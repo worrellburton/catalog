@@ -141,8 +141,12 @@ function buildGrid() {
   gridContainer.querySelectorAll('video').forEach(v => videoObserver.unobserve(v));
   gridContainer.innerHTML = '';
 
-  // Let CSS auto-fill handle columns, but set minmax based on slider
-  gridContainer.style.gridTemplateColumns = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
+  // On mobile, let CSS handle the 2-col grid; on desktop, use slider value
+  if (window.innerWidth <= 768) {
+    gridContainer.style.gridTemplateColumns = '';
+  } else {
+    gridContainer.style.gridTemplateColumns = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
+  }
 
   const filtered = getFilteredLooks();
   if (filtered.length === 0) return;
