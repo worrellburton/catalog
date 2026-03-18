@@ -28,19 +28,27 @@ const girlProducts = [
 
 // Look data with video files and creators
 const looks = [
-  { id: 1, title: 'Look 01', video: 'girl.mp4', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: girlProducts },
-  { id: 2, title: 'Look 02', video: 'guy.mp4', creator: '@marcus', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: guyProducts },
-  { id: 3, title: 'Look 03', video: 'girl.mp4', creator: '@sophia', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: girlProducts },
-  { id: 4, title: 'Look 04', video: 'guy.mp4', creator: '@lena', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: guyProducts },
-  { id: 5, title: 'Look 05', video: 'girl.mp4', creator: '@marcus', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: girlProducts },
-  { id: 6, title: 'Look 06', video: 'guy.mp4', creator: '@lena', description: 'Evening allure with timeless sophistication.', color: '#787878', products: guyProducts },
-  { id: 7, title: 'Look 07', video: 'girl.mp4', creator: '@sophia', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: girlProducts },
-  { id: 8, title: 'Look 08', video: 'guy.mp4', creator: '@marcus', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: guyProducts },
-  { id: 9, title: 'Look 09', video: 'girl.mp4', creator: '@lena', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: girlProducts },
-  { id: 10, title: 'Look 10', video: 'guy.mp4', creator: '@sophia', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: guyProducts },
-  { id: 11, title: 'Look 11', video: 'girl.mp4', creator: '@marcus', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: girlProducts },
-  { id: 12, title: 'Look 12', video: 'guy.mp4', creator: '@lena', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: guyProducts },
+  { id: 1, title: 'Look 01', video: 'girl.mp4', gender: 'women', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: girlProducts },
+  { id: 2, title: 'Look 02', video: 'guy.mp4', gender: 'men', creator: '@marcus', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: guyProducts },
+  { id: 3, title: 'Look 03', video: 'girl.mp4', gender: 'women', creator: '@sophia', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: girlProducts },
+  { id: 4, title: 'Look 04', video: 'guy.mp4', gender: 'men', creator: '@lena', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: guyProducts },
+  { id: 5, title: 'Look 05', video: 'girl.mp4', gender: 'women', creator: '@marcus', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: girlProducts },
+  { id: 6, title: 'Look 06', video: 'guy.mp4', gender: 'men', creator: '@lena', description: 'Evening allure with timeless sophistication.', color: '#787878', products: guyProducts },
+  { id: 7, title: 'Look 07', video: 'girl.mp4', gender: 'women', creator: '@sophia', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: girlProducts },
+  { id: 8, title: 'Look 08', video: 'guy.mp4', gender: 'men', creator: '@marcus', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: guyProducts },
+  { id: 9, title: 'Look 09', video: 'girl.mp4', gender: 'women', creator: '@lena', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: girlProducts },
+  { id: 10, title: 'Look 10', video: 'guy.mp4', gender: 'men', creator: '@sophia', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: guyProducts },
+  { id: 11, title: 'Look 11', video: 'girl.mp4', gender: 'women', creator: '@marcus', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: girlProducts },
+  { id: 12, title: 'Look 12', video: 'guy.mp4', gender: 'men', creator: '@lena', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: guyProducts },
 ];
+
+// Active filter
+let activeFilter = 'all'; // 'all', 'men', 'women'
+
+function getFilteredLooks() {
+  if (activeFilter === 'all') return looks;
+  return looks.filter(l => l.gender === activeFilter);
+}
 
 // DOM
 const gridContainer = document.getElementById('grid-container');
@@ -70,10 +78,21 @@ function buildGrid() {
   const cols = Math.max(1, Math.floor((window.innerWidth - 32) / (cardWidth + 8)));
   gridContainer.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
 
-  looks.forEach((look, i) => {
-    const card = createLookCard(look, i);
-    gridContainer.appendChild(card);
-  });
+  const filtered = getFilteredLooks();
+  if (filtered.length === 0) return;
+
+  // Calculate how many cards we need to fill the viewport generously
+  const cardHeight = (cardWidth * 4) / 3; // 3:4 aspect ratio
+  const visibleRows = Math.ceil((window.innerHeight * 3) / (cardHeight + 8));
+  const totalNeeded = cols * visibleRows;
+  const repeatCount = Math.max(1, Math.ceil(totalNeeded / filtered.length));
+
+  for (let r = 0; r < repeatCount; r++) {
+    filtered.forEach((look, i) => {
+      const card = createLookCard(look, i);
+      gridContainer.appendChild(card);
+    });
+  }
 
   updateTransform();
 }
@@ -284,6 +303,45 @@ function closeCreatorPage() {
   const page = document.getElementById('creator-page');
   if (page) page.remove();
 }
+
+// Bottom bar - search & filters
+const bottomBar = document.getElementById('bottom-bar');
+const searchBtn = document.getElementById('search-btn');
+const searchInput = document.getElementById('search-input');
+const filterBtns = document.querySelectorAll('.filter-chip');
+
+// Toggle search input
+searchBtn.addEventListener('click', () => {
+  bottomBar.classList.toggle('search-open');
+  if (bottomBar.classList.contains('search-open')) {
+    searchInput.focus();
+  } else {
+    searchInput.value = '';
+    searchInput.blur();
+  }
+});
+
+// Filter chips
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const filter = btn.dataset.filter;
+
+    // Toggle: if already active, go back to 'all'
+    if (activeFilter === filter) {
+      activeFilter = 'all';
+    } else {
+      activeFilter = filter;
+    }
+
+    // Update active states
+    filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
+
+    // Reset pan and rebuild
+    panX = 0;
+    panY = 0;
+    buildGrid();
+  });
+});
 
 // Init
 window.addEventListener('resize', buildGrid);
