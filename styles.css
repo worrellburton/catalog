@@ -270,16 +270,18 @@ body.locked .search-overlay {
   /* Stats: horizontal row */
   .deck-stats {
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 8px;
+    margin-top: 4px;
   }
 
   .deck-stat {
-    padding: 10px 0;
+    padding: 8px 0;
     text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .deck-stat-num {
-    font-size: 28px;
+    font-size: 24px;
     margin-bottom: 2px;
   }
 
