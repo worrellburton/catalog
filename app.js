@@ -12,17 +12,17 @@ function avatarSvg(creator) {
 
 // Product sets
 const guyProducts = [
-  { name: 'Patchwork Pointelle Short-Sleeve Shirt', brand: 'Vince', price: '$568' },
-  { name: 'Light Blue Straight Leg Jeans', brand: 'Suitsupply', price: '$199' },
-  { name: 'B27 Uptown Low-Top Sneaker Gray and White', brand: 'Dior', price: '$1,200' },
-  { name: 'Digital Camera', brand: 'Fujifilm', price: '$1,725' },
+  { name: 'Patchwork Pointelle Short-Sleeve Shirt', brand: 'Vince', price: '$568', url: 'https://www.vince.com/product/patchwork-pointelle-short-sleeve-shirt-M03516417A.html' },
+  { name: 'Light Blue Straight Leg Jeans', brand: 'Suitsupply', price: '$199', url: 'https://suitsupply.com' },
+  { name: 'B27 Uptown Low-Top Sneaker Gray and White', brand: 'Dior', price: '$1,200', url: 'https://www.dior.com' },
+  { name: 'Digital Camera', brand: 'Fujifilm', price: '$1,725', url: 'https://www.fujifilm.com' },
 ];
 
 const girlProducts = [
-  { name: 'Rock Style Flap Shoulder Bag', brand: 'Zara', price: '$49' },
-  { name: 'Major Shade Cat Eye Sunglasses', brand: 'Windsor', price: '$10' },
-  { name: 'Oval D Glitter Case for iPhone 16 Pro', brand: 'Diesel', price: '$39' },
-  { name: 'Cross Pendant Necklace', brand: 'Pavoi', price: '$13' },
+  { name: 'Rock Style Flap Shoulder Bag', brand: 'Zara', price: '$49', url: 'https://www.zara.com' },
+  { name: 'Major Shade Cat Eye Sunglasses', brand: 'Windsor', price: '$10', url: 'https://www.windsorstore.com' },
+  { name: 'Oval D Glitter Case for iPhone 16 Pro', brand: 'Diesel', price: '$39', url: 'https://www.diesel.com' },
+  { name: 'Cross Pendant Necklace', brand: 'Pavoi', price: '$13', url: 'https://www.pavoi.com' },
 ];
 
 // Look data with video files and creators
@@ -172,16 +172,29 @@ function openLook(look, index) {
   detailDescription.textContent = look.description;
   detailMedia.innerHTML = `<video src="${look.video}" autoplay loop muted playsinline style="width:100%;border-radius:12px;aspect-ratio:3/4;object-fit:cover"></video>`;
 
-  detailProducts.innerHTML = look.products.map(p => `
-    <div class="product-item">
+  detailProducts.innerHTML = look.products.map((p, pi) => `
+    <div class="product-item" data-product-index="${pi}" style="cursor:pointer">
       <div class="product-thumb" style="background:${look.color};opacity:0.5"></div>
       <div class="product-details">
         ${p.brand ? `<span class="product-brand">${p.brand}</span>` : ''}
         <h4>${p.name}</h4>
         <span>${p.price}</span>
       </div>
+      <svg class="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </div>
   `).join('');
+
+  // Make product items clickable
+  detailProducts.querySelectorAll('.product-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pi = parseInt(item.dataset.productIndex);
+      const product = look.products[pi];
+      if (product && product.url) {
+        openInAppBrowser(product.url, product.name);
+      }
+    });
+  });
 
   overlay.classList.remove('hidden');
 }
@@ -307,6 +320,43 @@ filterBtns.forEach(btn => {
     buildGrid();
   });
 });
+
+// In-app browser
+function openInAppBrowser(url, title) {
+  closeInAppBrowser();
+
+  const browser = document.createElement('div');
+  browser.className = 'in-app-browser';
+  browser.id = 'in-app-browser';
+
+  browser.innerHTML = `
+    <div class="iab-header">
+      <button class="iab-back" id="iab-back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to catalog
+      </button>
+      <span class="iab-title">${title || ''}</span>
+    </div>
+    <iframe src="${url}" class="iab-frame" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+  `;
+
+  document.body.appendChild(browser);
+
+  // Trigger slide-in
+  requestAnimationFrame(() => {
+    browser.classList.add('open');
+  });
+
+  browser.querySelector('#iab-back').addEventListener('click', closeInAppBrowser);
+}
+
+function closeInAppBrowser() {
+  const browser = document.getElementById('in-app-browser');
+  if (!browser) return;
+
+  browser.classList.remove('open');
+  browser.addEventListener('transitionend', () => browser.remove(), { once: true });
+}
 
 // Theme toggle
 const themeToggle = document.getElementById('theme-toggle');
