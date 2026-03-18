@@ -449,6 +449,95 @@ body.deck-mode .bottom-bar {
   transform: translateY(0);
 }
 
+/* Deck comparison table */
+.deck-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 8px;
+  max-width: 640px;
+}
+
+.deck-compare-col {
+  padding: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.compare-header {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.compare-old {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.compare-new {
+  color: #fff;
+}
+
+.compare-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.compare-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.compare-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.compare-value.highlight {
+  color: #fff;
+}
+
+.compare-value.dim {
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 400;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .deck-comparison {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .deck-compare-col {
+    padding: 16px;
+  }
+
+  .compare-header {
+    font-size: 13px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .compare-row {
+    padding: 6px 0;
+  }
+
+  .compare-label {
+    font-size: 12px;
+  }
+
+  .compare-value {
+    font-size: 13px;
+  }
+}
+
 /* Deck affiliate logos */
 .deck-affiliate-logos {
   display: flex;
