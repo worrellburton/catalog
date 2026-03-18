@@ -96,6 +96,10 @@ body.light-mode .icon-sun { display: none; }
   .view-toggle {
     display: flex;
   }
+
+  .header-right #scale-slider {
+    display: none;
+  }
 }
 
 .view-toggle:hover {
