@@ -508,9 +508,16 @@ document.getElementById('deck-mvp-btn').addEventListener('click', () => {
 });
 
 document.getElementById('back-to-deck').addEventListener('click', () => {
-  document.getElementById('deck-view').classList.add('active');
+  const dv = document.getElementById('deck-view');
+  dv.classList.add('active');
+  dv.scrollTop = 0;
   document.body.classList.add('deck-mode');
   document.body.classList.remove('from-deck');
+});
+
+// Deck theme toggle
+document.getElementById('deck-theme-toggle').addEventListener('click', () => {
+  document.body.classList.toggle('light-mode');
 });
 
 // Deck slide reveal on scroll
