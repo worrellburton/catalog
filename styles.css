@@ -970,6 +970,14 @@ body.from-deck .back-to-deck {
   display: flex;
 }
 
+@media (max-width: 768px) {
+  .back-to-deck {
+    left: 16px;
+    transform: none;
+    bottom: 24px;
+  }
+}
+
 /* Header */
 header {
   position: fixed;
