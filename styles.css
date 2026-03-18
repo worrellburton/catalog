@@ -202,11 +202,30 @@ header {
   padding: 16px;
 }
 
+/* Shimmer loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmerPulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Look card */
 .look-card {
   position: relative;
   aspect-ratio: 3 / 4;
-  background: var(--card-bg);
+  background: #111;
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
@@ -226,6 +245,40 @@ header {
   align-items: center;
   justify-content: center;
   position: relative;
+}
+
+/* Shimmer placeholder — shown until video loads */
+.look-card .card-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    #0d0d0d 0%,
+    #0d0d0d 35%,
+    #1a1a1a 42%,
+    #222 45%,
+    #1a1a1a 48%,
+    #0d0d0d 55%,
+    #0d0d0d 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite, shimmerPulse 3s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.look-card.loaded .card-shimmer {
+  opacity: 0;
+}
+
+.look-card video {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.look-card.loaded video {
+  opacity: 1;
 }
 
 .look-card .card-gradient {
@@ -301,6 +354,12 @@ header {
   height: 100%;
   object-fit: cover;
 }
+
+/* Stagger shimmer animation across cards */
+.look-card:nth-child(4n+1) .card-shimmer { animation-delay: 0s, 0s; }
+.look-card:nth-child(4n+2) .card-shimmer { animation-delay: 0.3s, 0.4s; }
+.look-card:nth-child(4n+3) .card-shimmer { animation-delay: 0.6s, 0.8s; }
+.look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s, 1.2s; }
 
 /* Look overlay */
 #look-overlay {

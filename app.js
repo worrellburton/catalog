@@ -111,7 +111,8 @@ function createLookCard(look, i) {
   card.dataset.id = look.id;
 
   card.innerHTML = `
-    <div class="card-inner" style="background: ${look.color}">
+    <div class="card-inner">
+      <div class="card-shimmer"></div>
       <video data-src="${look.video}" muted loop playsinline preload="none"></video>
       <div class="card-gradient"></div>
       <div class="card-creator-row" data-creator="${look.creator}">
@@ -121,8 +122,9 @@ function createLookCard(look, i) {
     </div>
   `;
 
-  // Observe video for lazy play
+  // Observe video for lazy play, mark loaded when playing
   const video = card.querySelector('video');
+  video.addEventListener('playing', () => card.classList.add('loaded'), { once: true });
   videoObserver.observe(video);
 
   const creatorLink = card.querySelector('.card-creator-row');
@@ -237,7 +239,8 @@ function openCreatorPage(creatorName) {
     card.style.width = '100%';
 
     card.innerHTML = `
-      <div class="card-inner" style="background: ${look.color}">
+      <div class="card-inner">
+        <div class="card-shimmer"></div>
         <video data-src="${look.video}" muted loop playsinline preload="none"></video>
         <div class="card-gradient"></div>
         <div class="card-creator-row">
@@ -248,6 +251,7 @@ function openCreatorPage(creatorName) {
     `;
 
     const video = card.querySelector('video');
+    video.addEventListener('playing', () => card.classList.add('loaded'), { once: true });
     videoObserver.observe(video);
 
     card.addEventListener('click', () => {
