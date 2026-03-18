@@ -1,3 +1,16 @@
+// Creator profiles with avatar colors (will use generated SVG avatars)
+const creators = {
+  '@sophia': { name: '@sophia', color: '#e8c4a0', initials: 'S' },
+  '@marcus': { name: '@marcus', color: '#7ea8c4', initials: 'M' },
+  '@lena':   { name: '@lena',   color: '#c49eb8', initials: 'L' },
+};
+
+function avatarSvg(creator) {
+  const c = creators[creator];
+  if (!c) return '';
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="22" fill="${c.color}"/><text x="22" y="23" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="18" font-weight="600" fill="#fff">${c.initials}</text></svg>`)}`;
+}
+
 // Look data with video files and creators
 const looks = [
   { id: 1, title: 'Look 01', video: 'girl.mp4', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: [{ name: 'Oversized Blazer', price: '$285' }, { name: 'Wide Leg Trousers', price: '$165' }, { name: 'Leather Belt', price: '$95' }] },
@@ -50,7 +63,7 @@ function buildGrid() {
   updateTransform();
 }
 
-function createLookCard(look, i, clickable = true) {
+function createLookCard(look, i) {
   const card = document.createElement('div');
   card.className = 'look-card';
   card.style.width = `${cardWidth}px`;
@@ -58,32 +71,28 @@ function createLookCard(look, i, clickable = true) {
 
   card.innerHTML = `
     <div class="card-inner" style="background: ${look.color}">
-      <video src="${look.video}" muted loop playsinline preload="metadata"></video>
+      <video src="${look.video}" muted loop playsinline autoplay preload="auto"></video>
       <div class="card-gradient"></div>
-      <span class="card-creator" data-creator="${look.creator}">${look.creator}</span>
+      <div class="card-creator-row" data-creator="${look.creator}">
+        <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
+        <span class="card-creator-name">${look.creator}</span>
+      </div>
       <span class="card-number">${String(i + 1).padStart(2, '0')} / ${looks.length}</span>
     </div>
   `;
 
-  // Play video on hover
-  const video = card.querySelector('video');
-  card.addEventListener('mouseenter', () => video.play());
-  card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
-
   // Creator link click
-  const creatorLink = card.querySelector('.card-creator');
+  const creatorLink = card.querySelector('.card-creator-row');
   creatorLink.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!hasDragged) openCreatorPage(look.creator);
   });
 
-  if (clickable) {
-    card.addEventListener('click', (e) => {
-      if (!hasDragged && !e.target.classList.contains('card-creator')) {
-        openLook(look, i);
-      }
-    });
-  }
+  card.addEventListener('click', (e) => {
+    if (!hasDragged && !e.target.closest('.card-creator-row')) {
+      openLook(look, i);
+    }
+  });
 
   return card;
 }
@@ -95,7 +104,7 @@ function updateTransform() {
 // Drag to pan
 gridViewport.addEventListener('mousedown', (e) => {
   if (e.target.closest('#look-overlay')) return;
-  if (e.target.closest('.card-creator')) return;
+  if (e.target.closest('.card-creator-row')) return;
   isDragging = true;
   hasDragged = false;
   dragStartX = e.clientX;
@@ -163,7 +172,7 @@ scaleSlider.addEventListener('input', () => {
 function openLook(look, index) {
   detailTitle.textContent = look.title;
   detailDescription.textContent = look.description;
-  detailMedia.innerHTML = `<video src="${look.video}" autoplay loop muted playsinline style="width:100%;border-radius:12px;aspect-ratio:3/1;object-fit:cover"></video>`;
+  detailMedia.innerHTML = `<video src="${look.video}" autoplay loop muted playsinline style="width:100%;border-radius:12px;aspect-ratio:3/4;object-fit:cover"></video>`;
 
   detailProducts.innerHTML = look.products.map(p => `
     <div class="product-item">
@@ -181,15 +190,19 @@ function openLook(look, index) {
 // Close look detail
 function closeLook() {
   overlay.classList.add('hidden');
-  // Pause detail video
   const vid = detailMedia.querySelector('video');
   if (vid) vid.pause();
 }
 
 closeBtn.addEventListener('click', closeLook);
 
+// Click anywhere on the overlay (negative space) to close
 overlay.addEventListener('click', (e) => {
-  if (e.target === overlay) closeLook();
+  // Close if clicking the overlay background, the detail container, or the media area
+  // Only keep open if clicking product info interactive elements
+  if (e.target === overlay || e.target.closest('.look-media') || e.target.closest('.look-detail') && !e.target.closest('.product-item')) {
+    closeLook();
+  }
 });
 
 document.addEventListener('keydown', (e) => {
@@ -204,10 +217,10 @@ document.addEventListener('keydown', (e) => {
 
 // Creator catalog page
 function openCreatorPage(creatorName) {
-  // Remove existing creator page if any
   closeCreatorPage();
 
   const creatorLooks = looks.filter(l => l.creator === creatorName);
+  const c = creators[creatorName];
 
   const page = document.createElement('div');
   page.className = 'creator-page';
@@ -232,16 +245,15 @@ function openCreatorPage(creatorName) {
 
     card.innerHTML = `
       <div class="card-inner" style="background: ${look.color}">
-        <video src="${look.video}" muted loop playsinline preload="metadata"></video>
+        <video src="${look.video}" muted loop playsinline autoplay preload="auto"></video>
         <div class="card-gradient"></div>
-        <span class="card-creator">${look.creator}</span>
+        <div class="card-creator-row">
+          <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
+          <span class="card-creator-name">${look.creator}</span>
+        </div>
         <span class="card-number">${look.title}</span>
       </div>
     `;
-
-    const video = card.querySelector('video');
-    card.addEventListener('mouseenter', () => video.play());
-    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
 
     card.addEventListener('click', () => {
       const globalIndex = looks.findIndex(l => l.id === look.id);

@@ -43,7 +43,7 @@ header {
 }
 
 .logo {
-  height: 24px;
+  height: 36px;
   width: auto;
   color: #ffffff;
 }
@@ -121,17 +121,18 @@ header {
 /* Look card */
 .look-card {
   position: relative;
-  aspect-ratio: 3 / 1;
+  aspect-ratio: 3 / 4;
   background: var(--card-bg);
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .look-card:hover {
-  transform: scale(1.02);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  transform: scale(1.04) translateY(-4px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  z-index: 10;
 }
 
 .look-card .card-inner {
@@ -164,22 +165,40 @@ header {
   z-index: 2;
 }
 
-.look-card .card-creator {
+.look-card .card-creator-row {
   position: absolute;
   bottom: 10px;
-  left: 14px;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   z-index: 2;
-  text-decoration: none;
   cursor: pointer;
-  transition: color 0.15s;
+  text-decoration: none;
+  transition: opacity 0.15s;
 }
 
-.look-card .card-creator:hover {
-  color: #fff;
+.look-card .card-creator-row:hover {
+  opacity: 0.85;
+}
+
+.look-card .card-creator-row:hover .card-creator-name {
   text-decoration: underline;
+}
+
+.card-creator-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.card-creator-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .look-card .card-number {
@@ -366,6 +385,7 @@ header {
 
 .creator-grid .look-card {
   width: 100%;
+  aspect-ratio: 3 / 4;
 }
 
 /* Responsive */
