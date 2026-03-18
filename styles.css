@@ -972,8 +972,8 @@ body.from-deck .back-to-deck {
 
 @media (max-width: 768px) {
   .back-to-deck {
-    left: 16px;
-    transform: none;
+    left: 50%;
+    transform: translateX(-50%);
     bottom: 24px;
   }
 }
