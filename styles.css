@@ -209,11 +209,7 @@ body.locked .search-overlay {
 
 .deck-view.active {
   display: block;
-  scroll-snap-type: y mandatory;
-}
-
-.deck-slide {
-  scroll-snap-align: start;
+  scroll-behavior: smooth;
 }
 
 body.deck-mode header,
