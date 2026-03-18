@@ -430,9 +430,4 @@ themeToggle.addEventListener('click', () => {
 });
 
 // Init
-let resizeTimeout;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimeout);
-  resizeTimeout = setTimeout(buildGrid, 150);
-});
 buildGrid();
