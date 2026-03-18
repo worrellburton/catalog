@@ -412,9 +412,26 @@ body.light-mode .search-overlay-input:focus {
 }
 
 .look-card:hover {
-  transform: scale(1.04) translateY(-4px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  z-index: 10;
+  transform: scale(1.08);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+}
+
+/* Hover backdrop — darkens and blurs other cards */
+.grid-hover-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.grid-hover-backdrop.visible {
+  opacity: 1;
 }
 
 .look-card .card-inner {

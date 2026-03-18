@@ -429,5 +429,42 @@ themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('light-mode');
 });
 
+// Hover backdrop (desktop only)
+const hoverBackdrop = document.getElementById('grid-hover-backdrop');
+const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+gridContainer.addEventListener('mouseenter', (e) => {
+  if (isTouchDevice()) return;
+  const card = e.target.closest('.look-card');
+  if (card) hoverBackdrop.classList.add('visible');
+}, true);
+
+gridContainer.addEventListener('mouseleave', (e) => {
+  if (isTouchDevice()) return;
+  const card = e.target.closest('.look-card');
+  if (card) {
+    const related = e.relatedTarget;
+    if (!related || !related.closest('.look-card')) {
+      hoverBackdrop.classList.remove('visible');
+    }
+  }
+}, true);
+
+// Use event delegation for smoother behavior
+gridContainer.addEventListener('mouseover', (e) => {
+  if (isTouchDevice()) return;
+  if (e.target.closest('.look-card')) {
+    hoverBackdrop.classList.add('visible');
+  }
+});
+
+gridContainer.addEventListener('mouseout', (e) => {
+  if (isTouchDevice()) return;
+  const related = e.relatedTarget;
+  if (!related || !related.closest('.look-card')) {
+    hoverBackdrop.classList.remove('visible');
+  }
+});
+
 // Init
 buildGrid();
