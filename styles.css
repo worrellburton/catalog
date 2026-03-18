@@ -820,11 +820,28 @@ body.light-mode .icon-sun { display: none; }
   background: rgba(128, 128, 128, 0.25);
 }
 
-/* Show grid icon in feed mode, feed icon in grid mode */
-.icon-feed { display: none; }
-.icon-grid { display: block; }
-body.feed-mode .icon-feed { display: block; }
-body.feed-mode .icon-grid { display: none; }
+/* View toggle icons — show next mode's icon */
+.icon-view { display: none; }
+
+/* Default (grid mode): show vertical icon (next mode) */
+.icon-view-vertical { display: block; }
+
+/* In vertical mode: show feed icon (next mode) */
+body.vertical-mode .icon-view-vertical { display: none; }
+body.vertical-mode .icon-view-feed { display: block; }
+
+/* In feed mode: show grid icon (next mode) */
+body.feed-mode .icon-view-feed { display: none; }
+body.feed-mode .icon-view-grid { display: block; }
+
+/* Vertical mode — single column, scrollable */
+body.vertical-mode #grid-container {
+  grid-template-columns: 1fr !important;
+}
+
+body.vertical-mode .look-card {
+  aspect-ratio: 3 / 4;
+}
 
 /* Feed mode - one card at a time, full screen snap scrolling */
 body.feed-mode #grid-container {

@@ -482,10 +482,15 @@ function closeInAppBrowser() {
   browser.addEventListener('transitionend', () => browser.remove(), { once: true });
 }
 
-// View toggle (grid / feed)
+// View toggle — cycles: grid → vertical → feed
 const viewToggle = document.getElementById('view-toggle');
+const viewModes = ['grid', 'vertical', 'feed'];
+let currentViewIndex = 0;
+
 viewToggle.addEventListener('click', () => {
-  document.body.classList.toggle('feed-mode');
+  document.body.classList.remove('grid-mode', 'vertical-mode', 'feed-mode');
+  currentViewIndex = (currentViewIndex + 1) % viewModes.length;
+  document.body.classList.add(viewModes[currentViewIndex] + '-mode');
 });
 
 // Theme toggle
@@ -497,10 +502,9 @@ themeToggle.addEventListener('click', () => {
 // Deck: See MVP button → show app with back-to-deck
 document.getElementById('deck-mvp-btn').addEventListener('click', () => {
   document.getElementById('deck-view').classList.remove('active');
-  document.body.classList.remove('deck-mode');
-  document.body.classList.remove('locked');
-  document.body.classList.remove('feed-mode');
-  document.body.classList.add('from-deck');
+  document.body.classList.remove('deck-mode', 'locked', 'feed-mode', 'vertical-mode');
+  document.body.classList.add('from-deck', 'grid-mode');
+  currentViewIndex = 0;
 });
 
 document.getElementById('back-to-deck').addEventListener('click', () => {
