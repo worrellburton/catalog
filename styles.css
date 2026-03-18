@@ -226,9 +226,9 @@ header {
   justify-content: space-between;
   padding: 0 28px;
   z-index: 100;
-  background: linear-gradient(to bottom, var(--bg) 30%, transparent 100%);
-  height: 90px;
-  padding-bottom: 26px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.35) 50%, transparent 100%);
+  height: 100px;
+  padding-bottom: 36px;
 }
 
 .header-left {
@@ -670,6 +670,27 @@ body.light-mode .search-backdrop {
   display: grid;
   gap: 8px;
   padding: 16px;
+}
+
+/* Bottom fade gradient */
+#grid-viewport::after {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.35) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 50;
+}
+
+body.light-mode #grid-viewport::after {
+  background: linear-gradient(to top, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
+}
+
+body.light-mode header {
+  background: linear-gradient(to bottom, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
 }
 
 /* Shimmer loading animation */
