@@ -6,7 +6,18 @@ const splashScreen = document.getElementById('splash-screen');
 const PASSWORD = '123';
 
 function attemptLogin() {
-  if (pwInput.value === PASSWORD) {
+  const val = pwInput.value.trim().toLowerCase();
+
+  if (val === 'deck') {
+    pwError.textContent = '';
+    pwGate.classList.add('dismissed');
+    document.getElementById('deck-view').classList.add('active');
+    document.body.classList.add('deck-mode');
+    setTimeout(() => pwGate.remove(), 600);
+    return;
+  }
+
+  if (val === PASSWORD) {
     pwError.textContent = '';
     pwGate.classList.add('dismissed');
 
@@ -477,6 +488,20 @@ viewToggle.addEventListener('click', () => {
 const themeToggle = document.getElementById('theme-toggle');
 themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('light-mode');
+});
+
+// Deck slide reveal on scroll
+const deckView = document.getElementById('deck-view');
+const deckObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.15 });
+
+deckView.querySelectorAll('.deck-slide').forEach(slide => {
+  deckObserver.observe(slide);
 });
 
 // Init

@@ -214,6 +214,163 @@ body.locked .search-overlay {
   fill: currentColor;
 }
 
+/* Deck View */
+.deck-view {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  background: #000;
+  overflow-y: auto;
+  display: none;
+  scroll-behavior: smooth;
+}
+
+.deck-view.active {
+  display: block;
+}
+
+body.deck-mode header,
+body.deck-mode #grid-viewport,
+body.deck-mode .bottom-bar {
+  display: none;
+}
+
+.deck-slide {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 80px 12%;
+  position: relative;
+}
+
+.deck-slide h2 {
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 28px;
+}
+
+.deck-slide > p {
+  font-size: clamp(15px, 1.6vw, 19px);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 680px;
+}
+
+.deck-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.25);
+  margin-bottom: 20px;
+}
+
+.deck-note {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 32px;
+  max-width: 560px;
+  line-height: 1.6;
+}
+
+/* Deck cover slide */
+.deck-cover {
+  align-items: center;
+  text-align: center;
+}
+
+.deck-logo {
+  height: 48px;
+  width: auto;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+.deck-subtitle {
+  font-size: 14px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.06em;
+}
+
+/* Deck steps */
+.deck-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 32px;
+  margin-top: 8px;
+}
+
+.deck-step {
+  padding: 28px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.deck-step-num {
+  font-size: 28px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.15);
+  display: block;
+  margin-bottom: 16px;
+}
+
+.deck-step h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.deck-step p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Deck stats */
+.deck-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 32px;
+  margin-top: 8px;
+}
+
+.deck-stat {
+  padding: 24px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.deck-stat-num {
+  font-size: clamp(32px, 4vw, 56px);
+  font-weight: 600;
+  color: #fff;
+  display: block;
+  margin-bottom: 8px;
+  letter-spacing: -0.03em;
+}
+
+.deck-stat-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1.4;
+}
+
+/* Deck slide reveal animation */
+.deck-slide {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.deck-slide.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* Header */
 header {
   position: fixed;
@@ -723,10 +880,14 @@ body.light-mode header {
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-.look-card:hover {
-  transform: scale(1.015);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  z-index: 10;
+/* On hover, darken siblings instead of scaling */
+#grid-container:hover .look-card {
+  opacity: 0.5;
+  transition: opacity 0.4s ease;
+}
+
+#grid-container .look-card:hover {
+  opacity: 1;
 }
 
 .look-card .card-inner {
