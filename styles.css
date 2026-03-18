@@ -1069,9 +1069,20 @@ body.light-mode .icon-sun { display: none; }
     display: none;
   }
 
+  header {
+    height: 56px;
+    padding: 0 16px;
+    padding-bottom: 0;
+    align-items: center;
+  }
+
+  .logo {
+    height: 30px;
+  }
+
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
-    padding-top: 100px;
+    padding-top: 64px;
   }
 
   #grid-viewport::after {
