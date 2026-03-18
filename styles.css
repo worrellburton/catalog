@@ -319,6 +319,16 @@ header {
   flex-shrink: 0;
 }
 
+.product-brand {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+  display: block;
+  margin-bottom: 3px;
+}
+
 .product-details h4 {
   font-size: 14px;
   font-weight: 500;

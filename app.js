@@ -11,20 +11,35 @@ function avatarSvg(creator) {
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="22" fill="${c.color}"/><text x="22" y="23" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="18" font-weight="600" fill="#fff">${c.initials}</text></svg>`)}`;
 }
 
+// Product sets
+const guyProducts = [
+  { name: 'Patchwork Pointelle Short-Sleeve Shirt', brand: 'Vince', price: '$568' },
+  { name: 'Light Blue Straight Leg Jeans', brand: 'Suitsupply', price: '$199' },
+  { name: 'B27 Uptown Low-Top Sneaker Gray and White', brand: 'Dior', price: '$1,200' },
+  { name: 'Digital Camera', brand: 'Fujifilm', price: '$1,725' },
+];
+
+const girlProducts = [
+  { name: 'Rock Style Flap Shoulder Bag', brand: 'Zara', price: '$49' },
+  { name: 'Major Shade Cat Eye Sunglasses', brand: 'Windsor', price: '$10' },
+  { name: 'Oval D Glitter Case for iPhone 16 Pro', brand: 'Diesel', price: '$39' },
+  { name: 'Cross Pendant Necklace', brand: 'Pavoi', price: '$13' },
+];
+
 // Look data with video files and creators
 const looks = [
-  { id: 1, title: 'Look 01', video: 'girl.mp4', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: [{ name: 'Oversized Blazer', price: '$285' }, { name: 'Wide Leg Trousers', price: '$165' }, { name: 'Leather Belt', price: '$95' }] },
-  { id: 2, title: 'Look 02', video: 'guy.mp4', creator: '@marcus', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: [{ name: 'Cashmere Sweater', price: '$320' }, { name: 'Silk Camisole', price: '$140' }] },
-  { id: 3, title: 'Look 03', video: 'girl.mp4', creator: '@sophia', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: [{ name: 'Structured Coat', price: '$450' }, { name: 'Knit Dress', price: '$210' }, { name: 'Ankle Boots', price: '$340' }] },
-  { id: 4, title: 'Look 04', video: 'guy.mp4', creator: '@lena', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: [{ name: 'Column Dress', price: '$275' }, { name: 'Statement Earrings', price: '$85' }] },
-  { id: 5, title: 'Look 05', video: 'girl.mp4', creator: '@marcus', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: [{ name: 'Denim Jacket', price: '$195' }, { name: 'Cotton Tee', price: '$65' }, { name: 'Canvas Sneakers', price: '$120' }] },
-  { id: 6, title: 'Look 06', video: 'guy.mp4', creator: '@lena', description: 'Evening allure with timeless sophistication.', color: '#787878', products: [{ name: 'Satin Blouse', price: '$185' }, { name: 'Tailored Skirt', price: '$155' }, { name: 'Clutch Bag', price: '$220' }] },
-  { id: 7, title: 'Look 07', video: 'girl.mp4', creator: '@sophia', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: [{ name: 'Trench Coat', price: '$395' }, { name: 'Merino Turtleneck', price: '$175' }] },
-  { id: 8, title: 'Look 08', video: 'guy.mp4', creator: '@marcus', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: [{ name: 'Wool Coat', price: '$520' }, { name: 'Leather Gloves', price: '$110' }, { name: 'Scarf', price: '$95' }] },
-  { id: 9, title: 'Look 09', video: 'girl.mp4', creator: '@lena', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: [{ name: 'Wrap Dress', price: '$245' }, { name: 'Strappy Heels', price: '$290' }] },
-  { id: 10, title: 'Look 10', video: 'guy.mp4', creator: '@sophia', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: [{ name: 'Double-Breasted Suit', price: '$580' }, { name: 'Oxford Shoes', price: '$310' }] },
-  { id: 11, title: 'Look 11', video: 'girl.mp4', creator: '@marcus', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: [{ name: 'Oversized Shirt', price: '$145' }, { name: 'Midi Skirt', price: '$170' }, { name: 'Flat Sandals', price: '$130' }] },
-  { id: 12, title: 'Look 12', video: 'guy.mp4', creator: '@lena', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: [{ name: 'Linen Blazer', price: '$265' }, { name: 'Relaxed Chinos', price: '$135' }, { name: 'Tote Bag', price: '$195' }] },
+  { id: 1, title: 'Look 01', video: 'girl.mp4', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: girlProducts },
+  { id: 2, title: 'Look 02', video: 'guy.mp4', creator: '@marcus', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: guyProducts },
+  { id: 3, title: 'Look 03', video: 'girl.mp4', creator: '@sophia', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: girlProducts },
+  { id: 4, title: 'Look 04', video: 'guy.mp4', creator: '@lena', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: guyProducts },
+  { id: 5, title: 'Look 05', video: 'girl.mp4', creator: '@marcus', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: girlProducts },
+  { id: 6, title: 'Look 06', video: 'guy.mp4', creator: '@lena', description: 'Evening allure with timeless sophistication.', color: '#787878', products: guyProducts },
+  { id: 7, title: 'Look 07', video: 'girl.mp4', creator: '@sophia', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: girlProducts },
+  { id: 8, title: 'Look 08', video: 'guy.mp4', creator: '@marcus', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: guyProducts },
+  { id: 9, title: 'Look 09', video: 'girl.mp4', creator: '@lena', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: girlProducts },
+  { id: 10, title: 'Look 10', video: 'guy.mp4', creator: '@sophia', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: guyProducts },
+  { id: 11, title: 'Look 11', video: 'girl.mp4', creator: '@marcus', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: girlProducts },
+  { id: 12, title: 'Look 12', video: 'guy.mp4', creator: '@lena', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: guyProducts },
 ];
 
 // DOM
@@ -77,7 +92,6 @@ function createLookCard(look, i) {
         <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
         <span class="card-creator-name">${look.creator}</span>
       </div>
-      <span class="card-number">${String(i + 1).padStart(2, '0')} / ${looks.length}</span>
     </div>
   `;
 
@@ -178,6 +192,7 @@ function openLook(look, index) {
     <div class="product-item">
       <div class="product-thumb" style="background:${look.color};opacity:0.5"></div>
       <div class="product-details">
+        ${p.brand ? `<span class="product-brand">${p.brand}</span>` : ''}
         <h4>${p.name}</h4>
         <span>${p.price}</span>
       </div>
@@ -251,7 +266,6 @@ function openCreatorPage(creatorName) {
           <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
           <span class="card-creator-name">${look.creator}</span>
         </div>
-        <span class="card-number">${look.title}</span>
       </div>
     `;
 
