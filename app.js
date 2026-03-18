@@ -389,26 +389,27 @@ const searchBtn = document.getElementById('search-btn');
 const searchInput = document.getElementById('search-input');
 const filterBtns = document.querySelectorAll('.filter-chip');
 
-// Search - always use overlay
-const searchOverlay = document.getElementById('search-overlay');
-const searchOverlayInput = document.getElementById('search-overlay-input');
-const searchOverlayClose = document.getElementById('search-overlay-close');
+// Search - expand bottom bar
+const searchBackdrop = document.getElementById('search-backdrop');
+const bottomSearchInput = document.getElementById('bottom-search-input');
 
 searchBtn.addEventListener('click', () => {
-  searchOverlay.classList.add('open');
-  setTimeout(() => searchOverlayInput.focus(), 100);
+  bottomBar.classList.add('search-open');
+  searchBackdrop.classList.add('visible');
+  setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
-  searchOverlay.classList.remove('open');
-  searchOverlayInput.value = '';
-  searchOverlayInput.blur();
+  bottomBar.classList.remove('search-open');
+  searchBackdrop.classList.remove('visible');
+  bottomSearchInput.value = '';
+  bottomSearchInput.blur();
 }
 
-searchOverlayClose.addEventListener('click', closeSearch);
+searchBackdrop.addEventListener('click', closeSearch);
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && searchOverlay.classList.contains('open')) {
+  if (e.key === 'Escape' && bottomBar.classList.contains('search-open')) {
     closeSearch();
   }
 });
