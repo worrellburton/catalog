@@ -77,6 +77,104 @@ header {
 body.light-mode .icon-moon { display: block; }
 body.light-mode .icon-sun { display: none; }
 
+/* View toggle */
+.view-toggle {
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  color: var(--text);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.view-toggle:hover {
+  background: rgba(128, 128, 128, 0.25);
+}
+
+/* Show grid icon in feed mode, feed icon in grid mode */
+.icon-feed { display: none; }
+.icon-grid { display: block; }
+body.feed-mode .icon-feed { display: block; }
+body.feed-mode .icon-grid { display: none; }
+
+/* Feed mode - one card at a time, full screen snap scrolling */
+body.feed-mode #grid-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+}
+
+body.feed-mode #grid-viewport {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100vh;
+  padding-bottom: 0;
+}
+
+body.feed-mode .look-card {
+  width: 100%;
+  max-width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+  border-radius: 0;
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+body.feed-mode .look-card:hover {
+  transform: none;
+  box-shadow: none;
+  z-index: auto;
+}
+
+body.feed-mode .look-card .card-inner {
+  border-radius: 0;
+}
+
+body.feed-mode .look-card .card-gradient {
+  height: 40%;
+}
+
+body.feed-mode .look-card .card-creator-row {
+  bottom: 20px;
+  left: 16px;
+  gap: 10px;
+}
+
+body.feed-mode .card-creator-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  border-width: 2px;
+}
+
+body.feed-mode .card-creator-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+body.feed-mode .grid-hover-backdrop {
+  display: none;
+}
+
+body.feed-mode .bottom-bar {
+  display: none;
+}
+
+body.feed-mode .header-right #scale-slider {
+  display: none;
+}
+
 /* Header slider */
 .header-right #scale-slider {
   width: 80px;

@@ -423,6 +423,12 @@ function closeInAppBrowser() {
   browser.addEventListener('transitionend', () => browser.remove(), { once: true });
 }
 
+// View toggle (grid / feed)
+const viewToggle = document.getElementById('view-toggle');
+viewToggle.addEventListener('click', () => {
+  document.body.classList.toggle('feed-mode');
+});
+
 // Theme toggle
 const themeToggle = document.getElementById('theme-toggle');
 themeToggle.addEventListener('click', () => {
