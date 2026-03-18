@@ -75,7 +75,11 @@ const videoObserver = new IntersectionObserver((entries) => {
         video.src = video.dataset.src;
         video.load();
       }
-      video.play().catch(() => {});
+      video.play().catch(() => {
+        // Autoplay blocked (common on mobile) — mark loaded anyway so shimmer hides
+        const card = video.closest('.look-card');
+        if (card) card.classList.add('loaded');
+      });
     } else {
       video.pause();
     }
@@ -130,14 +134,16 @@ function createLookCard(look, i) {
   const markLoaded = () => {
     if (card.classList.contains('loaded')) return;
     card.classList.add('loaded');
-    // Remove shimmer from DOM after fade-out transition
     if (shimmer) {
       shimmer.addEventListener('transitionend', () => shimmer.remove(), { once: true });
+      // Fallback: remove shimmer after 1s if transitionend doesn't fire
+      setTimeout(() => { if (shimmer.parentNode) shimmer.remove(); }, 1000);
     }
   };
   video.addEventListener('playing', markLoaded, { once: true });
   video.addEventListener('canplay', markLoaded, { once: true });
   video.addEventListener('loadeddata', markLoaded, { once: true });
+  video.addEventListener('loadedmetadata', markLoaded, { once: true });
   videoObserver.observe(video);
 
   const creatorLink = card.querySelector('.card-creator-row');
@@ -285,11 +291,13 @@ function openCreatorPage(creatorName) {
       card.classList.add('loaded');
       if (shimmerEl) {
         shimmerEl.addEventListener('transitionend', () => shimmerEl.remove(), { once: true });
+        setTimeout(() => { if (shimmerEl.parentNode) shimmerEl.remove(); }, 1000);
       }
     };
     video.addEventListener('playing', markCardLoaded, { once: true });
     video.addEventListener('canplay', markCardLoaded, { once: true });
     video.addEventListener('loadeddata', markCardLoaded, { once: true });
+    video.addEventListener('loadedmetadata', markCardLoaded, { once: true });
     videoObserver.observe(video);
 
     card.addEventListener('click', () => {
@@ -317,14 +325,42 @@ const searchBtn = document.getElementById('search-btn');
 const searchInput = document.getElementById('search-input');
 const filterBtns = document.querySelectorAll('.filter-chip');
 
-// Toggle search input
+// Search - mobile uses overlay, desktop uses inline
+const searchOverlay = document.getElementById('search-overlay');
+const searchOverlayInput = document.getElementById('search-overlay-input');
+const searchOverlayClose = document.getElementById('search-overlay-close');
+
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
 searchBtn.addEventListener('click', () => {
-  bottomBar.classList.toggle('search-open');
-  if (bottomBar.classList.contains('search-open')) {
-    searchInput.focus();
+  if (isMobile()) {
+    searchOverlay.classList.add('open');
+    setTimeout(() => searchOverlayInput.focus(), 100);
   } else {
-    searchInput.value = '';
-    searchInput.blur();
+    bottomBar.classList.toggle('search-open');
+    if (bottomBar.classList.contains('search-open')) {
+      searchInput.focus();
+    } else {
+      searchInput.value = '';
+      searchInput.blur();
+    }
+  }
+});
+
+searchOverlayClose.addEventListener('click', () => {
+  searchOverlay.classList.remove('open');
+  searchOverlayInput.value = '';
+  searchOverlayInput.blur();
+});
+
+// Close search overlay on escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && searchOverlay.classList.contains('open')) {
+    searchOverlay.classList.remove('open');
+    searchOverlayInput.value = '';
+    searchOverlayInput.blur();
   }
 });
 
@@ -380,24 +416,6 @@ function closeInAppBrowser() {
   browser.classList.remove('open');
   browser.addEventListener('transitionend', () => browser.remove(), { once: true });
 }
-
-// Mobile grid toggle
-const gridToggleBtns = document.querySelectorAll('.grid-toggle-btn');
-let mobileGridCols = 3;
-
-gridToggleBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    mobileGridCols = parseInt(btn.dataset.cols);
-    gridToggleBtns.forEach(b => b.classList.toggle('active', b === btn));
-
-    // Update grid class
-    gridContainer.classList.remove('mobile-cols-1', 'mobile-cols-2', 'mobile-cols-3');
-    gridContainer.classList.add(`mobile-cols-${mobileGridCols}`);
-  });
-});
-
-// Set default mobile grid
-gridContainer.classList.add(`mobile-cols-${mobileGridCols}`);
 
 // Theme toggle
 const themeToggle = document.getElementById('theme-toggle');

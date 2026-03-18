@@ -15,17 +15,6 @@
     </div>
     <div class="header-right">
       <input type="range" id="scale-slider" min="120" max="500" value="240" step="10">
-      <div class="grid-toggles" id="grid-toggles">
-        <button class="grid-toggle-btn active" data-cols="3" aria-label="3 columns">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><rect x="0" y="0" width="5" height="5" rx="1"/><rect x="6.5" y="0" width="5" height="5" rx="1"/><rect x="13" y="0" width="5" height="5" rx="1"/><rect x="0" y="6.5" width="5" height="5" rx="1"/><rect x="6.5" y="6.5" width="5" height="5" rx="1"/><rect x="13" y="6.5" width="5" height="5" rx="1"/><rect x="0" y="13" width="5" height="5" rx="1"/><rect x="6.5" y="13" width="5" height="5" rx="1"/><rect x="13" y="13" width="5" height="5" rx="1"/></svg>
-        </button>
-        <button class="grid-toggle-btn" data-cols="2" aria-label="2 columns">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><rect x="0" y="0" width="8" height="8" rx="1.5"/><rect x="10" y="0" width="8" height="8" rx="1.5"/><rect x="0" y="10" width="8" height="8" rx="1.5"/><rect x="10" y="10" width="8" height="8" rx="1.5"/></svg>
-        </button>
-        <button class="grid-toggle-btn" data-cols="1" aria-label="1 column">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><rect x="2" y="0" width="14" height="8" rx="2"/><rect x="2" y="10" width="14" height="8" rx="2"/></svg>
-        </button>
-      </div>
       <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
         <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -48,6 +37,15 @@
       </button>
     </div>
     <input type="text" class="search-input" id="search-input" placeholder="Search looks...">
+  </div>
+
+  <!-- Search overlay (mobile) -->
+  <div class="search-overlay" id="search-overlay">
+    <button class="search-overlay-close" id="search-overlay-close">&times;</button>
+    <p class="search-overlay-tagline">Discover looks.<br>Build your catalog.</p>
+    <div class="search-overlay-input-wrap">
+      <input type="text" class="search-overlay-input" id="search-overlay-input" placeholder="Search anything...">
+    </div>
   </div>
 
   <!-- Look Detail Overlay -->
