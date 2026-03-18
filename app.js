@@ -1,7 +1,7 @@
 // Creator profiles with avatar colors (will use generated SVG avatars)
 const creators = {
-  '@lilywittman': { name: '@lilywittman', color: '#e8c4a0', initials: 'L' },
-  '@garrett':     { name: '@garrett',     color: '#7ea8c4', initials: 'G' },
+  '@lilywittman': { name: '@lilywittman', displayName: 'Lily Wittman', color: '#e8c4a0', initials: 'L' },
+  '@garrett':     { name: '@garrett',     displayName: 'Garrett',      color: '#7ea8c4', initials: 'G' },
 };
 
 function avatarSvg(creator) {
@@ -86,8 +86,8 @@ function buildGrid() {
   gridContainer.querySelectorAll('video').forEach(v => videoObserver.unobserve(v));
   gridContainer.innerHTML = '';
 
-  const cols = Math.max(1, Math.floor((window.innerWidth - 32) / (cardWidth + 8)));
-  gridContainer.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
+  // Let CSS auto-fill handle columns, but set minmax based on slider
+  gridContainer.style.gridTemplateColumns = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
 
   const filtered = getFilteredLooks();
   if (filtered.length === 0) return;
@@ -107,9 +107,9 @@ function buildGrid() {
 function createLookCard(look, i) {
   const card = document.createElement('div');
   card.className = 'look-card';
-  card.style.width = `${cardWidth}px`;
   card.dataset.id = look.id;
 
+  const creatorData = creators[look.creator];
   card.innerHTML = `
     <div class="card-inner">
       <div class="card-shimmer"></div>
@@ -117,7 +117,7 @@ function createLookCard(look, i) {
       <div class="card-gradient"></div>
       <div class="card-creator-row" data-creator="${look.creator}">
         <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
-        <span class="card-creator-name">${look.creator}</span>
+        <span class="card-creator-name">${creatorData ? creatorData.displayName : look.creator}</span>
       </div>
     </div>
   `;
@@ -155,10 +155,11 @@ scaleSlider.addEventListener('input', () => {
 // Open look detail
 function openLook(look, index) {
   // Creator row
+  const cInfo = creators[look.creator];
   detailCreator.innerHTML = `
     <div class="detail-creator-row" data-creator="${look.creator}">
       <img class="detail-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
-      <span class="detail-creator-name">${look.creator}</span>
+      <span class="detail-creator-name">${cInfo ? cInfo.displayName : look.creator}</span>
     </div>
   `;
 
@@ -238,6 +239,7 @@ function openCreatorPage(creatorName) {
     card.className = 'look-card';
     card.style.width = '100%';
 
+    const cData = creators[look.creator];
     card.innerHTML = `
       <div class="card-inner">
         <div class="card-shimmer"></div>
@@ -245,7 +247,7 @@ function openCreatorPage(creatorName) {
         <div class="card-gradient"></div>
         <div class="card-creator-row">
           <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
-          <span class="card-creator-name">${look.creator}</span>
+          <span class="card-creator-name">${cData ? cData.displayName : look.creator}</span>
         </div>
       </div>
     `;
@@ -304,6 +306,12 @@ filterBtns.forEach(btn => {
     filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
     buildGrid();
   });
+});
+
+// Theme toggle
+const themeToggle = document.getElementById('theme-toggle');
+themeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('light-mode');
 });
 
 // Init
