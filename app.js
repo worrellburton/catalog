@@ -99,8 +99,16 @@ const looks = [
 let activeFilter = 'all'; // 'all', 'men', 'women'
 
 function getFilteredLooks() {
-  if (activeFilter === 'all') return looks;
-  return looks.filter(l => l.gender === activeFilter);
+  let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
+  if (searchQuery) {
+    filtered = filtered.filter(l =>
+      l.title.toLowerCase().includes(searchQuery) ||
+      l.creator.toLowerCase().includes(searchQuery) ||
+      l.description.toLowerCase().includes(searchQuery) ||
+      l.products.some(p => p.name.toLowerCase().includes(searchQuery) || p.brand.toLowerCase().includes(searchQuery))
+    );
+  }
+  return filtered;
 }
 
 // DOM
@@ -149,7 +157,21 @@ function buildGrid() {
   }
 
   const filtered = getFilteredLooks();
-  if (filtered.length === 0) return;
+  if (filtered.length === 0) {
+    if (searchQuery) {
+      const noResults = document.createElement('div');
+      noResults.className = 'no-results';
+      noResults.innerHTML = `
+        <div class="no-results-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <h3>No content matches "${searchQuery}"</h3>
+        <p>Try a different search or browse all looks</p>
+      `;
+      gridContainer.appendChild(noResults);
+    }
+    return;
+  }
 
   // Cap repeats to a reasonable number (max ~48 cards)
   const maxCards = 48;
@@ -417,11 +439,26 @@ searchBtn.addEventListener('click', () => {
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
-  bottomSearchInput.value = '';
+  if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
 
 searchBackdrop.addEventListener('click', closeSearch);
+
+// Search filtering
+let searchQuery = '';
+
+bottomSearchInput.addEventListener('input', (e) => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  buildGrid();
+});
+
+bottomSearchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && searchQuery) {
+    closeSearch();
+    // keep the query active — grid already filtered
+  }
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && bottomBar.classList.contains('search-open')) {
