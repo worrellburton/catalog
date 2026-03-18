@@ -277,7 +277,7 @@ body.locked .search-overlay {
   .deck-stat {
     padding: 8px 0;
     text-align: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    border-top: none;
   }
 
   .deck-stat-num {
