@@ -327,6 +327,52 @@ function closeLook() {
 
 closeBtn.addEventListener('click', closeLook);
 
+// Swipe down to close on mobile
+let touchStartY = 0;
+let touchStartX = 0;
+let overlayTranslateY = 0;
+
+overlay.addEventListener('touchstart', (e) => {
+  touchStartY = e.touches[0].clientY;
+  touchStartX = e.touches[0].clientX;
+  overlayTranslateY = 0;
+}, { passive: true });
+
+overlay.addEventListener('touchmove', (e) => {
+  const dy = e.touches[0].clientY - touchStartY;
+  const dx = Math.abs(e.touches[0].clientX - touchStartX);
+  // Only track downward vertical swipes
+  if (dy > 0 && dy > dx) {
+    overlayTranslateY = dy;
+    const opacity = Math.max(0.3, 1 - dy / 400);
+    overlay.style.transform = `translateY(${dy}px)`;
+    overlay.style.opacity = opacity;
+    overlay.style.transition = 'none';
+  }
+}, { passive: true });
+
+overlay.addEventListener('touchend', () => {
+  if (overlayTranslateY > 120) {
+    // Swipe far enough — close
+    overlay.style.transform = `translateY(100vh)`;
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    setTimeout(() => {
+      closeLook();
+      overlay.style.transform = '';
+      overlay.style.opacity = '';
+      overlay.style.transition = '';
+    }, 300);
+  } else {
+    // Snap back
+    overlay.style.transform = '';
+    overlay.style.opacity = '';
+    overlay.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    setTimeout(() => { overlay.style.transition = ''; }, 300);
+  }
+  overlayTranslateY = 0;
+});
+
 // Click anywhere on the overlay (negative space) to close
 overlay.addEventListener('click', (e) => {
   if (e.target === overlay || e.target.closest('.look-media') || (e.target.closest('.look-detail') && !e.target.closest('.product-item') && !e.target.closest('.detail-creator-row'))) {
