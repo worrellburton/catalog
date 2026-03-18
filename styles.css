@@ -209,7 +209,12 @@ body.locked .search-overlay {
 
 .deck-view.active {
   display: block;
+  scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
+}
+
+.deck-slide {
+  scroll-snap-align: start;
 }
 
 @media (max-width: 768px) {
@@ -509,23 +514,29 @@ body.deck-mode .bottom-bar {
 .deck-comparison {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-top: 8px;
-  max-width: 640px;
+  gap: 2px;
+  margin-top: 16px;
+  max-width: 720px;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .deck-compare-col {
-  padding: 24px;
-  border-radius: 12px;
+  padding: 32px;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 0;
+}
+
+.deck-compare-col:last-child {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .compare-header {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  margin-bottom: 20px;
-  padding-bottom: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -541,22 +552,23 @@ body.deck-mode .bottom-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
+  padding: 14px 0;
 }
 
 .compare-label {
-  font-size: 13px;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.35);
 }
 
 .compare-value {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
 }
 
 .compare-value.highlight {
   color: #fff;
+  font-size: 17px;
 }
 
 .compare-value.dim {
@@ -622,6 +634,85 @@ body.deck-mode .bottom-bar {
 @keyframes ringPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.3); }
   50% { box-shadow: 0 0 8px 3px rgba(74, 222, 128, 0.15); }
+}
+
+/* Revenue list */
+.deck-revenue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 680px;
+}
+
+.revenue-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.revenue-item:last-child {
+  border-bottom: none;
+}
+
+.revenue-num {
+  font-size: 20px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+  width: 28px;
+  padding-top: 2px;
+}
+
+.revenue-item h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.revenue-item p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.5;
+}
+
+body.light-mode .revenue-item {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+body.light-mode .revenue-num {
+  color: rgba(0, 0, 0, 0.15);
+}
+
+body.light-mode .revenue-item h3 {
+  color: #1a1a1a;
+}
+
+body.light-mode .revenue-item p {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 768px) {
+  .revenue-item {
+    padding: 10px 0;
+    gap: 12px;
+  }
+
+  .revenue-num {
+    font-size: 16px;
+    width: 22px;
+  }
+
+  .revenue-item h3 {
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .revenue-item p {
+    font-size: 11px;
+  }
 }
 
 /* Deck affiliate logos */
