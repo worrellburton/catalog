@@ -865,7 +865,11 @@ body.light-mode .icon-sun { display: none; }
 
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
-    padding-top: 72px;
+    padding-top: 100px;
+  }
+
+  #grid-viewport::after {
+    display: none;
   }
 }
 
