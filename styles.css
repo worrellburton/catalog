@@ -1570,27 +1570,29 @@ body.light-mode header {
   opacity: 0;
 }
 
-#close-look {
+.look-back-btn {
   position: absolute;
   top: 20px;
-  right: 28px;
+  left: 24px;
   background: none;
   border: none;
-  color: #fff;
-  font-size: 32px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  width: 48px;
-  height: 48px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background 0.2s;
+  gap: 6px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
   z-index: 210;
 }
 
-#close-look:hover {
-  background: rgba(255, 255, 255, 0.1);
+.look-back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .look-detail {
@@ -1900,12 +1902,13 @@ body.light-mode .detail-creator-avatar {
   border-color: rgba(0, 0, 0, 0.15);
 }
 
-body.light-mode #close-look {
-  color: #1a1a1a;
+body.light-mode .look-back-btn {
+  color: rgba(0, 0, 0, 0.5);
 }
 
-body.light-mode #close-look:hover {
+body.light-mode .look-back-btn:hover {
   background: rgba(0, 0, 0, 0.06);
+  color: #1a1a1a;
 }
 
 body.light-mode .bottom-bar {
