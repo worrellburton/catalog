@@ -246,7 +246,7 @@ body.locked .search-overlay {
     line-height: 1.5;
   }
 
-  /* Steps: number on top, compact */
+  /* Steps: compact list on mobile, no lines */
   .deck-steps {
     grid-template-columns: 1fr;
     gap: 0;
@@ -254,17 +254,20 @@ body.locked .search-overlay {
 
   .deck-step {
     padding: 8px 0;
-    border-top: none;
+    border-top: none !important;
   }
 
   .deck-step-num {
-    font-size: 18px;
-    margin-bottom: 4px;
+    font-size: 14px;
+    margin-bottom: 2px;
+    display: inline;
+    margin-right: 8px;
   }
 
   .deck-step h3 {
-    font-size: 14px;
+    font-size: 13px;
     margin-bottom: 2px;
+    display: inline;
   }
 
   .deck-step p {
@@ -520,7 +523,7 @@ body.deck-mode .bottom-bar {
   background: #4ade80;
   border-radius: 2px;
   width: 0;
-  transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 3.6s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
 }
 
