@@ -495,6 +495,7 @@ document.getElementById('deck-mvp-btn').addEventListener('click', () => {
   document.getElementById('deck-view').classList.remove('active');
   document.body.classList.remove('deck-mode');
   document.body.classList.remove('locked');
+  document.body.classList.remove('feed-mode');
   document.body.classList.add('from-deck');
 });
 

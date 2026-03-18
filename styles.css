@@ -220,90 +220,151 @@ body.locked .search-overlay {
   .deck-slide {
     scroll-snap-align: start;
     min-height: 100vh;
-    padding: 60px 24px;
+    max-height: 100vh;
+    overflow: hidden;
+    padding: 48px 20px;
+    justify-content: center;
+  }
+
+  .deck-label {
+    font-size: 10px;
+    margin-bottom: 12px;
   }
 
   .deck-slide h2 {
-    font-size: 24px;
-    margin-bottom: 16px;
+    font-size: 22px;
+    margin-bottom: 12px;
   }
 
   .deck-slide > p {
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  .deck-steps {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .deck-step {
-    padding: 16px 0;
-  }
-
-  .deck-step h3 {
-    font-size: 15px;
-    margin-bottom: 6px;
-  }
-
-  .deck-step p {
     font-size: 13px;
     line-height: 1.5;
   }
 
-  .deck-step-num {
-    font-size: 22px;
-    margin-bottom: 10px;
+  /* Steps: number on the left, content on the right — inline */
+  .deck-steps {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
+  .deck-step {
+    padding: 10px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-top: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .deck-step-num {
+    font-size: 16px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+    width: 24px;
+    padding-top: 2px;
+  }
+
+  .deck-step h3 {
+    font-size: 14px;
+    margin-bottom: 3px;
+  }
+
+  .deck-step p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Stats: horizontal row */
   .deck-stats {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
   }
 
   .deck-stat {
-    padding: 14px 0;
+    padding: 10px 0;
+    text-align: center;
   }
 
   .deck-stat-num {
-    font-size: 36px;
-    margin-bottom: 4px;
+    font-size: 28px;
+    margin-bottom: 2px;
   }
 
   .deck-stat-label {
-    font-size: 12px;
+    font-size: 10px;
   }
 
   .deck-note {
-    font-size: 12px;
-    margin-top: 16px;
+    font-size: 11px;
+    margin-top: 12px;
+    line-height: 1.5;
   }
 
+  /* Flywheel: tighter */
   .deck-flywheel {
     margin-top: 4px;
   }
 
-  .flywheel-step p {
-    font-size: 13px;
+  .flywheel-step {
+    padding: 6px 0 6px 14px;
+    gap: 10px;
   }
 
-  .flywheel-step {
-    padding: 10px 0 10px 16px;
+  .flywheel-num {
+    font-size: 12px;
+    width: 16px;
+  }
+
+  .flywheel-step p {
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .flywheel-arrow {
-    padding: 2px 0 2px 24px;
+    padding: 1px 0 1px 20px;
+    font-size: 12px;
   }
 
+  .flywheel-loop {
+    font-size: 10px;
+  }
+
+  /* Affiliate logos */
   .deck-affiliate-logos {
-    margin-top: 10px;
-    gap: 6px;
+    margin-top: 8px;
+    gap: 4px;
   }
 
   .affiliate-logo {
-    font-size: 10px;
-    padding: 4px 10px;
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  /* Comparison table */
+  .deck-comparison {
+    gap: 10px;
+  }
+
+  .deck-compare-col {
+    padding: 12px;
+  }
+
+  .compare-header {
+    font-size: 12px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+
+  .compare-row {
+    padding: 4px 0;
+  }
+
+  .compare-label {
+    font-size: 11px;
+  }
+
+  .compare-value {
+    font-size: 12px;
   }
 }
 
