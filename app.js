@@ -5,34 +5,38 @@ const pwGate = document.getElementById('password-gate');
 const splashScreen = document.getElementById('splash-screen');
 const PASSWORD = '123';
 
-pwInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    if (pwInput.value === PASSWORD) {
-      pwError.textContent = '';
-      pwGate.classList.add('dismissed');
+function attemptLogin() {
+  if (pwInput.value === PASSWORD) {
+    pwError.textContent = '';
+    pwGate.classList.add('dismissed');
 
-      // Show splash
-      splashScreen.classList.add('active');
+    // Show splash
+    splashScreen.classList.add('active');
 
-      // After splash animations play, fade out and reveal app
-      setTimeout(() => {
-        splashScreen.classList.add('fade-out');
-        document.body.classList.remove('locked');
-      }, 3200);
+    // After splash animations play, fade out and reveal app
+    setTimeout(() => {
+      splashScreen.classList.add('fade-out');
+      document.body.classList.remove('locked');
+    }, 3800);
 
-      // Remove splash from DOM after fade
-      setTimeout(() => {
-        splashScreen.remove();
-        pwGate.remove();
-      }, 4000);
-    } else {
-      pwError.textContent = 'Incorrect code';
-      pwInput.value = '';
-      pwInput.classList.add('shake');
-      setTimeout(() => pwInput.classList.remove('shake'), 500);
-    }
+    // Remove splash from DOM after fade
+    setTimeout(() => {
+      splashScreen.remove();
+      pwGate.remove();
+    }, 4600);
+  } else {
+    pwError.textContent = 'Incorrect code';
+    pwInput.value = '';
+    pwInput.classList.add('shake');
+    setTimeout(() => pwInput.classList.remove('shake'), 500);
   }
+}
+
+pwInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') attemptLogin();
 });
+
+document.getElementById('pw-enter').addEventListener('click', attemptLogin);
 
 // Auto-focus password input
 pwInput.focus();

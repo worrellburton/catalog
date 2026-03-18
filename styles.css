@@ -98,6 +98,27 @@ body.locked .search-overlay {
   letter-spacing: 16px;
 }
 
+.pw-enter {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 10px 40px;
+  border-radius: 24px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.pw-enter:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-8px); }
@@ -158,44 +179,42 @@ body.locked .search-overlay {
   gap: 0;
 }
 
-@keyframes splashLogoIn {
-  0% { opacity: 0; transform: translateY(20px) scale(0.95); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+/* Splash logo stroke draw animation */
+@keyframes strokeDraw {
+  0% {
+    stroke-dashoffset: 5000;
+    fill-opacity: 0;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+  }
 }
 
-@keyframes splashLineExpand {
-  0% { width: 0; opacity: 0; }
-  100% { width: 60px; opacity: 1; }
-}
-
-@keyframes splashTaglineIn {
-  0% { opacity: 0; transform: translateY(10px); }
-  100% { opacity: 1; transform: translateY(0); }
+@keyframes splashGlow {
+  0% { filter: drop-shadow(0 0 0px rgba(255, 255, 255, 0)); }
+  50% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.15)); }
+  100% { filter: drop-shadow(0 0 0px rgba(255, 255, 255, 0)); }
 }
 
 .splash-logo {
-  height: 48px;
+  height: 52px;
   width: auto;
-  color: #fff;
-  opacity: 0;
-  animation: splashLogoIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  animation: splashGlow 2s ease-in-out 1.8s forwards;
 }
 
-.splash-line {
-  height: 1px;
-  width: 0;
-  background: rgba(255, 255, 255, 0.2);
-  margin: 28px 0;
-  animation: splashLineExpand 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
-}
-
-.splash-tagline {
-  font-size: 14px;
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 0.08em;
-  opacity: 0;
-  animation: splashTaglineIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
+.splash-logo path {
+  stroke: #fff;
+  stroke-width: 2;
+  fill: #fff;
+  fill-opacity: 0;
+  stroke-dasharray: 5000;
+  stroke-dashoffset: 5000;
+  animation: strokeDraw 2.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
 }
 
 /* Header */
