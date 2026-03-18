@@ -157,8 +157,18 @@ function buildGrid() {
   }
 
   const filtered = getFilteredLooks();
+  destroyParticleWorld();
   if (filtered.length === 0) {
     if (searchQuery) {
+      const container = document.createElement('div');
+      container.className = 'no-results-container';
+      container.id = 'no-results-container';
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'no-results-canvas';
+      canvas.id = 'particle-canvas';
+      container.appendChild(canvas);
+
       const noResults = document.createElement('div');
       noResults.className = 'no-results';
       noResults.innerHTML = `
@@ -168,7 +178,9 @@ function buildGrid() {
         <h3>No content matches "${searchQuery}"</h3>
         <p>Try a different search or browse all looks</p>
       `;
-      gridContainer.appendChild(noResults);
+      container.appendChild(noResults);
+      document.body.appendChild(container);
+      initParticleWorld(canvas);
     }
     return;
   }
@@ -570,6 +582,136 @@ const deckObserver = new IntersectionObserver((entries) => {
 deckView.querySelectorAll('.deck-slide').forEach(slide => {
   deckObserver.observe(slide);
 });
+
+// 3D Particle world for no-results state
+let particleAnimId = null;
+let particleMouseX = 0;
+let particleMouseY = 0;
+
+function destroyParticleWorld() {
+  if (particleAnimId) {
+    cancelAnimationFrame(particleAnimId);
+    particleAnimId = null;
+  }
+  const existing = document.getElementById('no-results-container');
+  if (existing) existing.remove();
+}
+
+function initParticleWorld(canvas) {
+  const ctx = canvas.getContext('2d');
+  let w, h;
+  const particles = [];
+  const PARTICLE_COUNT = 120;
+  const MOUSE_RADIUS = 140;
+  const isLight = document.body.classList.contains('light-mode');
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Create particles with 3D positions
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      z: Math.random() * 400 + 100, // depth: 100-500
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      vz: (Math.random() - 0.5) * 0.2,
+      baseSize: Math.random() * 1.5 + 0.5,
+    });
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    particleMouseX = e.clientX;
+    particleMouseY = e.clientY;
+  });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 0) {
+      particleMouseX = e.touches[0].clientX;
+      particleMouseY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+
+      // Drift
+      p.x += p.vx;
+      p.y += p.vy;
+      p.z += p.vz;
+
+      // Wrap around
+      if (p.x < -20) p.x = w + 20;
+      if (p.x > w + 20) p.x = -20;
+      if (p.y < -20) p.y = h + 20;
+      if (p.y > h + 20) p.y = -20;
+      if (p.z < 50) p.z = 500;
+      if (p.z > 500) p.z = 50;
+
+      // Perspective projection
+      const scale = 300 / p.z;
+      const screenX = (p.x - w / 2) * scale + w / 2;
+      const screenY = (p.y - h / 2) * scale + h / 2;
+      const size = p.baseSize * scale;
+
+      // Mouse repulsion
+      const dx = screenX - particleMouseX;
+      const dy = screenY - particleMouseY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      let pushX = 0, pushY = 0;
+      if (dist < MOUSE_RADIUS && dist > 0) {
+        const force = (1 - dist / MOUSE_RADIUS) * 3;
+        pushX = (dx / dist) * force;
+        pushY = (dy / dist) * force;
+        p.x += pushX;
+        p.y += pushY;
+      }
+
+      // Draw particle
+      const depthAlpha = Math.max(0.03, 1 - (p.z - 100) / 500);
+      const alpha = depthAlpha * 0.35;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, Math.max(0.5, size), 0, Math.PI * 2);
+      ctx.fillStyle = isLight
+        ? `rgba(0, 0, 0, ${alpha})`
+        : `rgba(255, 255, 255, ${alpha})`;
+      ctx.fill();
+
+      // Draw connections between nearby particles
+      for (let j = i + 1; j < particles.length; j++) {
+        const q = particles[j];
+        const qScale = 300 / q.z;
+        const qx = (q.x - w / 2) * qScale + w / 2;
+        const qy = (q.y - h / 2) * qScale + h / 2;
+        const d = Math.sqrt((screenX - qx) ** 2 + (screenY - qy) ** 2);
+        if (d < 100) {
+          const lineAlpha = (1 - d / 100) * 0.08 * Math.min(depthAlpha, Math.max(0.03, 1 - (q.z - 100) / 500));
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(qx, qy);
+          ctx.strokeStyle = isLight
+            ? `rgba(0, 0, 0, ${lineAlpha})`
+            : `rgba(255, 255, 255, ${lineAlpha})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    particleAnimId = requestAnimationFrame(animate);
+  }
+
+  animate();
+}
 
 // Init
 buildGrid();
