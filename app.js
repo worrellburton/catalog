@@ -25,17 +25,16 @@ function attemptLogin() {
     // Show splash
     splashScreen.classList.add('active');
 
-    // After splash animations play, fade out and reveal app
+    // After splash plays, fade out and reveal app
     setTimeout(() => {
       splashScreen.classList.add('fade-out');
       document.body.classList.remove('locked');
-    }, 3800);
+    }, 2200);
 
-    // Remove splash from DOM after fade
     setTimeout(() => {
       splashScreen.remove();
       pwGate.remove();
-    }, 4600);
+    }, 3000);
   } else {
     pwError.textContent = 'Incorrect code';
     pwInput.value = '';

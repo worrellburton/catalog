@@ -179,35 +179,17 @@ body.locked .search-overlay {
   gap: 0;
 }
 
-/* Splash logo — massive, scrolling right to left */
-@keyframes splashScroll {
-  0% {
-    transform: translateX(10%);
-  }
-  100% {
-    transform: translateX(-60%);
-  }
-}
-
-@keyframes splashFadeIn {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
-.splash-content {
-  width: 100%;
-  overflow: hidden;
+@keyframes splashIn {
+  0% { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .splash-logo {
-  height: 30vh;
+  height: 36px;
   width: auto;
-  color: rgba(255, 255, 255, 0.08);
+  color: #fff;
   opacity: 0;
-  animation:
-    splashFadeIn 0.8s ease 0.2s forwards,
-    splashScroll 4s cubic-bezier(0.25, 0, 0.25, 1) 0.2s forwards;
-  white-space: nowrap;
+  animation: splashIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
 }
 
 .splash-logo path {
@@ -227,6 +209,11 @@ body.locked .search-overlay {
 
 .deck-view.active {
   display: block;
+  scroll-snap-type: y mandatory;
+}
+
+.deck-slide {
+  scroll-snap-align: start;
 }
 
 body.deck-mode header,
