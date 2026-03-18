@@ -594,6 +594,36 @@ body.deck-mode .bottom-bar {
   }
 }
 
+/* Guaranteed badge with animated green ring */
+.compare-value.guaranteed {
+  color: #4ade80;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@keyframes ringDraw {
+  0% { stroke-dashoffset: 63; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.guaranteed-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #4ade80;
+  display: inline-block;
+  flex-shrink: 0;
+  position: relative;
+  animation: ringPulse 2s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.3); }
+  50% { box-shadow: 0 0 8px 3px rgba(74, 222, 128, 0.15); }
+}
+
 /* Deck affiliate logos */
 .deck-affiliate-logos {
   display: flex;
