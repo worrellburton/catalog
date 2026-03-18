@@ -490,6 +490,20 @@ themeToggle.addEventListener('click', () => {
   document.body.classList.toggle('light-mode');
 });
 
+// Deck: See MVP button → show app with back-to-deck
+document.getElementById('deck-mvp-btn').addEventListener('click', () => {
+  document.getElementById('deck-view').classList.remove('active');
+  document.body.classList.remove('deck-mode');
+  document.body.classList.remove('locked');
+  document.body.classList.add('from-deck');
+});
+
+document.getElementById('back-to-deck').addEventListener('click', () => {
+  document.getElementById('deck-view').classList.add('active');
+  document.body.classList.add('deck-mode');
+  document.body.classList.remove('from-deck');
+});
+
 // Deck slide reveal on scroll
 const deckView = document.getElementById('deck-view');
 const deckObserver = new IntersectionObserver((entries) => {

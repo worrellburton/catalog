@@ -371,6 +371,55 @@ body.deck-mode .bottom-bar {
   transform: translateY(0);
 }
 
+/* Deck MVP button */
+.deck-mvp-btn {
+  margin-top: 32px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  padding: 12px 36px;
+  border-radius: 28px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.deck-mvp-btn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Back to deck button */
+.back-to-deck {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 6px 12px 6px 6px;
+  border-radius: 8px;
+  margin-right: 16px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.back-to-deck:hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+body.from-deck .back-to-deck {
+  display: flex;
+}
+
 /* Header */
 header {
   position: fixed;
