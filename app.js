@@ -381,6 +381,24 @@ function closeInAppBrowser() {
   browser.addEventListener('transitionend', () => browser.remove(), { once: true });
 }
 
+// Mobile grid toggle
+const gridToggleBtns = document.querySelectorAll('.grid-toggle-btn');
+let mobileGridCols = 3;
+
+gridToggleBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    mobileGridCols = parseInt(btn.dataset.cols);
+    gridToggleBtns.forEach(b => b.classList.toggle('active', b === btn));
+
+    // Update grid class
+    gridContainer.classList.remove('mobile-cols-1', 'mobile-cols-2', 'mobile-cols-3');
+    gridContainer.classList.add(`mobile-cols-${mobileGridCols}`);
+  });
+});
+
+// Set default mobile grid
+gridContainer.classList.add(`mobile-cols-${mobileGridCols}`);
+
 // Theme toggle
 const themeToggle = document.getElementById('theme-toggle');
 themeToggle.addEventListener('click', () => {
