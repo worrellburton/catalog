@@ -305,6 +305,7 @@ body.light-mode .icon-sun { display: none; }
 
 .look-card.loaded .card-shimmer {
   opacity: 0;
+  animation: none;
 }
 
 .look-card video {

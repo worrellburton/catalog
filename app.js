@@ -126,9 +126,18 @@ function createLookCard(look, i) {
 
   // Observe video for lazy play, mark loaded when video is ready
   const video = card.querySelector('video');
-  const markLoaded = () => card.classList.add('loaded');
+  const shimmer = card.querySelector('.card-shimmer');
+  const markLoaded = () => {
+    if (card.classList.contains('loaded')) return;
+    card.classList.add('loaded');
+    // Remove shimmer from DOM after fade-out transition
+    if (shimmer) {
+      shimmer.addEventListener('transitionend', () => shimmer.remove(), { once: true });
+    }
+  };
   video.addEventListener('playing', markLoaded, { once: true });
   video.addEventListener('canplay', markLoaded, { once: true });
+  video.addEventListener('loadeddata', markLoaded, { once: true });
   videoObserver.observe(video);
 
   const creatorLink = card.querySelector('.card-creator-row');
@@ -270,9 +279,17 @@ function openCreatorPage(creatorName) {
     `;
 
     const video = card.querySelector('video');
-    const markCardLoaded = () => card.classList.add('loaded');
+    const shimmerEl = card.querySelector('.card-shimmer');
+    const markCardLoaded = () => {
+      if (card.classList.contains('loaded')) return;
+      card.classList.add('loaded');
+      if (shimmerEl) {
+        shimmerEl.addEventListener('transitionend', () => shimmerEl.remove(), { once: true });
+      }
+    };
     video.addEventListener('playing', markCardLoaded, { once: true });
     video.addEventListener('canplay', markCardLoaded, { once: true });
+    video.addEventListener('loadeddata', markCardLoaded, { once: true });
     videoObserver.observe(video);
 
     card.addEventListener('click', () => {
