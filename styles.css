@@ -253,25 +253,25 @@ body.locked .search-overlay {
   }
 
   .deck-step {
-    padding: 8px 0;
+    padding: 4px 0 !important;
     border-top: none !important;
   }
 
   .deck-step-num {
-    font-size: 14px;
-    margin-bottom: 2px;
-    display: inline;
-    margin-right: 8px;
+    font-size: 12px !important;
+    margin-bottom: 0 !important;
+    display: inline !important;
+    margin-right: 6px;
   }
 
   .deck-step h3 {
-    font-size: 13px;
-    margin-bottom: 2px;
-    display: inline;
+    font-size: 13px !important;
+    margin-bottom: 2px !important;
+    display: inline !important;
   }
 
   .deck-step p {
-    font-size: 11px;
+    font-size: 11px !important;
     line-height: 1.4;
   }
 
