@@ -16,10 +16,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
-  overflow: hidden;
-  height: 100vh;
-  width: 100vw;
   cursor: default;
+  min-height: 100vh;
 }
 
 /* Header */
@@ -193,26 +191,15 @@ header {
 
 /* Grid viewport */
 #grid-viewport {
-  position: fixed;
-  top: var(--header-height);
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  cursor: grab;
-}
-
-#grid-viewport.dragging {
-  cursor: grabbing;
+  padding-top: var(--header-height);
+  padding-bottom: 100px;
+  min-height: 100vh;
 }
 
 #grid-container {
   display: grid;
   gap: 8px;
   padding: 16px;
-  position: absolute;
-  will-change: transform;
-  transition: none;
 }
 
 /* Look card */
@@ -384,6 +371,38 @@ header {
   justify-content: center;
   color: #fff;
   padding: 20px 0;
+}
+
+/* Detail creator row */
+.detail-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.detail-creator-row:hover {
+  opacity: 0.8;
+}
+
+.detail-creator-row:hover .detail-creator-name {
+  text-decoration: underline;
+}
+
+.detail-creator-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.detail-creator-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
 }
 
 .look-info h2 {

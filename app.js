@@ -56,35 +56,45 @@ const scaleSlider = document.getElementById('scale-slider');
 const overlay = document.getElementById('look-overlay');
 const closeBtn = document.getElementById('close-look');
 const detailMedia = document.getElementById('detail-media');
+const detailCreator = document.getElementById('detail-creator');
 const detailTitle = document.getElementById('detail-title');
 const detailDescription = document.getElementById('detail-description');
 const detailProducts = document.getElementById('detail-products');
 
 // State
 let cardWidth = parseInt(scaleSlider.value);
-let panX = 0;
-let panY = 0;
-let isDragging = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let startPanX = 0;
-let startPanY = 0;
-let hasDragged = false;
+
+// IntersectionObserver to lazy-play videos only when visible
+const videoObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const video = entry.target;
+    if (entry.isIntersecting) {
+      // Only load src when first visible
+      if (!video.src && video.dataset.src) {
+        video.src = video.dataset.src;
+      }
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  });
+}, { rootMargin: '200px' });
 
 // Build grid
 function buildGrid() {
+  // Disconnect all observed videos first
+  gridContainer.querySelectorAll('video').forEach(v => videoObserver.unobserve(v));
   gridContainer.innerHTML = '';
+
   const cols = Math.max(1, Math.floor((window.innerWidth - 32) / (cardWidth + 8)));
   gridContainer.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
 
   const filtered = getFilteredLooks();
   if (filtered.length === 0) return;
 
-  // Calculate how many cards we need to fill the viewport generously
-  const cardHeight = (cardWidth * 4) / 3; // 3:4 aspect ratio
-  const visibleRows = Math.ceil((window.innerHeight * 3) / (cardHeight + 8));
-  const totalNeeded = cols * visibleRows;
-  const repeatCount = Math.max(1, Math.ceil(totalNeeded / filtered.length));
+  // Cap repeats to a reasonable number (max ~48 cards)
+  const maxCards = 48;
+  const repeatCount = Math.max(1, Math.ceil(maxCards / filtered.length));
 
   for (let r = 0; r < repeatCount; r++) {
     filtered.forEach((look, i) => {
@@ -92,8 +102,6 @@ function buildGrid() {
       gridContainer.appendChild(card);
     });
   }
-
-  updateTransform();
 }
 
 function createLookCard(look, i) {
@@ -104,7 +112,7 @@ function createLookCard(look, i) {
 
   card.innerHTML = `
     <div class="card-inner" style="background: ${look.color}">
-      <video src="${look.video}" muted loop playsinline autoplay preload="auto"></video>
+      <video data-src="${look.video}" muted loop playsinline preload="none"></video>
       <div class="card-gradient"></div>
       <div class="card-creator-row" data-creator="${look.creator}">
         <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
@@ -113,15 +121,18 @@ function createLookCard(look, i) {
     </div>
   `;
 
-  // Creator link click
+  // Observe video for lazy play
+  const video = card.querySelector('video');
+  videoObserver.observe(video);
+
   const creatorLink = card.querySelector('.card-creator-row');
   creatorLink.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!hasDragged) openCreatorPage(look.creator);
+    openCreatorPage(look.creator);
   });
 
   card.addEventListener('click', (e) => {
-    if (!hasDragged && !e.target.closest('.card-creator-row')) {
+    if (!e.target.closest('.card-creator-row')) {
       openLook(look, i);
     }
   });
@@ -129,79 +140,31 @@ function createLookCard(look, i) {
   return card;
 }
 
-function updateTransform() {
-  gridContainer.style.transform = `translate(${panX}px, ${panY}px)`;
-}
-
-// Drag to pan
-gridViewport.addEventListener('mousedown', (e) => {
-  if (e.target.closest('#look-overlay')) return;
-  if (e.target.closest('.card-creator-row')) return;
-  isDragging = true;
-  hasDragged = false;
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  startPanX = panX;
-  startPanY = panY;
-  gridViewport.classList.add('dragging');
-  e.preventDefault();
-});
-
-window.addEventListener('mousemove', (e) => {
-  if (!isDragging) return;
-  const dx = e.clientX - dragStartX;
-  const dy = e.clientY - dragStartY;
-  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-    hasDragged = true;
-  }
-  panX = startPanX + dx;
-  panY = startPanY + dy;
-  updateTransform();
-});
-
-window.addEventListener('mouseup', () => {
-  isDragging = false;
-  gridViewport.classList.remove('dragging');
-});
-
-// Touch support
-gridViewport.addEventListener('touchstart', (e) => {
-  if (e.target.closest('#look-overlay')) return;
-  const touch = e.touches[0];
-  isDragging = true;
-  hasDragged = false;
-  dragStartX = touch.clientX;
-  dragStartY = touch.clientY;
-  startPanX = panX;
-  startPanY = panY;
-}, { passive: true });
-
-gridViewport.addEventListener('touchmove', (e) => {
-  if (!isDragging) return;
-  const touch = e.touches[0];
-  const dx = touch.clientX - dragStartX;
-  const dy = touch.clientY - dragStartY;
-  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-    hasDragged = true;
-  }
-  panX = startPanX + dx;
-  panY = startPanY + dy;
-  updateTransform();
-  e.preventDefault();
-}, { passive: false });
-
-gridViewport.addEventListener('touchend', () => {
-  isDragging = false;
-});
-
-// Scale slider
+// Scale slider (debounced)
+let scaleTimeout;
 scaleSlider.addEventListener('input', () => {
-  cardWidth = parseInt(scaleSlider.value);
-  buildGrid();
+  clearTimeout(scaleTimeout);
+  scaleTimeout = setTimeout(() => {
+    cardWidth = parseInt(scaleSlider.value);
+    buildGrid();
+  }, 80);
 });
 
 // Open look detail
 function openLook(look, index) {
+  // Creator row
+  detailCreator.innerHTML = `
+    <div class="detail-creator-row" data-creator="${look.creator}">
+      <img class="detail-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
+      <span class="detail-creator-name">${look.creator}</span>
+    </div>
+  `;
+
+  detailCreator.querySelector('.detail-creator-row').addEventListener('click', () => {
+    closeLook();
+    openCreatorPage(look.creator);
+  });
+
   detailTitle.textContent = look.title;
   detailDescription.textContent = look.description;
   detailMedia.innerHTML = `<video src="${look.video}" autoplay loop muted playsinline style="width:100%;border-radius:12px;aspect-ratio:3/4;object-fit:cover"></video>`;
@@ -231,9 +194,7 @@ closeBtn.addEventListener('click', closeLook);
 
 // Click anywhere on the overlay (negative space) to close
 overlay.addEventListener('click', (e) => {
-  // Close if clicking the overlay background, the detail container, or the media area
-  // Only keep open if clicking product info interactive elements
-  if (e.target === overlay || e.target.closest('.look-media') || e.target.closest('.look-detail') && !e.target.closest('.product-item')) {
+  if (e.target === overlay || e.target.closest('.look-media') || (e.target.closest('.look-detail') && !e.target.closest('.product-item') && !e.target.closest('.detail-creator-row'))) {
     closeLook();
   }
 });
@@ -253,7 +214,6 @@ function openCreatorPage(creatorName) {
   closeCreatorPage();
 
   const creatorLooks = looks.filter(l => l.creator === creatorName);
-  const c = creators[creatorName];
 
   const page = document.createElement('div');
   page.className = 'creator-page';
@@ -278,7 +238,7 @@ function openCreatorPage(creatorName) {
 
     card.innerHTML = `
       <div class="card-inner" style="background: ${look.color}">
-        <video src="${look.video}" muted loop playsinline autoplay preload="auto"></video>
+        <video data-src="${look.video}" muted loop playsinline preload="none"></video>
         <div class="card-gradient"></div>
         <div class="card-creator-row">
           <img class="card-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
@@ -286,6 +246,9 @@ function openCreatorPage(creatorName) {
         </div>
       </div>
     `;
+
+    const video = card.querySelector('video');
+    videoObserver.observe(video);
 
     card.addEventListener('click', () => {
       const globalIndex = looks.findIndex(l => l.id === look.id);
@@ -300,7 +263,10 @@ function openCreatorPage(creatorName) {
 
 function closeCreatorPage() {
   const page = document.getElementById('creator-page');
-  if (page) page.remove();
+  if (page) {
+    page.querySelectorAll('video').forEach(v => videoObserver.unobserve(v));
+    page.remove();
+  }
 }
 
 // Bottom bar - search & filters
@@ -325,23 +291,21 @@ filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     const filter = btn.dataset.filter;
 
-    // Toggle: if already active, go back to 'all'
     if (activeFilter === filter) {
       activeFilter = 'all';
     } else {
       activeFilter = filter;
     }
 
-    // Update active states
     filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
-
-    // Reset pan and rebuild
-    panX = 0;
-    panY = 0;
     buildGrid();
   });
 });
 
 // Init
-window.addEventListener('resize', buildGrid);
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(buildGrid, 150);
+});
 buildGrid();
