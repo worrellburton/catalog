@@ -69,17 +69,12 @@ const videoObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     const video = entry.target;
     if (entry.isIntersecting) {
-      // Only load src when first visible
-      if (video.dataset.src && !video.dataset.loaded) {
-        video.dataset.loaded = '1';
+      if (video.dataset.src && !video.dataset.srcSet) {
+        video.dataset.srcSet = '1';
         video.src = video.dataset.src;
         video.load();
       }
-      video.play().catch(() => {
-        // Autoplay blocked (common on mobile) — mark loaded anyway so shimmer hides
-        const card = video.closest('.look-card');
-        if (card) card.classList.add('loaded');
-      });
+      video.play().catch(() => {});
     } else {
       video.pause();
     }
@@ -128,22 +123,35 @@ function createLookCard(look, i) {
     </div>
   `;
 
-  // Observe video for lazy play, mark loaded when video is ready
   const video = card.querySelector('video');
   const shimmer = card.querySelector('.card-shimmer');
-  const markLoaded = () => {
+
+  function markLoaded() {
     if (card.classList.contains('loaded')) return;
     card.classList.add('loaded');
-    if (shimmer) {
-      shimmer.addEventListener('transitionend', () => shimmer.remove(), { once: true });
-      // Fallback: remove shimmer after 1s if transitionend doesn't fire
-      setTimeout(() => { if (shimmer.parentNode) shimmer.remove(); }, 1000);
+    if (shimmer) setTimeout(() => { if (shimmer.parentNode) shimmer.remove(); }, 700);
+  }
+
+  // Multiple triggers to catch all browser behaviors
+  ['playing', 'canplay', 'loadeddata', 'loadedmetadata'].forEach(evt => {
+    video.addEventListener(evt, markLoaded, { once: true });
+  });
+
+  // Poll fallback: check if video has data every 500ms, give up after 8s
+  let pollCount = 0;
+  const pollInterval = setInterval(() => {
+    pollCount++;
+    if (card.classList.contains('loaded') || pollCount > 16) {
+      clearInterval(pollInterval);
+      markLoaded(); // force it after 8s no matter what
+      return;
     }
-  };
-  video.addEventListener('playing', markLoaded, { once: true });
-  video.addEventListener('canplay', markLoaded, { once: true });
-  video.addEventListener('loadeddata', markLoaded, { once: true });
-  video.addEventListener('loadedmetadata', markLoaded, { once: true });
+    if (video.readyState >= 2) { // HAVE_CURRENT_DATA or better
+      clearInterval(pollInterval);
+      markLoaded();
+    }
+  }, 500);
+
   videoObserver.observe(video);
 
   const creatorLink = card.querySelector('.card-creator-row');
@@ -286,18 +294,31 @@ function openCreatorPage(creatorName) {
 
     const video = card.querySelector('video');
     const shimmerEl = card.querySelector('.card-shimmer');
-    const markCardLoaded = () => {
+
+    function markCardLoaded() {
       if (card.classList.contains('loaded')) return;
       card.classList.add('loaded');
-      if (shimmerEl) {
-        shimmerEl.addEventListener('transitionend', () => shimmerEl.remove(), { once: true });
-        setTimeout(() => { if (shimmerEl.parentNode) shimmerEl.remove(); }, 1000);
+      if (shimmerEl) setTimeout(() => { if (shimmerEl.parentNode) shimmerEl.remove(); }, 700);
+    }
+
+    ['playing', 'canplay', 'loadeddata', 'loadedmetadata'].forEach(evt => {
+      video.addEventListener(evt, markCardLoaded, { once: true });
+    });
+
+    let cPollCount = 0;
+    const cPollInterval = setInterval(() => {
+      cPollCount++;
+      if (card.classList.contains('loaded') || cPollCount > 16) {
+        clearInterval(cPollInterval);
+        markCardLoaded();
+        return;
       }
-    };
-    video.addEventListener('playing', markCardLoaded, { once: true });
-    video.addEventListener('canplay', markCardLoaded, { once: true });
-    video.addEventListener('loadeddata', markCardLoaded, { once: true });
-    video.addEventListener('loadedmetadata', markCardLoaded, { once: true });
+      if (video.readyState >= 2) {
+        clearInterval(cPollInterval);
+        markCardLoaded();
+      }
+    }, 500);
+
     videoObserver.observe(video);
 
     card.addEventListener('click', () => {
@@ -325,42 +346,27 @@ const searchBtn = document.getElementById('search-btn');
 const searchInput = document.getElementById('search-input');
 const filterBtns = document.querySelectorAll('.filter-chip');
 
-// Search - mobile uses overlay, desktop uses inline
+// Search - always use overlay
 const searchOverlay = document.getElementById('search-overlay');
 const searchOverlayInput = document.getElementById('search-overlay-input');
 const searchOverlayClose = document.getElementById('search-overlay-close');
 
-function isMobile() {
-  return window.innerWidth <= 768;
-}
-
 searchBtn.addEventListener('click', () => {
-  if (isMobile()) {
-    searchOverlay.classList.add('open');
-    setTimeout(() => searchOverlayInput.focus(), 100);
-  } else {
-    bottomBar.classList.toggle('search-open');
-    if (bottomBar.classList.contains('search-open')) {
-      searchInput.focus();
-    } else {
-      searchInput.value = '';
-      searchInput.blur();
-    }
-  }
+  searchOverlay.classList.add('open');
+  setTimeout(() => searchOverlayInput.focus(), 100);
 });
 
-searchOverlayClose.addEventListener('click', () => {
+function closeSearch() {
   searchOverlay.classList.remove('open');
   searchOverlayInput.value = '';
   searchOverlayInput.blur();
-});
+}
 
-// Close search overlay on escape
+searchOverlayClose.addEventListener('click', closeSearch);
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && searchOverlay.classList.contains('open')) {
-    searchOverlay.classList.remove('open');
-    searchOverlayInput.value = '';
-    searchOverlayInput.blur();
+    closeSearch();
   }
 });
 
