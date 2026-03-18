@@ -1,17 +1,17 @@
-// Sample look data (placeholders until real videos are provided)
+// Look data with video files and creators
 const looks = [
-  { id: 1, title: 'Look 01', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: [{ name: 'Oversized Blazer', price: '$285' }, { name: 'Wide Leg Trousers', price: '$165' }, { name: 'Leather Belt', price: '$95' }] },
-  { id: 2, title: 'Look 02', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: [{ name: 'Cashmere Sweater', price: '$320' }, { name: 'Silk Camisole', price: '$140' }] },
-  { id: 3, title: 'Look 03', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: [{ name: 'Structured Coat', price: '$450' }, { name: 'Knit Dress', price: '$210' }, { name: 'Ankle Boots', price: '$340' }] },
-  { id: 4, title: 'Look 04', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: [{ name: 'Column Dress', price: '$275' }, { name: 'Statement Earrings', price: '$85' }] },
-  { id: 5, title: 'Look 05', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: [{ name: 'Denim Jacket', price: '$195' }, { name: 'Cotton Tee', price: '$65' }, { name: 'Canvas Sneakers', price: '$120' }] },
-  { id: 6, title: 'Look 06', description: 'Evening allure with timeless sophistication.', color: '#787878', products: [{ name: 'Satin Blouse', price: '$185' }, { name: 'Tailored Skirt', price: '$155' }, { name: 'Clutch Bag', price: '$220' }] },
-  { id: 7, title: 'Look 07', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: [{ name: 'Trench Coat', price: '$395' }, { name: 'Merino Turtleneck', price: '$175' }] },
-  { id: 8, title: 'Look 08', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: [{ name: 'Wool Coat', price: '$520' }, { name: 'Leather Gloves', price: '$110' }, { name: 'Scarf', price: '$95' }] },
-  { id: 9, title: 'Look 09', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: [{ name: 'Wrap Dress', price: '$245' }, { name: 'Strappy Heels', price: '$290' }] },
-  { id: 10, title: 'Look 10', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: [{ name: 'Double-Breasted Suit', price: '$580' }, { name: 'Oxford Shoes', price: '$310' }] },
-  { id: 11, title: 'Look 11', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: [{ name: 'Oversized Shirt', price: '$145' }, { name: 'Midi Skirt', price: '$170' }, { name: 'Flat Sandals', price: '$130' }] },
-  { id: 12, title: 'Look 12', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: [{ name: 'Linen Blazer', price: '$265' }, { name: 'Relaxed Chinos', price: '$135' }, { name: 'Tote Bag', price: '$195' }] },
+  { id: 1, title: 'Look 01', video: 'girl.mp4', creator: '@sophia', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: [{ name: 'Oversized Blazer', price: '$285' }, { name: 'Wide Leg Trousers', price: '$165' }, { name: 'Leather Belt', price: '$95' }] },
+  { id: 2, title: 'Look 02', video: 'guy.mp4', creator: '@marcus', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: [{ name: 'Cashmere Sweater', price: '$320' }, { name: 'Silk Camisole', price: '$140' }] },
+  { id: 3, title: 'Look 03', video: 'girl.mp4', creator: '@sophia', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: [{ name: 'Structured Coat', price: '$450' }, { name: 'Knit Dress', price: '$210' }, { name: 'Ankle Boots', price: '$340' }] },
+  { id: 4, title: 'Look 04', video: 'guy.mp4', creator: '@lena', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: [{ name: 'Column Dress', price: '$275' }, { name: 'Statement Earrings', price: '$85' }] },
+  { id: 5, title: 'Look 05', video: 'girl.mp4', creator: '@marcus', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: [{ name: 'Denim Jacket', price: '$195' }, { name: 'Cotton Tee', price: '$65' }, { name: 'Canvas Sneakers', price: '$120' }] },
+  { id: 6, title: 'Look 06', video: 'guy.mp4', creator: '@lena', description: 'Evening allure with timeless sophistication.', color: '#787878', products: [{ name: 'Satin Blouse', price: '$185' }, { name: 'Tailored Skirt', price: '$155' }, { name: 'Clutch Bag', price: '$220' }] },
+  { id: 7, title: 'Look 07', video: 'girl.mp4', creator: '@sophia', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: [{ name: 'Trench Coat', price: '$395' }, { name: 'Merino Turtleneck', price: '$175' }] },
+  { id: 8, title: 'Look 08', video: 'guy.mp4', creator: '@marcus', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: [{ name: 'Wool Coat', price: '$520' }, { name: 'Leather Gloves', price: '$110' }, { name: 'Scarf', price: '$95' }] },
+  { id: 9, title: 'Look 09', video: 'girl.mp4', creator: '@lena', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: [{ name: 'Wrap Dress', price: '$245' }, { name: 'Strappy Heels', price: '$290' }] },
+  { id: 10, title: 'Look 10', video: 'guy.mp4', creator: '@sophia', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: [{ name: 'Double-Breasted Suit', price: '$580' }, { name: 'Oxford Shoes', price: '$310' }] },
+  { id: 11, title: 'Look 11', video: 'girl.mp4', creator: '@marcus', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: [{ name: 'Oversized Shirt', price: '$145' }, { name: 'Midi Skirt', price: '$170' }, { name: 'Flat Sandals', price: '$130' }] },
+  { id: 12, title: 'Look 12', video: 'guy.mp4', creator: '@lena', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: [{ name: 'Linen Blazer', price: '$265' }, { name: 'Relaxed Chinos', price: '$135' }, { name: 'Tote Bag', price: '$195' }] },
 ];
 
 // DOM
@@ -39,34 +39,53 @@ let hasDragged = false;
 // Build grid
 function buildGrid() {
   gridContainer.innerHTML = '';
-  const cols = Math.max(1, Math.floor((window.innerWidth - 48) / (cardWidth + 12)));
+  const cols = Math.max(1, Math.floor((window.innerWidth - 32) / (cardWidth + 8)));
   gridContainer.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
 
   looks.forEach((look, i) => {
-    const card = document.createElement('div');
-    card.className = 'look-card';
-    card.style.width = `${cardWidth}px`;
-    card.dataset.id = look.id;
-
-    card.innerHTML = `
-      <div class="card-inner" style="background: ${look.color}">
-        <div class="card-placeholder">${String(i + 1).padStart(2, '0')}</div>
-        <div class="card-gradient"></div>
-        <span class="card-title">${look.title}</span>
-        <span class="card-number">${String(i + 1).padStart(2, '0')} / ${looks.length}</span>
-      </div>
-    `;
-
-    card.addEventListener('click', (e) => {
-      if (!hasDragged) {
-        openLook(look, i);
-      }
-    });
-
+    const card = createLookCard(look, i);
     gridContainer.appendChild(card);
   });
 
   updateTransform();
+}
+
+function createLookCard(look, i, clickable = true) {
+  const card = document.createElement('div');
+  card.className = 'look-card';
+  card.style.width = `${cardWidth}px`;
+  card.dataset.id = look.id;
+
+  card.innerHTML = `
+    <div class="card-inner" style="background: ${look.color}">
+      <video src="${look.video}" muted loop playsinline preload="metadata"></video>
+      <div class="card-gradient"></div>
+      <span class="card-creator" data-creator="${look.creator}">${look.creator}</span>
+      <span class="card-number">${String(i + 1).padStart(2, '0')} / ${looks.length}</span>
+    </div>
+  `;
+
+  // Play video on hover
+  const video = card.querySelector('video');
+  card.addEventListener('mouseenter', () => video.play());
+  card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+
+  // Creator link click
+  const creatorLink = card.querySelector('.card-creator');
+  creatorLink.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!hasDragged) openCreatorPage(look.creator);
+  });
+
+  if (clickable) {
+    card.addEventListener('click', (e) => {
+      if (!hasDragged && !e.target.classList.contains('card-creator')) {
+        openLook(look, i);
+      }
+    });
+  }
+
+  return card;
 }
 
 function updateTransform() {
@@ -76,6 +95,7 @@ function updateTransform() {
 // Drag to pan
 gridViewport.addEventListener('mousedown', (e) => {
   if (e.target.closest('#look-overlay')) return;
+  if (e.target.closest('.card-creator')) return;
   isDragging = true;
   hasDragged = false;
   dragStartX = e.clientX;
@@ -104,8 +124,6 @@ window.addEventListener('mouseup', () => {
 });
 
 // Touch support
-let touchStartX = 0, touchStartY = 0;
-
 gridViewport.addEventListener('touchstart', (e) => {
   if (e.target.closest('#look-overlay')) return;
   const touch = e.touches[0];
@@ -145,7 +163,7 @@ scaleSlider.addEventListener('input', () => {
 function openLook(look, index) {
   detailTitle.textContent = look.title;
   detailDescription.textContent = look.description;
-  detailMedia.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:64px;color:rgba(255,255,255,0.06);font-weight:700;background:${look.color};border-radius:12px;aspect-ratio:3/1">${String(index + 1).padStart(2, '0')}</div>`;
+  detailMedia.innerHTML = `<video src="${look.video}" autoplay loop muted playsinline style="width:100%;border-radius:12px;aspect-ratio:3/1;object-fit:cover"></video>`;
 
   detailProducts.innerHTML = look.products.map(p => `
     <div class="product-item">
@@ -158,13 +176,14 @@ function openLook(look, index) {
   `).join('');
 
   overlay.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
 }
 
 // Close look detail
 function closeLook() {
   overlay.classList.add('hidden');
-  document.body.style.overflow = '';
+  // Pause detail video
+  const vid = detailMedia.querySelector('video');
+  if (vid) vid.pause();
 }
 
 closeBtn.addEventListener('click', closeLook);
@@ -174,8 +193,71 @@ overlay.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeLook();
+  if (e.key === 'Escape') {
+    if (!overlay.classList.contains('hidden')) {
+      closeLook();
+    } else {
+      closeCreatorPage();
+    }
+  }
 });
+
+// Creator catalog page
+function openCreatorPage(creatorName) {
+  // Remove existing creator page if any
+  closeCreatorPage();
+
+  const creatorLooks = looks.filter(l => l.creator === creatorName);
+
+  const page = document.createElement('div');
+  page.className = 'creator-page';
+  page.id = 'creator-page';
+
+  page.innerHTML = `
+    <button class="creator-back" id="creator-back">&larr; Back</button>
+    <div class="creator-header">
+      <h1>${creatorName}</h1>
+      <p>${creatorLooks.length} looks</p>
+    </div>
+    <div class="creator-grid" id="creator-grid"></div>
+  `;
+
+  document.body.appendChild(page);
+
+  const creatorGrid = page.querySelector('#creator-grid');
+  creatorLooks.forEach((look, i) => {
+    const card = document.createElement('div');
+    card.className = 'look-card';
+    card.style.width = '100%';
+
+    card.innerHTML = `
+      <div class="card-inner" style="background: ${look.color}">
+        <video src="${look.video}" muted loop playsinline preload="metadata"></video>
+        <div class="card-gradient"></div>
+        <span class="card-creator">${look.creator}</span>
+        <span class="card-number">${look.title}</span>
+      </div>
+    `;
+
+    const video = card.querySelector('video');
+    card.addEventListener('mouseenter', () => video.play());
+    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+
+    card.addEventListener('click', () => {
+      const globalIndex = looks.findIndex(l => l.id === look.id);
+      openLook(look, globalIndex);
+    });
+
+    creatorGrid.appendChild(card);
+  });
+
+  page.querySelector('#creator-back').addEventListener('click', closeCreatorPage);
+}
+
+function closeCreatorPage() {
+  const page = document.getElementById('creator-page');
+  if (page) page.remove();
+}
 
 // Init
 window.addEventListener('resize', buildGrid);
