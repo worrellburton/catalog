@@ -20,6 +20,7 @@ function attemptLogin() {
   if (val === PASSWORD) {
     pwError.textContent = '';
     pwGate.classList.add('dismissed');
+    document.body.classList.remove('from-deck');
 
     // Show splash
     splashScreen.classList.add('active');
