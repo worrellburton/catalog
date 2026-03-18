@@ -241,36 +241,29 @@ body.locked .search-overlay {
     line-height: 1.5;
   }
 
-  /* Steps: number on the left, content on the right — inline */
+  /* Steps: number on top, compact */
   .deck-steps {
     grid-template-columns: 1fr;
     gap: 0;
   }
 
   .deck-step {
-    padding: 10px 0;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    border-top: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .deck-step-num {
-    font-size: 16px;
-    margin-bottom: 0;
-    flex-shrink: 0;
-    width: 24px;
-    padding-top: 2px;
+    font-size: 18px;
+    margin-bottom: 4px;
   }
 
   .deck-step h3 {
     font-size: 14px;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
   }
 
   .deck-step p {
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.4;
   }
 
