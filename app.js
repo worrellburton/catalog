@@ -1,3 +1,42 @@
+// Password gate
+const pwInput = document.getElementById('pw-input');
+const pwError = document.getElementById('pw-error');
+const pwGate = document.getElementById('password-gate');
+const splashScreen = document.getElementById('splash-screen');
+const PASSWORD = '123';
+
+pwInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (pwInput.value === PASSWORD) {
+      pwError.textContent = '';
+      pwGate.classList.add('dismissed');
+
+      // Show splash
+      splashScreen.classList.add('active');
+
+      // After splash animations play, fade out and reveal app
+      setTimeout(() => {
+        splashScreen.classList.add('fade-out');
+        document.body.classList.remove('locked');
+      }, 3200);
+
+      // Remove splash from DOM after fade
+      setTimeout(() => {
+        splashScreen.remove();
+        pwGate.remove();
+      }, 4000);
+    } else {
+      pwError.textContent = 'Incorrect code';
+      pwInput.value = '';
+      pwInput.classList.add('shake');
+      setTimeout(() => pwInput.classList.remove('shake'), 500);
+    }
+  }
+});
+
+// Auto-focus password input
+pwInput.focus();
+
 // Creator profiles with avatar colors (will use generated SVG avatars)
 const creators = {
   '@lilywittman': { name: '@lilywittman', displayName: 'Lily Wittman', color: '#e8c4a0', initials: 'L' },
