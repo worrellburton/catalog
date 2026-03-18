@@ -70,8 +70,10 @@ const videoObserver = new IntersectionObserver((entries) => {
     const video = entry.target;
     if (entry.isIntersecting) {
       // Only load src when first visible
-      if (!video.src && video.dataset.src) {
+      if (video.dataset.src && !video.dataset.loaded) {
+        video.dataset.loaded = '1';
         video.src = video.dataset.src;
+        video.load();
       }
       video.play().catch(() => {});
     } else {
@@ -122,9 +124,11 @@ function createLookCard(look, i) {
     </div>
   `;
 
-  // Observe video for lazy play, mark loaded when playing
+  // Observe video for lazy play, mark loaded when video is ready
   const video = card.querySelector('video');
-  video.addEventListener('playing', () => card.classList.add('loaded'), { once: true });
+  const markLoaded = () => card.classList.add('loaded');
+  video.addEventListener('playing', markLoaded, { once: true });
+  video.addEventListener('canplay', markLoaded, { once: true });
   videoObserver.observe(video);
 
   const creatorLink = card.querySelector('.card-creator-row');
@@ -266,7 +270,9 @@ function openCreatorPage(creatorName) {
     `;
 
     const video = card.querySelector('video');
-    video.addEventListener('playing', () => card.classList.add('loaded'), { once: true });
+    const markCardLoaded = () => card.classList.add('loaded');
+    video.addEventListener('playing', markCardLoaded, { once: true });
+    video.addEventListener('canplay', markCardLoaded, { once: true });
     videoObserver.observe(video);
 
     card.addEventListener('click', () => {
