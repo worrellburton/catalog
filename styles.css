@@ -1399,7 +1399,7 @@ body.feed-mode .header-center {
   bottom: 0;
   overflow: hidden;
   pointer-events: none;
-  z-index: 98;
+  z-index: 100;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 60%, transparent 90%);
   mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 60%, transparent 90%);
   opacity: 0;
