@@ -2177,11 +2177,11 @@ body.light-mode header {
 
 .look-card .card-creator-row {
   position: absolute;
-  bottom: 10px;
-  left: 10px;
+  bottom: 8px;
+  left: 8px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   z-index: 2;
   cursor: pointer;
   text-decoration: none;
@@ -2197,12 +2197,12 @@ body.light-mode header {
 }
 
 .card-creator-avatar {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  max-width: 28px;
-  max-height: 28px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  max-width: 22px;
+  max-height: 22px;
   border-radius: 50%;
   object-fit: cover;
   border: 1.5px solid rgba(255, 255, 255, 0.5);
@@ -2211,7 +2211,7 @@ body.light-mode header {
 }
 
 .card-creator-name {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
