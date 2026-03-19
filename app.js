@@ -727,7 +727,7 @@ const filterApplyBtn = document.getElementById('filter-apply-btn');
 const filterCatalogName = document.getElementById('filter-catalog-name');
 const filterOptions = document.querySelectorAll('.filter-option');
 
-const activeFilters = { who: [], style: [], location: [], price: [] };
+const activeFilters = { who: [], style: [], location: [], price: [], occasion: [], type: [] };
 
 function openFilters() {
   bottomBar.classList.add('filters-open');
@@ -753,12 +753,32 @@ filterBtn.addEventListener('click', () => {
 // Toggle filter options
 filterOptions.forEach(btn => {
   btn.addEventListener('click', () => {
+    // Handle expandable buttons (like Fashion)
+    const expandsId = btn.dataset.expands;
+    if (expandsId) {
+      const subPanel = document.getElementById(expandsId);
+      if (subPanel) {
+        const isOpen = subPanel.classList.contains('open');
+        // Close all sub-panels first
+        document.querySelectorAll('.filter-sub-panel').forEach(p => p.classList.remove('open'));
+        if (!isOpen) {
+          subPanel.classList.add('open');
+        }
+      }
+    }
+
     const cat = btn.dataset.category;
     const val = btn.dataset.value;
+    if (!activeFilters[cat]) activeFilters[cat] = [];
     const idx = activeFilters[cat].indexOf(val);
     if (idx >= 0) {
       activeFilters[cat].splice(idx, 1);
       btn.classList.remove('active');
+      // Close sub-panel when deactivating
+      if (expandsId) {
+        const subPanel = document.getElementById(expandsId);
+        if (subPanel) subPanel.classList.remove('open');
+      }
     } else {
       activeFilters[cat].push(val);
       btn.classList.add('active');
@@ -837,6 +857,30 @@ const catalogNames = {
   'cards+budget': ['Penny Ante Fits', 'The Wild Card Deal', 'Go Fish for Deals'],
   'wellness+budget': ['Broke & Balanced', 'DIY Detox Edit', 'Zen on a Dime'],
   'wellness+luxury': ['Goop Energy', 'The Wellness Industrial Complex', 'Crystal-Infused Catalog'],
+
+  // Occasion sub-filters
+  datenight: ['Hot & Unbothered', 'The Third Date Edit', 'Rizz Catalog™', 'Main Character Date Night'],
+  workout: ['Sweat Now, Slay Later', 'Gym Rat Glamour', 'The Gains Gazette', 'Protein Shake Chic'],
+  brunch: ['Mimosa Mode', 'The Bottomless Edit', 'Eggs Benny & Beyond', 'Sunday Scaries Lookbook'],
+  wedding: ['Plus One Panic', 'The "I Do" Crew Edit', 'Open Bar Outfit Guide', 'Crying at Weddings Chic'],
+  festival: ['Glitter & Regret', 'Lost at Coachella', 'The Porta Potty Proof Edit', 'Main Stage Energy'],
+  office: ['Corporate Slay', 'Quiet Quitting Couture', 'The Reply All Edit', 'Zoom Ready™'],
+
+  // Type sub-filters
+  streetwear: ['Hype Beast Herald', 'Drop Day Dispatch', 'The Resale Report', 'Supreme Court of Style'],
+  minimalist: ['Less is More-ish', 'The Capsule Files', 'Blank Canvas Catalog', 'Marie Kondo Mode'],
+  vintage: ['Thrift Flip Tribune', 'Grandma\'s Closet Gold', 'The Y2K Revival', 'Secondhand Serotonin'],
+  athleisure: ['Yoga Pants & Ambition', 'The Errand Run Edit', 'Sporty Spice Diaries', 'Couch to Brunch'],
+  formal: ['Black Tie Butterflies', 'The Gala Gazette', 'Fancy Pants Protocol', 'Red Carpet Rental™'],
+  boho: ['Free Spirit Starter Pack', 'The Wanderlust Edit', 'Desert Rose Dispatch', 'Flower Child Files'],
+
+  // Fun combos with sub-filters
+  'datenight+luxury': ['Sugar Daddy Date Night', 'The Michelin Star Edit', 'Black Amex Romance'],
+  'datenight+budget': ['Dollar Menu Date Night', 'Netflix & Thrift', 'Cheap Thrills Catalog'],
+  'dogs+datenight': ['Bring Your Dog to Dinner', 'Paws & Romance', 'The Dog Park Meet-Cute'],
+  'cats+office': ['Corporate Cat Lady', 'Cat Hair Don\'t Care™', 'The 9-to-5 Meow'],
+  'workout+budget': ['Planet Fitness Fits', 'Broke & Buff', 'The Free Trial Edit'],
+  'festival+budget': ['Shein Festival Survival', 'DIY Flower Crown Energy', 'Broke at Burning Man'],
 };
 
 function updateCatalogName() {

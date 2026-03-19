@@ -1445,8 +1445,73 @@ body.feed-mode .header-center {
 }
 
 .filter-icon {
-  font-size: 14px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.filter-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.filter-option.active .filter-icon svg {
+  stroke: #000;
+}
+
+/* Expandable filter sub-panel */
+.filter-expandable {
+  position: relative;
+}
+
+.expand-arrow {
+  margin-left: 2px;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.filter-expandable.active .expand-arrow {
+  transform: rotate(180deg);
+  stroke: #000;
+  opacity: 1;
+}
+
+.filter-sub-panel {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  animation: filterSubIn 0.2s ease;
+}
+
+.filter-sub-panel.open {
+  display: flex;
+}
+
+@keyframes filterSubIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.filter-sub-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-sub-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .filter-apply-btn {
@@ -2818,6 +2883,23 @@ body.light-mode .filter-option:hover {
 body.light-mode .filter-option.active {
   background: rgba(0, 0, 0, 0.85);
   color: #fff;
+}
+
+body.light-mode .filter-option.active .filter-icon svg {
+  stroke: #fff;
+}
+
+body.light-mode .filter-sub-panel {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+body.light-mode .filter-sub-label {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+body.light-mode .filter-expandable.active .expand-arrow {
+  stroke: #fff;
 }
 
 body.light-mode .filter-apply-btn {
