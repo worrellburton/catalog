@@ -585,7 +585,11 @@ const suggestionsContainer = document.getElementById('search-suggestions');
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
-  if (suggestionsContainer) suggestionsContainer.classList.add('visible');
+  if (suggestionsContainer) {
+    // Reset any tapped states
+    suggestionsContainer.querySelectorAll('.tapped').forEach(el => el.classList.remove('tapped'));
+    suggestionsContainer.classList.add('visible');
+  }
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
@@ -627,24 +631,39 @@ const searchSuggestions = [
   'brunch outfit', 'skincare routine', 'festival looks', 'quiet luxury',
   'clean girl aesthetic', 'wedding guest dress', 'vintage finds',
   'sneaker rotation', 'concert outfit', 'airport outfit',
-  'first date fit', 'matcha everything', 'pilates princess'
+  'first date fit', 'matcha everything', 'pilates princess',
+  'cozy fall vibes', 'coffee shops LA', 'travel essentials',
+  'old money style', 'dopamine dressing', 'it girl energy',
+  'minimalist wardrobe', 'hot girl walk essentials', 'lazy sunday'
 ];
 
 if (suggestionsContainer) {
   const shuffled = [...searchSuggestions].sort(() => Math.random() - 0.5);
-  suggestionsContainer.innerHTML = shuffled.map(s =>
+  // Duplicate for seamless infinite scroll
+  const items = [...shuffled, ...shuffled];
+  const track = document.createElement('div');
+  track.className = 'search-suggestions-track';
+  track.innerHTML = items.map(s =>
     `<button class="search-suggestion" data-query="${s}">${s}</button>`
   ).join('');
+  suggestionsContainer.appendChild(track);
 
   suggestionsContainer.addEventListener('click', (e) => {
     const btn = e.target.closest('.search-suggestion');
-    if (!btn) return;
-    // Open search bar and populate with the suggestion
-    bottomBar.classList.add('search-open');
-    searchBackdrop.classList.add('visible');
-    bottomSearchInput.value = btn.dataset.query;
-    bottomSearchInput.dispatchEvent(new Event('input'));
-    setTimeout(() => bottomSearchInput.focus(), 100);
+    if (!btn || btn.classList.contains('tapped')) return;
+    const query = btn.dataset.query;
+
+    // Tap animation
+    btn.classList.add('tapped');
+
+    // After animation, close suggestions and search
+    setTimeout(() => {
+      bottomSearchInput.value = query;
+      searchQuery = query.toLowerCase();
+      buildGrid();
+      suggestionsContainer.classList.remove('visible');
+      closeSearch();
+    }, 600);
   });
 }
 

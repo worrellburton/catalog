@@ -1403,14 +1403,13 @@ body.feed-mode .header-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 60px 20px;
-  overflow-y: auto;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
 }
 
 .search-suggestions.visible {
@@ -1418,31 +1417,97 @@ body.feed-mode .header-center {
   visibility: visible;
 }
 
+.search-suggestions-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 40px 20px;
+  animation: scrollSuggestions 30s linear infinite;
+}
+
+@keyframes scrollSuggestions {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
 .search-suggestion {
-  padding: 8px 20px;
+  padding: 10px 24px;
   border-radius: 20px;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 20px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 28px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.2s ease;
   white-space: nowrap;
   pointer-events: auto;
   font-family: inherit;
+  transition: color 0.2s ease, transform 0.2s ease;
+  line-height: 1.8;
 }
 
 .search-suggestion:hover {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Tap animation */
+.search-suggestion.tapped {
+  animation: suggestionTap 0.6s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes suggestionTap {
+  0% {
+    transform: scale(1);
+    color: rgba(255, 255, 255, 0.35);
+  }
+  30% {
+    transform: scale(1.15);
+    color: #fff;
+    text-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 0 0 60px rgba(255, 255, 255, 0.4);
+  }
+  100% {
+    transform: scale(0.9);
+    color: #fff;
+    opacity: 0;
+    text-shadow: 0 0 40px rgba(255, 255, 255, 0.6);
+  }
 }
 
 body.light-mode .search-suggestion {
-  color: rgba(0, 0, 0, 0.2);
+  color: rgba(0, 0, 0, 0.15);
 }
 
 body.light-mode .search-suggestion:hover {
-  color: rgba(0, 0, 0, 0.8);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+body.light-mode .search-suggestion.tapped {
+  animation: suggestionTapLight 0.6s ease forwards;
+}
+
+@keyframes suggestionTapLight {
+  0% {
+    transform: scale(1);
+    color: rgba(0, 0, 0, 0.15);
+  }
+  30% {
+    transform: scale(1.15);
+    color: #000;
+    text-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    transform: scale(0.9);
+    color: #000;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-suggestion {
+    font-size: 24px;
+  }
 }
 
 @keyframes glowPulse {
