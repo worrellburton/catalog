@@ -1130,6 +1130,8 @@ body.light-mode .icon-sun { display: none; }
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
     padding-top: 80px;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   /* Black padding spacer above the grid on mobile */
