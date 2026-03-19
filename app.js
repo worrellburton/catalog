@@ -581,19 +581,15 @@ const filterBtns = document.querySelectorAll('.filter-chip');
 const searchBackdrop = document.getElementById('search-backdrop');
 const bottomSearchInput = document.getElementById('bottom-search-input');
 
-const crawlContainer = document.getElementById('crawl-container');
-
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
-  if (crawlContainer) crawlContainer.classList.add('visible');
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
-  if (crawlContainer) crawlContainer.classList.remove('visible');
   if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
@@ -621,49 +617,29 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Star Wars crawl — search ideas on main screen
-const crawlIdeas = [
+// Search suggestions
+const searchSuggestions = [
   'beach day', 'mens shorts', 'omg shoes', 'make me hot',
-  'healthy food', 'paris', 'restaurants in NYC', 'date night outfit',
-  'cozy fall vibes', 'gym fits', 'summer dresses', 'streetwear',
-  'coffee shops LA', 'brunch outfit', 'skincare routine', 'festival looks',
-  'travel essentials', 'clean girl aesthetic', 'wedding guest dress',
-  'vintage finds', 'apartment decor', 'sneaker rotation', 'hiking gear',
-  'best sunglasses', 'cocktail recipes', 'book recommendations',
-  'work from home setup', 'ski trip', 'golden hour pics', 'thrift haul',
-  'Tokyo street style', 'plant mom', 'vinyl collection', 'sunset chasing',
-  'morning routine', 'laptop bags', 'denim on denim', 'smoothie bowls',
-  'rooftop bars', 'linen everything', 'road trip snacks', 'yoga fits',
-  'minimalist wardrobe', 'concert outfit', 'self care sunday',
-  'what to wear in Italy', 'best tacos ever', 'coastal grandmother',
-  'mob wife aesthetic', 'quiet luxury', 'old money style', 'gorpcore',
-  'cottagecore', 'dopamine dressing', 'tech bro uniform', 'it girl energy',
-  'summer in Greece', 'Miami nightlife', 'London fog weather',
-  'cabin in the woods', 'after party looks', 'airport outfit',
-  'first date fit', 'lazy sunday', 'farmers market haul',
-  'best pizza NYC', 'matcha everything', 'pilates princess',
-  'hot girl walk essentials', 'desk setup inspo'
+  'date night outfit', 'gym fits', 'summer dresses', 'streetwear',
+  'brunch outfit', 'skincare routine', 'festival looks', 'quiet luxury',
+  'clean girl aesthetic', 'wedding guest dress', 'vintage finds',
+  'sneaker rotation', 'concert outfit', 'airport outfit',
+  'first date fit', 'matcha everything', 'pilates princess'
 ];
 
-const crawlContent = document.getElementById('crawl-content');
-if (crawlContent) {
-  // Shuffle and repeat for long scroll
-  const shuffled = [...crawlIdeas].sort(() => Math.random() - 0.5);
-  const doubled = [...shuffled, ...shuffled];
-  crawlContent.innerHTML = doubled.map(idea =>
-    `<div class="crawl-line" data-query="${idea}">${idea}</div>`
+const suggestionsContainer = document.getElementById('search-suggestions');
+if (suggestionsContainer) {
+  const shuffled = [...searchSuggestions].sort(() => Math.random() - 0.5);
+  suggestionsContainer.innerHTML = shuffled.map(s =>
+    `<button class="search-suggestion" data-query="${s}">${s}</button>`
   ).join('');
 
-  crawlContent.addEventListener('click', (e) => {
-    const line = e.target.closest('.crawl-line');
-    if (!line) return;
-    const query = line.dataset.query;
-    // Open search and populate
-    bottomBar.classList.add('search-open');
-    searchBackdrop.classList.add('visible');
-    bottomSearchInput.value = query;
+  suggestionsContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.search-suggestion');
+    if (!btn) return;
+    bottomSearchInput.value = btn.dataset.query;
     bottomSearchInput.dispatchEvent(new Event('input'));
-    setTimeout(() => bottomSearchInput.focus(), 100);
+    bottomSearchInput.focus();
   });
 }
 

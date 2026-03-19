@@ -1380,6 +1380,8 @@ body.feed-mode .header-center {
   width: 90%;
   max-width: 520px;
   border-radius: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .bottom-search-tagline {
@@ -1390,83 +1392,42 @@ body.feed-mode .header-center {
   letter-spacing: -0.01em;
 }
 
-/* Star Wars style crawl on main screen */
-.crawl-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 100;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 60%, transparent 90%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 60%, transparent 90%);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-
-.crawl-container.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.crawl-perspective {
-  width: 100%;
-  height: 100%;
-  perspective: 300px;
+/* Search suggestions */
+.search-suggestions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: center;
-  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 0;
 }
 
-.crawl-content {
-  position: absolute;
-  top: 100%;
-  width: 70%;
-  max-width: 600px;
-  text-align: center;
-  transform-origin: 50% 100%;
-  transform: rotateX(20deg);
-  animation: crawlUp 40s linear infinite;
-}
-
-@keyframes crawlUp {
-  0% { top: 100%; }
-  100% { top: -250%; }
-}
-
-.crawl-line {
-  font-size: 28px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.12);
-  line-height: 2.4;
-  white-space: nowrap;
+.search-suggestion {
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  pointer-events: auto;
-  transition: color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
 }
 
-.crawl-line:hover {
-  color: rgba(255, 255, 255, 0.4);
+.search-suggestion:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
-body.light-mode .crawl-line {
-  color: rgba(0, 0, 0, 0.07);
+body.light-mode .search-suggestion {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.5);
 }
 
-body.light-mode .crawl-line:hover {
-  color: rgba(0, 0, 0, 0.25);
-}
-
-@media (max-width: 768px) {
-  .crawl-content {
-    width: 90%;
-  }
-  .crawl-line {
-    font-size: 22px;
-    line-height: 2.2;
-  }
+body.light-mode .search-suggestion:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.8);
 }
 
 @keyframes glowPulse {
