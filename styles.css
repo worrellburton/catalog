@@ -1498,7 +1498,12 @@ body.light-mode .search-suggestion.tapped {
 
 @media (max-width: 768px) {
   .search-suggestion {
-    font-size: 24px;
+    font-size: 22px;
+    padding: 12px 20px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .search-suggestions-track {
+    gap: 2px;
   }
 }
 
@@ -1546,6 +1551,12 @@ body.light-mode .search-suggestion.tapped {
   .bottom-bar {
     bottom: 8px;
     border-radius: 22px;
+  }
+  .bottom-bar.search-open {
+    bottom: 12px;
+  }
+  .search-suggestions {
+    bottom: 100px;
   }
 }
 
