@@ -581,15 +581,19 @@ const filterBtns = document.querySelectorAll('.filter-chip');
 const searchBackdrop = document.getElementById('search-backdrop');
 const bottomSearchInput = document.getElementById('bottom-search-input');
 
+const crawlContainer = document.getElementById('crawl-container');
+
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
+  if (crawlContainer) crawlContainer.classList.add('visible');
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
+  if (crawlContainer) crawlContainer.classList.remove('visible');
   if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
