@@ -1400,9 +1400,6 @@ body.feed-mode .header-center {
   right: 0;
   bottom: 140px;
   z-index: 101;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
@@ -1423,12 +1420,7 @@ body.feed-mode .header-center {
   align-items: center;
   gap: 6px;
   padding: 40px 20px;
-  animation: scrollSuggestions 30s linear infinite;
-}
-
-@keyframes scrollSuggestions {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-50%); }
+  will-change: transform;
 }
 
 .search-suggestion {

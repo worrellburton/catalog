@@ -648,6 +648,43 @@ if (suggestionsContainer) {
   ).join('');
   suggestionsContainer.appendChild(track);
 
+  // JS-driven auto-scroll
+  let scrollY = 0;
+  let scrollRAF = null;
+  const scrollSpeed = 0.5; // px per frame
+
+  function autoScroll() {
+    scrollY += scrollSpeed;
+    // Reset when first half has scrolled out (seamless loop)
+    const halfHeight = track.scrollHeight / 2;
+    if (halfHeight > 0 && scrollY >= halfHeight) {
+      scrollY -= halfHeight;
+    }
+    track.style.transform = `translateY(-${scrollY}px)`;
+    scrollRAF = requestAnimationFrame(autoScroll);
+  }
+
+  function startScroll() {
+    if (!scrollRAF) scrollRAF = requestAnimationFrame(autoScroll);
+  }
+
+  function stopScroll() {
+    if (scrollRAF) {
+      cancelAnimationFrame(scrollRAF);
+      scrollRAF = null;
+    }
+  }
+
+  // Start/stop scroll when suggestions show/hide
+  const observer = new MutationObserver(() => {
+    if (suggestionsContainer.classList.contains('visible')) {
+      startScroll();
+    } else {
+      stopScroll();
+    }
+  });
+  observer.observe(suggestionsContainer, { attributes: true, attributeFilter: ['class'] });
+
   suggestionsContainer.addEventListener('click', (e) => {
     const btn = e.target.closest('.search-suggestion');
     if (!btn || btn.classList.contains('tapped')) return;
