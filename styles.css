@@ -1454,6 +1454,41 @@ body.feed-mode .header-center {
   border-color: transparent;
 }
 
+/* Featured creator filter buttons */
+.filter-creator-option {
+  padding: 5px 14px 5px 5px;
+  border-radius: 24px;
+}
+
+.filter-creator-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.filter-creator-option.glow {
+  border-color: rgba(168, 130, 255, 0.4);
+  box-shadow: 0 0 8px rgba(168, 130, 255, 0.25), 0 0 20px rgba(168, 130, 255, 0.1);
+  animation: creatorGlow 2.5s ease-in-out infinite;
+}
+
+.filter-creator-option.glow:hover {
+  border-color: rgba(168, 130, 255, 0.6);
+  box-shadow: 0 0 12px rgba(168, 130, 255, 0.4), 0 0 30px rgba(168, 130, 255, 0.15);
+}
+
+.filter-creator-option.glow.active {
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(168, 130, 255, 0.5), 0 0 30px rgba(168, 130, 255, 0.2);
+  animation: none;
+}
+
+@keyframes creatorGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(168, 130, 255, 0.25), 0 0 20px rgba(168, 130, 255, 0.1); }
+  50% { box-shadow: 0 0 14px rgba(168, 130, 255, 0.45), 0 0 30px rgba(168, 130, 255, 0.2); }
+}
+
 .filter-icon {
   display: flex;
   align-items: center;

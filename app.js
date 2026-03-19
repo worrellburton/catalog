@@ -758,7 +758,7 @@ const filterApplyBtn = document.getElementById('filter-apply-btn');
 const filterCatalogName = document.getElementById('filter-catalog-name');
 const filterOptions = document.querySelectorAll('.filter-option');
 
-const activeFilters = { who: [], style: [], location: [], price: [], occasion: [], type: [], room: [], vibe: [] };
+const activeFilters = { who: [], style: [], location: [], price: [], occasion: [], type: [], room: [], vibe: [], creator: [] };
 
 function openFilters() {
   bottomBar.classList.add('filters-open');
