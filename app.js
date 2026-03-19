@@ -4,6 +4,7 @@ const pwError = document.getElementById('pw-error');
 const pwGate = document.getElementById('password-gate');
 const splashScreen = document.getElementById('splash-screen');
 const PASSWORD = '123';
+const LANDING_PASSWORD = '321';
 
 function attemptLogin() {
   const val = pwInput.value.trim().toLowerCase();
@@ -14,6 +15,16 @@ function attemptLogin() {
     document.getElementById('deck-view').classList.add('active');
     document.body.classList.add('deck-mode');
     setTimeout(() => pwGate.remove(), 600);
+    return;
+  }
+
+  if (val === LANDING_PASSWORD) {
+    pwError.textContent = '';
+    pwGate.classList.add('dismissed');
+    document.getElementById('landing-page').classList.add('active');
+    document.body.classList.add('landing-mode');
+    setTimeout(() => pwGate.remove(), 600);
+    initLandingPage();
     return;
   }
 
@@ -757,6 +768,83 @@ function initParticleWorld(canvas) {
   }
 
   animate();
+}
+
+// Landing page logic
+function initLandingPage() {
+  const landingPage = document.getElementById('landing-page');
+  const landingNav = document.getElementById('landing-nav');
+
+  // Nav scroll effect
+  landingPage.addEventListener('scroll', () => {
+    if (landingPage.scrollTop > 50) {
+      landingNav.classList.add('scrolled');
+    } else {
+      landingNav.classList.remove('scrolled');
+    }
+  });
+
+  // Scroll reveal for lp-reveal elements
+  const lpRevealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        // Stagger siblings
+        const siblings = entry.target.parentElement.querySelectorAll('.lp-reveal');
+        let delay = 0;
+        siblings.forEach(sib => {
+          if (sib === entry.target) {
+            setTimeout(() => sib.classList.add('visible'), delay);
+          }
+        });
+        entry.target.classList.add('visible');
+        lpRevealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+  landingPage.querySelectorAll('.lp-reveal').forEach((el, i) => {
+    el.style.transitionDelay = `${(i % 3) * 0.15}s`;
+    lpRevealObserver.observe(el);
+  });
+
+  // Nav link smooth scroll
+  landingPage.querySelectorAll('.landing-nav-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const sectionId = link.dataset.section;
+      const target = document.getElementById('landing-' + sectionId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // CTA buttons -> transition to main app
+  function landingToApp() {
+    landingPage.classList.remove('active');
+    document.body.classList.remove('landing-mode', 'locked');
+
+    // Show splash briefly
+    splashScreen.classList.add('active');
+    setTimeout(() => {
+      splashScreen.classList.add('fade-out');
+    }, 1200);
+    setTimeout(() => {
+      splashScreen.remove();
+    }, 2000);
+  }
+
+  document.getElementById('landing-start-btn').addEventListener('click', landingToApp);
+  document.getElementById('landing-hero-cta').addEventListener('click', landingToApp);
+  document.getElementById('landing-cta-btn').addEventListener('click', landingToApp);
+
+  // "See how it works" scrolls to features
+  document.getElementById('landing-hero-secondary').addEventListener('click', () => {
+    const features = document.getElementById('landing-features');
+    if (features) {
+      features.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
 }
 
 // Init
