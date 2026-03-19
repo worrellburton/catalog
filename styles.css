@@ -1392,15 +1392,15 @@ body.feed-mode .header-center {
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — on main screen */
+/* Search suggestions — over backdrop when search is open */
 .search-suggestions {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 80px;
-  z-index: 5;
-  display: flex;
+  bottom: 120px;
+  z-index: 100;
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -1408,6 +1408,10 @@ body.feed-mode .header-center {
   padding: 60px 20px;
   overflow-y: auto;
   pointer-events: none;
+}
+
+.search-suggestions.visible {
+  display: flex;
 }
 
 .search-suggestion {

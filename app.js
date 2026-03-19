@@ -585,12 +585,14 @@ const suggestionsContainer = document.getElementById('search-suggestions');
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
+  if (suggestionsContainer) suggestionsContainer.classList.add('visible');
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
+  if (suggestionsContainer) suggestionsContainer.classList.remove('visible');
   if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
