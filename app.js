@@ -613,6 +613,16 @@ document.getElementById('deck-mvp-btn').addEventListener('click', () => {
   currentViewIndex = 0;
 });
 
+// Deck: Visit website button → go straight to landing page
+document.getElementById('deck-website-btn').addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('deck-view').classList.remove('active');
+  document.body.classList.remove('deck-mode', 'locked');
+  document.getElementById('landing-page').classList.add('active');
+  document.body.classList.add('landing-mode');
+  initLandingPage();
+});
+
 document.getElementById('back-to-deck').addEventListener('click', () => {
   const dv = document.getElementById('deck-view');
   dv.classList.add('active');

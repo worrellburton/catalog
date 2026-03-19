@@ -924,6 +924,16 @@ body.light-mode .deck-theme-toggle {
   justify-content: center;
 }
 
+@keyframes deckBtnGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 255, 255, 0.06), 0 0 20px rgba(255, 255, 255, 0); }
+  50% { box-shadow: 0 0 12px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.06); }
+}
+
+@keyframes deckBtnGlowWhite {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.1), 0 0 30px rgba(255, 255, 255, 0); }
+  50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.25), 0 0 50px rgba(255, 255, 255, 0.08); }
+}
+
 .deck-mvp-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -935,13 +945,18 @@ body.light-mode .deck-theme-toggle {
   padding: 12px 36px;
   border-radius: 28px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  text-decoration: none;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: deckBtnGlow 3s ease-in-out infinite;
 }
 
 .deck-mvp-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.5);
   color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px) scale(1.03);
+  animation: none;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2), 0 8px 30px rgba(255, 255, 255, 0.08);
 }
 
 .deck-website-btn {
@@ -957,13 +972,15 @@ body.light-mode .deck-theme-toggle {
   border: none;
   text-decoration: none;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: deckBtnGlowWhite 3s ease-in-out infinite 0.5s;
 }
 
 .deck-website-btn:hover {
-  background: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  background: #fff;
+  transform: translateY(-2px) scale(1.03);
+  animation: none;
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.3), 0 8px 30px rgba(255, 255, 255, 0.12);
 }
 
 /* Back to deck button (above bottom bar) */
@@ -2252,21 +2269,34 @@ body.light-mode .compare-value.highlight {
 body.light-mode .deck-mvp-btn {
   border-color: rgba(0, 0, 0, 0.15);
   color: rgba(0, 0, 0, 0.5);
+  animation-name: deckBtnGlowLight;
+}
+
+@keyframes deckBtnGlowLight {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0); }
+  50% { box-shadow: 0 0 12px rgba(0, 0, 0, 0.08), 0 0 40px rgba(0, 0, 0, 0.03); }
 }
 
 body.light-mode .deck-mvp-btn:hover {
   border-color: rgba(0, 0, 0, 0.3);
   color: #1a1a1a;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1), 0 8px 30px rgba(0, 0, 0, 0.06);
 }
 
 body.light-mode .deck-website-btn {
   background: #1a1a1a;
   color: #fff;
+  animation-name: deckBtnGlowDark;
+}
+
+@keyframes deckBtnGlowDark {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 0, 0, 0.08), 0 0 30px rgba(0, 0, 0, 0); }
+  50% { box-shadow: 0 0 20px rgba(0, 0, 0, 0.15), 0 0 50px rgba(0, 0, 0, 0.05); }
 }
 
 body.light-mode .deck-website-btn:hover {
   background: #000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.2), 0 8px 30px rgba(0, 0, 0, 0.1);
 }
 
 body.light-mode .affiliate-logo {
@@ -2322,6 +2352,8 @@ body.light-mode .creator-header p {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .landing-page.active {
