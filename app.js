@@ -272,12 +272,43 @@ function createLookCard(look, i) {
   return card;
 }
 
-// Scale slider (debounced)
+// Scale slider with view icons
+const sliderViewIcon = document.getElementById('slider-view-icon');
+const sliderLabel = document.getElementById('slider-label');
+
+const viewModes = [
+  { min: 120, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5"/><rect x="9.5" y="2" width="5" height="5"/><rect x="17" y="2" width="5" height="5"/><rect x="2" y="9.5" width="5" height="5"/><rect x="9.5" y="9.5" width="5" height="5"/><rect x="17" y="9.5" width="5" height="5"/><rect x="2" y="17" width="5" height="5"/><rect x="9.5" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg>`, label: 'Mosaic' },
+  { min: 200, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label: 'Grid' },
+  { min: 300, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="1"/><rect x="2" y="13" width="20" height="8" rx="1"/></svg>`, label: 'Cards' },
+  { min: 400, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M6 21v-1a6 6 0 0 1 12 0v1"/></svg>`, label: 'Focus' },
+];
+
+let currentViewMode = -1;
+
+function updateSliderIcon(value) {
+  let modeIndex = 0;
+  for (let i = viewModes.length - 1; i >= 0; i--) {
+    if (value >= viewModes[i].min) { modeIndex = i; break; }
+  }
+  if (modeIndex !== currentViewMode) {
+    currentViewMode = modeIndex;
+    const mode = viewModes[modeIndex];
+    sliderViewIcon.innerHTML = mode.icon;
+    sliderLabel.textContent = mode.label;
+    sliderViewIcon.classList.add('pop');
+    setTimeout(() => sliderViewIcon.classList.remove('pop'), 200);
+  }
+}
+
+updateSliderIcon(parseInt(scaleSlider.value));
+
 let scaleTimeout;
 scaleSlider.addEventListener('input', () => {
+  const val = parseInt(scaleSlider.value);
+  updateSliderIcon(val);
   clearTimeout(scaleTimeout);
   scaleTimeout = setTimeout(() => {
-    cardWidth = parseInt(scaleSlider.value);
+    cardWidth = val;
     buildGrid();
   }, 80);
 });
@@ -727,7 +758,7 @@ const filterApplyBtn = document.getElementById('filter-apply-btn');
 const filterCatalogName = document.getElementById('filter-catalog-name');
 const filterOptions = document.querySelectorAll('.filter-option');
 
-const activeFilters = { who: [], style: [], location: [], price: [], occasion: [], type: [] };
+const activeFilters = { who: [], style: [], location: [], price: [], occasion: [], type: [], room: [], vibe: [] };
 
 function openFilters() {
   bottomBar.classList.add('filters-open');
@@ -878,6 +909,38 @@ const catalogNames = {
   'cats+office': ['Corporate Cat Lady', 'Cat Hair Don\'t Care™', 'The 9-to-5 Meow'],
   'workout+budget': ['Planet Fitness Fits', 'Broke & Buff', 'The Free Trial Edit'],
   'festival+budget': ['Shein Festival Survival', 'DIY Flower Crown Energy', 'Broke at Burning Man'],
+
+  // Electronics
+  electronics: ['Tech Bro Starter Kit', 'The Gadget Gazette', 'Geek Chic Catalog', 'Silicon Valley Swag'],
+  'dogs+electronics': ['Who Chewed the Charger?', 'Smart Collar Dispatch', 'Bark-Activated Tech'],
+  'cats+electronics': ['Cats on Keyboards™', 'The Laser Pointer Gazette', 'Paws on the Trackpad'],
+  'electronics+luxury': ['The Early Adopter Elite', 'Gold-Plated Gadgets', 'Money No Object Tech'],
+  'electronics+budget': ['Wish.com Tech Review', 'Refurbished & Refreshed', 'Budget Byte Files'],
+
+  // Home Decor
+  homedecor: ['Couch Potato Chic', 'The Throw Pillow Papers', 'Nesting Mode™', 'Casa Cool Catalog'],
+
+  // Home Decor - Rooms
+  living: ['The Netflix Den Edit', 'Couch Surfing Catalog', 'Where the Remote Lives'],
+  bedroom: ['Bed Rot Boutique', 'The Snooze Button Edit', 'Pillow Fort Protocol', 'Duvet Day Catalog'],
+  kitchen: ['Chef\'s Kiss Collection', 'The Spatula Files', 'Midnight Snack Aesthetic', 'Counter Space Wars'],
+  bathroom: ['Shower Thoughts Catalog', 'The Spa Day Edit', 'Candle Hoarding Quarterly', 'Towel Tier List'],
+  outdoor: ['Touch Grass Catalog', 'The Patio Files', 'Grill & Chill Guide', 'Backyard Main Character'],
+
+  // Home Decor - Vibes
+  scandi: ['IKEA But Make It Art', 'The Neutral Zone', 'Hygge Headquarters', 'Beige is a Personality'],
+  maximalist: ['More is More is More', 'Chaos Theory Decor', 'The Clutter Queen Edit', 'Pattern Overload™'],
+  midcentury: ['Mad Men Living Room', 'Your Parents Had Taste', 'Atomic Ranch Revival', 'Eames Dream Edit'],
+  cottagecore: ['Goblincore\'s Cute Cousin', 'The Mushroom Lamp Edit', 'Grandma\'s House But Chic', 'Flower Arranging Era'],
+  industrial: ['Exposed Brick Energy', 'The Loft Life Files', 'Concrete Jungle Living', 'Pipe Dream Decor'],
+
+  // Fun combos
+  'bedroom+luxury': ['Egyptian Cotton Only', 'The California King Edit', 'Thread Count Flex'],
+  'kitchen+budget': ['Dollar Store Chef', 'Ramen Kitchen Makeover', 'IKEA Kitchen Speedrun'],
+  'homedecor+cats': ['Everything Is a Cat Bed', 'Scratch-Proof Living', 'Cat Tree Penthouse'],
+  'homedecor+dogs': ['Fur on Everything™', 'The Indestructible Edit', 'Dog-Proofed & Designed'],
+  'cottagecore+cats': ['Witch Cottage Cat Life', 'Herb Garden & Hairballs', 'Storybook Cat Lady'],
+  'scandi+budget': ['IKEA Catalog Catalog', 'Minimalism on a Dime', 'Less Stuff Less Money'],
 };
 
 function updateCatalogName() {
