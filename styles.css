@@ -915,8 +915,16 @@ body.light-mode .deck-theme-toggle {
 }
 
 /* Deck MVP button */
-.deck-mvp-btn {
+.deck-end-actions {
   margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.deck-mvp-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: rgba(255, 255, 255, 0.7);
@@ -934,6 +942,28 @@ body.light-mode .deck-theme-toggle {
   border-color: rgba(255, 255, 255, 0.4);
   color: #fff;
   background: rgba(255, 255, 255, 0.05);
+}
+
+.deck-website-btn {
+  display: inline-block;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  padding: 12px 36px;
+  border-radius: 28px;
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.deck-website-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
 }
 
 /* Back to deck button (above bottom bar) */
@@ -2227,6 +2257,16 @@ body.light-mode .deck-mvp-btn {
 body.light-mode .deck-mvp-btn:hover {
   border-color: rgba(0, 0, 0, 0.3);
   color: #1a1a1a;
+}
+
+body.light-mode .deck-website-btn {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+body.light-mode .deck-website-btn:hover {
+  background: #000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
 body.light-mode .affiliate-logo {
