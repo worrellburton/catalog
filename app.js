@@ -276,23 +276,23 @@ function createLookCard(look, i) {
 const sliderViewIcon = document.getElementById('slider-view-icon');
 const sliderLabel = document.getElementById('slider-label');
 
-const viewModes = [
+const sliderModes = [
   { min: 120, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5"/><rect x="9.5" y="2" width="5" height="5"/><rect x="17" y="2" width="5" height="5"/><rect x="2" y="9.5" width="5" height="5"/><rect x="9.5" y="9.5" width="5" height="5"/><rect x="17" y="9.5" width="5" height="5"/><rect x="2" y="17" width="5" height="5"/><rect x="9.5" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg>`, label: 'Mosaic' },
   { min: 200, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label: 'Grid' },
   { min: 300, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="1"/><rect x="2" y="13" width="20" height="8" rx="1"/></svg>`, label: 'Cards' },
   { min: 400, icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M6 21v-1a6 6 0 0 1 12 0v1"/></svg>`, label: 'Focus' },
 ];
 
-let currentViewMode = -1;
+let currentSliderMode = -1;
 
 function updateSliderIcon(value) {
   let modeIndex = 0;
-  for (let i = viewModes.length - 1; i >= 0; i--) {
-    if (value >= viewModes[i].min) { modeIndex = i; break; }
+  for (let i = sliderModes.length - 1; i >= 0; i--) {
+    if (value >= sliderModes[i].min) { modeIndex = i; break; }
   }
-  if (modeIndex !== currentViewMode) {
-    currentViewMode = modeIndex;
-    const mode = viewModes[modeIndex];
+  if (modeIndex !== currentSliderMode) {
+    currentSliderMode = modeIndex;
+    const mode = sliderModes[modeIndex];
     sliderViewIcon.innerHTML = mode.icon;
     sliderLabel.textContent = mode.label;
     sliderViewIcon.classList.add('pop');
