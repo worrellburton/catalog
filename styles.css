@@ -1363,9 +1363,9 @@ body.feed-mode .header-center {
   display: none;
   flex-direction: column;
   gap: 16px;
-  padding: 20px 20px 16px;
+  padding: 20px 40px 16px;
   width: 100%;
-  max-width: 480px;
+  max-width: 720px;
 }
 
 .bottom-bar.filters-open .bottom-bar-filters {
