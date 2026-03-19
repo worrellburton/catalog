@@ -540,6 +540,9 @@
       <button class="filter-chip" data-filter="women">Women</button>
       <button class="filter-chip" data-filter="men">Men</button>
       <div class="bottom-divider"></div>
+      <button class="filter-btn" id="filter-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
+      </button>
       <button class="search-btn" id="search-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
@@ -547,6 +550,45 @@
     <div class="bottom-bar-search">
       <p class="bottom-search-tagline">Make a catalog for anything.</p>
       <input type="text" class="bottom-search-input" id="bottom-search-input" placeholder="Search anything...">
+    </div>
+    <div class="bottom-bar-filters" id="bottom-bar-filters">
+      <p class="filter-catalog-name" id="filter-catalog-name">Your Catalog</p>
+      <div class="filter-section">
+        <div class="filter-section-label">Who's it for?</div>
+        <div class="filter-options">
+          <button class="filter-option" data-category="who" data-value="men"><span class="filter-icon">👔</span>Men</button>
+          <button class="filter-option" data-category="who" data-value="women"><span class="filter-icon">👗</span>Women</button>
+          <button class="filter-option" data-category="who" data-value="dogs"><span class="filter-icon">🐕</span>Dogs</button>
+          <button class="filter-option" data-category="who" data-value="cats"><span class="filter-icon">🐈</span>Cats</button>
+          <button class="filter-option" data-category="who" data-value="cards"><span class="filter-icon">🃏</span>Cards</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-label">Category</div>
+        <div class="filter-options">
+          <button class="filter-option" data-category="style" data-value="fashion"><span class="filter-icon">✨</span>Fashion</button>
+          <button class="filter-option" data-category="style" data-value="homedecor"><span class="filter-icon">🏠</span>Home Decor</button>
+          <button class="filter-option" data-category="style" data-value="wellness"><span class="filter-icon">🧘</span>Health & Wellness</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-label">Location</div>
+        <div class="filter-options">
+          <button class="filter-option" data-category="location" data-value="nyc"><span class="filter-icon">🗽</span>NYC</button>
+          <button class="filter-option" data-category="location" data-value="la"><span class="filter-icon">🌴</span>LA</button>
+          <button class="filter-option" data-category="location" data-value="paris"><span class="filter-icon">🗼</span>Paris</button>
+          <button class="filter-option" data-category="location" data-value="tokyo"><span class="filter-icon">⛩️</span>Tokyo</button>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-label">Price Point</div>
+        <div class="filter-options">
+          <button class="filter-option" data-category="price" data-value="budget"><span class="filter-icon">💰</span>Budget</button>
+          <button class="filter-option" data-category="price" data-value="mid"><span class="filter-icon">💎</span>Mid-Range</button>
+          <button class="filter-option" data-category="price" data-value="luxury"><span class="filter-icon">👑</span>Luxury</button>
+        </div>
+      </div>
+      <button class="filter-apply-btn" id="filter-apply-btn">Build My Catalog</button>
     </div>
   </div>
   <div class="search-backdrop" id="search-backdrop"></div>

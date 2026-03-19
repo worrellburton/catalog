@@ -720,6 +720,153 @@ filterBtns.forEach(btn => {
   });
 });
 
+// ── Filter panel ──
+const filterBtn = document.getElementById('filter-btn');
+const filterPanel = document.getElementById('bottom-bar-filters');
+const filterApplyBtn = document.getElementById('filter-apply-btn');
+const filterCatalogName = document.getElementById('filter-catalog-name');
+const filterOptions = document.querySelectorAll('.filter-option');
+
+const activeFilters = { who: [], style: [], location: [], price: [] };
+
+function openFilters() {
+  bottomBar.classList.add('filters-open');
+  searchBackdrop.classList.add('visible');
+  updateCatalogName();
+}
+
+function closeFilters() {
+  bottomBar.classList.remove('filters-open');
+  if (!bottomBar.classList.contains('search-open')) {
+    searchBackdrop.classList.remove('visible');
+  }
+}
+
+filterBtn.addEventListener('click', () => {
+  if (bottomBar.classList.contains('filters-open')) {
+    closeFilters();
+  } else {
+    openFilters();
+  }
+});
+
+// Toggle filter options
+filterOptions.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cat = btn.dataset.category;
+    const val = btn.dataset.value;
+    const idx = activeFilters[cat].indexOf(val);
+    if (idx >= 0) {
+      activeFilters[cat].splice(idx, 1);
+      btn.classList.remove('active');
+    } else {
+      activeFilters[cat].push(val);
+      btn.classList.add('active');
+    }
+    updateCatalogName();
+    updateFilterBtnState();
+  });
+});
+
+function updateFilterBtnState() {
+  const hasAny = Object.values(activeFilters).some(arr => arr.length > 0);
+  filterBtn.classList.toggle('has-filters', hasAny);
+}
+
+// Apply filters & close
+filterApplyBtn.addEventListener('click', () => {
+  // Sync the gender filters with the existing chip system
+  if (activeFilters.who.includes('men') && !activeFilters.who.includes('women')) {
+    activeFilter = 'men';
+  } else if (activeFilters.who.includes('women') && !activeFilters.who.includes('men')) {
+    activeFilter = 'women';
+  } else {
+    activeFilter = 'all';
+  }
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === activeFilter));
+  buildGrid();
+  closeFilters();
+});
+
+// Close filters on backdrop click (extend existing handler)
+searchBackdrop.addEventListener('click', closeFilters);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && bottomBar.classList.contains('filters-open')) {
+    closeFilters();
+  }
+});
+
+// ── Funny catalog name generator ──
+const catalogNames = {
+  // Single filter names
+  men: ['The Dapper Dude Edit', 'Bro-ture Collection', 'His Highness Haul', 'Guys Being Dudes™'],
+  women: ['The It-Girl Index', 'Slay Catalog™', 'The Girlboss Gazette', 'Her Royal Haul'],
+  dogs: ['Bark Avenue Boutique', 'Pawsitively Styled', 'The Good Boy Gazette', 'Woof Couture'],
+  cats: ['Meow Mix & Match', 'The Purrfect Edit', 'Cattitude Collection', 'Feline Fine Catalog'],
+  cards: ['Full Deck Fashion', 'Wild Card Wardrobe', 'The Ace Edit', 'Dealer\'s Choice Catalog'],
+  fashion: ['The Drip Report', 'Fit Check Files', 'Main Character Energy', 'The Vibe Vault'],
+  homedecor: ['Couch Potato Chic', 'The Throw Pillow Papers', 'Nesting Mode™', 'Casa Cool Catalog'],
+  wellness: ['Namaste & Shop', 'The Glow Up Guide', 'Zen Cart Energy', 'Matcha Money Moves'],
+  nyc: ['Bodega Chic', 'Subway Style Report', 'Manhattan Transfer Edit', 'The Concrete Jungle Book'],
+  la: ['Sunset Strip Style', 'Avocado Toast Aesthetic', 'The 405 Lookbook', 'Vitamin D Catalog'],
+  paris: ['Ooh La La List', 'Croissant & Couture', 'Left Bank Luxe', 'The Baguette Edit'],
+  tokyo: ['Harajuku Heat Check', 'The Shibuya Shuffle', 'Tokyo Drift Style', 'Kawaii Catalog'],
+  budget: ['Champagne Taste, Beer Budget', 'The Steal Deal', 'Ballin\' on a Budget', 'Thrift Lord Edit'],
+  mid: ['The Sweet Spot Shop', 'Treat Yourself Tier', 'Sensible Splurge', 'The Goldilocks Edit'],
+  luxury: ['Rich Auntie Energy', 'The Black Card Edit', 'Filthy Rich Files', 'Generational Wealth Vibes'],
+
+  // Combo names (key is sorted values joined with +)
+  'dogs+fashion': ['Bark-enciaga', 'Pup Culture Couture', 'Fetch Fashion Week'],
+  'cats+fashion': ['Catwalking the Catwalk', 'Gucci Paws', 'Fur-st Class Fashion'],
+  'cats+luxury': ['Fat Cat Finance', 'Kitten with a Trust Fund', 'Purrse Full of Gold'],
+  'dogs+luxury': ['Diamond Collar Club', 'Trust Fund Puppy', 'Barkingham Palace'],
+  'men+dogs': ['Good Boys & Their Boys', 'Mans Best Dressed Friend', 'The Bark Bro Edit'],
+  'women+cats': ['Crazy Cat Lady Couture', 'Whiskers & Wardrobe', 'Cat Mom Catalog'],
+  'men+luxury': ['Big Baller Brand', 'The Yacht Club Edit', 'Old Money Energy'],
+  'women+luxury': ['Rich Mom Aesthetic', 'Trust Fund Babe', 'The Heiress Edit'],
+  'men+budget': ['Broke Boy Drip', 'The Ramen Budget Edit', 'Frugal King Files'],
+  'women+budget': ['Budget Baddie', 'The Dollar Store Diva', 'Slay for Less'],
+  'dogs+wellness': ['Downward Dog Lifestyle', 'Zen Puppy Edit', 'Paws & Namaste'],
+  'cats+wellness': ['Nine Lives Wellness', 'Cat Nap & Chill', 'Purrified Living'],
+  'fashion+paris': ['Front Row at Fashion Week', 'Très Chic Tribune', 'Parisian Drip Report'],
+  'fashion+tokyo': ['Anime Protagonist Fit', 'Street Style: Tokyo', 'Harajuku Drip Files'],
+  'fashion+nyc': ['SoHo Street Style', 'Fashion Week Survivor', 'The Bushwick Edit'],
+  'fashion+la': ['Influencer Starter Pack', 'Rodeo Drive Dreams', 'The Calabasas Edit'],
+  'cards+luxury': ['High Roller Catalog', 'The Vegas VIP Edit', 'All In on Style'],
+  'cards+budget': ['Penny Ante Fits', 'The Wild Card Deal', 'Go Fish for Deals'],
+  'wellness+budget': ['Broke & Balanced', 'DIY Detox Edit', 'Zen on a Dime'],
+  'wellness+luxury': ['Goop Energy', 'The Wellness Industrial Complex', 'Crystal-Infused Catalog'],
+};
+
+function updateCatalogName() {
+  const allActive = [];
+  Object.values(activeFilters).forEach(arr => allActive.push(...arr));
+
+  if (allActive.length === 0) {
+    filterCatalogName.textContent = 'Build Your Catalog';
+    filterApplyBtn.textContent = 'Build My Catalog';
+    return;
+  }
+
+  // Try combo key first (sorted)
+  const comboKey = [...allActive].sort().join('+');
+  let pool = catalogNames[comboKey];
+
+  // If no combo, try individual and combine
+  if (!pool) {
+    const options = [];
+    allActive.forEach(v => {
+      if (catalogNames[v]) options.push(...catalogNames[v]);
+    });
+    pool = options.length > 0 ? options : ['The Custom Catalog'];
+  }
+
+  const name = pool[Math.floor(Math.random() * pool.length)];
+  filterCatalogName.textContent = name;
+  filterApplyBtn.textContent = `Build "${name}"`;
+}
+
 // In-app browser
 function openInAppBrowser(url, title) {
   closeInAppBrowser();
