@@ -585,14 +585,12 @@ const suggestionsContainer = document.getElementById('search-suggestions');
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
-  if (suggestionsContainer) suggestionsContainer.classList.add('visible');
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
-  if (suggestionsContainer) suggestionsContainer.classList.remove('visible');
   if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
@@ -639,9 +637,12 @@ if (suggestionsContainer) {
   suggestionsContainer.addEventListener('click', (e) => {
     const btn = e.target.closest('.search-suggestion');
     if (!btn) return;
+    // Open search bar and populate with the suggestion
+    bottomBar.classList.add('search-open');
+    searchBackdrop.classList.add('visible');
     bottomSearchInput.value = btn.dataset.query;
     bottomSearchInput.dispatchEvent(new Event('input'));
-    bottomSearchInput.focus();
+    setTimeout(() => bottomSearchInput.focus(), 100);
   });
 }
 
