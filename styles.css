@@ -1364,6 +1364,7 @@ body.feed-mode .header-center {
   gap: 16px;
   padding: 20px 20px 16px;
   width: 100%;
+  max-width: 480px;
 }
 
 .bottom-bar.filters-open .bottom-bar-filters {
@@ -1375,12 +1376,20 @@ body.feed-mode .header-center {
 }
 
 .bottom-bar.filters-open {
-  bottom: 40px;
-  width: 90%;
-  max-width: 420px;
-  border-radius: 20px;
-  max-height: 80vh;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 0;
+  max-height: 100vh;
   overflow-y: auto;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .filter-catalog-name {
@@ -1758,7 +1767,8 @@ body.light-mode .search-suggestion.tapped {
     bottom: 12px;
   }
   .bottom-bar.filters-open {
-    bottom: 12px;
+    top: 0;
+    bottom: 0;
   }
   .search-suggestions {
     bottom: 100px;
