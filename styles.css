@@ -1129,7 +1129,12 @@ body.light-mode .icon-sun { display: none; }
 
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
-    padding-top: 64px;
+    padding-top: 80px;
+  }
+
+  /* Black padding spacer above the grid on mobile */
+  #grid-viewport {
+    padding-top: 20px;
   }
 
   #grid-viewport::after {
@@ -1420,6 +1425,348 @@ body.feed-mode .header-center {
 
 .bottom-search-input::placeholder {
   color: rgba(255, 255, 255, 0.3);
+}
+
+/* Mobile: lower the bottom bar to sit just above the browser URL bar */
+@media (max-width: 768px) {
+  .bottom-bar {
+    bottom: 8px;
+    border-radius: 22px;
+  }
+}
+
+/* Bookmark toggle in header */
+.bookmark-toggle {
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  color: var(--text);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.bookmark-toggle:hover {
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.bookmark-toggle .bookmark-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #fff;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+body.light-mode .bookmark-toggle .bookmark-count {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+/* Bookmark button on look detail */
+.look-bookmark-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.look-bookmark-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+}
+
+.look-bookmark-btn.active {
+  background: #fff;
+  border-color: #fff;
+  color: #1a1a1a;
+}
+
+.look-bookmark-btn.active svg {
+  fill: currentColor;
+}
+
+body.light-mode .look-bookmark-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+body.light-mode .look-bookmark-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode .look-bookmark-btn.active {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+
+/* Product bookmark button */
+.product-bookmark-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.product-bookmark-btn:hover {
+  color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.15);
+}
+
+.product-bookmark-btn.active {
+  color: #fff;
+}
+
+.product-bookmark-btn.active svg {
+  fill: currentColor;
+}
+
+body.light-mode .product-bookmark-btn {
+  color: rgba(0, 0, 0, 0.2);
+}
+
+body.light-mode .product-bookmark-btn:hover {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+body.light-mode .product-bookmark-btn.active {
+  color: #1a1a1a;
+}
+
+/* Bookmarks Page */
+.bookmarks-page {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmarks-page.hidden {
+  display: none;
+}
+
+.bookmarks-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+}
+
+.bookmarks-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 8px 12px 8px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.bookmarks-back:hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.bookmarks-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bookmarks-sections {
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.bookmarks-section {
+  margin-bottom: 48px;
+}
+
+.bookmarks-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(128, 128, 128, 0.5);
+  margin-bottom: 16px;
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.bookmarks-look-card {
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.bookmarks-look-card:hover {
+  transform: scale(1.03);
+}
+
+.bookmarks-look-card video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bookmarks-look-card .blc-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bookmarks-look-card .blc-info span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.bookmarks-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bookmarks-product-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.bookmarks-product-item:hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.bookmarks-product-item .bp-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.bookmarks-product-item .bp-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookmarks-product-item .bp-brand {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(128, 128, 128, 0.5);
+  display: block;
+}
+
+.bookmarks-product-item .bp-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookmarks-product-item .bp-price {
+  font-size: 13px;
+  color: rgba(128, 128, 128, 0.6);
+  display: block;
+}
+
+.bookmarks-product-item .bp-remove {
+  background: none;
+  border: none;
+  color: rgba(128, 128, 128, 0.3);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.bookmarks-product-item .bp-remove:hover {
+  color: var(--text);
+}
+
+.bookmarks-empty {
+  font-size: 14px;
+  color: rgba(128, 128, 128, 0.4);
+  padding: 24px 0;
+  display: none;
+}
+
+.bookmarks-empty.visible {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .bookmarks-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .bookmarks-sections {
+    padding: 16px;
+  }
 }
 
 /* Search backdrop */
@@ -1854,11 +2201,17 @@ body.light-mode header {
 }
 
 /* Detail creator row */
+#detail-creator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
 .detail-creator-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 20px;
   cursor: pointer;
   transition: opacity 0.15s;
 }

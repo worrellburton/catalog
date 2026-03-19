@@ -63,16 +63,16 @@ document.getElementById('pw-enter').addEventListener('click', attemptLogin);
 // Auto-focus password input
 pwInput.focus();
 
-// Creator profiles with avatar colors (will use generated SVG avatars)
+// Creator profiles with real avatar photos
 const creators = {
-  '@lilywittman': { name: '@lilywittman', displayName: 'Lily Wittman', color: '#e8c4a0', initials: 'L' },
-  '@garrett':     { name: '@garrett',     displayName: 'Garrett',      color: '#7ea8c4', initials: 'G' },
+  '@lilywittman': { name: '@lilywittman', displayName: 'Lily Wittman', avatar: 'https://i.pravatar.cc/100?img=47' },
+  '@garrett':     { name: '@garrett',     displayName: 'Garrett',      avatar: 'https://i.pravatar.cc/100?img=12' },
 };
 
 function avatarSvg(creator) {
   const c = creators[creator];
   if (!c) return '';
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="22" fill="${c.color}"/><text x="22" y="23" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="18" font-weight="600" fill="#fff">${c.initials}</text></svg>`)}`;
+  return c.avatar;
 }
 
 // Product sets
@@ -282,6 +282,64 @@ scaleSlider.addEventListener('input', () => {
   }, 80);
 });
 
+// Bookmarks (persisted in localStorage)
+let bookmarkedLooks = JSON.parse(localStorage.getItem('catalog_bookmarked_looks') || '[]');
+let bookmarkedProducts = JSON.parse(localStorage.getItem('catalog_bookmarked_products') || '[]');
+
+function saveBookmarks() {
+  localStorage.setItem('catalog_bookmarked_looks', JSON.stringify(bookmarkedLooks));
+  localStorage.setItem('catalog_bookmarked_products', JSON.stringify(bookmarkedProducts));
+  updateBookmarkCount();
+}
+
+function isLookBookmarked(lookId) {
+  return bookmarkedLooks.includes(lookId);
+}
+
+function toggleLookBookmark(lookId) {
+  if (isLookBookmarked(lookId)) {
+    bookmarkedLooks = bookmarkedLooks.filter(id => id !== lookId);
+  } else {
+    bookmarkedLooks.push(lookId);
+  }
+  saveBookmarks();
+}
+
+function productKey(p) {
+  return `${p.brand}::${p.name}`;
+}
+
+function isProductBookmarked(p) {
+  return bookmarkedProducts.some(bp => productKey(bp) === productKey(p));
+}
+
+function toggleProductBookmark(p) {
+  const key = productKey(p);
+  if (bookmarkedProducts.some(bp => productKey(bp) === key)) {
+    bookmarkedProducts = bookmarkedProducts.filter(bp => productKey(bp) !== key);
+  } else {
+    bookmarkedProducts.push({ name: p.name, brand: p.brand, price: p.price, url: p.url });
+  }
+  saveBookmarks();
+}
+
+function updateBookmarkCount() {
+  const total = bookmarkedLooks.length + bookmarkedProducts.length;
+  const toggle = document.getElementById('bookmark-toggle');
+  let badge = toggle.querySelector('.bookmark-count');
+  if (total > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'bookmark-count';
+      toggle.appendChild(badge);
+    }
+    badge.textContent = total;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+updateBookmarkCount();
+
 // Open look detail
 function openLook(look, index) {
   // Creator row
@@ -291,11 +349,20 @@ function openLook(look, index) {
       <img class="detail-creator-avatar" src="${avatarSvg(look.creator)}" alt="${look.creator}">
       <span class="detail-creator-name">${cInfo ? cInfo.displayName : look.creator}</span>
     </div>
+    <button class="look-bookmark-btn ${isLookBookmarked(look.id) ? 'active' : ''}" id="look-bookmark-btn" aria-label="Bookmark look">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
   `;
 
   detailCreator.querySelector('.detail-creator-row').addEventListener('click', () => {
     closeLook();
     openCreatorPage(look.creator);
+  });
+
+  detailCreator.querySelector('#look-bookmark-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleLookBookmark(look.id);
+    e.currentTarget.classList.toggle('active', isLookBookmarked(look.id));
   });
 
   detailTitle.textContent = look.title;
@@ -310,13 +377,28 @@ function openLook(look, index) {
         <h4>${p.name}</h4>
         <span>${p.price}</span>
       </div>
+      <button class="product-bookmark-btn ${isProductBookmarked(p) ? 'active' : ''}" data-product-index="${pi}" aria-label="Bookmark product">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
       <svg class="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </div>
   `).join('');
 
-  // Make product items clickable
+  // Product bookmark buttons
+  detailProducts.querySelectorAll('.product-bookmark-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pi = parseInt(btn.dataset.productIndex);
+      const product = look.products[pi];
+      toggleProductBookmark(product);
+      btn.classList.toggle('active', isProductBookmarked(product));
+    });
+  });
+
+  // Make product items clickable (but not on bookmark btn)
   detailProducts.querySelectorAll('.product-item').forEach(item => {
     item.addEventListener('click', (e) => {
+      if (e.target.closest('.product-bookmark-btn')) return;
       e.stopPropagation();
       const pi = parseInt(item.dataset.productIndex);
       const product = look.products[pi];
@@ -778,6 +860,83 @@ function initParticleWorld(canvas) {
   }
 
   animate();
+}
+
+// Bookmarks page
+const bookmarksPage = document.getElementById('bookmarks-page');
+const bookmarksBack = document.getElementById('bookmarks-back');
+const bookmarksLooksGrid = document.getElementById('bookmarks-looks-grid');
+const bookmarksProductsList = document.getElementById('bookmarks-products-list');
+const bookmarksLooksEmpty = document.getElementById('bookmarks-looks-empty');
+const bookmarksProductsEmpty = document.getElementById('bookmarks-products-empty');
+
+document.getElementById('bookmark-toggle').addEventListener('click', openBookmarksPage);
+bookmarksBack.addEventListener('click', closeBookmarksPage);
+
+function openBookmarksPage() {
+  renderBookmarks();
+  bookmarksPage.classList.remove('hidden');
+}
+
+function closeBookmarksPage() {
+  bookmarksPage.classList.add('hidden');
+}
+
+function renderBookmarks() {
+  // Looks
+  bookmarksLooksGrid.innerHTML = '';
+  const savedLooks = looks.filter(l => bookmarkedLooks.includes(l.id));
+  bookmarksLooksEmpty.classList.toggle('visible', savedLooks.length === 0);
+
+  savedLooks.forEach(look => {
+    const card = document.createElement('div');
+    card.className = 'bookmarks-look-card';
+    card.innerHTML = `
+      <video src="${look.video}" muted loop playsinline autoplay></video>
+      <div class="blc-info">
+        <img src="${avatarSvg(look.creator)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">
+        <span>${look.title}</span>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      closeBookmarksPage();
+      const gi = looks.findIndex(l => l.id === look.id);
+      openLook(look, gi);
+    });
+    bookmarksLooksGrid.appendChild(card);
+  });
+
+  // Products
+  bookmarksProductsList.innerHTML = '';
+  bookmarksProductsEmpty.classList.toggle('visible', bookmarkedProducts.length === 0);
+
+  bookmarkedProducts.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'bookmarks-product-item';
+    item.innerHTML = `
+      <div class="bp-thumb" style="background: rgba(128,128,128,0.2);"></div>
+      <div class="bp-info">
+        <span class="bp-brand">${p.brand || ''}</span>
+        <span class="bp-name">${p.name}</span>
+        <span class="bp-price">${p.price}</span>
+      </div>
+      <button class="bp-remove" aria-label="Remove bookmark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    `;
+    item.querySelector('.bp-info').addEventListener('click', () => {
+      if (p.url) {
+        closeBookmarksPage();
+        openInAppBrowser(p.url, p.name);
+      }
+    });
+    item.querySelector('.bp-remove').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleProductBookmark(p);
+      renderBookmarks();
+    });
+    bookmarksProductsList.appendChild(item);
+  });
 }
 
 // Landing page logic

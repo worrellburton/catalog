@@ -506,6 +506,9 @@
       <input type="range" id="scale-slider" min="120" max="500" value="240" step="10">
     </div>
     <div class="header-right">
+      <button class="bookmark-toggle" id="bookmark-toggle" aria-label="Bookmarks">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
       <button class="view-toggle" id="view-toggle" aria-label="Toggle view">
         <!-- Grid: 2x2 squares -->
         <svg class="icon-view icon-view-grid" width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="1.5"/><rect x="10" y="1" width="7" height="7" rx="1.5"/><rect x="1" y="10" width="7" height="7" rx="1.5"/><rect x="10" y="10" width="7" height="7" rx="1.5"/></svg>
@@ -563,6 +566,29 @@
         <h2 id="detail-title"></h2>
         <p id="detail-description"></p>
         <div id="detail-products"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bookmarks Page -->
+  <div id="bookmarks-page" class="bookmarks-page hidden">
+    <div class="bookmarks-header">
+      <button class="bookmarks-back" id="bookmarks-back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </button>
+      <h2 class="bookmarks-title">Bookmarks</h2>
+    </div>
+    <div class="bookmarks-sections">
+      <div class="bookmarks-section">
+        <h3 class="bookmarks-section-title">Saved Looks</h3>
+        <div class="bookmarks-grid" id="bookmarks-looks-grid"></div>
+        <p class="bookmarks-empty" id="bookmarks-looks-empty">No looks saved yet</p>
+      </div>
+      <div class="bookmarks-section">
+        <h3 class="bookmarks-section-title">Saved Products</h3>
+        <div class="bookmarks-product-list" id="bookmarks-products-list"></div>
+        <p class="bookmarks-empty" id="bookmarks-products-empty">No products saved yet</p>
       </div>
     </div>
   </div>
