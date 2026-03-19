@@ -824,7 +824,6 @@ const catalogNames = {
   women: ['The It-Girl Index', 'Slay Catalog™', 'The Girlboss Gazette', 'Her Royal Haul'],
   dogs: ['Bark Avenue Boutique', 'Pawsitively Styled', 'The Good Boy Gazette', 'Woof Couture'],
   cats: ['Meow Mix & Match', 'The Purrfect Edit', 'Cattitude Collection', 'Feline Fine Catalog'],
-  cards: ['Full Deck Fashion', 'Wild Card Wardrobe', 'The Ace Edit', 'Dealer\'s Choice Catalog'],
   fashion: ['The Drip Report', 'Fit Check Files', 'Main Character Energy', 'The Vibe Vault'],
   homedecor: ['Couch Potato Chic', 'The Throw Pillow Papers', 'Nesting Mode™', 'Casa Cool Catalog'],
   wellness: ['Namaste & Shop', 'The Glow Up Guide', 'Zen Cart Energy', 'Matcha Money Moves'],
@@ -853,8 +852,6 @@ const catalogNames = {
   'fashion+tokyo': ['Anime Protagonist Fit', 'Street Style: Tokyo', 'Harajuku Drip Files'],
   'fashion+nyc': ['SoHo Street Style', 'Fashion Week Survivor', 'The Bushwick Edit'],
   'fashion+la': ['Influencer Starter Pack', 'Rodeo Drive Dreams', 'The Calabasas Edit'],
-  'cards+luxury': ['High Roller Catalog', 'The Vegas VIP Edit', 'All In on Style'],
-  'cards+budget': ['Penny Ante Fits', 'The Wild Card Deal', 'Go Fish for Deals'],
   'wellness+budget': ['Broke & Balanced', 'DIY Detox Edit', 'Zen on a Dime'],
   'wellness+luxury': ['Goop Energy', 'The Wellness Industrial Complex', 'Crystal-Infused Catalog'],
 
