@@ -617,6 +617,25 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Search suggestions — duplicate items for seamless infinite scroll
+const suggestionsScroll = document.getElementById('search-suggestions-scroll');
+if (suggestionsScroll) {
+  const items = Array.from(suggestionsScroll.children);
+  items.forEach(item => {
+    const clone = item.cloneNode(true);
+    suggestionsScroll.appendChild(clone);
+  });
+  // Click a suggestion to populate search
+  suggestionsScroll.addEventListener('click', (e) => {
+    const btn = e.target.closest('.search-suggestion');
+    if (!btn) return;
+    const query = btn.dataset.query;
+    bottomSearchInput.value = query;
+    bottomSearchInput.dispatchEvent(new Event('input'));
+    bottomSearchInput.focus();
+  });
+}
+
 // Filter chips
 filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
