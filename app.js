@@ -580,16 +580,19 @@ const filterBtns = document.querySelectorAll('.filter-chip');
 // Search - expand bottom bar
 const searchBackdrop = document.getElementById('search-backdrop');
 const bottomSearchInput = document.getElementById('bottom-search-input');
+const suggestionsContainer = document.getElementById('search-suggestions');
 
 searchBtn.addEventListener('click', () => {
   bottomBar.classList.add('search-open');
   searchBackdrop.classList.add('visible');
+  if (suggestionsContainer) suggestionsContainer.classList.add('visible');
   setTimeout(() => bottomSearchInput.focus(), 100);
 });
 
 function closeSearch() {
   bottomBar.classList.remove('search-open');
   searchBackdrop.classList.remove('visible');
+  if (suggestionsContainer) suggestionsContainer.classList.remove('visible');
   if (!searchQuery) bottomSearchInput.value = '';
   bottomSearchInput.blur();
 }
@@ -627,7 +630,6 @@ const searchSuggestions = [
   'first date fit', 'matcha everything', 'pilates princess'
 ];
 
-const suggestionsContainer = document.getElementById('search-suggestions');
 if (suggestionsContainer) {
   const shuffled = [...searchSuggestions].sort(() => Math.random() - 0.5);
   suggestionsContainer.innerHTML = shuffled.map(s =>
