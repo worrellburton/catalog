@@ -842,6 +842,13 @@ filterApplyBtn.addEventListener('click', () => {
 // Close filters on backdrop click (extend existing handler)
 searchBackdrop.addEventListener('click', closeFilters);
 
+// Close filters when clicking the background area (not the filter content)
+bottomBar.addEventListener('click', (e) => {
+  if (bottomBar.classList.contains('filters-open') && e.target === bottomBar) {
+    closeFilters();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && bottomBar.classList.contains('filters-open')) {
     closeFilters();
