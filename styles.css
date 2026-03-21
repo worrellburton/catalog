@@ -2396,8 +2396,14 @@ body.light-mode header {
   grid-row: span 2;
 }
 
+/* Wide cards span 2 columns, 1 row */
+.look-card-wide {
+  grid-column: span 2;
+}
+
 @media (max-width: 768px) {
-  .look-card-featured {
+  .look-card-featured,
+  .look-card-wide {
     grid-column: span 1;
     grid-row: span 1;
   }
