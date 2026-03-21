@@ -1,7 +1,6 @@
-'use client';
 
 import { useEffect } from 'react';
-import { looks, creators, Look, Product } from '@/data/looks';
+import { looks, creators, Look, Product } from '~/data/looks';
 
 interface BookmarksInterface {
   bookmarkedLooks: number[];
@@ -19,7 +18,7 @@ interface BookmarksPageProps {
 
 export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser }: BookmarksPageProps) {
   const savedLooks = looks.filter(l => bookmarks.bookmarkedLooks.includes(l.id));
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/catalogwebapp';
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

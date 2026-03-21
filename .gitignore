@@ -4,13 +4,11 @@
 .pnp.*
 .yarn/install-state.gz
 
-# next.js
-/.next/
-/out/
+# build
+/build/
 
 # misc
 *.tsbuildinfo
-next-env.d.ts
 
 # debug
 npm-debug.log*

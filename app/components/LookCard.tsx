@@ -1,7 +1,6 @@
-'use client';
 
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
-import { Look, creators } from '@/data/looks';
+import { Look, creators } from '~/data/looks';
 
 interface LookCardProps {
   look: Look;
@@ -17,7 +16,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
 
   const creatorData = creators[look.creator];
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/catalogwebapp';
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   useEffect(() => {
     const video = videoRef.current;

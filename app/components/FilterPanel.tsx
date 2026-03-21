@@ -1,7 +1,6 @@
-'use client';
 
 import { useState, useCallback } from 'react';
-import { catalogNames } from '@/data/catalogNames';
+import { catalogNames } from '~/data/catalogNames';
 
 export interface ActiveFilters {
   who: string[];

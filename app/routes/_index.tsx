@@ -1,20 +1,17 @@
-'use client';
-
 import { useState, useCallback } from 'react';
-import PasswordGate from '@/components/PasswordGate';
-
-import SplashScreen from '@/components/SplashScreen';
-import LandingPage from '@/components/LandingPage';
-import GridView from '@/components/GridView';
-import LookOverlay from '@/components/LookOverlay';
-import CreatorPage from '@/components/CreatorPage';
-import BottomBar from '@/components/BottomBar';
-import BookmarksPage from '@/components/BookmarksPage';
-import InAppBrowser from '@/components/InAppBrowser';
-import DeckView from '@/components/DeckView';
-import CatalogLogo from '@/components/CatalogLogo';
-import { Look } from '@/data/looks';
-import { useBookmarks } from '@/hooks/useBookmarks';
+import PasswordGate from '~/components/PasswordGate';
+import SplashScreen from '~/components/SplashScreen';
+import LandingPage from '~/components/LandingPage';
+import GridView from '~/components/GridView';
+import LookOverlay from '~/components/LookOverlay';
+import CreatorPage from '~/components/CreatorPage';
+import BottomBar from '~/components/BottomBar';
+import BookmarksPage from '~/components/BookmarksPage';
+import InAppBrowser from '~/components/InAppBrowser';
+import DeckView from '~/components/DeckView';
+import CatalogLogo from '~/components/CatalogLogo';
+import { Look } from '~/data/looks';
+import { useBookmarks } from '~/hooks/useBookmarks';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
 

@@ -35,7 +35,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npx next build
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -43,7 +43,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'out'
+          path: 'build/client'
 
       - name: Deploy to GitHub Pages
         id: deployment

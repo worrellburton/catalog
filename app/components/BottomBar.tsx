@@ -1,7 +1,6 @@
-'use client';
 
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { searchSuggestions } from '@/data/looks';
+import { searchSuggestions } from '~/data/looks';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 
 interface BottomBarProps {

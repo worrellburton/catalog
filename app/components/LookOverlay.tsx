@@ -1,7 +1,6 @@
-'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Look, creators, Product } from '@/data/looks';
+import { Look, creators, Product } from '~/data/looks';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -30,7 +29,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   );
 
   const creatorData = creators[look.creator];
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/catalogwebapp';
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

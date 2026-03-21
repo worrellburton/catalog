@@ -1,7 +1,6 @@
-'use client';
 
 import { useMemo, useRef, useEffect, useCallback } from 'react';
-import { looks, creators, Look } from '@/data/looks';
+import { looks, creators, Look } from '~/data/looks';
 import LookCard from './LookCard';
 
 interface GridViewProps {

@@ -1,4 +1,3 @@
-'use client';
 
 import React, { useEffect, useRef } from 'react';
 import CatalogLogo from './CatalogLogo';
@@ -9,7 +8,7 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
   const navRef = useRef<HTMLElement>(null);
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/catalogwebapp';
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   useEffect(() => {
     const handleScroll = () => {

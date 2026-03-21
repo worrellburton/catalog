@@ -1,7 +1,6 @@
-'use client';
 
 import { useState, useCallback } from 'react';
-import { Product } from '@/data/looks';
+import { Product } from '~/data/looks';
 
 const LOOKS_KEY = 'catalog_bookmarked_looks';
 const PRODUCTS_KEY = 'catalog_bookmarked_products';

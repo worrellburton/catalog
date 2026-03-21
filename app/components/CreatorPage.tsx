@@ -1,7 +1,6 @@
-'use client';
 
 import { useEffect, useMemo } from 'react';
-import { looks, creators, Look } from '@/data/looks';
+import { looks, creators, Look } from '~/data/looks';
 import LookCard from './LookCard';
 
 interface CreatorPageProps {
