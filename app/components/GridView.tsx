@@ -1,5 +1,5 @@
 
-import { useMemo, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { looks, creators, Look } from '~/data/looks';
 import LookCard from './LookCard';
 
@@ -10,10 +10,19 @@ interface GridViewProps {
   onOpenCreator: (creatorName: string) => void;
   isLightMode: boolean;
   shuffleKey?: number;
+  layoutMode?: number;
 }
 
-export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0 }: GridViewProps) {
+const LAYOUT_CONFIGS = [
+  { name: 'grid', maxCards: 48, minWidth: 240, featured: true },
+  { name: 'editorial', maxCards: 6, minWidth: 300, featured: false },
+  { name: 'mosaic', maxCards: 24, minWidth: 160, featured: true },
+  { name: 'spotlight', maxCards: 8, minWidth: 400, featured: false },
+];
+
+export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0, layoutMode = 0 }: GridViewProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
 
   const filteredLooks = useMemo(() => {
     let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
@@ -31,7 +40,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
 
   const displayLooks = useMemo(() => {
     if (filteredLooks.length === 0) return [];
-    const maxCards = 48;
+    const maxCards = layout.maxCards;
     const repeatCount = Math.max(1, Math.ceil(maxCards / filteredLooks.length));
     const result: (Look & { displayIndex: number })[] = [];
     for (let r = 0; r < repeatCount; r++) {
@@ -39,31 +48,34 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
         result.push({ ...look, displayIndex: r * filteredLooks.length + i });
       });
     }
-    // Shuffle using Fisher-Yates when shuffleKey changes
+    // Always shuffle on remix
     if (shuffleKey > 0) {
       for (let i = result.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [result[i], result[j]] = [result[j], result[i]];
       }
-      // Reassign displayIndex after shuffle
-      result.forEach((look, i) => { look.displayIndex = i; });
     }
-    return result;
-  }, [filteredLooks, shuffleKey]);
+    // Trim to max
+    const trimmed = result.slice(0, maxCards);
+    trimmed.forEach((look, i) => { look.displayIndex = i; });
+    return trimmed;
+  }, [filteredLooks, shuffleKey, layout.maxCards]);
 
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
       return {};
     }
-    return { gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' };
-  }, []);
+    return { gridTemplateColumns: `repeat(auto-fill, minmax(${layout.minWidth}px, 1fr))` };
+  }, [layout.minWidth]);
 
   const getCardClass = useCallback((globalIndex: number) => {
     const classes = ['look-card'];
-    if (globalIndex % 5 === 0) classes.push('look-card-featured');
-    else if (globalIndex % 7 === 0 || globalIndex % 11 === 0) classes.push('look-card-wide');
+    if (layout.featured) {
+      if (globalIndex % 5 === 0) classes.push('look-card-featured');
+      else if (globalIndex % 7 === 0 || globalIndex % 11 === 0) classes.push('look-card-wide');
+    }
     return classes.join(' ');
-  }, []);
+  }, [layout.featured]);
 
   if (filteredLooks.length === 0 && searchQuery) {
     return (
@@ -82,11 +94,11 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   }
 
   return (
-    <div className="grid-viewport" id="grid-viewport">
+    <div className={`grid-viewport layout-${layout.name}`} id="grid-viewport">
       <div className="grid-container" id="grid-container" ref={gridRef} style={gridStyle}>
-        {displayLooks.map((look, i) => (
+        {displayLooks.map((look) => (
           <LookCard
-            key={`${look.id}-${look.displayIndex}`}
+            key={`${look.id}-${look.displayIndex}-${shuffleKey}`}
             look={look}
             className={getCardClass(look.displayIndex)}
             onOpenLook={onOpenLook}

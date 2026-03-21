@@ -26,9 +26,46 @@ body {
 }
 
 .app-root.light-mode {
-  --bg: #f5f5f5;
+  --bg: #ffffff;
   --text: #1a1a1a;
   --card-bg: #ffffff;
+  background: #ffffff;
+}
+
+.light-mode #grid-container {
+  gap: 16px;
+  padding: 20px;
+}
+
+.light-mode .look-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.light-mode .look-card:hover {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.light-mode .look-card .card-creator-name {
+  color: #333;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.light-mode .look-card .card-creator-avatar {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.light-mode #grid-viewport {
+  background: #ffffff;
+}
+
+.light-mode #grid-viewport::after {
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
 }
 
 /* Back to deck button */
@@ -2515,6 +2552,7 @@ header {
   display: grid;
   gap: 8px;
   padding: 16px;
+  grid-auto-flow: dense;
 }
 
 /* Bottom fade gradient */
@@ -4295,5 +4333,295 @@ header {
 
   .landing-hero-title {
     font-size: 36px;
+  }
+}
+
+/* ============================================================
+   Layout modes for grid remix
+   ============================================================ */
+
+.layout-editorial #grid-container {
+  gap: 16px;
+  padding: 24px;
+}
+
+.layout-mosaic #grid-container {
+  gap: 4px;
+  padding: 8px;
+}
+
+.layout-spotlight #grid-container {
+  gap: 20px;
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ============================================================
+   Admin layout
+   ============================================================ */
+
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e5e5e5;
+}
+
+.admin-sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: #111;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.admin-sidebar-header {
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-logo {
+  height: 22px;
+}
+
+.admin-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.admin-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.admin-nav-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.admin-sidebar-footer {
+  padding: 16px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-back-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-main {
+  flex: 1;
+  margin-left: 240px;
+  min-height: 100vh;
+}
+
+.admin-page {
+  padding: 40px;
+  max-width: 1200px;
+}
+
+.admin-page-header {
+  margin-bottom: 32px;
+}
+
+.admin-page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.admin-page-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.admin-stat-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.admin-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-cell-name {
+  font-weight: 600;
+  color: #fff !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-cell-muted {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.admin-avatar {
+  font-size: 18px;
+}
+
+.admin-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-status-online {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.admin-status-away {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.admin-status-offline {
+  background: rgba(128, 128, 128, 0.1);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar {
+    width: 60px;
+    overflow: hidden;
+  }
+
+  .admin-sidebar-header {
+    padding: 16px;
+    justify-content: center;
+  }
+
+  .admin-badge,
+  .admin-nav-item span,
+  .admin-back-btn span,
+  .admin-logo {
+    display: none;
+  }
+
+  .admin-nav-item {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .admin-back-btn {
+    justify-content: center;
+  }
+
+  .admin-main {
+    margin-left: 60px;
+  }
+
+  .admin-page {
+    padding: 20px;
   }
 }

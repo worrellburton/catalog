@@ -30,18 +30,21 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
 
   return (
     <div className="bookmarks-page">
-      <button className="bookmarks-back" onClick={onClose}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        Back
-      </button>
+      <div className="bookmarks-header">
+        <button className="bookmarks-back" onClick={onClose}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
+        <h1 className="bookmarks-title">Saved</h1>
+      </div>
 
-      <div className="bookmarks-content">
+      <div className="bookmarks-sections">
         <div className="bookmarks-section">
           <h2 className="bookmarks-section-title">Saved Looks</h2>
           {savedLooks.length === 0 ? (
             <p className="bookmarks-empty visible">No saved looks yet</p>
           ) : (
-            <div className="bookmarks-looks-grid">
+            <div className="bookmarks-grid">
               {savedLooks.map(look => (
                 <div
                   key={look.id}
@@ -68,7 +71,7 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
           {bookmarks.bookmarkedProducts.length === 0 ? (
             <p className="bookmarks-empty visible">No saved products yet</p>
           ) : (
-            <div className="bookmarks-products-list">
+            <div className="bookmarks-product-list">
               {bookmarks.bookmarkedProducts.map((p, i) => (
                 <div key={i} className="bookmarks-product-item">
                   <div className="bp-thumb" style={{ background: 'rgba(128,128,128,0.2)' }} />

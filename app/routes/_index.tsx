@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
 import LandingPage from '~/components/LandingPage';
@@ -28,10 +29,16 @@ export default function Home() {
   const [isLightMode, setIsLightMode] = useState(false);
   const [fromDeck, setFromDeck] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(0);
+  const [layoutMode, setLayoutMode] = useState(0);
 
+  const navigate = useNavigate();
   const bookmarks = useBookmarks();
 
   const handlePasswordSubmit = useCallback((password: string): boolean => {
+    if (password === 'awds') {
+      navigate('/admin');
+      return true;
+    }
     if (password === 'deck') {
       setView('deck');
       return true;
@@ -52,8 +59,9 @@ export default function Home() {
     return false;
   }, []);
 
-  const handleShuffle = useCallback(() => {
+  const handleRemix = useCallback(() => {
     setShuffleKey(k => k + 1);
+    setLayoutMode(m => (m + 1) % 4);
   }, []);
 
   const handleLandingToApp = useCallback(() => {
@@ -146,8 +154,8 @@ export default function Home() {
             <div className="header-right">
               <button
                 className="shuffle-btn"
-                onClick={handleShuffle}
-                aria-label="Shuffle grid"
+                onClick={handleRemix}
+                aria-label="Remix grid"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
               </button>
@@ -176,6 +184,7 @@ export default function Home() {
             onOpenCreator={handleOpenCreator}
             isLightMode={isLightMode}
             shuffleKey={shuffleKey}
+            layoutMode={layoutMode}
           />
 
           <BottomBar
