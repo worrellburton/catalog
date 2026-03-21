@@ -1,16 +1,24 @@
 # catalog
 
-A visual lookbook webapp for browsing fashion "looks" — short video clips paired with product information. The interface is a draggable, zoomable grid of video cards on a dark background.
+A visual lookbook webapp for browsing fashion "looks" — short video clips paired with product information. The interface is a zoomable grid of video cards on a dark background.
 
 ## Live Site
 
 https://rwb8771.github.io/catalogwebapp/
 
+## Tech Stack
+
+- **Next.js 15** with App Router and TypeScript
+- **React 19** with functional components and hooks
+- **Static export** — `next build` outputs to `out/` for GitHub Pages deployment
+- **No external UI libraries** — all styling via vanilla CSS (`globals.css`)
+
 ## Deployment
 
 - **Workflow**: `.github/workflows/deploy.yml` deploys to GitHub Pages
 - **Triggers**: Pushes to `main` or any `claude/**` branch
-- **Method**: Static site — the workflow uploads the entire repo root as a GitHub Pages artifact (no build step)
+- **Method**: `npm ci` → `npx next build` → uploads `out/` directory as GitHub Pages artifact
+- **Base path**: `/catalogwebapp` (configured in `next.config.ts`)
 - **Environment**: The GitHub Pages environment must have `claude/**` and `main` listed as allowed deployment branches (configured in repo Settings > Environments > github-pages)
 
 ## Git / Branch Permissions
@@ -21,25 +29,45 @@ Claude Code sessions can only push to their own session branch (`claude/<descrip
 
 | File | Purpose |
 |---|---|
-| `index.html` | Single-page app shell. Contains the header (logo), grid viewport, bottom scale slider, and the look detail overlay markup. |
-| `styles.css` | All styling. Dark theme (`--bg: #000`), card layout, overlay, creator catalog page, bottom slider pill, responsive breakpoints. |
-| `app.js` | All application logic: look data, grid rendering, drag-to-pan, scale slider, video hover playback, look detail overlay, creator catalog pages. |
-| `girl.mp4` | Video asset used for odd-numbered looks. |
-| `guy.mp4` | Video asset used for even-numbered looks. |
-| `.github/workflows/deploy.yml` | GitHub Actions workflow for deploying to GitHub Pages on push. |
+| `src/app/page.tsx` | Main page component — orchestrates all views (password gate, landing, grid, deck) via React state |
+| `src/app/layout.tsx` | Root layout with metadata |
+| `src/app/globals.css` | All styling. Dark theme, card layout, overlay, landing page, deck, responsive breakpoints |
+| `src/components/GridView.tsx` | Main grid of look cards with filtering and search |
+| `src/components/LookCard.tsx` | Individual video card with lazy loading via IntersectionObserver |
+| `src/components/LookOverlay.tsx` | Detail overlay with video, product list, bookmarking |
+| `src/components/BottomBar.tsx` | Search, filter chips, scale slider, bookmarks button |
+| `src/components/LandingPage.tsx` | Marketing landing page with hero, features, creator/product sections |
+| `src/components/DeckView.tsx` | Investor deck with scroll-snap slides |
+| `src/components/PasswordGate.tsx` | Access code gate (123=app, 321=landing, deck=investor deck) |
+| `src/components/BookmarksPage.tsx` | Saved looks and products |
+| `src/components/CreatorPage.tsx` | Creator catalog showing all looks by a creator |
+| `src/components/InAppBrowser.tsx` | Slide-in iframe for product URLs |
+| `src/data/looks.ts` | Look data, creator profiles, product info, search suggestions |
+| `src/data/catalogNames.ts` | Funny catalog name generator for filter combos |
+| `src/hooks/useBookmarks.ts` | Bookmark state management with localStorage persistence |
+| `public/*.mp4` | Video assets |
+| `next.config.ts` | Next.js config (static export, basePath, asset prefix) |
+| `.github/workflows/deploy.yml` | GitHub Actions workflow for building and deploying |
 
 ## Navigation / Page Structure
 
-This is a single-page app with no router — all views are DOM overlays:
+Single-page app with React state-driven views:
 
-1. **Main Grid** — The default view. A CSS grid of look cards (3:1 aspect ratio) that can be panned by click-dragging and resized via the bottom slider.
-2. **Look Detail Overlay** — Opens when you click a card. Shows the video on the left and product info (name, price) on the right. Close with the × button, Escape key, or clicking outside.
-3. **Creator Catalog Page** — Opens when you click a creator name (e.g. `@sophia`) on a card. Shows all looks by that creator in a scrollable grid. Has a back button to return to the main grid.
+1. **Password Gate** — Initial view. Enter '123' for main app, '321' for landing page, 'deck' for investor deck
+2. **Splash Screen** — Brief logo animation on transition to main app
+3. **Landing Page** — Marketing page with hero, features, creator section, products, CTA
+4. **Main Grid** — CSS grid of look cards that can be resized via the bottom slider
+5. **Look Detail Overlay** — Opens when you click a card. Shows video + product info. Close with x, Escape, or click outside
+6. **Creator Catalog Page** — Shows all looks by a creator
+7. **Deck View** — Investor presentation with scroll-snap slides
+8. **Bookmarks Page** — Saved looks and products (persisted in localStorage)
 
 ## Architecture Decisions
 
-- **No build tools / no framework** — Plain HTML, CSS, and vanilla JavaScript. No bundler, no transpiler, no npm. Files are served as-is.
-- **No client-side router** — Views are managed by adding/removing DOM elements and toggling CSS classes (`hidden`).
-- **Look data is inline** — The `looks` array in `app.js` contains all look metadata (title, video file, creator, description, products). There is no API or database.
-- **Videos play on hover** — Cards show a static first frame by default (`preload="metadata"`). Video plays on `mouseenter` and resets on `mouseleave`. The detail view autoplays.
-- **Drag-to-pan** — The grid container is absolutely positioned and translated via `transform`. Mouse and touch events track deltas to update the pan offset. A `hasDragged` flag prevents click events from firing after a drag.
+- **Next.js with static export** — React components with SSG, no server runtime needed
+- **TypeScript** — Full type safety across components and data
+- **Component-based views** — Views managed by React state instead of DOM manipulation
+- **Memoized components** — LookCard uses React.memo, filtered looks use useMemo
+- **IntersectionObserver for video** — Videos lazy-load and auto-play/pause based on viewport visibility
+- **localStorage bookmarks** — Custom useBookmarks hook for persistent state
+- **CSS unchanged** — Same CSS class names, migrated from styles.css to globals.css
