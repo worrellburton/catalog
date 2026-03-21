@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import PasswordGate from '@/components/PasswordGate';
+import FrameworkSelector from '@/components/FrameworkSelector';
 import SplashScreen from '@/components/SplashScreen';
 import LandingPage from '@/components/LandingPage';
 import GridView from '@/components/GridView';
@@ -15,7 +16,7 @@ import CatalogLogo from '@/components/CatalogLogo';
 import { Look } from '@/data/looks';
 import { useBookmarks } from '@/hooks/useBookmarks';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
+type AppView = 'locked' | 'framework-select' | 'splash' | 'landing' | 'app' | 'deck';
 
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
@@ -42,15 +43,27 @@ export default function Home() {
       return true;
     }
     if (password === '123') {
+      setView('framework-select');
+      return true;
+    }
+    return false;
+  }, []);
+
+  const basePath = '/catalogwebapp';
+
+  const handleFrameworkSelect = useCallback((framework: 'nextjs' | 'remix' | 'java') => {
+    if (framework === 'nextjs') {
       setShowSplash(true);
       setView('splash');
       setTimeout(() => {
         setView('app');
         setShowSplash(false);
       }, 2200);
-      return true;
+    } else if (framework === 'remix') {
+      window.location.href = `${basePath}/remix-app/`;
+    } else if (framework === 'java') {
+      window.location.href = `${basePath}/java-app/`;
     }
-    return false;
   }, []);
 
   const handleLandingToApp = useCallback(() => {
@@ -126,6 +139,10 @@ export default function Home() {
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
       {view === 'locked' && (
         <PasswordGate onSubmit={handlePasswordSubmit} />
+      )}
+
+      {view === 'framework-select' && (
+        <FrameworkSelector onSelect={handleFrameworkSelect} />
       )}
 
       {showSplash && <SplashScreen />}
