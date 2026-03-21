@@ -7,14 +7,13 @@ import LookCard from './LookCard';
 interface GridViewProps {
   activeFilter: 'all' | 'men' | 'women';
   searchQuery: string;
-  cardWidth: number;
   onOpenLook: (look: Look) => void;
   onOpenCreator: (creatorName: string) => void;
   isLightMode: boolean;
   shuffleKey?: number;
 }
 
-export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0 }: GridViewProps) {
+export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0 }: GridViewProps) {
   const gridRef = useRef<HTMLDivElement>(null);
 
   const filteredLooks = useMemo(() => {
@@ -57,8 +56,8 @@ export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenL
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
       return {};
     }
-    return { gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))` };
-  }, [cardWidth]);
+    return { gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' };
+  }, []);
 
   const getCardClass = useCallback((globalIndex: number) => {
     const classes = ['look-card'];
