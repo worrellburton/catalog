@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import PasswordGate from '@/components/PasswordGate';
-import FrameworkSelector from '@/components/FrameworkSelector';
+
 import SplashScreen from '@/components/SplashScreen';
 import LandingPage from '@/components/LandingPage';
 import GridView from '@/components/GridView';
@@ -16,7 +16,7 @@ import CatalogLogo from '@/components/CatalogLogo';
 import { Look } from '@/data/looks';
 import { useBookmarks } from '@/hooks/useBookmarks';
 
-type AppView = 'locked' | 'framework-select' | 'splash' | 'landing' | 'app' | 'deck';
+type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
 
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
@@ -30,6 +30,7 @@ export default function Home() {
   const [cardWidth, setCardWidth] = useState(240);
   const [isLightMode, setIsLightMode] = useState(false);
   const [fromDeck, setFromDeck] = useState(false);
+  const [shuffleKey, setShuffleKey] = useState(0);
 
   const bookmarks = useBookmarks();
 
@@ -43,27 +44,19 @@ export default function Home() {
       return true;
     }
     if (password === '123') {
-      setView('framework-select');
-      return true;
-    }
-    return false;
-  }, []);
-
-  const basePath = '/catalogwebapp';
-
-  const handleFrameworkSelect = useCallback((framework: 'nextjs' | 'remix' | 'java') => {
-    if (framework === 'nextjs') {
       setShowSplash(true);
       setView('splash');
       setTimeout(() => {
         setView('app');
         setShowSplash(false);
       }, 2200);
-    } else if (framework === 'remix') {
-      window.location.href = `${basePath}/remix-app/`;
-    } else if (framework === 'java') {
-      window.location.href = `${basePath}/java-app/`;
+      return true;
     }
+    return false;
+  }, []);
+
+  const handleShuffle = useCallback(() => {
+    setShuffleKey(k => k + 1);
   }, []);
 
   const handleLandingToApp = useCallback(() => {
@@ -141,10 +134,6 @@ export default function Home() {
         <PasswordGate onSubmit={handlePasswordSubmit} />
       )}
 
-      {view === 'framework-select' && (
-        <FrameworkSelector onSelect={handleFrameworkSelect} />
-      )}
-
       {showSplash && <SplashScreen />}
 
       {view === 'landing' && (
@@ -188,6 +177,13 @@ export default function Home() {
             </div>
             <div className="header-right">
               <button
+                className="shuffle-btn"
+                onClick={handleShuffle}
+                aria-label="Shuffle grid"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+              </button>
+              <button
                 className="theme-toggle"
                 onClick={toggleTheme}
                 aria-label="Toggle theme"
@@ -212,6 +208,7 @@ export default function Home() {
             onOpenLook={handleOpenLook}
             onOpenCreator={handleOpenCreator}
             isLightMode={isLightMode}
+            shuffleKey={shuffleKey}
           />
 
           <BottomBar

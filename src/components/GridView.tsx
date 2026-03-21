@@ -11,9 +11,10 @@ interface GridViewProps {
   onOpenLook: (look: Look) => void;
   onOpenCreator: (creatorName: string) => void;
   isLightMode: boolean;
+  shuffleKey?: number;
 }
 
-export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenLook, onOpenCreator, isLightMode }: GridViewProps) {
+export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0 }: GridViewProps) {
   const gridRef = useRef<HTMLDivElement>(null);
 
   const filteredLooks = useMemo(() => {
@@ -40,8 +41,17 @@ export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenL
         result.push({ ...look, displayIndex: r * filteredLooks.length + i });
       });
     }
+    // Shuffle using Fisher-Yates when shuffleKey changes
+    if (shuffleKey > 0) {
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      // Reassign displayIndex after shuffle
+      result.forEach((look, i) => { look.displayIndex = i; });
+    }
     return result;
-  }, [filteredLooks]);
+  }, [filteredLooks, shuffleKey]);
 
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {

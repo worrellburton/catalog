@@ -1224,6 +1224,28 @@ header {
 }
 
 /* Theme toggle */
+.shuffle-btn {
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  color: var(--text);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.shuffle-btn:hover {
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.shuffle-btn:active {
+  transform: rotate(180deg);
+}
+
 .theme-toggle {
   background: rgba(128, 128, 128, 0.15);
   border: 1px solid rgba(128, 128, 128, 0.15);
