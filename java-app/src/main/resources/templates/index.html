@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>catalog</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}"/>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+    <div class="logo">catalog</div>
+    <div class="header-controls">
+        <div class="search-wrapper">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search looks..." autocomplete="off"/>
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+        </div>
+        <div class="slider-wrapper">
+            <label class="slider-label" for="scaleSlider">Size</label>
+            <input type="range" id="scaleSlider" class="scale-slider" min="120" max="500" value="240"/>
+        </div>
+    </div>
+</header>
+
+<!-- Grid -->
+<main class="grid-container" id="gridContainer">
+    <div th:each="look : ${looks}" class="look-card"
+         th:attr="data-id=${look.id},
+                  data-title=${look.title},
+                  data-description=${look.description},
+                  data-creator-handle=${look.creator.handle},
+                  data-creator-name=${look.creator.displayName},
+                  data-creator-avatar=${look.creator.avatar},
+                  data-gender=${look.gender},
+                  data-color=${look.color},
+                  data-video=${look.video}"
+    >
+        <!-- Product data as a hidden script block -->
+        <script type="application/json" class="product-data"
+                th:utext="${look.productsJson}">
+        </script>
+
+        <video th:src="@{'/videos/' + ${look.video}}"
+               muted playsinline preload="none" loop
+               class="card-video">
+        </video>
+        <div class="card-overlay">
+            <div class="card-title" th:text="${look.title}">Look 01</div>
+            <div class="card-creator">
+                <img th:src="${look.creator.avatar}" alt="" class="creator-avatar"/>
+                <span class="creator-name" th:text="${look.creator.displayName}">Creator</span>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Detail Overlay -->
+<div class="detail-overlay" id="detailOverlay">
+    <button class="overlay-close" id="overlayClose">&times;</button>
+    <div class="overlay-content">
+        <div class="overlay-video-wrapper">
+            <video id="overlayVideo" muted playsinline loop class="overlay-video"></video>
+        </div>
+        <div class="overlay-info">
+            <h2 id="overlayTitle" class="overlay-title"></h2>
+            <p id="overlayDescription" class="overlay-description"></p>
+            <div class="overlay-creator" id="overlayCreator">
+                <img id="overlayCreatorAvatar" alt="" class="creator-avatar"/>
+                <span id="overlayCreatorName"></span>
+            </div>
+            <div class="overlay-products" id="overlayProducts">
+                <h3>Products in this look</h3>
+                <div id="productList" class="product-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Spring Boot badge -->
+<div class="spring-badge">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6db33f" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+    Built with Spring Boot
+</div>
+
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
