@@ -75,7 +75,7 @@ export default function GridView({ activeFilter, searchQuery, cardWidth, onOpenL
 
   return (
     <div className="grid-viewport" id="grid-viewport">
-      <div className="grid-container" ref={gridRef} style={gridStyle}>
+      <div className="grid-container" id="grid-container" ref={gridRef} style={gridStyle}>
         {displayLooks.map((look, i) => (
           <LookCard
             key={`${look.id}-${look.displayIndex}`}
