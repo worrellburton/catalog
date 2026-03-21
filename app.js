@@ -203,6 +203,11 @@ function buildGrid() {
   for (let r = 0; r < repeatCount; r++) {
     filtered.forEach((look, i) => {
       const card = createLookCard(look, i);
+      // Every 5th card spans 2x2 grid spaces
+      const globalIndex = r * filtered.length + i;
+      if (globalIndex % 5 === 0) {
+        card.classList.add('look-card-featured');
+      }
       gridContainer.appendChild(card);
     });
   }

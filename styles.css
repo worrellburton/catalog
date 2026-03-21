@@ -2390,6 +2390,19 @@ body.light-mode header {
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+/* Featured cards span 2x2 grid cells */
+.look-card-featured {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+@media (max-width: 768px) {
+  .look-card-featured {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+}
+
 /* On hover, darken siblings — desktop only */
 @media (hover: hover) {
   #grid-container:hover .look-card {
