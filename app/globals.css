@@ -2606,15 +2606,14 @@ header {
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* Featured cards span 2x2 grid cells */
+/* Featured cards — subtle size increase, no spanning */
 .look-card-featured {
-  grid-column: span 2;
-  grid-row: span 2;
+  /* No grid spanning — keeps grid dense and gap-free */
 }
 
-/* Wide cards span 2 columns, 1 row */
+/* Wide cards — no spanning */
 .look-card-wide {
-  grid-column: span 2;
+  /* No grid spanning — keeps grid dense and gap-free */
 }
 
 @media (max-width: 768px) {

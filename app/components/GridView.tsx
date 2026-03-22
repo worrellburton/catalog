@@ -14,10 +14,10 @@ interface GridViewProps {
 }
 
 const LAYOUT_CONFIGS = [
-  { name: 'grid', maxCards: 48, minWidth: 240, featured: true },
-  { name: 'editorial', maxCards: 6, minWidth: 300, featured: false },
-  { name: 'mosaic', maxCards: 24, minWidth: 160, featured: true },
-  { name: 'spotlight', maxCards: 8, minWidth: 400, featured: false },
+  { name: 'grid', maxCards: 48, minWidth: 240 },
+  { name: 'editorial', maxCards: 6, minWidth: 300 },
+  { name: 'mosaic', maxCards: 24, minWidth: 160 },
+  { name: 'spotlight', maxCards: 8, minWidth: 400 },
 ];
 
 export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0, layoutMode = 0 }: GridViewProps) {
@@ -68,14 +68,9 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return { gridTemplateColumns: `repeat(auto-fill, minmax(${layout.minWidth}px, 1fr))` };
   }, [layout.minWidth]);
 
-  const getCardClass = useCallback((globalIndex: number) => {
-    const classes = ['look-card'];
-    if (layout.featured) {
-      if (globalIndex % 5 === 0) classes.push('look-card-featured');
-      else if (globalIndex % 7 === 0 || globalIndex % 11 === 0) classes.push('look-card-wide');
-    }
-    return classes.join(' ');
-  }, [layout.featured]);
+  const getCardClass = useCallback((_globalIndex: number) => {
+    return 'look-card';
+  }, []);
 
   if (filteredLooks.length === 0 && searchQuery) {
     return (
