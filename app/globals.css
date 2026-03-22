@@ -4446,10 +4446,28 @@ header {
 
 .admin-nav {
   flex: 1;
-  padding: 12px 8px;
+  padding: 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.admin-nav-section {
+  margin-bottom: 8px;
+}
+
+.admin-nav-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #aaa;
+  padding: 12px 14px 4px;
+}
+
+.admin-dark .admin-nav-section-title {
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .admin-nav-item {
@@ -4752,26 +4770,9 @@ header {
   min-width: 40px;
 }
 
-/* Look row (used in looks table) */
-.admin-look-row-group td {
-  padding: 0 !important;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.admin-look-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.admin-look-row:hover {
+/* Look rows */
+.admin-look-main-row:hover td {
   background: #fafafa;
-}
-
-.admin-look-cell {
-  flex-shrink: 0;
-  padding: 0 8px;
 }
 
 .admin-look-thumb {
@@ -4797,12 +4798,6 @@ header {
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-}
-
-.admin-look-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 4px;
 }
 
 /* Collapsible products section */
@@ -4974,11 +4969,8 @@ header {
   color: #ef4444;
 }
 
-.admin-dark .admin-look-row:hover {
+.admin-dark .admin-look-main-row:hover td {
   background: rgba(255, 255, 255, 0.02);
-}
-.admin-dark .admin-look-row-group td {
-  border-bottom-color: rgba(255, 255, 255, 0.04);
 }
 .admin-dark .admin-look-thumb {
   background: #222;
