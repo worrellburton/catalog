@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const products = [
   { name: 'Atlas Crossbody Bag', sku: 'ATL-CB-001', price: '$85.00', inventory: 24, status: 'Active', sales: 42 },
   { name: 'Canvas Tote - Natural', sku: 'ATL-CT-002', price: '$65.00', inventory: 18, status: 'Active', sales: 38 },
@@ -12,6 +14,7 @@ const products = [
 ];
 
 export default function PartnersProducts() {
+  const table = useSortableTable(products);
   const totalInventory = products.reduce((s, p) => s + p.inventory, 0);
   const totalSales = products.reduce((s, p) => s + p.sales, 0);
 
@@ -44,16 +47,16 @@ export default function PartnersProducts() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>Product</th>
-              <th>SKU</th>
-              <th>Price</th>
-              <th>Inventory</th>
-              <th>Sales</th>
-              <th>Status</th>
+              <SortableTh label="Product" sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="SKU" sortKey="sku" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Price" sortKey="price" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Inventory" sortKey="inventory" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Sales" sortKey="sales" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {products.map((p, i) => (
+            {table.sortedData.map((p, i) => (
               <tr key={i}>
                 <td>
                   <div className="partners-campaign-cell">

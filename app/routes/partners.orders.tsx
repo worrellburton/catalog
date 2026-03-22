@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const orders = [
   { id: '#1042', date: 'Mar 20, 2026', customer: 'Sarah M.', product: 'Atlas Crossbody Bag', qty: 1, total: '$85.00', status: 'Fulfilled' },
   { id: '#1041', date: 'Mar 19, 2026', customer: 'James L.', product: 'Atlas Weekender', qty: 1, total: '$195.00', status: 'Fulfilled' },
@@ -10,6 +12,8 @@ const orders = [
 ];
 
 export default function PartnersOrders() {
+  const table = useSortableTable(orders);
+
   return (
     <div className="partners-page">
       <div className="partners-page-header">
@@ -39,17 +43,17 @@ export default function PartnersOrders() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>Order</th>
-              <th>Date</th>
-              <th>Customer</th>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Total</th>
-              <th>Status</th>
+              <SortableTh label="Order" sortKey="id" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Date" sortKey="date" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Customer" sortKey="customer" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Product" sortKey="product" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Qty" sortKey="qty" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Total" sortKey="total" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {orders.map(o => (
+            {table.sortedData.map(o => (
               <tr key={o.id}>
                 <td style={{ fontWeight: 600 }}>{o.id}</td>
                 <td style={{ color: '#888' }}>{o.date}</td>

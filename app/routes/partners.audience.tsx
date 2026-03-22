@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const demographics = [
   { label: 'Women 18-24', pct: 32 },
   { label: 'Women 25-34', pct: 28 },
@@ -27,6 +29,8 @@ const interests = [
 ];
 
 export default function PartnersAudience() {
+  const table = useSortableTable(topLocations, { key: 'users', direction: 'desc' });
+
   return (
     <div className="partners-page">
       <h2 className="partners-page-title">Audience</h2>
@@ -86,13 +90,13 @@ export default function PartnersAudience() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>City</th>
-              <th>Country</th>
-              <th>Users</th>
+              <SortableTh label="City" sortKey="city" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Country" sortKey="country" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Users" sortKey="users" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {topLocations.map((loc, i) => (
+            {table.sortedData.map((loc, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 500 }}>{loc.city}</td>
                 <td>{loc.country}</td>

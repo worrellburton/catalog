@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const ads = [
   { name: 'Grid 1', type: 'Grid', placement: 'Feed', impressions: 168, clicks: 54, ctr: '32.14%', spend: '$0.00', status: 'Active' },
   { name: 'Story 1', type: 'Story', placement: 'Explore', impressions: 1420, clicks: 135, ctr: '9.51%', spend: '$120.00', status: 'Active' },
@@ -6,6 +8,8 @@ const ads = [
 ];
 
 export default function PartnersAdvertisements() {
+  const table = useSortableTable(ads);
+
   return (
     <div className="partners-page">
       <div className="partners-page-header">
@@ -35,18 +39,18 @@ export default function PartnersAdvertisements() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>Ad Name</th>
-              <th>Type</th>
-              <th>Placement</th>
-              <th>Impressions</th>
-              <th>Clicks</th>
-              <th>CTR</th>
-              <th>Spend</th>
-              <th>Status</th>
+              <SortableTh label="Ad Name" sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Type" sortKey="type" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Placement" sortKey="placement" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Impressions" sortKey="impressions" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Clicks" sortKey="clicks" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="CTR" sortKey="ctr" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Spend" sortKey="spend" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {ads.map((ad, i) => (
+            {table.sortedData.map((ad, i) => (
               <tr key={i}>
                 <td>
                   <div className="partners-campaign-cell">

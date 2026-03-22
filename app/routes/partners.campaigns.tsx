@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const campaignData = [
   {
     name: 'Test 1',
@@ -41,6 +43,7 @@ const campaignData = [
 ];
 
 export default function PartnersCampaigns() {
+  const table = useSortableTable(campaignData);
   const totalRevenue = '$245.00';
   const totalAdSpend = '$120.00';
   const totalCpc = '$0.89';
@@ -52,21 +55,21 @@ export default function PartnersCampaigns() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>Campaign</th>
-              <th>Advertisement</th>
-              <th>Audience</th>
-              <th>Revenue</th>
-              <th>Ad Spend</th>
-              <th>CPC</th>
+              <SortableTh label="Campaign" sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Advertisement" sortKey="advertisement" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Audience" sortKey="audience" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Revenue" sortKey="revenue" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Ad Spend" sortKey="adSpend" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="CPC" sortKey="cpc" currentSort={table.sort} onSort={table.handleSort} />
               <th className="partners-th-accent">I</th>
               <th className="partners-th-accent">C</th>
               <th className="partners-th-green">CTR</th>
-              <th>ROAS</th>
-              <th>Status</th>
+              <SortableTh label="ROAS" sortKey="roas" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {campaignData.map((c, i) => (
+            {table.sortedData.map((c, i) => (
               <tr key={i}>
                 <td>
                   <div className="partners-campaign-cell">

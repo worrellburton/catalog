@@ -6990,6 +6990,7 @@ header {
 
 .partners-page {
   max-width: 1100px;
+  margin: 0 auto;
 }
 
 .partners-page-header {
@@ -7009,24 +7010,164 @@ header {
   font-weight: 500;
 }
 
-.partners-time-filter {
+/* Insights header with time controls */
+.partners-insights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.partners-time-select {
-  padding: 8px 28px 8px 14px;
+.partners-time-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.partners-time-pills {
+  display: flex;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.partners-time-pill {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.partners-time-pill:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.partners-time-pill.active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Date picker button */
+.partners-date-picker-wrap {
+  position: relative;
+}
+
+.partners-date-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
-  color: #1a1a1a;
+  color: #555;
   cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.partners-date-picker-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: #fff;
+}
+
+.partners-date-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  min-width: 180px;
+  z-index: 50;
+  animation: partners-dropdown-in 0.15s ease;
+}
+
+@keyframes partners-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.partners-date-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.partners-date-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1a1a1a;
+}
+
+.partners-date-dropdown-item.active {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.partners-date-dropdown-item.active svg {
+  color: #22c55e;
+}
+
+/* View toggle icon buttons */
+.partners-view-toggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+
+.partners-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #999;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.partners-view-btn:hover {
+  color: #555;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.partners-view-btn.active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .partners-stats-row {
