@@ -2,15 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import { looks } from '~/data/looks';
 
 const statCards = [
-  { label: 'Revenue', value: '$70', change: '+0 yesterday' },
-  { label: 'ROAS', value: '2x', change: '', highlight: true },
-  { label: 'Ad Spend', value: '$35', change: '+0 yesterday' },
+  { label: 'Revenue', value: '$70', change: '+$0 yesterday', trend: [20, 35, 28, 42, 55, 48, 70] },
+  { label: 'ROAS', value: '2x', change: '', highlight: true, trend: [1, 1.2, 1.5, 1.8, 2, 1.9, 2] },
+  { label: 'Ad Spend', value: '$35', change: '+$0 yesterday', trend: [10, 15, 20, 25, 30, 32, 35] },
 ];
 
 const statCards2 = [
-  { label: '# of Impressions', value: '22', change: '+1 yesterday' },
-  { label: '# of Clickouts', value: '16', change: '+0 yesterday' },
-  { label: '# of Orders', value: '2', change: '+0 yesterday' },
+  { label: 'Impressions', value: '22', change: '+1 yesterday', trend: [5, 8, 12, 15, 18, 20, 22] },
+  { label: 'Clickouts', value: '16', change: '+0 yesterday', trend: [3, 5, 8, 10, 12, 14, 16] },
+  { label: 'Orders', value: '2', change: '+0 yesterday', trend: [0, 0, 0, 1, 1, 1, 2] },
 ];
 
 const timeRanges = [
@@ -20,6 +20,16 @@ const timeRanges = [
   { key: '6m', label: 'Last 6 months', short: '6M' },
   { key: '1y', label: 'Last year', short: '1Y' },
   { key: 'all', label: 'All time', short: 'All' },
+];
+
+const revenueByDay = [
+  { day: 'Mon', value: 12 },
+  { day: 'Tue', value: 8 },
+  { day: 'Wed', value: 18 },
+  { day: 'Thu', value: 15 },
+  { day: 'Fri', value: 22 },
+  { day: 'Sat', value: 10 },
+  { day: 'Sun', value: 5 },
 ];
 
 function getDateRangeLabel(key: string) {
@@ -32,12 +42,27 @@ function getDateRangeLabel(key: string) {
   return `${fmt(start)} – ${fmt(now)}`;
 }
 
+function MiniSparkline({ data, color = '#22c55e' }: { data: number[]; color?: string }) {
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const h = 24;
+  const w = 60;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ');
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="partners-mini-sparkline">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default function PartnersHome() {
   const [timeFilter, setTimeFilter] = useState('all');
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const sampleLooks = looks.slice(0, 2);
+  const maxRevenue = Math.max(...revenueByDay.map(d => d.value));
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -53,7 +78,6 @@ export default function PartnersHome() {
   return (
     <div className="partners-page">
       <div className="partners-insights-header">
-        <h2 className="partners-page-title" style={{ margin: 0 }}>Insights</h2>
         <div className="partners-time-bar">
           <div className="partners-time-pills">
             {timeRanges.map(t => (
@@ -92,25 +116,13 @@ export default function PartnersHome() {
         </div>
       </div>
 
-      <div className="partners-view-toggle">
-        <button className="partners-view-btn active" title="Overview">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        </button>
-        <button className="partners-view-btn" title="Revenue">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        </button>
-        <button className="partners-view-btn" title="Growth">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-        </button>
-        <button className="partners-view-btn" title="Audience">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </button>
-      </div>
-
       <div className="partners-stats-row">
         {statCards.map(card => (
           <div key={card.label} className={`partners-stat-card ${card.highlight ? 'highlight' : ''}`}>
-            <span className="partners-stat-label">{card.label}</span>
+            <div className="partners-stat-top">
+              <span className="partners-stat-label">{card.label}</span>
+              <MiniSparkline data={card.trend} color={card.highlight ? '#a78bfa' : '#22c55e'} />
+            </div>
             <span className="partners-stat-value">{card.value}</span>
             {card.change && <span className="partners-stat-change">{card.change}</span>}
           </div>
@@ -120,15 +132,56 @@ export default function PartnersHome() {
       <div className="partners-stats-row">
         {statCards2.map(card => (
           <div key={card.label} className="partners-stat-card">
-            <span className="partners-stat-label">{card.label}</span>
+            <div className="partners-stat-top">
+              <span className="partners-stat-label">{card.label}</span>
+              <MiniSparkline data={card.trend} />
+            </div>
             <span className="partners-stat-value">{card.value}</span>
             <span className="partners-stat-change">{card.change}</span>
           </div>
         ))}
       </div>
 
+      <div className="partners-dashboard-grid">
+        <div className="partners-section-card">
+          <h3 className="partners-section-title" style={{ textAlign: 'left', marginBottom: 16 }}>Revenue by Day</h3>
+          <div className="partners-bar-chart">
+            {revenueByDay.map((d, i) => (
+              <div key={i} className="partners-bar-col">
+                <div className="partners-bar" style={{ height: `${(d.value / maxRevenue) * 100}px` }}>
+                  <span className="partners-bar-value">${d.value}</span>
+                </div>
+                <span className="partners-bar-label">{d.day}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="partners-section-card">
+          <h3 className="partners-section-title" style={{ textAlign: 'left', marginBottom: 16 }}>Quick Actions</h3>
+          <div className="partners-quick-actions">
+            <button className="partners-quick-action">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>New Campaign</span>
+            </button>
+            <button className="partners-quick-action">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <span>Add Product</span>
+            </button>
+            <button className="partners-quick-action">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Sync Products</span>
+            </button>
+            <button className="partners-quick-action">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Export Data</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="partners-section-card">
-        <h3 className="partners-section-title">Looks posted with your brand will show up here</h3>
+        <h3 className="partners-section-title" style={{ textAlign: 'left' }}>Looks posted with your brand will show up here</h3>
         <div className="partners-looks-grid">
           {sampleLooks.map(look => (
             <div key={look.id} className="partners-look-thumb">
@@ -147,7 +200,7 @@ export default function PartnersHome() {
       </div>
 
       <div className="partners-section-card">
-        <h3 className="partners-section-title">Creators that own your product will show up here</h3>
+        <h3 className="partners-section-title" style={{ textAlign: 'left' }}>Creators that own your product will show up here</h3>
         <div className="partners-creators-grid">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="partners-creator-placeholder partners-shimmer">

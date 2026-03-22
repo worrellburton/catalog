@@ -1,3 +1,5 @@
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
 const weeklyData = [
   { week: 'Feb 17', views: 120, clicks: 18, orders: 1 },
   { week: 'Feb 24', views: 145, clicks: 22, orders: 2 },
@@ -16,6 +18,7 @@ const referralSources = [
 
 export default function PartnersGrowth() {
   const maxViews = Math.max(...weeklyData.map(d => d.views));
+  const table = useSortableTable(referralSources, { key: 'visits', direction: 'desc' });
 
   return (
     <div className="partners-page">
@@ -57,13 +60,13 @@ export default function PartnersGrowth() {
         <table className="partners-campaigns-table">
           <thead>
             <tr>
-              <th>Source</th>
-              <th>Visits</th>
-              <th>Conversion</th>
+              <SortableTh label="Source" sortKey="source" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Visits" sortKey="visits" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Conversion" sortKey="conversion" currentSort={table.sort} onSort={table.handleSort} />
             </tr>
           </thead>
           <tbody>
-            {referralSources.map((r, i) => (
+            {table.sortedData.map((r, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 500 }}>{r.source}</td>
                 <td>{r.visits}</td>

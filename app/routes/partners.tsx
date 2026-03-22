@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useLocation } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 
 interface NavItem {
@@ -9,7 +9,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/partners', label: 'Home', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
+  { to: '/partners', label: 'Insights', icon: 'M23 6l-9.5 9.5-5-5L1 18M23 6h-6M23 6v6' },
   { to: '/partners/orders', label: 'Orders', icon: 'M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0' },
   { to: '/partners/store', label: 'Store', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
   { to: '/partners/collections', label: 'Collections', icon: 'M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21' },
@@ -20,14 +20,33 @@ const navItems: NavItem[] = [
   { to: '/partners/audience', label: 'Audience', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
 ];
 
+const pageTitles: Record<string, string> = {
+  '/partners': 'Insights',
+  '/partners/orders': 'Orders',
+  '/partners/store': 'Store',
+  '/partners/collections': 'Collections',
+  '/partners/products': 'Products',
+  '/partners/growth': 'Growth',
+  '/partners/campaigns': 'Campaigns',
+  '/partners/advertisements': 'Advertisements',
+  '/partners/audience': 'Audience',
+  '/partners/appearance': 'Appearance',
+};
+
 export default function PartnersLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [lastSynced, setLastSynced] = useState(() => {
     const stored = localStorage.getItem('partners-last-synced');
     return stored || 'Mar 22, 2026 3:42 PM';
   });
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const currentPage = pageTitles[location.pathname] || 'Partners';
 
   const handleSync = () => {
     const now = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
@@ -46,6 +65,10 @@ export default function PartnersLayout() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (searchOpen && searchRef.current) searchRef.current.focus();
+  }, [searchOpen]);
 
   return (
     <div className="partners-layout">
@@ -115,13 +138,42 @@ export default function PartnersLayout() {
           </button>
         </div>
       </aside>
-      <main className="partners-main">
-        <Outlet />
-      </main>
-      <button className="glass-portal-toggle" onClick={() => navigate('/admin')} aria-label="Go to Admin">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Admin</span>
-      </button>
+      <div className="partners-main-wrap">
+        <header className="partners-topbar">
+          <div className="partners-topbar-left">
+            <span className="partners-breadcrumb-label">{currentPage}</span>
+          </div>
+          <div className="partners-topbar-right">
+            <div className={`partners-topbar-search ${searchOpen ? 'open' : ''}`}>
+              {searchOpen ? (
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onBlur={() => { if (!searchQuery) setSearchOpen(false); }}
+                  className="partners-topbar-search-input"
+                />
+              ) : (
+                <button className="partners-topbar-icon-btn" onClick={() => setSearchOpen(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+              )}
+            </div>
+            <button className="partners-topbar-icon-btn" title="Notifications">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span className="partners-topbar-badge" />
+            </button>
+            <button className="partners-topbar-icon-btn" onClick={() => navigate('/admin')} title="Admin">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+          </div>
+        </header>
+        <main className="partners-main">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
