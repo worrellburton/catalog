@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 
-type Tab = 'ads' | 'campaigns' | 'brands' | 'audiences';
+type Tab = 'ads' | 'campaigns' | 'brands' | 'audiences' | 'revenue';
 
 const adsData = [
   { name: 'Summer Sale Banner', type: 'Banner', placement: 'Grid Top', status: 'active', impressions: '12,450', clicks: '342', ctr: '2.7%', spend: '$1,200' },
@@ -36,7 +36,7 @@ const audiencesData = [
 ];
 
 export default function AdminAdvertisements() {
-  const [activeTab, setActiveTab] = useState<Tab>('ads');
+  const [activeTab, setActiveTab] = useState<Tab>('brands');
   const adsTable = useSortableTable(adsData);
   const campaignsTable = useSortableTable(campaignsData);
   const audiencesTable = useSortableTable(audiencesData);
@@ -44,14 +44,15 @@ export default function AdminAdvertisements() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1>Advertisements</h1>
-        <p className="admin-page-subtitle">Manage ads, campaigns, brands, and audiences</p>
+        <h1>Partnerships</h1>
+        <p className="admin-page-subtitle">Manage brands, ads, campaigns, and audiences</p>
       </div>
       <div className="admin-tabs">
+        <button className={`admin-tab ${activeTab === 'brands' ? 'active' : ''}`} onClick={() => setActiveTab('brands')}>Brands</button>
         <button className={`admin-tab ${activeTab === 'ads' ? 'active' : ''}`} onClick={() => setActiveTab('ads')}>Ads</button>
         <button className={`admin-tab ${activeTab === 'campaigns' ? 'active' : ''}`} onClick={() => setActiveTab('campaigns')}>Campaigns</button>
-        <button className={`admin-tab ${activeTab === 'brands' ? 'active' : ''}`} onClick={() => setActiveTab('brands')}>Brands</button>
         <button className={`admin-tab ${activeTab === 'audiences' ? 'active' : ''}`} onClick={() => setActiveTab('audiences')}>Audiences</button>
+        <button className={`admin-tab ${activeTab === 'revenue' ? 'active' : ''}`} onClick={() => setActiveTab('revenue')}>Revenue</button>
       </div>
 
       {activeTab === 'ads' && (
@@ -175,6 +176,41 @@ export default function AdminAdvertisements() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {activeTab === 'revenue' && (
+        <div className="admin-stats-grid">
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Total Revenue</div>
+            <div className="admin-stat-value">$178,350</div>
+            <div className="admin-stat-change positive">+12% this month</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Ad Revenue</div>
+            <div className="admin-stat-value">$3,260</div>
+            <div className="admin-stat-change positive">+8%</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Brand Partnerships</div>
+            <div className="admin-stat-value">$142,400</div>
+            <div className="admin-stat-change positive">+15%</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Affiliate Clicks</div>
+            <div className="admin-stat-value">12,178</div>
+            <div className="admin-stat-change positive">+22%</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Avg Order Value</div>
+            <div className="admin-stat-value">$67.40</div>
+            <div className="admin-stat-change neutral">-2%</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">Creator Payouts</div>
+            <div className="admin-stat-value">$32,690</div>
+            <div className="admin-stat-change positive">+18%</div>
+          </div>
         </div>
       )}
     </div>

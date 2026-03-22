@@ -86,7 +86,7 @@ export default function AdminContent() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Thumbnail</th>
+                <th>Creative</th>
                 <SortableTh label="Creator" sortKey="creatorDisplay" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
                 <th>Created At</th>
                 <th>Platform</th>
@@ -107,6 +107,9 @@ export default function AdminContent() {
                       <td>
                         <div className="admin-look-thumb">
                           <video src={`${basePath}/${row.video}`} muted loop playsInline preload="metadata" />
+                          <div className="admin-look-preview">
+                            <video src={`${basePath}/${row.video}`} autoPlay muted loop playsInline />
+                          </div>
                         </div>
                       </td>
                       <td>
