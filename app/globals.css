@@ -4403,6 +4403,9 @@ header {
   min-height: 100vh;
   background: #fafafa;
   color: #333;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .admin-sidebar {
