@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { catalogNames } from '~/data/catalogNames';
 
 export interface ActiveFilters {
@@ -33,37 +33,61 @@ export function getCatalogName(filters: ActiveFilters): string {
   const allActive: string[] = [];
   Object.values(filters).forEach(arr => allActive.push(...arr));
   if (allActive.length === 0) return 'Build Your Catalog';
-
   const comboKey = [...allActive].sort().join('+');
   let pool = catalogNames[comboKey];
   if (!pool) {
     const options: string[] = [];
-    allActive.forEach(v => {
-      if (catalogNames[v]) options.push(...catalogNames[v]);
-    });
+    allActive.forEach(v => { if (catalogNames[v]) options.push(...catalogNames[v]); });
     pool = options.length > 0 ? options : ['The Custom Catalog'];
   }
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-const bottomsSubOptions = [
-  { val: 'jeans', label: 'Jeans' },
-  { val: 'trousers', label: 'Trousers' },
-  { val: 'shorts', label: 'Shorts' },
-  { val: 'skirts', label: 'Skirts' },
-  { val: 'joggers', label: 'Joggers' },
+const allLocations = ['NYC', 'LA', 'Paris', 'Tokyo', 'London', 'Milan', 'Seoul', 'Miami', 'Berlin', 'Sydney', 'Dubai', 'Mexico City', 'Toronto', 'Barcelona', 'Amsterdam'];
+
+const pricePoints = [
+  { val: 'under25', label: 'Under $25' },
+  { val: '25-50', label: '$25–$50' },
+  { val: '50-100', label: '$50–$100' },
+  { val: '100-200', label: '$100–$200' },
+  { val: '200-500', label: '$200–$500' },
+  { val: '500plus', label: '$500+' },
+];
+
+const bottomsKeywords = [
+  { val: 'jeans', label: 'Jeans', x: -120, y: -40 },
+  { val: 'trousers', label: 'Trousers', x: 120, y: -30 },
+  { val: 'shorts', label: 'Shorts', x: -90, y: 50 },
+  { val: 'skirts', label: 'Skirts', x: 100, y: 60 },
+  { val: 'joggers', label: 'Joggers', x: 0, y: -70 },
+  { val: 'leggings', label: 'Leggings', x: -50, y: 80 },
+  { val: 'cargo', label: 'Cargo', x: 60, y: 90 },
+  { val: 'chinos', label: 'Chinos', x: -140, y: 10 },
 ];
 
 export default function FilterPanel({ activeFilters, onFiltersChange, onApply, onClose }: FilterPanelProps) {
   const [openSubPanel, setOpenSubPanel] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('Build Your Catalog');
-  const [priceRange, setPriceRange] = useState([0, 500]);
+  const [locationOpen, setLocationOpen] = useState(false);
   const [locationSearch, setLocationSearch] = useState('');
+  const [bottomsExpanded, setBottomsExpanded] = useState(false);
+  const locationRef = useRef<HTMLDivElement>(null);
 
-  const locationOptions = ['NYC', 'LA', 'Paris', 'Tokyo', 'London', 'Milan', 'Seoul', 'Miami'];
   const filteredLocations = locationSearch
-    ? locationOptions.filter(l => l.toLowerCase().includes(locationSearch.toLowerCase()))
-    : locationOptions;
+    ? allLocations.filter(l => l.toLowerCase().includes(locationSearch.toLowerCase()))
+    : allLocations;
+
+  // Close location dropdown on outside click
+  useEffect(() => {
+    if (!locationOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
+        setLocationOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [locationOpen]);
 
   const toggleFilter = useCallback((category: keyof ActiveFilters, value: string, expands?: string) => {
     const updated = { ...activeFilters, [category]: [...activeFilters[category]] };
@@ -71,9 +95,11 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
     if (idx >= 0) {
       updated[category].splice(idx, 1);
       if (expands && openSubPanel === expands) setOpenSubPanel(null);
+      if (value === 'bottoms') setBottomsExpanded(false);
     } else {
       updated[category].push(value);
       if (expands) setOpenSubPanel(expands);
+      if (value === 'bottoms') setBottomsExpanded(true);
     }
     onFiltersChange(updated);
     const allActive: string[] = [];
@@ -94,22 +120,14 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
 
   const isActive = (category: keyof ActiveFilters, value: string) => activeFilters[category].includes(value);
 
-  const handleApply = () => {
-    const allActive: string[] = [];
-    Object.values(activeFilters).forEach(arr => allActive.push(...arr));
-    if (allActive.length === 0) {
-      onApply();
-      return;
-    }
-    onApply();
-  };
+  const selectedLocations = activeFilters.location;
 
   const btnText = displayName === 'Build Your Catalog' ? 'Build My Catalog' : `Build "${displayName}"`;
 
   return (
     <div className="filter-panel-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bottom-bar-filters" id="bottom-bar-filters" onClick={(e) => e.stopPropagation()}>
-        <p className="filter-catalog-name" id="filter-catalog-name">{displayName}</p>
+      <div className="bottom-bar-filters" onClick={(e) => e.stopPropagation()}>
+        <p className="filter-catalog-name">{displayName}</p>
 
         {/* Who's it for? */}
         <div className="filter-section">
@@ -149,7 +167,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
 
           {/* Fashion sub-panel */}
-          <div className={`filter-sub-panel ${openSubPanel === 'fashion-sub' ? 'open' : ''}`} id="fashion-sub">
+          <div className={`filter-sub-panel ${openSubPanel === 'fashion-sub' ? 'open' : ''}`}>
             <div className="filter-sub-group">
               <div className="filter-sub-label">By Occasion</div>
               <div className="filter-options">
@@ -170,7 +188,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
               <div className="filter-options">
                 {[
                   { val: 'tops', label: 'Tops' },
-                  { val: 'bottoms', label: 'Bottoms', expands: 'bottoms-sub' },
+                  { val: 'bottoms', label: 'Bottoms' },
                   { val: 'shoes', label: 'Shoes' },
                   { val: 'outerwear', label: 'Outerwear' },
                   { val: 'hats', label: 'Hats' },
@@ -178,30 +196,39 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
                 ].map(o => (
                   <button
                     key={o.val}
-                    className={`filter-option filter-sub-option ${o.expands ? 'filter-expandable' : ''} ${isActive('type', o.val) ? 'active' : ''}`}
-                    onClick={() => toggleFilter('type', o.val, o.expands)}
+                    className={`filter-option filter-sub-option ${isActive('type', o.val) ? 'active' : ''}`}
+                    onClick={() => toggleFilter('type', o.val)}
                   >
                     {o.label}
-                    {o.expands && <svg className="expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>}
                   </button>
                 ))}
               </div>
             </div>
-            {/* Bottoms sub-options */}
-            <div className={`filter-sub-panel ${openSubPanel === 'bottoms-sub' ? 'open' : ''}`}>
-              <div className="filter-sub-group">
-                <div className="filter-sub-label">Bottoms</div>
-                <div className="filter-options">
-                  {bottomsSubOptions.map(o => (
-                    <button key={o.val} className={`filter-option filter-sub-option ${isActive('type', o.val) ? 'active' : ''}`} onClick={() => toggleFilter('type', o.val)}>{o.label}</button>
-                  ))}
-                </div>
+
+            {/* Bottoms branch-out */}
+            {bottomsExpanded && (
+              <div className="bottoms-branch">
+                <div className="bottoms-branch-center">Bottoms</div>
+                {bottomsKeywords.map((kw, i) => (
+                  <button
+                    key={kw.val}
+                    className={`bottoms-branch-keyword ${isActive('type', kw.val) ? 'active' : ''}`}
+                    style={{
+                      '--bx': `${kw.x}px`,
+                      '--by': `${kw.y}px`,
+                      animationDelay: `${i * 0.05}s`,
+                    } as React.CSSProperties}
+                    onClick={() => toggleFilter('type', kw.val)}
+                  >
+                    {kw.label}
+                  </button>
+                ))}
               </div>
-            </div>
+            )}
           </div>
 
           {/* Home Decor sub-panel */}
-          <div className={`filter-sub-panel ${openSubPanel === 'homedecor-sub' ? 'open' : ''}`} id="homedecor-sub">
+          <div className={`filter-sub-panel ${openSubPanel === 'homedecor-sub' ? 'open' : ''}`}>
             <div className="filter-sub-group">
               <div className="filter-sub-label">By Room</div>
               <div className="filter-options">
@@ -233,49 +260,54 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
         </div>
 
-        {/* Location */}
+        {/* Location — dropdown */}
         <div className="filter-section">
           <div className="filter-section-label">Location</div>
-          <div className="filter-location-search">
-            <input
-              type="text"
-              className="filter-location-input"
-              placeholder="Search location..."
-              value={locationSearch}
-              onChange={(e) => setLocationSearch(e.target.value)}
-            />
-          </div>
-          <div className="filter-options">
-            {filteredLocations.map(loc => (
-              <button key={loc} className={`filter-option ${isActive('location', loc.toLowerCase()) ? 'active' : ''}`} onClick={() => toggleFilter('location', loc.toLowerCase())}>{loc}</button>
-            ))}
+          <div className="filter-dropdown" ref={locationRef}>
+            <button className="filter-dropdown-trigger" onClick={() => setLocationOpen(o => !o)}>
+              <span>{selectedLocations.length > 0 ? selectedLocations.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(', ') : 'Select locations...'}</span>
+              <svg className={`filter-dropdown-chevron ${locationOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {locationOpen && (
+              <div className="filter-dropdown-menu">
+                <input
+                  type="text"
+                  className="filter-dropdown-search"
+                  placeholder="Search..."
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                  autoFocus
+                />
+                <div className="filter-dropdown-list">
+                  {filteredLocations.map(loc => (
+                    <button
+                      key={loc}
+                      className={`filter-dropdown-item ${isActive('location', loc.toLowerCase()) ? 'active' : ''}`}
+                      onClick={() => toggleFilter('location', loc.toLowerCase())}
+                    >
+                      <span className="filter-dropdown-check">{isActive('location', loc.toLowerCase()) ? '✓' : ''}</span>
+                      {loc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Price Range */}
+        {/* Price Range — selectable price point buttons */}
         <div className="filter-section">
           <div className="filter-section-label">Price Range</div>
-          <div className="filter-slider-wrap">
-            <span className="filter-slider-label">${priceRange[0]}</span>
-            <input
-              type="range"
-              className="filter-slider"
-              min="0"
-              max="500"
-              step="10"
-              value={priceRange[0]}
-              onChange={(e) => setPriceRange([Math.min(Number(e.target.value), priceRange[1]), priceRange[1]])}
-            />
-            <input
-              type="range"
-              className="filter-slider"
-              min="0"
-              max="500"
-              step="10"
-              value={priceRange[1]}
-              onChange={(e) => setPriceRange([priceRange[0], Math.max(Number(e.target.value), priceRange[0])])}
-            />
-            <span className="filter-slider-label">${priceRange[1]}+</span>
+          <div className="filter-price-points">
+            {pricePoints.map(pp => (
+              <button
+                key={pp.val}
+                className={`filter-price-point ${isActive('price', pp.val) ? 'active' : ''}`}
+                onClick={() => toggleFilter('price', pp.val)}
+              >
+                {pp.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -294,7 +326,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
         </div>
 
-        <button className="filter-apply-btn" id="filter-apply-btn" onClick={handleApply}>{btnText}</button>
+        <button className="filter-apply-btn" onClick={onApply}>{btnText}</button>
       </div>
     </div>
   );
