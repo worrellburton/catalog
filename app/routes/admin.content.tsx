@@ -132,9 +132,9 @@ export default function AdminContent() {
                         </button>
                       </td>
                     </tr>
-                    {isExpanded && (
-                      <tr className="admin-look-expanded-row">
-                        <td colSpan={9} style={{ padding: 0 }}>
+                    <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
+                      <td colSpan={9} style={{ padding: 0 }}>
+                        <div className="admin-expand-animate">
                           <div className="admin-look-products">
                             <h3 className="admin-products-title">Products</h3>
                             <table className="admin-table admin-products-table">
@@ -178,9 +178,9 @@ export default function AdminContent() {
                               </tbody>
                             </table>
                           </div>
-                        </td>
-                      </tr>
-                    )}
+                        </div>
+                      </td>
+                    </tr>
                   </Fragment>
                 );
               })}
