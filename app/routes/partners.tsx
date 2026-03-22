@@ -16,7 +16,7 @@ const navItems: NavItem[] = [
   { to: '/partners/products', label: 'Products', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
   { to: '/partners/growth', label: 'Growth', icon: 'M23 6l-9.5 9.5-5-5L1 18' },
   { to: '/partners/campaigns', label: 'Campaigns', icon: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7' },
-  { to: '/partners/advertisements', label: 'Advertisements', icon: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z' },
+  { to: '/partners/creative', label: 'Creative', icon: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z' },
   { to: '/partners/audience', label: 'Audience', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
 ];
 
@@ -28,7 +28,7 @@ const pageTitles: Record<string, string> = {
   '/partners/products': 'Products',
   '/partners/growth': 'Growth',
   '/partners/campaigns': 'Campaigns',
-  '/partners/advertisements': 'Advertisements',
+  '/partners/creative': 'Creative',
   '/partners/audience': 'Audience',
   '/partners/appearance': 'Appearance',
 };
