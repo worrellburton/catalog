@@ -1,6 +1,20 @@
-import { useState, Fragment, useMemo } from 'react';
+import { useState, Fragment, useMemo, useCallback } from 'react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
+function AdminToggle({ on, onChange }: { on: boolean; onChange: (val: boolean) => void }) {
+  return (
+    <button
+      className={`admin-toggle-btn ${on ? 'on' : 'off'}`}
+      onClick={(e) => { e.stopPropagation(); onChange(!on); }}
+      aria-label={on ? 'Toggle off' : 'Toggle on'}
+    >
+      <span className="admin-toggle-track">
+        <span className="admin-toggle-thumb" />
+      </span>
+    </button>
+  );
+}
 
 interface LookRow {
   id: number;
@@ -17,6 +31,18 @@ export default function AdminContent() {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+  // Toggle states per look: { [lookId]: { platform, featured, splash } }
+  const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
+
+  const getToggles = useCallback((id: number) => toggles[id] || { platform: true, featured: true, splash: true }, [toggles]);
+
+  const setToggle = useCallback((id: number, field: 'platform' | 'featured' | 'splash', value: boolean) => {
+    setToggles(prev => ({
+      ...prev,
+      [id]: { ...prev[id] || { platform: true, featured: true, splash: true }, [field]: value },
+    }));
+  }, []);
 
   const lookRows: LookRow[] = useMemo(() =>
     looks.map(look => {
@@ -90,10 +116,10 @@ export default function AdminContent() {
                         </div>
                       </td>
                       <td className="admin-cell-muted">Feb 17, 2026, 12:16 PM</td>
-                      <td><span className="admin-toggle on" /></td>
-                      <td><span className="admin-toggle on" /></td>
+                      <td><AdminToggle on={getToggles(row.id).platform} onChange={v => setToggle(row.id, 'platform', v)} /></td>
+                      <td><AdminToggle on={getToggles(row.id).featured} onChange={v => setToggle(row.id, 'featured', v)} /></td>
                       <td><span className="admin-weight-input">5</span></td>
-                      <td><span className="admin-toggle on" /></td>
+                      <td><AdminToggle on={getToggles(row.id).splash} onChange={v => setToggle(row.id, 'splash', v)} /></td>
                       <td>{row.products}</td>
                       <td>
                         <button className="admin-icon-btn" aria-label="Expand" onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}>
