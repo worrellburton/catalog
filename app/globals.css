@@ -1267,6 +1267,24 @@ header {
   color: var(--text);
 }
 
+.logo-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.logo-btn:hover {
+  transform: scale(1.05);
+}
+
+.logo-btn:active {
+  transform: scale(0.95);
+}
+
 /* Theme toggle */
 .shuffle-btn {
   background: rgba(128, 128, 128, 0.15);
@@ -1306,6 +1324,36 @@ header {
 
 .theme-toggle:hover {
   background: rgba(128, 128, 128, 0.25);
+}
+
+.theme-toggle-fixed {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 90;
+  background: rgba(128, 128, 128, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  color: var(--text);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.theme-toggle-fixed:hover {
+  background: rgba(128, 128, 128, 0.3);
+  transform: scale(1.1);
+}
+
+.theme-toggle-fixed:active {
+  transform: scale(0.9);
 }
 
 /* Show/hide sun/moon icons based on theme */
@@ -2424,6 +2472,64 @@ header {
   margin-bottom: 16px;
 }
 
+.bookmarks-grid-view {
+  padding: 0;
+}
+
+.bookmarks-grid-view .grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px;
+  padding: 0;
+}
+
+.bookmarks-card-wrap {
+  position: relative;
+}
+
+.bookmarks-card-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.bookmarks-card-badge:hover {
+  background: rgba(255, 80, 80, 0.4);
+  transform: scale(1.1);
+}
+
+.bookmarks-products-section {
+  padding: 24px;
+  max-width: 800px;
+  margin: 24px auto 0;
+}
+
+.bookmarks-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 24px;
+  color: rgba(128, 128, 128, 0.4);
+  font-size: 14px;
+}
+
 .bookmarks-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2940,11 +3046,46 @@ header {
 }
 
 .look-card .card-creator-row:hover {
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .look-card .card-creator-row:hover .card-creator-name {
-  text-decoration: underline;
+  text-decoration: none;
+}
+
+.card-creator-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.look-card:hover .card-creator-btn {
+  display: flex;
+}
+
+.card-creator-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.card-creator-btn:active {
+  transform: scale(0.95);
 }
 
 .card-creator-avatar {

@@ -83,13 +83,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           preload="none"
         />
         <div className="card-gradient" />
-        <div
-          className="card-creator-row"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenCreator(look.creator);
-          }}
-        >
+        <div className="card-creator-row">
           <img
             className="card-creator-avatar"
             src={creatorData?.avatar || ''}
@@ -98,6 +92,16 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           <span className="card-creator-name">
             {creatorData?.displayName || look.creator}
           </span>
+          <button
+            className="card-creator-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCreator(look.creator);
+            }}
+            aria-label={`View ${creatorData?.displayName || look.creator}`}
+          >
+            View
+          </button>
         </div>
       </div>
     </div>

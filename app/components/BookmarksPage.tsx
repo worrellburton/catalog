@@ -1,10 +1,13 @@
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { looks, creators, Look, Product } from '~/data/looks';
+import LookCard from './LookCard';
 
 interface BookmarksInterface {
   bookmarkedLooks: number[];
   bookmarkedProducts: Product[];
+  isLookBookmarked: (lookId: number) => boolean;
+  toggleLookBookmark: (lookId: number) => void;
   isProductBookmarked: (p: Product) => boolean;
   toggleProductBookmark: (p: Product) => void;
 }
@@ -18,7 +21,6 @@ interface BookmarksPageProps {
 
 export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser }: BookmarksPageProps) {
   const savedLooks = looks.filter(l => bookmarks.bookmarkedLooks.includes(l.id));
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -27,6 +29,12 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const handleOpenLook = useCallback((look: Look) => {
+    onOpenLook(look);
+  }, [onOpenLook]);
+
+  const handleOpenCreator = useCallback(() => {}, []);
 
   return (
     <div className="bookmarks-page">
@@ -38,70 +46,70 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
         <h1 className="bookmarks-title">Saved</h1>
       </div>
 
-      <div className="bookmarks-sections">
-        <div className="bookmarks-section">
-          <h2 className="bookmarks-section-title">Saved Looks</h2>
-          {savedLooks.length === 0 ? (
-            <p className="bookmarks-empty visible">No saved looks yet</p>
-          ) : (
-            <div className="bookmarks-grid">
-              {savedLooks.map(look => (
-                <div
-                  key={look.id}
-                  className="bookmarks-look-card"
-                  onClick={() => { onClose(); onOpenLook(look); }}
+      {savedLooks.length === 0 && bookmarks.bookmarkedProducts.length === 0 ? (
+        <div className="bookmarks-empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <p>No saved items yet</p>
+        </div>
+      ) : (
+        <div className="bookmarks-grid-view">
+          <div className="grid-container">
+            {savedLooks.map((look) => (
+              <div key={look.id} className="bookmarks-card-wrap">
+                <LookCard
+                  look={look}
+                  className="look-card loaded"
+                  onOpenLook={handleOpenLook}
+                  onOpenCreator={handleOpenCreator}
+                />
+                <button
+                  className="bookmarks-card-badge"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bookmarks.toggleLookBookmark(look.id);
+                  }}
+                  aria-label="Remove bookmark"
                 >
-                  <video src={`${basePath}/${look.video}`} muted loop playsInline autoPlay />
-                  <div className="blc-info">
-                    <img
-                      src={creators[look.creator]?.avatar || ''}
-                      style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }}
-                      alt={look.creator}
-                    />
-                    <span>{look.title}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
 
-        <div className="bookmarks-section">
-          <h2 className="bookmarks-section-title">Saved Products</h2>
-          {bookmarks.bookmarkedProducts.length === 0 ? (
-            <p className="bookmarks-empty visible">No saved products yet</p>
-          ) : (
-            <div className="bookmarks-product-list">
-              {bookmarks.bookmarkedProducts.map((p, i) => (
-                <div key={i} className="bookmarks-product-item">
-                  <div className="bp-thumb" style={{ background: 'rgba(128,128,128,0.2)' }} />
-                  <div
-                    className="bp-info"
-                    onClick={() => {
-                      if (p.url) {
-                        onClose();
-                        onOpenBrowser(p.url, p.name);
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <span className="bp-brand">{p.brand || ''}</span>
-                    <span className="bp-name">{p.name}</span>
-                    <span className="bp-price">{p.price}</span>
+          {bookmarks.bookmarkedProducts.length > 0 && (
+            <div className="bookmarks-products-section">
+              <h2 className="bookmarks-section-title">Saved Products</h2>
+              <div className="bookmarks-product-list">
+                {bookmarks.bookmarkedProducts.map((p, i) => (
+                  <div key={i} className="bookmarks-product-item">
+                    <div className="bp-thumb" style={{ background: 'rgba(128,128,128,0.2)' }} />
+                    <div
+                      className="bp-info"
+                      onClick={() => {
+                        if (p.url) {
+                          onOpenBrowser(p.url, p.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <span className="bp-brand">{p.brand || ''}</span>
+                      <span className="bp-name">{p.name}</span>
+                      <span className="bp-price">{p.price}</span>
+                    </div>
+                    <button
+                      className="bp-remove"
+                      onClick={() => bookmarks.toggleProductBookmark(p)}
+                      aria-label="Remove bookmark"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                   </div>
-                  <button
-                    className="bp-remove"
-                    onClick={() => bookmarks.toggleProductBookmark(p)}
-                    aria-label="Remove bookmark"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -18,28 +18,20 @@ const navSections: NavSection[] = [
   {
     title: 'Users',
     items: [
-      { to: '/admin/shoppers', label: 'Shoppers', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
-      { to: '/admin/creators', label: 'Creators', icon: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z' },
+      { to: '/admin/users', label: 'Users', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
     ],
   },
   {
     title: 'Content',
     items: [
-      { to: '/admin/looks', label: 'Looks', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
-      { to: '/admin/products', label: 'Products', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
-      { to: '/admin/brands', label: 'Brands', icon: 'M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0' },
-      { to: '/admin/musics', label: 'Musics', icon: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z' },
-      { to: '/admin/places', label: 'Places', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0zM12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z' },
-      { to: '/admin/categories', label: 'Categories & Tags', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
+      { to: '/admin/content', label: 'Content', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
+      { to: '/admin/search', label: 'Search', icon: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35' },
     ],
   },
   {
     title: 'Advertising',
     items: [
       { to: '/admin/advertisements', label: 'Advertisements', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
-      { to: '/admin/campaigns', label: 'Campaigns', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
-      { to: '/admin/audiences', label: 'Audiences', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
-      { to: '/admin/signup-links', label: 'Signup Links', icon: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' },
     ],
   },
   {
@@ -54,7 +46,6 @@ const navSections: NavSection[] = [
     title: 'System',
     items: [
       { to: '/admin/moderation', label: 'Moderation', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
-      { to: '/admin/settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' },
       { to: '/admin/administrators', label: 'Administrators', icon: 'M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z' },
     ],
   },
@@ -67,29 +58,16 @@ interface SearchItem {
 }
 
 const allSearchItems: SearchItem[] = [
-  // People
-  { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
-  { label: 'Shoppers', type: 'Page', to: '/admin/shoppers' },
-  { label: 'Creators', type: 'Page', to: '/admin/creators' },
-  // Content
-  { label: 'Looks', type: 'Page', to: '/admin/looks' },
-  { label: 'Products', type: 'Page', to: '/admin/products' },
-  { label: 'Brands', type: 'Page', to: '/admin/brands' },
-  { label: 'Musics', type: 'Page', to: '/admin/musics' },
-  { label: 'Places', type: 'Page', to: '/admin/places' },
-  { label: 'Categories & Tags', type: 'Page', to: '/admin/categories' },
-  // Advertising
+  // Pages
+  { label: 'Users', type: 'Page', to: '/admin/users' },
+  { label: 'Content', type: 'Page', to: '/admin/content' },
+  { label: 'Search', type: 'Page', to: '/admin/search' },
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
-  { label: 'Campaigns', type: 'Page', to: '/admin/campaigns' },
-  { label: 'Audiences', type: 'Page', to: '/admin/audiences' },
-  { label: 'Signup Links', type: 'Page', to: '/admin/signup-links' },
-  // Analytics
   { label: 'Earnings', type: 'Page', to: '/admin/earnings' },
   { label: 'Activities', type: 'Page', to: '/admin/activities' },
   { label: 'Reports', type: 'Page', to: '/admin/reports' },
-  // System
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
-  { label: 'Settings', type: 'Page', to: '/admin/settings' },
+  { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
   // Shoppers
   { label: 'Carla', type: 'Shopper', to: '/admin/shoppers/Carla' },
   { label: 'alfvaz', type: 'Shopper', to: '/admin/shoppers/alfvaz' },
