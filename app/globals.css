@@ -5563,6 +5563,13 @@ header {
   border-radius: 50%;
   flex-shrink: 0;
 }
+.admin-activity-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
 .admin-activity-content {
   display: flex;
   justify-content: space-between;
@@ -5574,6 +5581,138 @@ header {
   color: #999;
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* Stat card icons */
+.admin-stat-icon {
+  color: #888;
+  margin-bottom: 4px;
+}
+
+/* Sparklines */
+.admin-sparkline {
+  width: 100%;
+  height: 24px;
+  margin-top: 8px;
+}
+.admin-sparkline-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: sparklineDraw 1.2s ease forwards;
+}
+.sparkline-up { stroke: #22c55e; }
+.sparkline-flat { stroke: #999; }
+.sparkline-down { stroke: #ef4444; }
+
+@keyframes sparklineDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Rank bar animation */
+.admin-rank-bar-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.admin-rank-bar {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.admin-rank-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #333, #888);
+  border-radius: 2px;
+  animation: rankBarGrow 0.8s ease forwards;
+  transform-origin: left;
+}
+@keyframes rankBarGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Weekly chart */
+.admin-weekly-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 140px;
+  padding: 0 4px;
+}
+.admin-weekly-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.admin-weekly-bars {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.admin-weekly-bar {
+  width: 100%;
+  max-width: 40px;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  animation: barGrow 0.6s ease forwards;
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+.admin-weekly-bar.searches {
+  background: linear-gradient(180deg, #333, #666);
+}
+@keyframes barGrow {
+  to { transform: scaleY(1); }
+}
+.admin-weekly-tooltip {
+  display: none;
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #333;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.admin-weekly-bar:hover .admin-weekly-tooltip {
+  display: block;
+}
+.admin-weekly-label {
+  font-size: 10px;
+  color: #888;
+  font-weight: 500;
+}
+.admin-chart-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.admin-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #888;
+}
+.admin-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .admin-date-input {
@@ -5791,6 +5930,15 @@ header {
   font-size: 11px;
   font-weight: 700;
   color: #555;
+  flex-shrink: 0;
+}
+
+.admin-user-avatar-img {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  object-fit: cover;
   flex-shrink: 0;
 }
 
@@ -6303,9 +6451,10 @@ header {
   overflow: hidden;
 }
 .admin-brand-logo {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
+  border-radius: 6px;
 }
 .admin-dark .admin-product-creative {
   background: #222;
@@ -7264,6 +7413,28 @@ header {
 .partners-create-campaign-btn:hover {
   background: #333;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Done button */
+.partners-done-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: #22c55e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.partners-done-btn:hover {
+  background: #16a34a;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
 
 /* Store page */

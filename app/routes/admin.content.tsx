@@ -58,6 +58,24 @@ export default function AdminContent() {
     }),
   []);
 
+  // Brand-to-domain mapping for Brandfetch logos
+  const brandDomains: Record<string, string> = useMemo(() => ({
+    'Zara': 'zara.com',
+    'Windsor': 'windsorstore.com',
+    'Diesel': 'diesel.com',
+    'Pavoi': 'pavoi.com',
+    'Vince': 'vince.com',
+    'Suitsupply': 'suitsupply.com',
+    'Dior': 'dior.com',
+    'Fujifilm': 'fujifilm.com',
+  }), []);
+
+  const getBrandLogo = useCallback((brand: string) => {
+    const domain = brandDomains[brand];
+    if (!domain) return null;
+    return `https://cdn.brandfetch.io/${domain}/w/80/h/80/fallback/lettermark?c=1id3n10pdBTarCHI0db`;
+  }, [brandDomains]);
+
   const allProducts = useMemo(() => {
     const productMap = new Map<string, { brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number }>();
     looks.forEach(look => {
@@ -226,7 +244,7 @@ export default function AdminContent() {
                   <td>
                     <div className="admin-product-creative">
                       <img
-                        src={`https://logo.clearbit.com/${p.brand.toLowerCase().replace(/\s+/g, '')}.com`}
+                        src={getBrandLogo(p.brand) || ''}
                         alt={p.brand}
                         className="admin-brand-logo"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

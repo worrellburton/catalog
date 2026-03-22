@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from '@remix-run/react';
 import AnimatedBackground, { variants } from '~/components/AnimatedBackground';
 
 const fonts = [
@@ -15,6 +16,7 @@ const fonts = [
 ];
 
 export default function AdminAppearance() {
+  const navigate = useNavigate();
   const [selectedFont, setSelectedFont] = useState(() => localStorage.getItem('admin-font') || 'Inter');
   const [selectedBg, setSelectedBg] = useState<number>(() => {
     const stored = localStorage.getItem('admin-bg');
@@ -40,8 +42,14 @@ export default function AdminAppearance() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1>Appearance</h1>
-        <p className="admin-page-subtitle">Customize your platform experience</p>
+        <div>
+          <h1>Appearance</h1>
+          <p className="admin-page-subtitle">Customize your platform experience</p>
+        </div>
+        <button className="partners-done-btn" onClick={() => navigate('/admin')}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Done
+        </button>
       </div>
 
       <div className="admin-appearance-section" style={{ marginBottom: 24 }}>
