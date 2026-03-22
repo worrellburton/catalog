@@ -4,6 +4,16 @@
   box-sizing: border-box;
 }
 
+/* Hide scrollbars globally */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   --bg: #000000;
   --text: #ffffff;
@@ -5056,7 +5066,7 @@ header {
   position: sticky;
   top: 0;
   z-index: 20;
-  padding: 16px 32px;
+  padding: 10px 24px;
   background: inherit;
   border-bottom: 1px solid #eee;
 }
@@ -5280,23 +5290,23 @@ header {
 }
 
 .admin-page {
-  padding: 40px;
+  padding: 24px 28px;
   max-width: 1400px;
 }
 
 .admin-page-header {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .admin-page-header h1 {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   color: #111;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .admin-page-subtitle {
-  font-size: 14px;
+  font-size: 12px;
   color: #888;
 }
 
@@ -5339,10 +5349,10 @@ header {
 }
 
 .admin-tab {
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: none;
   border: none;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: #999;
   cursor: pointer;
@@ -5383,19 +5393,19 @@ header {
   overflow-x: auto;
   background: #fff;
   border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .admin-table th {
   text-align: left;
-  padding: 12px 16px;
-  font-size: 11px;
+  padding: 8px 12px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -5431,7 +5441,7 @@ header {
 }
 
 .admin-table td {
-  padding: 14px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid #f0f0f0;
   color: #444;
   vertical-align: middle;
