@@ -6719,6 +6719,22 @@ header {
   overflow: visible;
 }
 
+.partners-last-synced {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: #999;
+  font-weight: 500;
+}
+
+.partners-last-synced svg {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
 .partners-user-trigger {
   display: flex;
   align-items: center;

@@ -23,7 +23,18 @@ const navItems: NavItem[] = [
 export default function PartnersLayout() {
   const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [lastSynced, setLastSynced] = useState(() => {
+    const stored = localStorage.getItem('partners-last-synced');
+    return stored || 'Mar 22, 2026 3:42 PM';
+  });
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleSync = () => {
+    const now = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+    setLastSynced(now);
+    localStorage.setItem('partners-last-synced', now);
+    setUserMenuOpen(false);
+  };
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -66,7 +77,7 @@ export default function PartnersLayout() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3zM3 9h18M9 21V9"/></svg>
                 <span>Go to Shopify</span>
               </a>
-              <button className="partners-user-popup-item" onClick={() => setUserMenuOpen(false)}>
+              <button className="partners-user-popup-item" onClick={handleSync}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 <span>Sync Products</span>
               </button>
@@ -90,6 +101,10 @@ export default function PartnersLayout() {
               </button>
             </div>
           )}
+          <div className="partners-last-synced">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>Synced {lastSynced}</span>
+          </div>
           <button className="partners-user-trigger" onClick={() => setUserMenuOpen(o => !o)}>
             <span className="partners-user-avatar">A</span>
             <div className="partners-user-info">
