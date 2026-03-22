@@ -4887,7 +4887,7 @@ header {
 }
 
 .admin-sidebar {
-  width: 240px;
+  width: 200px;
   min-height: 100vh;
   background: #fff;
   border-right: 1px solid #e5e5e5;
@@ -4902,23 +4902,23 @@ header {
 }
 
 .admin-sidebar-header {
-  padding: 24px 20px;
+  padding: 16px 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-bottom: 1px solid #e5e5e5;
 }
 
 .admin-logo {
-  height: 22px;
+  height: 18px;
 }
 
 .admin-badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
   background: #f0f0f0;
   color: #888;
@@ -4988,15 +4988,15 @@ header {
 .admin-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9px 14px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 6px;
   color: #666;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   transition: all 0.15s ease;
-  border-left: 3px solid transparent;
+  border-left: 2px solid transparent;
 }
 
 .admin-nav-item:hover {
@@ -5198,7 +5198,7 @@ header {
 
 .admin-main {
   flex: 1;
-  margin-left: 240px;
+  margin-left: 200px;
   min-height: 100vh;
 }
 
@@ -5712,6 +5712,58 @@ header {
 .admin-toggle.off::after {
   background: #fff;
   left: 2px;
+}
+
+/* Action buttons */
+.admin-action-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.15s;
+}
+.admin-action-btn.approve {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-color: #c8e6c9;
+}
+.admin-action-btn.approve:hover {
+  background: #c8e6c9;
+}
+.admin-action-btn.deny {
+  background: #fbe9e7;
+  color: #c62828;
+  border-color: #ffccbc;
+}
+.admin-action-btn.deny:hover {
+  background: #ffccbc;
+}
+
+/* Activity list */
+.admin-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+  color: #555;
+}
+.admin-activity-item svg {
+  color: #aaa;
+  flex-shrink: 0;
+}
+.admin-detail-empty {
+  font-size: 12px;
+  color: #aaa;
+  padding: 8px 0;
 }
 
 /* Weight input */

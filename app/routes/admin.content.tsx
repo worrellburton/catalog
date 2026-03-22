@@ -11,16 +11,7 @@ interface LookRow {
   products: number;
 }
 
-const brands = [
-  { name: 'Aritzia', products: 8, looks: 14, clicks: '2,847', revenue: '$42,300', status: 'active' },
-  { name: 'Zara', products: 12, looks: 9, clicks: '3,102', revenue: '$38,750', status: 'active' },
-  { name: 'COS', products: 6, looks: 7, clicks: '1,456', revenue: '$21,200', status: 'active' },
-  { name: 'Massimo Dutti', products: 5, looks: 4, clicks: '892', revenue: '$15,400', status: 'active' },
-  { name: 'Everlane', products: 9, looks: 11, clicks: '2,203', revenue: '$31,800', status: 'active' },
-  { name: 'Reformation', products: 4, looks: 6, clicks: '1,678', revenue: '$28,900', status: 'paused' },
-];
-
-type Tab = 'looks' | 'products' | 'brands' | 'musics' | 'places';
+type Tab = 'looks' | 'products' | 'musics' | 'places';
 
 export default function AdminContent() {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
@@ -60,7 +51,6 @@ export default function AdminContent() {
       <div className="admin-tabs">
         <button className={`admin-tab ${activeTab === 'looks' ? 'active' : ''}`} onClick={() => setActiveTab('looks')}>Looks</button>
         <button className={`admin-tab ${activeTab === 'products' ? 'active' : ''}`} onClick={() => setActiveTab('products')}>Products</button>
-        <button className={`admin-tab ${activeTab === 'brands' ? 'active' : ''}`} onClick={() => setActiveTab('brands')}>Brands</button>
         <button className={`admin-tab ${activeTab === 'musics' ? 'active' : ''}`} onClick={() => setActiveTab('musics')}>Musics</button>
         <button className={`admin-tab ${activeTab === 'places' ? 'active' : ''}`} onClick={() => setActiveTab('places')}>Places</button>
       </div>
@@ -103,7 +93,7 @@ export default function AdminContent() {
                       <td><span className="admin-toggle on" /></td>
                       <td><span className="admin-toggle on" /></td>
                       <td><span className="admin-weight-input">5</span></td>
-                      <td><span className="admin-toggle off" /></td>
+                      <td><span className="admin-toggle on" /></td>
                       <td>{row.products}</td>
                       <td>
                         <button className="admin-icon-btn" aria-label="Expand" onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}>
@@ -190,35 +180,6 @@ export default function AdminContent() {
                   <td>{p.price}</td>
                   <td className="admin-cell-muted">{p.lookTitle}</td>
                   <td><span className="admin-status admin-status-online">active</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {activeTab === 'brands' && (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Brand</th>
-                <th>Products</th>
-                <th>In Looks</th>
-                <th>Link Clicks</th>
-                <th>Revenue</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {brands.map(b => (
-                <tr key={b.name}>
-                  <td className="admin-cell-name">{b.name}</td>
-                  <td>{b.products}</td>
-                  <td>{b.looks}</td>
-                  <td>{b.clicks}</td>
-                  <td>{b.revenue}</td>
-                  <td><span className={`admin-status admin-status-${b.status === 'active' ? 'online' : 'away'}`}>{b.status}</span></td>
                 </tr>
               ))}
             </tbody>
