@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 
@@ -60,10 +60,88 @@ const navSections: NavSection[] = [
   },
 ];
 
+interface SearchItem {
+  label: string;
+  type: string;
+  to: string;
+}
+
+const allSearchItems: SearchItem[] = [
+  // People
+  { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
+  { label: 'Shoppers', type: 'Page', to: '/admin/shoppers' },
+  { label: 'Creators', type: 'Page', to: '/admin/creators' },
+  // Content
+  { label: 'Looks', type: 'Page', to: '/admin/looks' },
+  { label: 'Products', type: 'Page', to: '/admin/products' },
+  { label: 'Brands', type: 'Page', to: '/admin/brands' },
+  { label: 'Musics', type: 'Page', to: '/admin/musics' },
+  { label: 'Places', type: 'Page', to: '/admin/places' },
+  { label: 'Categories & Tags', type: 'Page', to: '/admin/categories' },
+  // Advertising
+  { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
+  { label: 'Campaigns', type: 'Page', to: '/admin/campaigns' },
+  { label: 'Audiences', type: 'Page', to: '/admin/audiences' },
+  { label: 'Signup Links', type: 'Page', to: '/admin/signup-links' },
+  // Analytics
+  { label: 'Earnings', type: 'Page', to: '/admin/earnings' },
+  { label: 'Activities', type: 'Page', to: '/admin/activities' },
+  { label: 'Reports', type: 'Page', to: '/admin/reports' },
+  // System
+  { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
+  { label: 'Settings', type: 'Page', to: '/admin/settings' },
+  // Shoppers
+  { label: 'Carla', type: 'Shopper', to: '/admin/shoppers/Carla' },
+  { label: 'alfvaz', type: 'Shopper', to: '/admin/shoppers/alfvaz' },
+  { label: 'franky90', type: 'Shopper', to: '/admin/shoppers/franky90' },
+  { label: 'D1.barbershop', type: 'Shopper', to: '/admin/shoppers/D1.barbershop' },
+  // Creators
+  { label: 'applee', type: 'Creator', to: '/admin/creators/applee' },
+  { label: 'PrettyHome', type: 'Creator', to: '/admin/creators/PrettyHome' },
+  { label: 'testapple', type: 'Creator', to: '/admin/creators/testapple' },
+  { label: 'apple', type: 'Creator', to: '/admin/creators/apple' },
+];
+
 export default function AdminLayout() {
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return allSearchItems.filter(item =>
+      item.label.toLowerCase().includes(q) || item.type.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      }
+      if (e.key === 'Escape') setSearchOpen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, []);
 
   const toggleSection = (title: string) => {
     setCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
@@ -124,6 +202,35 @@ export default function AdminLayout() {
         </div>
       </aside>
       <main className="admin-main">
+        <div className="admin-topbar" ref={searchRef}>
+          <div className="admin-search-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              ref={searchInputRef}
+              className="admin-search-input"
+              type="text"
+              placeholder="Search pages, shoppers, creators..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+            />
+            <span className="admin-search-shortcut">&#8984;K</span>
+          </div>
+          {searchOpen && searchResults.length > 0 && (
+            <div className="admin-search-results">
+              {searchResults.map(item => (
+                <button
+                  key={item.to}
+                  className="admin-search-result"
+                  onClick={() => { navigate(item.to); setSearchOpen(false); setSearchQuery(''); }}
+                >
+                  <span className="admin-search-result-type">{item.type}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <Outlet />
       </main>
     </div>

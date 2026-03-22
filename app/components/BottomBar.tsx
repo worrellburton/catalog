@@ -120,23 +120,23 @@ export default function BottomBar({
         <div className="search-backdrop visible" onClick={handleBackdropClick} />
       )}
 
-      <div className={`bottom-bar ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
-        {searchOpen && (
-          <div className="search-suggestions visible" id="search-suggestions">
-            <div className="search-suggestions-track" ref={trackRef}>
-              {shuffledSuggestions.map((s, i) => (
-                <button
-                  key={i}
-                  className="search-suggestion"
-                  onClick={(e) => handleSuggestionClick(s, e)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+      {searchOpen && (
+        <div className="search-suggestions visible" id="search-suggestions">
+          <div className="search-suggestions-track" ref={trackRef}>
+            {shuffledSuggestions.map((s, i) => (
+              <button
+                key={i}
+                className="search-suggestion"
+                onClick={(e) => handleSuggestionClick(s, e)}
+              >
+                {s}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
+      <div className={`bottom-bar ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
         <div className="bottom-bar-inner">
           <button className={`filter-btn ${hasActiveFilters(activeFilters) ? 'has-filters' : ''}`} onClick={filtersOpen ? closeFilters : openFilters}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
@@ -162,14 +162,16 @@ export default function BottomBar({
           </div>
         )}
 
-        {filtersOpen && (
-          <FilterPanel
-            activeFilters={activeFilters}
-            onFiltersChange={setActiveFilters}
-            onApply={handleFilterApply}
-          />
-        )}
       </div>
+
+      {filtersOpen && (
+        <FilterPanel
+          activeFilters={activeFilters}
+          onFiltersChange={setActiveFilters}
+          onApply={handleFilterApply}
+          onClose={closeFilters}
+        />
+      )}
     </>
   );
 }
