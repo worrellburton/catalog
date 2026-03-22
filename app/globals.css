@@ -5523,6 +5523,13 @@ header {
   font-weight: 600;
   margin: 0 0 14px;
   color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-home-card-title svg {
+  flex-shrink: 0;
 }
 .admin-home-rank-list {
   display: flex;
@@ -7575,6 +7582,50 @@ header {
   border-radius: 6px;
   background: #f0f0f0;
   flex-shrink: 0;
+}
+
+/* Brand logo in products table */
+.partners-brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #f5f5f5;
+  padding: 4px;
+}
+
+.partners-brand-logo-sm {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.partners-brand-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.partners-product-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.partners-product-name {
+  font-weight: 500;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.partners-product-brand-sub {
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
 }
 
 .partners-money-badge {

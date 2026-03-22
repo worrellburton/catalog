@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 
 const products = [
-  { name: 'Atlas Crossbody Bag', sku: 'ATL-CB-001', price: '$85.00', inventory: 24, status: 'Active', sales: 42 },
-  { name: 'Canvas Tote - Natural', sku: 'ATL-CT-002', price: '$65.00', inventory: 18, status: 'Active', sales: 38 },
-  { name: 'Leather Wallet', sku: 'ATL-LW-003', price: '$45.00', inventory: 56, status: 'Active', sales: 67 },
-  { name: 'Atlas Weekender', sku: 'ATL-WK-004', price: '$195.00', inventory: 8, status: 'Active', sales: 15 },
-  { name: 'Belt Bag', sku: 'ATL-BB-005', price: '$55.00', inventory: 31, status: 'Active', sales: 29 },
-  { name: 'Atlas Backpack', sku: 'ATL-BP-006', price: '$210.00', inventory: 5, status: 'Active', sales: 11 },
-  { name: 'Canvas Tote - Black', sku: 'ATL-CT-007', price: '$65.00', inventory: 22, status: 'Active', sales: 33 },
-  { name: 'Mini Crossbody', sku: 'ATL-MC-008', price: '$55.00', inventory: 0, status: 'Out of Stock', sales: 48 },
-  { name: 'Travel Organizer', sku: 'ATL-TO-009', price: '$35.00', inventory: 44, status: 'Active', sales: 21 },
-  { name: 'Laptop Sleeve', sku: 'ATL-LS-010', price: '$40.00', inventory: 0, status: 'Draft', sales: 0 },
+  { name: 'Rock Style Flap Shoulder Bag', brand: 'Zara', domain: 'zara.com', price: '$49', inventory: 24, status: 'Active', sales: 42, inLooks: 6, creators: 1, saves: 10, clicks: 68 },
+  { name: 'Major Shade Cat Eye Sunglasses', brand: 'Windsor', domain: 'windsorstore.com', price: '$10', inventory: 18, status: 'Active', sales: 38, inLooks: 6, creators: 1, saves: 3, clicks: 121 },
+  { name: 'Oval D Glitter Case for iPhone 16 Pro', brand: 'Diesel', domain: 'diesel.com', price: '$39', inventory: 56, status: 'Active', sales: 67, inLooks: 6, creators: 1, saves: 4, clicks: 58 },
+  { name: 'Cross Pendant Necklace', brand: 'Pavoi', domain: 'pavoi.com', price: '$13', inventory: 31, status: 'Active', sales: 29, inLooks: 6, creators: 1, saves: 17, clicks: 85 },
+  { name: 'Patchwork Pointelle Short-Sleeve Shirt', brand: 'Vince', domain: 'vince.com', price: '$568', inventory: 8, status: 'Active', sales: 15, inLooks: 6, creators: 1, saves: 11, clicks: 50 },
+  { name: 'Light Blue Straight Leg Jeans', brand: 'Suitsupply', domain: 'suitsupply.com', price: '$199', inventory: 5, status: 'Active', sales: 11, inLooks: 6, creators: 1, saves: 1, clicks: 63 },
+  { name: 'B27 Uptown Low-Top Sneaker Gray and White', brand: 'Dior', domain: 'dior.com', price: '$1,200', inventory: 22, status: 'Active', sales: 33, inLooks: 6, creators: 1, saves: 7, clicks: 77 },
+  { name: 'Digital Camera', brand: 'Fujifilm', domain: 'fujifilm.com', price: '$1,725', inventory: 0, status: 'Active', sales: 48, inLooks: 6, creators: 1, saves: 11, clicks: 108 },
+  { name: 'Atlas Crossbody Bag', brand: 'Atlas', domain: 'atlasleatherco.com', price: '$85', inventory: 44, status: 'Active', sales: 21, inLooks: 4, creators: 2, saves: 8, clicks: 42 },
+  { name: 'Canvas Tote - Natural', brand: 'Atlas', domain: 'atlasleatherco.com', price: '$65', inventory: 0, status: 'Draft', sales: 0, inLooks: 0, creators: 0, saves: 0, clicks: 0 },
 ];
+
+function getBrandLogo(domain: string) {
+  return `https://cdn.brandfetch.io/${domain}/w/80/h/80/fallback/lettermark?c=1id3n10pdBTarCHI0db`;
+}
 
 export default function PartnersProducts() {
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -60,27 +64,48 @@ export default function PartnersProducts() {
           <table className="partners-campaigns-table">
             <thead>
               <tr>
+                <th style={{ width: 70, textAlign: 'center' }}>Creative</th>
                 <SortableTh label="Product" sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
-                <SortableTh label="SKU" sortKey="sku" currentSort={table.sort} onSort={table.handleSort} />
+                <SortableTh label="Brand" sortKey="brand" currentSort={table.sort} onSort={table.handleSort} />
                 <SortableTh label="Price" sortKey="price" currentSort={table.sort} onSort={table.handleSort} />
-                <SortableTh label="Inventory" sortKey="inventory" currentSort={table.sort} onSort={table.handleSort} />
-                <SortableTh label="Sales" sortKey="sales" currentSort={table.sort} onSort={table.handleSort} />
+                <SortableTh label="In Looks" sortKey="inLooks" currentSort={table.sort} onSort={table.handleSort} />
+                <SortableTh label="Creators" sortKey="creators" currentSort={table.sort} onSort={table.handleSort} />
+                <SortableTh label="Saves" sortKey="saves" currentSort={table.sort} onSort={table.handleSort} />
+                <SortableTh label="Clicks" sortKey="clicks" currentSort={table.sort} onSort={table.handleSort} />
                 <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
               </tr>
             </thead>
             <tbody>
               {table.sortedData.map((p, i) => (
                 <tr key={i}>
+                  <td style={{ textAlign: 'center' }}>
+                    <img
+                      src={getBrandLogo(p.domain)}
+                      alt={p.brand}
+                      className="partners-brand-logo"
+                    />
+                  </td>
                   <td>
-                    <div className="partners-campaign-cell">
-                      <div className="partners-product-thumb partners-shimmer" />
-                      <span style={{ fontWeight: 500 }}>{p.name}</span>
+                    <div className="partners-product-name-cell">
+                      <span className="partners-product-name">{p.name}</span>
+                      <span className="partners-product-brand-sub">{p.brand}</span>
                     </div>
                   </td>
-                  <td style={{ color: '#888', fontFamily: 'monospace', fontSize: 11 }}>{p.sku}</td>
+                  <td>
+                    <div className="partners-brand-cell">
+                      <img
+                        src={getBrandLogo(p.domain)}
+                        alt={p.brand}
+                        className="partners-brand-logo-sm"
+                      />
+                      <span>{p.brand}</span>
+                    </div>
+                  </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  <td style={{ color: p.inventory === 0 ? '#ef4444' : undefined, fontWeight: p.inventory === 0 ? 600 : 400 }}>{p.inventory}</td>
-                  <td>{p.sales}</td>
+                  <td>{p.inLooks}</td>
+                  <td>{p.creators}</td>
+                  <td>{p.saves}</td>
+                  <td>{p.clicks}</td>
                   <td>
                     <span className={`partners-status-badge ${p.status === 'Out of Stock' ? 'refunded' : p.status.toLowerCase()}`}>{p.status}</span>
                   </td>
@@ -93,19 +118,23 @@ export default function PartnersProducts() {
         <div className="partners-grid-view">
           {products.map((p, i) => (
             <div key={i} className="partners-grid-card">
-              <div className="partners-grid-card-preview partners-shimmer">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <div className="partners-grid-card-preview" style={{ background: '#f8f8f8' }}>
+                <img
+                  src={getBrandLogo(p.domain)}
+                  alt={p.brand}
+                  style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }}
+                />
               </div>
               <div className="partners-grid-card-body">
                 <div className="partners-grid-card-title">{p.name}</div>
-                <div className="partners-grid-card-meta">{p.sku}</div>
+                <div className="partners-grid-card-meta">{p.brand}</div>
                 <div className="partners-grid-card-stats">
                   <span>{p.price}</span>
-                  <span>{p.inventory} in stock</span>
+                  <span>{p.clicks} clicks</span>
                 </div>
                 <div className="partners-grid-card-footer">
                   <span className={`partners-status-badge ${p.status === 'Out of Stock' ? 'refunded' : p.status.toLowerCase()}`}>{p.status}</span>
-                  <span style={{ fontSize: 12, color: '#888' }}>{p.sales} sold</span>
+                  <span style={{ fontSize: 12, color: '#888' }}>{p.saves} saves</span>
                 </div>
               </div>
             </div>
