@@ -28,8 +28,8 @@ export default function Home() {
 
   const [isLightMode, setIsLightMode] = useState(false);
   const [fromDeck, setFromDeck] = useState(false);
-  const [shuffleKey, setShuffleKey] = useState(0);
-  const [layoutMode, setLayoutMode] = useState(0);
+  const [shuffleKey, setShuffleKey] = useState(1);
+  const [layoutMode, setLayoutMode] = useState(() => 1 + Math.floor(Math.random() * 3));
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
@@ -61,7 +61,7 @@ export default function Home() {
 
   const handleRemix = useCallback(() => {
     setShuffleKey(k => k + 1);
-    setLayoutMode(m => (m + 1) % 4);
+    setLayoutMode(m => (m % 3) + 1);
   }, []);
 
   const handleLandingToApp = useCallback(() => {
