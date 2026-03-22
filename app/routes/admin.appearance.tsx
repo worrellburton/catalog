@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AnimatedBackground, { variants } from '~/components/AnimatedBackground';
 
 const fonts = [
   { name: 'Inter', family: "'Inter', sans-serif" },
@@ -13,131 +14,79 @@ const fonts = [
   { name: 'Figtree', family: "'Figtree', sans-serif" },
 ];
 
-const accentColors = [
-  { name: 'Green', value: '#4caf50' },
-  { name: 'Blue', value: '#2196f3' },
-  { name: 'Purple', value: '#9c27b0' },
-  { name: 'Orange', value: '#ff9800' },
-  { name: 'Red', value: '#f44336' },
-  { name: 'Teal', value: '#009688' },
-  { name: 'Pink', value: '#e91e63' },
-  { name: 'Indigo', value: '#3f51b5' },
-];
-
-const borderRadiusOptions = [
-  { label: 'Sharp', value: '0px' },
-  { label: 'Subtle', value: '4px' },
-  { label: 'Rounded', value: '8px' },
-  { label: 'Pill', value: '16px' },
-];
-
-const densityOptions = [
-  { label: 'Compact', value: 'compact' },
-  { label: 'Default', value: 'default' },
-  { label: 'Comfortable', value: 'comfortable' },
-];
-
 export default function AdminAppearance() {
-  const [selectedFont, setSelectedFont] = useState('Inter');
-  const [selectedColor, setSelectedColor] = useState('#4caf50');
-  const [selectedRadius, setSelectedRadius] = useState('8px');
-  const [selectedDensity, setSelectedDensity] = useState('default');
+  const [selectedFont, setSelectedFont] = useState(() => localStorage.getItem('admin-font') || 'Inter');
+  const [selectedBg, setSelectedBg] = useState<number>(() => {
+    const stored = localStorage.getItem('admin-bg');
+    return stored !== null ? parseInt(stored) : -1;
+  });
+
+  // Apply font to the entire page when it changes
+  useEffect(() => {
+    const font = fonts.find(f => f.name === selectedFont);
+    if (font) {
+      document.documentElement.style.fontFamily = font.family;
+      localStorage.setItem('admin-font', selectedFont);
+    }
+  }, [selectedFont]);
+
+  // Persist background selection
+  useEffect(() => {
+    localStorage.setItem('admin-bg', selectedBg.toString());
+    // Dispatch event so admin layout can pick up the change
+    window.dispatchEvent(new CustomEvent('admin-bg-change', { detail: selectedBg }));
+  }, [selectedBg]);
 
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <h1>Appearance</h1>
-        <p className="admin-page-subtitle">Customize the admin panel look and feel</p>
+        <p className="admin-page-subtitle">Customize your platform experience</p>
       </div>
 
-      <div className="admin-appearance-grid">
-        <div className="admin-appearance-section">
-          <h3 className="admin-appearance-section-title">Font Family</h3>
-          <p className="admin-appearance-section-desc">Choose a font for the admin interface</p>
-          <div className="admin-font-grid">
-            {fonts.map(f => (
-              <button
-                key={f.name}
-                className={`admin-font-option ${selectedFont === f.name ? 'active' : ''}`}
-                onClick={() => setSelectedFont(f.name)}
-                style={{ fontFamily: f.family }}
-              >
-                <span className="admin-font-preview" style={{ fontFamily: f.family }}>Aa</span>
-                <span className="admin-font-name">{f.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="admin-appearance-section">
-          <h3 className="admin-appearance-section-title">Accent Color</h3>
-          <p className="admin-appearance-section-desc">Primary color for buttons, toggles, and highlights</p>
-          <div className="admin-color-grid">
-            {accentColors.map(c => (
-              <button
-                key={c.value}
-                className={`admin-color-option ${selectedColor === c.value ? 'active' : ''}`}
-                onClick={() => setSelectedColor(c.value)}
-              >
-                <span className="admin-color-swatch" style={{ background: c.value }} />
-                <span className="admin-color-name">{c.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="admin-appearance-section">
-          <h3 className="admin-appearance-section-title">Border Radius</h3>
-          <p className="admin-appearance-section-desc">Corner roundness for cards, buttons, and inputs</p>
-          <div className="admin-radius-grid">
-            {borderRadiusOptions.map(r => (
-              <button
-                key={r.value}
-                className={`admin-radius-option ${selectedRadius === r.value ? 'active' : ''}`}
-                onClick={() => setSelectedRadius(r.value)}
-              >
-                <div className="admin-radius-preview" style={{ borderRadius: r.value }} />
-                <span>{r.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="admin-appearance-section">
-          <h3 className="admin-appearance-section-title">Density</h3>
-          <p className="admin-appearance-section-desc">Spacing and padding across the interface</p>
-          <div className="admin-radius-grid">
-            {densityOptions.map(d => (
-              <button
-                key={d.value}
-                className={`admin-radius-option ${selectedDensity === d.value ? 'active' : ''}`}
-                onClick={() => setSelectedDensity(d.value)}
-              >
-                <div className="admin-density-preview">
-                  {[...Array(d.value === 'compact' ? 4 : d.value === 'default' ? 3 : 2)].map((_, i) => (
-                    <div key={i} className="admin-density-line" style={{ height: d.value === 'compact' ? 3 : d.value === 'default' ? 4 : 6 }} />
-                  ))}
-                </div>
-                <span>{d.label}</span>
-              </button>
-            ))}
-          </div>
+      <div className="admin-appearance-section" style={{ marginBottom: 24 }}>
+        <h3 className="admin-appearance-section-title">Font Family</h3>
+        <p className="admin-appearance-section-desc">Choose a font for the entire platform</p>
+        <div className="admin-font-grid">
+          {fonts.map(f => (
+            <button
+              key={f.name}
+              className={`admin-font-option ${selectedFont === f.name ? 'active' : ''}`}
+              onClick={() => setSelectedFont(f.name)}
+              style={{ fontFamily: f.family }}
+            >
+              <span className="admin-font-preview" style={{ fontFamily: f.family }}>Aa</span>
+              <span className="admin-font-name">{f.name}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="admin-appearance-preview-section">
-        <h3 className="admin-appearance-section-title">Preview</h3>
-        <div className="admin-appearance-preview" style={{ fontFamily: fonts.find(f => f.name === selectedFont)?.family, borderRadius: selectedRadius }}>
-          <div className="admin-appearance-preview-header">
-            <span style={{ fontWeight: 700, fontSize: 16 }}>Sample Card</span>
-            <button className="admin-appearance-preview-btn" style={{ background: selectedColor, borderRadius: selectedRadius }}>Action</button>
-          </div>
-          <p style={{ fontSize: 13, color: '#666', margin: '8px 0 12px' }}>This is a preview of your selected appearance settings applied to a sample component.</p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div className="admin-appearance-preview-tag" style={{ borderRadius: selectedRadius }}>Tag One</div>
-            <div className="admin-appearance-preview-tag" style={{ borderRadius: selectedRadius }}>Tag Two</div>
-            <div className="admin-appearance-preview-tag" style={{ borderRadius: selectedRadius }}>Tag Three</div>
-          </div>
+      <div className="admin-appearance-section">
+        <h3 className="admin-appearance-section-title">Background</h3>
+        <p className="admin-appearance-section-desc">Select an animated background for the main console</p>
+        <div className="admin-bg-grid">
+          <button
+            className={`admin-bg-option ${selectedBg === -1 ? 'active' : ''}`}
+            onClick={() => setSelectedBg(-1)}
+          >
+            <div className="admin-bg-preview" style={{ background: '#0a0a0a' }}>
+              <span className="admin-bg-none-label">None</span>
+            </div>
+            <span className="admin-bg-name">Default</span>
+          </button>
+          {variants.map((v, i) => (
+            <button
+              key={i}
+              className={`admin-bg-option ${selectedBg === i ? 'active' : ''}`}
+              onClick={() => setSelectedBg(i)}
+            >
+              <div className="admin-bg-preview">
+                <AnimatedBackground variant={i} preview />
+              </div>
+              <span className="admin-bg-name">{v.name}</span>
+            </button>
+          ))}
         </div>
       </div>
     </div>

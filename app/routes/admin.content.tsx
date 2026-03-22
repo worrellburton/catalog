@@ -58,9 +58,26 @@ export default function AdminContent() {
     }),
   []);
 
-  const allProducts = useMemo(() =>
-    looks.flatMap(l => l.products.map(p => ({ ...p, lookTitle: l.title }))),
-  []);
+  const allProducts = useMemo(() => {
+    const productMap = new Map<string, { brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number }>();
+    looks.forEach(look => {
+      const c = creators[look.creator];
+      look.products.forEach(p => {
+        const key = `${p.brand}-${p.name}`;
+        if (!productMap.has(key)) {
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10 });
+        }
+        const entry = productMap.get(key)!;
+        entry.looks.add(look.title);
+        entry.creators.add(c?.displayName || look.creator);
+      });
+    });
+    return Array.from(productMap.values()).map(p => ({
+      ...p,
+      lookCount: p.looks.size,
+      creatorCount: p.creators.size,
+    }));
+  }, []);
 
   const lookTable = useSortableTable(lookRows);
 
@@ -93,8 +110,7 @@ export default function AdminContent() {
                 <th>Featured</th>
                 <th>Weight</th>
                 <th>Splash</th>
-                <SortableTh label="Products" sortKey="products" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
-                <th>Actions</th>
+                <th>Products</th>
               </tr>
             </thead>
             <tbody>
@@ -123,17 +139,17 @@ export default function AdminContent() {
                       <td><AdminToggle on={getToggles(row.id).featured} onChange={v => setToggle(row.id, 'featured', v)} /></td>
                       <td><span className="admin-weight-input">5</span></td>
                       <td><AdminToggle on={getToggles(row.id).splash} onChange={v => setToggle(row.id, 'splash', v)} /></td>
-                      <td>{row.products}</td>
                       <td>
-                        <button className="admin-icon-btn" aria-label="Expand" onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                        <button className="admin-products-dropdown" onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}>
+                          <span>{row.products} Products</span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                             <polyline points="6 9 12 15 18 9"/>
                           </svg>
                         </button>
                       </td>
                     </tr>
                     <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
-                      <td colSpan={9} style={{ padding: 0 }}>
+                      <td colSpan={8} style={{ padding: 0 }}>
                         <div className="admin-expand-animate">
                           <div className="admin-look-products">
                             <h3 className="admin-products-title">Products</h3>
@@ -194,20 +210,40 @@ export default function AdminContent() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Brand</th>
+                <th style={{ textAlign: 'left' }}>Creative</th>
+                <th style={{ textAlign: 'left' }}>Product</th>
                 <th>Price</th>
-                <th>In Look</th>
+                <th>In Looks</th>
+                <th>Creators</th>
+                <th>Saves</th>
+                <th>Clicks</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {allProducts.map((p, i) => (
-                <tr key={`${p.name}-${i}`}>
-                  <td className="admin-cell-name">{p.name}</td>
-                  <td className="admin-cell-muted">{p.brand}</td>
-                  <td>{p.price}</td>
-                  <td className="admin-cell-muted">{p.lookTitle}</td>
+                <tr key={`${p.brand}-${p.name}-${i}`}>
+                  <td>
+                    <div className="admin-product-creative">
+                      <img
+                        src={`https://logo.clearbit.com/${p.brand.toLowerCase().replace(/\s+/g, '')}.com`}
+                        alt={p.brand}
+                        className="admin-brand-logo"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'left' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                      <div style={{ fontSize: 10, color: '#999' }}>{p.brand}</div>
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{p.price}</td>
+                  <td>{p.lookCount}</td>
+                  <td>{p.creatorCount}</td>
+                  <td>{p.saves}</td>
+                  <td>{p.clicks}</td>
                   <td><span className="admin-status admin-status-online">active</span></td>
                 </tr>
               ))}
