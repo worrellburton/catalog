@@ -68,9 +68,16 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return { gridTemplateColumns: `repeat(auto-fill, minmax(${layout.minWidth}px, 1fr))` };
   }, [layout.minWidth]);
 
-  const getCardClass = useCallback((_globalIndex: number) => {
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
+
+  const getCardClass = useCallback((globalIndex: number) => {
+    if (!isDesktop || shuffleKey === 0) return 'look-card';
+    // Deterministic pattern based on shuffleKey + index
+    const seed = (shuffleKey * 7 + globalIndex * 13) % 20;
+    if (seed === 0) return 'look-card look-card-featured';
+    if (seed === 3 || seed === 7) return 'look-card look-card-wide';
     return 'look-card';
-  }, []);
+  }, [shuffleKey, isDesktop]);
 
   if (filteredLooks.length === 0 && searchQuery) {
     return (
