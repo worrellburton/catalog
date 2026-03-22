@@ -65,6 +65,11 @@ const navSections: NavSection[] = [
 export default function AdminLayout() {
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (title: string) => {
+    setCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
+  };
 
   return (
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'}`}>
@@ -75,25 +80,30 @@ export default function AdminLayout() {
         </div>
         <nav className="admin-nav">
           {navSections.map(section => (
-            <div key={section.title} className="admin-nav-section">
-              <div className="admin-nav-section-title">{section.title}</div>
-              {section.items.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
+            <div key={section.title} className={`admin-nav-section ${collapsed[section.title] ? 'collapsed' : ''}`}>
+              <button className="admin-nav-section-title" onClick={() => toggleSection(section.title)}>
+                <span>{section.title}</span>
+                <svg className="admin-nav-section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div className="admin-nav-section-items">
+                {section.items.map(item => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d={item.icon} />
+                    </svg>
+                    <span>{item.label}</span>
+                    {item.badge && (
+                      <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
             </div>
           ))}
         </nav>
