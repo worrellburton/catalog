@@ -14,39 +14,33 @@ const fonts = [
   { name: 'Figtree', family: "'Figtree', sans-serif" },
 ];
 
-export default function AdminAppearance() {
-  const [selectedFont, setSelectedFont] = useState(() => localStorage.getItem('admin-font') || 'Inter');
+export default function PartnersAppearance() {
+  const [selectedFont, setSelectedFont] = useState(() => localStorage.getItem('partners-font') || 'Inter');
   const [selectedBg, setSelectedBg] = useState<number>(() => {
-    const stored = localStorage.getItem('admin-bg');
+    const stored = localStorage.getItem('partners-bg');
     return stored !== null ? parseInt(stored) : -1;
   });
 
-  // Apply font to the entire page when it changes
   useEffect(() => {
     const font = fonts.find(f => f.name === selectedFont);
     if (font) {
       document.documentElement.style.fontFamily = font.family;
-      localStorage.setItem('admin-font', selectedFont);
+      localStorage.setItem('partners-font', selectedFont);
     }
   }, [selectedFont]);
 
-  // Persist background selection
   useEffect(() => {
-    localStorage.setItem('admin-bg', selectedBg.toString());
-    // Dispatch event so admin layout can pick up the change
-    window.dispatchEvent(new CustomEvent('admin-bg-change', { detail: selectedBg }));
+    localStorage.setItem('partners-bg', selectedBg.toString());
+    window.dispatchEvent(new CustomEvent('partners-bg-change', { detail: selectedBg }));
   }, [selectedBg]);
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
-        <h1>Appearance</h1>
-        <p className="admin-page-subtitle">Customize your platform experience</p>
-      </div>
+    <div className="partners-page">
+      <h2 className="partners-page-title">Appearance</h2>
+      <p style={{ color: '#888', fontSize: 13, marginTop: -12, marginBottom: 24 }}>Customize your brand console experience</p>
 
-      <div className="admin-appearance-section" style={{ marginBottom: 24 }}>
-        <h3 className="admin-appearance-section-title">Font Family</h3>
-        <p className="admin-appearance-section-desc">Choose a font for the entire platform — changes apply instantly</p>
+      <div className="partners-section-card" style={{ marginBottom: 24 }}>
+        <h3 className="partners-section-title" style={{ textAlign: 'left', marginBottom: 16 }}>Font Family</h3>
         <div className="admin-font-grid">
           {fonts.map(f => (
             <button
@@ -62,15 +56,15 @@ export default function AdminAppearance() {
         </div>
       </div>
 
-      <div className="admin-appearance-section">
-        <h3 className="admin-appearance-section-title">Background</h3>
-        <p className="admin-appearance-section-desc">Select an animated background for the main console</p>
+      <div className="partners-section-card">
+        <h3 className="partners-section-title" style={{ textAlign: 'left', marginBottom: 16 }}>Background</h3>
+        <p style={{ color: '#888', fontSize: 12, marginBottom: 16 }}>Select an animated background for your console</p>
         <div className="admin-bg-grid">
           <button
             className={`admin-bg-option ${selectedBg === -1 ? 'active' : ''}`}
             onClick={() => setSelectedBg(-1)}
           >
-            <div className="admin-bg-preview" style={{ background: '#0a0a0a' }}>
+            <div className="admin-bg-preview" style={{ background: '#f8f8f8' }}>
               <span className="admin-bg-none-label">None</span>
             </div>
             <span className="admin-bg-name">Default</span>
