@@ -21,7 +21,6 @@ const navSections: NavSection[] = [
       { to: '/admin/administrators', label: 'Administrators', icon: 'M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z' },
       { to: '/admin/shoppers', label: 'Shoppers', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
       { to: '/admin/creators', label: 'Creators', icon: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z' },
-      { to: '/admin/audiences', label: 'Audiences', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
     ],
   },
   {
@@ -36,19 +35,18 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: 'Marketing',
+    title: 'Advertising',
     items: [
       { to: '/admin/advertisements', label: 'Advertisements', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
       { to: '/admin/campaigns', label: 'Campaigns', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+      { to: '/admin/audiences', label: 'Audiences', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
       { to: '/admin/signup-links', label: 'Signup Links', icon: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' },
     ],
   },
   {
     title: 'Analytics',
     items: [
-      { to: '/admin/clickouts', label: 'Clickouts & Taps', icon: 'M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M2 2l7.586 7.586' },
       { to: '/admin/earnings', label: 'Earnings', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
-      { to: '/admin/revenue', label: 'Revenue', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
       { to: '/admin/activities', label: 'Activities', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
       { to: '/admin/reports', label: 'Reports', icon: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' },
     ],

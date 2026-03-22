@@ -11,6 +11,7 @@ import BookmarksPage from '~/components/BookmarksPage';
 import InAppBrowser from '~/components/InAppBrowser';
 import DeckView from '~/components/DeckView';
 import CatalogLogo from '~/components/CatalogLogo';
+import UserMenu from '~/components/UserMenu';
 import { Look } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 
@@ -153,13 +154,6 @@ export default function Home() {
             </div>
             <div className="header-right">
               <button
-                className="shuffle-btn"
-                onClick={handleRemix}
-                aria-label="Remix grid"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              </button>
-              <button
                 className="theme-toggle"
                 onClick={toggleTheme}
                 aria-label="Toggle theme"
@@ -170,12 +164,14 @@ export default function Home() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 )}
               </button>
-              <button className="bookmark-toggle" onClick={() => setShowBookmarks(true)} aria-label="Bookmarks">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
-              </button>
             </div>
           </header>
+
+          <UserMenu
+            onRemix={handleRemix}
+            onOpenBookmarks={() => setShowBookmarks(true)}
+            bookmarkCount={bookmarks.totalCount}
+          />
 
           <GridView
             activeFilter={activeFilter}
