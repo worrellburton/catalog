@@ -4676,6 +4676,32 @@ header {
   white-space: nowrap;
 }
 
+.admin-th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-th-sortable:hover {
+  color: #555;
+}
+
+.admin-th-sortable-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-sort-icon {
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.admin-th-sortable:hover .admin-sort-icon,
+.admin-sort-icon.active {
+  opacity: 1;
+}
+
 .admin-table td {
   padding: 14px 16px;
   border-bottom: 1px solid #f0f0f0;
@@ -4972,6 +4998,10 @@ header {
 .admin-dark .admin-table th {
   color: rgba(255, 255, 255, 0.3);
   border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.admin-dark .admin-th-sortable:hover {
+  color: rgba(255, 255, 255, 0.6);
 }
 .admin-dark .admin-table td {
   color: rgba(255, 255, 255, 0.7);

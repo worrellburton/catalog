@@ -1,10 +1,36 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, useMemo } from 'react';
 import { looks, creators } from '~/data/looks';
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
+
+interface LookRow {
+  id: number;
+  creator: string;
+  creatorDisplay: string;
+  creatorAvatar: string;
+  video: string;
+  products: number;
+}
 
 export default function AdminLooks() {
   const [activeTab, setActiveTab] = useState<'active' | 'incoming'>('active');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+  const lookRows: LookRow[] = useMemo(() =>
+    looks.map(look => {
+      const c = creators[look.creator];
+      return {
+        id: look.id,
+        creator: look.creator,
+        creatorDisplay: c?.displayName || look.creator,
+        creatorAvatar: c?.avatar || '',
+        video: look.video,
+        products: look.products.length,
+      };
+    }),
+  []);
+
+  const { sortedData, sort, handleSort } = useSortableTable(lookRows);
 
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -29,31 +55,31 @@ export default function AdminLooks() {
             <thead>
               <tr>
                 <th>Thumbnail</th>
-                <th>Creator</th>
+                <SortableTh label="Creator" sortKey="creatorDisplay" currentSort={sort} onSort={handleSort} />
                 <th>Created At</th>
                 <th>Platform</th>
                 <th>Featured</th>
                 <th>Weight</th>
                 <th>Splash</th>
-                <th>Products</th>
+                <SortableTh label="Products" sortKey="products" currentSort={sort} onSort={handleSort} />
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {looks.map(look => {
-                const creator = creators[look.creator];
-                const isExpanded = expandedId === look.id;
+              {sortedData.map(row => {
+                const look = looks.find(l => l.id === row.id)!;
+                const isExpanded = expandedId === row.id;
                 return (
-                  <Fragment key={look.id}>
+                  <Fragment key={row.id}>
                     <tr
                       className="admin-look-main-row"
-                      onClick={() => toggleExpand(look.id)}
+                      onClick={() => toggleExpand(row.id)}
                       style={{ cursor: 'pointer' }}
                     >
                       <td>
                         <div className="admin-look-thumb">
                           <video
-                            src={`${basePath}/${look.video}`}
+                            src={`${basePath}/${row.video}`}
                             muted
                             loop
                             playsInline
@@ -65,10 +91,10 @@ export default function AdminLooks() {
                         <div className="admin-look-creator">
                           <img
                             className="admin-look-creator-avatar"
-                            src={creator?.avatar || ''}
-                            alt={look.creator}
+                            src={row.creatorAvatar}
+                            alt={row.creator}
                           />
-                          <span>{creator?.displayName || look.creator}</span>
+                          <span>{row.creatorDisplay}</span>
                         </div>
                       </td>
                       <td className="admin-cell-muted">Feb 17, 2026, 12:16 PM</td>
@@ -76,9 +102,9 @@ export default function AdminLooks() {
                       <td><span className="admin-toggle on" /></td>
                       <td><span className="admin-weight-input">5</span></td>
                       <td><span className="admin-toggle off" /></td>
-                      <td>{look.products.length}</td>
+                      <td>{row.products}</td>
                       <td>
-                        <button className="admin-icon-btn" aria-label="Expand" onClick={(e) => { e.stopPropagation(); toggleExpand(look.id); }}>
+                        <button className="admin-icon-btn" aria-label="Expand" onClick={(e) => { e.stopPropagation(); toggleExpand(row.id); }}>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                             <polyline points="6 9 12 15 18 9"/>
                           </svg>

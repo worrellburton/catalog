@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
 
 const shoppers = [
   { initials: 'CA', name: 'Carla', color: '#e8f5e9', sso: 'SSO', createdAt: 'Mar 01, 2026 12:18 PM', shopping: 'Women', location: 'Washington, England, United Kingdom', height: '5\'9"', age: '-', saved: 0, followings: 0, invited: 0, creator: '-', enteredVia: '-' },
@@ -9,6 +10,7 @@ const shoppers = [
 
 export default function AdminShoppers() {
   const [activeTab, setActiveTab] = useState<'active' | 'waitlist'>('active');
+  const { sortedData, sort, handleSort } = useSortableTable(shoppers);
 
   return (
     <div className="admin-page">
@@ -28,23 +30,23 @@ export default function AdminShoppers() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Shopper</th>
-                <th>SSO</th>
+                <SortableTh label="Shopper" sortKey="name" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="SSO" sortKey="sso" currentSort={sort} onSort={handleSort} />
                 <th>Email</th>
-                <th>Created At</th>
-                <th>Shopping</th>
-                <th>Location</th>
+                <SortableTh label="Created At" sortKey="createdAt" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Shopping" sortKey="shopping" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Location" sortKey="location" currentSort={sort} onSort={handleSort} />
                 <th>Height</th>
                 <th>Age</th>
-                <th>Saved</th>
-                <th>Followings</th>
-                <th>Invited</th>
-                <th>Creator</th>
-                <th>Entered App Via</th>
+                <SortableTh label="Saved" sortKey="saved" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Followings" sortKey="followings" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Invited" sortKey="invited" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Creator" sortKey="creator" currentSort={sort} onSort={handleSort} />
+                <SortableTh label="Entered App Via" sortKey="enteredVia" currentSort={sort} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>
-              {shoppers.map(s => (
+              {sortedData.map(s => (
                 <tr key={s.name}>
                   <td className="admin-cell-name">
                     <span className="admin-user-avatar" style={{ background: s.color }}>{s.initials}</span>
