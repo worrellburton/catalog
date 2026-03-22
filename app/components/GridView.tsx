@@ -1,5 +1,5 @@
 
-import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
+import { useMemo, useRef, useCallback, useEffect, useState, Fragment } from 'react';
 import { looks, creators, Look } from '~/data/looks';
 import LookCard from './LookCard';
 
@@ -14,11 +14,13 @@ interface GridViewProps {
 }
 
 const LAYOUT_CONFIGS = [
-  { name: 'grid', maxCards: 48, minWidth: 240 },
-  { name: 'editorial', maxCards: 6, minWidth: 300 },
-  { name: 'mosaic', maxCards: 24, minWidth: 160 },
-  { name: 'spotlight', maxCards: 8, minWidth: 400 },
+  { name: 'grid', minWidth: 240 },
+  { name: 'editorial', minWidth: 300 },
+  { name: 'mosaic', minWidth: 160 },
+  { name: 'spotlight', minWidth: 400 },
 ];
+
+const BATCH_SIZE = 12;
 
 function ParticleField({ isLightMode }: { isLightMode: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -118,7 +120,9 @@ function ParticleField({ isLightMode }: { isLightMode: boolean }) {
 
 export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0, layoutMode = 0 }: GridViewProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
   const filteredLooks = useMemo(() => {
     let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
@@ -134,26 +138,51 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return filtered;
   }, [activeFilter, searchQuery]);
 
-  const displayLooks = useMemo(() => {
+  // Build an infinite pool by repeating looks
+  const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];
-    const maxCards = layout.maxCards;
-    const repeatCount = Math.max(1, Math.ceil(maxCards / filteredLooks.length));
+    // Pre-generate a large pool
+    const poolSize = 200;
     const result: (Look & { displayIndex: number })[] = [];
-    for (let r = 0; r < repeatCount; r++) {
-      filteredLooks.forEach((look, i) => {
-        result.push({ ...look, displayIndex: r * filteredLooks.length + i });
-      });
+    for (let i = 0; i < poolSize; i++) {
+      result.push({ ...filteredLooks[i % filteredLooks.length], displayIndex: i });
     }
     if (shuffleKey > 0) {
-      for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
+      // Shuffle in chunks to keep variety
+      for (let chunk = 0; chunk < poolSize; chunk += filteredLooks.length) {
+        const end = Math.min(chunk + filteredLooks.length, poolSize);
+        for (let i = end - 1; i > chunk; i--) {
+          const j = chunk + Math.floor(Math.random() * (i - chunk + 1));
+          [result[i], result[j]] = [result[j], result[i]];
+        }
       }
     }
-    const trimmed = result.slice(0, maxCards);
-    trimmed.forEach((look, i) => { look.displayIndex = i; });
-    return trimmed;
-  }, [filteredLooks, shuffleKey, layout.maxCards]);
+    return result;
+  }, [filteredLooks, shuffleKey]);
+
+  const displayLooks = useMemo(() => {
+    return infinitePool.slice(0, visibleCount);
+  }, [infinitePool, visibleCount]);
+
+  // Reset visible count when filter/search/shuffle changes
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE);
+  }, [activeFilter, searchQuery, shuffleKey, layoutMode]);
+
+  // Infinite scroll: observe sentinel at bottom
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || filteredLooks.length === 0) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount(prev => Math.min(prev + BATCH_SIZE, infinitePool.length));
+      }
+    }, { rootMargin: '400px' });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filteredLooks.length, infinitePool.length]);
 
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
@@ -200,6 +229,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
           />
         ))}
       </div>
+      <div ref={sentinelRef} style={{ height: 1 }} />
     </div>
   );
 }
