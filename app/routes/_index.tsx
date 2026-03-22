@@ -13,8 +13,14 @@ import DeckView from '~/components/DeckView';
 import CatalogLogo from '~/components/CatalogLogo';
 import { Look } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
+import { catalogNames } from '~/data/catalogNames';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
+
+function getRandomCatalogName(): string {
+  const allNames = Object.values(catalogNames).flat();
+  return allNames[Math.floor(Math.random() * allNames.length)];
+}
 
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
@@ -30,6 +36,7 @@ export default function Home() {
   const [fromDeck, setFromDeck] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(() => 1 + Math.floor(Math.random() * 3));
+  const [catalogName, setCatalogName] = useState(getRandomCatalogName);
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
@@ -62,6 +69,7 @@ export default function Home() {
   const handleRemix = useCallback(() => {
     setShuffleKey(k => k + 1);
     setLayoutMode(m => (m % 3) + 1);
+    setCatalogName(getRandomCatalogName());
   }, []);
 
   const handleLandingToApp = useCallback(() => {
@@ -152,6 +160,7 @@ export default function Home() {
               <button className="logo-btn" onClick={handleRemix} aria-label="Remix">
                 <CatalogLogo className="logo" />
               </button>
+              <span className="catalog-name">{catalogName}</span>
             </div>
             <div className="header-right">
               <button
@@ -186,12 +195,8 @@ export default function Home() {
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
           />
 
-          <button className="theme-toggle-fixed" onClick={toggleTheme} aria-label="Toggle theme">
-            {isLightMode ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            )}
+          <button className="remix-btn-fixed" onClick={handleRemix} aria-label="Remix">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
 
           {selectedLook && (

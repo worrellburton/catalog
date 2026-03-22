@@ -98,8 +98,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       style={overlayStyle}
     >
       <div className="look-detail">
-        <button className="close-look" onClick={onClose}>&times;</button>
-
         <div className="look-media">
           <video
             src={`${basePath}/${look.video}`}

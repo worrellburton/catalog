@@ -154,13 +154,12 @@ export default function BottomBar({
 
         {searchOpen && (
           <div className="bottom-bar-search">
-            <p className="bottom-search-tagline">Make a catalog for anything.</p>
             <input
               ref={searchInputRef}
               type="text"
               className="bottom-search-input"
               id="bottom-search-input"
-              placeholder="Search anything..."
+              placeholder="Make a catalog for anything."
               value={localSearch}
               onChange={handleSearchInput}
               onKeyDown={(e) => { if (e.key === 'Enter') closeSearch(); }}

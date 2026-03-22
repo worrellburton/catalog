@@ -1285,6 +1285,18 @@ header {
   transform: scale(0.95);
 }
 
+.catalog-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  margin-left: 10px;
+  letter-spacing: 0.02em;
+}
+.light-mode .catalog-name {
+  color: rgba(0, 0, 0, 0.4);
+}
+
 /* Theme toggle */
 .shuffle-btn {
   background: rgba(128, 128, 128, 0.15);
@@ -1326,7 +1338,7 @@ header {
   background: rgba(128, 128, 128, 0.25);
 }
 
-.theme-toggle-fixed {
+.remix-btn-fixed {
   position: fixed;
   bottom: 20px;
   right: 20px;
@@ -1347,20 +1359,14 @@ header {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.theme-toggle-fixed:hover {
+.remix-btn-fixed:hover {
   background: rgba(128, 128, 128, 0.3);
   transform: scale(1.1);
 }
 
-.theme-toggle-fixed:active {
+.remix-btn-fixed:active {
   transform: scale(0.9);
 }
-
-/* Show/hide sun/moon icons based on theme */
-.icon-moon { display: none; }
-.icon-sun { display: block; }
-.light-mode .icon-moon { display: block; }
-.light-mode .icon-sun { display: none; }
 
 /* View toggle (mobile only) */
 .view-toggle {
@@ -3054,50 +3060,28 @@ header {
   z-index: 2;
   cursor: pointer;
   text-decoration: none;
-  transition: opacity 0.15s;
+  padding: 4px 10px 4px 4px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.look-card .card-creator-row:hover {
-  opacity: 1;
-}
-
-.look-card .card-creator-row:hover .card-creator-name {
-  text-decoration: none;
-}
-
-.card-creator-btn {
-  display: none;
-  align-items: center;
-  justify-content: center;
+.look-card:hover .card-creator-row {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  font-family: inherit;
-  letter-spacing: 0.03em;
-  padding: 4px 10px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-.look-card:hover .card-creator-btn {
-  display: flex;
+.look-card .card-creator-row:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: scale(1.03);
 }
 
-.card-creator-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.4);
-  transform: scale(1.05);
-}
-
-.card-creator-btn:active {
-  transform: scale(0.95);
+.look-card .card-creator-row:active {
+  transform: scale(0.97);
 }
 
 .card-creator-avatar {
