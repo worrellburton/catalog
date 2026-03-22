@@ -4603,6 +4603,54 @@ header {
   color: #999;
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e5e5e5;
+  margin-bottom: 24px;
+}
+
+.admin-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #999;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-tab:hover {
+  color: #555;
+}
+
+.admin-tab.active {
+  color: #111;
+  border-bottom-color: #111;
+}
+
+.admin-tab-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: #e5e5e5;
+  color: #666;
+  padding: 1px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.admin-tab.active .admin-tab-badge {
+  background: #111;
+  color: #fff;
+}
+
 .admin-table-wrap {
   overflow-x: auto;
   background: #fff;
@@ -4939,6 +4987,33 @@ header {
 .admin-dark .admin-cell-muted {
   color: rgba(255, 255, 255, 0.4) !important;
 }
+.admin-dark .admin-tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.admin-dark .admin-tab {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.admin-dark .admin-tab:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-dark .admin-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+.admin-dark .admin-tab-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-dark .admin-tab.active .admin-tab-badge {
+  background: #fff;
+  color: #111;
+}
+
 .admin-dark .admin-empty {
   color: rgba(255, 255, 255, 0.35);
 }
