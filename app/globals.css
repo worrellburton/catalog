@@ -2768,7 +2768,7 @@ header {
 .look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s, 1.2s; }
 
 /* Look overlay */
-#look-overlay {
+.look-overlay {
   position: fixed;
   inset: 0;
   background: var(--overlay-bg);
@@ -2780,20 +2780,43 @@ header {
   transition: opacity 0.4s ease;
 }
 
-#look-overlay .look-detail {
+.look-overlay .look-detail {
   transform: translateY(0) scale(1);
   opacity: 1;
   transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
 }
 
-#look-overlay.hidden {
+.look-overlay.hidden {
   opacity: 0;
   pointer-events: none;
 }
 
-#look-overlay.hidden .look-detail {
+.look-overlay.hidden .look-detail {
   transform: translateY(30px) scale(0.97);
   opacity: 0;
+}
+
+.close-look {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.close-look:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .look-back-btn {
@@ -2852,7 +2875,7 @@ header {
 }
 
 /* Detail creator row */
-#detail-creator {
+.detail-creator {
   display: flex;
   align-items: center;
   justify-content: space-between;
