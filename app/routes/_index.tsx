@@ -17,7 +17,20 @@ import { catalogNames } from '~/data/catalogNames';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
 
-function getRandomCatalogName(): string {
+function getRandomCatalogName(query?: string): string {
+  if (query && query.trim()) {
+    const q = query.toLowerCase().trim();
+    // Find keys that match the search query
+    const matchingKeys = Object.keys(catalogNames).filter(key =>
+      key.split('+').some(part => q.includes(part) || part.includes(q))
+    );
+    if (matchingKeys.length > 0) {
+      // Prefer combo keys (more specific) over single keys
+      const sorted = matchingKeys.sort((a, b) => b.length - a.length);
+      const names = catalogNames[sorted[0]];
+      return names[Math.floor(Math.random() * names.length)];
+    }
+  }
   const allNames = Object.values(catalogNames).flat();
   return allNames[Math.floor(Math.random() * allNames.length)];
 }
@@ -163,13 +176,6 @@ export default function Home() {
               <span className="catalog-name">{catalogName}</span>
             </div>
             <div className="header-right">
-              <button
-                className="shuffle-btn"
-                onClick={handleRemix}
-                aria-label="Remix grid"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              </button>
               <button className="bookmark-toggle" onClick={() => setShowBookmarks(true)} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
@@ -191,7 +197,7 @@ export default function Home() {
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
             searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            onSearchChange={(q: string) => { setSearchQuery(q); if (q.trim()) setCatalogName(getRandomCatalogName(q)); }}
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
           />
 
