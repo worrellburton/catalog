@@ -18,7 +18,7 @@ https://worrellburton.github.io/catalog/
 - **Workflow**: `.github/workflows/deploy.yml` deploys to GitHub Pages
 - **Triggers**: Pushes to `main` or any `claude/**` branch
 - **Method**: `npm ci` → `npm run build` → uploads `build/client/` directory as GitHub Pages artifact
-- **Base path**: `/catalogwebapp/` (configured in `vite.config.ts` via `base` and Remix `basename`)
+- **Base path**: `/catalog/` (configured in `vite.config.ts` via `base` and Remix `basename`)
 - **SPA fallback**: `index.html` is copied to `404.html` at build time so GitHub Pages serves the SPA for all routes
 - **Environment**: The GitHub Pages environment must have `claude/**` and `main` listed as allowed deployment branches (configured in repo Settings > Environments > github-pages)
 

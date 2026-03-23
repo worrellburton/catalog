@@ -7,11 +7,11 @@ import { join } from "node:path";
 const isProduction = process.env.NODE_ENV === "production";
 
 export default defineConfig({
-  base: "/catalogwebapp/",
+  base: "/catalog/",
   plugins: [
     remix({
       ssr: false,
-      basename: "/catalogwebapp/",
+      basename: "/catalog/",
       buildEnd(args) {
         if (!isProduction) return;
         const clientDir = args.remixConfig.buildDirectory + "/client";
