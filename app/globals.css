@@ -8302,7 +8302,7 @@ header {
 .partners-bar {
   width: 100%;
   max-width: 60px;
-  background: linear-gradient(180deg, #1a1a1a, #444);
+  background: linear-gradient(180deg, #22c55e, #4ade80);
   border-radius: 6px 6px 0 0;
   display: flex;
   align-items: flex-start;
