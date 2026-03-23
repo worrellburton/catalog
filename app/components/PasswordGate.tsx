@@ -20,6 +20,14 @@ const brandDomains = [
   'ralphlauren.com', 'tommyhilfiger.com', 'calvinklein.com', 'hugoboss.com', 'lacoste.com',
 ];
 
+const catalogNames = [
+  'The Drip Report', 'Fit Check Files', 'Main Character Energy', 'The Vibe Vault',
+  'Rich Auntie Energy', 'The Black Card Edit', 'Slay Catalog™', 'The It-Girl Index',
+  'Hype Beast Herald', 'Drop Day Dispatch', 'Corporate Slay', 'Quiet Quitting Couture',
+  'Bark Avenue Boutique', 'Ooh La La List', 'Harajuku Heat Check', 'Mimosa Mode',
+  'Hot & Unbothered', 'Glitter & Regret', 'The Dapper Dude Edit', 'Couch Potato Chic',
+];
+
 function getBrandLogo(domain: string) {
   return `https://cdn.brandfetch.io/${domain}/theme/dark/logo?c=1id3n10pdBTarCHI0db`;
 }
@@ -44,12 +52,22 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
   const [error, setError] = useState('');
   const [shaking, setShaking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [nameIndex, setNameIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const passwordSectionRef = useRef<HTMLDivElement>(null);
   const [rows] = useState(() => getRows(12));
 
   useEffect(() => {
-    inputRef.current?.focus();
+    const interval = setInterval(() => {
+      setNameIndex((prev) => (prev + 1) % catalogNames.length);
+    }, 2500);
+    return () => clearInterval(interval);
   }, []);
+
+  const scrollToPassword = () => {
+    passwordSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => inputRef.current?.focus(), 600);
+  };
 
   const attemptLogin = () => {
     const val = value.trim().toLowerCase();
@@ -68,46 +86,67 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
 
   return (
     <div className="password-gate">
-      <div className="pw-marquee-bg" aria-hidden="true">
-        {rows.map((row, i) => (
-          <div
-            key={i}
-            className="pw-marquee-row"
-            style={{
-              animationDuration: `${25 + i * 4}s`,
-              animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
-            }}
-          >
-            {[...row, ...row].map((domain, j) => (
-              <img
-                key={j}
-                className="pw-marquee-logo"
-                src={getBrandLogo(domain)}
-                alt=""
-                loading="lazy"
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="pw-content">
-        <CatalogLogo className="pw-logo" />
-        <p className="pw-subtitle">Enter access code</p>
-        <div className="pw-input-wrap">
-          <input
-            ref={inputRef}
-            type="password"
-            className={`pw-input ${shaking ? 'shake' : ''}`}
-            placeholder="---"
-            maxLength={10}
-            autoComplete="off"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') attemptLogin(); }}
-          />
+      {/* Hero section — full viewport */}
+      <div className="pw-hero">
+        <div className="pw-marquee-bg" aria-hidden="true">
+          {rows.map((row, i) => (
+            <div
+              key={i}
+              className="pw-marquee-row"
+              style={{
+                animationDuration: `${25 + i * 4}s`,
+                animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
+              }}
+            >
+              {[...row, ...row].map((domain, j) => (
+                <img
+                  key={j}
+                  className="pw-marquee-logo"
+                  src={getBrandLogo(domain)}
+                  alt=""
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          ))}
         </div>
-        <button className="pw-enter" onClick={attemptLogin}>Enter</button>
-        <p className="pw-error">{error}</p>
+        {/* Gradient vignette overlay */}
+        <div className="pw-hero-vignette" />
+        {/* Centered logo + rotating name */}
+        <div className="pw-hero-content">
+          <CatalogLogo className="pw-hero-logo" />
+          <div className="pw-rotating-name-wrap">
+            <span key={nameIndex} className="pw-rotating-name">
+              {catalogNames[nameIndex]}
+            </span>
+          </div>
+        </div>
+        {/* Scroll indicator */}
+        <button className="pw-scroll-hint" onClick={scrollToPassword} aria-label="Scroll down">
+          <span className="pw-scroll-arrow">&#8595;</span>
+        </button>
+      </div>
+
+      {/* Password section — scrolls into view */}
+      <div className="pw-password-section" ref={passwordSectionRef}>
+        <div className="pw-content">
+          <p className="pw-subtitle">Enter access code</p>
+          <div className="pw-input-wrap">
+            <input
+              ref={inputRef}
+              type="password"
+              className={`pw-input ${shaking ? 'shake' : ''}`}
+              placeholder="---"
+              maxLength={10}
+              autoComplete="off"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') attemptLogin(); }}
+            />
+          </div>
+          <button className="pw-enter" onClick={attemptLogin}>Enter</button>
+          <p className="pw-error">{error}</p>
+        </div>
       </div>
     </div>
   );
