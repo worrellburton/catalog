@@ -151,7 +151,7 @@ body {
 .pw-floating-logo {
   position: absolute;
   bottom: -80px;
-  filter: brightness(0) invert(1);
+  filter: none;
   animation: pw-float-up linear infinite;
   will-change: transform;
 }

@@ -22,7 +22,7 @@ const brandDomains = [
 ];
 
 function getBrandLogo(domain: string) {
-  return `https://cdn.brandfetch.io/${domain}/w/120/h/120?c=1id3n10pdBTarCHI0db`;
+  return `https://cdn.brandfetch.io/${domain}/theme/dark/logo?c=1id3n10pdBTarCHI0db`;
 }
 
 interface FloatingLogo {
@@ -44,7 +44,7 @@ function generateLogos(count: number): FloatingLogo[] {
       domain: shuffled[i % shuffled.length],
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: 32 + Math.random() * 28,
+      size: 40 + Math.random() * 40,
       speed: 18 + Math.random() * 30,
       drift: -30 + Math.random() * 60,
       opacity: 0.04 + Math.random() * 0.08,
@@ -90,7 +90,7 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
             className="pw-floating-logo"
             style={{
               left: `${logo.x}%`,
-              width: logo.size,
+              width: logo.size * 1.8,
               height: logo.size,
               opacity: logo.opacity,
               animationDuration: `${logo.speed}s`,
