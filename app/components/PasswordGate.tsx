@@ -6,21 +6,26 @@ interface PasswordGateProps {
   onSubmit: (password: string) => boolean;
 }
 
-const brandNames = [
-  'ZARA', 'NIKE', 'ADIDAS', 'GUCCI', 'PRADA',
-  'DIOR', 'CHANEL', 'LOUIS VUITTON', 'BALENCIAGA', 'VERSACE',
-  'BURBERRY', 'FENDI', 'GIVENCHY', 'VALENTINO', 'SAINT LAURENT',
-  'CELINE', 'LOEWE', 'BOTTEGA VENETA', 'DIESEL', 'ACNE STUDIOS',
-  'STÜSSY', 'SUPREME', 'CARHARTT', 'PATAGONIA', 'THE NORTH FACE',
-  'UNIQLO', 'H&M', 'COS', 'ARKET', 'ASOS',
-  'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'HUGO BOSS', 'LACOSTE',
-  'ROLEX', 'OMEGA', 'CARTIER', 'TIFFANY & CO', 'RAY-BAN',
-  'NEW BALANCE', 'CONVERSE', 'VANS', 'PUMA', 'ASICS',
-  'LULULEMON', 'GYMSHARK', 'THEORY', 'REISS', 'ALLSAINTS',
+const brandDomains = [
+  'zara.com', 'nike.com', 'adidas.com', 'gucci.com', 'prada.com',
+  'dior.com', 'chanel.com', 'louisvuitton.com', 'balenciaga.com', 'versace.com',
+  'burberry.com', 'fendi.com', 'givenchy.com', 'valentino.com', 'saintlaurent.com',
+  'celine.com', 'loewe.com', 'bottegaveneta.com', 'diesel.com', 'acnestudios.com',
+  'stussy.com', 'supremenewyork.com', 'carhartt.com', 'patagonia.com', 'northface.com',
+  'uniqlo.com', 'hm.com', 'cos.com', 'arket.com', 'asos.com',
+  'suitsupply.com', 'vince.com', 'theory.com', 'reiss.com', 'allsaints.com',
+  'rolex.com', 'omega.com', 'cartier.com', 'tiffany.com', 'pandora.com',
+  'rayban.com', 'oakley.com', 'warbyparker.com', 'lululemon.com', 'gymshark.com',
+  'newbalance.com', 'converse.com', 'vans.com', 'puma.com', 'asics.com',
+  'ralphlauren.com', 'tommyhilfiger.com', 'calvinklein.com', 'hugoboss.com', 'lacoste.com',
 ];
 
+function getBrandLogo(domain: string) {
+  return `https://cdn.brandfetch.io/${domain}/theme/dark/logo?c=1id3n10pdBTarCHI0db`;
+}
+
 function getRows(rowCount: number): string[][] {
-  const shuffled = [...brandNames].sort(() => Math.random() - 0.5);
+  const shuffled = [...brandDomains].sort(() => Math.random() - 0.5);
   const rows: string[][] = [];
   const perRow = Math.ceil(shuffled.length / rowCount);
   for (let i = 0; i < rowCount; i++) {
@@ -40,7 +45,7 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
   const [shaking, setShaking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [rows] = useState(() => getRows(8));
+  const [rows] = useState(() => getRows(12));
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -69,13 +74,18 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
             key={i}
             className="pw-marquee-row"
             style={{
-              animationDuration: `${30 + i * 5}s`,
+              animationDuration: `${25 + i * 4}s`,
               animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
             }}
           >
-            {/* Duplicate row for seamless loop */}
-            {[...row, ...row].map((name, j) => (
-              <span key={j} className="pw-brand-name">{name}</span>
+            {[...row, ...row].map((domain, j) => (
+              <img
+                key={j}
+                className="pw-marquee-logo"
+                src={getBrandLogo(domain)}
+                alt=""
+                loading="lazy"
+              />
             ))}
           </div>
         ))}
