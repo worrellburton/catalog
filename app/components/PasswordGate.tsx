@@ -1,57 +1,37 @@
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import CatalogLogo from './CatalogLogo';
 
 interface PasswordGateProps {
   onSubmit: (password: string) => boolean;
 }
 
-const brandDomains = [
-  'zara.com', 'nike.com', 'adidas.com', 'gucci.com', 'prada.com',
-  'dior.com', 'chanel.com', 'louisvuitton.com', 'balenciaga.com', 'versace.com',
-  'burberry.com', 'fendi.com', 'givenchy.com', 'valentino.com', 'saintlaurent.com',
-  'celine.com', 'loewe.com', 'bottegaveneta.com', 'diesel.com', 'acnestudios.com',
-  'stussy.com', 'supremenewyork.com', 'carhartt.com', 'patagonia.com', 'northface.com',
-  'uniqlo.com', 'hm.com', 'cos.com', 'arket.com', 'asos.com',
-  'suitsupply.com', 'vince.com', 'theory.com', 'reiss.com', 'allsaints.com',
-  'fujifilm.com', 'leica-camera.com', 'apple.com', 'sony.com', 'bose.com',
-  'rolex.com', 'omega.com', 'cartier.com', 'tiffany.com', 'pandora.com',
-  'rayban.com', 'oakley.com', 'warbyparker.com', 'lululemon.com', 'gymshark.com',
-  'newbalance.com', 'converse.com', 'vans.com', 'puma.com', 'asics.com',
-  'ralphlauren.com', 'tommyhilfiger.com', 'calvinklein.com', 'hugoboss.com', 'lacoste.com',
+const brandNames = [
+  'ZARA', 'NIKE', 'ADIDAS', 'GUCCI', 'PRADA',
+  'DIOR', 'CHANEL', 'LOUIS VUITTON', 'BALENCIAGA', 'VERSACE',
+  'BURBERRY', 'FENDI', 'GIVENCHY', 'VALENTINO', 'SAINT LAURENT',
+  'CELINE', 'LOEWE', 'BOTTEGA VENETA', 'DIESEL', 'ACNE STUDIOS',
+  'STÜSSY', 'SUPREME', 'CARHARTT', 'PATAGONIA', 'THE NORTH FACE',
+  'UNIQLO', 'H&M', 'COS', 'ARKET', 'ASOS',
+  'RALPH LAUREN', 'TOMMY HILFIGER', 'CALVIN KLEIN', 'HUGO BOSS', 'LACOSTE',
+  'ROLEX', 'OMEGA', 'CARTIER', 'TIFFANY & CO', 'RAY-BAN',
+  'NEW BALANCE', 'CONVERSE', 'VANS', 'PUMA', 'ASICS',
+  'LULULEMON', 'GYMSHARK', 'THEORY', 'REISS', 'ALLSAINTS',
 ];
 
-function getBrandLogo(domain: string) {
-  return `https://cdn.brandfetch.io/${domain}/theme/dark/logo?c=1id3n10pdBTarCHI0db`;
-}
-
-interface FloatingLogo {
-  domain: string;
-  x: number;
-  y: number;
-  size: number;
-  speed: number;
-  drift: number;
-  opacity: number;
-  delay: number;
-}
-
-function generateLogos(count: number): FloatingLogo[] {
-  const logos: FloatingLogo[] = [];
-  const shuffled = [...brandDomains].sort(() => Math.random() - 0.5);
-  for (let i = 0; i < count; i++) {
-    logos.push({
-      domain: shuffled[i % shuffled.length],
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 40 + Math.random() * 40,
-      speed: 18 + Math.random() * 30,
-      drift: -30 + Math.random() * 60,
-      opacity: 0.04 + Math.random() * 0.08,
-      delay: Math.random() * -40,
-    });
+function getRows(rowCount: number): string[][] {
+  const shuffled = [...brandNames].sort(() => Math.random() - 0.5);
+  const rows: string[][] = [];
+  const perRow = Math.ceil(shuffled.length / rowCount);
+  for (let i = 0; i < rowCount; i++) {
+    const start = (i * perRow) % shuffled.length;
+    const row: string[] = [];
+    for (let j = 0; j < perRow; j++) {
+      row.push(shuffled[(start + j) % shuffled.length]);
+    }
+    rows.push(row);
   }
-  return logos;
+  return rows;
 }
 
 export default function PasswordGate({ onSubmit }: PasswordGateProps) {
@@ -60,7 +40,7 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
   const [shaking, setShaking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const logos = useMemo(() => generateLogos(50), []);
+  const [rows] = useState(() => getRows(8));
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -83,28 +63,20 @@ export default function PasswordGate({ onSubmit }: PasswordGateProps) {
 
   return (
     <div className="password-gate">
-      <div className="pw-logos-bg" aria-hidden="true">
-        {logos.map((logo, i) => (
+      <div className="pw-marquee-bg" aria-hidden="true">
+        {rows.map((row, i) => (
           <div
             key={i}
-            className="pw-floating-logo"
+            className="pw-marquee-row"
             style={{
-              left: `${logo.x}%`,
-              width: logo.size * 1.8,
-              height: logo.size,
-              opacity: logo.opacity,
-              animationDuration: `${logo.speed}s`,
-              animationDelay: `${logo.delay}s`,
-              '--drift': `${logo.drift}px`,
-            } as React.CSSProperties}
+              animationDuration: `${30 + i * 5}s`,
+              animationDirection: i % 2 === 0 ? 'normal' : 'reverse',
+            }}
           >
-            <img
-              src={getBrandLogo(logo.domain)}
-              alt=""
-              width={logo.size}
-              height={logo.size}
-              loading="lazy"
-            />
+            {/* Duplicate row for seamless loop */}
+            {[...row, ...row].map((name, j) => (
+              <span key={j} className="pw-brand-name">{name}</span>
+            ))}
           </div>
         ))}
       </div>

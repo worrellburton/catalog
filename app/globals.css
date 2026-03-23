@@ -140,42 +140,41 @@ body {
   pointer-events: none;
 }
 
-/* Floating brand logos background */
-.pw-logos-bg {
+/* Scrolling brand names background */
+.pw-marquee-bg {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
 }
 
-.pw-floating-logo {
-  position: absolute;
-  bottom: -80px;
-  filter: none;
-  animation: pw-float-up linear infinite;
-  will-change: transform;
+.pw-marquee-row {
+  display: flex;
+  white-space: nowrap;
+  animation: pw-scroll-left linear infinite;
+  width: max-content;
 }
 
-.pw-floating-logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.pw-brand-name {
+  display: inline-block;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.07);
+  text-transform: uppercase;
+  font-family: inherit;
 }
 
-@keyframes pw-float-up {
+@keyframes pw-scroll-left {
   0% {
-    transform: translateY(0) translateX(0) rotate(0deg);
-    opacity: 0;
-  }
-  5% {
-    opacity: 1;
-  }
-  95% {
-    opacity: 1;
+    transform: translateX(0);
   }
   100% {
-    transform: translateY(calc(-100vh - 120px)) translateX(var(--drift, 0px)) rotate(15deg);
-    opacity: 0;
+    transform: translateX(-50%);
   }
 }
 
