@@ -4,7 +4,7 @@ A visual lookbook webapp for browsing fashion "looks" — short video clips pair
 
 ## Live Site
 
-https://rwb8771.github.io/catalogwebapp/
+https://worrellburton.github.io/catalog/
 
 ## Tech Stack
 
