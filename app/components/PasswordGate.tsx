@@ -22,7 +22,7 @@ const brandDomains = [
 ];
 
 function getBrandLogo(domain: string) {
-  return `https://cdn.brandfetch.io/${domain}/w/120/h/120/fallback/lettermark?c=1id3n10pdBTarCHI0db`;
+  return `https://cdn.brandfetch.io/${domain}/w/120/h/120?c=1id3n10pdBTarCHI0db`;
 }
 
 interface FloatingLogo {
