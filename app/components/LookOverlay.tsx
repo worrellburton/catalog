@@ -1,6 +1,7 @@
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { Look, creators, Product } from '~/data/looks';
+import { useEscapeKey } from '~/hooks/useEscapeKey';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -31,13 +32,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     setTouchStartY(e.touches[0].clientY);

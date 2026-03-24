@@ -102,20 +102,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
       if (value === 'bottoms') setBottomsExpanded(true);
     }
     onFiltersChange(updated);
-    const allActive: string[] = [];
-    Object.values(updated).forEach(arr => allActive.push(...arr));
-    if (allActive.length === 0) {
-      setDisplayName('Build Your Catalog');
-    } else {
-      const comboKey = [...allActive].sort().join('+');
-      let pool = catalogNames[comboKey];
-      if (!pool) {
-        const options: string[] = [];
-        allActive.forEach(v => { if (catalogNames[v]) options.push(...catalogNames[v]); });
-        pool = options.length > 0 ? options : ['The Custom Catalog'];
-      }
-      setDisplayName(pool[Math.floor(Math.random() * pool.length)]);
-    }
+    setDisplayName(getCatalogName(updated));
   }, [activeFilters, onFiltersChange, openSubPanel]);
 
   const isActive = (category: keyof ActiveFilters, value: string) => activeFilters[category].includes(value);
