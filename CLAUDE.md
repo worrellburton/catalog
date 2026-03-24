@@ -111,7 +111,7 @@ Single-page app with React state-driven views:
 
 The admin panel is a Remix-based internal dashboard for managing the catalog platform — creators, looks, products, brands, campaigns, moderation, and platform settings.
 
-- Route prefix: `app/routes/admin.*`
+- Route folder: `app/routes/admin/`
 - Layout shell: `app/routes/admin.tsx`
 - Auth: password-gated (access code `admin` — update this section when auth is implemented)
 
@@ -119,38 +119,38 @@ The admin panel is a Remix-based internal dashboard for managing the catalog pla
 
 | Route | Purpose |
 |---|---|
-| `admin._index.tsx` | Admin dashboard home |
-| `admin.looks.tsx` | Manage all looks |
-| `admin.incoming-looks.tsx` | Review & approve incoming looks |
-| `admin.creators.tsx` | List all creators |
-| `admin.creators.$name.tsx` | Individual creator profile & management |
-| `admin.brands.tsx` | Brand management |
-| `admin.products.tsx` | Product catalog management |
-| `admin.campaigns.tsx` | Campaign management |
-| `admin.categories.tsx` | Category & tag management |
-| `admin.users.tsx` | User management |
-| `admin.user.$name.tsx` | Individual user detail |
-| `admin.shoppers.tsx` | Shopper accounts list |
-| `admin.shoppers.$name.tsx` | Individual shopper profile |
-| `admin.shoppers-waitlist.tsx` | Shopper waitlist |
-| `admin.incoming-creators.tsx` | Creator applications / onboarding queue |
-| `admin.moderation.tsx` | Content moderation queue |
-| `admin.reports.tsx` | Reported content |
-| `admin.advertisements.tsx` | Ad management |
-| `admin.audiences.tsx` | Audience segmentation |
-| `admin.revenue.tsx` | Revenue overview |
-| `admin.earnings.tsx` | Creator earnings |
-| `admin.clickouts.tsx` | Clickout tracking & analytics |
-| `admin.activities.tsx` | Activity / audit log |
-| `admin.links.tsx` | Link management |
-| `admin.musics.tsx` | Music / audio management |
-| `admin.places.tsx` | Location / place tags |
-| `admin.signup-links.tsx` | Invite / signup link management |
-| `admin.search.tsx` | Admin search |
-| `admin.appearance.tsx` | Platform appearance settings |
-| `admin.settings.tsx` | General platform settings |
-| `admin.content.tsx` | Content management |
-| `admin.administrators.tsx` | Admin user management |
+| `admin/_index.tsx` | Admin dashboard home |
+| `admin/looks.tsx` | Manage all looks |
+| `admin/incoming-looks.tsx` | Review & approve incoming looks |
+| `admin/creators.tsx` | List all creators |
+| `admin/creators.$name.tsx` | Individual creator profile & management |
+| `admin/brands.tsx` | Brand management |
+| `admin/products.tsx` | Product catalog management |
+| `admin/campaigns.tsx` | Campaign management |
+| `admin/categories.tsx` | Category & tag management |
+| `admin/users.tsx` | User management |
+| `admin/user.$name.tsx` | Individual user detail |
+| `admin/shoppers.tsx` | Shopper accounts list |
+| `admin/shoppers.$name.tsx` | Individual shopper profile |
+| `admin/shoppers-waitlist.tsx` | Shopper waitlist |
+| `admin/incoming-creators.tsx` | Creator applications / onboarding queue |
+| `admin/moderation.tsx` | Content moderation queue |
+| `admin/reports.tsx` | Reported content |
+| `admin/advertisements.tsx` | Ad management |
+| `admin/audiences.tsx` | Audience segmentation |
+| `admin/revenue.tsx` | Revenue overview |
+| `admin/earnings.tsx` | Creator earnings |
+| `admin/clickouts.tsx` | Clickout tracking & analytics |
+| `admin/activities.tsx` | Activity / audit log |
+| `admin/links.tsx` | Link management |
+| `admin/musics.tsx` | Music / audio management |
+| `admin/places.tsx` | Location / place tags |
+| `admin/signup-links.tsx` | Invite / signup link management |
+| `admin/search.tsx` | Admin search |
+| `admin/appearance.tsx` | Platform appearance settings |
+| `admin/settings.tsx` | General platform settings |
+| `admin/content.tsx` | Content management |
+| `admin/administrators.tsx` | Admin user management |
 
 ## Key Patterns
 
@@ -168,7 +168,7 @@ The admin panel is a Remix-based internal dashboard for managing the catalog pla
 
 The partners portal is a self-service dashboard for brand partners to manage their storefront, products, campaigns, and analytics. It replaces the previous standalone React app at `/Users/samirmaikap/Sites/catalog-campaign` — use that codebase as the reference implementation for behaviour and API integration patterns.
 
-- Route prefix: `app/routes/partners.*`
+- Route folder: `app/routes/partners/`
 - Layout shell: `app/routes/partners.tsx`
 - Audience: external brand/partner users
 - Server: `/Users/samirmaikap/Sites/catalog-server` (Express + Sequelize + MySQL)
@@ -178,16 +178,16 @@ The partners portal is a self-service dashboard for brand partners to manage the
 
 | Route | Purpose |
 |---|---|
-| `partners._index.tsx` | Partners dashboard home (orders summary, analytics overview) |
-| `partners.store.tsx` | Brand storefront management (logo, background, Shopify connection) |
-| `partners.products.tsx` | Product listing & management (synced from Shopify) |
-| `partners.collections.tsx` | Collection / curated sets management |
-| `partners.campaigns.tsx` | Campaign creation & tracking |
-| `partners.orders.tsx` | Order management (Shopify orders) |
-| `partners.audience.tsx` | Audience insights |
-| `partners.growth.tsx` | Growth metrics & analytics (sales, impressions, clickouts, followers) |
-| `partners.creative.tsx` | Creative assets & look collaboration |
-| `partners.appearance.tsx` | Storefront appearance customisation |
+| `partners/_index.tsx` | Partners dashboard home (orders summary, analytics overview) |
+| `partners/store.tsx` | Brand storefront management (logo, background, Shopify connection) |
+| `partners/products.tsx` | Product listing & management (synced from Shopify) |
+| `partners/collections.tsx` | Collection / curated sets management |
+| `partners/campaigns.tsx` | Campaign creation & tracking |
+| `partners/orders.tsx` | Order management (Shopify orders) |
+| `partners/audience.tsx` | Audience insights |
+| `partners/growth.tsx` | Growth metrics & analytics (sales, impressions, clickouts, followers) |
+| `partners/creative.tsx` | Creative assets & look collaboration |
+| `partners/appearance.tsx` | Storefront appearance customisation |
 
 ## API Integration
 
