@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
@@ -56,6 +56,40 @@ export default function Home() {
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
+
+  // Read hash on mount for deep linking
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (hash === 'deck' || hash === 'decks') {
+      setView('deck-selector');
+    } else if (hash === 'deck/v6') {
+      setActiveDeck('v6');
+      setView('deck');
+    } else if (hash === 'deck/v5') {
+      setActiveDeck('v5');
+      setView('deck');
+    } else if (hash === 'app') {
+      setView('app');
+    } else if (hash === 'landing') {
+      setView('landing');
+    }
+  }, []);
+
+  // Sync hash when view changes
+  useEffect(() => {
+    let hash = '';
+    if (view === 'deck-selector') hash = 'deck';
+    else if (view === 'deck') hash = `deck/${activeDeck}`;
+    else if (view === 'app') hash = 'app';
+    else if (view === 'landing') hash = 'landing';
+    else if (view === 'locked') hash = '';
+
+    if (hash) {
+      window.history.replaceState(null, '', `#${hash}`);
+    } else {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [view, activeDeck]);
 
   const handlePasswordSubmit = useCallback((password: string): boolean => {
     if (password === 'awds') {
