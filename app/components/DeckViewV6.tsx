@@ -135,7 +135,6 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
             <img src={`${basePath}/app-preview-filter.png`} alt="Catalog filter view" className="deck-app-screenshot" />
           </div>
         </div>
-        <button className="deck-inline-cta" onClick={onSeeApp}>Try the live prototype &rarr;</button>
       </div>
 
       {/* Slide 6: Three-Sided Value */}
