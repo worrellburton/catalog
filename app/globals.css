@@ -615,10 +615,56 @@ body {
 }
 
 /* Deck V6: App preview — phone mockup */
+/* Solution slide two-column layout */
+.deck-slide-solution {
+  padding: 0 !important;
+}
+
+.deck-solution-layout {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  min-height: 100vh;
+  padding: 60px;
+  box-sizing: border-box;
+}
+
+.deck-solution-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.deck-solution-text .deck-label {
+  display: block;
+}
+
+.deck-solution-text h2 {
+  margin-top: 12px;
+}
+
+.deck-solution-text p {
+  margin-top: 16px;
+}
+
+.deck-solution-phone {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .deck-solution-layout {
+    flex-direction: column;
+    padding: 40px 24px;
+    gap: 32px;
+  }
+}
+
 .deck-app-preview {
   display: flex;
   margin-top: 24px;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .deck-app-frame {

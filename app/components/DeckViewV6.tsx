@@ -100,7 +100,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       <div className="deck-slide">
         <span className="deck-label">Intro</span>
         <h2>Creator content is the new storefront.</h2>
-        <p>Catalog is the platform where every creator&apos;s taste becomes a shoppable experience. Discovery, monetization, and attribution happen in one place, not scattered across a dozen tools. In a world where AI is commoditizing search and recommendation, Catalog bets on something algorithms can&apos;t replicate: human curation, personal style, and earned trust.</p>
+        <p>Catalog is the platform where every creator&apos;s taste becomes a shoppable experience. Discovery, monetization, and attribution happen in one place, not scattered across a dozen tools. AI powers the infrastructure — visual similarity, personalized recommendations, automated tagging — while creators provide the curation and trust that no algorithm can manufacture on its own.</p>
       </div>
 
       {/* Slide 3: The Problem */}
@@ -129,25 +129,29 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       {/* Slide 4: The Insight */}
       <div className="deck-slide">
         <span className="deck-label">The Insight</span>
-        <h2>Taste can&apos;t be automated.</h2>
-        <p>We watched creators monetize across Instagram, TikTok, LTK, ShopMy, and Amazon storefronts and saw the same pattern everywhere: audiences follow people for their taste, but the infrastructure to convert that trust into commerce is fragmented, under-monetized, and invisible to brands. The insight isn&apos;t that creators sell. Everyone knows that. The insight is that nobody has built the platform that treats a creator&apos;s curation as the storefront itself. In an era of AI-generated everything, human taste is the last authentic signal. Catalog is built on that conviction.</p>
+        <h2>Human taste, amplified by AI.</h2>
+        <p>We watched creators monetize across Instagram, TikTok, LTK, ShopMy, and Amazon storefronts and saw the same pattern everywhere: audiences follow people for their taste, but the infrastructure to convert that trust into commerce is fragmented, under-monetized, and invisible to brands. The insight isn&apos;t that creators sell. Everyone knows that. The insight is that nobody has built the platform that treats a creator&apos;s curation as the storefront itself — and then uses AI to make that storefront smarter. Vector-based visual similarity surfaces looks that match a shopper&apos;s taste. AI handles the heavy lifting; creators provide the signal.</p>
       </div>
 
       {/* Slide 5: The Solution */}
-      <div className="deck-slide">
-        <span className="deck-label">The Solution</span>
-        <h2>A living storefront for every creator.</h2>
-        <p>Catalog turns creator content into shoppable lookbooks. Short video clips paired with tagged products, browsable by style, occasion, and creator. The product is live and the V1 is built.</p>
-        <div className="deck-app-preview">
-          <div className="deck-app-frame">
-            <video
-              src={`${basePath}/Untitled.mp4`}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="deck-app-video"
-            />
+      <div className="deck-slide deck-slide-solution">
+        <div className="deck-solution-layout">
+          <div className="deck-solution-text">
+            <span className="deck-label">The Solution</span>
+            <h2>A living storefront for every creator.</h2>
+            <p>Catalog turns creator content into shoppable lookbooks. Short video clips paired with tagged products, browsable by style, occasion, and creator. The product is live and the V1 is built.</p>
+          </div>
+          <div className="deck-solution-phone">
+            <div className="deck-app-frame">
+              <video
+                src={`${basePath}/Untitled.mp4`}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="deck-app-video"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -311,8 +315,8 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       {/* Slide 10: Why Now */}
       <div className="deck-slide">
         <span className="deck-label">Why Now</span>
-        <h2>The anti-AI commerce moment.</h2>
-        <p>AI is commoditizing search, recommendation, and content creation. Every storefront will soon have AI-generated product descriptions, AI-curated collections, and AI-personalized feeds. In that world, human curation becomes the scarcest signal. Creator commerce is fragmenting across dozens of tools while brands are pulling back from awareness spend and demanding measurable ROI. Gen Z doesn&apos;t trust ads but does trust people. Catalog is built for exactly this moment: a human-first commerce platform in an increasingly automated digital environment.</p>
+        <h2>The infrastructure moment.</h2>
+        <p>Creator commerce is fragmenting across dozens of tools while brands are pulling back from awareness spend and demanding measurable ROI. Gen Z doesn&apos;t trust ads but does trust people. Meanwhile, AI has matured enough to power visual search, product matching, and personalized discovery at scale. Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that actually works for everyone involved.</p>
       </div>
 
       {/* Slide 11: Traction */}
