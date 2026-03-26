@@ -615,6 +615,57 @@ body {
 }
 
 /* Deck V6: App preview — phone mockup */
+/* Insight slide — video grid background */
+.deck-slide-insight {
+  position: relative;
+  overflow: hidden;
+}
+
+.deck-insight-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  opacity: 0.12;
+}
+
+.deck-insight-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 6px;
+}
+
+.deck-insight-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.85) 70%);
+  pointer-events: none;
+}
+
+.deck-insight-content {
+  position: relative;
+  z-index: 1;
+}
+
+.light-mode .deck-insight-grid {
+  opacity: 0.08;
+}
+
+.light-mode .deck-insight-overlay {
+  background: radial-gradient(ellipse at center, rgba(250,250,250,0.4) 0%, rgba(250,250,250,0.85) 70%);
+}
+
+@media (max-width: 768px) {
+  .deck-insight-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+  }
+}
+
 /* Solution slide two-column layout */
 .deck-slide-solution {
   padding: 0 !important;
