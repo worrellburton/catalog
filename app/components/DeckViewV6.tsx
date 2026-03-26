@@ -126,13 +126,14 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
         <p>Catalog turns creator content into shoppable lookbooks. Short video clips paired with tagged products, browsable by style, occasion, and creator. The product is live and the V1 is built.</p>
         <div className="deck-app-preview">
           <div className="deck-app-frame">
-            <img src={`${basePath}/app-preview-grid.png`} alt="Catalog grid view" className="deck-app-screenshot" />
-          </div>
-          <div className="deck-app-frame">
-            <img src={`${basePath}/app-preview-detail.png`} alt="Catalog look detail" className="deck-app-screenshot" />
-          </div>
-          <div className="deck-app-frame">
-            <img src={`${basePath}/app-preview-filter.png`} alt="Catalog filter view" className="deck-app-screenshot" />
+            <video
+              src={`${basePath}/Untitled.mp4`}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="deck-app-video"
+            />
           </div>
         </div>
       </div>
