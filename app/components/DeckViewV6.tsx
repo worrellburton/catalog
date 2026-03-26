@@ -79,7 +79,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       {/* Slide 1: Cover */}
       <div className="deck-slide deck-cover">
         <CatalogLogo className="deck-logo" />
-        <p className="deck-subtitle">Investor Deck V.6</p>
+        <p className="deck-subtitle">Investor Deck V.6 for Alex and Dan</p>
       </div>
 
       {/* Slide 2: Intro */}
