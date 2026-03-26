@@ -16,10 +16,15 @@ export default function DeckSelector({ onSelectDeck, onBack }: DeckSelectorProps
         <CatalogLogo className="deck-selector-logo" />
         <p className="deck-selector-subtitle">Select a deck</p>
         <div className="deck-selector-grid">
-          <button className="deck-selector-card" onClick={() => onSelectDeck('v5')}>
+          <button className="deck-selector-card" onClick={() => onSelectDeck('v6')}>
+            <span className="deck-selector-version">V.6</span>
+            <span className="deck-selector-label">Deck v.6</span>
+            <span className="deck-selector-desc">Latest investor deck</span>
+          </button>
+          <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v5')}>
             <span className="deck-selector-version">V.5</span>
             <span className="deck-selector-label">Deck v.5</span>
-            <span className="deck-selector-desc">Investor deck for Alex and Dan</span>
+            <span className="deck-selector-desc">Previous version</span>
           </button>
         </div>
       </div>

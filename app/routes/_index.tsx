@@ -10,6 +10,7 @@ import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
 import InAppBrowser from '~/components/InAppBrowser';
 import DeckView from '~/components/DeckView';
+import DeckViewV6 from '~/components/DeckViewV6';
 import DeckSelector from '~/components/DeckSelector';
 import CatalogLogo from '~/components/CatalogLogo';
 import { Look } from '~/data/looks';
@@ -48,6 +49,7 @@ export default function Home() {
 
   const [isLightMode, setIsLightMode] = useState(false);
   const [fromDeck, setFromDeck] = useState(false);
+  const [activeDeck, setActiveDeck] = useState<'v5' | 'v6'>('v6');
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(() => 1 + Math.floor(Math.random() * 3));
   const [catalogName, setCatalogName] = useState(getRandomCatalogName);
@@ -104,7 +106,8 @@ export default function Home() {
     setView('landing');
   }, []);
 
-  const handleSelectDeck = useCallback((_deckId: string) => {
+  const handleSelectDeck = useCallback((deckId: string) => {
+    setActiveDeck(deckId as 'v5' | 'v6');
     setView('deck');
   }, []);
 
@@ -167,8 +170,18 @@ export default function Home() {
         />
       )}
 
-      {view === 'deck' && (
+      {view === 'deck' && activeDeck === 'v5' && (
         <DeckView
+          onSeeApp={handleDeckToApp}
+          onVisitWebsite={handleDeckToLanding}
+          onBack={handleBackToDeckSelector}
+          isLightMode={isLightMode}
+          onToggleTheme={toggleTheme}
+        />
+      )}
+
+      {view === 'deck' && activeDeck === 'v6' && (
+        <DeckViewV6
           onSeeApp={handleDeckToApp}
           onVisitWebsite={handleDeckToLanding}
           onBack={handleBackToDeckSelector}

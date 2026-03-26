@@ -534,6 +534,89 @@ body {
   color: rgba(0, 0, 0, 0.35);
 }
 
+.deck-selector-card-muted {
+  opacity: 0.5;
+}
+
+.deck-selector-card-muted:hover {
+  opacity: 0.8;
+}
+
+/* Deck V6: App preview screenshots */
+.deck-app-preview {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.deck-app-frame {
+  width: 180px;
+  height: 320px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  flex-shrink: 0;
+}
+
+.deck-app-screenshot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.deck-inline-cta {
+  margin-top: 20px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+  padding: 10px 28px;
+  border-radius: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.deck-inline-cta:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.light-mode .deck-app-frame {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .deck-inline-cta {
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .deck-inline-cta:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+  color: #1a1a1a;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 768px) {
+  .deck-app-preview {
+    gap: 10px;
+  }
+
+  .deck-app-frame {
+    width: 120px;
+    height: 213px;
+    border-radius: 12px;
+  }
+}
+
 /* Splash Screen */
 .splash-screen {
   position: fixed;
