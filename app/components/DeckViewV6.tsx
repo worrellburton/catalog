@@ -129,7 +129,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       {/* Slide 4: The Insight */}
       <div className="deck-slide deck-slide-insight">
         <div className="deck-insight-grid" aria-hidden="true">
-          {Array.from({ length: 12 }).map((_, i) => (
+          {Array.from({ length: 24 }).map((_, i) => (
             <video
               key={i}
               src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
