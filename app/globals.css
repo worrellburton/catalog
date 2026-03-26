@@ -535,68 +535,21 @@ body {
   color: rgba(0, 0, 0, 0.35);
 }
 
-/* Catalog flywheel (Shopify-style) — two-column layout */
+/* Catalog flywheel (Shopify-style) */
 .catalog-flywheel {
   display: flex;
-  align-items: center;
-  gap: 48px;
+  justify-content: center;
   margin-top: 12px;
 }
 
-.flywheel-desc {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  flex: 1;
-  min-width: 0;
-}
-
-.flywheel-desc-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.flywheel-desc-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 5px;
-}
-
-.flywheel-desc-item strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 4px;
-}
-
-.flywheel-desc-item p {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.4);
-  line-height: 1.5;
-  margin: 0;
-}
-
 .catalog-flywheel-svg {
-  width: 300px;
-  height: 300px;
+  width: 320px;
+  height: 320px;
   color: #fff;
-  flex-shrink: 0;
 }
 
 .light-mode .catalog-flywheel-svg {
   color: #1a1a1a;
-}
-
-.light-mode .flywheel-desc-item strong {
-  color: #1a1a1a;
-}
-
-.light-mode .flywheel-desc-item p {
-  color: rgba(0, 0, 0, 0.4);
 }
 
 .deck-math-intro {
@@ -617,11 +570,6 @@ body {
 }
 
 @media (max-width: 768px) {
-  .catalog-flywheel {
-    flex-direction: column;
-    gap: 24px;
-  }
-
   .catalog-flywheel-svg {
     width: 260px;
     height: 260px;

@@ -25,11 +25,24 @@ const DeckView: React.FC<DeckViewProps> = ({
 
     const slides = container.querySelectorAll('.deck-slide');
 
+    const hash = window.location.hash.replace('#', '');
+    const slideMatch = hash.match(/^deck\/v5\/(\d+)$/);
+    if (slideMatch) {
+      const idx = parseInt(slideMatch[1], 10) - 1;
+      if (idx >= 0 && idx < slides.length) {
+        slides[idx].scrollIntoView();
+      }
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add('visible');
+            const idx = Array.from(slides).indexOf(entry.target);
+            if (idx >= 0) {
+              window.history.replaceState(null, '', `#deck/v5/${idx + 1}`);
+            }
           } else {
             entry.target.classList.remove('visible');
           }
@@ -37,7 +50,7 @@ const DeckView: React.FC<DeckViewProps> = ({
       },
       {
         root: container,
-        threshold: 0.15,
+        threshold: 0.5,
       }
     );
 

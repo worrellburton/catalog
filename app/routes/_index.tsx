@@ -62,10 +62,10 @@ export default function Home() {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'deck' || hash === 'decks') {
       setView('deck-selector');
-    } else if (hash === 'deck/v6') {
+    } else if (hash === 'deck/v6' || hash.startsWith('deck/v6/')) {
       setActiveDeck('v6');
       setView('deck');
-    } else if (hash === 'deck/v5') {
+    } else if (hash === 'deck/v5' || hash.startsWith('deck/v5/')) {
       setActiveDeck('v5');
       setView('deck');
     } else if (hash === 'app') {
