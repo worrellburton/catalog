@@ -34,11 +34,6 @@ export default function DeckSelector({ onSelectDeck, onBack }: DeckSelectorProps
               <li>The Ask</li>
             </ol>
           </button>
-          <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v5')}>
-            <span className="deck-selector-version">V.5</span>
-            <span className="deck-selector-label">Deck v.5</span>
-            <span className="deck-selector-desc">Previous version</span>
-          </button>
         </div>
       </div>
     </div>
