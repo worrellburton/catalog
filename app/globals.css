@@ -628,7 +628,7 @@ body {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 4px;
-  opacity: 0.12;
+  opacity: 0.35;
 }
 
 .deck-insight-video {
@@ -642,7 +642,7 @@ body {
 .deck-insight-overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.85) 70%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 75%);
   pointer-events: none;
 }
 

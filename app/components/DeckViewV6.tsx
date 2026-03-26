@@ -145,7 +145,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
         <div className="deck-insight-content">
           <span className="deck-label">The Insight</span>
           <h2>Human taste, amplified by AI.</h2>
-          <p>We watched creators monetize across Instagram, TikTok, LTK, ShopMy, and Amazon storefronts and saw the same pattern everywhere: audiences follow people for their taste, but the infrastructure to convert that trust into commerce is fragmented, under-monetized, and invisible to brands. The insight isn&apos;t that creators sell. Everyone knows that. The insight is that nobody has built the platform that treats a creator&apos;s curation as the storefront itself — and then uses AI to make that storefront smarter. Vector-based visual similarity surfaces looks that match a shopper&apos;s taste. AI handles the heavy lifting; creators provide the signal.</p>
+          <p>Creators drive purchases but can&apos;t capture the value. Nobody has built the platform that treats curation as the storefront itself — and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators provide the signal.</p>
         </div>
       </div>
 
