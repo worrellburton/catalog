@@ -157,16 +157,15 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
             <h2>A living storefront for every creator.</h2>
             <p>Catalog turns creator content into shoppable lookbooks. Short video clips paired with tagged products, browsable by style, occasion, and creator. The product is live and the V1 is built.</p>
           </div>
-          <div className="deck-solution-phone">
-            <div className="deck-app-frame">
-              <video
-                src={`${basePath}/Untitled.mp4`}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="deck-app-video"
-              />
+          <div className="deck-solution-phones">
+            <div className="deck-app-frame deck-phone-side">
+              <video src={`${basePath}/girl2.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
+            </div>
+            <div className="deck-app-frame deck-phone-center">
+              <video src={`${basePath}/Untitled.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
+            </div>
+            <div className="deck-app-frame deck-phone-side">
+              <video src={`${basePath}/guy.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
             </div>
           </div>
         </div>

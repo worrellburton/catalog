@@ -697,18 +697,40 @@ body {
   margin-top: 16px;
 }
 
-.deck-solution-phone {
+.deck-solution-phones {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 16px;
+}
+
+.deck-phone-center {
+  z-index: 2;
+}
+
+.deck-phone-side {
+  width: 170px !important;
+  height: 340px !important;
+  opacity: 0.7;
+  transform: scale(0.9);
+  border-radius: 30px !important;
 }
 
 @media (max-width: 768px) {
+  .deck-solution-phones {
+    gap: 8px;
+  }
+
+  .deck-phone-side {
+    width: 100px !important;
+    height: 200px !important;
+    border-radius: 20px !important;
+  }
+
   .deck-solution-layout {
     flex-direction: column;
     padding: 40px 24px;
-    gap: 32px;
+    gap: 24px;
   }
 }
 
