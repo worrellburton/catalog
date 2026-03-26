@@ -443,9 +443,10 @@ body {
 
 .deck-selector-grid {
   display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 16px;
   justify-content: center;
+  align-items: center;
 }
 
 .deck-selector-card {
@@ -454,7 +455,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 40px 48px;
-  min-width: 200px;
+  width: 320px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
