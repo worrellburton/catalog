@@ -20,19 +20,11 @@ export default function DeckSelector({ onSelectDeck, onBack }: DeckSelectorProps
             <span className="deck-selector-version">V.6</span>
             <span className="deck-selector-label">Deck v.6</span>
             <span className="deck-selector-desc">Latest investor deck</span>
-            <ol className="deck-selector-slides">
-              <li>Intro</li>
-              <li>The Problem</li>
-              <li>The Insight</li>
-              <li>The Solution</li>
-              <li>Three-Sided Value</li>
-              <li>Market Opportunity</li>
-              <li>The Math</li>
-              <li>Flywheel</li>
-              <li>Why Now</li>
-              <li>Traction</li>
-              <li>The Ask</li>
-            </ol>
+          </button>
+          <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v5')}>
+            <span className="deck-selector-version">V.5</span>
+            <span className="deck-selector-label">Deck v.5</span>
+            <span className="deck-selector-desc">Previous version</span>
           </button>
         </div>
       </div>
