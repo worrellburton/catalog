@@ -384,6 +384,156 @@ body {
   transition: opacity 0.2s;
 }
 
+/* Deck Selector */
+.deck-selector {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deck-selector-back {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  z-index: 360;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.deck-selector-back:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.deck-selector-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.deck-selector-logo {
+  height: 40px;
+  width: auto;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.deck-selector-subtitle {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+.deck-selector-grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.deck-selector-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 48px;
+  min-width: 200px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #fff;
+  font-family: inherit;
+}
+
+.deck-selector-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.deck-selector-version {
+  font-size: 32px;
+  font-weight: 200;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.deck-selector-label {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.deck-selector-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.light-mode .deck-selector {
+  background: #fafafa;
+}
+
+.light-mode .deck-selector-back {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .deck-selector-back:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-logo {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-subtitle {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.light-mode .deck-selector-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .deck-selector-version {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .deck-selector-desc {
+  color: rgba(0, 0, 0, 0.35);
+}
+
 /* Splash Screen */
 .splash-screen {
   position: fixed;
@@ -1121,6 +1271,33 @@ body {
 
 .light-mode .flywheel-orbit {
   stroke: rgba(22, 163, 74, 0.3);
+}
+
+/* Deck back button */
+.deck-back-btn {
+  position: fixed;
+  top: 20px;
+  left: 24px;
+  z-index: 360;
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.deck-back-btn:hover {
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.light-mode .deck-back-btn {
+  color: #1a1a1a;
 }
 
 /* Deck theme toggle */

@@ -5,6 +5,7 @@ import CatalogLogo from './CatalogLogo';
 interface DeckViewProps {
   onSeeApp: () => void;
   onVisitWebsite: () => void;
+  onBack: () => void;
   isLightMode: boolean;
   onToggleTheme: () => void;
 }
@@ -12,6 +13,7 @@ interface DeckViewProps {
 const DeckView: React.FC<DeckViewProps> = ({
   onSeeApp,
   onVisitWebsite,
+  onBack,
   isLightMode,
   onToggleTheme,
 }) => {
@@ -48,6 +50,10 @@ const DeckView: React.FC<DeckViewProps> = ({
 
   return (
     <div className="deck-view active" ref={containerRef}>
+      {/* Back to deck selector */}
+      <button className="deck-back-btn" onClick={onBack} aria-label="Back to decks">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
       {/* Theme toggle */}
       <button className="deck-theme-toggle" onClick={onToggleTheme}>
         {isLightMode ? (

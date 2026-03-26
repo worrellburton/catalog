@@ -10,12 +10,13 @@ import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
 import InAppBrowser from '~/components/InAppBrowser';
 import DeckView from '~/components/DeckView';
+import DeckSelector from '~/components/DeckSelector';
 import CatalogLogo from '~/components/CatalogLogo';
 import { Look } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { catalogNames } from '~/data/catalogNames';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck';
+type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck-selector' | 'deck';
 
 function getRandomCatalogName(query?: string): string {
   if (query && query.trim()) {
@@ -60,7 +61,7 @@ export default function Home() {
       return true;
     }
     if (password === 'deck') {
-      setView('deck');
+      setView('deck-selector');
       return true;
     }
     if (password === '321') {
@@ -103,9 +104,17 @@ export default function Home() {
     setView('landing');
   }, []);
 
+  const handleSelectDeck = useCallback((_deckId: string) => {
+    setView('deck');
+  }, []);
+
+  const handleBackToDeckSelector = useCallback(() => {
+    setView('deck-selector');
+  }, []);
+
   const handleBackToDeck = useCallback(() => {
     setFromDeck(false);
-    setView('deck');
+    setView('deck-selector');
   }, []);
 
   const handleOpenLook = useCallback((look: Look) => {
@@ -151,10 +160,18 @@ export default function Home() {
         <LandingPage onStartBrowsing={handleLandingToApp} />
       )}
 
+      {view === 'deck-selector' && (
+        <DeckSelector
+          onSelectDeck={handleSelectDeck}
+          onBack={() => setView('locked')}
+        />
+      )}
+
       {view === 'deck' && (
         <DeckView
           onSeeApp={handleDeckToApp}
           onVisitWebsite={handleDeckToLanding}
+          onBack={handleBackToDeckSelector}
           isLightMode={isLightMode}
           onToggleTheme={toggleTheme}
         />
