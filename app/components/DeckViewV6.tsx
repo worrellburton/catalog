@@ -174,7 +174,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       {/* Slide 6: Three-Sided Value */}
       <div className="deck-slide">
         <span className="deck-label">Three-Sided Value</span>
-        <h2>When every side wins,<br />the flywheel spins.</h2>
+        <h2>Everyone wins.</h2>
         <div className="deck-steps">
           <div className="deck-step">
             <svg className="deck-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>

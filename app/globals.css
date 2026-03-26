@@ -1062,7 +1062,9 @@ body {
   margin-bottom: 28px;
 }
 
-.deck-slide > p {
+.deck-slide > p,
+.deck-insight-content > p,
+.deck-solution-text > p {
   font-size: clamp(15px, 1.6vw, 19px);
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.5);
@@ -4268,6 +4270,8 @@ header {
 }
 
 .light-mode .deck-slide > p,
+.light-mode .deck-insight-content > p,
+.light-mode .deck-solution-text > p,
 .light-mode .deck-step p,
 .light-mode .deck-note {
   color: rgba(0, 0, 0, 0.5);
