@@ -2738,27 +2738,27 @@ header {
 @keyframes glowPulse {
   0%, 100% {
     box-shadow:
-      0 0 12px rgba(120, 140, 255, 0.25),
-      0 0 40px rgba(120, 140, 255, 0.08),
+      0 0 12px rgba(255, 255, 255, 0.08),
+      0 0 40px rgba(255, 255, 255, 0.03),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   50% {
     box-shadow:
-      0 0 20px rgba(140, 120, 255, 0.4),
-      0 0 60px rgba(140, 120, 255, 0.12),
+      0 0 20px rgba(255, 255, 255, 0.15),
+      0 0 60px rgba(255, 255, 255, 0.05),
       inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 }
 
 .bottom-search-input {
   width: 100%;
-  padding: 14px 18px;
+  padding: 14px 24px;
   font-size: 15px;
   font-family: inherit;
   font-weight: 400;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+  border-radius: 50px;
   color: #fff;
   outline: none;
   animation: glowPulse 3s ease-in-out infinite;
@@ -2766,7 +2766,7 @@ header {
 }
 
 .bottom-search-input:focus {
-  border-color: rgba(140, 120, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
   animation: glowPulse 2s ease-in-out infinite;
 }
 
@@ -3286,13 +3286,13 @@ header {
 @keyframes glowPulseLight {
   0%, 100% {
     box-shadow:
-      0 0 12px rgba(100, 120, 255, 0.15),
-      0 0 40px rgba(100, 120, 255, 0.05);
+      0 0 12px rgba(0, 0, 0, 0.06),
+      0 0 40px rgba(0, 0, 0, 0.02);
   }
   50% {
     box-shadow:
-      0 0 20px rgba(100, 120, 255, 0.25),
-      0 0 60px rgba(100, 120, 255, 0.08);
+      0 0 20px rgba(0, 0, 0, 0.1),
+      0 0 60px rgba(0, 0, 0, 0.04);
   }
 }
 
