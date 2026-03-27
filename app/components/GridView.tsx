@@ -1,5 +1,5 @@
 
-import { useMemo, useRef, useCallback, useEffect, useState, Fragment } from 'react';
+import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import { looks, creators, Look } from '~/data/looks';
 import LookCard from './LookCard';
 
@@ -85,17 +85,20 @@ function ParticleField({ isLightMode }: { isLightMode: boolean }) {
         ctx!.fill();
       }
 
-      // Draw connections between close particles
+      // Draw connections between close particles (squared distance to avoid sqrt)
+      const maxDist = 100;
+      const maxDistSq = maxDist * maxDist;
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 100) {
+          const distSq = dx * dx + dy * dy;
+          if (distSq < maxDistSq) {
+            const dist = Math.sqrt(distSq);
             ctx!.beginPath();
             ctx!.moveTo(particles[i].x, particles[i].y);
             ctx!.lineTo(particles[j].x, particles[j].y);
-            ctx!.strokeStyle = `rgba(${baseColor}, ${0.04 * (1 - dist / 100)})`;
+            ctx!.strokeStyle = `rgba(${baseColor}, ${0.04 * (1 - dist / maxDist)})`;
             ctx!.lineWidth = 0.5;
             ctx!.stroke();
           }

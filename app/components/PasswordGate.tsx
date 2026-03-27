@@ -33,7 +33,11 @@ function getBrandLogo(domain: string) {
 }
 
 function getRows(rowCount: number): string[][] {
-  const shuffled = [...brandDomains].sort(() => Math.random() - 0.5);
+  const shuffled = [...brandDomains];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   const rows: string[][] = [];
   const perRow = Math.ceil(shuffled.length / rowCount);
   for (let i = 0; i < rowCount; i++) {

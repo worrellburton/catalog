@@ -1,6 +1,7 @@
 
-import { useEffect, useMemo } from 'react';
-import { looks, creators, Look } from '~/data/looks';
+import { useMemo } from 'react';
+import { looks, Look } from '~/data/looks';
+import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 
 interface CreatorPageProps {
@@ -12,13 +13,7 @@ interface CreatorPageProps {
 export default function CreatorPage({ creatorName, onClose, onOpenLook }: CreatorPageProps) {
   const creatorLooks = useMemo(() => looks.filter(l => l.creator === creatorName), [creatorName]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <div className="creator-page">

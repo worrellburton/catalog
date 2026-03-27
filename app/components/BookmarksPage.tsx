@@ -1,6 +1,7 @@
 
-import { useEffect, useCallback } from 'react';
-import { looks, creators, Look, Product } from '~/data/looks';
+import { useCallback } from 'react';
+import { looks, Look, Product } from '~/data/looks';
+import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 
 interface BookmarksInterface {
@@ -22,19 +23,13 @@ interface BookmarksPageProps {
 export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser }: BookmarksPageProps) {
   const savedLooks = looks.filter(l => bookmarks.bookmarkedLooks.includes(l.id));
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const handleOpenLook = useCallback((look: Look) => {
     onOpenLook(look);
   }, [onOpenLook]);
 
-  const handleOpenCreator = useCallback(() => {}, []);
+  const noop = useCallback(() => {}, []);
 
   return (
     <div className="bookmarks-page">
@@ -60,7 +55,7 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
                   look={look}
                   className="look-card loaded"
                   onOpenLook={handleOpenLook}
-                  onOpenCreator={handleOpenCreator}
+                  onOpenCreator={noop}
                 />
                 <button
                   className="bookmarks-card-badge"

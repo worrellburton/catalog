@@ -384,61 +384,80 @@ body {
   transition: opacity 0.2s;
 }
 
-/* Framework Selector */
-.framework-selector {
+/* Deck Selector */
+.deck-selector {
   position: fixed;
   inset: 0;
-  z-index: 500;
+  z-index: 350;
   background: #000;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.4s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.deck-selector-back {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  z-index: 360;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.fw-content {
+.deck-selector-back:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.deck-selector-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 32px;
+  gap: 12px;
 }
 
-.fw-logo {
+.deck-selector-logo {
   height: 40px;
   width: auto;
   color: #fff;
   margin-bottom: 8px;
 }
 
-.fw-subtitle {
+.deck-selector-subtitle {
   font-size: 13px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.3);
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  margin-bottom: 32px;
 }
 
-.fw-grid {
+.deck-selector-grid {
   display: flex;
-  gap: 20px;
-  padding: 0 20px;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
 }
 
-.fw-card {
+.deck-selector-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 32px 28px;
-  width: 220px;
+  padding: 40px 48px;
+  width: 320px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -446,49 +465,358 @@ body {
   font-family: inherit;
 }
 
-.fw-card:hover {
+.deck-selector-card:hover {
   background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-4px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.fw-card-selected {
-  transform: scale(0.95);
-  opacity: 0.7;
+.deck-selector-version {
+  font-size: 32px;
+  font-weight: 200;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.fw-icon {
-  font-size: 36px;
-  line-height: 1;
-}
-
-.fw-name {
-  font-size: 18px;
+.deck-selector-label {
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.fw-desc {
+.deck-selector-desc {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.35);
   text-align: center;
   line-height: 1.4;
 }
 
-.fw-tech {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.25);
-  letter-spacing: 0.05em;
-  text-align: center;
+.light-mode .deck-selector {
+  background: #fafafa;
+}
+
+.light-mode .deck-selector-back {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .deck-selector-back:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-logo {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-subtitle {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.light-mode .deck-selector-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+
+.light-mode .deck-selector-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .deck-selector-version {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .deck-selector-desc {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* Catalog flywheel (Shopify-style) */
+.catalog-flywheel {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.catalog-flywheel-svg {
+  width: 320px;
+  height: 320px;
+  color: #fff;
+}
+
+.light-mode .catalog-flywheel-svg {
+  color: #1a1a1a;
+}
+
+.deck-math-intro {
+  margin-bottom: 12px !important;
+  margin-top: 0 !important;
+}
+
+/* Three-Sided Value icons */
+.deck-step-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.light-mode .deck-step-icon {
+  color: rgba(0, 0, 0, 0.35);
 }
 
 @media (max-width: 768px) {
-  .fw-grid {
-    flex-direction: column;
-    align-items: center;
-  }
-  .fw-card {
+  .catalog-flywheel-svg {
     width: 260px;
+    height: 260px;
+  }
+}
+
+.deck-selector-slides {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.deck-selector-slides li {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.03em;
+  text-align: left;
+  padding: 3px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.deck-selector-slides li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.light-mode .deck-selector-slides li {
+  color: rgba(0, 0, 0, 0.25);
+  border-color: rgba(0, 0, 0, 0.04);
+}
+
+.deck-selector-card-muted {
+  opacity: 0.5;
+}
+
+.deck-selector-card-muted:hover {
+  opacity: 0.8;
+}
+
+/* Deck V6: App preview — phone mockup */
+/* Insight slide — video grid background */
+.deck-slide-insight {
+  position: relative;
+  overflow: hidden;
+}
+
+.deck-insight-grid {
+  position: absolute;
+  inset: -50% 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 33vh;
+  gap: 4px;
+  opacity: 0.35;
+  animation: insightScroll 30s linear infinite;
+}
+
+@keyframes insightScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+.deck-insight-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 6px;
+}
+
+.deck-insight-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 75%);
+  pointer-events: none;
+}
+
+.deck-insight-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.deck-insight-content > p {
+  max-width: 680px;
+}
+
+.light-mode .deck-insight-grid {
+  opacity: 0.08;
+}
+
+.light-mode .deck-insight-overlay {
+  background: radial-gradient(ellipse at center, rgba(250,250,250,0.4) 0%, rgba(250,250,250,0.85) 70%);
+}
+
+@media (max-width: 768px) {
+  .deck-insight-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+  }
+}
+
+/* Solution slide two-column layout */
+.deck-slide-solution {
+  padding: 0 !important;
+}
+
+.deck-solution-layout {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  min-height: 100vh;
+  padding: 60px;
+  box-sizing: border-box;
+}
+
+.deck-solution-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.deck-solution-text .deck-label {
+  display: block;
+}
+
+.deck-solution-text h2 {
+  margin-top: 12px;
+}
+
+.deck-solution-text p {
+  margin-top: 16px;
+}
+
+.deck-solution-phones {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.deck-phone-center {
+  z-index: 2;
+}
+
+.deck-phone-side {
+  width: 170px !important;
+  height: 340px !important;
+  opacity: 0.7;
+  transform: scale(0.9);
+  border-radius: 30px !important;
+}
+
+@media (max-width: 768px) {
+  .deck-solution-phones {
+    gap: 8px;
+  }
+
+  .deck-phone-side {
+    width: 100px !important;
+    height: 200px !important;
+    border-radius: 20px !important;
+  }
+
+  .deck-solution-layout {
+    flex-direction: column;
+    padding: 40px 24px;
+    gap: 24px;
+  }
+}
+
+.deck-app-preview {
+  display: flex;
+  margin-top: 24px;
+  justify-content: center;
+}
+
+.deck-app-frame {
+  position: relative;
+  width: 220px;
+  height: 440px;
+  border-radius: 36px;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  background: #000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  animation: phoneFloat 4s ease-in-out infinite;
+}
+
+.deck-app-frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 20px;
+  background: #000;
+  border-radius: 0 0 16px 16px;
+  z-index: 2;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+}
+
+@keyframes phoneFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.deck-app-screenshot,
+.deck-app-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.light-mode .deck-app-frame {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: #f5f5f5;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .deck-app-frame::before {
+  background: #f5f5f5;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .deck-app-frame {
+    width: 160px;
+    height: 320px;
+    border-radius: 28px;
+  }
+
+  .deck-app-frame::before {
+    width: 60px;
+    height: 16px;
+    border-radius: 0 0 12px 12px;
   }
 }
 
@@ -748,7 +1076,9 @@ body {
   margin-bottom: 28px;
 }
 
-.deck-slide > p {
+.deck-slide > p,
+.deck-insight-content > p,
+.deck-solution-text > p {
   font-size: clamp(15px, 1.6vw, 19px);
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.5);
@@ -909,14 +1239,14 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
-  margin-top: 16px;
+  margin-top: 8px;
   max-width: 720px;
   border-radius: 16px;
   overflow: hidden;
 }
 
 .deck-compare-col {
-  padding: 32px;
+  padding: 24px;
   background: rgba(255, 255, 255, 0.02);
   border: none;
   border-radius: 0;
@@ -927,10 +1257,10 @@ body {
 }
 
 .compare-header {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: 28px;
-  padding-bottom: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -946,7 +1276,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0;
+  padding: 10px 0;
 }
 
 .compare-label {
@@ -1229,6 +1559,33 @@ body {
 
 .light-mode .flywheel-orbit {
   stroke: rgba(22, 163, 74, 0.3);
+}
+
+/* Deck back button */
+.deck-back-btn {
+  position: fixed;
+  top: 20px;
+  left: 24px;
+  z-index: 360;
+  background: rgba(128, 128, 128, 0.15);
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.deck-back-btn:hover {
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.light-mode .deck-back-btn {
+  color: #1a1a1a;
 }
 
 /* Deck theme toggle */
@@ -2381,27 +2738,27 @@ header {
 @keyframes glowPulse {
   0%, 100% {
     box-shadow:
-      0 0 12px rgba(120, 140, 255, 0.25),
-      0 0 40px rgba(120, 140, 255, 0.08),
+      0 0 12px rgba(255, 255, 255, 0.08),
+      0 0 40px rgba(255, 255, 255, 0.03),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   50% {
     box-shadow:
-      0 0 20px rgba(140, 120, 255, 0.4),
-      0 0 60px rgba(140, 120, 255, 0.12),
+      0 0 20px rgba(255, 255, 255, 0.15),
+      0 0 60px rgba(255, 255, 255, 0.05),
       inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 }
 
 .bottom-search-input {
   width: 100%;
-  padding: 14px 18px;
+  padding: 14px 24px;
   font-size: 15px;
   font-family: inherit;
   font-weight: 400;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+  border-radius: 50px;
   color: #fff;
   outline: none;
   animation: glowPulse 3s ease-in-out infinite;
@@ -2409,7 +2766,7 @@ header {
 }
 
 .bottom-search-input:focus {
-  border-color: rgba(140, 120, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
   animation: glowPulse 2s ease-in-out infinite;
 }
 
@@ -2929,13 +3286,13 @@ header {
 @keyframes glowPulseLight {
   0%, 100% {
     box-shadow:
-      0 0 12px rgba(100, 120, 255, 0.15),
-      0 0 40px rgba(100, 120, 255, 0.05);
+      0 0 12px rgba(0, 0, 0, 0.06),
+      0 0 40px rgba(0, 0, 0, 0.02);
   }
   50% {
     box-shadow:
-      0 0 20px rgba(100, 120, 255, 0.25),
-      0 0 60px rgba(100, 120, 255, 0.08);
+      0 0 20px rgba(0, 0, 0, 0.1),
+      0 0 60px rgba(0, 0, 0, 0.04);
   }
 }
 
@@ -3927,6 +4284,8 @@ header {
 }
 
 .light-mode .deck-slide > p,
+.light-mode .deck-insight-content > p,
+.light-mode .deck-solution-text > p,
 .light-mode .deck-step p,
 .light-mode .deck-note {
   color: rgba(0, 0, 0, 0.5);
