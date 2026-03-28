@@ -364,68 +364,57 @@ const DeckView: React.FC<DeckViewProps> = ({
         <span className="deck-label">The Math</span>
         <h2>Structurally better economics.</h2>
         <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
-        <div className="deck-comparison-wrapper">
-          <div className="deck-comparison">
-            <div className="deck-compare-col">
-              <h3 className="compare-header compare-old">Traditional Affiliate</h3>
-              <div className="compare-row">
-                <span className="compare-label">Commission rate</span>
-                <span className="compare-value">10%</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Creator payout</span>
-                <span className="compare-value">$16 (8%)</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Platform revenue</span>
-                <span className="compare-value">$4 (2%)</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Brand cost visibility</span>
-                <span className="compare-value dim">Unpredictable</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Attribution</span>
-                <span className="compare-value dim">Last-click, lossy</span>
-              </div>
-            </div>
-            <div className="compare-arrow">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </div>
-            <div className="deck-compare-col deck-compare-col-new">
-              <h3 className="compare-header compare-new">Catalog (Fixed ROAS)</h3>
-              <div className="compare-row">
-                <span className="compare-label">Brand pays</span>
-                <span className="compare-value highlight">$40 (20%)</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Creator payout</span>
-                <span className="compare-value highlight">$20 (10%)</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Catalog revenue</span>
-                <span className="compare-value highlight">$20 (10%)</span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Brand cost visibility</span>
-                <span className="compare-value guaranteed fire-text">
-                  Guaranteed 5x ROAS
-                </span>
-              </div>
-              <div className="compare-row">
-                <span className="compare-label">Attribution</span>
-                <span className="compare-value highlight">Full-funnel, per-creator</span>
-              </div>
-            </div>
+        <div className="math-table">
+          {/* Header */}
+          <div className="math-table-header">
+            <div className="math-table-label-col" />
+            <div className="math-table-val-col math-col-old">Traditional Affiliate</div>
+            <div className="math-table-val-col math-col-new">Catalog (Fixed ROAS)</div>
+          </div>
+          {/* Rows */}
+          <div className="math-table-row">
+            <div className="math-table-label-col">Commission rate</div>
+            <div className="math-table-val-col math-val-old">10%</div>
+            <div className="math-table-val-col math-val-new">20%</div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Creator payout</div>
+            <div className="math-table-val-col math-val-old">$16 <span className="math-pct">(8%)</span></div>
+            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Platform revenue</div>
+            <div className="math-table-val-col math-val-old">$4 <span className="math-pct">(2%)</span></div>
+            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Brand cost visibility</div>
+            <div className="math-table-val-col math-val-old math-val-dim">Unpredictable</div>
+            <div className="math-table-val-col math-val-green fire-text">Guaranteed 5x ROAS</div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Attribution</div>
+            <div className="math-table-val-col math-val-old math-val-dim">Last-click, lossy</div>
+            <div className="math-table-val-col math-val-new">Full-funnel, per-creator</div>
           </div>
         </div>
       </div>
 
       {/* Slide 10: Flywheel */}
-      <div className="deck-slide">
-        <span className="deck-label">Flywheel</span>
-        <h2>Growth that compounds.</h2>
-        <div className="deck-flywheel-ring">
+      <div className="deck-slide deck-slide-flywheel-split">
+        <div className="flywheel-left">
+          <span className="deck-label">Flywheel</span>
+          <h2>Build supply first.<br />Demand follows trust.</h2>
+          <div className="flywheel-labels">
+            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Seed content and creators, build supply</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Creators share, audiences arrive</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Shoppers browse, trust, buy</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Creators earn, invest more</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
+          </div>
+          <p>We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
+        </div>
+        <div className="flywheel-right">
           <div className="flywheel-center">
             <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
               <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
@@ -436,13 +425,6 @@ const DeckView: React.FC<DeckViewProps> = ({
             <div className="flywheel-node" style={{ '--angle': '144deg' } as React.CSSProperties}><span>3</span></div>
             <div className="flywheel-node" style={{ '--angle': '216deg' } as React.CSSProperties}><span>4</span></div>
             <div className="flywheel-node" style={{ '--angle': '288deg' } as React.CSSProperties}><span>5</span></div>
-          </div>
-          <div className="flywheel-labels">
-            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Creators share links</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Users sign up via trust</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Creators earn, promote more</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Shoppers browse and stay</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
           </div>
         </div>
       </div>

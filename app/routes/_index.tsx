@@ -13,8 +13,9 @@ import DeckView from '~/components/DeckView';
 import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
 import DeckSelector from '~/components/DeckSelector';
+import ProductPage from '~/components/ProductPage';
 import CatalogLogo from '~/components/CatalogLogo';
-import { Look } from '~/data/looks';
+import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { catalogNames } from '~/data/catalogNames';
 
@@ -45,6 +46,7 @@ export default function Home() {
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [browserUrl, setBrowserUrl] = useState<{ url: string; title: string } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -183,6 +185,10 @@ export default function Home() {
     setBrowserUrl(null);
   }, []);
 
+  const handleOpenProduct = useCallback((product: Product) => {
+    setSelectedProduct(product);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
   }, []);
@@ -289,6 +295,7 @@ export default function Home() {
               onClose={handleCloseLook}
               onOpenCreator={handleOpenCreator}
               onOpenBrowser={handleOpenBrowser}
+              onOpenProduct={handleOpenProduct}
               bookmarks={bookmarks}
             />
           )}
@@ -305,6 +312,15 @@ export default function Home() {
             <BookmarksPage
               bookmarks={bookmarks}
               onClose={() => setShowBookmarks(false)}
+              onOpenLook={handleOpenLook}
+              onOpenBrowser={handleOpenBrowser}
+            />
+          )}
+
+          {selectedProduct && (
+            <ProductPage
+              product={selectedProduct}
+              onClose={() => setSelectedProduct(null)}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
             />
