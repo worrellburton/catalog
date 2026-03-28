@@ -144,21 +144,57 @@ const DeckView: React.FC<DeckViewProps> = ({
       <div className="deck-slide">
         <span className="deck-label">Three-Sided Value</span>
         <h2>Everyone wins.</h2>
-        <div className="deck-steps">
-          <div className="deck-step">
-            <span className="deck-step-num">01</span>
-            <h3>For Shoppers</h3>
-            <p>Curated discovery instead of chaos. Browse by creator, occasion, aesthetic.</p>
+        <div className="value-matrix">
+          {/* Header row */}
+          <div className="value-matrix-header">
+            <div className="value-matrix-corner" />
+            <div className="value-matrix-col-label value-before-label">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Today
+            </div>
+            <div className="value-matrix-col-label value-after-label">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              With Catalog
+            </div>
           </div>
-          <div className="deck-step">
-            <span className="deck-step-num">02</span>
-            <h3>For Creators</h3>
-            <p>Earn from engagement, performance, and referrals. Style becomes an asset, not just content.</p>
+          {/* Shoppers row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+              <span>Shoppers</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Algorithmic noise, ad fatigue, endless scrolling through undifferentiated storefronts</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>Curated discovery driven by people they trust. Browse by creator, occasion, aesthetic</p>
+            </div>
           </div>
-          <div className="deck-step">
-            <span className="deck-step-num">03</span>
-            <h3>For Brands</h3>
-            <p>Fixed ROAS model. Spend tied to actual return, not impressions.</p>
+          {/* Creators row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <span>Creators</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Scattered affiliate links, no audience ownership, content disappears in the feed</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>A dedicated storefront for their taste. Higher commissions, real audience ownership</p>
+            </div>
+          </div>
+          {/* Brands row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+              <span>Brands</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Vague awareness spend, unpredictable ROAS, last-click attribution</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>Guaranteed ROAS, full-funnel attribution, authentic distribution through trusted voices</p>
+            </div>
           </div>
         </div>
       </div>
@@ -189,7 +225,7 @@ const DeckView: React.FC<DeckViewProps> = ({
       {/* Slide 8: Market Opportunity */}
       <div className="deck-slide">
         <span className="deck-label">Market Opportunity</span>
-        <h2>$1.2T and growing fast</h2>
+        <h2>Positioned at the intersection.</h2>
         <div className="deck-stats">
           <div className="deck-stat">
             <span className="deck-stat-num">$1.2T</span>
@@ -209,59 +245,99 @@ const DeckView: React.FC<DeckViewProps> = ({
           </div>
           <div className="deck-stat">
             <span className="deck-stat-num">82%</span>
-            <span className="deck-stat-label">Consumers trust creator recs over ads</span>
+            <span className="deck-stat-label">Shoppers trust creator recs over ads</span>
             <div className="stat-growth">
               <div className="growth-line" style={{ '--grow-width': '50%' } as React.CSSProperties} />
               <span className="growth-rate">+12% YoY</span>
             </div>
           </div>
         </div>
+        <div className="deck-stats deck-stats-row2">
+          <div className="deck-stat">
+            <span className="deck-stat-num">$16.4B</span>
+            <span className="deck-stat-label">Creator earnings from apps &amp; platforms in 2025</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '75%' } as React.CSSProperties} />
+              <span className="growth-rate">+28% YoY</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">50M+</span>
+            <span className="deck-stat-label">People who consider themselves creators globally</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '60%' } as React.CSSProperties} />
+              <span className="growth-rate">+18% YoY</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">67%</span>
+            <span className="deck-stat-label">Of Gen Z have purchased via creator recommendation</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '45%' } as React.CSSProperties} />
+              <span className="growth-rate">+15% YoY</span>
+            </div>
+          </div>
+        </div>
+        <p>Catalog sits where creator economy infrastructure meets social commerce. Not competing with Shopify for merchants or Instagram for attention. Building the commerce layer that connects creators directly to purchase.</p>
       </div>
 
       {/* Slide 9: The Math */}
       <div className="deck-slide">
         <span className="deck-label">The Math</span>
-        <h2>Why this beats traditional affiliate.</h2>
-        <div className="deck-comparison">
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-old">Traditional Affiliate</h3>
-            <div className="compare-row">
-              <span className="compare-label">Commission rate</span>
-              <span className="compare-value">10%</span>
+        <h2>Structurally better economics.</h2>
+        <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
+        <div className="deck-comparison-wrapper">
+          <div className="deck-comparison">
+            <div className="deck-compare-col">
+              <h3 className="compare-header compare-old">Traditional Affiliate</h3>
+              <div className="compare-row">
+                <span className="compare-label">Commission rate</span>
+                <span className="compare-value">10%</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Creator payout</span>
+                <span className="compare-value">$16 (8%)</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Platform revenue</span>
+                <span className="compare-value">$4 (2%)</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Brand cost visibility</span>
+                <span className="compare-value dim">Unpredictable</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Attribution</span>
+                <span className="compare-value dim">Last-click, lossy</span>
+              </div>
             </div>
-            <div className="compare-row">
-              <span className="compare-label">Creator gets</span>
-              <span className="compare-value">8%</span>
+            <div className="compare-arrow">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
             </div>
-            <div className="compare-row">
-              <span className="compare-label">Publisher gets</span>
-              <span className="compare-value">2%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Brand cost visibility</span>
-              <span className="compare-value dim">Unpredictable</span>
-            </div>
-          </div>
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-new">Catalog (Fixed ROAS)</h3>
-            <div className="compare-row">
-              <span className="compare-label">Brand pays</span>
-              <span className="compare-value highlight">20% of revenue</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Creator gets</span>
-              <span className="compare-value highlight">10%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Catalog gets</span>
-              <span className="compare-value highlight">10%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Brand cost visibility</span>
-              <span className="compare-value guaranteed">
-                <span className="guaranteed-ring" />
-                Guaranteed
-              </span>
+            <div className="deck-compare-col deck-compare-col-new">
+              <h3 className="compare-header compare-new">Catalog (Fixed ROAS)</h3>
+              <div className="compare-row">
+                <span className="compare-label">Brand pays</span>
+                <span className="compare-value highlight">$40 (20%)</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Creator payout</span>
+                <span className="compare-value highlight">$20 (10%)</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Catalog revenue</span>
+                <span className="compare-value highlight">$20 (10%)</span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Brand cost visibility</span>
+                <span className="compare-value guaranteed fire-text">
+                  Guaranteed 5x ROAS
+                </span>
+              </div>
+              <div className="compare-row">
+                <span className="compare-label">Attribution</span>
+                <span className="compare-value highlight">Full-funnel, per-creator</span>
+              </div>
             </div>
           </div>
         </div>

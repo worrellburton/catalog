@@ -1291,26 +1291,173 @@ body {
   transform: translateY(0);
 }
 
-/* Deck comparison table */
-.deck-comparison {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  margin-top: 8px;
-  max-width: 720px;
-  border-radius: 16px;
-  overflow: hidden;
+/* Value Matrix (Three-Sided Value slide) */
+.value-matrix {
+  margin-top: 16px;
+  width: 100%;
 }
 
-.deck-compare-col {
-  padding: 24px;
+.value-matrix-header {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.value-matrix-corner {
+  /* empty top-left cell */
+}
+
+.value-matrix-col-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 14px 20px;
+  border-radius: 10px 10px 0 0;
+}
+
+.value-before-label {
+  color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.02);
-  border: none;
+}
+
+.value-after-label {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.value-matrix-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.value-matrix-persona {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+}
+
+.value-persona-icon {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.value-matrix-persona span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.value-matrix-cell {
+  padding: 20px;
   border-radius: 0;
 }
 
-.deck-compare-col:last-child {
-  background: rgba(255, 255, 255, 0.04);
+.value-matrix-cell p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.value-before {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.value-before p {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.value-after {
+  background: rgba(74, 222, 128, 0.04);
+  border-left: 2px solid rgba(74, 222, 128, 0.15);
+}
+
+.value-after p {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.value-matrix-row:last-child .value-before {
+  border-radius: 0 0 0 10px;
+}
+
+.value-matrix-row:last-child .value-after {
+  border-radius: 0 0 10px 0;
+}
+
+@media (max-width: 768px) {
+  .value-matrix-header {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .value-matrix-corner {
+    display: none;
+  }
+
+  .value-matrix-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-bottom: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .value-matrix-persona {
+    flex-direction: row;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .value-matrix-cell {
+    padding: 12px 16px;
+  }
+}
+
+/* Second row of stats */
+.deck-stats-row2 {
+  margin-top: 24px;
+  padding-top: 8px;
+}
+
+/* Deck comparison table */
+.deck-comparison-wrapper {
+  margin-top: 24px;
+}
+
+.deck-comparison {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  max-width: 820px;
+  align-items: stretch;
+}
+
+.deck-compare-col {
+  padding: 28px;
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  border-radius: 14px;
+}
+
+.deck-compare-col-new {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.compare-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: rgba(255, 255, 255, 0.15);
 }
 
 .compare-header {
@@ -1322,7 +1469,7 @@ body {
 }
 
 .compare-old {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .compare-new {
@@ -1338,13 +1485,13 @@ body {
 
 .compare-label {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .compare-value {
   font-size: 16px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .compare-value.highlight {
@@ -1353,15 +1500,64 @@ body {
 }
 
 .compare-value.dim {
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.3);
   font-weight: 400;
   font-style: italic;
+}
+
+/* Fire animation on Guaranteed ROAS */
+.compare-value.fire-text {
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 16px;
+  position: relative;
+  text-shadow:
+    0 0 10px rgba(74, 222, 128, 0.4),
+    0 0 20px rgba(74, 222, 128, 0.2),
+    0 0 40px rgba(74, 222, 128, 0.1);
+  animation: fireGlow 2s ease-in-out infinite;
+}
+
+@keyframes fireGlow {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(74, 222, 128, 0.4),
+      0 0 20px rgba(74, 222, 128, 0.2),
+      0 0 40px rgba(74, 222, 128, 0.1);
+    filter: brightness(1);
+  }
+  25% {
+    text-shadow:
+      0 0 14px rgba(74, 222, 128, 0.6),
+      0 0 28px rgba(74, 222, 128, 0.3),
+      0 0 50px rgba(250, 204, 21, 0.15);
+    filter: brightness(1.15);
+  }
+  50% {
+    text-shadow:
+      0 0 18px rgba(74, 222, 128, 0.5),
+      0 0 35px rgba(74, 222, 128, 0.25),
+      0 0 60px rgba(251, 146, 60, 0.1);
+    filter: brightness(1.1);
+  }
+  75% {
+    text-shadow:
+      0 0 12px rgba(74, 222, 128, 0.55),
+      0 0 24px rgba(74, 222, 128, 0.3),
+      0 0 45px rgba(250, 204, 21, 0.12);
+    filter: brightness(1.2);
+  }
 }
 
 @media (max-width: 768px) {
   .deck-comparison {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .compare-arrow {
+    transform: rotate(90deg);
+    padding: 8px 0;
   }
 
   .deck-compare-col {
@@ -4387,6 +4583,19 @@ header {
   border-color: rgba(0, 0, 0, 0.06);
 }
 
+.light-mode .deck-compare-col-new {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .compare-arrow {
+  color: rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .compare-header.compare-old {
+  color: rgba(0, 0, 0, 0.45);
+}
+
 .light-mode .compare-header.compare-new {
   color: #1a1a1a;
 }
@@ -4401,6 +4610,49 @@ header {
 
 .light-mode .compare-value.highlight {
   color: #1a1a1a;
+}
+
+.light-mode .compare-value.fire-text {
+  color: #16a34a;
+  text-shadow:
+    0 0 10px rgba(22, 163, 74, 0.3),
+    0 0 20px rgba(22, 163, 74, 0.15);
+}
+
+/* Light mode: Value matrix */
+.light-mode .value-before-label {
+  color: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .value-after-label {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.06);
+}
+
+.light-mode .value-persona-icon {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.light-mode .value-matrix-persona span {
+  color: #1a1a1a;
+}
+
+.light-mode .value-before {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .value-before p {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.light-mode .value-after {
+  background: rgba(22, 163, 74, 0.04);
+  border-left-color: rgba(22, 163, 74, 0.15);
+}
+
+.light-mode .value-after p {
+  color: rgba(0, 0, 0, 0.7);
 }
 
 /* Old flywheel light-mode removed — new styles are inline above */
