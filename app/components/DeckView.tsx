@@ -113,10 +113,88 @@ const DeckView: React.FC<DeckViewProps> = ({
       </div>
 
       {/* Slide 2: Intro */}
-      <div className="deck-slide">
-        <span className="deck-label">Intro</span>
-        <h2>Shopping used to be an experience.</h2>
-        <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. We&apos;re bringing it back, built for creators, designed for how people actually shop today.</p>
+      <div className="deck-slide deck-slide-intro-split">
+        <div className="deck-intro-left">
+          <span className="deck-label">Intro</span>
+          <h2>Shopping used to be an experience.</h2>
+          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. We&apos;re bringing it back, built for creators, designed for how people actually shop today.</p>
+        </div>
+        <div className="deck-intro-right">
+          <div className="flip-catalog">
+            <div className="flip-catalog-spine" />
+            {/* Static back pages for depth */}
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '4px', '--page-shade': '0.03' } as React.CSSProperties} />
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '3px', '--page-shade': '0.04' } as React.CSSProperties} />
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '2px', '--page-shade': '0.05' } as React.CSSProperties} />
+            {/* Animated flipping pages */}
+            <div className="flip-catalog-page flip-page-anim flip-page-1">
+              <div className="flip-page-front">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)' }}>
+                  <div className="flip-page-swatch" style={{ background: '#e8d5b7' }} />
+                  <div className="flip-page-swatch" style={{ background: '#8b6f47' }} />
+                  <div className="flip-page-swatch" style={{ background: '#2c2c2c' }} />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '70%' }} />
+                  <div className="flip-page-line" style={{ width: '55%' }} />
+                  <div className="flip-page-line" style={{ width: '40%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-grid">
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                </div>
+              </div>
+            </div>
+            <div className="flip-catalog-page flip-page-anim flip-page-2">
+              <div className="flip-page-front">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #1a2a1a 0%, #0f1f0f 100%)' }}>
+                  <div className="flip-page-circle" />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '65%' }} />
+                  <div className="flip-page-line" style={{ width: '50%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a1a2a 0%, #1a0f1a 100%)' }} />
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '60%' }} />
+                  <div className="flip-page-line" style={{ width: '75%' }} />
+                  <div className="flip-page-line" style={{ width: '45%' }} />
+                </div>
+              </div>
+            </div>
+            <div className="flip-catalog-page flip-page-anim flip-page-3">
+              <div className="flip-page-front">
+                <div className="flip-page-grid">
+                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.04)' }} />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '80%' }} />
+                  <div className="flip-page-line" style={{ width: '60%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-lines" style={{ paddingTop: '30px' }}>
+                  <div className="flip-page-line" style={{ width: '90%' }} />
+                  <div className="flip-page-line" style={{ width: '70%' }} />
+                  <div className="flip-page-line" style={{ width: '85%' }} />
+                  <div className="flip-page-line" style={{ width: '50%' }} />
+                </div>
+              </div>
+            </div>
+            {/* Cover (top page, visible at rest) */}
+            <div className="flip-catalog-cover">
+              <span className="flip-cover-title">CATALOG</span>
+              <span className="flip-cover-season">SS &apos;26</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Slide 3: The Problem */}
