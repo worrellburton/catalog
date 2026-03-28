@@ -323,6 +323,7 @@ export default function Home() {
               onClose={() => setSelectedProduct(null)}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
+              onOpenCreator={handleOpenCreator}
             />
           )}
 

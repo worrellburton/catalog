@@ -4717,6 +4717,71 @@ header {
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* Owned by creators */
+.product-page-creators {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.product-page-creator-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.product-page-creator-card:last-child {
+  border-bottom: none;
+}
+
+.product-page-creator-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.product-page-creator-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.product-page-creator-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-page-creator-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  display: block;
+}
+
+.product-page-creator-handle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  display: block;
+}
+
+.product-page-creator-looks {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 20px;
+}
+
 @media (max-width: 768px) {
   .product-page-hero {
     flex-direction: column;
@@ -4792,6 +4857,31 @@ header {
 
 .light-mode .product-page-similar-price {
   color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .product-page-creator-card {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .product-page-creator-card:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-mode .product-page-creator-avatar {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .product-page-creator-name {
+  color: #1a1a1a;
+}
+
+.light-mode .product-page-creator-handle {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .product-page-creator-looks {
+  color: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* Creator catalog page */
