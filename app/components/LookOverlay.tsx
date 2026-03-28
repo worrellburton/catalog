@@ -16,10 +16,11 @@ interface LookOverlayProps {
   onOpenCreator: (name: string) => void;
   onOpenBrowser: (url: string, title: string) => void;
   onOpenProduct?: (product: Product) => void;
+  onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, bookmarks }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, bookmarks }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [touchStartY, setTouchStartY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -176,7 +177,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             ))}
           </div>
 
-          <button className="create-catalog-btn" onClick={() => { /* TODO: generate catalog */ }}>
+          <button className="create-catalog-btn" onClick={() => onCreateCatalog?.(look.creator)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
             Create catalog around this look
           </button>

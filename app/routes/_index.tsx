@@ -189,6 +189,13 @@ export default function Home() {
     setSelectedProduct(product);
   }, []);
 
+  const handleCreateCatalog = useCallback((query: string) => {
+    setSelectedProduct(null);
+    setSelectedLook(null);
+    setSearchQuery(query);
+    setCatalogName(getRandomCatalogName(query));
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
   }, []);
@@ -296,6 +303,7 @@ export default function Home() {
               onOpenCreator={handleOpenCreator}
               onOpenBrowser={handleOpenBrowser}
               onOpenProduct={handleOpenProduct}
+              onCreateCatalog={handleCreateCatalog}
               bookmarks={bookmarks}
             />
           )}
@@ -324,6 +332,7 @@ export default function Home() {
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
               onOpenCreator={handleOpenCreator}
+              onCreateCatalog={handleCreateCatalog}
             />
           )}
 
