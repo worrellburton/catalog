@@ -332,27 +332,27 @@ const DeckView: React.FC<DeckViewProps> = ({
         </div>
         <div className="deck-stats deck-stats-row2">
           <div className="deck-stat">
-            <span className="deck-stat-num">$16.4B</span>
-            <span className="deck-stat-label">Creator earnings from apps &amp; platforms in 2025</span>
+            <span className="deck-stat-num">10x</span>
+            <span className="deck-stat-label">Short-form video conversion vs static display ads</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '75%' } as React.CSSProperties} />
-              <span className="growth-rate">+28% YoY</span>
+              <div className="growth-line" style={{ '--grow-width': '80%' } as React.CSSProperties} />
+              <span className="growth-rate">+40% YoY</span>
             </div>
           </div>
           <div className="deck-stat">
-            <span className="deck-stat-num">50M+</span>
-            <span className="deck-stat-label">People who consider themselves creators globally</span>
+            <span className="deck-stat-num">92min</span>
+            <span className="deck-stat-label">Daily time on creator content vs 12min on shopping apps</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '60%' } as React.CSSProperties} />
-              <span className="growth-rate">+18% YoY</span>
+              <div className="growth-line" style={{ '--grow-width': '65%' } as React.CSSProperties} />
+              <span className="growth-rate">+24% YoY</span>
             </div>
           </div>
           <div className="deck-stat">
-            <span className="deck-stat-num">67%</span>
-            <span className="deck-stat-label">Of Gen Z have purchased via creator recommendation</span>
+            <span className="deck-stat-num">73%</span>
+            <span className="deck-stat-label">Of purchases now start on mobile, not desktop</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '45%' } as React.CSSProperties} />
-              <span className="growth-rate">+15% YoY</span>
+              <div className="growth-line" style={{ '--grow-width': '55%' } as React.CSSProperties} />
+              <span className="growth-rate">+8% YoY</span>
             </div>
           </div>
         </div>
