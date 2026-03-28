@@ -4224,7 +4224,9 @@ header {
 .look-overlay {
   position: fixed;
   inset: 0;
-  background: var(--overlay-bg);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -5180,6 +5182,10 @@ header {
 
 .light-mode .look-info p {
   color: rgba(0, 0, 0, 0.55);
+}
+
+.light-mode .look-overlay {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .light-mode .product-brand {
