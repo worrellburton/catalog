@@ -615,6 +615,62 @@ body {
 }
 
 /* Deck V6: App preview — phone mockup */
+/* Intro slide — floating SVG icons */
+.deck-slide-intro {
+  position: relative;
+  overflow: hidden;
+}
+
+.deck-intro-svgs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.deck-intro-icon {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  color: rgba(255, 255, 255, 0.06);
+  animation: introFloat 8s ease-in-out infinite;
+}
+
+.deck-intro-icon-1 { top: 12%; left: 8%; animation-delay: 0s; animation-duration: 7s; }
+.deck-intro-icon-2 { top: 18%; right: 12%; animation-delay: 1.2s; animation-duration: 9s; }
+.deck-intro-icon-3 { bottom: 25%; left: 15%; animation-delay: 2.5s; animation-duration: 8s; }
+.deck-intro-icon-4 { top: 35%; right: 25%; animation-delay: 0.8s; animation-duration: 10s; width: 40px; height: 40px; }
+.deck-intro-icon-5 { bottom: 15%; right: 8%; animation-delay: 3s; animation-duration: 7.5s; }
+.deck-intro-icon-6 { bottom: 35%; left: 30%; animation-delay: 1.8s; animation-duration: 9.5s; width: 36px; height: 36px; }
+
+@keyframes introFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.4; }
+  25% { transform: translateY(-12px) rotate(3deg); opacity: 0.7; }
+  50% { transform: translateY(-6px) rotate(-2deg); opacity: 0.5; }
+  75% { transform: translateY(-16px) rotate(1deg); opacity: 0.8; }
+}
+
+.deck-intro-content {
+  position: relative;
+  z-index: 1;
+}
+
+.light-mode .deck-intro-icon {
+  color: rgba(0, 0, 0, 0.05);
+}
+
+/* Animated step icons — gentle pulse */
+.deck-anim-icon {
+  animation: stepIconPulse 3s ease-in-out infinite;
+}
+
+.deck-step:nth-child(2) .deck-anim-icon { animation-delay: 0.5s; }
+.deck-step:nth-child(3) .deck-anim-icon { animation-delay: 1s; }
+
+@keyframes stepIconPulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+}
+
 /* Insight slide — video grid background */
 .deck-slide-insight {
   position: relative;
