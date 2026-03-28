@@ -1133,6 +1133,7 @@ body {
 }
 
 .deck-slide > p,
+.deck-intro-content > p,
 .deck-insight-content > p,
 .deck-solution-text > p {
   font-size: clamp(15px, 1.6vw, 19px);
@@ -4340,6 +4341,7 @@ header {
 }
 
 .light-mode .deck-slide > p,
+.light-mode .deck-intro-content > p,
 .light-mode .deck-insight-content > p,
 .light-mode .deck-solution-text > p,
 .light-mode .deck-step p,
