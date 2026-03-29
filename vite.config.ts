@@ -5,7 +5,8 @@ import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const isProduction = process.env.NODE_ENV === "production";
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "/";
+const rawBase = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const basePath = rawBase ? `${rawBase}/` : "/";
 
 export default defineConfig({
   base: basePath,
