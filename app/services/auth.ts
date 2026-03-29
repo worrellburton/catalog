@@ -1,0 +1,82 @@
+import { supabase } from '~/utils/supabase';
+
+export interface AuthUser {
+  id: string;
+  email?: string;
+  phone?: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
+function mapUser(user: { id: string; email?: string; phone?: string; user_metadata?: Record<string, string> }): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    phone: user.phone,
+    displayName: user.user_metadata?.full_name || user.user_metadata?.name || user.email || user.phone,
+    avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+  };
+}
+
+export async function signInWithGoogle(): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
+  });
+
+  return { error: error?.message };
+}
+
+export async function sendPhoneOtp(phone: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+
+  const { error } = await supabase.auth.signInWithOtp({
+    phone,
+  });
+
+  return { error: error?.message };
+}
+
+export async function verifyPhoneOtp(phone: string, token: string): Promise<{ user?: AuthUser; error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone,
+    token,
+    type: 'sms',
+  });
+
+  if (error || !data.user) return { error: error?.message || 'Verification failed' };
+  return { user: mapUser(data.user) };
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  if (!supabase) return null;
+
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return null;
+  return mapUser(data.user);
+}
+
+export async function signOut(): Promise<void> {
+  if (!supabase) return;
+  await supabase.auth.signOut();
+}
+
+export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
+  if (!supabase) return { unsubscribe: () => {} };
+
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user ? mapUser(session.user) : null);
+  });
+
+  return { unsubscribe: () => data.subscription.unsubscribe() };
+}

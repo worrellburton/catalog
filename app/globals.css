@@ -301,7 +301,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 20px;
   position: relative;
   z-index: 2;
 }
@@ -383,6 +383,140 @@ body {
   height: 16px;
   transition: opacity 0.2s;
 }
+
+/* Auth buttons */
+.pw-google-btn,
+.pw-phone-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 280px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pw-google-btn {
+  background: #fff;
+  color: #333;
+  border: none;
+}
+
+.pw-google-btn:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.pw-google-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pw-phone-btn {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.pw-phone-btn:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pw-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 280px;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.pw-divider::before,
+.pw-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pw-code-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 13px;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  padding: 8px 16px;
+  transition: color 0.2s;
+}
+
+.pw-code-btn:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.pw-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: -16px;
+}
+
+.pw-phone-prefix {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 300;
+}
+
+.pw-input-phone {
+  width: 240px;
+  padding-left: 32px;
+  letter-spacing: 1px;
+  font-size: 18px;
+  text-align: left;
+}
+
+.pw-input-phone::placeholder {
+  letter-spacing: 1px;
+}
+
+.pw-input-otp {
+  width: 180px;
+  font-size: 28px;
+  letter-spacing: 8px;
+}
+
+.pw-input-otp::placeholder {
+  letter-spacing: 10px;
+}
+
+.pw-back-link {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.2s;
+}
+
+.pw-back-link:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 
 /* Deck Selector */
 .deck-selector {

@@ -17,6 +17,7 @@ import ProductPage from '~/components/ProductPage';
 import CatalogLogo from '~/components/CatalogLogo';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
+import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck-selector' | 'deck';
@@ -59,6 +60,19 @@ export default function Home() {
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
+  const { user, loading: authLoading } = useAuth();
+
+  // Auto-enter app if user is authenticated (e.g. Google OAuth redirect)
+  useEffect(() => {
+    if (!authLoading && user && view === 'locked') {
+      setShowSplash(true);
+      setView('splash');
+      setTimeout(() => {
+        setView('app');
+        setShowSplash(false);
+      }, 2200);
+    }
+  }, [user, authLoading, view]);
 
   // Read hash on mount for deep linking
   useEffect(() => {
@@ -120,6 +134,15 @@ export default function Home() {
       return true;
     }
     return false;
+  }, []);
+
+  const handleAuthSuccess = useCallback(() => {
+    setShowSplash(true);
+    setView('splash');
+    setTimeout(() => {
+      setView('app');
+      setShowSplash(false);
+    }, 2200);
   }, []);
 
   const handleRemix = useCallback(() => {
@@ -205,7 +228,7 @@ export default function Home() {
   return (
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
       {view === 'locked' && (
-        <PasswordGate onSubmit={handlePasswordSubmit} />
+        <PasswordGate onSubmit={handlePasswordSubmit} onAuthSuccess={handleAuthSuccess} />
       )}
 
       {showSplash && <SplashScreen />}
