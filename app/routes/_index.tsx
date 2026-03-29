@@ -62,17 +62,12 @@ export default function Home() {
   const bookmarks = useBookmarks();
   const { user, loading: authLoading } = useAuth();
 
-  // Auto-enter app if user is authenticated (e.g. Google OAuth redirect)
+  // Auto-redirect to admin if user is authenticated (e.g. Google OAuth redirect)
   useEffect(() => {
     if (!authLoading && user && view === 'locked') {
-      setShowSplash(true);
-      setView('splash');
-      setTimeout(() => {
-        setView('app');
-        setShowSplash(false);
-      }, 2200);
+      navigate('/admin');
     }
-  }, [user, authLoading, view]);
+  }, [user, authLoading, view, navigate]);
 
   // Read hash on mount for deep linking
   useEffect(() => {
@@ -137,13 +132,8 @@ export default function Home() {
   }, []);
 
   const handleAuthSuccess = useCallback(() => {
-    setShowSplash(true);
-    setView('splash');
-    setTimeout(() => {
-      setView('app');
-      setShowSplash(false);
-    }, 2200);
-  }, []);
+    navigate('/admin');
+  }, [navigate]);
 
   const handleRemix = useCallback(() => {
     setShuffleKey(k => k + 1);
