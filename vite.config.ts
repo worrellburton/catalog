@@ -5,13 +5,14 @@ import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const isProduction = process.env.NODE_ENV === "production";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "/";
 
 export default defineConfig({
-  base: "/catalog/",
+  base: basePath,
   plugins: [
     remix({
       ssr: false,
-      basename: "/catalog/",
+      basename: basePath,
       ignoredRouteFiles: ["routes/admin/**", "routes/partners/**"],
       routes(defineRoutes) {
         return defineRoutes((route) => {
