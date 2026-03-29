@@ -5,6 +5,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
+import { Analytics } from "@vercel/analytics/remix";
 import "./globals.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <ScrollRestoration />
         <Scripts />
+        <Analytics />
       </body>
     </html>
   );
