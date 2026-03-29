@@ -279,6 +279,7 @@ export default function Home() {
             searchQuery={searchQuery}
             onOpenLook={handleOpenLook}
             onOpenCreator={handleOpenCreator}
+            onCreateCatalog={handleCreateCatalog}
             isLightMode={isLightMode}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
@@ -313,6 +314,9 @@ export default function Home() {
               creatorName={creatorFilter}
               onClose={handleCloseCreator}
               onOpenLook={handleOpenLook}
+              onOpenProduct={handleOpenProduct}
+              onOpenBrowser={handleOpenBrowser}
+              onCreateCatalog={handleCreateCatalog}
             />
           )}
 

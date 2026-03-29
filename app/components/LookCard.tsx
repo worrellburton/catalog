@@ -7,9 +7,10 @@ interface LookCardProps {
   className?: string;
   onOpenLook: (look: Look) => void;
   onOpenCreator: (creatorName: string) => void;
+  onCreateCatalog?: (query: string) => void;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog }: LookCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -83,6 +84,18 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           preload="none"
         />
         <div className="card-gradient" />
+        {onCreateCatalog && (
+          <button
+            className="card-catalog-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreateCatalog(look.creator);
+            }}
+            aria-label="Create catalog from this look"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </button>
+        )}
         <div
           className="card-creator-row"
           onClick={(e) => {

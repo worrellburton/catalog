@@ -8,6 +8,7 @@ interface GridViewProps {
   searchQuery: string;
   onOpenLook: (look: Look) => void;
   onOpenCreator: (creatorName: string) => void;
+  onCreateCatalog?: (query: string) => void;
   isLightMode: boolean;
   shuffleKey?: number;
   layoutMode?: number;
@@ -121,7 +122,7 @@ function ParticleField({ isLightMode }: { isLightMode: boolean }) {
   return <canvas ref={canvasRef} className="no-results-canvas" />;
 }
 
-export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, isLightMode, shuffleKey = 0, layoutMode = 0 }: GridViewProps) {
+export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpenCreator, onCreateCatalog, isLightMode, shuffleKey = 0, layoutMode = 0 }: GridViewProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
@@ -229,6 +230,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
             className={getCardClass(look.displayIndex)}
             onOpenLook={onOpenLook}
             onOpenCreator={onOpenCreator}
+            onCreateCatalog={onCreateCatalog}
           />
         ))}
       </div>
