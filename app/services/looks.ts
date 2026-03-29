@@ -32,6 +32,7 @@ interface SupabaseLook {
 }
 
 async function fetchLooksFromSupabase(): Promise<Look[]> {
+  if (!supabase) return staticLooks;
   const { data, error } = await supabase
     .from('looks')
     .select(`
@@ -82,6 +83,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
 }
 
 async function fetchCreatorsFromSupabase(): Promise<Record<string, Creator>> {
+  if (!supabase) return staticCreators;
   const { data, error } = await supabase
     .from('creators')
     .select('handle, display_name, avatar_url');
@@ -103,6 +105,7 @@ async function fetchCreatorsFromSupabase(): Promise<Record<string, Creator>> {
 }
 
 async function fetchSearchSuggestionsFromSupabase(): Promise<string[]> {
+  if (!supabase) return staticSuggestions;
   const { data, error } = await supabase
     .from('search_suggestions')
     .select('text')
