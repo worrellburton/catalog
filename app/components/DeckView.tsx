@@ -113,10 +113,88 @@ const DeckView: React.FC<DeckViewProps> = ({
       </div>
 
       {/* Slide 2: Intro */}
-      <div className="deck-slide">
-        <span className="deck-label">Intro</span>
-        <h2>Shopping used to be an experience.</h2>
-        <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. We&apos;re bringing it back, built for creators, designed for how people actually shop today.</p>
+      <div className="deck-slide deck-slide-intro-split">
+        <div className="deck-intro-left">
+          <span className="deck-label">Intro</span>
+          <h2>Shopping used to be an experience.</h2>
+          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. We&apos;re bringing it back, built for creators, designed for how people actually shop today.</p>
+        </div>
+        <div className="deck-intro-right">
+          <div className="flip-catalog">
+            <div className="flip-catalog-spine" />
+            {/* Static back pages for depth */}
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '4px', '--page-shade': '0.03' } as React.CSSProperties} />
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '3px', '--page-shade': '0.04' } as React.CSSProperties} />
+            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '2px', '--page-shade': '0.05' } as React.CSSProperties} />
+            {/* Animated flipping pages */}
+            <div className="flip-catalog-page flip-page-anim flip-page-1">
+              <div className="flip-page-front">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)' }}>
+                  <div className="flip-page-swatch" style={{ background: '#e8d5b7' }} />
+                  <div className="flip-page-swatch" style={{ background: '#8b6f47' }} />
+                  <div className="flip-page-swatch" style={{ background: '#2c2c2c' }} />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '70%' }} />
+                  <div className="flip-page-line" style={{ width: '55%' }} />
+                  <div className="flip-page-line" style={{ width: '40%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-grid">
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                  <div className="flip-grid-item" />
+                </div>
+              </div>
+            </div>
+            <div className="flip-catalog-page flip-page-anim flip-page-2">
+              <div className="flip-page-front">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #1a2a1a 0%, #0f1f0f 100%)' }}>
+                  <div className="flip-page-circle" />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '65%' }} />
+                  <div className="flip-page-line" style={{ width: '50%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a1a2a 0%, #1a0f1a 100%)' }} />
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '60%' }} />
+                  <div className="flip-page-line" style={{ width: '75%' }} />
+                  <div className="flip-page-line" style={{ width: '45%' }} />
+                </div>
+              </div>
+            </div>
+            <div className="flip-catalog-page flip-page-anim flip-page-3">
+              <div className="flip-page-front">
+                <div className="flip-page-grid">
+                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.04)' }} />
+                </div>
+                <div className="flip-page-lines">
+                  <div className="flip-page-line" style={{ width: '80%' }} />
+                  <div className="flip-page-line" style={{ width: '60%' }} />
+                </div>
+              </div>
+              <div className="flip-page-back">
+                <div className="flip-page-lines" style={{ paddingTop: '30px' }}>
+                  <div className="flip-page-line" style={{ width: '90%' }} />
+                  <div className="flip-page-line" style={{ width: '70%' }} />
+                  <div className="flip-page-line" style={{ width: '85%' }} />
+                  <div className="flip-page-line" style={{ width: '50%' }} />
+                </div>
+              </div>
+            </div>
+            {/* Cover (top page, visible at rest) */}
+            <div className="flip-catalog-cover">
+              <span className="flip-cover-title">CATALOG</span>
+              <span className="flip-cover-season">SS &apos;26</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Slide 3: The Problem */}
@@ -144,21 +222,57 @@ const DeckView: React.FC<DeckViewProps> = ({
       <div className="deck-slide">
         <span className="deck-label">Three-Sided Value</span>
         <h2>Everyone wins.</h2>
-        <div className="deck-steps">
-          <div className="deck-step">
-            <span className="deck-step-num">01</span>
-            <h3>For Shoppers</h3>
-            <p>Curated discovery instead of chaos. Browse by creator, occasion, aesthetic.</p>
+        <div className="value-matrix">
+          {/* Header row */}
+          <div className="value-matrix-header">
+            <div className="value-matrix-corner" />
+            <div className="value-matrix-col-label value-before-label">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Today
+            </div>
+            <div className="value-matrix-col-label value-after-label">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              With Catalog
+            </div>
           </div>
-          <div className="deck-step">
-            <span className="deck-step-num">02</span>
-            <h3>For Creators</h3>
-            <p>Earn from engagement, performance, and referrals. Style becomes an asset, not just content.</p>
+          {/* Shoppers row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+              <span>Shoppers</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Algorithmic noise, ad fatigue, endless scrolling through undifferentiated storefronts</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>Curated discovery driven by people they trust. Browse by creator, occasion, aesthetic</p>
+            </div>
           </div>
-          <div className="deck-step">
-            <span className="deck-step-num">03</span>
-            <h3>For Brands</h3>
-            <p>Fixed ROAS model. Spend tied to actual return, not impressions.</p>
+          {/* Creators row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <span>Creators</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Scattered affiliate links, no audience ownership, content disappears in the feed</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>A dedicated storefront for their taste. Higher commissions, real audience ownership</p>
+            </div>
+          </div>
+          {/* Brands row */}
+          <div className="value-matrix-row">
+            <div className="value-matrix-persona">
+              <svg className="value-persona-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+              <span>Brands</span>
+            </div>
+            <div className="value-matrix-cell value-before">
+              <p>Vague awareness spend, unpredictable ROAS, last-click attribution</p>
+            </div>
+            <div className="value-matrix-cell value-after">
+              <p>Guaranteed ROAS, full-funnel attribution, authentic distribution through trusted voices</p>
+            </div>
           </div>
         </div>
       </div>
@@ -189,7 +303,7 @@ const DeckView: React.FC<DeckViewProps> = ({
       {/* Slide 8: Market Opportunity */}
       <div className="deck-slide">
         <span className="deck-label">Market Opportunity</span>
-        <h2>$1.2T and growing fast</h2>
+        <h2>Positioned at the intersection.</h2>
         <div className="deck-stats">
           <div className="deck-stat">
             <span className="deck-stat-num">$1.2T</span>
@@ -209,69 +323,98 @@ const DeckView: React.FC<DeckViewProps> = ({
           </div>
           <div className="deck-stat">
             <span className="deck-stat-num">82%</span>
-            <span className="deck-stat-label">Consumers trust creator recs over ads</span>
+            <span className="deck-stat-label">Shoppers trust creator recs over ads</span>
             <div className="stat-growth">
               <div className="growth-line" style={{ '--grow-width': '50%' } as React.CSSProperties} />
               <span className="growth-rate">+12% YoY</span>
             </div>
           </div>
         </div>
+        <div className="deck-stats deck-stats-row2">
+          <div className="deck-stat">
+            <span className="deck-stat-num">10x</span>
+            <span className="deck-stat-label">Short-form video conversion vs static display ads</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '80%' } as React.CSSProperties} />
+              <span className="growth-rate">+40% YoY</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">92min</span>
+            <span className="deck-stat-label">Daily time on creator content vs 12min on shopping apps</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '65%' } as React.CSSProperties} />
+              <span className="growth-rate">+24% YoY</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">73%</span>
+            <span className="deck-stat-label">Of purchases now start on mobile, not desktop</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '55%' } as React.CSSProperties} />
+              <span className="growth-rate">+8% YoY</span>
+            </div>
+          </div>
+        </div>
+        <p>Catalog sits where creator economy infrastructure meets social commerce. Not competing with Shopify for merchants or Instagram for attention. Building the commerce layer that connects creators directly to purchase.</p>
       </div>
 
       {/* Slide 9: The Math */}
       <div className="deck-slide">
         <span className="deck-label">The Math</span>
-        <h2>Why this beats traditional affiliate.</h2>
-        <div className="deck-comparison">
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-old">Traditional Affiliate</h3>
-            <div className="compare-row">
-              <span className="compare-label">Commission rate</span>
-              <span className="compare-value">10%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Creator gets</span>
-              <span className="compare-value">8%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Publisher gets</span>
-              <span className="compare-value">2%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Brand cost visibility</span>
-              <span className="compare-value dim">Unpredictable</span>
-            </div>
+        <h2>Structurally better economics.</h2>
+        <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
+        <div className="math-table">
+          {/* Header */}
+          <div className="math-table-header">
+            <div className="math-table-label-col" />
+            <div className="math-table-val-col math-col-old">Traditional Affiliate</div>
+            <div className="math-table-val-col math-col-new">Catalog (Fixed ROAS)</div>
           </div>
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-new">Catalog (Fixed ROAS)</h3>
-            <div className="compare-row">
-              <span className="compare-label">Brand pays</span>
-              <span className="compare-value highlight">20% of revenue</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Creator gets</span>
-              <span className="compare-value highlight">10%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Catalog gets</span>
-              <span className="compare-value highlight">10%</span>
-            </div>
-            <div className="compare-row">
-              <span className="compare-label">Brand cost visibility</span>
-              <span className="compare-value guaranteed">
-                <span className="guaranteed-ring" />
-                Guaranteed
-              </span>
-            </div>
+          {/* Rows */}
+          <div className="math-table-row">
+            <div className="math-table-label-col">Commission rate</div>
+            <div className="math-table-val-col math-val-old">10%</div>
+            <div className="math-table-val-col math-val-new">20%</div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Creator payout</div>
+            <div className="math-table-val-col math-val-old">$16 <span className="math-pct">(8%)</span></div>
+            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Platform revenue</div>
+            <div className="math-table-val-col math-val-old">$4 <span className="math-pct">(2%)</span></div>
+            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Brand cost visibility</div>
+            <div className="math-table-val-col math-val-old math-val-dim">Unpredictable</div>
+            <div className="math-table-val-col math-val-green fire-text">Guaranteed 5x ROAS</div>
+          </div>
+          <div className="math-table-row">
+            <div className="math-table-label-col">Attribution</div>
+            <div className="math-table-val-col math-val-old math-val-dim">Last-click, lossy</div>
+            <div className="math-table-val-col math-val-new">Full-funnel, per-creator</div>
           </div>
         </div>
       </div>
 
       {/* Slide 10: Flywheel */}
-      <div className="deck-slide">
-        <span className="deck-label">Flywheel</span>
-        <h2>Growth that compounds.</h2>
-        <div className="deck-flywheel-ring">
+      <div className="deck-slide deck-slide-flywheel-split">
+        <div className="flywheel-left">
+          <span className="deck-label">Flywheel</span>
+          <h2>Build supply first.<br />Demand follows trust.</h2>
+          <div className="flywheel-labels">
+            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Seed content and creators, build supply</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Creators share, audiences arrive</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Shoppers browse, trust, buy</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Creators earn, invest more</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
+          </div>
+          <p>We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
+        </div>
+        <div className="flywheel-right">
           <div className="flywheel-center">
             <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
               <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
@@ -282,13 +425,6 @@ const DeckView: React.FC<DeckViewProps> = ({
             <div className="flywheel-node" style={{ '--angle': '144deg' } as React.CSSProperties}><span>3</span></div>
             <div className="flywheel-node" style={{ '--angle': '216deg' } as React.CSSProperties}><span>4</span></div>
             <div className="flywheel-node" style={{ '--angle': '288deg' } as React.CSSProperties}><span>5</span></div>
-          </div>
-          <div className="flywheel-labels">
-            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Creators share links</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Users sign up via trust</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Creators earn, promote more</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Shoppers browse and stay</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
           </div>
         </div>
       </div>

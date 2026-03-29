@@ -15,10 +15,12 @@ interface LookOverlayProps {
   onClose: () => void;
   onOpenCreator: (name: string) => void;
   onOpenBrowser: (url: string, title: string) => void;
+  onOpenProduct?: (product: Product) => void;
+  onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, bookmarks }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, bookmarks }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [touchStartY, setTouchStartY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -74,6 +76,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       next[index] = !next[index];
       return next;
     });
+  };
+
+  const handleProductClick = (p: Product) => {
+    if (onOpenProduct) {
+      onOpenProduct(p);
+    } else if (p.url) {
+      onOpenBrowser(p.url, p.name);
+    }
   };
 
   const overlayStyle: React.CSSProperties = isAnimatingOut
@@ -137,12 +147,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <div
                 key={pi}
                 className="product-item"
-                onClick={() => {
-                  if (p.url) onOpenBrowser(p.url, p.name);
-                }}
+                onClick={() => handleProductClick(p)}
                 style={{ cursor: 'pointer' }}
               >
-                <div className="product-thumb" style={{ background: look.color, opacity: 0.5 }} />
+                <div className="product-thumb">
+                  {p.image ? (
+                    <img src={p.image} alt={p.name} className="product-thumb-img" />
+                  ) : (
+                    <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
+                  )}
+                </div>
                 <div className="product-details">
                   {p.brand && <span className="product-brand">{p.brand}</span>}
                   <h4>{p.name}</h4>
@@ -162,6 +176,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </div>
             ))}
           </div>
+
+          <button className="create-catalog-btn" onClick={() => onCreateCatalog?.(look.creator)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Create catalog around this look
+          </button>
         </div>
       </div>
     </div>
