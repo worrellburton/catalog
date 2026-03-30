@@ -112,86 +112,64 @@ const DeckView: React.FC<DeckViewProps> = ({
         <p className="deck-subtitle">Investor Deck V.5 for Alex and Dan</p>
       </div>
 
-      {/* Slide 2: Intro */}
+      {/* Slide 2: Intro — Old Catalogs Meet AI */}
       <div className="deck-slide deck-slide-intro-split">
         <div className="deck-intro-left">
           <span className="deck-label">Intro</span>
-          <h2>Shopping used to be an experience.</h2>
-          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. We&apos;re bringing it back, built for creators, designed for how people actually shop today.</p>
+          <h2>The catalog is back.</h2>
+          <p>For decades, catalogs were how America discovered what to buy. Sears, J.Crew, IKEA — pages you dog-eared, circled, tore out. It was curated, visual, personal. Then e-commerce killed the catalog and replaced it with search bars and infinite scroll.</p>
+          <p>We&apos;re building the next generation. Where creators are the editors, video is the format, and AI makes every catalog personal. Same magic. New medium.</p>
         </div>
         <div className="deck-intro-right">
-          <div className="flip-catalog">
-            <div className="flip-catalog-spine" />
-            {/* Static back pages for depth */}
-            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '4px', '--page-shade': '0.03' } as React.CSSProperties} />
-            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '3px', '--page-shade': '0.04' } as React.CSSProperties} />
-            <div className="flip-catalog-page flip-page-static" style={{ '--page-offset': '2px', '--page-shade': '0.05' } as React.CSSProperties} />
-            {/* Animated flipping pages */}
-            <div className="flip-catalog-page flip-page-anim flip-page-1">
-              <div className="flip-page-front">
-                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)' }}>
-                  <div className="flip-page-swatch" style={{ background: '#e8d5b7' }} />
-                  <div className="flip-page-swatch" style={{ background: '#8b6f47' }} />
-                  <div className="flip-page-swatch" style={{ background: '#2c2c2c' }} />
+          <div className="catalog-evolution">
+            {/* Old catalog */}
+            <div className="evo-old">
+              <div className="evo-catalog-old">
+                <div className="evo-catalog-cover">
+                  <div className="evo-catalog-stripe" />
+                  <span className="evo-catalog-title">SPRING<br/>CATALOG</span>
+                  <span className="evo-catalog-year">&apos;92</span>
+                  <div className="evo-catalog-badge">512 pages</div>
                 </div>
-                <div className="flip-page-lines">
-                  <div className="flip-page-line" style={{ width: '70%' }} />
-                  <div className="flip-page-line" style={{ width: '55%' }} />
-                  <div className="flip-page-line" style={{ width: '40%' }} />
+                <div className="evo-catalog-pages">
+                  <div className="evo-page" style={{ '--offset': '3px' } as React.CSSProperties} />
+                  <div className="evo-page" style={{ '--offset': '6px' } as React.CSSProperties} />
+                  <div className="evo-page" style={{ '--offset': '9px' } as React.CSSProperties} />
                 </div>
               </div>
-              <div className="flip-page-back">
-                <div className="flip-page-grid">
-                  <div className="flip-grid-item" />
-                  <div className="flip-grid-item" />
-                  <div className="flip-grid-item" />
-                  <div className="flip-grid-item" />
-                </div>
-              </div>
+              <span className="evo-label">Then</span>
             </div>
-            <div className="flip-catalog-page flip-page-anim flip-page-2">
-              <div className="flip-page-front">
-                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #1a2a1a 0%, #0f1f0f 100%)' }}>
-                  <div className="flip-page-circle" />
-                </div>
-                <div className="flip-page-lines">
-                  <div className="flip-page-line" style={{ width: '65%' }} />
-                  <div className="flip-page-line" style={{ width: '50%' }} />
-                </div>
+
+            {/* Arrow / transformation */}
+            <div className="evo-arrow">
+              <div className="evo-arrow-line" />
+              <div className="evo-spark">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
+                </svg>
+                <span>AI</span>
               </div>
-              <div className="flip-page-back">
-                <div className="flip-page-img" style={{ background: 'linear-gradient(135deg, #2a1a2a 0%, #1a0f1a 100%)' }} />
-                <div className="flip-page-lines">
-                  <div className="flip-page-line" style={{ width: '60%' }} />
-                  <div className="flip-page-line" style={{ width: '75%' }} />
-                  <div className="flip-page-line" style={{ width: '45%' }} />
-                </div>
-              </div>
+              <div className="evo-arrow-line" />
             </div>
-            <div className="flip-catalog-page flip-page-anim flip-page-3">
-              <div className="flip-page-front">
-                <div className="flip-page-grid">
-                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                  <div className="flip-grid-item" style={{ background: 'rgba(255,255,255,0.04)' }} />
-                </div>
-                <div className="flip-page-lines">
-                  <div className="flip-page-line" style={{ width: '80%' }} />
-                  <div className="flip-page-line" style={{ width: '60%' }} />
+
+            {/* New catalog */}
+            <div className="evo-new">
+              <div className="evo-phone">
+                <div className="evo-phone-notch" />
+                <div className="evo-phone-screen">
+                  <div className="evo-phone-grid">
+                    <div className="evo-phone-card evo-card-1" />
+                    <div className="evo-phone-card evo-card-2" />
+                    <div className="evo-phone-card evo-card-3" />
+                    <div className="evo-phone-card evo-card-4" />
+                  </div>
+                  <div className="evo-phone-bar">
+                    <div className="evo-phone-avatar" />
+                    <div className="evo-phone-text" />
+                  </div>
                 </div>
               </div>
-              <div className="flip-page-back">
-                <div className="flip-page-lines" style={{ paddingTop: '30px' }}>
-                  <div className="flip-page-line" style={{ width: '90%' }} />
-                  <div className="flip-page-line" style={{ width: '70%' }} />
-                  <div className="flip-page-line" style={{ width: '85%' }} />
-                  <div className="flip-page-line" style={{ width: '50%' }} />
-                </div>
-              </div>
-            </div>
-            {/* Cover (top page, visible at rest) */}
-            <div className="flip-catalog-cover">
-              <span className="flip-cover-title">CATALOG</span>
-              <span className="flip-cover-season">SS &apos;26</span>
+              <span className="evo-label">Now</span>
             </div>
           </div>
         </div>
