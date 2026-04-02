@@ -1,15 +1,15 @@
 
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { Look, creators, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
+import { getTrackingData, getPositionAtTime } from '~/data/videoTracking';
 
-// Preset hotspot positions for products on the video
-// Each position is [top%, left%] — placed to simulate detected items
+// Fallback positions if no tracking data exists for a video
 const HOTSPOT_POSITIONS: [number, number][] = [
-  [28, 65],  // product 0: top-right area (shirt/top)
-  [55, 30],  // product 1: mid-left (pants/bottom)
-  [72, 55],  // product 2: lower-mid (shoes)
-  [18, 40],  // product 3: top area (accessory/hat)
+  [28, 65],
+  [55, 30],
+  [72, 55],
+  [18, 40],
 ];
 
 interface BookmarksInterface {
@@ -31,6 +31,8 @@ interface LookOverlayProps {
 
 export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, bookmarks }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const rafRef = useRef<number>(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const [opacity, setOpacity] = useState(1);
@@ -41,6 +43,41 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
+
+  // Video tracking
+  const trackingData = getTrackingData(look.video);
+  const [hotspotPositions, setHotspotPositions] = useState<{ top: number; left: number }[]>(
+    look.products.map((_, i) => {
+      if (trackingData) {
+        return getPositionAtTime(trackingData.products[i], 0, trackingData.videoDuration);
+      }
+      const pos = HOTSPOT_POSITIONS[i % HOTSPOT_POSITIONS.length];
+      return { top: pos[0], left: pos[1] };
+    })
+  );
+
+  // RAF loop to update hotspot positions from video currentTime
+  useEffect(() => {
+    if (!trackingData) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const update = () => {
+      const t = video.currentTime;
+      const positions = look.products.map((_, i) => {
+        if (i < trackingData.products.length) {
+          return getPositionAtTime(trackingData.products[i], t, trackingData.videoDuration);
+        }
+        const pos = HOTSPOT_POSITIONS[i % HOTSPOT_POSITIONS.length];
+        return { top: pos[0], left: pos[1] };
+      });
+      setHotspotPositions(positions);
+      rafRef.current = requestAnimationFrame(update);
+    };
+
+    rafRef.current = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [trackingData, look.products]);
 
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -116,6 +153,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       <div className="look-detail">
         <div className="look-media" onClick={() => setShowHotspots(h => !h)}>
           <video
+            ref={videoRef}
             src={`${basePath}/${look.video}`}
             autoPlay
             loop
@@ -125,16 +163,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           />
           {/* Product hotspot dots on video */}
           {showHotspots && look.products.map((p, i) => {
-            const pos = HOTSPOT_POSITIONS[i % HOTSPOT_POSITIONS.length];
+            const pos = hotspotPositions[i] || { top: 50, left: 50 };
             return (
               <div
                 key={i}
-                className={`hotspot ${activeHotspot === i ? 'active' : ''}`}
+                className={`hotspot ${trackingData ? 'tracking' : ''} ${activeHotspot === i ? 'active' : ''}`}
                 style={{
-                  top: `${pos[0]}%`,
-                  left: `${pos[1]}%`,
-                  animationDelay: `${i * -1.7}s`,
-                  animationDuration: `${3.5 + i * 0.8}s`,
+                  top: `${pos.top}%`,
+                  left: `${pos.left}%`,
+                  ...(trackingData ? {} : { animationDelay: `${i * -1.7}s`, animationDuration: `${3.5 + i * 0.8}s` }),
                 }}
                 onMouseEnter={() => setActiveHotspot(i)}
                 onMouseLeave={() => setActiveHotspot(null)}
@@ -142,7 +179,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               >
                 <span className="hotspot-dot" />
                 <span className="hotspot-ping" />
-                <div className={`hotspot-tooltip ${pos[1] > 50 ? 'left' : 'right'}`}>
+                <div className={`hotspot-tooltip ${pos.left > 50 ? 'left' : 'right'}`}>
                   <span className="hotspot-tooltip-brand">{p.brand}</span>
                   <span className="hotspot-tooltip-name">{p.name}</span>
                   <span className="hotspot-tooltip-price">{p.price}</span>

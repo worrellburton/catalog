@@ -56,8 +56,9 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
   return (
     <div className="product-page-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="product-page">
-        <button className="product-page-close" onClick={onClose} aria-label="Close">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button className="product-page-back" onClick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
         </button>
 
         <div className="product-page-content">

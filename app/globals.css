@@ -4820,6 +4820,11 @@ header {
 .hotspot:nth-child(3) { animation-name: hotspotDrift3; }
 .hotspot:nth-child(4) { animation-name: hotspotDrift4; }
 
+.hotspot.tracking {
+  animation: none !important;
+  transition: top 0.08s linear, left 0.08s linear;
+}
+
 /* Organic drift paths — each dot follows a different figure-8 / oval */
 @keyframes hotspotDrift1 {
   0%, 100% { margin-top: 0; margin-left: 0; }
@@ -5140,25 +5145,26 @@ header {
 }
 
 .product-page-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  transition: background 0.2s;
+  display: none;
 }
 
-.product-page-close:hover {
-  background: rgba(255, 255, 255, 0.15);
+.product-page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 16px 0 0 16px;
+  font-family: inherit;
+  z-index: 10;
+}
+
+.product-page-back:hover {
+  color: #fff;
 }
 
 .product-page-content {
@@ -5540,7 +5546,7 @@ header {
 .creator-page {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: #fff;
   z-index: 150;
   overflow-y: auto;
   padding: var(--header-height) 28px 28px;
@@ -5564,21 +5570,21 @@ header {
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 20px;
 }
 
 .creator-hero-curated {
   font-size: 15px;
   font-style: italic;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   font-family: Georgia, 'Times New Roman', serif;
 }
 
 .creator-hero-name {
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
-  color: #fff;
+  color: #111;
   margin: 4px 0 20px;
   letter-spacing: -0.02em;
 }
@@ -5589,8 +5595,8 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #000;
-  background: #fff;
+  color: #fff;
+  background: #111;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -5604,14 +5610,14 @@ header {
 
 .creator-hero-trust {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   margin-bottom: 12px;
 }
 
 .creator-hero-socials {
   display: flex;
   gap: 16px;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(0, 0, 0, 0.3);
 }
 
 .creator-hero-socials svg {
@@ -5620,7 +5626,7 @@ header {
 }
 
 .creator-hero-socials svg:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 /* Creator Navigation */
@@ -5628,7 +5634,7 @@ header {
   display: flex;
   justify-content: center;
   gap: 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 24px;
 }
 
@@ -5636,7 +5642,7 @@ header {
   padding: 14px 8px;
   font-size: 15px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -5646,12 +5652,12 @@ header {
 }
 
 .creator-nav-tab:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.7);
 }
 
 .creator-nav-tab.active {
-  color: #fff;
-  border-bottom-color: #fff;
+  color: #111;
+  border-bottom-color: #111;
 }
 
 /* Brand filter chips */
@@ -5671,9 +5677,9 @@ header {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.45);
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
@@ -5682,14 +5688,14 @@ header {
 }
 
 .creator-brand-chip:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(0, 0, 0, 0.3);
+  color: rgba(0, 0, 0, 0.7);
 }
 
 .creator-brand-chip.active {
-  background: #fff;
-  color: #000;
-  border-color: #fff;
+  background: #111;
+  color: #fff;
+  border-color: #111;
 }
 
 .creator-products-grid {
@@ -5699,7 +5705,7 @@ header {
 }
 
 .creator-product-card {
-  background: rgba(255, 255, 255, 0.04);
+  background: #f7f7f7;
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -5707,7 +5713,7 @@ header {
 }
 
 .creator-product-card:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #efefef;
   transform: translateY(-2px);
 }
 
@@ -5725,7 +5731,7 @@ header {
 .creator-product-placeholder {
   width: 100%;
   height: 100%;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .creator-product-info {
@@ -5737,14 +5743,14 @@ header {
 
 .creator-product-brand {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .creator-product-name {
   font-size: 13px;
-  color: #fff;
+  color: #222;
   font-weight: 500;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -5755,7 +5761,7 @@ header {
 .creator-product-price {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #111;
   margin-top: 4px;
 }
 
@@ -5766,7 +5772,7 @@ header {
   justify-content: center;
   gap: 16px;
   padding: 80px 0;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(0, 0, 0, 0.3);
   font-size: 14px;
 }
 
@@ -5775,7 +5781,7 @@ header {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.5);
   text-decoration: none;
   margin-bottom: 20px;
   cursor: pointer;
@@ -5785,7 +5791,7 @@ header {
 }
 
 .creator-back:hover {
-  color: #fff;
+  color: #111;
 }
 
 .creator-grid {
