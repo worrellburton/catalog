@@ -4,6 +4,7 @@ import { Product } from '~/data/looks';
 
 const LOOKS_KEY = 'catalog_bookmarked_looks';
 const PRODUCTS_KEY = 'catalog_bookmarked_products';
+const CREATORS_KEY = 'catalog_followed_creators';
 
 function productKey(p: Product): string {
   return `${p.brand}::${p.name}`;
@@ -24,10 +25,13 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 export interface UseBookmarks {
   bookmarkedLooks: number[];
   bookmarkedProducts: Product[];
+  followedCreators: string[];
   isLookBookmarked: (lookId: number) => boolean;
   toggleLookBookmark: (lookId: number) => void;
   isProductBookmarked: (p: Product) => boolean;
   toggleProductBookmark: (p: Product) => void;
+  isCreatorFollowed: (handle: string) => boolean;
+  toggleCreatorFollow: (handle: string) => void;
   totalCount: number;
 }
 
@@ -38,6 +42,10 @@ export function useBookmarks(): UseBookmarks {
 
   const [bookmarkedProducts, setBookmarkedProducts] = useState<Product[]>(() =>
     loadFromStorage<Product[]>(PRODUCTS_KEY, [])
+  );
+
+  const [followedCreators, setFollowedCreators] = useState<string[]>(() =>
+    loadFromStorage<string[]>(CREATORS_KEY, [])
   );
 
   const isLookBookmarked = useCallback(
@@ -81,15 +89,36 @@ export function useBookmarks(): UseBookmarks {
     []
   );
 
-  const totalCount = bookmarkedLooks.length + bookmarkedProducts.length;
+  const isCreatorFollowed = useCallback(
+    (handle: string): boolean => followedCreators.includes(handle),
+    [followedCreators]
+  );
+
+  const toggleCreatorFollow = useCallback(
+    (handle: string): void => {
+      setFollowedCreators((prev) => {
+        const next = prev.includes(handle)
+          ? prev.filter((h) => h !== handle)
+          : [...prev, handle];
+        localStorage.setItem(CREATORS_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
+
+  const totalCount = bookmarkedLooks.length + bookmarkedProducts.length + followedCreators.length;
 
   return {
     bookmarkedLooks,
     bookmarkedProducts,
+    followedCreators,
     isLookBookmarked,
     toggleLookBookmark,
     isProductBookmarked,
     toggleProductBookmark,
+    isCreatorFollowed,
+    toggleCreatorFollow,
     totalCount,
   };
 }

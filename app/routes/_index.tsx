@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
@@ -57,10 +57,39 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(() => 1 + Math.floor(Math.random() * 3));
   const [catalogName, setCatalogName] = useState(getRandomCatalogName);
+  const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('recentCatalogs') || '[]');
+    } catch { return []; }
+  });
+  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
+  const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
   const { user, loading: authLoading } = useAuth();
+
+  // Track recent catalogs
+  useEffect(() => {
+    if (catalogName) {
+      setRecentCatalogs(prev => {
+        const updated = [catalogName, ...prev.filter(n => n !== catalogName)].slice(0, 5);
+        localStorage.setItem('recentCatalogs', JSON.stringify(updated));
+        return updated;
+      });
+    }
+  }, [catalogName]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (catalogDropdownRef.current && !catalogDropdownRef.current.contains(e.target as Node)) {
+        setCatalogDropdownOpen(false);
+      }
+    };
+    if (catalogDropdownOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [catalogDropdownOpen]);
 
   // Auto-redirect to admin if user is authenticated (e.g. Google OAuth redirect)
   useEffect(() => {
@@ -277,7 +306,37 @@ export default function Home() {
               <button className="logo-btn" onClick={handleRemix} aria-label="Remix">
                 <CatalogLogo className="logo" />
               </button>
-              <span className="catalog-name">{catalogName}</span>
+              <div className="catalog-dropdown-wrap" ref={catalogDropdownRef}>
+                <button
+                  className="catalog-name-btn"
+                  onClick={() => setCatalogDropdownOpen(o => !o)}
+                >
+                  <span>{catalogName}</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {catalogDropdownOpen && (
+                  <div className="catalog-dropdown">
+                    <div className="catalog-dropdown-section">Recent</div>
+                    {recentCatalogs.map((name, i) => (
+                      <button
+                        key={i}
+                        className={`catalog-dropdown-item ${name === catalogName ? 'active' : ''}`}
+                        onClick={() => { setCatalogName(name); setCatalogDropdownOpen(false); }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                    <div className="catalog-dropdown-divider" />
+                    <button
+                      className="catalog-dropdown-item catalog-dropdown-shuffle"
+                      onClick={() => { setCatalogName(getRandomCatalogName()); setCatalogDropdownOpen(false); }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                      Shuffle catalog
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="header-right">
               <button className="bookmark-toggle" onClick={() => setShowBookmarks(true)} aria-label="Bookmarks">
@@ -339,6 +398,7 @@ export default function Home() {
               onClose={() => setShowBookmarks(false)}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
+              onOpenCreator={(handle) => { setShowBookmarks(false); handleOpenCreator(handle); }}
             />
           )}
 

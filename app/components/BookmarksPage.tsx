@@ -1,16 +1,19 @@
 
 import { useCallback } from 'react';
-import { looks, Look, Product } from '~/data/looks';
+import { looks, creators, Look, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 
 interface BookmarksInterface {
   bookmarkedLooks: number[];
   bookmarkedProducts: Product[];
+  followedCreators: string[];
   isLookBookmarked: (lookId: number) => boolean;
   toggleLookBookmark: (lookId: number) => void;
   isProductBookmarked: (p: Product) => boolean;
   toggleProductBookmark: (p: Product) => void;
+  isCreatorFollowed: (handle: string) => boolean;
+  toggleCreatorFollow: (handle: string) => void;
 }
 
 interface BookmarksPageProps {
@@ -18,10 +21,14 @@ interface BookmarksPageProps {
   onClose: () => void;
   onOpenLook: (look: Look) => void;
   onOpenBrowser: (url: string, title: string) => void;
+  onOpenCreator?: (handle: string) => void;
 }
 
-export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser }: BookmarksPageProps) {
+export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser, onOpenCreator }: BookmarksPageProps) {
   const savedLooks = looks.filter(l => bookmarks.bookmarkedLooks.includes(l.id));
+  const followedCreatorData = bookmarks.followedCreators
+    .map(handle => ({ handle, data: creators[handle] }))
+    .filter(c => c.data);
 
   useEscapeKey(onClose);
 
@@ -41,7 +48,33 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
         <h1 className="bookmarks-title">Saved</h1>
       </div>
 
-      {savedLooks.length === 0 && bookmarks.bookmarkedProducts.length === 0 ? (
+      {/* Followed Creators */}
+      {followedCreatorData.length > 0 && (
+        <div className="bookmarks-creators-section">
+          <h2 className="bookmarks-section-title">Your Circle</h2>
+          <div className="bookmarks-creators-row">
+            {followedCreatorData.map(({ handle, data }) => (
+              <div
+                key={handle}
+                className="bookmarks-creator-card"
+                onClick={() => onOpenCreator?.(handle)}
+              >
+                <img className="bookmarks-creator-avatar" src={data.avatar} alt={data.displayName} />
+                <span className="bookmarks-creator-name">{data.displayName}</span>
+                <span className="bookmarks-creator-handle">{handle}</span>
+                <button
+                  className="bookmarks-creator-unfollow"
+                  onClick={(e) => { e.stopPropagation(); bookmarks.toggleCreatorFollow(handle); }}
+                >
+                  Following
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {savedLooks.length === 0 && bookmarks.bookmarkedProducts.length === 0 && followedCreatorData.length === 0 ? (
         <div className="bookmarks-empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <p>No saved items yet</p>

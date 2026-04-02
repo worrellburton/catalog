@@ -342,40 +342,42 @@ const DeckView: React.FC<DeckViewProps> = ({
         <span className="deck-label">The Math</span>
         <h2>Structurally better economics.</h2>
         <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
-        <div className="math-table">
-          {/* Header */}
-          <div className="math-table-header">
-            <div className="math-table-label-col" />
-            <div className="math-table-val-col math-col-old">Traditional Affiliate</div>
-            <div className="math-table-val-col math-col-new">Catalog (Fixed ROAS)</div>
-          </div>
-          {/* Rows */}
-          <div className="math-table-row">
-            <div className="math-table-label-col">Commission rate</div>
-            <div className="math-table-val-col math-val-old">10%</div>
-            <div className="math-table-val-col math-val-new">20%</div>
-          </div>
-          <div className="math-table-row">
-            <div className="math-table-label-col">Creator payout</div>
-            <div className="math-table-val-col math-val-old">$16 <span className="math-pct">(8%)</span></div>
-            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
-          </div>
-          <div className="math-table-row">
-            <div className="math-table-label-col">Platform revenue</div>
-            <div className="math-table-val-col math-val-old">$4 <span className="math-pct">(2%)</span></div>
-            <div className="math-table-val-col math-val-new">$20 <span className="math-pct">(10%)</span></div>
-          </div>
-          <div className="math-table-row">
-            <div className="math-table-label-col">Brand cost visibility</div>
-            <div className="math-table-val-col math-val-old math-val-dim">Unpredictable</div>
-            <div className="math-table-val-col math-val-green fire-text">Guaranteed 5x ROAS</div>
-          </div>
-          <div className="math-table-row">
-            <div className="math-table-label-col">Attribution</div>
-            <div className="math-table-val-col math-val-old math-val-dim">Last-click, lossy</div>
-            <div className="math-table-val-col math-val-new">Full-funnel, per-creator</div>
-          </div>
-        </div>
+        <table className="math-tbl">
+          <thead>
+            <tr>
+              <th />
+              <th className="math-tbl-old">Traditional Affiliate</th>
+              <th className="math-tbl-new">Catalog (Fixed ROAS)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="math-tbl-label">Commission rate</td>
+              <td className="math-tbl-val-old">10%</td>
+              <td className="math-tbl-val-new">20%</td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Creator payout</td>
+              <td className="math-tbl-val-old">$16 <span className="math-pct">(8%)</span></td>
+              <td className="math-tbl-val-new">$20 <span className="math-pct">(10%)</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Platform revenue</td>
+              <td className="math-tbl-val-old">$4 <span className="math-pct">(2%)</span></td>
+              <td className="math-tbl-val-new">$20 <span className="math-pct">(10%)</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Brand cost visibility</td>
+              <td className="math-tbl-val-old math-tbl-dim">Unpredictable</td>
+              <td className="math-tbl-val-new fire-text">Guaranteed 5x ROAS</td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Attribution</td>
+              <td className="math-tbl-val-old math-tbl-dim">Last-click, lossy</td>
+              <td className="math-tbl-val-new">Full-funnel, per-creator</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Slide 10: Flywheel */}
