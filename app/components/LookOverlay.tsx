@@ -130,7 +130,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <div
                 key={i}
                 className={`hotspot ${activeHotspot === i ? 'active' : ''}`}
-                style={{ top: `${pos[0]}%`, left: `${pos[1]}%` }}
+                style={{
+                  top: `${pos[0]}%`,
+                  left: `${pos[1]}%`,
+                  animationDelay: `${i * -1.7}s`,
+                  animationDuration: `${3.5 + i * 0.8}s`,
+                }}
                 onMouseEnter={() => setActiveHotspot(i)}
                 onMouseLeave={() => setActiveHotspot(null)}
                 onClick={(e) => { e.stopPropagation(); handleProductClick(p); }}
