@@ -1,7 +1,16 @@
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { Look, creators, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
+
+// Preset hotspot positions for products on the video
+// Each position is [top%, left%] — placed to simulate detected items
+const HOTSPOT_POSITIONS: [number, number][] = [
+  [28, 65],  // product 0: top-right area (shirt/top)
+  [55, 30],  // product 1: mid-left (pants/bottom)
+  [72, 55],  // product 2: lower-mid (shoes)
+  [18, 40],  // product 3: top area (accessory/hat)
+];
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -27,6 +36,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const [opacity, setOpacity] = useState(1);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
+  const [activeHotspot, setActiveHotspot] = useState<number | null>(null);
+  const [showHotspots, setShowHotspots] = useState(true);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -103,7 +114,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       style={overlayStyle}
     >
       <div className="look-detail">
-        <div className="look-media">
+        <div className="look-media" onClick={() => setShowHotspots(h => !h)}>
           <video
             src={`${basePath}/${look.video}`}
             autoPlay
@@ -112,6 +123,35 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             playsInline
             style={{ width: '100%', borderRadius: 12, aspectRatio: '3/4', objectFit: 'cover' }}
           />
+          {/* Product hotspot dots on video */}
+          {showHotspots && look.products.map((p, i) => {
+            const pos = HOTSPOT_POSITIONS[i % HOTSPOT_POSITIONS.length];
+            return (
+              <div
+                key={i}
+                className={`hotspot ${activeHotspot === i ? 'active' : ''}`}
+                style={{ top: `${pos[0]}%`, left: `${pos[1]}%` }}
+                onMouseEnter={() => setActiveHotspot(i)}
+                onMouseLeave={() => setActiveHotspot(null)}
+                onClick={(e) => { e.stopPropagation(); handleProductClick(p); }}
+              >
+                <span className="hotspot-dot" />
+                <span className="hotspot-ping" />
+                <div className={`hotspot-tooltip ${pos[1] > 50 ? 'left' : 'right'}`}>
+                  <span className="hotspot-tooltip-brand">{p.brand}</span>
+                  <span className="hotspot-tooltip-name">{p.name}</span>
+                  <span className="hotspot-tooltip-price">{p.price}</span>
+                </div>
+              </div>
+            );
+          })}
+          {/* Shopping bag icon indicator */}
+          <div className="hotspot-indicator">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+            </svg>
+            <span>{look.products.length}</span>
+          </div>
         </div>
 
         <div className="look-info">

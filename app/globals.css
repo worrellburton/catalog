@@ -4803,6 +4803,124 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+
+/* Product hotspots on video */
+.hotspot {
+  position: absolute;
+  z-index: 5;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.hotspot-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 2;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hotspot:hover .hotspot-dot,
+.hotspot.active .hotspot-dot {
+  transform: scale(1.3);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.hotspot-ping {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  animation: hotspotPing 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hotspotPing {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.hotspot-tooltip {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 14px;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.hotspot-tooltip.right {
+  left: calc(100% + 12px);
+}
+
+.hotspot-tooltip.left {
+  right: calc(100% + 12px);
+}
+
+.hotspot:hover .hotspot-tooltip,
+.hotspot.active .hotspot-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hotspot-tooltip-brand {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hotspot-tooltip-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.hotspot-tooltip-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Shopping bag indicator bottom-left of video */
+.hotspot-indicator {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  padding: 6px 12px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 4;
+  pointer-events: none;
 }
 
 .look-media .look-placeholder {
