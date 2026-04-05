@@ -10,6 +10,7 @@ const basePath = rawBase ? `${rawBase}/` : "/";
 
 export default defineConfig({
   base: basePath,
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   plugins: [
     remix({
       ssr: false,
