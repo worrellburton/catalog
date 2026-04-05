@@ -8,14 +8,13 @@ interface UserMenuUser {
 }
 
 interface UserMenuProps {
-  onRemix: () => void;
   onOpenBookmarks: () => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
 }
 
-export default function UserMenu({ onRemix, onOpenBookmarks, bookmarkCount, user, onLogout }: UserMenuProps) {
+export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogout }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -58,10 +57,6 @@ export default function UserMenu({ onRemix, onOpenBookmarks, bookmarkCount, user
               <div className="user-menu-divider" />
             </>
           )}
-          <button className="user-menu-item" onClick={() => { onRemix(); setOpen(false); }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            <span>Remix</span>
-          </button>
           <button className="user-menu-item" onClick={() => { onOpenBookmarks(); setOpen(false); }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             <span>Bookmarks</span>
