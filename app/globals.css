@@ -3082,13 +3082,35 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  font-family: inherit;
 }
 
 .search-btn:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+.search-btn-label {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .search-btn {
+    width: auto;
+    height: 40px;
+    padding: 0 16px 0 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .search-btn-label {
+    display: inline;
+    white-space: nowrap;
+  }
 }
 
 /* Filter button */
