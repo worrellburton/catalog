@@ -8,11 +8,12 @@ interface ProductPageProps {
   onClose: () => void;
   onOpenLook: (look: Look) => void;
   onOpenBrowser: (url: string, title: string) => void;
+  onOpenProduct?: (product: Product) => void;
   onOpenCreator?: (name: string) => void;
   onCreateCatalog?: (query: string) => void;
 }
 
-export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowser, onOpenCreator, onCreateCatalog }: ProductPageProps) {
+export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowser, onOpenProduct, onOpenCreator, onCreateCatalog }: ProductPageProps) {
   useEscapeKey(onClose);
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -78,8 +79,9 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
               <button
                 className="product-page-shop-btn"
                 onClick={() => onOpenBrowser(product.url, product.name)}
+                disabled={!product.url}
               >
-                Shop Now
+                Shop on {product.brand}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
               </button>
               <button className="create-catalog-btn" onClick={() => onCreateCatalog?.(product.brand)}>
@@ -164,7 +166,7 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
                   <div
                     key={i}
                     className="product-page-similar-item"
-                    onClick={() => onOpenBrowser(p.url, p.name)}
+                    onClick={() => onOpenProduct ? onOpenProduct(p) : onOpenBrowser(p.url, p.name)}
                   >
                     {p.image ? (
                       <img src={p.image} alt={p.name} className="product-page-similar-img" />

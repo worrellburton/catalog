@@ -8,7 +8,6 @@ import LookOverlay from '~/components/LookOverlay';
 import CreatorPage from '~/components/CreatorPage';
 import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
-import InAppBrowser from '~/components/InAppBrowser';
 import DeckView from '~/components/DeckView';
 import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
@@ -46,7 +45,6 @@ export default function Home() {
   const [selectedLook, setSelectedLook] = useState<Look | null>(null);
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
-  const [browserUrl, setBrowserUrl] = useState<{ url: string; title: string } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -232,12 +230,9 @@ export default function Home() {
     setCreatorFilter(null);
   }, []);
 
-  const handleOpenBrowser = useCallback((url: string, title: string) => {
-    setBrowserUrl({ url, title });
-  }, []);
-
-  const handleCloseBrowser = useCallback(() => {
-    setBrowserUrl(null);
+  const handleOpenBrowser = useCallback((url: string, _title: string) => {
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
   const handleOpenProduct = useCallback((product: Product) => {
@@ -418,18 +413,12 @@ export default function Home() {
               onClose={() => setSelectedProduct(null)}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
+              onOpenProduct={handleOpenProduct}
               onOpenCreator={handleOpenCreator}
               onCreateCatalog={handleCreateCatalog}
             />
           )}
 
-          {browserUrl && (
-            <InAppBrowser
-              url={browserUrl.url}
-              title={browserUrl.title}
-              onClose={handleCloseBrowser}
-            />
-          )}
         </>
       )}
     </div>
