@@ -14,6 +14,7 @@ import DeckViewV7 from '~/components/DeckViewV7';
 import DeckSelector from '~/components/DeckSelector';
 import ProductPage from '~/components/ProductPage';
 import CatalogLogo from '~/components/CatalogLogo';
+import UserMenu from '~/components/UserMenu';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
@@ -65,7 +66,7 @@ export default function Home() {
 
   const navigate = useNavigate();
   const bookmarks = useBookmarks();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
 
   // Track recent catalogs
   useEffect(() => {
@@ -351,6 +352,13 @@ export default function Home() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
               </button>
+              <UserMenu
+                onRemix={handleRemix}
+                onOpenBookmarks={() => setShowBookmarks(true)}
+                bookmarkCount={bookmarks.totalCount}
+                user={user}
+                onLogout={async () => { await logout(); setView('locked'); }}
+              />
             </div>
           </header>
 
