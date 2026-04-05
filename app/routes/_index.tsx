@@ -93,14 +93,14 @@ export default function Home() {
 
   // Auto-enter main catalog grid if user is authenticated (e.g. Google OAuth redirect)
   useEffect(() => {
-    if (!authLoading && user && view === 'locked') {
-      setShowSplash(true);
-      setView('splash');
-      setTimeout(() => {
-        setView('app');
-        setShowSplash(false);
-      }, 2200);
+    if (authLoading) return;
+    if (!user) return;
+    if (view !== 'locked') return;
+    // Clean OAuth hash fragment from URL
+    if (window.location.hash.includes('access_token')) {
+      window.history.replaceState(null, '', window.location.pathname);
     }
+    setView('app');
   }, [user, authLoading, view]);
 
   // Read hash on mount for deep linking
