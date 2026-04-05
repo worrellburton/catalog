@@ -63,7 +63,7 @@ function formatPhone(value: string): string {
 }
 
 export default function PasswordGate({ onSubmit, onAuthSuccess }: PasswordGateProps) {
-  const [authMode, setAuthMode] = useState<AuthMode>('main');
+  const [authMode, setAuthMode] = useState<AuthMode>('code');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [accessCode, setAccessCode] = useState('');
