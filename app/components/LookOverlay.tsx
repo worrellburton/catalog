@@ -37,23 +37,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   useEscapeKey(onClose);
 
-  const [dragEnabled, setDragEnabled] = useState(true);
-
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only allow swipe-to-dismiss when the scroll container is at the top
-    const scrollTop = overlayRef.current?.scrollTop ?? 0;
-    setDragEnabled(scrollTop <= 0);
     setTouchStartY(e.touches[0].clientY);
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!dragEnabled) return;
     const dy = e.touches[0].clientY - touchStartY;
     if (dy > 0) {
       setTranslateY(dy);
       setOpacity(Math.max(0.3, 1 - dy / 400));
     }
-  }, [touchStartY, dragEnabled]);
+  }, [touchStartY]);
 
   const handleTouchEnd = useCallback(() => {
     if (translateY > 120) {
