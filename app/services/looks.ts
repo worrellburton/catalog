@@ -4,7 +4,7 @@ import { looks as staticLooks, creators as staticCreators, searchSuggestions as 
 
 // Flag to toggle between Supabase and static data
 // Set to true once Supabase tables are populated
-const USE_SUPABASE = false;
+const USE_SUPABASE = true;
 
 // ============================================
 // Supabase fetchers
