@@ -9,10 +9,11 @@ interface BottomBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onOpenCreators?: () => void;
+  catalogName?: string;
 }
 
 export default function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onOpenCreators
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onOpenCreators, catalogName
 }: BottomBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -145,6 +146,7 @@ export default function BottomBar({
         <div className="bottom-bar-inner">
           <button className="search-btn" onClick={openSearch} aria-label="Open search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            {catalogName && <span className="search-btn-label">{catalogName}</span>}
           </button>
         </div>
 

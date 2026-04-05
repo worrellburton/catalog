@@ -376,6 +376,7 @@ export default function Home() {
             searchQuery={searchQuery}
             onSearchChange={(q: string) => { setSearchQuery(q); if (q.trim()) setCatalogName(getRandomCatalogName(q)); }}
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
+            catalogName={catalogName}
           />
 
           {selectedLook && (
