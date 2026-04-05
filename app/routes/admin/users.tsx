@@ -1,13 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import { getProfiles, type Profile } from '~/services/profiles';
 
-const shoppers = [
-  { initials: 'CA', name: 'Carla', color: '#e8f5e9', avatar: 'https://i.pravatar.cc/40?img=5', sso: 'SSO', createdAt: 'Mar 01, 2026', lastSignIn: 'Mar 22, 2026 2:14 PM', shopping: 'Women', location: 'Washington, UK', saved: 0, followings: 0, creator: '-' },
-  { initials: 'AL', name: 'alfvaz', color: '#e3f2fd', avatar: 'https://i.pravatar.cc/40?img=33', sso: 'SSO', createdAt: 'Feb 28, 2026', lastSignIn: 'Mar 21, 2026 9:45 AM', shopping: 'Men', location: '-', saved: 0, followings: 1, creator: 'Angelina Oleas' },
-  { initials: 'FR', name: 'franky90', color: '#fff3e0', avatar: 'https://i.pravatar.cc/40?img=59', sso: 'Google', createdAt: 'Feb 28, 2026', lastSignIn: 'Mar 20, 2026 6:30 PM', shopping: 'Men', location: '-', saved: 0, followings: 1, creator: 'Angelina Oleas' },
-  { initials: 'D1', name: 'D1.barbershop', color: '#f3e5f5', avatar: 'https://i.pravatar.cc/40?img=15', sso: 'Google', createdAt: 'Feb 25, 2026', lastSignIn: 'Mar 15, 2026 11:02 AM', shopping: 'Men', location: '-', saved: 0, followings: 0, creator: '-' },
-];
+function formatDate(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function profileToShopper(p: Profile) {
+  const name = p.full_name || p.email?.split('@')[0] || 'Unknown';
+  return {
+    initials: name.slice(0, 2).toUpperCase(),
+    name,
+    color: '#e8f5e9',
+    avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+    sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
+    createdAt: formatDate(p.created_at),
+    lastSignIn: formatDateTime(p.last_sign_in_at),
+    shopping: '-',
+    location: '-',
+    saved: 0,
+    followings: 0,
+    creator: '-',
+  };
+}
 
 const waitlistData = [
   { initials: 'JM', name: 'jmartinez', color: '#e0f7fa', avatar: 'https://i.pravatar.cc/40?img=23', email: 'jmartinez@gmail.com', requestedAt: 'Mar 18, 2026', shopping: 'Women', location: 'Miami, FL', referral: 'Instagram' },
@@ -38,6 +62,12 @@ type Tab = 'shoppers' | 'creators' | 'waitlist' | 'incoming';
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
+  const [shoppers, setShoppers] = useState<ReturnType<typeof profileToShopper>[]>([]);
+
+  useEffect(() => {
+    getProfiles().then(profiles => setShoppers(profiles.map(profileToShopper)));
+  }, []);
+
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creatorsData);
   const waitlistTable = useSortableTable(waitlistData);

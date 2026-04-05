@@ -150,6 +150,13 @@ export default function PasswordGate({ onSubmit, onAuthSuccess }: PasswordGatePr
 
   const handleAccessCode = () => {
     const val = accessCode.trim().toLowerCase();
+    // 123 → return to main sign-in screen (Google / Phone)
+    if (val === '123') {
+      setAuthMode('main');
+      setAccessCode('');
+      setError('');
+      return;
+    }
     const success = onSubmit(val);
     if (success) {
       setDismissed(true);

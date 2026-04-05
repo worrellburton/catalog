@@ -91,12 +91,17 @@ export default function Home() {
     return () => document.removeEventListener('mousedown', handler);
   }, [catalogDropdownOpen]);
 
-  // Auto-redirect to admin if user is authenticated (e.g. Google OAuth redirect)
+  // Auto-enter main catalog grid if user is authenticated (e.g. Google OAuth redirect)
   useEffect(() => {
     if (!authLoading && user && view === 'locked') {
-      navigate('/admin');
+      setShowSplash(true);
+      setView('splash');
+      setTimeout(() => {
+        setView('app');
+        setShowSplash(false);
+      }, 2200);
     }
-  }, [user, authLoading, view, navigate]);
+  }, [user, authLoading, view]);
 
   // Read hash on mount for deep linking
   useEffect(() => {
@@ -161,8 +166,13 @@ export default function Home() {
   }, []);
 
   const handleAuthSuccess = useCallback(() => {
-    navigate('/admin');
-  }, [navigate]);
+    setShowSplash(true);
+    setView('splash');
+    setTimeout(() => {
+      setView('app');
+      setShowSplash(false);
+    }, 2200);
+  }, []);
 
   const handleRemix = useCallback(() => {
     setShuffleKey(k => k + 1);
