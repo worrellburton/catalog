@@ -126,6 +126,9 @@ export default function Home() {
 
   // Sync hash when view changes
   useEffect(() => {
+    // Don't clobber Supabase OAuth return hash — let the client parse it first.
+    if (window.location.hash.includes('access_token')) return;
+
     let hash = '';
     if (view === 'deck-selector') hash = 'deck';
     else if (view === 'deck') hash = `deck/${activeDeck}`;
