@@ -3111,6 +3111,9 @@ header {
     display: inline;
     white-space: nowrap;
   }
+  .catalog-dropdown-wrap {
+    display: none;
+  }
 }
 
 /* Filter button */
