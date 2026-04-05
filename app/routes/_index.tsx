@@ -353,7 +353,6 @@ export default function Home() {
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
               </button>
               <UserMenu
-                onRemix={handleRemix}
                 onOpenBookmarks={() => setShowBookmarks(true)}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
