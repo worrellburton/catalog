@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { getProfiles, updateUserRole, type Profile } from '~/services/profiles';
+import { creators as lookCreators } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 
@@ -111,7 +112,31 @@ export default function AdminUsers() {
   }, []);
 
   const shoppers = allUsers.filter(u => u.role === 'shopper');
-  const creators = allUsers.filter(u => u.role === 'creator');
+  const dbCreators = allUsers.filter(u => u.role === 'creator');
+
+  // Merge content creators from looks data with DB creators
+  const contentCreators: UserRow[] = useMemo(() => {
+    const dbNames = new Set(dbCreators.map(c => c.name.toLowerCase()));
+    return Object.values(lookCreators)
+      .filter(c => !dbNames.has(c.displayName.toLowerCase()))
+      .map(c => ({
+        id: `content-${c.name}`,
+        initials: c.displayName.slice(0, 2).toUpperCase(),
+        name: c.displayName,
+        avatar: c.avatar,
+        sso: '-',
+        role: 'creator' as UserRole,
+        createdAt: '-',
+        lastSignIn: '-',
+        shopping: '-',
+        location: '-',
+        saved: 0,
+        followings: 0,
+        creator: '-',
+      }));
+  }, [dbCreators]);
+
+  const creators = [...dbCreators, ...contentCreators];
   const admins = allUsers.filter(u => u.role === 'admin');
 
   const shopperTable = useSortableTable(shoppers);
