@@ -1,21 +1,104 @@
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from '@remix-run/react';
+import { looks, creators, type Look } from '~/data/looks';
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
 
-const userData: Record<string, { type: string; searches: string[]; clicks: string[]; saved: string[] }> = {
-  'Carla': { type: 'Shopper', searches: ['summer dresses', 'white sneakers', 'linen pants'], clicks: ['Rock Style Flap Shoulder Bag - Zara', 'Major Shade Cat Eye Sunglasses - Windsor'], saved: ['Look 07'] },
-  'alfvaz': { type: 'Shopper', searches: ['streetwear', 'dior sneakers', 'mens fashion'], clicks: ['B27 Uptown Low-Top Sneaker - Dior', 'Patchwork Pointelle Shirt - Vince'], saved: [] },
-  'franky90': { type: 'Shopper', searches: ['casual outfits', 'jeans'], clicks: ['Light Blue Straight Leg Jeans - Suitsupply'], saved: [] },
-  'D1.barbershop': { type: 'Shopper', searches: [], clicks: [], saved: [] },
-  'applee': { type: 'Creator', searches: ['mens outfits', 'sneaker trends'], clicks: ['B27 Uptown Low-Top Sneaker - Dior'], saved: [] },
-  'PrettyHome': { type: 'Creator', searches: ['home decor', 'minimalist style'], clicks: ['Rock Style Flap Shoulder Bag - Zara', 'Oval D Glitter Case - Diesel'], saved: [] },
-  'testapple': { type: 'Creator', searches: [], clicks: [], saved: [] },
-  'apple': { type: 'Creator', searches: [], clicks: [], saved: [] },
-};
+function findCreatorHandle(displayName: string): string | null {
+  for (const [handle, c] of Object.entries(creators)) {
+    if (c.displayName.toLowerCase() === displayName.toLowerCase()) return handle;
+  }
+  return null;
+}
+
+function LookRow({ look, expanded, onToggle }: { look: Look; expanded: boolean; onToggle: () => void }) {
+  const creator = creators[look.creator];
+  return (
+    <>
+      <tr className="admin-clickable-row" onClick={onToggle}>
+        <td className="admin-cell-name">
+          <video
+            src={`${import.meta.env.BASE_URL}${look.video}`}
+            className="admin-look-thumb"
+            muted
+            playsInline
+            preload="metadata"
+          />
+          <span>{look.title}</span>
+        </td>
+        <td>{creator?.displayName || look.creator}</td>
+        <td><span className={`admin-gender-badge admin-gender-${look.gender}`}>{look.gender === 'men' ? 'Men' : 'Women'}</span></td>
+        <td>{look.products.length}</td>
+        <td className="admin-cell-muted">{look.description}</td>
+        <td>
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="admin-look-products-row">
+          <td colSpan={6}>
+            <div className="admin-products-grid">
+              {look.products.map((p, i) => (
+                <div key={i} className="admin-product-card">
+                  {p.image && <img src={p.image} alt={p.name} className="admin-product-img" />}
+                  <div className="admin-product-info">
+                    <span className="admin-product-name">{p.name}</span>
+                    <span className="admin-product-brand">{p.brand}</span>
+                    <span className="admin-product-price">{p.price}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+interface LookTableRow {
+  id: number;
+  title: string;
+  creatorName: string;
+  gender: string;
+  productCount: number;
+  description: string;
+}
 
 export default function AdminUserDetail() {
   const { name } = useParams();
   const navigate = useNavigate();
   const decoded = decodeURIComponent(name || '');
-  const user = userData[decoded] || { type: 'Shopper', searches: [], clicks: [], saved: [] };
+
+  const creatorHandle = findCreatorHandle(decoded);
+  const creator = creatorHandle ? creators[creatorHandle] : null;
+  const isCreator = !!creator;
+
+  const creatorLooks = useMemo(() => {
+    if (!creatorHandle) return [];
+    return looks.filter(l => l.creator === creatorHandle);
+  }, [creatorHandle]);
+
+  const tableRows: LookTableRow[] = useMemo(() =>
+    creatorLooks.map(l => ({
+      id: l.id,
+      title: l.title,
+      creatorName: creator?.displayName || l.creator,
+      gender: l.gender,
+      productCount: l.products.length,
+      description: l.description,
+    })),
+  [creatorLooks, creator]);
+
+  const lookTable = useSortableTable(tableRows);
+  const [expandedLook, setExpandedLook] = useState<number | null>(null);
+
+  const totalProducts = creatorLooks.reduce((sum, l) => sum + l.products.length, 0);
+  const uniqueBrands = new Set(creatorLooks.flatMap(l => l.products.map(p => p.brand)));
 
   return (
     <div className="admin-page">
@@ -24,71 +107,78 @@ export default function AdminUserDetail() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Users
         </button>
-        <h1>{decoded}</h1>
-        <p className="admin-page-subtitle">{user.type} profile and activity</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {creator && <img src={creator.avatar} alt="" className="admin-user-avatar-img" style={{ width: 40, height: 40 }} />}
+          <div>
+            <h1>{decoded}</h1>
+            <p className="admin-page-subtitle">{isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}</p>
+          </div>
+        </div>
       </div>
+
       <div className="admin-detail-grid">
         <div className="admin-detail-card">
           <h3>Profile</h3>
           <div className="admin-detail-rows">
             <div className="admin-detail-row"><span>Username</span><span>{decoded}</span></div>
+            {creatorHandle && <div className="admin-detail-row"><span>Handle</span><span>{creatorHandle}</span></div>}
             <div className="admin-detail-row"><span>Status</span><span className="admin-status-active">Active</span></div>
-            <div className="admin-detail-row"><span>Type</span><span>{user.type}</span></div>
+            <div className="admin-detail-row"><span>Type</span><span>{isCreator ? 'Creator' : 'Shopper'}</span></div>
           </div>
         </div>
         <div className="admin-detail-card">
           <h3>Activity</h3>
           <div className="admin-detail-rows">
-            <div className="admin-detail-row"><span>Saved</span><span>{user.saved.length}</span></div>
-            <div className="admin-detail-row"><span>Searches</span><span>{user.searches.length}</span></div>
-            <div className="admin-detail-row"><span>Clicks</span><span>{user.clicks.length}</span></div>
+            <div className="admin-detail-row"><span>Looks</span><span>{creatorLooks.length}</span></div>
+            <div className="admin-detail-row"><span>Products</span><span>{totalProducts}</span></div>
+            <div className="admin-detail-row"><span>Brands</span><span>{uniqueBrands.size}</span></div>
+            <div className="admin-detail-row"><span>Saved</span><span>0</span></div>
           </div>
         </div>
       </div>
-      <div className="admin-detail-grid" style={{ marginTop: 16 }}>
-        <div className="admin-detail-card">
-          <h3>Recent Searches</h3>
-          {user.searches.length === 0 ? (
-            <p className="admin-detail-empty">No searches yet</p>
-          ) : (
-            <div className="admin-activity-list">
-              {user.searches.map((s, i) => (
-                <div key={i} className="admin-activity-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <span>{s}</span>
-                </div>
-              ))}
-            </div>
-          )}
+
+      {isCreator && creatorLooks.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h2 className="admin-section-title">Looks ({creatorLooks.length})</h2>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <SortableTh label="Look" sortKey="title" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
+                  <SortableTh label="Creator" sortKey="creatorName" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
+                  <SortableTh label="Gender" sortKey="gender" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
+                  <SortableTh label="Products" sortKey="productCount" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
+                  <SortableTh label="Description" sortKey="description" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
+                  <th style={{ width: 30 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lookTable.sortedData.map(row => {
+                  const look = creatorLooks.find(l => l.id === row.id)!;
+                  return (
+                    <LookRow
+                      key={row.id}
+                      look={look}
+                      expanded={expandedLook === row.id}
+                      onToggle={() => setExpandedLook(prev => prev === row.id ? null : row.id)}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="admin-detail-card">
-          <h3>Recent Clicks</h3>
-          {user.clicks.length === 0 ? (
-            <p className="admin-detail-empty">No clicks yet</p>
-          ) : (
-            <div className="admin-activity-list">
-              {user.clicks.map((c, i) => (
-                <div key={i} className="admin-activity-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                  <span>{c}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      {user.saved.length > 0 && (
+      )}
+
+      {!isCreator && (
         <div className="admin-detail-grid" style={{ marginTop: 16 }}>
           <div className="admin-detail-card">
-            <h3>Saved Looks</h3>
-            <div className="admin-activity-list">
-              {user.saved.map((s, i) => (
-                <div key={i} className="admin-activity-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                  <span>{s}</span>
-                </div>
-              ))}
-            </div>
+            <h3>Recent Searches</h3>
+            <p className="admin-detail-empty">No searches yet</p>
+          </div>
+          <div className="admin-detail-card">
+            <h3>Recent Clicks</h3>
+            <p className="admin-detail-empty">No clicks yet</p>
           </div>
         </div>
       )}
