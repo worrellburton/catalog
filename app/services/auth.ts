@@ -67,14 +67,17 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!data.user) return null;
   const authUser = mapUser(data.user);
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .single();
-
-  if (profile?.role) {
-    authUser.role = profile.role as UserRole;
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+    if (profile?.role) {
+      authUser.role = profile.role as UserRole;
+    }
+  } catch {
+    // role column may not exist yet
   }
 
   return authUser;
