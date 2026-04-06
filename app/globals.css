@@ -3103,12 +3103,16 @@ header {
 
 /* Search button */
 .search-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.6);
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  width: auto;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -3117,15 +3121,18 @@ header {
   transition: all 0.2s ease;
   flex-shrink: 0;
   font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .search-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
 }
 
 .search-btn-label {
-  display: none;
+  display: inline;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
