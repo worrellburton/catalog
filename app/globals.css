@@ -2875,30 +2875,63 @@ header {
   }
 
   header {
-    height: 56px;
-    padding: 0 16px;
+    height: 48px;
+    padding: 0 12px;
     padding-bottom: 0;
     align-items: center;
+    background: #0a0a0a;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .logo {
-    height: 30px;
+    height: 26px;
+  }
+
+  .header-right {
+    gap: 8px;
   }
 
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
-    padding-top: 80px;
-    padding-left: 0;
-    padding-right: 0;
+    gap: 2px !important;
+    padding-top: 50px;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 
-  /* Black padding spacer above the grid on mobile */
   #grid-viewport {
-    padding-top: 20px;
+    padding-top: 0;
+    padding-bottom: 80px;
+    background: #0a0a0a;
   }
 
   #grid-viewport::after {
     display: none;
+  }
+
+  .look-card {
+    border-radius: 4px;
+  }
+
+  .look-card .card-catalog-btn {
+    opacity: 1;
+    transform: scale(1);
+    width: 32px;
+    height: 32px;
+    top: 6px;
+    right: 6px;
+  }
+
+  .look-card .card-creator-row {
+    bottom: 6px;
+    left: 6px;
+    padding: 3px 8px 3px 3px;
+    gap: 5px;
+  }
+
+  .look-card .card-creator-name {
+    font-size: 11px;
   }
 }
 
