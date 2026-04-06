@@ -2895,7 +2895,7 @@ header {
   #grid-container {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 2px !important;
-    padding-top: 80px;
+    padding-top: 100px;
     padding-left: 2px;
     padding-right: 2px;
   }
