@@ -182,6 +182,14 @@ export default function Home() {
     setCatalogName(getRandomCatalogName());
   }, []);
 
+  const handleLogoClick = useCallback(() => {
+    setSearchQuery('');
+    setActiveFilter('all');
+    setCreatorFilter(null);
+    setShuffleKey(k => k + 1);
+    setCatalogName(getRandomCatalogName());
+  }, []);
+
   const handleLandingToApp = useCallback(() => {
     setShowSplash(true);
     setView('splash');
@@ -312,7 +320,7 @@ export default function Home() {
 
           <header>
             <div className="header-left">
-              <button className="logo-btn" onClick={handleRemix} aria-label="Remix">
+              <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
                 <CatalogLogo className="logo" />
               </button>
               <div className="catalog-dropdown-wrap" ref={catalogDropdownRef}>
