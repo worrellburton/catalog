@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import type { UserRole } from '~/types/roles';
 
 export interface AuthUser {
   id: string;
@@ -6,6 +7,7 @@ export interface AuthUser {
   phone?: string;
   displayName?: string;
   avatarUrl?: string;
+  role?: UserRole;
 }
 
 function mapUser(user: { id: string; email?: string; phone?: string; user_metadata?: Record<string, string> }): AuthUser {
@@ -63,7 +65,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
-  return mapUser(data.user);
+  const authUser = mapUser(data.user);
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .single();
+
+  if (profile?.role) {
+    authUser.role = profile.role as UserRole;
+  }
+
+  return authUser;
 }
 
 export async function signOut(): Promise<void> {
