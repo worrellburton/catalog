@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from '@remix-run/react';
+import type { UserRole } from '~/types/roles';
+import { USER_ROLE_LABELS } from '~/types/roles';
 
 interface UserMenuUser {
   displayName?: string;
   email?: string;
   avatarUrl?: string;
+  role?: UserRole;
 }
 
 interface UserMenuProps {
@@ -52,6 +55,7 @@ export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogou
                 <div className="user-menu-identity">
                   {user.displayName && <span className="user-menu-name">{user.displayName}</span>}
                   {user.email && <span className="user-menu-email">{user.email}</span>}
+                  {user.role && <span className={`user-menu-role user-menu-role-${user.role}`}>{USER_ROLE_LABELS[user.role]}</span>}
                 </div>
               </div>
               <div className="user-menu-divider" />

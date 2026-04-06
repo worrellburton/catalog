@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { getProfiles, type Profile } from '~/services/profiles';
+import { getProfiles, updateUserRole, type Profile } from '~/services/profiles';
+import type { UserRole } from '~/types/roles';
+import { USER_ROLE_LABELS } from '~/types/roles';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
@@ -15,14 +17,31 @@ function formatDateTime(iso: string | null): string {
   return d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function profileToShopper(p: Profile) {
+interface UserRow {
+  id: string;
+  initials: string;
+  name: string;
+  avatar: string;
+  sso: string;
+  role: UserRole;
+  createdAt: string;
+  lastSignIn: string;
+  shopping: string;
+  location: string;
+  saved: number;
+  followings: number;
+  creator: string;
+}
+
+function profileToRow(p: Profile): UserRow {
   const name = p.full_name || p.email?.split('@')[0] || 'Unknown';
   return {
+    id: p.id,
     initials: name.slice(0, 2).toUpperCase(),
     name,
-    color: '#e8f5e9',
     avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
+    role: p.role || 'shopper',
     createdAt: formatDate(p.created_at),
     lastSignIn: formatDateTime(p.last_sign_in_at),
     shopping: '-',
@@ -35,16 +54,123 @@ function profileToShopper(p: Profile) {
 
 type Tab = 'shoppers' | 'creators' | 'waitlist' | 'incoming';
 
+function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole) => void }) {
+  const [open, setOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  const handleChange = async (newRole: UserRole) => {
+    if (newRole === role) { setOpen(false); return; }
+    setUpdating(true);
+    const { error } = await updateUserRole(userId, newRole);
+    if (!error) {
+      onRoleChange(userId, newRole);
+    }
+    setUpdating(false);
+    setOpen(false);
+  };
+
+  return (
+    <div className="admin-role-badge-wrap" style={{ position: 'relative' }}>
+      <button
+        className={`admin-role-badge admin-role-${role}`}
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        disabled={updating}
+      >
+        {updating ? '...' : USER_ROLE_LABELS[role]}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <div className="admin-role-dropdown" onClick={(e) => e.stopPropagation()}>
+          {(Object.keys(USER_ROLE_LABELS) as UserRole[]).map(r => (
+            <button
+              key={r}
+              className={`admin-role-option ${r === role ? 'active' : ''}`}
+              onClick={() => handleChange(r)}
+            >
+              {USER_ROLE_LABELS[r]}
+              {r === role && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
-  const [shoppers, setShoppers] = useState<ReturnType<typeof profileToShopper>[]>([]);
+  const [allUsers, setAllUsers] = useState<UserRow[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    getProfiles().then(profiles => setShoppers(profiles.map(profileToShopper)));
+    getProfiles().then(profiles => setAllUsers(profiles.map(profileToRow)));
   }, []);
 
+  const handleRoleChange = useCallback((userId: string, newRole: UserRole) => {
+    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+  }, []);
+
+  const shoppers = allUsers.filter(u => u.role === 'shopper');
+  const creators = allUsers.filter(u => u.role === 'creator');
+  const admins = allUsers.filter(u => u.role === 'admin');
+
   const shopperTable = useSortableTable(shoppers);
-  const navigate = useNavigate();
+  const creatorTable = useSortableTable(creators);
+
+  const renderTable = (
+    data: UserRow[],
+    table: ReturnType<typeof useSortableTable<UserRow>>,
+    labelCol: string,
+  ) => {
+    if (data.length === 0) {
+      return <p className="admin-detail-empty">No {labelCol.toLowerCase()}s yet</p>;
+    }
+    return (
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Last Sign In" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Shopping" sortKey="shopping" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Location" sortKey="location" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Via Creator" sortKey="creator" currentSort={table.sort} onSort={table.handleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {table.sortedData.map(u => (
+              <tr
+                key={u.id}
+                className="admin-clickable-row"
+                onClick={() => navigate(`/admin/user/${encodeURIComponent(u.name)}`)}
+              >
+                <td className="admin-cell-name">
+                  <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />
+                  {u.name}
+                </td>
+                <td>
+                  <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
+                </td>
+                <td><span className="admin-sso-badge">{u.sso}</span></td>
+                <td className="admin-cell-muted">{u.createdAt}</td>
+                <td className="admin-cell-muted">{u.lastSignIn}</td>
+                <td>{u.shopping}</td>
+                <td className="admin-cell-muted">{u.location}</td>
+                <td>{u.saved}</td>
+                <td>{u.followings}</td>
+                <td className="admin-cell-muted">{u.creator}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="admin-page">
@@ -53,69 +179,20 @@ export default function AdminUsers() {
         <p className="admin-page-subtitle">Manage shoppers and creators</p>
       </div>
       <div className="admin-tabs">
-        <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>Shoppers</button>
+        <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>
+          Shoppers{shoppers.length > 0 && <span className="admin-tab-count">{shoppers.length}</span>}
+        </button>
+        <button className={`admin-tab ${activeTab === 'creators' ? 'active' : ''}`} onClick={() => setActiveTab('creators')}>
+          Creators{creators.length > 0 && <span className="admin-tab-count">{creators.length}</span>}
+        </button>
         <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>Waitlist</button>
-        <button className={`admin-tab ${activeTab === 'creators' ? 'active' : ''}`} onClick={() => setActiveTab('creators')}>Creators</button>
         <button className={`admin-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => setActiveTab('incoming')}>Incoming</button>
       </div>
 
-      {activeTab === 'shoppers' && (
-        shoppers.length === 0 ? (
-          <p className="admin-detail-empty">No shoppers yet</p>
-        ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <SortableTh label="Shopper" sortKey="name" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="SSO" sortKey="sso" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Joined" sortKey="createdAt" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Last Sign In" sortKey="lastSignIn" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Shopping" sortKey="shopping" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Location" sortKey="location" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Saved" sortKey="saved" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Following" sortKey="followings" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                  <SortableTh label="Via Creator" sortKey="creator" currentSort={shopperTable.sort} onSort={shopperTable.handleSort} />
-                </tr>
-              </thead>
-              <tbody>
-                {shopperTable.sortedData.map(s => (
-                  <tr
-                    key={s.name}
-                    className="admin-clickable-row"
-                    onClick={() => navigate(`/admin/user/${encodeURIComponent(s.name)}`)}
-                  >
-                    <td className="admin-cell-name">
-                      <img className="admin-user-avatar-img" src={s.avatar} alt={s.name} />
-                      {s.name}
-                    </td>
-                    <td><span className="admin-sso-badge">{s.sso}</span></td>
-                    <td className="admin-cell-muted">{s.createdAt}</td>
-                    <td className="admin-cell-muted">{s.lastSignIn}</td>
-                    <td>{s.shopping}</td>
-                    <td className="admin-cell-muted">{s.location}</td>
-                    <td>{s.saved}</td>
-                    <td>{s.followings}</td>
-                    <td className="admin-cell-muted">{s.creator}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      )}
-
-      {activeTab === 'waitlist' && (
-        <p className="admin-detail-empty">No waitlist signups yet</p>
-      )}
-
-      {activeTab === 'creators' && (
-        <p className="admin-detail-empty">No creators yet</p>
-      )}
-
-      {activeTab === 'incoming' && (
-        <p className="admin-detail-empty">No incoming creator applications</p>
-      )}
+      {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
+      {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
+      {activeTab === 'waitlist' && <p className="admin-detail-empty">No waitlist signups yet</p>}
+      {activeTab === 'incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
     </div>
   );
 }
