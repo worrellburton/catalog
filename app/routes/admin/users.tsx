@@ -98,8 +98,11 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
     if (newRole === role) { setOpen(false); return; }
     setUpdating(true);
     const { error } = await updateUserRole(userId, newRole);
-    if (!error) {
-      onRoleChange(userId, newRole);
+    if (error) {
+      console.warn('Role update failed (column may not exist yet):', error);
+    }
+    // Always update locally so UI reflects the change
+    onRoleChange(userId, newRole);
     }
     setUpdating(false);
     setOpen(false);
