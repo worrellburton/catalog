@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
+import { useAuth } from '~/hooks/useAuth';
 
 interface NavItem {
   to: string;
@@ -51,7 +52,18 @@ const allSearchItems: SearchItem[] = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  if (loading || !user) {
+    return null;
+  }
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -166,11 +178,19 @@ export default function AdminLayout() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 <span>Back to catalog</span>
               </button>
+              <button className="admin-user-popup-item admin-user-popup-logout" onClick={async () => { const { signOut } = await import('~/services/auth'); await signOut(); navigate('/', { replace: true }); setUserMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <span>Log out</span>
+              </button>
             </div>
           )}
           <button className="admin-user-trigger" onClick={() => setUserMenuOpen(o => !o)}>
-            <span className="admin-user-avatar-sm">AD</span>
-            <span className="admin-user-name">Admin</span>
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="admin-user-avatar-img-sm" />
+            ) : (
+              <span className="admin-user-avatar-sm">{(user.displayName || 'U').slice(0, 2).toUpperCase()}</span>
+            )}
+            <span className="admin-user-name">{user.displayName || user.email || 'User'}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
           </button>
         </div>
