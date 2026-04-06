@@ -323,37 +323,6 @@ export default function Home() {
               <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
                 <CatalogLogo className="logo" />
               </button>
-              <div className="catalog-dropdown-wrap" ref={catalogDropdownRef}>
-                <button
-                  className="catalog-name-btn"
-                  onClick={() => setCatalogDropdownOpen(o => !o)}
-                >
-                  <span>{catalogName}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                {catalogDropdownOpen && (
-                  <div className="catalog-dropdown">
-                    <div className="catalog-dropdown-section">Recent</div>
-                    {recentCatalogs.map((name, i) => (
-                      <button
-                        key={i}
-                        className={`catalog-dropdown-item ${name === catalogName ? 'active' : ''}`}
-                        onClick={() => { setCatalogName(name); setCatalogDropdownOpen(false); }}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                    <div className="catalog-dropdown-divider" />
-                    <button
-                      className="catalog-dropdown-item catalog-dropdown-shuffle"
-                      onClick={() => { setCatalogName(getRandomCatalogName()); setCatalogDropdownOpen(false); }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-                      Shuffle catalog
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
             <div className="header-right">
               <button className="bookmark-toggle" onClick={() => setShowBookmarks(true)} aria-label="Bookmarks">
@@ -388,10 +357,6 @@ export default function Home() {
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
             catalogName={catalogName}
           />
-
-          <button className="remix-btn-fixed" onClick={handleRemix} aria-label="Remix">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </button>
 
           {selectedLook && (
             <LookOverlay
