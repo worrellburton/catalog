@@ -14,15 +14,24 @@ export interface Profile {
 
 export async function getProfiles(): Promise<Profile[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  // Try with role column first, fall back without if column doesn't exist yet
+  let { data, error } = await supabase
     .from('profiles')
     .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('Failed to load profiles', error);
-    return [];
+    // role column may not exist yet — retry without it
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, email, full_name, avatar_url, provider, created_at, last_sign_in_at')
+      .order('created_at', { ascending: false });
+    if (fallback.error) {
+      console.error('Failed to load profiles', fallback.error);
+      return [];
+    }
+    data = fallback.data;
   }
-  return (data || []).map(p => ({ ...p, role: p.role || 'shopper' }));
+  return (data || []).map(p => ({ ...p, role: (p as Record<string, unknown>).role as UserRole || 'shopper' }));
 }
 
 export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
