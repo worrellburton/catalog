@@ -62,7 +62,7 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'shoppers' | 'creators' | 'waitlist' | 'incoming';
+type Tab = 'shoppers' | 'shoppers-waitlist' | 'creators' | 'creators-incoming' | 'admins';
 
 function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole) => void }) {
   const [open, setOpen] = useState(false);
@@ -175,6 +175,7 @@ export default function AdminUsers() {
 
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creators);
+  const adminTable = useSortableTable(admins);
 
   const renderTable = (
     data: UserRow[],
@@ -240,20 +241,32 @@ export default function AdminUsers() {
         <p className="admin-page-subtitle">Manage shoppers and creators</p>
       </div>
       <div className="admin-tabs">
-        <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>
-          Shoppers{shoppers.length > 0 && <span className="admin-tab-count">{shoppers.length}</span>}
+        <div className="admin-tab-group">
+          <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>
+            Shoppers{shoppers.length > 0 && <span className="admin-tab-count">{shoppers.length}</span>}
+          </button>
+          <button className={`admin-tab admin-tab-sub ${activeTab === 'shoppers-waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers-waitlist')}>
+            Waitlist
+          </button>
+        </div>
+        <div className="admin-tab-group">
+          <button className={`admin-tab ${activeTab === 'creators' ? 'active' : ''}`} onClick={() => setActiveTab('creators')}>
+            Creators{creators.length > 0 && <span className="admin-tab-count">{creators.length}</span>}
+          </button>
+          <button className={`admin-tab admin-tab-sub ${activeTab === 'creators-incoming' ? 'active' : ''}`} onClick={() => setActiveTab('creators-incoming')}>
+            Incoming
+          </button>
+        </div>
+        <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
+          Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
         </button>
-        <button className={`admin-tab ${activeTab === 'creators' ? 'active' : ''}`} onClick={() => setActiveTab('creators')}>
-          Creators{creators.length > 0 && <span className="admin-tab-count">{creators.length}</span>}
-        </button>
-        <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>Waitlist</button>
-        <button className={`admin-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => setActiveTab('incoming')}>Incoming</button>
       </div>
 
       {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
+      {activeTab === 'shoppers-waitlist' && <p className="admin-detail-empty">No waitlist signups yet</p>}
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
-      {activeTab === 'waitlist' && <p className="admin-detail-empty">No waitlist signups yet</p>}
-      {activeTab === 'incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
+      {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
+      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}
     </div>
   );
 }
