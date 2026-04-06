@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { getProfiles, updateUserRole, type Profile } from '~/services/profiles';
-import { creators as lookCreators } from '~/data/looks';
+import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 
@@ -27,11 +28,18 @@ interface UserRow {
   role: UserRole;
   createdAt: string;
   lastSignIn: string;
+  looksCount: number;
   shopping: string;
   location: string;
   saved: number;
   followings: number;
   creator: string;
+}
+
+// Count looks per creator handle
+const looksPerCreator: Record<string, number> = {};
+for (const look of looks) {
+  looksPerCreator[look.creator] = (looksPerCreator[look.creator] || 0) + 1;
 }
 
 function profileToRow(p: Profile): UserRow {
@@ -45,6 +53,7 @@ function profileToRow(p: Profile): UserRow {
     role: p.role || 'shopper',
     createdAt: formatDate(p.created_at),
     lastSignIn: formatDateTime(p.last_sign_in_at),
+    looksCount: 0,
     shopping: '-',
     location: '-',
     saved: 0,
@@ -58,6 +67,24 @@ type Tab = 'shoppers' | 'creators' | 'waitlist' | 'incoming';
 function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole) => void }) {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(!open);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = () => setOpen(false);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
 
   const handleChange = async (newRole: UserRole) => {
     if (newRole === role) { setOpen(false); return; }
@@ -71,17 +98,22 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
   };
 
   return (
-    <div className="admin-role-badge-wrap" style={{ position: 'relative' }}>
+    <div className="admin-role-badge-wrap">
       <button
+        ref={btnRef}
         className={`admin-role-badge admin-role-${role}`}
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        onClick={handleOpen}
         disabled={updating}
       >
         {updating ? '...' : USER_ROLE_LABELS[role]}
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      {open && (
-        <div className="admin-role-dropdown" onClick={(e) => e.stopPropagation()}>
+      {open && pos && ReactDOM.createPortal(
+        <div
+          className="admin-role-dropdown"
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {(Object.keys(USER_ROLE_LABELS) as UserRole[]).map(r => (
             <button
               key={r}
@@ -92,7 +124,8 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
               {r === role && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -128,6 +161,7 @@ export default function AdminUsers() {
         role: 'creator' as UserRole,
         createdAt: '-',
         lastSignIn: '-',
+        looksCount: looksPerCreator[c.name] || 0,
         shopping: '-',
         location: '-',
         saved: 0,
@@ -157,6 +191,7 @@ export default function AdminUsers() {
             <tr>
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Last Sign In" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
@@ -181,6 +216,7 @@ export default function AdminUsers() {
                 <td>
                   <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
                 </td>
+                <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
                 <td><span className="admin-sso-badge">{u.sso}</span></td>
                 <td className="admin-cell-muted">{u.createdAt}</td>
                 <td className="admin-cell-muted">{u.lastSignIn}</td>
