@@ -61,16 +61,6 @@ export default function AdminLayout() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/', { replace: true });
-    }
-  }, [user, loading, navigate]);
-
-  if (loading || !user) {
-    return null;
-  }
-
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
@@ -78,6 +68,12 @@ export default function AdminLayout() {
       item.label.toLowerCase().includes(q) || item.type.toLowerCase().includes(q)
     ).slice(0, 8);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -113,6 +109,10 @@ export default function AdminLayout() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
+
+  if (loading || !user) {
+    return null;
+  }
 
   return (
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'}`}>
