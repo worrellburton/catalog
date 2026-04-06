@@ -81,9 +81,17 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
 
   useEffect(() => {
     if (!open) return;
-    const handleClick = () => setOpen(false);
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    const handleClick = (e: MouseEvent) => {
+      // Don't close if clicking inside the dropdown portal
+      const dropdown = document.querySelector('.admin-role-dropdown');
+      if (dropdown && dropdown.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    // Use setTimeout so the current click doesn't immediately close
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick);
+    }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleClick); };
   }, [open]);
 
   const handleChange = async (newRole: UserRole) => {
@@ -214,7 +222,7 @@ export default function AdminUsers() {
                   <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />
                   {u.name}
                 </td>
-                <td>
+                <td onClick={(e) => e.stopPropagation()}>
                   <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
                 </td>
                 <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
