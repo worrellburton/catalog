@@ -66,89 +66,95 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
   return (
     <div className="inline-look-detail" ref={containerRef}>
-      <div className="inline-look-media">
+      {/* Video section — full width popout card */}
+      <div className="inline-look-video-wrap">
         <video
           ref={videoRef}
           src={`${basePath}/${look.video}`}
           loop
           muted
           playsInline
-          style={{ width: '100%', borderRadius: 12, aspectRatio: '3/4', objectFit: 'cover' }}
         />
-        <div className="hotspot-indicator">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
-          </svg>
-          <span>{look.products.length}</span>
+        <div className="inline-look-video-overlay">
+          <div className="hotspot-indicator">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+            </svg>
+            <span>{look.products.length}</span>
+          </div>
+          <button
+            className="inline-look-catalog-btn"
+            onClick={() => onCreateCatalog?.(look.creator)}
+            aria-label="Create catalog"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          </button>
         </div>
-        <button
-          className="look-create-catalog-btn"
-          onClick={() => onCreateCatalog?.(look.creator)}
-          aria-label="Create catalog around this look"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        </button>
       </div>
 
-      <div className="inline-look-info">
-        <div className="detail-creator">
+      {/* Info section */}
+      <div className="inline-look-body">
+        {/* Creator row */}
+        <div className="inline-look-creator-row">
           <div
-            className="detail-creator-row"
+            className="inline-look-creator"
             onClick={() => onOpenCreator(look.creator)}
-            style={{ cursor: 'pointer' }}
           >
             <img
-              className="detail-creator-avatar"
+              className="inline-look-creator-avatar"
               src={creatorData?.avatar || ''}
               alt={look.creator}
             />
-            <span className="detail-creator-name">
+            <span className="inline-look-creator-name">
               {creatorData?.displayName || look.creator}
             </span>
           </div>
           <button
-            className={`look-bookmark-btn ${lookBookmarked ? 'active' : ''}`}
+            className={`inline-look-bookmark-btn ${lookBookmarked ? 'active' : ''}`}
             onClick={handleToggleLookBookmark}
             aria-label="Bookmark look"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={lookBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           </button>
         </div>
 
-        <h2 className="detail-title">{look.title}</h2>
-        <p className="detail-description">{look.description}</p>
+        {/* Title & description */}
+        <h2 className="inline-look-title">{look.title}</h2>
+        <p className="inline-look-desc">{look.description}</p>
 
-        <div className="detail-products">
+        {/* Product list */}
+        <div className="inline-look-products">
           {look.products.map((p, pi) => (
             <div
               key={pi}
-              className="product-item"
+              className="inline-product-card"
               onClick={() => handleProductClick(p)}
-              style={{ cursor: 'pointer' }}
             >
-              <div className="product-thumb">
+              <div className="inline-product-thumb">
                 {p.image ? (
-                  <img src={p.image} alt={p.name} className="product-thumb-img" />
+                  <img src={p.image} alt={p.name} />
                 ) : (
-                  <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
+                  <div className="inline-product-thumb-placeholder" style={{ background: look.color }} />
                 )}
               </div>
-              <div className="product-details">
-                {p.brand && <span className="product-brand">{p.brand}</span>}
-                <h4>{p.name}</h4>
-                <span>{p.price}</span>
+              <div className="inline-product-info">
+                {p.brand && <span className="inline-product-brand">{p.brand}</span>}
+                <span className="inline-product-name">{p.name}</span>
+                <span className="inline-product-price">{p.price}</span>
               </div>
-              <button
-                className={`product-bookmark-btn ${productBookmarks[pi] ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleProductBookmark(pi);
-                }}
-                aria-label="Bookmark product"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              </button>
-              <svg className="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <div className="inline-product-actions">
+                <button
+                  className={`inline-product-bookmark ${productBookmarks[pi] ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleProductBookmark(pi);
+                  }}
+                  aria-label="Bookmark product"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill={productBookmarks[pi] ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <svg className="inline-product-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
             </div>
           ))}
         </div>
