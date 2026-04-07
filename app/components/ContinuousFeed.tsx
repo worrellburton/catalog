@@ -33,14 +33,23 @@ type FeedState = {
 };
 
 type FeedAction =
-  | { type: 'OPEN_LOOK'; look: Look }
+  | { type: 'OPEN_LOOK'; look: Look; fromSegmentId: string }
   | { type: 'RESET'; looks: Look[] };
 
 function feedReducer(state: FeedState, action: FeedAction): FeedState {
   switch (action.type) {
     case 'OPEN_LOOK': {
-      const { look } = action;
-      const newSeen = new Set(state.seenLookIds);
+      const { look, fromSegmentId } = action;
+
+      // Find the segment the click came from and truncate everything after it
+      const segIdx = state.segments.findIndex(s => s.id === fromSegmentId);
+      const keepSegments = segIdx >= 0 ? state.segments.slice(0, segIdx + 1) : state.segments;
+
+      const newSeen = new Set<number>();
+      keepSegments.forEach(s => {
+        if (s.type === 'feed') s.looks.forEach(l => newSeen.add(l.id));
+        if (s.type === 'detail') newSeen.add(s.look.id);
+      });
       newSeen.add(look.id);
 
       const related = getSimilarLooks(look, allLooks, 8, newSeen);
@@ -48,7 +57,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
 
       return {
         segments: [
-          ...state.segments,
+          ...keepSegments,
           { type: 'detail', id: `detail-${look.id}-${Date.now()}`, look },
           { type: 'feed', id: `feed-${look.id}-${Date.now()}`, looks: related, title: 'More like this' },
         ],
@@ -124,8 +133,8 @@ export default function ContinuousFeed({
     prevSegmentCount.current = state.segments.length;
   }, [state.segments.length]);
 
-  const handleOpenLook = useCallback((look: Look) => {
-    dispatch({ type: 'OPEN_LOOK', look });
+  const handleOpenLook = useCallback((look: Look, segmentId: string) => {
+    dispatch({ type: 'OPEN_LOOK', look, fromSegmentId: segmentId });
   }, []);
 
   // Find the last detail segment index for ref assignment
@@ -143,6 +152,7 @@ export default function ContinuousFeed({
           return (
             <FeedSection
               key={segment.id}
+              segmentId={segment.id}
               looks={segment.looks}
               onOpenLook={handleOpenLook}
               onOpenCreator={onOpenCreator}

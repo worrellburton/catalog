@@ -4,7 +4,8 @@ import type { Look } from '~/data/looks';
 
 interface FeedSectionProps {
   looks: Look[];
-  onOpenLook: (look: Look) => void;
+  segmentId: string;
+  onOpenLook: (look: Look, segmentId: string) => void;
   onOpenCreator: (name: string) => void;
   onCreateCatalog?: (query: string) => void;
   title?: string;
@@ -17,6 +18,7 @@ const SUB_BATCH = 6;
 
 export default function FeedSection({
   looks,
+  segmentId,
   onOpenLook,
   onOpenCreator,
   onCreateCatalog,
@@ -72,7 +74,7 @@ export default function FeedSection({
           <LookCard
             key={`${look.id}-${look.displayIndex}`}
             look={look}
-            onOpenLook={onOpenLook}
+            onOpenLook={(l) => onOpenLook(l, segmentId)}
             onOpenCreator={onOpenCreator}
             onCreateCatalog={onCreateCatalog}
           />
