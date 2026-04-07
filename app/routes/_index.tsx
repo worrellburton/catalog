@@ -3,8 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
 import LandingPage from '~/components/LandingPage';
-import GridView from '~/components/GridView';
-import LookOverlay from '~/components/LookOverlay';
+import ContinuousFeed from '~/components/ContinuousFeed';
 import CreatorPage from '~/components/CreatorPage';
 import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
@@ -43,7 +42,7 @@ function getRandomCatalogName(query?: string): string {
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
   const [showSplash, setShowSplash] = useState(false);
-  const [selectedLook, setSelectedLook] = useState<Look | null>(null);
+  const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [browserUrl, setBrowserUrl] = useState<{ url: string; title: string } | null>(null);
@@ -356,15 +355,16 @@ export default function Home() {
             </div>
           </header>
 
-          <GridView
+          <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
-            onOpenLook={handleOpenLook}
-            onOpenCreator={handleOpenCreator}
-            onCreateCatalog={handleCreateCatalog}
-            isLightMode={isLightMode}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
+            onOpenCreator={handleOpenCreator}
+            onOpenBrowser={handleOpenBrowser}
+            onOpenProduct={handleOpenProduct}
+            onCreateCatalog={handleCreateCatalog}
+            bookmarks={bookmarks}
           />
 
           <BottomBar
@@ -375,21 +375,8 @@ export default function Home() {
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
           />
 
-          <button className="remix-btn-fixed" onClick={handleRemix} aria-label="Remix">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </button>
-
-          {selectedLook && (
-            <LookOverlay
-              look={selectedLook}
-              onClose={handleCloseLook}
-              onOpenCreator={handleOpenCreator}
-              onOpenBrowser={handleOpenBrowser}
-              onOpenProduct={handleOpenProduct}
-              onCreateCatalog={handleCreateCatalog}
-              bookmarks={bookmarks}
-            />
-          )}
+          {/* LookOverlay removed from main feed — replaced by ContinuousFeed inline detail.
+              LookOverlay still used by BookmarksPage and CreatorPage overlays. */}
 
           {creatorFilter && (
             <CreatorPage
