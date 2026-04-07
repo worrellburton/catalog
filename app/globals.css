@@ -11630,55 +11630,79 @@ header {
   padding: 0 2px;
 }
 
-/* ===== Look Detail Popout ===== */
-.inline-look-detail.popout {
-  display: flex;
-  flex-direction: column;
+/* ===== Look Page (full-screen detail) ===== */
+.look-page {
+  position: fixed;
+  inset: 0;
   background: #000;
+  z-index: 150;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.light-mode .inline-look-detail.popout {
+.light-mode .look-page {
   background: #fff;
 }
 
-/* Video section — full viewport height, edge-to-edge */
-.popout-video-section {
-  position: relative;
-  width: 100%;
-  min-height: 85vh;
+/* Back button */
+.look-page-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 160;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: none;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+}
+
+.light-mode .look-page-back {
+  background: rgba(255, 255, 255, 0.7);
+  color: #000;
+}
+
+/* Video section */
+.look-page-video-section {
+  position: relative;
+  width: 100%;
+  height: 85vh;
   overflow: hidden;
 }
 
-.popout-video-section video {
+.look-page-video-section video {
   width: 100%;
-  height: 85vh;
+  height: 100%;
   object-fit: cover;
   display: block;
 }
 
-/* Gradient fade at bottom of video */
-.popout-video-gradient {
+.look-page-video-gradient {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 200px;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
   pointer-events: none;
 }
 
-.light-mode .popout-video-gradient {
-  background: linear-gradient(to top, rgba(255,255,255,0.9) 0%, transparent 100%);
+.light-mode .look-page-video-gradient {
+  background: linear-gradient(to top, rgba(255,255,255,0.85) 0%, transparent 100%);
 }
 
-/* Top overlay — hotspot + actions */
-.popout-video-top {
+/* Top overlay */
+.look-page-video-top {
   position: absolute;
   top: 16px;
-  left: 16px;
+  left: 60px;
   right: 16px;
   display: flex;
   justify-content: space-between;
@@ -11686,7 +11710,7 @@ header {
   z-index: 2;
 }
 
-.popout-video-top .hotspot-indicator {
+.look-page-hotspot {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -11700,13 +11724,12 @@ header {
   color: #fff;
 }
 
-.popout-video-top-right {
+.look-page-actions {
   display: flex;
   gap: 8px;
 }
 
-.popout-bookmark-btn,
-.popout-catalog-btn {
+.look-page-action-btn {
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -11721,12 +11744,12 @@ header {
   cursor: pointer;
 }
 
-.popout-bookmark-btn.active {
+.look-page-action-btn.active {
   color: #fff;
 }
 
-/* Bottom overlay — creator info on video */
-.popout-video-bottom {
+/* Bottom overlay — creator */
+.look-page-video-bottom {
   position: absolute;
   bottom: 24px;
   left: 16px;
@@ -11734,63 +11757,63 @@ header {
   z-index: 2;
 }
 
-.popout-creator {
+.look-page-creator {
   display: flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
 }
 
-.popout-creator-avatar {
-  width: 40px;
-  height: 40px;
+.look-page-creator-avatar {
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.popout-creator-info {
+.look-page-creator-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.popout-creator-name {
+.look-page-creator-name {
   font-size: 15px;
   font-weight: 700;
   color: #fff;
   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-.popout-look-title {
+.look-page-look-title {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.75);
   text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-/* Products section below video */
-.popout-products-section {
-  padding: 20px 16px 32px;
+/* Products section */
+.look-page-products-section {
+  padding: 20px 16px 28px;
 }
 
-.popout-desc {
+.look-page-desc {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.5;
   margin-bottom: 16px;
 }
 
-.light-mode .popout-desc {
+.light-mode .look-page-desc {
   color: rgba(0, 0, 0, 0.45);
 }
 
-.popout-products {
+.look-page-products {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.popout-product-card {
+.look-page-product {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -11801,19 +11824,19 @@ header {
   transition: background 0.15s;
 }
 
-.popout-product-card:active {
+.look-page-product:active {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.light-mode .popout-product-card {
+.light-mode .look-page-product {
   background: rgba(0, 0, 0, 0.04);
 }
 
-.light-mode .popout-product-card:active {
+.light-mode .look-page-product:active {
   background: rgba(0, 0, 0, 0.08);
 }
 
-.popout-product-thumb {
+.look-page-product-thumb {
   width: 52px;
   height: 52px;
   border-radius: 10px;
@@ -11821,20 +11844,20 @@ header {
   flex-shrink: 0;
 }
 
-.popout-product-thumb img {
+.look-page-product-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.popout-product-thumb-placeholder {
+.look-page-product-placeholder {
   width: 100%;
   height: 100%;
   opacity: 0.4;
   border-radius: 10px;
 }
 
-.popout-product-info {
+.look-page-product-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -11842,7 +11865,7 @@ header {
   gap: 1px;
 }
 
-.popout-product-brand {
+.look-page-product-brand {
   font-size: 11px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
@@ -11850,11 +11873,11 @@ header {
   letter-spacing: 0.06em;
 }
 
-.light-mode .popout-product-brand {
+.light-mode .look-page-product-brand {
   color: rgba(0, 0, 0, 0.4);
 }
 
-.popout-product-name {
+.look-page-product-name {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -11862,23 +11885,23 @@ header {
   text-overflow: ellipsis;
 }
 
-.popout-product-price {
+.look-page-product-price {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.45);
 }
 
-.light-mode .popout-product-price {
+.light-mode .look-page-product-price {
   color: rgba(0, 0, 0, 0.45);
 }
 
-.popout-product-actions {
+.look-page-product-end {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 
-.popout-product-bookmark {
+.look-page-product-bm {
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.35);
@@ -11886,24 +11909,48 @@ header {
   padding: 4px;
 }
 
-.popout-product-bookmark.active {
+.look-page-product-bm.active {
   color: #fff;
 }
 
-.light-mode .popout-product-bookmark {
+.light-mode .look-page-product-bm {
   color: rgba(0, 0, 0, 0.25);
 }
 
-.light-mode .popout-product-bookmark.active {
+.light-mode .look-page-product-bm.active {
   color: #000;
 }
 
-.popout-product-chevron {
+.look-page-product-chevron {
   color: rgba(255, 255, 255, 0.2);
 }
 
-.light-mode .popout-product-chevron {
+.light-mode .look-page-product-chevron {
   color: rgba(0, 0, 0, 0.2);
+}
+
+/* Related feed */
+.look-page-related {
+  padding: 8px 0 80px;
+}
+
+.look-page-related-header {
+  padding: 16px 16px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.02em;
+}
+
+.light-mode .look-page-related-header {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.look-page-related-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  padding: 0 2px;
 }
 
 /* Desktop: wider grid for feed sections */
@@ -11916,19 +11963,6 @@ header {
     margin: 0 auto;
   }
 
-  .inline-look-detail.popout {
-    max-width: 600px;
-    margin: 0 auto;
-  }
-
-  .popout-video-section {
-    min-height: 80vh;
-  }
-
-  .popout-video-section video {
-    height: 80vh;
-  }
-
   .continuous-feed {
     padding-top: 80px;
   }
@@ -11936,5 +11970,21 @@ header {
   .feed-section-header {
     max-width: 1200px;
     margin: 0 auto;
+  }
+
+  .look-page-video-section {
+    height: 80vh;
+  }
+
+  .look-page-products-section,
+  .look-page-related {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .look-page-related-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 0 4px;
   }
 }

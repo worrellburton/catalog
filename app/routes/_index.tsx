@@ -12,6 +12,7 @@ import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
 import DeckSelector from '~/components/DeckSelector';
 import ProductPage from '~/components/ProductPage';
+import LookPage from '~/components/LookPage';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
 import { Look, Product } from '~/data/looks';
@@ -342,6 +343,7 @@ export default function Home() {
             searchQuery={searchQuery}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
+            onOpenLook={handleOpenLook}
             onOpenCreator={handleOpenCreator}
             onOpenBrowser={handleOpenBrowser}
             onOpenProduct={handleOpenProduct}
@@ -358,8 +360,18 @@ export default function Home() {
             catalogName={catalogName}
           />
 
-          {/* LookOverlay removed from main feed — replaced by ContinuousFeed inline detail.
-              LookOverlay still used by BookmarksPage and CreatorPage overlays. */}
+          {selectedLook && (
+            <LookPage
+              look={selectedLook}
+              onClose={handleCloseLook}
+              onOpenLook={handleOpenLook}
+              onOpenCreator={handleOpenCreator}
+              onOpenBrowser={handleOpenBrowser}
+              onOpenProduct={handleOpenProduct}
+              onCreateCatalog={handleCreateCatalog}
+              bookmarks={bookmarks}
+            />
+          )}
 
           {creatorFilter && (
             <CreatorPage
