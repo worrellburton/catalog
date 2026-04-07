@@ -3,8 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
 import LandingPage from '~/components/LandingPage';
-import GridView from '~/components/GridView';
-import LookOverlay from '~/components/LookOverlay';
+import ContinuousFeed from '~/components/ContinuousFeed';
 import CreatorPage from '~/components/CreatorPage';
 import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
@@ -43,7 +42,7 @@ function getRandomCatalogName(query?: string): string {
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
   const [showSplash, setShowSplash] = useState(false);
-  const [selectedLook, setSelectedLook] = useState<Look | null>(null);
+  const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -338,15 +337,16 @@ export default function Home() {
             </div>
           </header>
 
-          <GridView
+          <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
-            onOpenLook={handleOpenLook}
-            onOpenCreator={handleOpenCreator}
-            onCreateCatalog={handleCreateCatalog}
-            isLightMode={isLightMode}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
+            onOpenCreator={handleOpenCreator}
+            onOpenBrowser={handleOpenBrowser}
+            onOpenProduct={handleOpenProduct}
+            onCreateCatalog={handleCreateCatalog}
+            bookmarks={bookmarks}
           />
 
           <BottomBar
@@ -358,17 +358,8 @@ export default function Home() {
             catalogName={catalogName}
           />
 
-          {selectedLook && (
-            <LookOverlay
-              look={selectedLook}
-              onClose={handleCloseLook}
-              onOpenCreator={handleOpenCreator}
-              onOpenBrowser={handleOpenBrowser}
-              onOpenProduct={handleOpenProduct}
-              onCreateCatalog={handleCreateCatalog}
-              bookmarks={bookmarks}
-            />
-          )}
+          {/* LookOverlay removed from main feed — replaced by ContinuousFeed inline detail.
+              LookOverlay still used by BookmarksPage and CreatorPage overlays. */}
 
           {creatorFilter && (
             <CreatorPage
