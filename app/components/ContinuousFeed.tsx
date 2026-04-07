@@ -122,16 +122,16 @@ export default function ContinuousFeed({
 
   // Scroll to newly added detail
   const lastDetailRef = useRef<HTMLDivElement>(null);
-  const prevSegmentCount = useRef(state.segments.length);
+  const lastDetailIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (state.segments.length > prevSegmentCount.current && lastDetailRef.current) {
-      // Small delay to ensure DOM is painted before scrolling
+    const lastDetail = state.segments.find((s, i) => i === lastDetailIdx);
+    if (lastDetail && lastDetail.id !== lastDetailIdRef.current && lastDetailRef.current) {
+      lastDetailIdRef.current = lastDetail.id;
       requestAnimationFrame(() => {
         lastDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     }
-    prevSegmentCount.current = state.segments.length;
-  }, [state.segments.length]);
+  }, [state.segments, lastDetailIdx]);
 
   const handleOpenLook = useCallback((look: Look, segmentId: string) => {
     dispatch({ type: 'OPEN_LOOK', look, fromSegmentId: segmentId });

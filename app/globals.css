@@ -11630,51 +11630,63 @@ header {
   padding: 0 2px;
 }
 
-/* ===== Inline Look Detail (popout card) ===== */
-.inline-look-detail {
+/* ===== Look Detail Popout ===== */
+.inline-look-detail.popout {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  background: #000;
 }
 
-.light-mode .inline-look-detail {
-  border-color: rgba(0, 0, 0, 0.06);
-  background: rgba(0, 0, 0, 0.01);
+.light-mode .inline-look-detail.popout {
+  background: #fff;
 }
 
-/* Video wrapper — full bleed, big card */
-.inline-look-video-wrap {
+/* Video section — full viewport height, edge-to-edge */
+.popout-video-section {
   position: relative;
   width: 100%;
-  padding: 20px 24px 0;
+  min-height: 85vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.inline-look-video-wrap video {
+.popout-video-section video {
   width: 100%;
-  aspect-ratio: 3/4;
+  height: 85vh;
   object-fit: cover;
-  border-radius: 12px;
   display: block;
 }
 
-/* Overlay buttons on video */
-.inline-look-video-overlay {
+/* Gradient fade at bottom of video */
+.popout-video-gradient {
   position: absolute;
-  bottom: 12px;
-  left: 36px;
-  right: 36px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
   pointer-events: none;
 }
 
-.inline-look-video-overlay > * {
-  pointer-events: auto;
+.light-mode .popout-video-gradient {
+  background: linear-gradient(to top, rgba(255,255,255,0.9) 0%, transparent 100%);
 }
 
-.inline-look-detail .hotspot-indicator {
+/* Top overlay — hotspot + actions */
+.popout-video-top {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 2;
+}
+
+.popout-video-top .hotspot-indicator {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -11688,14 +11700,20 @@ header {
   color: #fff;
 }
 
-.inline-look-catalog-btn {
+.popout-video-top-right {
+  display: flex;
+  gap: 8px;
+}
+
+.popout-bookmark-btn,
+.popout-catalog-btn {
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: none;
-  color: #fff;
-  width: 34px;
-  height: 34px;
+  color: rgba(255, 255, 255, 0.7);
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -11703,107 +11721,99 @@ header {
   cursor: pointer;
 }
 
-/* Body — creator, title, description, products */
-.inline-look-body {
-  padding: 16px 24px 28px;
-}
-
-/* Creator row */
-.inline-look-creator-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.inline-look-creator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.inline-look-creator-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.inline-look-creator-name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.inline-look-bookmark-btn {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.45);
-  cursor: pointer;
-  padding: 6px;
-}
-
-.inline-look-bookmark-btn.active {
+.popout-bookmark-btn.active {
   color: #fff;
 }
 
-.light-mode .inline-look-bookmark-btn {
-  color: rgba(0, 0, 0, 0.35);
+/* Bottom overlay — creator info on video */
+.popout-video-bottom {
+  position: absolute;
+  bottom: 24px;
+  left: 16px;
+  right: 16px;
+  z-index: 2;
 }
 
-.light-mode .inline-look-bookmark-btn.active {
-  color: #000;
+.popout-creator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
 }
 
-/* Title & description */
-.inline-look-title {
-  font-size: 18px;
+.popout-creator-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.popout-creator-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popout-creator-name {
+  font-size: 15px;
   font-weight: 700;
-  margin-bottom: 6px;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-.inline-look-desc {
+.popout-look-title {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* Products section below video */
+.popout-products-section {
+  padding: 20px 16px 32px;
+}
+
+.popout-desc {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.5;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
-.light-mode .inline-look-desc {
+.light-mode .popout-desc {
   color: rgba(0, 0, 0, 0.45);
 }
 
-/* Product cards */
-.inline-look-products {
+.popout-products {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.inline-product-card {
+.popout-product-card {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.inline-product-card:active {
-  background: rgba(255, 255, 255, 0.1);
+.popout-product-card:active {
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.light-mode .inline-product-card {
+.light-mode .popout-product-card {
   background: rgba(0, 0, 0, 0.04);
 }
 
-.light-mode .inline-product-card:active {
+.light-mode .popout-product-card:active {
   background: rgba(0, 0, 0, 0.08);
 }
 
-.inline-product-thumb {
+.popout-product-thumb {
   width: 52px;
   height: 52px;
   border-radius: 10px;
@@ -11811,20 +11821,20 @@ header {
   flex-shrink: 0;
 }
 
-.inline-product-thumb img {
+.popout-product-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.inline-product-thumb-placeholder {
+.popout-product-thumb-placeholder {
   width: 100%;
   height: 100%;
   opacity: 0.4;
   border-radius: 10px;
 }
 
-.inline-product-info {
+.popout-product-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -11832,7 +11842,7 @@ header {
   gap: 1px;
 }
 
-.inline-product-brand {
+.popout-product-brand {
   font-size: 11px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.4);
@@ -11840,11 +11850,11 @@ header {
   letter-spacing: 0.06em;
 }
 
-.light-mode .inline-product-brand {
+.light-mode .popout-product-brand {
   color: rgba(0, 0, 0, 0.4);
 }
 
-.inline-product-name {
+.popout-product-name {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -11852,23 +11862,23 @@ header {
   text-overflow: ellipsis;
 }
 
-.inline-product-price {
+.popout-product-price {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.45);
 }
 
-.light-mode .inline-product-price {
+.light-mode .popout-product-price {
   color: rgba(0, 0, 0, 0.45);
 }
 
-.inline-product-actions {
+.popout-product-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 
-.inline-product-bookmark {
+.popout-product-bookmark {
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.35);
@@ -11876,23 +11886,23 @@ header {
   padding: 4px;
 }
 
-.inline-product-bookmark.active {
+.popout-product-bookmark.active {
   color: #fff;
 }
 
-.light-mode .inline-product-bookmark {
+.light-mode .popout-product-bookmark {
   color: rgba(0, 0, 0, 0.25);
 }
 
-.light-mode .inline-product-bookmark.active {
+.light-mode .popout-product-bookmark.active {
   color: #000;
 }
 
-.inline-product-chevron {
+.popout-product-chevron {
   color: rgba(255, 255, 255, 0.2);
 }
 
-.light-mode .inline-product-chevron {
+.light-mode .popout-product-chevron {
   color: rgba(0, 0, 0, 0.2);
 }
 
@@ -11906,22 +11916,17 @@ header {
     margin: 0 auto;
   }
 
-  .inline-look-detail {
-    max-width: 500px;
+  .inline-look-detail.popout {
+    max-width: 600px;
     margin: 0 auto;
   }
 
-  .inline-look-video-wrap {
-    padding: 24px 0 0;
+  .popout-video-section {
+    min-height: 80vh;
   }
 
-  .inline-look-video-overlay {
-    left: 12px;
-    right: 12px;
-  }
-
-  .inline-look-body {
-    padding: 16px 0 32px;
+  .popout-video-section video {
+    height: 80vh;
   }
 
   .continuous-feed {
