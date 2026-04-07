@@ -116,7 +116,10 @@ export default function ContinuousFeed({
   const prevSegmentCount = useRef(state.segments.length);
   useEffect(() => {
     if (state.segments.length > prevSegmentCount.current && lastDetailRef.current) {
-      lastDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Small delay to ensure DOM is painted before scrolling
+      requestAnimationFrame(() => {
+        lastDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
     prevSegmentCount.current = state.segments.length;
   }, [state.segments.length]);
