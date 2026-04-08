@@ -4806,22 +4806,19 @@ header {
 .look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s, 1.2s; }
 
 /* ═══════════════════════════════════════════
-   LOOK OVERLAY — desktop side-by-side, mobile full-screen
+   LOOK OVERLAY — fullscreen 60/40 split
    ═══════════════════════════════════════════ */
 
-/* Backdrop */
+/* Full-screen container — acts as flex parent for the two columns */
 .look-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  background: #0a0a0a;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: row;
   opacity: 0;
-  transition: opacity 0.28s ease;
+  transition: opacity 0.32s ease;
 }
 
 .look-overlay--in {
@@ -4833,43 +4830,84 @@ header {
   pointer-events: none;
 }
 
-/* Main card: side-by-side on desktop */
-.look-detail {
-  display: flex;
-  flex-direction: row;
-  width: min(92vw, 980px);
-  height: min(88vh, 720px);
-  background: #111;
-  border-radius: 20px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.04);
-  transform: scale(0.94) translateY(16px);
-  opacity: 0;
-  transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
-}
-
-.look-overlay--in .look-detail {
-  transform: scale(1) translateY(0);
-  opacity: 1;
-}
-
-.look-overlay--out .look-detail {
-  transform: scale(0.95) translateY(12px);
-  opacity: 0;
-}
-
-/* ── Left: video column ── */
+/* ── Left: media column (60%) ── */
 .look-media-col {
-  flex: 0 0 52%;
+  flex: 0 0 60%;
   position: relative;
   background: #000;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
+/* Back button — positioned top-left on the media side */
+.look-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, color 0.18s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.look-back-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Wrapper to center media within the 60% column */
+.look-media-centered {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.look-media {
+  position: relative;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.look-media-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Right: info panel (40%) ── */
+.look-info-col {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #111;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Drag strip — mobile only */
 .look-drag-strip {
-  display: none; /* mobile only */
+  display: none;
   justify-content: center;
   padding: 10px 0 4px;
   flex-shrink: 0;
@@ -4883,38 +4921,17 @@ header {
   display: block;
 }
 
-.look-media {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-.look-media-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* ── Right: info panel ── */
-.look-info-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #111;
-}
-
-/* Top bar row: back chevron + bookmark */
+/* Top bar: mobile back btn (hidden on desktop) + bookmark */
 .look-info-topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px 12px;
+  justify-content: flex-end;
+  padding: 20px 24px 12px;
   flex-shrink: 0;
 }
 
-.look-back-btn-inline {
+/* Mobile-only back button inside info panel */
+.look-back-btn-mobile {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -4922,14 +4939,15 @@ header {
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  display: flex;
+  display: none; /* hidden on desktop */
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-right: auto;
   transition: background 0.18s, color 0.18s;
 }
 
-.look-back-btn-inline:hover {
+.look-back-btn-mobile:hover {
   background: rgba(255, 255, 255, 0.13);
   color: #fff;
 }
@@ -4939,7 +4957,7 @@ header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 20px 14px;
+  padding: 4px 24px 14px;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity 0.15s;
@@ -4966,7 +4984,7 @@ header {
 .look-tabs {
   display: flex;
   gap: 0;
-  padding: 0 20px;
+  padding: 0 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
@@ -5022,7 +5040,7 @@ header {
 
 /* Product cards list */
 .look-products-list {
-  padding: 4px 20px 24px;
+  padding: 4px 24px 24px;
   display: flex;
   flex-direction: column;
 }
@@ -5080,7 +5098,7 @@ header {
 
 /* Creator About tab */
 .look-creator-about {
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -6483,25 +6501,41 @@ header {
 }
 
 .light-mode .look-overlay {
-  background: rgba(240, 240, 240, 0.85);
+  background: #f5f5f5;
 }
 
-.light-mode .look-detail {
-  background: #f0f0f0;
-  border-color: rgba(0, 0, 0, 0.08);
+.light-mode .look-media-col {
+  background: #e0e0e0;
+}
+
+.light-mode .look-back-btn {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.light-mode .look-back-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+.light-mode .look-media {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
 }
 
 .light-mode .look-info-col {
   background: #f0f0f0;
+  border-left-color: rgba(0, 0, 0, 0.08);
 }
 
-.light-mode .look-back-btn-inline {
+.light-mode .look-back-btn-mobile {
   background: rgba(0, 0, 0, 0.06);
   border-color: rgba(0, 0, 0, 0.1);
   color: rgba(0, 0, 0, 0.7);
 }
 
-.light-mode .look-back-btn-inline:hover {
+.light-mode .look-back-btn-mobile:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -6581,15 +6615,6 @@ header {
 
 .light-mode .detail-creator-avatar {
   border-color: rgba(0, 0, 0, 0.15);
-}
-
-.light-mode .look-back-btn {
-  color: rgba(0, 0, 0, 0.5);
-}
-
-.light-mode .look-back-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #1a1a1a;
 }
 
 .light-mode .detail-creator-name {
@@ -6944,28 +6969,24 @@ header {
     font-size: 11px;
   }
 
-  /* Look overlay — fullscreen single-column on mobile */
+  /* Look overlay — fullscreen bottom-sheet on mobile */
   .look-overlay {
-    padding: 0;
-    align-items: flex-end;
+    flex-direction: column;
     background: rgba(0, 0, 0, 0.5);
   }
 
-  .look-detail {
-    flex-direction: column;
-    width: 100%;
-    height: 96vh;
-    border-radius: 24px 24px 0 0;
-    transform: translateY(60px);
-    overflow: hidden;
+  /* Back button on media side — hidden on mobile */
+  .look-back-btn {
+    display: none;
   }
 
-  .look-overlay--in .look-detail {
-    transform: translateY(0);
+  /* Mobile back button in info panel — shown */
+  .look-back-btn-mobile {
+    display: flex;
   }
 
-  .look-overlay--out .look-detail {
-    transform: translateY(80px);
+  .look-info-topbar {
+    justify-content: space-between;
   }
 
   .look-media-col {
@@ -6973,6 +6994,18 @@ header {
     height: 56vw;
     min-height: 200px;
     max-height: 280px;
+  }
+
+  .look-media-centered {
+    padding: 0;
+  }
+
+  .look-media {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .look-drag-strip {
@@ -6983,6 +7016,8 @@ header {
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .look-info-topbar {
