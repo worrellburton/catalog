@@ -16,6 +16,7 @@ interface ContinuousFeedProps {
   searchQuery: string;
   shuffleKey: number;
   layoutMode: number;
+  onOpenLook?: (look: Look) => void;
   onOpenCreator: (name: string) => void;
   onOpenBrowser: (url: string, title: string) => void;
   onOpenProduct?: (product: Product) => void;
@@ -72,6 +73,7 @@ export default function ContinuousFeed({
   searchQuery,
   shuffleKey,
   layoutMode,
+  onOpenLook: onOpenLookProp,
   onOpenCreator,
   onOpenBrowser,
   onOpenProduct,
@@ -125,8 +127,12 @@ export default function ContinuousFeed({
   }, [state.segments.length]);
 
   const handleOpenLook = useCallback((look: Look) => {
-    dispatch({ type: 'OPEN_LOOK', look });
-  }, []);
+    if (onOpenLookProp) {
+      onOpenLookProp(look);
+    } else {
+      dispatch({ type: 'OPEN_LOOK', look });
+    }
+  }, [onOpenLookProp]);
 
   // Find the last detail segment index for ref assignment
   const lastDetailIdx = useMemo(() => {
