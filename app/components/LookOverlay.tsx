@@ -21,7 +21,7 @@ interface LookOverlayProps {
 }
 
 export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, bookmarks }: LookOverlayProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [touchStartY, setTouchStartY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -37,6 +37,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   useEscapeKey(onClose);
 
+  // Swipe-down on the header drag area to dismiss
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     setTouchStartY(e.touches[0].clientY);
   }, []);
@@ -58,12 +59,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       setOpacity(1);
     }
   }, [translateY, onClose]);
-
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) {
-      onClose();
-    }
-  }, [onClose]);
 
   const handleToggleLookBookmark = () => {
     bookmarks.toggleLookBookmark(look.id);
@@ -87,117 +82,163 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     }
   };
 
-  const overlayStyle: React.CSSProperties = isAnimatingOut
+  const panelStyle: React.CSSProperties = isAnimatingOut
     ? { transform: 'translateY(100vh)', opacity: 0, transition: 'transform 0.3s ease, opacity 0.3s ease' }
     : translateY > 0
       ? { transform: `translateY(${translateY}px)`, opacity, transition: 'none' }
       : {};
 
   return (
-    <div
-      ref={overlayRef}
-      className="look-overlay"
-      onClick={handleOverlayClick}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={overlayStyle}
-    >
-      <button className="look-back-btn" onClick={(e) => { e.stopPropagation(); onClose(); }} aria-label="Back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-      </button>
-      <div className="look-detail">
-        <div className="look-media">
-          <video
-            ref={videoRef}
-            src={`${basePath}/${look.video}`}
-            autoPlay
-            loop
-            muted
-            playsInline
-            style={{ width: '100%', borderRadius: 12, aspectRatio: '3/4', objectFit: 'cover' }}
-          />
-          {/* Shopping bag icon indicator */}
-          <div className="hotspot-indicator">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+    <div className="look-overlay">
+      <div ref={detailRef} className="look-detail" style={panelStyle}>
+
+        {/* Drag handle + back button */}
+        <div
+          className="look-detail-header"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <button
+            className="look-back-btn-inline"
+            onClick={onClose}
+            aria-label="Back"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
             </svg>
-            <span>{look.products.length}</span>
+          </button>
+          <div className="look-drag-handle" />
+        </div>
+
+        {/* Video — full width with padding and rounded corners */}
+        <div className="look-media-wrapper">
+          <div className="look-media">
+            <video
+              ref={videoRef}
+              src={`${basePath}/${look.video}`}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="look-media-video"
+            />
+            {/* Bottom-left: product count badge */}
+            <div className="hotspot-indicator">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <path d="M16 10a4 4 0 01-8 0"/>
+              </svg>
+              <span>{look.products.length}</span>
+            </div>
+            {/* Bottom-right: catalog button */}
+            <button
+              className="look-create-catalog-btn"
+              onClick={(e) => { e.stopPropagation(); onCreateCatalog?.(look.creator); }}
+              aria-label="Create catalog"
+              title="Create catalog around this look"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Creator row */}
+        <div className="look-creator-section">
+          <div
+            className="detail-creator-row"
+            onClick={() => { onClose(); onOpenCreator(look.creator); }}
+          >
+            <img
+              className="detail-creator-avatar"
+              src={creatorData?.avatar || ''}
+              alt={look.creator}
+            />
+            <span className="detail-creator-name">
+              {creatorData?.displayName || look.creator}
+            </span>
           </div>
           <button
-            className="look-create-catalog-btn"
-            onClick={(e) => { e.stopPropagation(); onCreateCatalog?.(look.creator); }}
-            aria-label="Create catalog around this look"
-            title="Create catalog around this look"
+            className={`look-bookmark-btn${lookBookmarked ? ' active' : ''}`}
+            onClick={handleToggleLookBookmark}
+            aria-label="Bookmark look"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill={lookBookmarked ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
           </button>
         </div>
 
-        <div className="look-info">
-          <div className="detail-creator">
+        {/* Product cards */}
+        <div className="look-products-list">
+          {look.products.map((p, pi) => (
             <div
-              className="detail-creator-row"
-              onClick={() => { onClose(); onOpenCreator(look.creator); }}
-              style={{ cursor: 'pointer' }}
+              key={pi}
+              className="product-card"
+              onClick={() => handleProductClick(p)}
             >
-              <img
-                className="detail-creator-avatar"
-                src={creatorData?.avatar || ''}
-                alt={look.creator}
-              />
-              <span className="detail-creator-name">
-                {creatorData?.displayName || look.creator}
-              </span>
-            </div>
-            <button
-              className={`look-bookmark-btn ${lookBookmarked ? 'active' : ''}`}
-              onClick={handleToggleLookBookmark}
-              aria-label="Bookmark look"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-            </button>
-          </div>
-
-          <h2 className="detail-title">{look.title}</h2>
-          <p className="detail-description">{look.description}</p>
-
-          <div className="detail-products">
-            {look.products.map((p, pi) => (
-              <div
-                key={pi}
-                className="product-item"
-                onClick={() => handleProductClick(p)}
-                style={{ cursor: 'pointer' }}
-              >
-                <div className="product-thumb">
-                  {p.image ? (
-                    <img src={p.image} alt={p.name} className="product-thumb-img" />
-                  ) : (
-                    <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
-                  )}
-                </div>
-                <div className="product-details">
-                  {p.brand && <span className="product-brand">{p.brand}</span>}
-                  <h4>{p.name}</h4>
-                  <span>{p.price}</span>
-                </div>
-                <button
-                  className={`product-bookmark-btn ${productBookmarks[pi] ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleProductBookmark(pi);
-                  }}
-                  aria-label="Bookmark product"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                </button>
-                <svg className="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <div className="product-card-thumb">
+                {p.image ? (
+                  <img src={p.image} alt={p.name} className="product-thumb-img" />
+                ) : (
+                  <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
+                )}
               </div>
-            ))}
-          </div>
-
+              <div className="product-card-info">
+                {p.brand && <span className="product-brand">{p.brand}</span>}
+                <span className="product-card-name">{p.name}</span>
+                <span className="product-card-price">{p.price}</span>
+              </div>
+              <button
+                className={`product-bookmark-btn${productBookmarks[pi] ? ' active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); handleToggleProductBookmark(pi); }}
+                aria-label="Bookmark product"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill={productBookmarks[pi] ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <svg
+                className="product-arrow"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          ))}
         </div>
+
       </div>
     </div>
   );
