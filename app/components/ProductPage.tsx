@@ -1,5 +1,5 @@
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Product, Look, looks, creators } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 
@@ -14,7 +14,19 @@ interface ProductPageProps {
 }
 
 export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowser, onOpenProduct, onOpenCreator, onCreateCatalog }: ProductPageProps) {
-  useEscapeKey(onClose);
+  const [mounted, setMounted] = useState(false);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setIsAnimatingOut(true);
+    setTimeout(onClose, 320);
+  }, [onClose]);
+
+  useEscapeKey(handleClose);
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -55,9 +67,9 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
   }, [product]);
 
   return (
-    <div className="product-page-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={`product-page-overlay${mounted && !isAnimatingOut ? ' product-page-overlay--in' : ''}${isAnimatingOut ? ' product-page-overlay--out' : ''}`}>
       <div className="product-page">
-        <button className="product-page-back" onClick={onClose}>
+        <button className="product-page-back" onClick={handleClose}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>
@@ -100,7 +112,7 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
                   <div
                     key={key}
                     className="product-page-creator-card"
-                    onClick={() => { if (onOpenCreator) { onClose(); onOpenCreator(key); } }}
+                  onClick={() => { if (onOpenCreator) { handleClose(); onOpenCreator(key); } }}
                   >
                     <img
                       src={data?.avatar || ''}
@@ -129,7 +141,7 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
                     <div
                       key={look.id}
                       className="product-page-look-card"
-                      onClick={() => { onClose(); onOpenLook(look); }}
+                      onClick={() => { handleClose(); onOpenLook(look); }}
                     >
                       <video
                         src={`${basePath}/${look.video}`}

@@ -8,23 +8,23 @@
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  opacity: 0;
-  transition: opacity 0.32s ease;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
 }
 
 .look-overlay--in {
-  opacity: 1;
+  transform: translateY(0);
 }
 
 .look-overlay--out {
-  opacity: 0;
+  transform: translateY(100%);
   pointer-events: none;
 }
 
-/* ── Left: media column (60%) ── */
+/* ── Left: media column (42%) ── */
 .look-media-col {
-  flex: 0 0 60%;
+  flex: 0 0 42%;
   position: relative;
   background: #000;
   display: flex;
@@ -87,9 +87,9 @@
   display: block;
 }
 
-/* ── Right: info panel (40%) ── */
+/* ── Right: info panel (58%) ── */
 .look-info-col {
-  flex: 0 0 40%;
+  flex: 0 0 58%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -376,11 +376,11 @@
   border-radius: 3px;
 }
 
-/* Hero section: the 60/40 split — takes full viewport height */
+/* Hero section: the split — slightly shorter than viewport so feed peeks */
 .look-hero-section {
   display: flex;
   flex-direction: row;
-  height: 100vh;
+  height: 85vh;
   flex-shrink: 0;
   width: 100%;
 }

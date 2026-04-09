@@ -151,17 +151,8 @@ export default function Home() {
       setView('deck-selector');
       return true;
     }
-    if (password === '321') {
-      setView('landing');
-      return true;
-    }
     if (password === '123') {
-      setShowSplash(true);
-      setView('splash');
-      setTimeout(() => {
-        setView('app');
-        setShowSplash(false);
-      }, 2200);
+      setView('app');
       return true;
     }
     return false;
@@ -245,6 +236,7 @@ export default function Home() {
   }, []);
 
   const handleOpenProduct = useCallback((product: Product) => {
+    setSelectedLook(null);
     setSelectedProduct(product);
   }, []);
 
