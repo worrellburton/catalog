@@ -1,0 +1,479 @@
+/* Light mode */
+.light-mode {
+  --bg: #f5f5f0;
+  --text: #1a1a1a;
+  --card-bg: #e0e0db;
+  --overlay-bg: rgba(255, 255, 255, 0.95);
+}
+
+.light-mode .look-card .card-shimmer {
+  background: linear-gradient(105deg, #ddd 0%, #ddd 35%, #eee 42%, #f5f5f5 45%, #eee 48%, #ddd 55%, #ddd 100%);
+  background-size: 200% 100%;
+}
+
+.light-mode .look-card {
+  background: #ddd;
+}
+
+.light-mode .look-info,
+.light-mode .look-info h2 {
+  color: #1a1a1a;
+}
+
+.light-mode .look-info p {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.light-mode .look-overlay {
+  background: #f5f5f5;
+}
+
+.light-mode .look-media-col {
+  background: #e0e0e0;
+}
+
+.light-mode .look-back-btn {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.light-mode .look-back-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+.light-mode .look-media {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .look-info-col {
+  background: #f0f0f0;
+  border-left-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .look-back-btn-mobile {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.light-mode .look-back-btn-mobile:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .look-tabs {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .look-tab {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .look-tab:hover {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.light-mode .look-tab.active {
+  color: #1a1a1a;
+  border-bottom-color: #1a1a1a;
+}
+
+.light-mode .look-tab-count {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.light-mode .look-tab.active .look-tab-count {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+.light-mode .look-creator-row:hover {
+  opacity: 0.65;
+}
+
+.light-mode .look-creator-handle {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .product-brand {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.light-mode .product-card-name {
+  color: #1a1a1a;
+}
+
+.light-mode .product-card-price {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .product-card {
+  border-bottom-color: rgba(0, 0, 0, 0.07);
+}
+
+.light-mode .product-card-thumb {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .look-creator-about-bio {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.light-mode .look-creator-about-btn {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.light-mode .look-creator-about-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+.light-mode .look-feed-section {
+  background: #f5f5f5;
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .look-feed-heading {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.light-mode .look-overlay-scroll {
+  scrollbar-color: rgba(0,0,0,0.12) transparent;
+}
+
+.light-mode .look-overlay-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12);
+}
+
+.light-mode .detail-creator-name {
+  color: #1a1a1a;
+}
+
+.light-mode .detail-creator-avatar {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .detail-creator-name {
+  color: #1a1a1a;
+}
+
+.light-mode .bottom-bar {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.light-mode .filter-chip {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .filter-chip:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.light-mode .filter-chip.active {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+.light-mode .search-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .filter-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .filter-btn.has-filters {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+.light-mode .filter-catalog-name {
+  color: #1a1a1a;
+}
+
+.light-mode .filter-section-label {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .filter-option {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .filter-option:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.light-mode .filter-option.active {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+.light-mode .filter-option.active .filter-icon svg {
+  stroke: #fff;
+}
+
+.light-mode .filter-sub-panel {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .filter-sub-label {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.light-mode .filter-expandable.active .expand-arrow {
+  stroke: #fff;
+}
+
+.light-mode .filter-apply-btn {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+.light-mode .filter-apply-btn:hover {
+  background: #000;
+}
+
+.light-mode .bottom-divider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .search-input {
+  color: #1a1a1a;
+}
+
+.light-mode .search-input::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.light-mode #scale-slider {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.light-mode #scale-slider::-webkit-slider-thumb {
+  background: #1a1a1a;
+}
+
+.light-mode #scale-slider::-moz-range-thumb {
+  background: #1a1a1a;
+}
+
+.light-mode .creator-page {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.light-mode .deck-view {
+  background: #f5f5f0;
+}
+
+.light-mode .deck-slide h2 {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-slide > p,
+.light-mode .deck-intro-content > p,
+.light-mode .deck-insight-content > p,
+.light-mode .deck-solution-text > p,
+.light-mode .deck-step p,
+.light-mode .deck-note {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .deck-label {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.light-mode .deck-step h3,
+.light-mode .deck-stat-num {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-step {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .deck-stat {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .deck-stat-label {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .deck-step-num {
+  color: rgba(0, 0, 0, 0.15);
+}
+
+.light-mode .deck-logo {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-subtitle {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* Light mode: Math table */
+.light-mode .math-table {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .math-table-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .math-table-label-col {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .math-col-old {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .math-col-new {
+  color: #1a1a1a;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-mode .math-table-row {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+.light-mode .math-val-old {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .math-val-new {
+  color: #1a1a1a;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-mode .math-val-dim {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.light-mode .math-val-green {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-mode .math-pct {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.light-mode .math-val-new .math-pct {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .fire-text {
+  color: #16a34a;
+  text-shadow:
+    0 0 10px rgba(22, 163, 74, 0.3),
+    0 0 20px rgba(22, 163, 74, 0.15);
+}
+
+/* Light mode: Value matrix */
+.light-mode .value-before-label {
+  color: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .value-after-label {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.06);
+}
+
+.light-mode .value-persona-icon {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.light-mode .value-matrix-persona span {
+  color: #1a1a1a;
+}
+
+.light-mode .value-before {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .value-before p {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.light-mode .value-after {
+  background: rgba(22, 163, 74, 0.04);
+  border-left-color: rgba(22, 163, 74, 0.15);
+}
+
+.light-mode .value-after p {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* Old flywheel light-mode removed — new styles are inline above */
+
+.light-mode .deck-mvp-btn {
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.5);
+  animation-name: deckBtnGlowLight;
+}
+
+@keyframes deckBtnGlowLight {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0); }
+  50% { box-shadow: 0 0 12px rgba(0, 0, 0, 0.08), 0 0 40px rgba(0, 0, 0, 0.03); }
+}
+
+.light-mode .deck-mvp-btn:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+  color: #1a1a1a;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1), 0 8px 30px rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .deck-website-btn {
+  background: #1a1a1a;
+  color: #fff;
+  animation-name: deckBtnGlowDark;
+}
+
+@keyframes deckBtnGlowDark {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 0, 0, 0.08), 0 0 30px rgba(0, 0, 0, 0); }
+  50% { box-shadow: 0 0 20px rgba(0, 0, 0, 0.15), 0 0 50px rgba(0, 0, 0, 0.05); }
+}
+
+.light-mode .deck-website-btn:hover {
+  background: #000;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.2), 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .affiliate-logo {
+  color: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .creator-back {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .creator-back:hover {
+  color: #1a1a1a;
+}
+
+.light-mode .creator-header p {
+  color: rgba(0, 0, 0, 0.5);
+}
+

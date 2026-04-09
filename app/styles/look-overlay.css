@@ -1,0 +1,760 @@
+/* ═══════════════════════════════════════════
+   LOOK OVERLAY — fullscreen 60/40 split
+   ═══════════════════════════════════════════ */
+
+/* Full-screen container */
+.look-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0a0a0a;
+  opacity: 0;
+  transition: opacity 0.32s ease;
+  overflow: hidden;
+}
+
+.look-overlay--in {
+  opacity: 1;
+}
+
+.look-overlay--out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Left: media column (60%) ── */
+.look-media-col {
+  flex: 0 0 60%;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Back button — positioned top-left on the media side */
+.look-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, color 0.18s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.look-back-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Wrapper to center media within the 60% column */
+.look-media-centered {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.look-media {
+  position: relative;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.look-media-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Right: info panel (40%) ── */
+.look-info-col {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #111;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Drag strip — mobile only */
+.look-drag-strip {
+  display: none;
+  justify-content: center;
+  padding: 10px 0 4px;
+  flex-shrink: 0;
+}
+
+.look-drag-pill {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  display: block;
+}
+
+/* Top bar: mobile back btn (hidden on desktop) + bookmark */
+.look-info-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 20px 24px 12px;
+  flex-shrink: 0;
+}
+
+/* Mobile-only back button inside info panel */
+.look-back-btn-mobile {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: none; /* hidden on desktop */
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: auto;
+  transition: background 0.18s, color 0.18s;
+}
+
+.look-back-btn-mobile:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}
+
+/* Creator row */
+.look-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 24px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.look-creator-row:hover {
+  opacity: 0.75;
+}
+
+.look-creator-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.look-creator-handle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  display: block;
+}
+
+/* Tabs */
+.look-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.look-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  margin-right: 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.look-tab:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.look-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+.look-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.5;
+}
+
+.look-tab.active .look-tab-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* Tab content scrollable area */
+.look-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Product cards list */
+.look-products-list {
+  padding: 4px 24px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.product-card:last-child {
+  border-bottom: none;
+}
+
+.product-card:hover {
+  opacity: 0.72;
+}
+
+.product-card-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.product-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.product-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.product-card-price {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  display: block;
+}
+
+/* Creator About tab */
+.look-creator-about {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.look-creator-about-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.look-creator-about-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.look-creator-about-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.look-creator-about-handle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 2px;
+}
+
+.look-creator-about-bio {
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+.look-creator-about-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  width: fit-content;
+}
+
+.look-creator-about-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* ── Scrollable wrapper (makes the whole overlay a scrollable page) ── */
+.look-overlay-scroll {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.look-overlay-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.look-overlay-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.look-overlay-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+
+/* Hero section: the 60/40 split — takes full viewport height */
+.look-hero-section {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+/* ── Feed section below the hero ── */
+.look-feed-section {
+  width: 100%;
+  padding: 48px 32px 64px;
+  background: #0a0a0a;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.look-feed-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 24px;
+  letter-spacing: -0.01em;
+}
+
+.look-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.look-feed-grid .look-card {
+  aspect-ratio: 9 / 16;
+}
+
+/* Hotspot indicator (shared, within .look-media) */
+.look-media .hotspot-indicator {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Catalog btn stays bottom-right of video */
+
+/* Product hotspots on video */
+.hotspot {
+  position: absolute;
+  z-index: 5;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  animation: hotspotDrift1 4s ease-in-out infinite;
+}
+
+.hotspot:nth-child(2) { animation-name: hotspotDrift2; }
+.hotspot:nth-child(3) { animation-name: hotspotDrift3; }
+.hotspot:nth-child(4) { animation-name: hotspotDrift4; }
+
+.hotspot.tracking {
+  animation: none !important;
+  transition: top 0.08s linear, left 0.08s linear;
+}
+
+/* Organic drift paths — each dot follows a different figure-8 / oval */
+@keyframes hotspotDrift1 {
+  0%, 100% { margin-top: 0; margin-left: 0; }
+  25% { margin-top: -6px; margin-left: 4px; }
+  50% { margin-top: 2px; margin-left: 8px; }
+  75% { margin-top: 5px; margin-left: -2px; }
+}
+
+@keyframes hotspotDrift2 {
+  0%, 100% { margin-top: 0; margin-left: 0; }
+  20% { margin-top: 5px; margin-left: -5px; }
+  40% { margin-top: 8px; margin-left: 2px; }
+  60% { margin-top: -2px; margin-left: 6px; }
+  80% { margin-top: -6px; margin-left: -3px; }
+}
+
+@keyframes hotspotDrift3 {
+  0%, 100% { margin-top: 0; margin-left: 0; }
+  30% { margin-top: -4px; margin-left: -6px; }
+  50% { margin-top: 3px; margin-left: -8px; }
+  70% { margin-top: 6px; margin-left: 3px; }
+}
+
+@keyframes hotspotDrift4 {
+  0%, 100% { margin-top: 0; margin-left: 0; }
+  15% { margin-top: 4px; margin-left: 5px; }
+  45% { margin-top: -5px; margin-left: 3px; }
+  65% { margin-top: -3px; margin-left: -7px; }
+  85% { margin-top: 6px; margin-left: -2px; }
+}
+
+.hotspot:hover,
+.hotspot.active {
+  animation-play-state: paused;
+}
+
+.hotspot-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 2;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hotspot:hover .hotspot-dot,
+.hotspot.active .hotspot-dot {
+  transform: scale(1.3);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.hotspot-ping {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  animation: hotspotPing 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hotspotPing {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.hotspot-tooltip {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 14px;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.hotspot-tooltip.right {
+  left: calc(100% + 12px);
+}
+
+.hotspot-tooltip.left {
+  right: calc(100% + 12px);
+}
+
+.hotspot:hover .hotspot-tooltip,
+.hotspot.active .hotspot-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hotspot-tooltip-brand {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hotspot-tooltip-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.hotspot-tooltip-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Shopping bag indicator bottom-left of video */
+.hotspot-indicator {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  padding: 6px 12px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.look-create-catalog-btn {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  transition: all 0.2s ease;
+}
+
+.look-create-catalog-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.08);
+}
+
+.look-media .look-placeholder {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.look-info {
+  display: none; /* replaced by look-creator-section + look-products-list */
+}
+
+/* Detail creator row */
+.detail-creator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.detail-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.detail-creator-row:hover {
+  opacity: 0.8;
+}
+
+.detail-creator-row:hover .detail-creator-name {
+  text-decoration: underline;
+}
+
+.detail-creator-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.detail-creator-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.look-info h2 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.look-info p {
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 32px;
+}
+
+.product-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.product-thumb {
+  width: 64px;
+  height: 64px;
+  background: #2a2a2a;
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.product-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.product-brand {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.product-details h4 {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.product-details span {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Create Catalog button */
+.create-catalog-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 20px;
+  background: radial-gradient(circle at center, rgba(120, 80, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 70%);
+  border: 1px solid rgba(120, 80, 255, 0.25);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 100%;
+  justify-content: center;
+  box-shadow: 0 0 12px rgba(120, 80, 255, 0.1);
+}
+
+.create-catalog-btn:hover {
+  background: radial-gradient(circle at center, rgba(120, 80, 255, 0.35) 0%, rgba(60, 40, 140, 0.2) 70%);
+  color: #fff;
+  border-color: rgba(180, 140, 255, 0.5);
+  box-shadow: 0 0 20px rgba(120, 80, 255, 0.4), 0 0 40px rgba(120, 80, 255, 0.15);
+}
+
+.light-mode .create-catalog-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.light-mode .create-catalog-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+

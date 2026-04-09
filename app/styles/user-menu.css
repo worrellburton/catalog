@@ -1,0 +1,197 @@
+/* User menu - bottom left */
+.user-menu {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 100;
+}
+
+.header-right .user-menu {
+  position: relative;
+  bottom: auto;
+  left: auto;
+}
+
+.user-menu-trigger-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.user-menu-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.user-menu-identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-menu-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-menu-email {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-menu-role {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+  margin-top: 2px;
+}
+.user-menu-role-shopper { color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.08); }
+.user-menu-role-creator { color: #66bb6a; background: rgba(46, 125, 50, 0.2); }
+.user-menu-role-admin { color: #64b5f6; background: rgba(21, 101, 192, 0.2); }
+
+.header-right .user-menu-popout {
+  bottom: auto;
+  top: calc(100% + 8px);
+  left: auto;
+  right: 0;
+}
+
+.user-menu-trigger {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  background: rgba(128, 128, 128, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.user-menu-trigger:hover,
+.user-menu-trigger.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.user-menu-trigger.active {
+  transform: rotate(60deg);
+}
+
+.light-mode .user-menu-trigger {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .user-menu-trigger:hover,
+.light-mode .user-menu-trigger.active {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.user-menu-popout {
+  position: absolute;
+  bottom: 54px;
+  left: 0;
+  min-width: 180px;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: userMenuSlideUp 0.2s ease;
+}
+
+@keyframes userMenuSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.light-mode .user-menu-popout {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.user-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.light-mode .user-menu-item {
+  color: #333;
+}
+
+.light-mode .user-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 8px;
+}
+
+.light-mode .user-menu-divider {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.user-menu-badge {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.light-mode .user-menu-badge {
+  background: rgba(0, 0, 0, 0.08);
+  color: #555;
+}
+
