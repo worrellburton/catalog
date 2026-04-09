@@ -369,6 +369,7 @@ export default function Home() {
               onOpenBrowser={handleOpenBrowser}
               onOpenProduct={handleOpenProduct}
               onCreateCatalog={handleCreateCatalog}
+              onOpenLook={handleOpenLook}
               bookmarks={bookmarks}
             />
           )}
