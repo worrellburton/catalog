@@ -1,0 +1,321 @@
+/* Responsive */
+@media (max-width: 768px) {
+  /* Hotspots — smaller on mobile */
+  .hotspot-dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .hotspot-ping {
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+  }
+
+  .hotspot-tooltip {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
+
+  .hotspot-tooltip-name {
+    font-size: 12px;
+    max-width: 140px;
+    white-space: normal;
+  }
+
+  .hotspot-indicator {
+    bottom: 10px;
+    left: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  /* Look overlay — fullscreen bottom-sheet on mobile */
+  .look-overlay {
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  /* Hero section stacks vertically on mobile */
+  .look-hero-section {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  /* Back button on media side — hidden on mobile */
+  .look-back-btn {
+    display: none;
+  }
+
+  /* Mobile back button in info panel — shown */
+  .look-back-btn-mobile {
+    display: flex;
+  }
+
+  .look-info-topbar {
+    justify-content: space-between;
+  }
+
+  .look-media-col {
+    flex: 0 0 auto;
+    height: 56vw;
+    min-height: 200px;
+    max-height: 280px;
+  }
+
+  .look-media-centered {
+    padding: 0;
+  }
+
+  .look-media {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .look-drag-strip {
+    display: flex;
+  }
+
+  .look-info-col {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .look-info-topbar {
+    padding: 10px 16px 8px;
+  }
+
+  .look-creator-row {
+    padding: 2px 16px 10px;
+  }
+
+  .look-tabs {
+    padding: 0 16px;
+  }
+
+  .look-products-list {
+    padding: 4px 16px 24px;
+  }
+
+  .look-feed-section {
+    padding: 32px 16px 48px;
+  }
+
+  .look-feed-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Product items in overlay */
+  .product-item {
+    padding: 10px 0;
+  }
+
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .product-details h4 {
+    font-size: 13px;
+  }
+
+  /* Creator page — mobile adjustments */
+  .creator-page {
+    padding-top: 60px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .creator-hero {
+    padding: 24px 0 20px;
+  }
+
+  .creator-hero-avatar {
+    width: 80px;
+    height: 80px;
+  }
+
+  .creator-hero-name {
+    font-size: 28px;
+  }
+
+  .creator-follow-btn {
+    padding: 8px 24px;
+    font-size: 12px;
+  }
+
+  .creator-nav {
+    gap: 20px;
+  }
+
+  .creator-nav-tab {
+    font-size: 14px;
+    padding: 12px 4px;
+  }
+
+  .creator-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .creator-grid .look-card {
+    aspect-ratio: 3/4;
+  }
+
+  .creator-products-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .creator-product-info {
+    padding: 8px;
+  }
+
+  .creator-product-name {
+    font-size: 12px;
+  }
+
+  .creator-brand-chips {
+    padding-bottom: 16px;
+    gap: 6px;
+  }
+
+  .creator-brand-chip {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  /* Catalog dropdown */
+  .catalog-dropdown-wrap {
+    margin-left: 6px;
+  }
+
+  .catalog-name-btn {
+    padding: 4px 8px;
+    max-width: 160px;
+  }
+
+  .catalog-name-btn span {
+    font-size: 11px;
+  }
+
+  .catalog-dropdown {
+    min-width: 200px;
+    left: -20px;
+  }
+
+  /* Card catalog hover button — always visible on mobile (no hover) */
+  .look-card .card-catalog-btn {
+    opacity: 1;
+    transform: scale(1);
+    width: 32px;
+    height: 32px;
+    top: 8px;
+    right: 8px;
+  }
+
+  /* Auth buttons */
+  .pw-google-btn,
+  .pw-phone-btn {
+    width: 260px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .pw-hero-logo {
+    max-width: 200px;
+  }
+
+  .pw-subtitle {
+    font-size: 12px;
+  }
+
+  .pw-input-phone {
+    width: 200px;
+    font-size: 16px;
+  }
+
+  .pw-input-otp {
+    width: 160px;
+    font-size: 24px;
+  }
+
+  /* Bookmarks creators section */
+  .bookmarks-creators-section {
+    padding: 16px;
+  }
+
+  .bookmarks-creator-card {
+    min-width: 100px;
+    padding: 12px;
+  }
+
+  .bookmarks-creator-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Deck evolution visual */
+  .catalog-evolution {
+    flex-direction: column;
+    gap: 20px;
+    transform: scale(0.85);
+  }
+
+  .evo-arrow {
+    flex-direction: row;
+  }
+
+  .evo-arrow-line {
+    width: 32px;
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent);
+  }
+
+  .evo-catalog-old {
+    width: 140px;
+    height: 190px;
+  }
+
+  .evo-phone {
+    width: 130px;
+    height: 230px;
+  }
+
+  /* Deck intro split — stack on mobile */
+  .deck-slide-intro-split .deck-intro-left p {
+    font-size: 14px;
+  }
+
+  /* Math table on mobile */
+  .math-tbl {
+    font-size: 12px;
+  }
+
+  .math-tbl th,
+  .math-tbl td {
+    padding: 10px 12px;
+  }
+
+  .math-tbl thead th {
+    font-size: 10px;
+  }
+
+  .math-tbl-label {
+    font-size: 12px;
+  }
+
+  .math-tbl-val-old,
+  .math-tbl-val-new {
+    font-size: 13px;
+  }
+}
+

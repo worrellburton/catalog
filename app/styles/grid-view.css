@@ -1,0 +1,363 @@
+/* Scale slider */
+.slider-view-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.slider-view-icon svg {
+  transition: all 0.25s ease;
+}
+
+.slider-view-icon.pop {
+  transform: scale(1.3);
+}
+
+.slider-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  white-space: nowrap;
+  min-width: 50px;
+  text-align: left;
+  transition: opacity 0.2s ease;
+  letter-spacing: 0.02em;
+}
+
+.light-mode .slider-view-icon {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .slider-label {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+#scale-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+  border-radius: 1px;
+}
+
+#scale-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+#scale-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Grid viewport */
+#grid-viewport {
+  padding-bottom: 100px;
+  min-height: 100vh;
+}
+
+#grid-container {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  grid-auto-flow: dense;
+}
+
+/* Bottom fade gradient */
+#grid-viewport::after {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.35) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 50;
+}
+
+.light-mode #grid-viewport::after {
+  background: linear-gradient(to top, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
+}
+
+.light-mode header {
+  background: linear-gradient(to bottom, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
+}
+
+/* Shimmer loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes shimmerPulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Look card */
+.look-card {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: #111;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Featured cards — 2x2 on desktop */
+.look-card-featured {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+/* Wide cards — 2x1 on desktop, video zoomed to fill landscape */
+.look-card-wide {
+  grid-column: span 2;
+  aspect-ratio: 3 / 2;
+}
+
+.look-card-wide video,
+.look-card-wide img {
+  object-fit: cover;
+  object-position: center 20%;
+  transform: scale(1.15);
+}
+
+@media (max-width: 768px) {
+  .look-card-featured,
+  .look-card-wide {
+    grid-column: span 1;
+    grid-row: span 1;
+    aspect-ratio: 3 / 4;
+  }
+  .look-card-wide video,
+  .look-card-wide img {
+    transform: none;
+    object-position: center;
+  }
+}
+
+/* On hover, darken siblings — desktop only */
+@media (hover: hover) {
+  #grid-container:hover .look-card {
+    opacity: 0.5;
+    transition: opacity 0.4s ease;
+  }
+
+  #grid-container .look-card:hover {
+    opacity: 1;
+  }
+}
+
+.look-card .card-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Shimmer placeholder — shown until video loads */
+.look-card .card-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    #0d0d0d 0%,
+    #0d0d0d 35%,
+    #1a1a1a 42%,
+    #222 45%,
+    #1a1a1a 48%,
+    #0d0d0d 55%,
+    #0d0d0d 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite, shimmerPulse 3s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.look-card.loaded .card-shimmer {
+  opacity: 0;
+  animation: none;
+}
+
+.look-card video {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.look-card.loaded video {
+  opacity: 1;
+}
+
+.look-card .card-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+
+.look-card .card-title {
+  position: absolute;
+  bottom: 10px;
+  left: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+  z-index: 2;
+}
+
+.look-card .card-catalog-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: radial-gradient(circle, rgba(120, 80, 255, 0.4) 0%, rgba(0, 0, 0, 0.6) 70%);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.3s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+}
+
+.look-card:hover .card-catalog-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.look-card .card-catalog-btn:hover {
+  background: radial-gradient(circle, rgba(120, 80, 255, 0.7) 0%, rgba(60, 40, 140, 0.8) 70%);
+  box-shadow: 0 0 20px rgba(120, 80, 255, 0.5), 0 0 40px rgba(120, 80, 255, 0.2);
+  border-color: rgba(180, 140, 255, 0.5);
+  transform: scale(1.1);
+}
+
+.look-card .card-catalog-btn:active {
+  transform: scale(0.95);
+}
+
+.look-card .card-creator-row {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 4px 10px 4px 4px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.look-card:hover .card-creator-row {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.look-card .card-creator-row:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: scale(1.03);
+}
+
+.look-card .card-creator-row:active {
+  transform: scale(0.97);
+}
+
+.card-creator-avatar {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  max-width: 22px;
+  max-height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.card-creator-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.look-card .card-number {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+.look-card video,
+.look-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Stagger shimmer animation across cards */
+.look-card:nth-child(4n+1) .card-shimmer { animation-delay: 0s, 0s; }
+.look-card:nth-child(4n+2) .card-shimmer { animation-delay: 0.3s, 0.4s; }
+.look-card:nth-child(4n+3) .card-shimmer { animation-delay: 0.6s, 0.8s; }
+.look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s, 1.2s; }
+

@@ -6,7 +6,29 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
-import "./globals.css";
+
+/* ── Modular styles (split from globals.css) ── */
+import "./styles/base.css";
+import "./styles/password-gate.css";
+import "./styles/deck-selector.css";
+import "./styles/deck-v6.css";
+import "./styles/splash-screen.css";
+import "./styles/deck-view.css";
+import "./styles/header.css";
+import "./styles/bottom-bar.css";
+import "./styles/bookmarks.css";
+import "./styles/grid-view.css";
+import "./styles/look-overlay.css";
+import "./styles/product-page.css";
+import "./styles/creator-page.css";
+import "./styles/user-menu.css";
+import "./styles/in-app-browser.css";
+import "./styles/light-mode.css";
+import "./styles/responsive.css";
+import "./styles/landing-page.css";
+import "./styles/admin.css";
+import "./styles/partners.css";
+import "./styles/feed.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
