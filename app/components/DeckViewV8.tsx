@@ -330,7 +330,6 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           ]).map((chart) => {
             const points = chart.points.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
             const areaPath = `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} L ${points[points.length - 1][0]} 140 L ${points[0][0]} 140 Z`;
-            const [endX, endY] = points[points.length - 1];
             return (
               <div key={chart.key} className="deck-v8-market-card">
                 <div className="deck-v8-market-head">
@@ -383,18 +382,6 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                       style={{ '--dot-delay': `${2.5 + i * 0.75}s` } as React.CSSProperties}
                     />
                   ))}
-                  {/* up-arrow tip at end of line */}
-                  <g transform={`translate(${endX} ${endY})`} filter={`url(#v8mg-glow-${chart.key})`}>
-                    <path
-                      className="v8mc-arrow"
-                      d="M -6 5 L 0 -7 L 6 5"
-                      fill="none"
-                      stroke="#4ade80"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </g>
                   {/* year labels (show every 2nd year to fit) */}
                   {['2024', '2026', '2028', '2030', '2032', '2035'].map((year) => {
                     const yearNum = parseInt(year, 10);
