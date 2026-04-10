@@ -77,12 +77,12 @@ const CycleIcon: React.FC = () => (
   </svg>
 );
 
-const flywheelSteps: { n: number; angle: string; label: string; icon: React.ReactNode }[] = [
-  { n: 1, angle: '0deg',   label: 'Seed creators, build supply',         icon: <SproutIcon /> },
-  { n: 2, angle: '72deg',  label: 'Creators share, audiences arrive',    icon: <ShareIcon /> },
-  { n: 3, angle: '144deg', label: 'Shoppers browse, trust, buy',         icon: <BagIcon /> },
-  { n: 4, angle: '216deg', label: 'Creators earn, invest more',          icon: <CoinIcon /> },
-  { n: 5, angle: '288deg', label: 'Shoppers become creators',            icon: <CycleIcon /> },
+const flywheelSteps: { n: number; angle: string; label: string; sub: string; icon: React.ReactNode }[] = [
+  { n: 1, angle: '0deg',   label: 'Onboard creators',     sub: 'Free tools, fast payouts, instant storefronts.',        icon: <SproutIcon /> },
+  { n: 2, angle: '72deg',  label: 'Creators publish',     sub: 'Each look ships with its own built-in audience.',      icon: <ShareIcon /> },
+  { n: 3, angle: '144deg', label: 'Shoppers buy on trust', sub: 'Trusted voices convert 3-5× better than paid ads.',    icon: <BagIcon /> },
+  { n: 4, angle: '216deg', label: 'Earnings + data return', sub: 'Top creators reinvest. The feed learns what sells.', icon: <CoinIcon /> },
+  { n: 5, angle: '288deg', label: 'The loop compounds',   sub: 'CAC drops. LTV climbs. Trust deepens every quarter.',  icon: <CycleIcon /> },
 ];
 
 const DeckViewV8: React.FC<DeckViewV8Props> = ({
@@ -468,7 +468,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <span className="deck-label">Flywheel</span>
           <h2>Build supply first.<br />Demand follows trust.</h2>
           <div className="flywheel-labels">
-            {flywheelSteps.map(({ n, label, icon }) => (
+            {flywheelSteps.map(({ n, label, sub, icon }) => (
               <div
                 key={n}
                 className="flywheel-label-item"
@@ -476,11 +476,14 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                 onMouseLeave={() => setActiveFlywheelStep(null)}
               >
                 <span className="fl-num">{icon}</span>
-                <p>{label}</p>
+                <div className="fl-text">
+                  <p className="fl-label">{label}</p>
+                  <p className="fl-sub">{sub}</p>
+                </div>
               </div>
             ))}
           </div>
-          <p>We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
+          <p>Every rotation makes the next one cheaper. Each creator we onboard brings free distribution; each sale teaches the feed; each earning cycle pulls the best creators back in. The flywheel doesn&rsquo;t just spin &mdash; it accelerates.</p>
         </div>
         <div className="flywheel-right">
           <div className="flywheel-center">
