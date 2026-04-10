@@ -112,7 +112,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Intro</span>
           <h2 className="deck-v8-reveal deck-v8-reveal-2">Shopping used to be an experience.</h2>
-          <p className="deck-v8-reveal deck-v8-reveal-3">Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
+          <p className="deck-v8-reveal deck-v8-reveal-3">Flipping through a catalog was discovery at its best. Curated, visual, personal. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
         </div>
       </div>
 
@@ -129,6 +129,11 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               <h3>Shoppers</h3>
               <p>Discovery is fragmented across social feeds, search engines, and retail sites. The experience is ad-heavy, algorithm-driven, and impersonal. Finding products you actually want feels like work.</p>
             </div>
+            <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="broken-circle" cx="12" cy="12" r="10" />
+              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+            </svg>
           </div>
           <div className="deck-v8-problem-item">
             <span className="deck-v8-problem-num">02</span>
@@ -136,6 +141,11 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               <h3>Creators</h3>
               <p>Monetization is constrained by traditional affiliate structures that pay single-digit commissions and offer zero audience ownership. Creators drive purchases but don&apos;t capture the value they create.</p>
             </div>
+            <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="broken-circle" cx="12" cy="12" r="10" />
+              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+            </svg>
           </div>
           <div className="deck-v8-problem-item">
             <span className="deck-v8-problem-num">03</span>
@@ -143,6 +153,11 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               <h3>Brands</h3>
               <p>Creator-driven commerce is difficult to measure and hard to attribute cleanly. Brands want commerce outcomes, not just impressions, but current tools make ROI opaque.</p>
             </div>
+            <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="broken-circle" cx="12" cy="12" r="10" />
+              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+            </svg>
           </div>
         </div>
       </div>
@@ -156,33 +171,50 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         </div>
       </div>
 
-      {/* Slide 6: Three-Sided Value */}
-      <div className="deck-slide">
-        <span className="deck-label">Three-Sided Value</span>
-        <h2>Everyone wins.</h2>
-        <div className="deck-steps">
-          <div className="deck-step">
-            <svg className="deck-step-icon deck-anim-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M8 11h6"/><path d="M11 8v6"/></svg>
-            <span className="deck-step-num">01</span>
-            <h3>For Shoppers</h3>
-            <p>An exploratory, curated shopping experience driven by people they trust. No algorithmic noise, no ad fatigue. Discovery that actually feels like discovery.</p>
+      {/* Slide 5: Three-Sided Value - split layout matching Problem */}
+      <div className="deck-slide deck-v8-problem deck-v8-wins">
+        <div className="deck-v8-split-left">
+          <span className="deck-label">Three-Sided Value</span>
+          <h2>Everyone wins.</h2>
+        </div>
+        <div className="deck-v8-split-right">
+          <div className="deck-v8-problem-item">
+            <span className="deck-v8-problem-num">01</span>
+            <div className="deck-v8-problem-body">
+              <h3>For Shoppers</h3>
+              <p>An exploratory, curated shopping experience driven by people they trust. No algorithmic noise, no ad fatigue. Discovery that actually feels like discovery.</p>
+            </div>
+            <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="win-circle" cx="12" cy="12" r="10" />
+              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+            </svg>
           </div>
-          <div className="deck-step">
-            <svg className="deck-step-icon deck-anim-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            <span className="deck-step-num">02</span>
-            <h3>For Creators</h3>
-            <p>A new income stream with higher commissions, real audience ownership, and a dedicated storefront for their taste. Style becomes a durable, monetizable asset.</p>
+          <div className="deck-v8-problem-item">
+            <span className="deck-v8-problem-num">02</span>
+            <div className="deck-v8-problem-body">
+              <h3>For Creators</h3>
+              <p>A new income stream with higher commissions, real audience ownership, and a dedicated storefront for their taste. Style becomes a durable, monetizable asset.</p>
+            </div>
+            <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="win-circle" cx="12" cy="12" r="10" />
+              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+            </svg>
           </div>
-          <div className="deck-step">
-            <svg className="deck-step-icon deck-anim-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            <span className="deck-step-num">03</span>
-            <h3>For Brands</h3>
-            <p>Authentic distribution through trusted voices with measurable commerce outcomes. Guaranteed ROAS visibility and clean attribution on every dollar spent.</p>
+          <div className="deck-v8-problem-item">
+            <span className="deck-v8-problem-num">03</span>
+            <div className="deck-v8-problem-body">
+              <h3>For Brands</h3>
+              <p>Authentic distribution through trusted voices with measurable commerce outcomes. Guaranteed ROAS visibility and clean attribution on every dollar spent.</p>
+            </div>
+            <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle className="win-circle" cx="12" cy="12" r="10" />
+              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+            </svg>
           </div>
         </div>
       </div>
 
-      {/* Slide 7: Market Opportunity */}
+      {/* Slide 6: Market Opportunity */}
       <div className="deck-slide deck-v8-market">
         <span className="deck-label">Market Opportunity</span>
         <h2>Three curves, one window.</h2>
@@ -190,30 +222,32 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           {([
             {
               key: 'social',
-              value: '$1.2T',
-              label: 'Global social commerce by 2028',
+              value: '$3.2T',
+              label: 'Global social commerce by 2035',
               growth: '+31% CAGR',
-              points: '20,110 80,90 140,68 200,44 260,20',
-              area: 'M 20 110 L 80 90 L 140 68 L 200 44 L 260 20 L 260 140 L 20 140 Z',
+              // 12 data points for 2024..2035 across x=20..260 (step ~21.8)
+              points: '20,122 42,116 64,108 85,98 107,86 129,72 150,58 172,46 194,36 216,28 238,22 260,18',
+              source: 'Grand View Research, 2024',
             },
             {
               key: 'creator',
-              value: '$250B',
-              label: 'Creator-driven commerce by 2028',
+              value: '$1.1T',
+              label: 'Creator-driven commerce by 2035',
               growth: '+22% CAGR',
-              points: '20,98 80,82 140,66 200,46 260,20',
-              area: 'M 20 98 L 80 82 L 140 66 L 200 46 L 260 20 L 260 140 L 20 140 Z',
+              points: '20,116 42,108 64,98 85,88 107,76 129,64 150,54 172,44 194,36 216,30 238,24 260,20',
+              source: 'Goldman Sachs, 2023',
             },
             {
               key: 'trust',
-              value: '82%',
-              label: 'Shoppers trust creators over ads',
+              value: '94%',
+              label: 'Shoppers trust creators over ads by 2035',
               growth: '+12% YoY',
-              points: '20,92 80,74 140,56 200,38 260,20',
-              area: 'M 20 92 L 80 74 L 140 56 L 200 38 L 260 20 L 260 140 L 20 140 Z',
+              points: '20,108 42,100 64,92 85,82 107,72 129,62 150,54 172,46 194,38 216,30 238,24 260,20',
+              source: 'Matter Communications, 2024',
             },
           ]).map((chart) => {
             const points = chart.points.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
+            const areaPath = `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} L ${points[points.length - 1][0]} 140 L ${points[0][0]} 140 Z`;
             return (
               <div key={chart.key} className="deck-v8-market-card">
                 <div className="deck-v8-market-head">
@@ -224,9 +258,16 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                 <svg className="deck-v8-market-chart" viewBox="0 0 280 180" preserveAspectRatio="xMidYMid meet">
                   <defs>
                     <linearGradient id={`v8mg-${chart.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-                      <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                      <stop offset="0%" stopColor="rgba(74,222,128,0.35)" />
+                      <stop offset="100%" stopColor="rgba(74,222,128,0)" />
                     </linearGradient>
+                    <filter id={`v8mg-glow-${chart.key}`} x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2.5" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
                   </defs>
                   {/* horizontal grid */}
                   {[20, 50, 80, 110].map((y) => (
@@ -235,16 +276,17 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                   {/* x-axis baseline */}
                   <line x1="20" y1="140" x2="260" y2="140" stroke="rgba(255,255,255,0.15)" />
                   {/* area fill */}
-                  <path className="v8mc-area" d={chart.area} fill={`url(#v8mg-${chart.key})`} />
+                  <path className="v8mc-area" d={areaPath} fill={`url(#v8mg-${chart.key})`} />
                   {/* line */}
                   <polyline
                     className="v8mc-line"
                     points={chart.points}
                     fill="none"
-                    stroke="#fff"
+                    stroke="#4ade80"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    filter={`url(#v8mg-glow-${chart.key})`}
                   />
                   {/* dots */}
                   {points.map(([x, y], i) => (
@@ -253,14 +295,15 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                       className="v8mc-dot"
                       cx={x}
                       cy={y}
-                      r="3"
-                      fill="#fff"
-                      style={{ '--dot-delay': `${1.6 + i * 0.12}s` } as React.CSSProperties}
+                      r="2.5"
+                      fill="#4ade80"
+                      style={{ '--dot-delay': `${1.6 + i * 0.08}s` } as React.CSSProperties}
                     />
                   ))}
-                  {/* year labels */}
-                  {['2024', '2025', '2026', '2027', '2028'].map((year, i) => {
-                    const x = 20 + i * 60;
+                  {/* year labels (show every 2nd year to fit) */}
+                  {['2024', '2026', '2028', '2030', '2032', '2035'].map((year) => {
+                    const yearNum = parseInt(year, 10);
+                    const x = 20 + ((yearNum - 2024) / 11) * 240;
                     return (
                       <g key={year}>
                         <line x1={x} y1="140" x2={x} y2="144" stroke="rgba(255,255,255,0.2)" />
@@ -269,6 +312,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                     );
                   })}
                 </svg>
+                <p className="deck-v8-market-source">Source: {chart.source}</p>
               </div>
             );
           })}
@@ -283,9 +327,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <h2>Economics that work for everyone.</h2>
           <div className="deck-scenario">
             <span className="deck-scenario-tag">Scenario</span>
-            <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
+            <p>A creator posts a look featuring a $200 jacket, and a shopper buys it through Catalog.</p>
           </div>
-          <table className="math-tbl">
+          <table className="math-tbl deck-v8-math-tbl">
           <thead>
             <tr>
               <th className="math-tbl-label"></th>
@@ -297,27 +341,27 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             <tr>
               <td className="math-tbl-label">Brand pays</td>
               <td className="math-val-old">$20<span className="math-pct">(10%)</span></td>
-              <td className="math-val-new">$40<span className="math-pct">(20%)</span></td>
+              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$40<span className="math-pct">(20%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Creator payout</td>
               <td className="math-val-old">$16<span className="math-pct">(8%)</span></td>
-              <td className="math-val-new">$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$20<span className="math-pct">(10%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Platform revenue</td>
               <td className="math-val-old">$4<span className="math-pct">(2%)</span></td>
-              <td className="math-val-new">$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$20<span className="math-pct">(10%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Brand cost visibility</td>
               <td className="math-val-dim">Unpredictable</td>
-              <td className="math-val-new"><span className="fire-text">Guaranteed 5x ROAS</span></td>
+              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span><span className="fire-text">Guaranteed 5x ROAS</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Attribution</td>
               <td className="math-val-dim">Last-click, lossy</td>
-              <td className="math-val-new">Full-funnel, per-creator</td>
+              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>Full-funnel, per-creator</td>
             </tr>
           </tbody>
         </table>
@@ -359,11 +403,23 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
               <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
             </svg>
-            <div className="flywheel-node" style={{ '--angle': '0deg' } as React.CSSProperties}><span>1</span></div>
-            <div className="flywheel-node" style={{ '--angle': '72deg' } as React.CSSProperties}><span>2</span></div>
-            <div className="flywheel-node" style={{ '--angle': '144deg' } as React.CSSProperties}><span>3</span></div>
-            <div className="flywheel-node" style={{ '--angle': '216deg' } as React.CSSProperties}><span>4</span></div>
-            <div className="flywheel-node" style={{ '--angle': '288deg' } as React.CSSProperties}><span>5</span></div>
+            {[
+              { n: 1, angle: '0deg' },
+              { n: 2, angle: '72deg' },
+              { n: 3, angle: '144deg' },
+              { n: 4, angle: '216deg' },
+              { n: 5, angle: '288deg' },
+            ].map(({ n, angle }) => (
+              <div
+                key={n}
+                className="flywheel-node"
+                style={{ '--angle': angle } as React.CSSProperties}
+                onMouseEnter={() => setActiveFlywheelStep(n)}
+                onMouseLeave={() => setActiveFlywheelStep(null)}
+              >
+                <span>{n}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -375,19 +431,31 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <p>Creator commerce is fragmenting across dozens of tools while brands are pulling back from awareness spend and demanding measurable ROI. Gen Z doesn&apos;t trust ads but does trust people. Meanwhile, AI has matured enough to power visual search, product matching, and personalized discovery at scale. Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that actually works for everyone involved.</p>
       </div>
 
-      {/* Slide 11: Traction */}
+      {/* Slide 10: Traction */}
       <div className="deck-slide deck-v8-traction">
         <span className="deck-label">Traction</span>
         <h2>Early momentum.</h2>
-        <div className="deck-solution-phones deck-v8-traction-phones">
-          <div className="deck-app-frame deck-phone-side">
-            <video src={`${basePath}/girl2.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
-          </div>
-          <div className="deck-app-frame deck-phone-center">
-            <video src={`${basePath}/Untitled.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
-          </div>
-          <div className="deck-app-frame deck-phone-side">
-            <video src={`${basePath}/guy.mp4`} autoPlay loop muted playsInline className="deck-app-video" />
+        <div className="deck-v8-phone-marquee" aria-hidden="true">
+          <div className="deck-v8-phone-track">
+            {/* Phones list, duplicated for a seamless infinite loop */}
+            {[...Array(2)].map((_, loopIdx) => (
+              <React.Fragment key={loopIdx}>
+                {[
+                  'girl2.mp4',
+                  'Untitled.mp4',
+                  'guy.mp4',
+                  'girl2.mp4',
+                  'Untitled.mp4',
+                  'guy.mp4',
+                  'girl2.mp4',
+                  'Untitled.mp4',
+                ].map((src, i) => (
+                  <div key={`${loopIdx}-${i}`} className="deck-app-frame deck-v8-marquee-phone">
+                    <video src={`${basePath}/${src}`} autoPlay loop muted playsInline className="deck-app-video" />
+                  </div>
+                ))}
+              </React.Fragment>
+            ))}
           </div>
         </div>
         <div className="deck-stats deck-v8-traction-stats">
@@ -424,10 +492,10 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         </div>
       </div>
 
-      {/* Slide 13: Final */}
+      {/* Slide 12: Final */}
       <div className="deck-slide deck-cover">
         <CatalogLogo className="deck-logo" />
-        <p className="deck-subtitle">The human layer of commerce.</p>
+        <p className="deck-subtitle">Human Taste, Powered by AI</p>
         <div className="deck-end-actions">
           <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
           <button className="deck-website-btn" id="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
