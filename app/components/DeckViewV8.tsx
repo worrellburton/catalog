@@ -97,8 +97,8 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <p className="deck-subtitle">Investor Deck V.8 for Alex and Dan</p>
       </div>
 
-      {/* Slide 2: Intro — catalog nostalgia + SVG animations */}
-      <div className="deck-slide deck-slide-intro">
+      {/* Slide 2: Intro: catalog nostalgia + SVG animations */}
+      <div className="deck-slide deck-slide-intro deck-v8-intro">
         <div className="deck-intro-svgs" aria-hidden="true">
           {/* Animated floating catalog/book icons */}
           <svg className="deck-intro-icon deck-intro-icon-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
@@ -109,13 +109,13 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </div>
         <div className="deck-intro-content">
-          <span className="deck-label">Intro</span>
-          <h2>Shopping used to be an experience.</h2>
-          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed — you found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
+          <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Intro</span>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Shopping used to be an experience.</h2>
+          <p className="deck-v8-reveal deck-v8-reveal-3">Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed. You found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
         </div>
       </div>
 
-      {/* Slide 3: The Problem — with animated SVG icons */}
+      {/* Slide 3: The Problem: with animated SVG icons */}
       <div className="deck-slide">
         <span className="deck-label">The Problem</span>
         <h2>Three stakeholders.<br />Three broken experiences.</h2>
@@ -141,22 +141,13 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         </div>
       </div>
 
-      {/* Slide 4: The Insight */}
-      <div className="deck-slide">
-        <div className="deck-insight-content">
-          <span className="deck-label">The Insight</span>
-          <h2>Human taste, amplified by AI.</h2>
-          <p>Creators drive purchases but can&apos;t capture the value — and have no real revenue stream from curation. Nobody has built the platform that turns taste into a storefront and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators earn from every sale.</p>
-        </div>
-      </div>
-
-      {/* Slide 5: The Solution — three phones */}
+      {/* Slide 4: The Solution: merged insight + three phones */}
       <div className="deck-slide deck-slide-solution">
         <div className="deck-solution-layout">
           <div className="deck-solution-text">
             <span className="deck-label">The Solution</span>
-            <h2>Where discovery becomes commerce.</h2>
-            <p>Shoppers browse curated looks and tap to find visually similar products. Creators build shoppable storefronts powered by their taste. Brands get measurable, creator-driven distribution. One platform connecting all three — with AI surfacing the right content to the right person.</p>
+            <h2>Human taste, amplified by AI.</h2>
+            <p>Creators turn their taste into shoppable storefronts. Shoppers browse curated looks and tap to find visually similar products. Brands get measurable, creator-driven distribution. AI does the heavy lifting: visual search, automated tagging, personalized discovery. Every sale routes value back to the people who created it.</p>
           </div>
           <div className="deck-solution-phones">
             <div className="deck-app-frame deck-phone-side">
