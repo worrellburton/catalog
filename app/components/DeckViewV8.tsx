@@ -10,6 +10,22 @@ interface DeckViewV8Props {
   onToggleTheme: () => void;
 }
 
+/* Math table animated check/X icons */
+const MathCheckIcon: React.FC = () => (
+  <svg className="math-icon math-check-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <circle className="math-icon-circle" cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.4" />
+    <polyline className="math-icon-stroke" points="6.2 10.4 9 13.2 14 7.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const MathXIcon: React.FC = () => (
+  <svg className="math-icon math-x-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <circle className="math-icon-circle" cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.4" />
+    <line className="math-icon-stroke math-icon-x-1" x1="7.2" y1="7.2" x2="12.8" y2="12.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <line className="math-icon-stroke math-icon-x-2" x1="12.8" y1="7.2" x2="7.2" y2="12.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 const DeckViewV8: React.FC<DeckViewV8Props> = ({
   onSeeApp,
   onVisitWebsite,
@@ -228,6 +244,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               // 12 data points for 2024..2035 across x=20..260 (step ~21.8)
               points: '20,122 42,116 64,108 85,98 107,86 129,72 150,58 172,46 194,36 216,28 238,22 260,18',
               source: 'Grand View Research, 2024',
+              sourceUrl: 'https://www.grandviewresearch.com/industry-analysis/social-commerce-market',
             },
             {
               key: 'creator',
@@ -236,6 +253,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               growth: '+22% CAGR',
               points: '20,116 42,108 64,98 85,88 107,76 129,64 150,54 172,44 194,36 216,30 238,24 260,20',
               source: 'Goldman Sachs, 2023',
+              sourceUrl: 'https://www.goldmansachs.com/insights/articles/the-creator-economy-could-approach-half-a-trillion-dollars-by-2027',
             },
             {
               key: 'trust',
@@ -244,6 +262,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               growth: '+12% YoY',
               points: '20,108 42,100 64,92 85,82 107,72 129,62 150,54 172,46 194,38 216,30 238,24 260,20',
               source: 'Matter Communications, 2024',
+              sourceUrl: 'https://www.matternow.com/blog/new-consumer-survey-81-increase-their-trust-in-brand-through-influencer-marketing/',
             },
           ]).map((chart) => {
             const points = chart.points.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
@@ -297,7 +316,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                       cy={y}
                       r="2.5"
                       fill="#4ade80"
-                      style={{ '--dot-delay': `${1.6 + i * 0.08}s` } as React.CSSProperties}
+                      style={{ '--dot-delay': `${2.5 + i * 0.75}s` } as React.CSSProperties}
                     />
                   ))}
                   {/* year labels (show every 2nd year to fit) */}
@@ -312,7 +331,16 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                     );
                   })}
                 </svg>
-                <p className="deck-v8-market-source">Source: {chart.source}</p>
+                <p className="deck-v8-market-source-wrap">
+                  <a
+                    className="deck-v8-market-source"
+                    href={chart.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Source: {chart.source}
+                  </a>
+                </p>
               </div>
             );
           })}
@@ -340,28 +368,28 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <tbody>
             <tr>
               <td className="math-tbl-label">Brand pays</td>
-              <td className="math-val-old">$20<span className="math-pct">(10%)</span></td>
-              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$40<span className="math-pct">(20%)</span></td>
+              <td className="math-val-old"><MathXIcon />$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">(20%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Creator payout</td>
-              <td className="math-val-old">$16<span className="math-pct">(8%)</span></td>
-              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-old"><MathXIcon />$16<span className="math-pct">(8%)</span></td>
+              <td className="math-val-new"><MathCheckIcon />$20<span className="math-pct">(10%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Platform revenue</td>
-              <td className="math-val-old">$4<span className="math-pct">(2%)</span></td>
-              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-old"><MathXIcon />$4<span className="math-pct">(2%)</span></td>
+              <td className="math-val-new"><MathCheckIcon />$20<span className="math-pct">(10%)</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Brand cost visibility</td>
-              <td className="math-val-dim">Unpredictable</td>
-              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span><span className="fire-text">Guaranteed 5x ROAS</span></td>
+              <td className="math-val-dim"><MathXIcon />Unpredictable</td>
+              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">Guaranteed 5x ROAS</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Attribution</td>
-              <td className="math-val-dim">Last-click, lossy</td>
-              <td className="math-val-new"><span className="math-check" aria-hidden="true">✓</span>Full-funnel, per-creator</td>
+              <td className="math-val-dim"><MathXIcon />Last-click, lossy</td>
+              <td className="math-val-new"><MathCheckIcon />Full-funnel, per-creator</td>
             </tr>
           </tbody>
         </table>
@@ -424,11 +452,64 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         </div>
       </div>
 
-      {/* Slide 10: Why Now */}
-      <div className="deck-slide">
+      {/* Slide 9: Why Now */}
+      <div className="deck-slide deck-v8-whynow">
         <span className="deck-label">Why Now</span>
         <h2>The wedge is open.</h2>
-        <p>Creator commerce is fragmenting across dozens of tools while brands are pulling back from awareness spend and demanding measurable ROI. Gen Z doesn&apos;t trust ads but does trust people. Meanwhile, AI has matured enough to power visual search, product matching, and personalized discovery at scale. Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that actually works for everyone involved.</p>
+        <div className="deck-v8-whynow-grid">
+          <div className="deck-v8-whynow-item">
+            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-fragment">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect className="fragment-box fragment-box-1" x="6" y="6" width="12" height="12" rx="2" />
+                <rect className="fragment-box fragment-box-2" x="30" y="6" width="12" height="12" rx="2" />
+                <rect className="fragment-box fragment-box-3" x="6" y="30" width="12" height="12" rx="2" />
+                <rect className="fragment-box fragment-box-4" x="30" y="30" width="12" height="12" rx="2" />
+              </svg>
+            </div>
+            <h3>Creator tools are fragmenting</h3>
+            <p>Dozens of siloed apps. No unified commerce layer. Creators juggling link-in-bios, affiliate dashboards, and DMs.</p>
+          </div>
+
+          <div className="deck-v8-whynow-item">
+            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-roi">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline className="roi-line" points="6,34 16,22 24,28 34,14 42,20" />
+                <circle className="roi-dot roi-dot-1" cx="6" cy="34" r="1.8" fill="currentColor" />
+                <circle className="roi-dot roi-dot-2" cx="16" cy="22" r="1.8" fill="currentColor" />
+                <circle className="roi-dot roi-dot-3" cx="24" cy="28" r="1.8" fill="currentColor" />
+                <circle className="roi-dot roi-dot-4" cx="34" cy="14" r="1.8" fill="currentColor" />
+                <circle className="roi-dot roi-dot-5" cx="42" cy="20" r="1.8" fill="currentColor" />
+              </svg>
+            </div>
+            <h3>Brands demand measurable ROI</h3>
+            <p>Awareness budgets are shrinking. CFOs want attribution, not impressions. Guaranteed ROAS is the new ask.</p>
+          </div>
+
+          <div className="deck-v8-whynow-item">
+            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-trust">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle className="trust-ring trust-ring-1" cx="24" cy="24" r="6" />
+                <circle className="trust-ring trust-ring-2" cx="24" cy="24" r="12" />
+                <circle className="trust-ring trust-ring-3" cx="24" cy="24" r="18" />
+              </svg>
+            </div>
+            <h3>Gen Z trusts people, not ads</h3>
+            <p>Ad blindness is total. Authentic creator voices convert where paid media flatlines. Trust is the new distribution.</p>
+          </div>
+
+          <div className="deck-v8-whynow-item">
+            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-ai">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path className="ai-sparkle ai-sparkle-1" d="M24 8 L26 20 L38 22 L26 24 L24 36 L22 24 L10 22 L22 20 Z" />
+                <path className="ai-sparkle ai-sparkle-2" d="M38 6 L39 11 L44 12 L39 13 L38 18 L37 13 L32 12 L37 11 Z" />
+                <path className="ai-sparkle ai-sparkle-3" d="M10 32 L11 37 L16 38 L11 39 L10 44 L9 39 L4 38 L9 37 Z" />
+              </svg>
+            </div>
+            <h3>AI is finally ready</h3>
+            <p>Visual search, auto-tagging, and personalized discovery now run at scale. The infrastructure caught up to the vision.</p>
+          </div>
+        </div>
+        <p className="deck-v8-whynow-close">Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that works for everyone involved.</p>
       </div>
 
       {/* Slide 10: Traction */}
@@ -458,37 +539,95 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             ))}
           </div>
         </div>
-        <div className="deck-stats deck-v8-traction-stats">
-          <div className="deck-stat"><span className="deck-stat-num">V1</span><span className="deck-stat-label">Product live and functional</span></div>
-          <div className="deck-stat"><span className="deck-stat-num">X</span><span className="deck-stat-label">Active creators</span></div>
-          <div className="deck-stat"><span className="deck-stat-num">X</span><span className="deck-stat-label">Looks published</span></div>
-          <div className="deck-stat"><span className="deck-stat-num">X</span><span className="deck-stat-label">Brands integrated</span></div>
+        <div className="deck-v8-traction-stats">
+          <div className="deck-v8-traction-stat">
+            <span className="deck-v8-traction-num">V1</span>
+            <span className="deck-v8-traction-label">Product live and functional</span>
+          </div>
+          <div className="deck-v8-traction-stat">
+            <span className="deck-v8-traction-num">42</span>
+            <span className="deck-v8-traction-label">Active creators</span>
+          </div>
+          <div className="deck-v8-traction-stat">
+            <span className="deck-v8-traction-num">318</span>
+            <span className="deck-v8-traction-label">Looks published</span>
+          </div>
+          <div className="deck-v8-traction-stat">
+            <span className="deck-v8-traction-num">12</span>
+            <span className="deck-v8-traction-label">Brands integrated</span>
+          </div>
         </div>
+        <p className="deck-v8-traction-note">* Demo data &mdash; live numbers updated as the beta scales.</p>
       </div>
 
       {/* Slide 12: The Ask */}
-      <div className="deck-slide">
+      <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
         <h2>Fuel the flywheel.</h2>
-        <div className="deck-raise-summary">
-          <div className="deck-raise-item">
-            <span className="deck-raise-num">$2.5M</span>
-            <span className="deck-raise-label">Round size</span>
+
+        <div className="deck-v8-ask-stage">
+          <div className="deck-v8-ask-raise">
+            <div className="deck-v8-ask-raise-card">
+              <div className="deck-v8-ask-raise-row">
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">$2.5M</span>
+                  <span className="deck-v8-ask-raise-label">Round size</span>
+                </div>
+                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">$12.5M</span>
+                  <span className="deck-v8-ask-raise-label">SAFE cap</span>
+                </div>
+                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">Seed</span>
+                  <span className="deck-v8-ask-raise-label">Stage</span>
+                </div>
+              </div>
+              <p className="deck-v8-ask-raise-caption">Capital deployed across three priorities to ignite the flywheel.</p>
+            </div>
           </div>
-          <div className="deck-raise-item">
-            <span className="deck-raise-num">$12.5M</span>
-            <span className="deck-raise-label">SAFE cap</span>
+
+          <svg className="deck-v8-ask-flow" viewBox="0 0 1000 240" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="v8AskFlowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
+                <stop offset="60%" stopColor="rgba(255,255,255,0.5)" />
+                <stop offset="100%" stopColor="rgba(74,222,128,0.85)" />
+              </linearGradient>
+              <filter id="v8AskFlowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-1" d="M 500 10 C 500 90, 170 100, 170 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.6" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-2" d="M 500 10 C 500 120, 500 120, 500 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.6" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-3" d="M 500 10 C 500 90, 830 100, 830 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.6" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-1" cx="170" cy="230" r="3" fill="#4ade80" filter="url(#v8AskFlowGlow)" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-2" cx="500" cy="230" r="3" fill="#4ade80" filter="url(#v8AskFlowGlow)" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3" fill="#4ade80" filter="url(#v8AskFlowGlow)" />
+          </svg>
+
+          <div className="deck-v8-ask-priorities">
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">01</span>
+              <h3>Seed the creator side</h3>
+              <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">02</span>
+              <h3>Deepen the product</h3>
+              <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">03</span>
+              <h3>Bring brands on board</h3>
+              <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
+            </div>
           </div>
-          <div className="deck-raise-item">
-            <span className="deck-raise-num">Seed</span>
-            <span className="deck-raise-label">Stage</span>
-          </div>
-        </div>
-        <p className="deck-note deck-raise-intro">Capital deployed across three priorities to ignite the flywheel.</p>
-        <div className="deck-steps">
-          <div className="deck-step"><span className="deck-step-num">01</span><h3>Seed the creator side</h3><p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p></div>
-          <div className="deck-step"><span className="deck-step-num">02</span><h3>Deepen the product</h3><p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p></div>
-          <div className="deck-step"><span className="deck-step-num">03</span><h3>Bring brands on board</h3><p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p></div>
         </div>
       </div>
 
