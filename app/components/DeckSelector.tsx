@@ -16,15 +16,20 @@ export default function DeckSelector({ onSelectDeck, onBack }: DeckSelectorProps
         <CatalogLogo className="deck-selector-logo" />
         <p className="deck-selector-subtitle">Select a deck</p>
         <div className="deck-selector-grid">
-          <button className="deck-selector-card" onClick={() => onSelectDeck('v7')}>
+          <button className="deck-selector-card" onClick={() => onSelectDeck('v8')}>
+            <span className="deck-selector-version">V.8</span>
+            <span className="deck-selector-label">Deck v.8</span>
+            <span className="deck-selector-desc">Latest investor deck</span>
+          </button>
+          <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v7')}>
             <span className="deck-selector-version">V.7</span>
             <span className="deck-selector-label">Deck v.7</span>
-            <span className="deck-selector-desc">Latest investor deck</span>
+            <span className="deck-selector-desc">Previous version</span>
           </button>
           <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v6')}>
             <span className="deck-selector-version">V.6</span>
             <span className="deck-selector-label">Deck v.6</span>
-            <span className="deck-selector-desc">Previous version</span>
+            <span className="deck-selector-desc">Earlier version</span>
           </button>
           <button className="deck-selector-card deck-selector-card-muted" onClick={() => onSelectDeck('v5')}>
             <span className="deck-selector-version">V.5</span>
