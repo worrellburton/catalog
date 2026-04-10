@@ -63,7 +63,23 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
   }, []);
 
   return (
-    <div className="deck-view active" ref={containerRef}>
+    <div className="deck-view deck-view-v8 active" ref={containerRef}>
+      <div className="deck-v8-bg" aria-hidden="true">
+        <div className="deck-insight-grid">
+          {Array.from({ length: 24 }).map((_, i) => (
+            <video
+              key={i}
+              src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
+              muted
+              loop
+              playsInline
+              autoPlay
+              className="deck-insight-video"
+            />
+          ))}
+        </div>
+        <div className="deck-insight-overlay" />
+      </div>
       <button className="deck-back-btn" onClick={onBack} aria-label="Back to decks">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
@@ -125,22 +141,8 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         </div>
       </div>
 
-      {/* Slide 4: The Insight — with video grid bg + revenue mention */}
-      <div className="deck-slide deck-slide-insight">
-        <div className="deck-insight-grid" aria-hidden="true">
-          {Array.from({ length: 24 }).map((_, i) => (
-            <video
-              key={i}
-              src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
-              muted
-              loop
-              playsInline
-              autoPlay
-              className="deck-insight-video"
-            />
-          ))}
-        </div>
-        <div className="deck-insight-overlay" />
+      {/* Slide 4: The Insight */}
+      <div className="deck-slide">
         <div className="deck-insight-content">
           <span className="deck-label">The Insight</span>
           <h2>Human taste, amplified by AI.</h2>
@@ -234,31 +236,59 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <span className="deck-label">The Math</span>
         <h2>Structurally better economics.</h2>
         <p className="deck-note deck-math-intro">A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
-        <div className="deck-comparison">
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-old">Traditional Affiliate</h3>
-            <div className="compare-row"><span className="compare-label">Commission rate</span><span className="compare-value">10%</span></div>
-            <div className="compare-row"><span className="compare-label">Creator payout</span><span className="compare-value">$16 (8%)</span></div>
-            <div className="compare-row"><span className="compare-label">Platform revenue</span><span className="compare-value">$4 (2%)</span></div>
-            <div className="compare-row"><span className="compare-label">Brand cost visibility</span><span className="compare-value dim">Unpredictable</span></div>
-            <div className="compare-row"><span className="compare-label">Attribution</span><span className="compare-value dim">Last-click, lossy</span></div>
-          </div>
-          <div className="deck-compare-col">
-            <h3 className="compare-header compare-new">Catalog (Fixed ROAS)</h3>
-            <div className="compare-row"><span className="compare-label">Brand pays</span><span className="compare-value highlight">$40 (20%)</span></div>
-            <div className="compare-row"><span className="compare-label">Creator payout</span><span className="compare-value highlight">$20 (10%)</span></div>
-            <div className="compare-row"><span className="compare-label">Catalog revenue</span><span className="compare-value highlight">$20 (10%)</span></div>
-            <div className="compare-row"><span className="compare-label">Brand cost visibility</span><span className="compare-value guaranteed"><span className="guaranteed-ring" />Guaranteed 5x ROAS</span></div>
-            <div className="compare-row"><span className="compare-label">Attribution</span><span className="compare-value highlight">Full-funnel, per-creator</span></div>
-          </div>
-        </div>
+        <table className="math-tbl">
+          <thead>
+            <tr>
+              <th className="math-tbl-label"></th>
+              <th className="math-tbl-old">Traditional Affiliate</th>
+              <th className="math-tbl-new">Catalog (Fixed ROAS)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="math-tbl-label">Brand pays</td>
+              <td className="math-val-old">$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-new">$40<span className="math-pct">(20%)</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Creator payout</td>
+              <td className="math-val-old">$16<span className="math-pct">(8%)</span></td>
+              <td className="math-val-new">$20<span className="math-pct">(10%)</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Platform revenue</td>
+              <td className="math-val-old">$4<span className="math-pct">(2%)</span></td>
+              <td className="math-val-new">$20<span className="math-pct">(10%)</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Brand cost visibility</td>
+              <td className="math-val-dim">Unpredictable</td>
+              <td className="math-val-new"><span className="fire-text">Guaranteed 5x ROAS</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Attribution</td>
+              <td className="math-val-dim">Last-click, lossy</td>
+              <td className="math-val-new">Full-funnel, per-creator</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Slide 9: Flywheel */}
-      <div className="deck-slide">
-        <span className="deck-label">Flywheel</span>
-        <h2>Build supply first.<br />Demand follows trust.</h2>
-        <div className="deck-flywheel-ring">
+      <div className="deck-slide deck-slide-flywheel-split">
+        <div className="flywheel-left">
+          <span className="deck-label">Flywheel</span>
+          <h2>Build supply first.<br />Demand follows trust.</h2>
+          <div className="flywheel-labels">
+            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Seed creators, build supply</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Creators share, audiences arrive</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Shoppers browse, trust, buy</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Creators earn, invest more</p></div>
+            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
+          </div>
+          <p>We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
+        </div>
+        <div className="flywheel-right">
           <div className="flywheel-center">
             <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
               <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
@@ -270,15 +300,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             <div className="flywheel-node" style={{ '--angle': '216deg' } as React.CSSProperties}><span>4</span></div>
             <div className="flywheel-node" style={{ '--angle': '288deg' } as React.CSSProperties}><span>5</span></div>
           </div>
-          <div className="flywheel-labels">
-            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Seed creators, build supply</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Creators share, audiences arrive</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Shoppers browse, trust, buy</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Creators earn, invest more</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
-          </div>
         </div>
-        <p className="deck-note">We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
       </div>
 
       {/* Slide 10: Why Now */}
@@ -303,7 +325,22 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
       {/* Slide 12: The Ask */}
       <div className="deck-slide">
         <span className="deck-label">The Ask</span>
-        <h2>Raising a seed round to ignite the flywheel.</h2>
+        <h2>Raising $2.5M on a $12.5M SAFE.</h2>
+        <div className="deck-raise-summary">
+          <div className="deck-raise-item">
+            <span className="deck-raise-num">$2.5M</span>
+            <span className="deck-raise-label">Round size</span>
+          </div>
+          <div className="deck-raise-item">
+            <span className="deck-raise-num">$12.5M</span>
+            <span className="deck-raise-label">SAFE cap</span>
+          </div>
+          <div className="deck-raise-item">
+            <span className="deck-raise-num">Seed</span>
+            <span className="deck-raise-label">Stage</span>
+          </div>
+        </div>
+        <p className="deck-note deck-raise-intro">Capital deployed across three priorities to ignite the flywheel.</p>
         <div className="deck-steps">
           <div className="deck-step"><span className="deck-step-num">01</span><h3>Seed the creator side</h3><p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p></div>
           <div className="deck-step"><span className="deck-step-num">02</span><h3>Deepen the product</h3><p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p></div>

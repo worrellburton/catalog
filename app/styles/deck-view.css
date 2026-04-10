@@ -1098,3 +1098,138 @@
   }
 }
 
+/* ============================================= */
+/* Deck V.8 — persistent video grid background   */
+/* ============================================= */
+
+.deck-view-v8 .deck-v8-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.deck-view-v8 .deck-v8-bg .deck-insight-grid {
+  position: absolute;
+  inset: -50% 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 33vh;
+  gap: 4px;
+  opacity: 0.22;
+  animation: insightScroll 45s linear infinite;
+}
+
+.deck-view-v8 .deck-v8-bg .deck-insight-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 6px;
+}
+
+.deck-view-v8 .deck-v8-bg .deck-insight-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.88) 70%);
+  pointer-events: none;
+}
+
+.light-mode .deck-view-v8 .deck-v8-bg .deck-insight-grid {
+  opacity: 0.08;
+}
+
+.light-mode .deck-view-v8 .deck-v8-bg .deck-insight-overlay {
+  background: radial-gradient(ellipse at center, rgba(250, 250, 250, 0.6) 0%, rgba(250, 250, 250, 0.92) 70%);
+}
+
+/* Ensure V.8 slides sit above the fixed background */
+.deck-view-v8 .deck-slide {
+  position: relative;
+  z-index: 1;
+}
+
+.deck-view-v8 .deck-back-btn,
+.deck-view-v8 .deck-theme-toggle {
+  z-index: 360;
+}
+
+@media (max-width: 768px) {
+  .deck-view-v8 .deck-v8-bg .deck-insight-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+  }
+}
+
+/* The Ask — raise summary */
+.deck-raise-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 8px;
+  margin-bottom: 16px;
+  max-width: 720px;
+  padding: 24px 28px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.deck-raise-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deck-raise-num {
+  font-size: clamp(24px, 2.6vw, 34px);
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.deck-raise-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.deck-raise-intro {
+  margin-top: 8px;
+}
+
+.light-mode .deck-raise-summary {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.light-mode .deck-raise-num {
+  color: #1a1a1a;
+}
+
+.light-mode .deck-raise-label {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+  .deck-raise-summary {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+
+  .deck-raise-num {
+    font-size: 22px;
+  }
+
+  .deck-raise-label {
+    font-size: 10px;
+  }
+}
+
