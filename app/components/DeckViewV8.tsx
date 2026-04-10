@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 
 interface DeckViewV8Props {
@@ -19,6 +19,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -223,11 +224,15 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
       </div>
 
       {/* Slide 8: The Math */}
-      <div className="deck-slide">
-        <span className="deck-label">The Math</span>
-        <h2>Structurally better economics.</h2>
-        <p className="deck-note deck-math-intro">A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
-        <table className="math-tbl">
+      <div className="deck-slide deck-v8-math">
+        <div className="deck-v8-math-inner">
+          <span className="deck-label">The Math</span>
+          <h2>Economics that work for everyone.</h2>
+          <div className="deck-scenario">
+            <span className="deck-scenario-tag">Scenario</span>
+            <p>A creator posts a look featuring a $200 jacket. A shopper buys it through Catalog.</p>
+          </div>
+          <table className="math-tbl">
           <thead>
             <tr>
               <th className="math-tbl-label"></th>
@@ -263,19 +268,35 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Slide 9: Flywheel */}
-      <div className="deck-slide deck-slide-flywheel-split">
+      <div
+        className="deck-slide deck-slide-flywheel-split"
+        data-active-step={activeFlywheelStep ?? undefined}
+      >
         <div className="flywheel-left">
           <span className="deck-label">Flywheel</span>
           <h2>Build supply first.<br />Demand follows trust.</h2>
           <div className="flywheel-labels">
-            <div className="flywheel-label-item"><span className="fl-num">1</span><p>Seed creators, build supply</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">2</span><p>Creators share, audiences arrive</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">3</span><p>Shoppers browse, trust, buy</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">4</span><p>Creators earn, invest more</p></div>
-            <div className="flywheel-label-item"><span className="fl-num">5</span><p>Shoppers become creators</p></div>
+            {[
+              { n: 1, label: 'Seed creators, build supply' },
+              { n: 2, label: 'Creators share, audiences arrive' },
+              { n: 3, label: 'Shoppers browse, trust, buy' },
+              { n: 4, label: 'Creators earn, invest more' },
+              { n: 5, label: 'Shoppers become creators' },
+            ].map(({ n, label }) => (
+              <div
+                key={n}
+                className="flywheel-label-item"
+                onMouseEnter={() => setActiveFlywheelStep(n)}
+                onMouseLeave={() => setActiveFlywheelStep(null)}
+              >
+                <span className="fl-num">{n}</span>
+                <p>{label}</p>
+              </div>
+            ))}
           </div>
           <p>We start with creators because supply drives organic demand. Every creator who publishes a look brings their own audience, their own trust, and their own distribution.</p>
         </div>
