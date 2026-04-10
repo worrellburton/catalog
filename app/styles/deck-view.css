@@ -792,7 +792,7 @@
 .deck-slide-flywheel-split {
   flex-direction: row !important;
   align-items: center;
-  gap: 48px;
+  gap: 12px;
   padding-top: 60px !important;
   padding-bottom: 60px !important;
 }
@@ -801,6 +801,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  max-width: 560px;
 }
 
 .flywheel-left h2 {
@@ -1118,8 +1119,16 @@
   grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 33vh;
   gap: 4px;
-  opacity: 0.42;
+  opacity: 0;
+  transition: opacity 1.6s cubic-bezier(0.22, 1, 0.36, 1);
   animation: insightScroll 45s linear infinite;
+}
+
+/* Slide 1 stays on a clean black bg; the feed grid fades in once the user
+   advances past the cover. The videos still mount immediately so they can
+   preload and be playing the moment the fade kicks in. */
+.deck-view-v8.deck-v8-bg-revealed .deck-v8-bg .deck-insight-grid {
+  opacity: 0.42;
 }
 
 .deck-view-v8 .deck-v8-bg .deck-insight-video {
@@ -1315,23 +1324,10 @@
   transition-delay: 0.75s;
 }
 
-/* Intro cover: oversized Catalog logo (same fade-in, just bigger) */
-.deck-view-v8 .deck-v8-cover-intro .deck-v8-cover-logo {
-  height: clamp(120px, 18vw, 240px);
-  margin-bottom: 36px;
-  filter: drop-shadow(0 0 40px rgba(255, 255, 255, 0.1));
-}
-
+/* Intro cover: keep default Catalog logo size, just rely on the existing fade-in */
 .deck-view-v8 .deck-v8-cover-intro .deck-subtitle {
   font-size: clamp(13px, 1vw, 16px);
   letter-spacing: 0.14em;
-}
-
-@media (max-width: 700px) {
-  .deck-view-v8 .deck-v8-cover-intro .deck-v8-cover-logo {
-    height: clamp(90px, 32vw, 140px);
-    margin-bottom: 24px;
-  }
 }
 
 /* Respect reduced motion preferences */
@@ -1661,6 +1657,24 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+/* Lucide-style icon inside the left list badge and the wheel nodes */
+.deck-view-v8 .fl-num .fl-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.deck-view-v8 .flywheel-node span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.deck-view-v8 .flywheel-node .fl-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: #fff;
+}
+
 /* Idle glow pulse on every node, staggered */
 @keyframes v8NodeGlow {
   0%, 100% {
@@ -1885,6 +1899,29 @@
 .deck-view-v8 .deck-slide.visible .v8mc-dot {
   opacity: 1;
   transition-delay: var(--dot-delay, 2.5s);
+}
+
+/* Up-arrow tip at end of line — appears after the line finishes drawing */
+.deck-view-v8 .v8mc-arrow {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translateY(6px) scale(0.7);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .v8mc-arrow {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-delay: 13.6s;
+  animation: v8MarketArrowBob 3.2s ease-in-out infinite 15s;
+}
+
+@keyframes v8MarketArrowBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-3px) scale(1.05); }
 }
 
 /* Source citation under each chart */
@@ -2491,25 +2528,25 @@
   filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.45));
 }
 
-/* Circle circumference ≈ 53.4 (r=8.5) */
+/* Circle circumference ≈ 53.4 (r=8.5) — slow, unified draw across every row */
 .deck-view-v8 .math-icon .math-icon-circle {
   stroke-dasharray: 54;
   stroke-dashoffset: 54;
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset 1.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Check polyline length ≈ 11 — unified stroke duration for perfect sync with X */
+/* Check polyline length ≈ 11 — slow stroke matched perfectly with X */
 .deck-view-v8 .math-check-icon .math-icon-stroke {
   stroke-dasharray: 12;
   stroke-dashoffset: 12;
-  transition: stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* X lines length ≈ 8 each — matched transition duration and easing to check */
+/* X lines length ≈ 8 each — matched duration and easing to check */
 .deck-view-v8 .math-x-icon .math-icon-stroke {
   stroke-dasharray: 8.5;
   stroke-dashoffset: 8.5;
-  transition: stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .deck-view-v8 .deck-slide.visible .math-icon .math-icon-circle {
@@ -2520,17 +2557,9 @@
   stroke-dashoffset: 0;
 }
 
-/* Staggered reveal per row — table has 5 body rows */
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(1) .math-icon-circle { transition-delay: 0.8s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(1) .math-icon-stroke { transition-delay: 1.5s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(2) .math-icon-circle { transition-delay: 1.0s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(2) .math-icon-stroke { transition-delay: 1.7s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(3) .math-icon-circle { transition-delay: 1.2s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(3) .math-icon-stroke { transition-delay: 1.9s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(4) .math-icon-circle { transition-delay: 1.4s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(4) .math-icon-stroke { transition-delay: 2.1s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(5) .math-icon-circle { transition-delay: 1.6s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(5) .math-icon-stroke { transition-delay: 2.3s; }
+/* All rows animate together (no per-row stagger) — slow and synchronised */
+.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody .math-icon-circle { transition-delay: 0.9s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody .math-icon-stroke { transition-delay: 2.3s; }
 
 /* Gentle pulse after draw-in — matched timing/intensity so check and X pulse in perfect sync */
 @keyframes v8MathCheckPulse {
@@ -2541,8 +2570,8 @@
   0%, 100% { filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
   50% { filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.75)); }
 }
-.deck-view-v8 .deck-slide.visible .math-check-icon { animation: v8MathCheckPulse 3.4s ease-in-out infinite 3s; }
-.deck-view-v8 .deck-slide.visible .math-x-icon { animation: v8MathXPulse 3.4s ease-in-out infinite 3s; }
+.deck-view-v8 .deck-slide.visible .math-check-icon { animation: v8MathCheckPulse 3.4s ease-in-out infinite 3.8s; }
+.deck-view-v8 .deck-slide.visible .math-x-icon { animation: v8MathXPulse 3.4s ease-in-out infinite 3.8s; }
 
 @media (prefers-reduced-motion: reduce) {
   .deck-view-v8 .math-icon .math-icon-circle,

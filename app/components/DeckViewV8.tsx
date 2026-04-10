@@ -26,6 +26,65 @@ const MathXIcon: React.FC = () => (
   </svg>
 );
 
+/* Flywheel step icons — five lucide-style line icons that map to the loop */
+const flywheelIconProps = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+
+const SproutIcon: React.FC = () => (
+  <svg className="fl-icon" {...flywheelIconProps}>
+    <path d="M7 20h10" />
+    <path d="M10 20c5.5-2.5.8-6.4 3-10" />
+    <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z" />
+    <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z" />
+  </svg>
+);
+const ShareIcon: React.FC = () => (
+  <svg className="fl-icon" {...flywheelIconProps}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+const BagIcon: React.FC = () => (
+  <svg className="fl-icon" {...flywheelIconProps}>
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+    <path d="M3 6h18" />
+    <path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>
+);
+const CoinIcon: React.FC = () => (
+  <svg className="fl-icon" {...flywheelIconProps}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+    <path d="M12 18V6" />
+  </svg>
+);
+const CycleIcon: React.FC = () => (
+  <svg className="fl-icon" {...flywheelIconProps}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </svg>
+);
+
+const flywheelSteps: { n: number; angle: string; label: string; icon: React.ReactNode }[] = [
+  { n: 1, angle: '0deg',   label: 'Seed creators, build supply',         icon: <SproutIcon /> },
+  { n: 2, angle: '72deg',  label: 'Creators share, audiences arrive',    icon: <ShareIcon /> },
+  { n: 3, angle: '144deg', label: 'Shoppers browse, trust, buy',         icon: <BagIcon /> },
+  { n: 4, angle: '216deg', label: 'Creators earn, invest more',          icon: <CoinIcon /> },
+  { n: 5, angle: '288deg', label: 'Shoppers become creators',            icon: <CycleIcon /> },
+];
+
 const DeckViewV8: React.FC<DeckViewV8Props> = ({
   onSeeApp,
   onVisitWebsite,
@@ -36,6 +95,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
+  const [bgRevealed, setBgRevealed] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -49,6 +109,8 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
       const idx = parseInt(slideMatch[1], 10) - 1;
       if (idx >= 0 && idx < slides.length) {
         slides[idx].scrollIntoView();
+        // If we deep-linked past the cover, reveal the bg right away.
+        if (idx > 0) setBgRevealed(true);
       }
     }
 
@@ -60,6 +122,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             const idx = Array.from(slides).indexOf(entry.target);
             if (idx >= 0) {
               window.history.replaceState(null, '', `#deck/v8/${idx + 1}`);
+              if (idx > 0) setBgRevealed(true);
             }
           } else {
             entry.target.classList.remove('visible');
@@ -80,7 +143,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
   }, []);
 
   return (
-    <div className="deck-view deck-view-v8 active" ref={containerRef}>
+    <div className={`deck-view deck-view-v8 active${bgRevealed ? ' deck-v8-bg-revealed' : ''}`} ref={containerRef}>
       <div className="deck-v8-bg" aria-hidden="true">
         <div className="deck-insight-grid">
           {Array.from({ length: 24 }).map((_, i) => (
@@ -267,6 +330,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           ]).map((chart) => {
             const points = chart.points.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
             const areaPath = `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} L ${points[points.length - 1][0]} 140 L ${points[0][0]} 140 Z`;
+            const [endX, endY] = points[points.length - 1];
             return (
               <div key={chart.key} className="deck-v8-market-card">
                 <div className="deck-v8-market-head">
@@ -319,6 +383,18 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                       style={{ '--dot-delay': `${2.5 + i * 0.75}s` } as React.CSSProperties}
                     />
                   ))}
+                  {/* up-arrow tip at end of line */}
+                  <g transform={`translate(${endX} ${endY})`} filter={`url(#v8mg-glow-${chart.key})`}>
+                    <path
+                      className="v8mc-arrow"
+                      d="M -6 5 L 0 -7 L 6 5"
+                      fill="none"
+                      stroke="#4ade80"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
                   {/* year labels (show every 2nd year to fit) */}
                   {['2024', '2026', '2028', '2030', '2032', '2035'].map((year) => {
                     const yearNum = parseInt(year, 10);
@@ -405,20 +481,14 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <span className="deck-label">Flywheel</span>
           <h2>Build supply first.<br />Demand follows trust.</h2>
           <div className="flywheel-labels">
-            {[
-              { n: 1, label: 'Seed creators, build supply' },
-              { n: 2, label: 'Creators share, audiences arrive' },
-              { n: 3, label: 'Shoppers browse, trust, buy' },
-              { n: 4, label: 'Creators earn, invest more' },
-              { n: 5, label: 'Shoppers become creators' },
-            ].map(({ n, label }) => (
+            {flywheelSteps.map(({ n, label, icon }) => (
               <div
                 key={n}
                 className="flywheel-label-item"
                 onMouseEnter={() => setActiveFlywheelStep(n)}
                 onMouseLeave={() => setActiveFlywheelStep(null)}
               >
-                <span className="fl-num">{n}</span>
+                <span className="fl-num">{icon}</span>
                 <p>{label}</p>
               </div>
             ))}
@@ -431,13 +501,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
               <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
             </svg>
-            {[
-              { n: 1, angle: '0deg' },
-              { n: 2, angle: '72deg' },
-              { n: 3, angle: '144deg' },
-              { n: 4, angle: '216deg' },
-              { n: 5, angle: '288deg' },
-            ].map(({ n, angle }) => (
+            {flywheelSteps.map(({ n, angle, icon }) => (
               <div
                 key={n}
                 className="flywheel-node"
@@ -445,7 +509,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
                 onMouseEnter={() => setActiveFlywheelStep(n)}
                 onMouseLeave={() => setActiveFlywheelStep(null)}
               >
-                <span>{n}</span>
+                <span>{icon}</span>
               </div>
             ))}
           </div>
@@ -604,7 +668,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               </filter>
             </defs>
             <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-1" pathLength="1" d="M 500 10 C 500 90, 170 100, 170 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
-            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-2" pathLength="1" d="M 500 10 L 500 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-2" pathLength="1" d="M 500 10 C 501 90, 499 150, 500 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
             <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-3" pathLength="1" d="M 500 10 C 500 90, 830 100, 830 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
             <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-1" cx="170" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
             <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-2" cx="500" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
