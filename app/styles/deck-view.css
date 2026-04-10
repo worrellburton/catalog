@@ -1315,6 +1315,25 @@
   transition-delay: 0.75s;
 }
 
+/* Intro cover: oversized Catalog logo (same fade-in, just bigger) */
+.deck-view-v8 .deck-v8-cover-intro .deck-v8-cover-logo {
+  height: clamp(120px, 18vw, 240px);
+  margin-bottom: 36px;
+  filter: drop-shadow(0 0 40px rgba(255, 255, 255, 0.1));
+}
+
+.deck-view-v8 .deck-v8-cover-intro .deck-subtitle {
+  font-size: clamp(13px, 1vw, 16px);
+  letter-spacing: 0.14em;
+}
+
+@media (max-width: 700px) {
+  .deck-view-v8 .deck-v8-cover-intro .deck-v8-cover-logo {
+    height: clamp(90px, 32vw, 140px);
+    margin-bottom: 24px;
+  }
+}
+
 /* Respect reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .deck-view-v8 .deck-slide .deck-label,
@@ -2212,10 +2231,32 @@
   height: 360px;
   border-radius: 28px;
   flex-shrink: 0;
-  opacity: 1;
-  transform: none;
+  opacity: 0;
+  transform: translateY(14px);
   animation: none;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition:
+    opacity 1.1s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Elegant left-to-right phone reveal when slide enters view */
+.deck-view-v8 .deck-slide.visible .deck-v8-marquee-phone.deck-app-frame {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(1)  { transition-delay: 1.15s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(2)  { transition-delay: 1.28s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(3)  { transition-delay: 1.41s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(4)  { transition-delay: 1.54s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(5)  { transition-delay: 1.67s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(6)  { transition-delay: 1.80s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(7)  { transition-delay: 1.93s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(8)  { transition-delay: 2.06s; }
+/* Duplicated loop phones: fade in together once the first loop is revealed */
+.deck-view-v8 .deck-slide.visible .deck-v8-phone-track .deck-v8-marquee-phone:nth-child(n+9) {
+  transition-delay: 2.2s;
 }
 
 .deck-view-v8 .deck-v8-marquee-phone.deck-app-frame::before {
@@ -2242,19 +2283,10 @@
   }
 }
 
-/* Fade/slide the marquee in with the rest of the slide */
+/* Wrapper no longer fades — individual phones handle the elegant L→R reveal */
 .deck-view-v8 .deck-slide .deck-v8-phone-marquee {
-  opacity: 0;
-  transform: translateY(16px);
-  transition:
-    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.deck-view-v8 .deck-slide.visible .deck-v8-phone-marquee {
   opacity: 1;
   transform: translateY(0);
-  transition-delay: 0.9s;
 }
 
 /* =============================================================
@@ -2466,18 +2498,18 @@
   transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Check polyline length ≈ 11 */
+/* Check polyline length ≈ 11 — unified stroke duration for perfect sync with X */
 .deck-view-v8 .math-check-icon .math-icon-stroke {
   stroke-dasharray: 12;
   stroke-dashoffset: 12;
-  transition: stroke-dashoffset 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* X lines length ≈ 8 each */
+/* X lines length ≈ 8 each — matched transition duration and easing to check */
 .deck-view-v8 .math-x-icon .math-icon-stroke {
   stroke-dasharray: 8.5;
   stroke-dashoffset: 8.5;
-  transition: stroke-dashoffset 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .deck-view-v8 .deck-slide.visible .math-icon .math-icon-circle {
@@ -2500,14 +2532,14 @@
 .deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(5) .math-icon-circle { transition-delay: 1.6s; }
 .deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody tr:nth-child(5) .math-icon-stroke { transition-delay: 2.3s; }
 
-/* Gentle pulse after draw-in */
+/* Gentle pulse after draw-in — matched timing/intensity so check and X pulse in perfect sync */
 @keyframes v8MathCheckPulse {
   0%, 100% { filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.4)); }
   50% { filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.75)); }
 }
 @keyframes v8MathXPulse {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.35)); }
-  50% { filter: drop-shadow(0 0 9px rgba(239, 68, 68, 0.65)); }
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
+  50% { filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.75)); }
 }
 .deck-view-v8 .deck-slide.visible .math-check-icon { animation: v8MathCheckPulse 3.4s ease-in-out infinite 3s; }
 .deck-view-v8 .deck-slide.visible .math-x-icon { animation: v8MathXPulse 3.4s ease-in-out infinite 3s; }
@@ -3244,6 +3276,454 @@
   .deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-dot-3 {
     animation: none;
     opacity: 0.8;
+  }
+}
+
+/* =============================================================
+   V.8 Ask flow — normalized path animation using pathLength
+   ============================================================= */
+
+.deck-view-v8 .deck-v8-ask-flow-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.95;
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-1,
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-2,
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-3 {
+  animation: v8AskFlowDrawN 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-1 { animation-delay: 0.9s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-2 { animation-delay: 1.1s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-3 { animation-delay: 1.3s; }
+
+@keyframes v8AskFlowDrawN {
+  0%   { stroke-dashoffset: 1; opacity: 0; }
+  20%  { opacity: 0.95; }
+  100% { stroke-dashoffset: 0; opacity: 0.95; }
+}
+
+/* Gold accents for Ask slide (overrides green) */
+.deck-view-v8 .deck-v8-ask-priority::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245, 197, 66, 0.65) 50%,
+    transparent 100%
+  );
+}
+
+.deck-view-v8 .deck-v8-ask-priority:hover {
+  border-color: rgba(245, 197, 66, 0.4);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(245, 197, 66, 0.18);
+}
+
+.deck-view-v8 .deck-v8-ask-priority-num {
+  color: rgba(245, 197, 66, 0.9);
+}
+
+.deck-view-v8 .deck-v8-ask-raise-card::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(245, 197, 66, 0.32) 100%
+  );
+}
+
+.light-mode .deck-view-v8 .deck-v8-ask-priority-num {
+  color: #a37200;
+}
+
+/* =============================================================
+   Slide 2 Intro: broken-up animated icon points
+   ============================================================= */
+
+.deck-view-v8 .deck-v8-intro .deck-v8-intro-points {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 26px;
+  max-width: 620px;
+}
+
+.deck-view-v8 .deck-v8-intro-point {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 1.1s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(1) { transition-delay: 1.05s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(2) { transition-delay: 1.25s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(3) { transition-delay: 1.45s; }
+
+.deck-view-v8 .deck-v8-intro-point p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 400;
+}
+
+.deck-view-v8 .deck-v8-intro-point p em {
+  font-style: normal;
+  color: #fff;
+  font-weight: 500;
+}
+
+.deck-view-v8 .deck-v8-intro-point-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.deck-view-v8 .deck-v8-intro-point-icon svg {
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+}
+
+/* Draw-in stroke animation for all intro-point icon strokes */
+.deck-view-v8 .deck-v8-intro-point-icon .intro-pt-stroke,
+.deck-view-v8 .deck-v8-intro-point-icon .intro-pt-line,
+.deck-view-v8 .deck-v8-intro-point-icon .intro-pt-rect,
+.deck-view-v8 .deck-v8-intro-point-icon .intro-pt-sparkle {
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon .intro-pt-stroke,
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon .intro-pt-line,
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon .intro-pt-rect,
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon .intro-pt-sparkle {
+  stroke-dashoffset: 0;
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(1) .intro-pt-stroke,
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(1) .intro-pt-line {
+  transition-delay: 1.4s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(2) .intro-pt-rect {
+  transition-delay: 1.6s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point:nth-child(3) .intro-pt-sparkle {
+  transition-delay: 1.8s;
+}
+
+/* Noise icon: rectangles drift/flicker after draw */
+@keyframes v8IntroNoiseFlicker {
+  0%, 100% { opacity: 0.9; transform: translate(0, 0); }
+  25% { opacity: 0.55; transform: translate(0.6px, -0.4px); }
+  50% { opacity: 0.9; transform: translate(-0.4px, 0.5px); }
+  75% { opacity: 0.65; transform: translate(0.3px, 0.3px); }
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-noise .intro-pt-rect {
+  transform-origin: center;
+  animation: v8IntroNoiseFlicker 3.2s ease-in-out infinite 2.8s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-noise .intro-pt-rect-2 {
+  animation-delay: 2.9s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-noise .intro-pt-rect-3 {
+  animation-delay: 3.0s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-noise .intro-pt-rect-4 {
+  animation-delay: 3.1s;
+}
+
+/* AI sparkle twinkle */
+@keyframes v8IntroSparkleTwinkle {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-ai .intro-pt-sparkle {
+  transform-origin: center;
+  animation: v8IntroSparkleTwinkle 2.6s ease-in-out infinite 3s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-ai .intro-pt-sparkle-2 {
+  animation-delay: 3.3s;
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-ai .intro-pt-sparkle-3 {
+  animation-delay: 3.6s;
+}
+
+/* Catalog icon: soft page flicker glow */
+@keyframes v8IntroCatalogGlow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); }
+  50% { filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35)); }
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-intro-point-icon-catalog svg {
+  animation: v8IntroCatalogGlow 3.4s ease-in-out infinite 2.8s;
+}
+
+.light-mode .deck-view-v8 .deck-v8-intro-point {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.light-mode .deck-view-v8 .deck-v8-intro-point p {
+  color: rgba(0, 0, 0, 0.68);
+}
+.light-mode .deck-view-v8 .deck-v8-intro-point p em {
+  color: #1a1a1a;
+}
+.light-mode .deck-view-v8 .deck-v8-intro-point-icon {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-v8-intro-point-icon .intro-pt-stroke,
+  .deck-view-v8 .deck-v8-intro-point-icon .intro-pt-line,
+  .deck-view-v8 .deck-v8-intro-point-icon .intro-pt-rect,
+  .deck-view-v8 .deck-v8-intro-point-icon .intro-pt-sparkle {
+    stroke-dashoffset: 0;
+    transition: none;
+    animation: none;
+  }
+}
+
+/* =============================================================
+   Slide 4 Solution: liquid-glass 4-card grid (matches Why Now layout)
+   ============================================================= */
+
+.deck-view-v8 .deck-v8-solution .deck-v8-solution-points {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px;
+  margin: 36px auto 0;
+  width: 100%;
+  max-width: 1180px;
+  text-align: left;
+}
+
+.deck-view-v8 .deck-v8-solution-point {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 22px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.4s ease,
+    border-color 0.4s ease;
+}
+
+.deck-view-v8 .deck-v8-solution-point:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-4px);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(1) { transition-delay: 0.9s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(2) { transition-delay: 1.1s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(3) { transition-delay: 1.3s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(4) { transition-delay: 1.5s; }
+
+.deck-view-v8 .deck-v8-solution-point p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 400;
+  text-align: left;
+}
+
+.deck-view-v8 .deck-v8-solution-point p em {
+  font-style: normal;
+  color: #fff;
+  font-weight: 500;
+}
+
+.deck-view-v8 .deck-v8-solution-point-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.deck-view-v8 .deck-v8-solution-point-icon svg {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+}
+
+.deck-view-v8 .deck-v8-solution-point-icon .sol-pt-stroke {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  transition: stroke-dashoffset 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point-icon .sol-pt-stroke {
+  stroke-dashoffset: 0;
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(1) .sol-pt-stroke { transition-delay: 1.4s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(2) .sol-pt-stroke { transition-delay: 1.6s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(3) .sol-pt-stroke { transition-delay: 1.8s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(4) .sol-pt-stroke { transition-delay: 2.0s; }
+
+@keyframes v8SolutionSparkleTwinkle {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-solution-point:nth-child(4) .sol-pt-sparkle {
+  transform-origin: center;
+  animation: v8SolutionSparkleTwinkle 2.8s ease-in-out infinite 3.4s;
+}
+
+.light-mode .deck-view-v8 .deck-v8-solution-point {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.light-mode .deck-view-v8 .deck-v8-solution-point:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light-mode .deck-view-v8 .deck-v8-solution-point p {
+  color: rgba(0, 0, 0, 0.55);
+}
+.light-mode .deck-view-v8 .deck-v8-solution-point p em {
+  color: #1a1a1a;
+}
+.light-mode .deck-view-v8 .deck-v8-solution-point-icon {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+}
+
+@media (max-width: 1080px) {
+  .deck-view-v8 .deck-v8-solution .deck-v8-solution-points {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 720px;
+  }
+}
+
+@media (max-width: 600px) {
+  .deck-view-v8 .deck-v8-solution .deck-v8-solution-points {
+    grid-template-columns: 1fr;
+    max-width: 440px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-v8-solution-point-icon .sol-pt-stroke {
+    stroke-dashoffset: 0;
+    transition: none;
+    animation: none;
+  }
+}
+
+/* =============================================================
+   Slide 6 Market: simplified centered note
+   ============================================================= */
+
+.deck-view-v8 .deck-v8-market-note {
+  text-align: center;
+  max-width: 600px;
+  margin: 28px auto 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+.light-mode .deck-view-v8 .deck-v8-market-note {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+/* =============================================================
+   Slide 10 Traction: animated reveal for demo data stats
+   ============================================================= */
+
+.deck-view-v8 .deck-slide .deck-v8-traction-stat {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 1.0s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.0s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-stat {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-stat:nth-child(1) { transition-delay: 1.3s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-stat:nth-child(2) { transition-delay: 1.45s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-stat:nth-child(3) { transition-delay: 1.6s; }
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-stat:nth-child(4) { transition-delay: 1.75s; }
+
+.deck-view-v8 .deck-slide .deck-v8-traction-note {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v8-traction-note {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 2.0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-slide .deck-v8-traction-stat,
+  .deck-view-v8 .deck-slide .deck-v8-traction-note {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
