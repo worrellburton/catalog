@@ -318,7 +318,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
       {/* Slide 10: Why Now */}
       <div className="deck-slide">
         <span className="deck-label">Why Now</span>
-        <h2>The infrastructure moment.</h2>
+        <h2>The wedge is open.</h2>
         <p>Creator commerce is fragmenting across dozens of tools while brands are pulling back from awareness spend and demanding measurable ROI. Gen Z doesn&apos;t trust ads but does trust people. Meanwhile, AI has matured enough to power visual search, product matching, and personalized discovery at scale. Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that actually works for everyone involved.</p>
       </div>
 
