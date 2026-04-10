@@ -29,6 +29,7 @@ import "./styles/landing-page.css";
 import "./styles/admin.css";
 import "./styles/partners.css";
 import "./styles/feed.css";
+import "./styles/my-looks.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

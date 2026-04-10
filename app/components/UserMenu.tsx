@@ -12,12 +12,13 @@ interface UserMenuUser {
 
 interface UserMenuProps {
   onOpenBookmarks: () => void;
+  onOpenMyLooks?: () => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
 }
 
-export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogout }: UserMenuProps) {
+export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount, user, onLogout }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -66,6 +67,12 @@ export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogou
             <span>Bookmarks</span>
             {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
           </button>
+          {onOpenMyLooks && (
+            <button className="user-menu-item" onClick={() => { onOpenMyLooks(); setOpen(false); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>My Looks</span>
+            </button>
+          )}
           <button className="user-menu-item" onClick={() => { navigate('/admin'); setOpen(false); }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
             <span>Admin</span>
