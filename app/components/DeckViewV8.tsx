@@ -128,42 +128,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Intro</span>
           <h2 className="deck-v8-reveal deck-v8-reveal-2">Shopping used to be an experience.</h2>
-          <div className="deck-v8-intro-points">
-            <div className="deck-v8-intro-point">
-              <span className="deck-v8-intro-point-icon deck-v8-intro-point-icon-catalog" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path className="intro-pt-stroke" d="M5 6 C 5 5, 6 4, 7 4 L 15 4 L 15 26 L 7 26 C 6 26, 5 25, 5 24 Z" />
-                  <path className="intro-pt-stroke" d="M27 6 C 27 5, 26 4, 25 4 L 17 4 L 17 26 L 25 26 C 26 26, 27 25, 27 24 Z" />
-                  <line className="intro-pt-stroke intro-pt-line" x1="8.5" y1="9" x2="12" y2="9" />
-                  <line className="intro-pt-stroke intro-pt-line" x1="8.5" y1="13" x2="12" y2="13" />
-                  <line className="intro-pt-stroke intro-pt-line" x1="20" y1="9" x2="23.5" y2="9" />
-                  <line className="intro-pt-stroke intro-pt-line" x1="20" y1="13" x2="23.5" y2="13" />
-                </svg>
-              </span>
-              <p>Discovery used to be <em>curated, visual, personal</em>.</p>
-            </div>
-            <div className="deck-v8-intro-point">
-              <span className="deck-v8-intro-point-icon deck-v8-intro-point-icon-noise" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect className="intro-pt-rect intro-pt-rect-1" x="5" y="5" width="8" height="8" rx="1" />
-                  <rect className="intro-pt-rect intro-pt-rect-2" x="19" y="5" width="8" height="8" rx="1" />
-                  <rect className="intro-pt-rect intro-pt-rect-3" x="5" y="19" width="8" height="8" rx="1" />
-                  <rect className="intro-pt-rect intro-pt-rect-4" x="19" y="19" width="8" height="8" rx="1" />
-                </svg>
-              </span>
-              <p>Then commerce moved online — and that feeling vanished.</p>
-            </div>
-            <div className="deck-v8-intro-point">
-              <span className="deck-v8-intro-point-icon deck-v8-intro-point-icon-ai" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path className="intro-pt-sparkle intro-pt-sparkle-1" d="M16 5 L 17.3 12 L 24 13 L 17.3 14 L 16 21 L 14.7 14 L 8 13 L 14.7 12 Z" />
-                  <path className="intro-pt-sparkle intro-pt-sparkle-2" d="M24.5 19 L 25.2 22 L 28 22.5 L 25.2 23 L 24.5 26 L 23.8 23 L 21 22.5 L 23.8 22 Z" />
-                  <path className="intro-pt-sparkle intro-pt-sparkle-3" d="M7 21 L 7.6 23 L 9.5 23.4 L 7.6 23.8 L 7 26 L 6.4 23.8 L 4.5 23.4 L 6.4 23 Z" />
-                </svg>
-              </span>
-              <p>Catalog brings it back — powered by AI, built for how people shop now.</p>
-            </div>
-          </div>
+          <p className="deck-v8-reveal deck-v8-reveal-3">Flipping through a catalog was discovery at its best. Curated, visual, personal. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
         </div>
       </div>
 
@@ -218,44 +183,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
         <div className="deck-v8-solution-inner">
           <span className="deck-label">The Solution</span>
           <h2>Human taste, amplified by AI.</h2>
-          <div className="deck-v8-solution-points">
-            <div className="deck-v8-solution-point">
-              <span className="deck-v8-solution-point-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path className="sol-pt-stroke" d="M6 10 L 16 4 L 26 10 L 26 26 L 6 26 Z" />
-                  <path className="sol-pt-stroke" d="M12 26 L 12 16 L 20 16 L 20 26" />
-                </svg>
-              </span>
-              <p>Creators turn their taste into <em>shoppable storefronts</em>.</p>
-            </div>
-            <div className="deck-v8-solution-point">
-              <span className="deck-v8-solution-point-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <circle className="sol-pt-stroke" cx="14" cy="14" r="8" />
-                  <line className="sol-pt-stroke" x1="20" y1="20" x2="27" y2="27" />
-                </svg>
-              </span>
-              <p>Shoppers tap any look to find <em>visually similar products</em>.</p>
-            </div>
-            <div className="deck-v8-solution-point">
-              <span className="deck-v8-solution-point-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline className="sol-pt-stroke" points="4 22 12 14 18 20 28 8" />
-                  <polyline className="sol-pt-stroke" points="22 8 28 8 28 14" />
-                </svg>
-              </span>
-              <p>Brands get <em>measurable, creator-driven distribution</em>.</p>
-            </div>
-            <div className="deck-v8-solution-point">
-              <span className="deck-v8-solution-point-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path className="sol-pt-stroke sol-pt-sparkle" d="M16 5 L 17.4 12 L 24.5 13.5 L 17.4 15 L 16 22 L 14.6 15 L 7.5 13.5 L 14.6 12 Z" />
-                  <path className="sol-pt-stroke sol-pt-sparkle" d="M25 21 L 25.6 23.4 L 28 24 L 25.6 24.6 L 25 27 L 24.4 24.6 L 22 24 L 24.4 23.4 Z" />
-                </svg>
-              </span>
-              <p>AI powers visual search, tagging, and <em>personalized discovery</em>.</p>
-            </div>
-          </div>
+          <p>Creators turn their taste into shoppable storefronts. Shoppers browse curated looks and tap to find visually similar products. Brands get measurable, creator-driven distribution. AI does the heavy lifting: visual search, automated tagging, personalized discovery. Every sale routes value back to the people who created it.</p>
         </div>
       </div>
 
@@ -581,7 +509,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             <p>Visual search, auto-tagging, and personalized discovery now run at scale. The infrastructure caught up to the vision.</p>
           </div>
         </div>
-        <p className="deck-v8-whynow-close">Catalog brings these forces together: creator trust on the front end, AI intelligence on the back end, and a commerce model that works for everyone involved.</p>
+        <p className="deck-v8-whynow-close">Catalog is the commerce layer built for this moment.</p>
       </div>
 
       {/* Slide 10: Traction */}
@@ -662,7 +590,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
 
           <svg className="deck-v8-ask-flow" viewBox="0 0 1000 240" preserveAspectRatio="none" aria-hidden="true">
             <defs>
-              <linearGradient id="v8AskFlowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <linearGradient id="v8AskFlowGrad" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="230">
                 <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
                 <stop offset="55%" stopColor="rgba(253,224,130,0.8)" />
                 <stop offset="100%" stopColor="rgba(245,197,66,0.95)" />

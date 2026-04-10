@@ -2402,14 +2402,14 @@
   stroke-dashoffset: 0;
 }
 
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon .win-circle { transition-delay: 1.5s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon .win-check { transition-delay: 2.35s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon .win-circle { transition-delay: 1.5s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon .win-check { transition-delay: 2.35s; }
 
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon .win-circle { transition-delay: 1.7s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon .win-check { transition-delay: 2.55s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon .win-circle { transition-delay: 1.7s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon .win-check { transition-delay: 2.55s; }
 
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon .win-circle { transition-delay: 1.9s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon .win-check { transition-delay: 2.75s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon .win-circle { transition-delay: 1.9s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon .win-check { transition-delay: 2.75s; }
 
 @keyframes v8WinPulse {
   0%, 100% {
@@ -2422,13 +2422,13 @@
   }
 }
 
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item .deck-v8-win-icon {
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item .deck-v8-win-icon {
   animation: v8WinPulse 3.6s ease-in-out infinite;
 }
 
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon { animation-delay: 3s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon { animation-delay: 3.2s; }
-.deck-view-v8 .deck-slide.visible .deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon { animation-delay: 3.4s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(1) .deck-v8-win-icon { animation-delay: 3s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(2) .deck-v8-win-icon { animation-delay: 3.2s; }
+.deck-view-v8 .deck-slide.visible.deck-v8-wins .deck-v8-problem-item:nth-child(3) .deck-v8-win-icon { animation-delay: 3.4s; }
 
 /* Subtle hover accent for wins (green tint) */
 .deck-view-v8 .deck-v8-wins .deck-v8-problem-item:hover {
@@ -3038,38 +3038,6 @@
   margin: -6px 0 -6px;
   overflow: visible;
   pointer-events: none;
-}
-
-.deck-view-v8 .deck-v8-ask-flow-path {
-  stroke-dasharray: 280;
-  stroke-dashoffset: 280;
-  opacity: 0.9;
-}
-
-.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-1 {
-  animation: v8AskFlowDraw 2.2s cubic-bezier(0.22, 1, 0.36, 1) 0.9s forwards;
-}
-
-.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-2 {
-  animation: v8AskFlowDraw 2.2s cubic-bezier(0.22, 1, 0.36, 1) 1.05s forwards;
-}
-
-.deck-view-v8 .deck-slide.visible .deck-v8-ask-flow-path-3 {
-  animation: v8AskFlowDraw 2.2s cubic-bezier(0.22, 1, 0.36, 1) 1.2s forwards;
-}
-
-@keyframes v8AskFlowDraw {
-  0% {
-    stroke-dashoffset: 280;
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.9;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0.9;
-  }
 }
 
 .deck-view-v8 .deck-v8-ask-flow-dot {
