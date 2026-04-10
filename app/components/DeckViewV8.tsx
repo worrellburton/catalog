@@ -189,9 +189,8 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </div>
         <div className="deck-intro-content">
-          <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Intro</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">Shopping used to be an experience.</h2>
-          <p className="deck-v8-reveal deck-v8-reveal-3">Flipping through a catalog was discovery at its best. Curated, visual, personal. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
+          <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">The commerce layer for the entire creator economy.</h2>
         </div>
       </div>
 
