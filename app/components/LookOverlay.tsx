@@ -42,10 +42,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-  // Related looks: same gender or creator, excluding the current look
+  // Build a pool of 30 looks (excluding current look), cycling through available looks
   const feedLooks = useMemo(() => {
-    const source = allLooks || allLooksData;
-    return source.filter(l => l.id !== look.id);
+    const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
+    if (source.length === 0) return [];
+    const POOL_SIZE = 30;
+    const result: (Look & { displayIndex: number })[] = [];
+    for (let i = 0; i < POOL_SIZE; i++) {
+      result.push({ ...source[i % source.length], id: source[i % source.length].id * 1000 + i, displayIndex: i });
+    }
+    return result;
   }, [look.id, allLooks]);
 
   // Trigger enter animation after first paint
@@ -211,6 +217,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </div>
             </div>
 
+            {/* Look title */}
+            {look.title && (
+              <h2 className="look-detail-title">{look.title}</h2>
+            )}
+
             {/* Tabs */}
             <div className="look-tabs">
               <button
@@ -296,7 +307,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             <div className="look-feed-grid">
               {feedLooks.map(fl => (
                 <LookCard
-                  key={fl.id}
+                  key={`${fl.id}-${'displayIndex' in fl ? fl.displayIndex : fl.id}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
