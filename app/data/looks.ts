@@ -10,6 +10,7 @@ export interface Creator {
   name: string;
   displayName: string;
   avatar: string;
+  bio?: string;
 }
 
 export interface Look {

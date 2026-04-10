@@ -12,6 +12,7 @@ import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
 import DeckSelector from '~/components/DeckSelector';
 import ProductPage from '~/components/ProductPage';
+import LookOverlay from '~/components/LookOverlay';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
 import { Look, Product } from '~/data/looks';
@@ -150,17 +151,8 @@ export default function Home() {
       setView('deck-selector');
       return true;
     }
-    if (password === '321') {
-      setView('landing');
-      return true;
-    }
     if (password === '123') {
-      setShowSplash(true);
-      setView('splash');
-      setTimeout(() => {
-        setView('app');
-        setShowSplash(false);
-      }, 2200);
+      setView('app');
       return true;
     }
     return false;
@@ -244,6 +236,7 @@ export default function Home() {
   }, []);
 
   const handleOpenProduct = useCallback((product: Product) => {
+    setSelectedLook(null);
     setSelectedProduct(product);
   }, []);
 
@@ -342,6 +335,7 @@ export default function Home() {
             searchQuery={searchQuery}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
+            onOpenLook={handleOpenLook}
             onOpenCreator={handleOpenCreator}
             onOpenBrowser={handleOpenBrowser}
             onOpenProduct={handleOpenProduct}
@@ -358,8 +352,19 @@ export default function Home() {
             catalogName={catalogName}
           />
 
-          {/* LookOverlay removed from main feed — replaced by ContinuousFeed inline detail.
-              LookOverlay still used by BookmarksPage and CreatorPage overlays. */}
+          {/* LookOverlay for grid look taps */}
+          {selectedLook && (
+            <LookOverlay
+              look={selectedLook}
+              onClose={handleCloseLook}
+              onOpenCreator={handleOpenCreator}
+              onOpenBrowser={handleOpenBrowser}
+              onOpenProduct={handleOpenProduct}
+              onCreateCatalog={handleCreateCatalog}
+              onOpenLook={handleOpenLook}
+              bookmarks={bookmarks}
+            />
+          )}
 
           {creatorFilter && (
             <CreatorPage
