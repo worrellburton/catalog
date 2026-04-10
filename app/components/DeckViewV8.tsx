@@ -26,7 +26,7 @@ const MathXIcon: React.FC = () => (
   </svg>
 );
 
-/* Flywheel step icons — five lucide-style line icons that map to the loop */
+/* Flywheel step icons: five lucide-style line icons that map to the loop */
 const flywheelIconProps = {
   viewBox: '0 0 24 24',
   fill: 'none',
@@ -483,7 +483,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
               </div>
             ))}
           </div>
-          <p>Every rotation makes the next one cheaper. Each creator we onboard brings free distribution; each sale teaches the feed; each earning cycle pulls the best creators back in. The flywheel doesn&rsquo;t just spin &mdash; it accelerates.</p>
+          <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
         </div>
         <div className="flywheel-right">
           <div className="flywheel-center">
@@ -611,7 +611,7 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             <span className="deck-v8-traction-label">Brands integrated</span>
           </div>
         </div>
-        <p className="deck-v8-traction-note">* Demo data &mdash; live numbers updated as the beta scales.</p>
+        <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
       </div>
 
       {/* Slide 12: The Ask */}
