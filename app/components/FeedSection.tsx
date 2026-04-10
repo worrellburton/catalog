@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import LookCard from './LookCard';
 import type { Look } from '~/data/looks';
 
@@ -10,7 +10,15 @@ interface FeedSectionProps {
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
+  layoutMode?: number;
 }
+
+const LAYOUT_CONFIGS = [
+  { name: 'grid', columns: 5 },
+  { name: 'editorial', columns: 4 },
+  { name: 'mosaic', columns: 6 },
+  { name: 'spotlight', columns: 3 },
+];
 
 const DEFAULT_BATCH = 12;
 const SUB_BATCH = 6;
@@ -23,10 +31,30 @@ export default function FeedSection({
   title,
   batchSize,
   isInitial = false,
+  layoutMode = 0,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
+
+  // Grid style based on layout mode - full width with fixed columns
+  const gridStyle = useMemo(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      return {};
+    }
+    return { gridTemplateColumns: `repeat(${layout.columns}, 1fr)` };
+  }, [layout.columns]);
+
+  // Get varied card classes for visual interest
+  const getCardClass = useCallback((globalIndex: number) => {
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
+    if (!isDesktop || layoutMode === 0) return 'look-card';
+    const seed = (layoutMode * 7 + globalIndex * 13) % 20;
+    if (seed === 0) return 'look-card look-card-featured';
+    if (seed === 3 || seed === 7) return 'look-card look-card-wide';
+    return 'look-card';
+  }, [layoutMode]);
 
   // Create infinite pool by repeating looks
   const pool = useMemo(() => {
@@ -65,13 +93,14 @@ export default function FeedSection({
   if (looks.length === 0) return null;
 
   return (
-    <div className="feed-section">
+    <div className={`feed-section layout-${layout.name}`}>
       {title && <div className="feed-section-header">{title}</div>}
-      <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined}>
+      <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined} style={gridStyle}>
         {displayLooks.map((look) => (
           <LookCard
             key={`${look.id}-${look.displayIndex}`}
             look={look}
+            className={getCardClass(look.displayIndex)}
             onOpenLook={onOpenLook}
             onOpenCreator={onOpenCreator}
             onCreateCatalog={onCreateCatalog}

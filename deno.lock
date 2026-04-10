@@ -1,0 +1,42 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/phoenix@^0.4.0?target=denonext": "https://esm.sh/@supabase/phoenix@0.4.0?target=denonext",
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.101.1",
+    "https://esm.sh/iceberg-js@^0.8.1?target=denonext": "https://esm.sh/iceberg-js@0.8.1?target=denonext"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/auth-js@2.101.1/denonext/auth-js.mjs": "7162301a02541f484fb861406488b55840b874898828c2e63825c23a82337829",
+    "https://esm.sh/@supabase/functions-js@2.101.1/denonext/functions-js.mjs": "ac1ac4726630634dfa3c6f2b23fd13ab60e354d524447e81f31110611909dd49",
+    "https://esm.sh/@supabase/phoenix@0.4.0/denonext/phoenix.mjs": "d9187057b2e3276d1110b9d814f737d4f8eff7f8b2765c4aa6bf7c7c30d070c9",
+    "https://esm.sh/@supabase/phoenix@0.4.0?target=denonext": "c1df3cfcdcf13e9cfddf86181efbdd8d4099b9a2682188b74106596277a69d16",
+    "https://esm.sh/@supabase/postgrest-js@2.101.1/denonext/postgrest-js.mjs": "13b6b1161878a5e4c00ed733076b9147d25692eeaa897fc95a9a5a62dba5f695",
+    "https://esm.sh/@supabase/realtime-js@2.101.1/denonext/realtime-js.mjs": "f2b886aadb983cef7835db8aba0f53346b91d693807a5ac890b38155899b805d",
+    "https://esm.sh/@supabase/storage-js@2.101.1/denonext/storage-js.mjs": "d3493bc29c7cfc542573223d6480260b5c4feaa28400e63473477e99442c2289",
+    "https://esm.sh/@supabase/supabase-js@2.101.1": "a0b3bce15718ea65beee03d44136fb795fab037a2f7134cc4e0157eee6f8063a",
+    "https://esm.sh/@supabase/supabase-js@2.101.1/denonext/supabase-js.mjs": "8d6d7278861982576de3d46daa0bac64b0411898d38ed0ffd8a2e90d069fd79c",
+    "https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs": "d839d81a2e3966500ca2cdd0c1cb458e9608bacfc91f7bb67a69b2e878dcdb4f",
+    "https://esm.sh/iceberg-js@0.8.1?target=denonext": "58c849d7fe2bf4eca4a84eb501e83c161a7d8c34ca1bec15a962b3bec3062633",
+    "https://esm.sh/tslib@2.8.1/denonext/tslib.mjs": "c38da5dd6da6281964435002ce204cd586634fe3bdfb24a0ee116f48cf3292e9"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@remix-run/dev@^2.17.4",
+        "npm:@remix-run/node@^2.17.4",
+        "npm:@remix-run/react@^2.17.4",
+        "npm:@supabase/supabase-js@^2.100.1",
+        "npm:@types/node@22",
+        "npm:@types/react-dom@19",
+        "npm:@types/react@19",
+        "npm:@vercel/analytics@^2.0.1",
+        "npm:isbot@^5.1.36",
+        "npm:react-dom@^19.2.4",
+        "npm:react@^19.2.4",
+        "npm:typescript@^5.7.0",
+        "npm:vite-tsconfig-paths@^6.1.1",
+        "npm:vite@^6.4.1"
+      ]
+    }
+  }
+}

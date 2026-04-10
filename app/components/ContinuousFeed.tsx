@@ -155,6 +155,7 @@ export default function ContinuousFeed({
               onCreateCatalog={onCreateCatalog}
               title={segment.title}
               isInitial={segment.isInitial}
+              layoutMode={layoutMode}
             />
           );
         }
