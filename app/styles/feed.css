@@ -75,14 +75,16 @@
 /* ===== Continuous Feed ===== */
 
 .continuous-feed {
-  padding-top: 100px;
+  padding-top: 0;
   padding-bottom: 100px;
   min-height: 100vh;
+  width: 100%;
 }
 
 /* Feed Section */
 .feed-section {
   margin-bottom: 8px;
+  width: 100%;
 }
 
 .feed-section-header {
@@ -101,7 +103,54 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 2px;
-  padding: 0 2px;
+  padding: 0;
+  grid-auto-flow: dense;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+/* ===== Layout Mode Variations ===== */
+
+/* Desktop: Full-width edge-to-edge grid */
+@media (min-width: 769px) {
+  .feed-section-grid {
+    gap: 2px;
+    padding: 0;
+    width: 100%;
+    max-width: none !important;
+    margin: 0;
+  }
+
+  /* Editorial layout — slightly larger gaps */
+  .layout-editorial .feed-section-grid {
+    gap: 4px;
+  }
+
+  /* Mosaic layout — tighter gaps */
+  .layout-mosaic .feed-section-grid {
+    gap: 1px;
+  }
+
+  /* Spotlight layout — larger gaps for emphasis */
+  .layout-spotlight .feed-section-grid {
+    gap: 6px;
+  }
+
+  /* Featured card — spans 2 columns */
+  .look-card-featured {
+    grid-column: span 2;
+  }
+
+  /* Wide card — spans 2 columns */
+  .look-card-wide {
+    grid-column: span 2;
+  }
+
+  .look-card-featured video,
+  .look-card-wide video {
+    aspect-ratio: 16/9;
+  }
 }
 
 /* ===== Inline Look Detail (popout card) ===== */
@@ -370,14 +419,14 @@
   color: rgba(0, 0, 0, 0.2);
 }
 
-/* Desktop: wider grid for feed sections */
+/* Desktop: full-width edge-to-edge grid */
 @media (min-width: 769px) {
   .feed-section-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 0 4px;
-    max-width: 1200px;
-    margin: 0 auto;
+    gap: 2px;
+    padding: 0;
+    width: 100%;
+    max-width: none !important;
+    margin: 0;
   }
 
   .inline-look-detail {
@@ -399,7 +448,7 @@
   }
 
   .continuous-feed {
-    padding-top: 80px;
+    padding-top: 0;
   }
 
   .feed-section-header {

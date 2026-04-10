@@ -172,6 +172,16 @@
   display: block;
 }
 
+/* Look title */
+.look-detail-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #ffffff;
+  padding: 12px 24px 16px;
+  margin: 0;
+}
+
 /* Tabs */
 .look-tabs {
   display: flex;

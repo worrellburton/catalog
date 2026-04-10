@@ -16,6 +16,7 @@ import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import MyLooks from '~/components/MyLooks';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
@@ -47,6 +48,7 @@ export default function Home() {
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showMyLooks, setShowMyLooks] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,7 +57,7 @@ export default function Home() {
   const [fromDeck, setFromDeck] = useState(false);
   const [activeDeck, setActiveDeck] = useState<'v5' | 'v6' | 'v7' | 'v8'>('v8');
   const [shuffleKey, setShuffleKey] = useState(1);
-  const [layoutMode, setLayoutMode] = useState(() => 1 + Math.floor(Math.random() * 3));
+  const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState(getRandomCatalogName);
   const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
     try {
@@ -337,6 +339,7 @@ export default function Home() {
               </button>
               <UserMenu
                 onOpenBookmarks={() => setShowBookmarks(true)}
+                onOpenMyLooks={() => setShowMyLooks(true)}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
@@ -365,6 +368,10 @@ export default function Home() {
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
             catalogName={catalogName}
           />
+
+          <button className="remix-btn-fixed" onClick={handleRemix} aria-label="Remix">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
 
           {/* LookOverlay for grid look taps */}
           {selectedLook && (
@@ -399,6 +406,10 @@ export default function Home() {
               onOpenBrowser={handleOpenBrowser}
               onOpenCreator={(handle) => { setShowBookmarks(false); handleOpenCreator(handle); }}
             />
+          )}
+
+          {showMyLooks && (
+            <MyLooks onClose={() => setShowMyLooks(false)} />
           )}
 
           {selectedProduct && (
