@@ -12,13 +12,14 @@ const USE_SUPABASE = true;
 
 interface SupabaseLook {
   id: string;
-  legacy_id: number;
+  legacy_id: number | null;
   title: string;
-  video_path: string;
-  gender: 'men' | 'women';
-  creator_handle: string;
-  description: string;
-  color: string;
+  video_path: string | null;
+  gender: 'men' | 'women' | 'unisex' | null;
+  creator_handle: string | null;
+  description: string | null;
+  color: string | null;
+  status: string | null;
   look_products: {
     sort_order: number;
     products: {
@@ -44,6 +45,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       creator_handle,
       description,
       color,
+      status,
       look_products (
         sort_order,
         products (
@@ -55,29 +57,35 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         )
       )
     `)
-    .order('legacy_id');
+    .order('created_at', { ascending: false });
 
   if (error || !data) {
     console.warn('Supabase looks fetch failed, falling back to static:', error?.message);
     return staticLooks;
   }
 
-  return (data as SupabaseLook[]).map((row) => ({
-    id: row.legacy_id,
+  // Filter to only looks that have a displayable video (legacy or via look_videos)
+  // and are either live or have no status (legacy seed data)
+  const liveLooks = (data as SupabaseLook[]).filter(
+    (row) => row.video_path && (!row.status || row.status === 'live')
+  );
+
+  return liveLooks.map((row, index) => ({
+    id: row.legacy_id ?? -(index + 1),
     title: row.title,
-    video: row.video_path,
-    gender: row.gender,
-    creator: row.creator_handle,
+    video: row.video_path || '',
+    gender: (row.gender as 'men' | 'women') || 'women',
+    creator: row.creator_handle || '',
     description: row.description || '',
     color: row.color || '#888',
     products: (row.look_products || [])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((lp) => ({
-        name: lp.products.name,
-        brand: lp.products.brand || '',
-        price: lp.products.price || '',
-        url: lp.products.url || '',
-        image: lp.products.image_url,
+        name: lp.products?.name || '',
+        brand: lp.products?.brand || '',
+        price: lp.products?.price || '',
+        url: lp.products?.url || '',
+        image: lp.products?.image_url,
       })),
   }));
 }

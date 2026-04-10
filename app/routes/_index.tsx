@@ -15,6 +15,7 @@ import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import MyLooks from '~/components/MyLooks';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
@@ -46,6 +47,7 @@ export default function Home() {
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showMyLooks, setShowMyLooks] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -323,6 +325,7 @@ export default function Home() {
               </button>
               <UserMenu
                 onOpenBookmarks={() => setShowBookmarks(true)}
+                onOpenMyLooks={() => setShowMyLooks(true)}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
@@ -385,6 +388,10 @@ export default function Home() {
               onOpenBrowser={handleOpenBrowser}
               onOpenCreator={(handle) => { setShowBookmarks(false); handleOpenCreator(handle); }}
             />
+          )}
+
+          {showMyLooks && (
+            <MyLooks onClose={() => setShowMyLooks(false)} />
           )}
 
           {selectedProduct && (
