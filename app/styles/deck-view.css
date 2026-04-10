@@ -1237,6 +1237,7 @@
 .deck-view-v8 .deck-slide .deck-solution-text > p,
 .deck-view-v8 .deck-slide .deck-v8-solution-inner > p,
 .deck-view-v8 .deck-slide .flywheel-left > p,
+.deck-view-v8 .deck-slide .deck-v8-wins-subtitle,
 .deck-view-v8 .deck-slide .deck-note,
 .deck-view-v8 .deck-slide .deck-steps,
 .deck-view-v8 .deck-slide .deck-stats,
@@ -1272,6 +1273,7 @@
 .deck-view-v8 .deck-slide.visible .deck-solution-text > p,
 .deck-view-v8 .deck-slide.visible .deck-v8-solution-inner > p,
 .deck-view-v8 .deck-slide.visible .flywheel-left > p,
+.deck-view-v8 .deck-slide.visible .deck-v8-wins-subtitle,
 .deck-view-v8 .deck-slide.visible .deck-note,
 .deck-view-v8 .deck-slide.visible .deck-steps,
 .deck-view-v8 .deck-slide.visible .deck-stats,
@@ -1302,7 +1304,8 @@
 .deck-view-v8 .deck-slide.visible .deck-insight-content > p,
 .deck-view-v8 .deck-slide.visible .deck-solution-text > p,
 .deck-view-v8 .deck-slide.visible .deck-v8-solution-inner > p,
-.deck-view-v8 .deck-slide.visible .flywheel-left > p {
+.deck-view-v8 .deck-slide.visible .flywheel-left > p,
+.deck-view-v8 .deck-slide.visible .deck-v8-wins-subtitle {
   transition-delay: 0.95s;
 }
 
@@ -2111,12 +2114,23 @@
   min-width: 0;
 }
 
+.deck-v8-problem-role {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.42);
+  margin-bottom: 4px;
+}
+
 .deck-v8-problem-body h3 {
-  font-size: 16px;
+  font-size: clamp(26px, 2.6vw, 34px);
   font-weight: 600;
   color: #fff;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 
 .deck-v8-problem-body p {
@@ -2124,6 +2138,16 @@
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.55);
   margin: 0;
+}
+
+/* "Everyone wins." subtitle on the combined Solution slide */
+.deck-view-v8 .deck-v8-wins-subtitle {
+  font-size: clamp(16px, 1.5vw, 20px);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  letter-spacing: -0.01em;
+  margin-top: -12px;
+  max-width: none;
 }
 
 /* Staggered reveal of stakeholder cards */
@@ -2175,6 +2199,14 @@
 
 .light-mode .deck-v8-problem-num {
   color: rgba(0, 0, 0, 0.35);
+}
+
+.light-mode .deck-v8-problem-role {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.light-mode .deck-view-v8 .deck-v8-wins-subtitle {
+  color: rgba(0, 0, 0, 0.78);
 }
 
 /* =============================================================

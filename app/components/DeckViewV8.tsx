@@ -209,8 +209,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">01</span>
             <div className="deck-v8-problem-body">
-              <h3>Shoppers</h3>
-              <p>Discovery is fragmented across social feeds, search engines, and retail sites. The experience is ad-heavy, algorithm-driven, and impersonal. Finding products you actually want feels like work.</p>
+              <span className="deck-v8-problem-role">Shoppers</span>
+              <h3>Discovery.</h3>
+              <p>Fragmented, ad-heavy, impersonal.</p>
             </div>
           </div>
           <div className="deck-v8-problem-item">
@@ -221,8 +222,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">02</span>
             <div className="deck-v8-problem-body">
-              <h3>Creators</h3>
-              <p>Monetization is constrained by traditional affiliate structures that pay single-digit commissions and offer zero audience ownership. Creators drive purchases but don&apos;t capture the value they create.</p>
+              <span className="deck-v8-problem-role">Creators</span>
+              <h3>Revenue.</h3>
+              <p>Single-digit commissions, no audience ownership.</p>
             </div>
           </div>
           <div className="deck-v8-problem-item">
@@ -233,27 +235,20 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">03</span>
             <div className="deck-v8-problem-body">
-              <h3>Brands</h3>
-              <p>Creator-driven commerce is difficult to measure and hard to attribute cleanly. Brands want commerce outcomes, not just impressions, but current tools make ROI opaque.</p>
+              <span className="deck-v8-problem-role">Brands</span>
+              <h3>ROAS.</h3>
+              <p>Opaque attribution, no commerce outcomes.</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Slide 4: The Solution: centered messaging */}
-      <div className="deck-slide deck-slide-solution deck-v8-solution">
-        <div className="deck-v8-solution-inner">
-          <span className="deck-label">The Solution</span>
-          <h2>Human taste, amplified by AI.</h2>
-          <p>Creators turn their taste into shoppable storefronts. Shoppers browse curated looks and tap to find visually similar products. Brands get measurable, creator-driven distribution. AI does the heavy lifting: visual search, automated tagging, personalized discovery. Every sale routes value back to the people who created it.</p>
-        </div>
-      </div>
-
-      {/* Slide 5: Three-Sided Value - split layout matching Problem */}
+      {/* Slide 4: The Solution - inverse of Problem, split layout with checkmarks */}
       <div className="deck-slide deck-v8-problem deck-v8-wins">
         <div className="deck-v8-split-left">
-          <span className="deck-label">Three-Sided Value</span>
-          <h2>Everyone wins.</h2>
+          <span className="deck-label">The Solution</span>
+          <h2>Human taste,<br />amplified by AI.</h2>
+          <p className="deck-v8-wins-subtitle">Everyone wins.</p>
         </div>
         <div className="deck-v8-split-right">
           <div className="deck-v8-problem-item">
@@ -263,8 +258,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">01</span>
             <div className="deck-v8-problem-body">
-              <h3>For Shoppers</h3>
-              <p>An exploratory, curated shopping experience driven by people they trust. No algorithmic noise, no ad fatigue. Discovery that actually feels like discovery.</p>
+              <span className="deck-v8-problem-role">For Shoppers</span>
+              <h3>Discovery.</h3>
+              <p>Curated by people they trust. No ads, no noise.</p>
             </div>
           </div>
           <div className="deck-v8-problem-item">
@@ -274,8 +270,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">02</span>
             <div className="deck-v8-problem-body">
-              <h3>For Creators</h3>
-              <p>A new income stream with higher commissions, real audience ownership, and a dedicated storefront for their taste. Style becomes a durable, monetizable asset.</p>
+              <span className="deck-v8-problem-role">For Creators</span>
+              <h3>Revenue.</h3>
+              <p>Real commissions, audience ownership, paid in days.</p>
             </div>
           </div>
           <div className="deck-v8-problem-item">
@@ -285,8 +282,9 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
             </svg>
             <span className="deck-v8-problem-num">03</span>
             <div className="deck-v8-problem-body">
-              <h3>For Brands</h3>
-              <p>Authentic distribution through trusted voices with measurable commerce outcomes. Guaranteed ROAS visibility and clean attribution on every dollar spent.</p>
+              <span className="deck-v8-problem-role">For Brands</span>
+              <h3>ROAS.</h3>
+              <p>Clean attribution and guaranteed commerce outcomes.</p>
             </div>
           </div>
         </div>
