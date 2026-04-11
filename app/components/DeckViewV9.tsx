@@ -589,17 +589,17 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
               <>
                 <svg className="deck-v9-tech-rays" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {[
-                    { x: 43, y: 30 },
-                    { x: 65, y: 30 },
-                    { x: 87, y: 30 },
-                    { x: 54, y: 78 },
-                    { x: 76, y: 78 },
+                    { x: 32, y: 50 },
+                    { x: 50, y: 50 },
+                    { x: 68, y: 50 },
+                    { x: 41, y: 82 },
+                    { x: 59, y: 82 },
                   ].map(({ x, y }, n) => (
                     <line
                       key={n}
                       className="deck-v9-tech-ray"
-                      x1="16"
-                      y1="50"
+                      x1="50"
+                      y1="16"
                       x2={x}
                       y2={y}
                       style={{ '--ray-i': n } as React.CSSProperties}

@@ -2482,17 +2482,17 @@
 
 .deck-view-v9 .deck-v9-tech-stage {
   position: relative;
-  width: min(560px, 100%);
+  width: min(480px, 100%);
   aspect-ratio: 1 / 1;
 }
 
 /* Seed grid - 5 tiles laid out in a row at the top, click any to fan out neighbors */
 .deck-view-v9 .deck-v9-tech-seed {
   position: absolute;
-  width: 16%;
+  width: 14%;
   aspect-ratio: 9 / 16;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   padding: 0;
   background: #000;
@@ -2508,12 +2508,12 @@
   display: block;
 }
 
-/* Default seed positions: 5 tiles centered horizontally near the top */
-.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:0"] { left: 6%; top: 40%; }
-.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:1"] { left: 25%; top: 40%; }
-.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:2"] { left: 44%; top: 40%; }
-.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:3"] { left: 63%; top: 40%; }
-.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:4"] { left: 82%; top: 40%; }
+/* Default seed positions: 5 tiles across the top of the stage */
+.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:0"] { left: 7%;  top: 4%; }
+.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:1"] { left: 25%; top: 4%; }
+.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:2"] { left: 43%; top: 4%; }
+.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:3"] { left: 61%; top: 4%; }
+.deck-view-v9 .deck-v9-tech-seed[style*="--seed-i:4"] { left: 79%; top: 4%; }
 
 .deck-view-v9 .deck-v9-tech-seed:hover:not(.is-seed) {
   transform: translateY(-4px);
@@ -2522,9 +2522,9 @@
 }
 
 .deck-view-v9 .deck-v9-tech-seed.is-seed {
-  left: 4% !important;
-  top: 28%;
-  width: 24%;
+  left: 43% !important;
+  top: 4%;
+  width: 14%;
   border-color: #f5c542;
   box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.6), 0 0 32px rgba(245, 197, 66, 0.45);
   z-index: 3;
@@ -2539,10 +2539,10 @@
 /* Neighbor tiles fanned out below the seed */
 .deck-view-v9 .deck-v9-tech-neighbor {
   position: absolute;
-  width: 16%;
+  width: 14%;
   aspect-ratio: 9 / 16;
   border: 1px solid rgba(245, 197, 66, 0.4);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   background: #000;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
@@ -2558,12 +2558,12 @@
   display: block;
 }
 
-/* Neighbors arranged in a 3+2 grid on the RIGHT side of the stage */
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:0"] { left: 34%; top: 8%;  animation-delay: 0.18s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:1"] { left: 56%; top: 8%;  animation-delay: 0.26s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:2"] { left: 78%; top: 8%;  animation-delay: 0.34s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:3"] { left: 45%; top: 56%; animation-delay: 0.42s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:4"] { left: 67%; top: 56%; animation-delay: 0.50s; }
+/* Neighbors: 3-across row beneath the seed, then 2 centered below that */
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:0"] { left: 25%; top: 38%; animation-delay: 0.18s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:1"] { left: 43%; top: 38%; animation-delay: 0.26s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:2"] { left: 61%; top: 38%; animation-delay: 0.34s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:3"] { left: 34%; top: 70%; animation-delay: 0.42s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:4"] { left: 52%; top: 70%; animation-delay: 0.50s; }
 
 .deck-view-v9 .deck-v9-tech-neighbor-tag {
   position: absolute;
