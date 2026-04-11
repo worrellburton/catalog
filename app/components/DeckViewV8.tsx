@@ -85,6 +85,18 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
   { n: 5, angle: '288deg', label: 'The loop compounds',   sub: 'CAC drops. LTV climbs. Trust deepens every quarter.',  icon: <CycleIcon /> },
 ];
 
+/* 16-month roadmap phases for the Roadmap timeline slide.
+   start/end are in months (0..16). Bars render proportionally over a 16-month track. */
+const roadmapPhases: { label: string; sub: string; start: number; end: number; color: string }[] = [
+  { label: 'Closed Beta',           sub: 'Invite-only creators, core feed, bookmarking.',          start: 0,  end: 3,  color: '#a78bfa' },
+  { label: 'Creator Tools v1',      sub: 'Storefronts, fast payouts, analytics dashboard.',       start: 1,  end: 5,  color: '#fb923c' },
+  { label: 'AI Visual Discovery',   sub: 'Vector search, auto-tagging, look-to-look recs.',       start: 3,  end: 8,  color: '#38bdf8' },
+  { label: 'Brand Portal + Shopify', sub: 'Self-serve onboarding, product sync, attribution.',    start: 4,  end: 9,  color: '#f97316' },
+  { label: 'Public iOS Launch',     sub: 'Native app, social sharing, growth loops live.',        start: 7,  end: 11, color: '#34d399' },
+  { label: 'Fixed-ROAS Ad Network', sub: 'Guaranteed-outcome placements, audience targeting.',    start: 9,  end: 14, color: '#f5c542' },
+  { label: 'Series A + Scale',      sub: 'Hire to GTM, geo expansion, category breadth.',         start: 13, end: 16, color: '#f43f5e' },
+];
+
 const DeckViewV8: React.FC<DeckViewV8Props> = ({
   onSeeApp,
   onVisitWebsite,
@@ -609,6 +621,55 @@ const DeckViewV8: React.FC<DeckViewV8Props> = ({
           </div>
         </div>
         <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
+      </div>
+
+      {/* Slide 11: Roadmap timeline */}
+      <div className="deck-slide deck-v8-roadmap">
+        <span className="deck-label">Roadmap</span>
+        <h2>16 months to commerce gravity.</h2>
+
+        <div className="deck-v8-roadmap-card">
+          <div className="deck-v8-roadmap-card-header">Timeline overview</div>
+
+          <div className="deck-v8-roadmap-rows">
+            {roadmapPhases.map((phase, idx) => {
+              const leftPct = (phase.start / 16) * 100;
+              const widthPct = ((phase.end - phase.start) / 16) * 100;
+              const months = phase.end - phase.start;
+              return (
+                <div key={phase.label} className="deck-v8-roadmap-row" style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
+                  <div className="deck-v8-roadmap-rowlabel">
+                    <span className="deck-v8-roadmap-rowlabel-title">{phase.label}</span>
+                    <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
+                  </div>
+                  <div className="deck-v8-roadmap-track">
+                    <div
+                      className="deck-v8-roadmap-bar"
+                      style={{
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        background: phase.color,
+                        boxShadow: `0 0 24px ${phase.color}33`,
+                      }}
+                    >
+                      <span className="deck-v8-roadmap-bar-label">{months}mo</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="deck-v8-roadmap-axis">
+            <span>Month 0</span>
+            <span>Month 4</span>
+            <span>Month 8</span>
+            <span>Month 12</span>
+            <span>Month 16</span>
+          </div>
+        </div>
+
+        <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
       </div>
 
       {/* Slide 12: The Ask */}
