@@ -241,7 +241,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         </div>
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">The discovery platform for all commerce, powered by creator content.</h2>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.<br />Powered by creators.</h2>
         </div>
       </div>
 
@@ -282,8 +282,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
       <div className="deck-slide deck-v8-problem deck-v8-wins deck-v9-problem-slide">
         <div className="deck-v8-split-left">
           <span className="deck-label">The Solution</span>
-          <h2>Human taste,<br />amplified by AI.</h2>
-          <p className="deck-v8-wins-subtitle">Everyone wins.</p>
+          <h2>Human taste,<br />amplified by AI.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v8-split-right">
           {[
@@ -590,17 +589,17 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
               <>
                 <svg className="deck-v9-tech-rays" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {[
-                    { x: 12, y: 75 },
-                    { x: 31, y: 82 },
-                    { x: 50, y: 88 },
-                    { x: 69, y: 82 },
-                    { x: 88, y: 75 },
+                    { x: 43, y: 30 },
+                    { x: 65, y: 30 },
+                    { x: 87, y: 30 },
+                    { x: 54, y: 78 },
+                    { x: 76, y: 78 },
                   ].map(({ x, y }, n) => (
                     <line
                       key={n}
                       className="deck-v9-tech-ray"
-                      x1="50"
-                      y1="14"
+                      x1="16"
+                      y1="50"
                       x2={x}
                       y2={y}
                       style={{ '--ray-i': n } as React.CSSProperties}

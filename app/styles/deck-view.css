@@ -2261,6 +2261,11 @@
   color: rgba(0, 0, 0, 0.55);
 }
 
+/* V.9 intro headline: widen so explicit <br /> is the only break */
+.deck-view-v9 .deck-v8-intro .deck-intro-content > h2 {
+  max-width: 32ch;
+}
+
 /* ===========================================================
    V.9 Left-side nav dots with hover-reveal labels
    =========================================================== */
@@ -2517,9 +2522,9 @@
 }
 
 .deck-view-v9 .deck-v9-tech-seed.is-seed {
-  left: 42% !important;
-  top: 6%;
-  width: 18%;
+  left: 4% !important;
+  top: 28%;
+  width: 24%;
   border-color: #f5c542;
   box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.6), 0 0 32px rgba(245, 197, 66, 0.45);
   z-index: 3;
@@ -2553,11 +2558,12 @@
   display: block;
 }
 
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:0"] { left: 4%;  top: 60%; animation-delay: 0.18s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:1"] { left: 23%; top: 70%; animation-delay: 0.26s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:2"] { left: 42%; top: 74%; animation-delay: 0.34s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:3"] { left: 61%; top: 70%; animation-delay: 0.42s; }
-.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:4"] { left: 80%; top: 60%; animation-delay: 0.50s; }
+/* Neighbors arranged in a 3+2 grid on the RIGHT side of the stage */
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:0"] { left: 34%; top: 8%;  animation-delay: 0.18s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:1"] { left: 56%; top: 8%;  animation-delay: 0.26s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:2"] { left: 78%; top: 8%;  animation-delay: 0.34s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:3"] { left: 45%; top: 56%; animation-delay: 0.42s; }
+.deck-view-v9 .deck-v9-tech-neighbor[style*="--n-i:4"] { left: 67%; top: 56%; animation-delay: 0.50s; }
 
 .deck-view-v9 .deck-v9-tech-neighbor-tag {
   position: absolute;
