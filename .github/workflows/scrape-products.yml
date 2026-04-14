@@ -2,9 +2,11 @@ name: Product Scraper Agent
 
 on:
   schedule:
-    # Every 30 minutes (GitHub Actions minimum reliable interval is 5 min)
+    # Every 30 minutes — runs from the default branch (main)
+    # Push this workflow to main to activate the cron
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    # Manual trigger always uses the branch you select in the GitHub UI
     # Manual trigger from GitHub UI — useful for testing or one-off runs
     inputs:
       limit:
