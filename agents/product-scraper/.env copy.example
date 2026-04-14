@@ -1,0 +1,8 @@
+# Set these before running the agent
+
+# Anthropic API key (required)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Supabase credentials (required for --save mode)
+SUPABASE_URL=https://vtarjrnqvcqbhoclvcur.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
