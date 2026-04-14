@@ -114,8 +114,9 @@ def main():
 
         try:
             result = run_agent(url, save=False)
-            mark_done(supabase, product_id, result)
-            print(f"  ✅ Done — {result.get('title', 'no title')}")
+            product = result["data"]  # run_agent returns {"success", "data", "storage"}
+            mark_done(supabase, product_id, product)
+            print(f"  ✅ Done — {product.get('title', 'no title')}")
             passed += 1
         except Exception as e:
             error_msg = str(e)

@@ -2,8 +2,8 @@
 Modal deployment for the Product Scraper Agent.
 
 Exposes two entry points:
-  1. HTTP webhook  — POST /scrape  (called by Supabase DB webhook on INSERT)
-  2. Cron job      — every 30 min  (picks up any pending rows)
+  1. HTTP webhook  — POST /scrape-product  (Supabase DB webhook on INSERT)
+  2. Cron job      — every 30 min  (retries pending + failed products)
 
 Deploy:
     modal deploy modal_app.py
@@ -31,8 +31,10 @@ scraper_image = (
         "playwright>=1.48.0",
         "supabase>=2.10.0",
         "python-dotenv>=1.0.0",
+        "fastapi[standard]>=0.115.0",
     )
     .run_commands("playwright install chromium --with-deps")
+    .add_local_file("agent.py", "/root/agent.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -63,24 +65,25 @@ def scrape_and_update(product_id: str, url: str):
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
 
     try:
-        data = run_agent(url, save=False)
+        result = run_agent(url, save=False)
+        product = result["data"]  # run_agent returns {"success", "data", "storage"}
 
         supabase.table("products").update({
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "scrape_error": None,
-            "name": data.get("title"),
-            "brand": data.get("brand"),
-            "description": data.get("description"),
-            "price": data.get("price"),
-            "discounted_price": data.get("discounted_price"),
-            "currency": data.get("currency"),
-            "images": data.get("images", []),
-            "image_url": (data.get("images") or [None])[0],
-            "availability": data.get("availability"),
+            "name": product.get("title"),
+            "brand": product.get("brand"),
+            "description": product.get("description"),
+            "price": product.get("price"),
+            "discounted_price": product.get("discounted_price"),
+            "currency": product.get("currency"),
+            "images": product.get("images", []),
+            "image_url": (product.get("images") or [None])[0],
+            "availability": product.get("availability"),
         }).eq("id", product_id).execute()
 
-        print(f"✅ [{product_id}] {data.get('title')}")
+        print(f"✅ [{product_id}] {product.get('title')}")
 
     except Exception as e:
         supabase.table("products").update({
@@ -92,47 +95,13 @@ def scrape_and_update(product_id: str, url: str):
         raise
 
 
-# ─── Cron: every 30 min, pick up all pending rows ──────────────────────
-
-@app.function(
-    image=scraper_image,
-    secrets=secrets,
-    schedule=modal.Cron("*/30 * * * *"),
-)
-def scrape_pending():
-    """Scheduled job — find all pending products and scrape them in parallel."""
-    import os
-    from supabase import create_client
-
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
-
-    rows = (
-        supabase.table("products")
-        .select("id, url")
-        .eq("scrape_status", "pending")
-        .limit(50)
-        .execute()
-    )
-
-    pending = rows.data or []
-    if not pending:
-        print("No pending products.")
-        return
-
-    print(f"Found {len(pending)} pending product(s) — dispatching…")
-
-    # Fan out — each product scraped in its own Modal container in parallel
-    for _ in scrape_and_update.starmap([(row["id"], row["url"]) for row in pending if row.get("url")]):
-        pass
-
-
 # ─── Webhook: triggered by Supabase DB webhook on INSERT ───────────────
 
 @app.function(
     image=scraper_image,
     secrets=secrets,
 )
-@modal.web_endpoint(method="POST", label="scrape-product")
+@modal.fastapi_endpoint(method="POST", label="scrape-product")
 def scrape_webhook(body: dict):
     """
     POST /scrape-product
@@ -154,3 +123,38 @@ def scrape_webhook(body: dict):
     scrape_and_update.spawn(product_id, url)
 
     return {"status": "queued", "product_id": product_id}
+
+
+# ─── Cron: retry pending + failed products every 30 min ────────────────
+
+@app.function(
+    image=scraper_image,
+    secrets=secrets,
+    schedule=modal.Cron("*/30 * * * *"),
+)
+def scrape_pending():
+    """Scheduled job — find pending and failed products, scrape them in parallel."""
+    import os
+    from supabase import create_client
+
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+    rows = (
+        supabase.table("products")
+        .select("id, url")
+        .in_("scrape_status", ["pending", "failed"])
+        .not_.is_("url", "null")
+        .limit(50)
+        .execute()
+    )
+
+    pending = rows.data or []
+    if not pending:
+        print("No pending or failed products.")
+        return
+
+    print(f"Found {len(pending)} product(s) to scrape — dispatching…")
+
+    # Fan out — each product scraped in its own Modal container in parallel
+    for _ in scrape_and_update.starmap([(row["id"], row["url"]) for row in pending]):
+        pass
