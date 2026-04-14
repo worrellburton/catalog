@@ -1,0 +1,61 @@
+name: Product Scraper Agent
+
+on:
+  schedule:
+    # Every 30 minutes — runs from the default branch (main)
+    # Push this workflow to main to activate the cron
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    # Manual trigger always uses the branch you select in the GitHub UI
+    # Manual trigger from GitHub UI — useful for testing or one-off runs
+    inputs:
+      limit:
+        description: "Max products to scrape (default: 50)"
+        required: false
+        default: "50"
+      dry_run:
+        description: "Dry run — list pending without scraping"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  scrape:
+    name: Scrape pending products
+    runs-on: ubuntu-latest
+    timeout-minutes: 25  # under 30 min so it finishes before next run starts
+
+    defaults:
+      run:
+        working-directory: agents/product-scraper
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agents/product-scraper/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run batch scraper
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          LIMIT="${{ github.event.inputs.limit || '50' }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [ "$DRY_RUN" = "true" ]; then
+            python run_batch.py --limit "$LIMIT" --dry-run
+          else
+            python run_batch.py --limit "$LIMIT"
+          fi
