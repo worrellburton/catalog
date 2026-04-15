@@ -2161,3 +2161,140 @@
 .admin-dark .admin-bg-option:hover { border-color: rgba(255,255,255,0.3); }
 .admin-dark .admin-bg-name { color: rgba(255,255,255,0.5); }
 
+/* ─── Modal ────────────────────────────────────────────────────────── */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: admin-modal-fade-in 0.15s ease;
+}
+@keyframes admin-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.admin-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 440px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  animation: admin-modal-slide-in 0.2s ease;
+}
+.admin-modal-wide {
+  width: 720px;
+}
+@keyframes admin-modal-slide-in {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.admin-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 20px 0;
+}
+.admin-modal-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.admin-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.admin-modal-close:hover { color: #333; }
+.admin-modal-body {
+  padding: 16px 20px;
+}
+.admin-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────── */
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-btn-primary {
+  background: #111;
+  color: #fff;
+}
+.admin-btn-primary:hover:not(:disabled) { background: #333; }
+.admin-btn-secondary {
+  background: #f5f5f5;
+  color: #333;
+}
+.admin-btn-secondary:hover:not(:disabled) { background: #e8e8e8; }
+
+/* ─── Forms ────────────────────────────────────────────────────────── */
+.admin-form-group {
+  margin-bottom: 14px;
+}
+.admin-form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 5px;
+}
+.admin-form-group input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.admin-form-group input:focus { border-color: #111; }
+.admin-form-hint {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+.admin-form-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ─── Dark mode modal/forms ────────────────────────────────────────── */
+.admin-dark .admin-modal { background: #1e1e1e; border: 1px solid rgba(255,255,255,0.1); }
+.admin-dark .admin-modal-header h3 { color: rgba(255,255,255,0.9); }
+.admin-dark .admin-modal-close { color: rgba(255,255,255,0.4); }
+.admin-dark .admin-modal-close:hover { color: rgba(255,255,255,0.8); }
+.admin-dark .admin-modal-footer { border-top-color: rgba(255,255,255,0.06); }
+.admin-dark .admin-btn-primary { background: #fff; color: #111; }
+.admin-dark .admin-btn-primary:hover:not(:disabled) { background: #e8e8e8; }
+.admin-dark .admin-btn-secondary { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
+.admin-dark .admin-btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.admin-dark .admin-form-group label { color: rgba(255,255,255,0.5); }
+.admin-dark .admin-form-group input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+.admin-dark .admin-form-group input:focus { border-color: rgba(255,255,255,0.3); }
+.admin-dark .admin-form-hint { color: rgba(255,255,255,0.3); }
+

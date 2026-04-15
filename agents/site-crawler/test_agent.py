@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+Tests for the site-crawler agent.
+
+Run:
+    cd agents/site-crawler
+    python -m pytest test_agent.py -v
+    python -m pytest test_agent.py -v -k "not live"   # skip live API tests
+"""
+
+import json
+import pytest
+from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
+
+# ─── Import agent modules ──────────────────────────────────────────────
+
+from agent import (
+    BrowserAgent,
+    COORDINATOR_TOOLS,
+    COLLECTION_TOOLS,
+    COORDINATOR_MODEL,
+    COLLECTION_MODEL,
+    MAX_HTML_LENGTH,
+    MAX_LINKS_RETURN,
+    _call_with_retry,
+    RETRY_DELAYS,
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 1. Tool definitions — no duplicate names
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestToolDefinitions:
+    """Validate tool schemas before sending to the API."""
+
+    def test_coordinator_tools_no_duplicates(self):
+        names = [t["name"] for t in COORDINATOR_TOOLS]
+        assert len(names) == len(set(names)), (
+            f"Duplicate coordinator tool names: "
+            f"{[n for n in names if names.count(n) > 1]}"
+        )
+
+    def test_collection_tools_no_duplicates(self):
+        names = [t["name"] for t in COLLECTION_TOOLS]
+        assert len(names) == len(set(names)), (
+            f"Duplicate collection tool names: "
+            f"{[n for n in names if names.count(n) > 1]}"
+        )
+
+    def test_coordinator_tools_have_required_fields(self):
+        for tool in COORDINATOR_TOOLS:
+            assert "name" in tool, f"Tool missing name: {tool}"
+            assert "description" in tool, f"Tool {tool['name']} missing description"
+            assert "input_schema" in tool, f"Tool {tool['name']} missing input_schema"
+            assert tool["input_schema"].get("type") == "object"
+
+    def test_collection_tools_have_required_fields(self):
+        for tool in COLLECTION_TOOLS:
+            assert "name" in tool, f"Tool missing name: {tool}"
+            assert "description" in tool, f"Tool {tool['name']} missing description"
+            assert "input_schema" in tool, f"Tool {tool['name']} missing input_schema"
+            assert tool["input_schema"].get("type") == "object"
+
+    def test_coordinator_has_expected_tools(self):
+        names = {t["name"] for t in COORDINATOR_TOOLS}
+        assert "visit_page" in names
+        assert "get_navigation" in names
+        assert "save_collections" in names
+
+    def test_collection_has_expected_tools(self):
+        names = {t["name"] for t in COLLECTION_TOOLS}
+        assert "visit_page" in names
+        assert "get_product_links" in names
+        assert "save_product_urls" in names
+        assert "scroll_down" in names
+
+    def test_collection_does_not_have_get_page_html(self):
+        """get_page_html was removed to save tokens — verify it stays removed."""
+        names = {t["name"] for t in COLLECTION_TOOLS}
+        assert "get_page_html" not in names
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 2. Model configuration
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestModelConfig:
+    def test_coordinator_uses_sonnet(self):
+        assert "sonnet" in COORDINATOR_MODEL.lower()
+
+    def test_collection_uses_haiku(self):
+        assert "haiku" in COLLECTION_MODEL.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 3. BrowserAgent — domain checks
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestBrowserAgent:
+    def test_is_same_domain_true(self):
+        agent = BrowserAgent("https://www.nike.com")
+        assert agent.is_same_domain("https://www.nike.com/shoes") is True
+        assert agent.is_same_domain("https://www.nike.com/collections/running") is True
+
+    def test_is_same_domain_false(self):
+        agent = BrowserAgent("https://www.nike.com")
+        assert agent.is_same_domain("https://www.adidas.com/shoes") is False
+        assert agent.is_same_domain("https://google.com") is False
+
+    def test_is_same_domain_relative(self):
+        agent = BrowserAgent("https://www.nike.com")
+        # Empty netloc = relative URL
+        assert agent.is_same_domain("/shoes") is True
+
+    def test_is_same_domain_handles_bad_input(self):
+        agent = BrowserAgent("https://www.nike.com")
+        # Empty string and javascript: parse with empty netloc — is_same_domain
+        # only checks netloc; JS links are filtered in get_page_links() instead
+        assert agent.is_same_domain("") is True
+        assert agent.is_same_domain("https://totally-different.com") is False
+
+    def test_visited_urls_tracking(self):
+        agent = BrowserAgent("https://example.com")
+        assert agent.pages_visited == 0
+        assert len(agent.visited_urls) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 4. Retry logic
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestRetryLogic:
+    def test_retry_on_rate_limit(self):
+        """Should retry on RateLimitError and succeed on later attempt."""
+        import anthropic
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.stop_reason = "end_turn"
+
+        # Fail twice, succeed on third
+        mock_client.messages.create.side_effect = [
+            anthropic.RateLimitError(
+                message="rate limited",
+                response=MagicMock(status_code=429, headers={}),
+                body={"error": {"type": "rate_limit_error", "message": "rate limited"}},
+            ),
+            anthropic.RateLimitError(
+                message="rate limited",
+                response=MagicMock(status_code=429, headers={}),
+                body={"error": {"type": "rate_limit_error", "message": "rate limited"}},
+            ),
+            mock_response,
+        ]
+
+        with patch("time.sleep"):  # Don't actually sleep in tests
+            result = _call_with_retry(mock_client, model="test", messages=[], max_tokens=100)
+
+        assert result == mock_response
+        assert mock_client.messages.create.call_count == 3
+
+    def test_no_retry_on_success(self):
+        """Should not retry if first call succeeds."""
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_client.messages.create.return_value = mock_response
+
+        result = _call_with_retry(mock_client, model="test", messages=[], max_tokens=100)
+
+        assert result == mock_response
+        assert mock_client.messages.create.call_count == 1
+
+    def test_retry_delays_configured(self):
+        assert len(RETRY_DELAYS) >= 3
+        assert all(d > 0 for d in RETRY_DELAYS)
+        # Delays should increase
+        for i in range(1, len(RETRY_DELAYS)):
+            assert RETRY_DELAYS[i] >= RETRY_DELAYS[i - 1]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Configuration sanity
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestConfigSanity:
+    def test_max_html_length_reasonable(self):
+        assert MAX_HTML_LENGTH <= 20_000, "HTML should be kept small to save tokens"
+
+    def test_max_links_return_reasonable(self):
+        assert MAX_LINKS_RETURN <= 300, "Links list should be limited"
+
+    def test_no_python_syntax_warnings(self):
+        """Ensure no invalid escape sequences in the source file."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            import importlib
+            import agent
+            importlib.reload(agent)
+            syntax_warnings = [x for x in w if issubclass(x.category, SyntaxWarning)]
+            assert len(syntax_warnings) == 0, (
+                f"SyntaxWarnings found: {[str(x.message) for x in syntax_warnings]}"
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 6. JSON output format of browser methods
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestBrowserOutputFormat:
+    """Test that browser methods produce valid JSON with expected structure."""
+
+    def test_visit_page_rejects_visited(self):
+        agent = BrowserAgent("https://example.com")
+        agent.visited_urls.add("https://example.com/test")
+        result = json.loads(agent.visit_page("https://example.com/test"))
+        assert "error" in result
+        assert "Already visited" in result["error"]
+
+    def test_visit_page_rejects_different_domain(self):
+        agent = BrowserAgent("https://example.com")
+        result = json.loads(agent.visit_page("https://other-site.com/page"))
+        assert "error" in result
+        assert "Different domain" in result["error"]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -53,6 +53,7 @@ export default defineConfig({
             route("shoppers/:name", "routes/admin/shoppers.$name.tsx");
             route("shoppers-waitlist", "routes/admin/shoppers-waitlist.tsx");
             route("signup-links", "routes/admin/signup-links.tsx");
+            route("site-crawls", "routes/admin/site-crawls.tsx");
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
           });
