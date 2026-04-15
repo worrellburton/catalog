@@ -108,6 +108,23 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [bgRevealed, setBgRevealed] = useState(false);
+  const [techActiveSeed, setTechActiveSeed] = useState<number | null>(null);
+  const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
+  const [activeSlideIdx, setActiveSlideIdx] = useState(0);
+  const slideTitles = [
+    'Cover',
+    'The Dream',
+    'The Problem',
+    'The Solution',
+    'Market Opportunity',
+    'The Math',
+    'Flywheel',
+    'Technology',
+    'Traction',
+    'The Ask',
+    'Roadmap',
+    'Closing',
+  ];
 
   useEffect(() => {
     const container = containerRef.current;
@@ -116,7 +133,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
     const slides = container.querySelectorAll('.deck-slide');
 
     const hash = window.location.hash.replace('#', '');
-    const slideMatch = hash.match(/^deck\/v8\/(\d+)$/);
+    const slideMatch = hash.match(/^deck\/v9\/(\d+)$/);
     if (slideMatch) {
       const idx = parseInt(slideMatch[1], 10) - 1;
       if (idx >= 0 && idx < slides.length) {
@@ -133,7 +150,8 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
             entry.target.classList.add('visible');
             const idx = Array.from(slides).indexOf(entry.target);
             if (idx >= 0) {
-              window.history.replaceState(null, '', `#deck/v8/${idx + 1}`);
+              window.history.replaceState(null, '', `#deck/v9/${idx + 1}`);
+              setActiveSlideIdx(idx);
               if (idx > 0) setBgRevealed(true);
             }
           } else {
@@ -183,10 +201,31 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         )}
       </button>
 
+      {/* Left-side nav dots with hover-reveal slide labels */}
+      <nav className="deck-v9-nav" aria-label="Deck navigation">
+        {slideTitles.map((title, idx) => (
+          <button
+            key={idx}
+            type="button"
+            className={`deck-v9-nav-dot${idx === activeSlideIdx ? ' is-active' : ''}`}
+            aria-label={`Jump to ${title}`}
+            onClick={() => {
+              const slides = containerRef.current?.querySelectorAll('.deck-slide');
+              if (slides && slides[idx]) {
+                slides[idx].scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+          >
+            <span className="deck-v9-nav-dot-mark" />
+            <span className="deck-v9-nav-dot-label">{title}</span>
+          </button>
+        ))}
+      </nav>
+
       {/* Slide 1: Cover */}
       <div className="deck-slide deck-cover deck-v8-cover-intro">
         <CatalogLogo className="deck-logo deck-v8-cover-logo" />
-        <p className="deck-subtitle">Investor Deck V.8 for Alex and Dan</p>
+        <p className="deck-subtitle">Investor Deck V.9 for Alex and Dan</p>
       </div>
 
       {/* Slide 2: Intro: catalog nostalgia + SVG animations */}
@@ -202,103 +241,72 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         </div>
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">The commerce layer for the entire creator economy.</h2>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.<br />Powered by creators.</h2>
         </div>
       </div>
 
       {/* Slide 3: The Problem: split layout with stakeholders stacked right */}
-      <div className="deck-slide deck-v8-problem">
+      <div className="deck-slide deck-v8-problem deck-v9-problem-slide">
         <div className="deck-v8-split-left">
           <span className="deck-label">The Problem</span>
           <h2>Three stakeholders.<br />Three broken experiences.</h2>
         </div>
         <div className="deck-v8-split-right">
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-broken-icon deck-v8-broken-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="broken-circle" cx="12" cy="12" r="10" />
-              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-            </svg>
-            <span className="deck-v8-problem-num">01</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">Shoppers</span>
-              <h3>Discovery.</h3>
-              <p>Fragmented, ad-heavy, impersonal.</p>
+          {[
+            { num: '01', role: 'Shoppers', word: 'Discovery.', sub: 'Fragmented, ad-heavy, impersonal.' },
+            { num: '02', role: 'Creators', word: 'Revenue.', sub: 'Single-digit commissions, no audience ownership.' },
+            { num: '03', role: 'Brands', word: 'ROAS.', sub: 'Opaque attribution, no commerce outcomes.' },
+          ].map(({ num, role, word, sub }) => (
+            <div key={num} className="deck-v8-problem-item deck-v9-problem-item">
+              <div className="deck-v9-problem-body">
+                <div className="deck-v9-problem-headline">
+                  <span className="deck-v9-problem-role">{role}</span>
+                  <span className="deck-v9-problem-num">{num}</span>
+                </div>
+                <div className="deck-v9-problem-pain">
+                  <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle className="broken-circle" cx="12" cy="12" r="10" />
+                    <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+                    <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+                  </svg>
+                  <h3>{word}</h3>
+                </div>
+                <p>{sub}</p>
+              </div>
             </div>
-          </div>
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-broken-icon deck-v8-broken-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="broken-circle" cx="12" cy="12" r="10" />
-              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-            </svg>
-            <span className="deck-v8-problem-num">02</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">Creators</span>
-              <h3>Revenue.</h3>
-              <p>Single-digit commissions, no audience ownership.</p>
-            </div>
-          </div>
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-broken-icon deck-v8-broken-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="broken-circle" cx="12" cy="12" r="10" />
-              <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-              <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-            </svg>
-            <span className="deck-v8-problem-num">03</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">Brands</span>
-              <h3>ROAS.</h3>
-              <p>Opaque attribution, no commerce outcomes.</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
       {/* Slide 4: The Solution - inverse of Problem, split layout with checkmarks */}
-      <div className="deck-slide deck-v8-problem deck-v8-wins">
+      <div className="deck-slide deck-v8-problem deck-v8-wins deck-v9-problem-slide">
         <div className="deck-v8-split-left">
           <span className="deck-label">The Solution</span>
-          <h2>Human taste,<br />amplified by AI.</h2>
-          <p className="deck-v8-wins-subtitle">Everyone wins.</p>
+          <h2>Human taste,<br />amplified by AI.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v8-split-right">
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-win-icon deck-v8-win-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="win-circle" cx="12" cy="12" r="10" />
-              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-            </svg>
-            <span className="deck-v8-problem-num">01</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">For Shoppers</span>
-              <h3>Discovery.</h3>
-              <p>Curated by people they trust. No ads, no noise.</p>
+          {[
+            { num: '01', role: 'For Shoppers', word: 'Discovery.', sub: 'Curated by people they trust. No ads, no noise.' },
+            { num: '02', role: 'For Creators', word: 'Revenue.', sub: 'Real commissions, audience ownership, paid in days.' },
+            { num: '03', role: 'For Brands',   word: 'ROAS.',     sub: 'Clean attribution and guaranteed commerce outcomes.' },
+          ].map(({ num, role, word, sub }) => (
+            <div key={num} className="deck-v8-problem-item deck-v9-problem-item">
+              <div className="deck-v9-problem-body">
+                <div className="deck-v9-problem-headline">
+                  <span className="deck-v9-problem-role">{role}</span>
+                  <span className="deck-v9-problem-num">{num}</span>
+                </div>
+                <div className="deck-v9-problem-pain">
+                  <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle className="win-circle" cx="12" cy="12" r="10" />
+                    <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+                  </svg>
+                  <h3>{word}</h3>
+                </div>
+                <p>{sub}</p>
+              </div>
             </div>
-          </div>
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-win-icon deck-v8-win-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="win-circle" cx="12" cy="12" r="10" />
-              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-            </svg>
-            <span className="deck-v8-problem-num">02</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">For Creators</span>
-              <h3>Revenue.</h3>
-              <p>Real commissions, audience ownership, paid in days.</p>
-            </div>
-          </div>
-          <div className="deck-v8-problem-item">
-            <svg className="deck-v8-win-icon deck-v8-win-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle className="win-circle" cx="12" cy="12" r="10" />
-              <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-            </svg>
-            <span className="deck-v8-problem-num">03</span>
-            <div className="deck-v8-problem-body">
-              <span className="deck-v8-problem-role">For Brands</span>
-              <h3>ROAS.</h3>
-              <p>Clean attribution and guaranteed commerce outcomes.</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -429,34 +437,45 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
             <span className="deck-scenario-tag">Scenario</span>
             <p>A creator posts a look featuring a $200 jacket, and a shopper buys it through Catalog.</p>
           </div>
-          <table className="math-tbl deck-v8-math-tbl">
+          <table className="math-tbl deck-v8-math-tbl deck-v9-math-tbl">
           <thead>
             <tr>
               <th className="math-tbl-label"></th>
-              <th className="math-tbl-old">Traditional Affiliate</th>
-              <th className="math-tbl-new">Catalog (Fixed ROAS)</th>
+              <th className="math-tbl-old">
+                <span className="deck-v9-math-col-title">Traditional Affiliate</span>
+                <span className="deck-v9-math-col-sub">Sales commission, paid only on attribution</span>
+              </th>
+              <th className="math-tbl-new">
+                <span className="deck-v9-math-col-title">Catalog (Fixed ROAS)</span>
+                <span className="deck-v9-math-col-sub">Ad spend, locks in a guaranteed sale</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="math-tbl-label">Brand pays</td>
-              <td className="math-val-old"><MathXIcon />$20<span className="math-pct">(10%)</span></td>
-              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">(20%)</span></td>
+              <td className="math-tbl-label">Cost type</td>
+              <td className="math-val-dim"><MathXIcon />Variable, post-sale</td>
+              <td className="math-val-new"><MathCheckIcon />Fixed, pre-paid media</td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Brand spend</td>
+              <td className="math-val-old"><MathXIcon />$20<span className="math-pct">commission</span></td>
+              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">ad placement</span></td>
+            </tr>
+            <tr>
+              <td className="math-tbl-label">Brand outcome</td>
+              <td className="math-val-dim"><MathXIcon />Maybe a sale</td>
+              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">$200 sale, 5x guaranteed</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Creator payout</td>
-              <td className="math-val-old"><MathXIcon />$16<span className="math-pct">(8%)</span></td>
-              <td className="math-val-new"><MathCheckIcon />$20<span className="math-pct">(10%)</span></td>
+              <td className="math-val-old"><MathXIcon />$16</td>
+              <td className="math-val-new"><MathCheckIcon />$20</td>
             </tr>
             <tr>
               <td className="math-tbl-label">Platform revenue</td>
-              <td className="math-val-old"><MathXIcon />$4<span className="math-pct">(2%)</span></td>
-              <td className="math-val-new"><MathCheckIcon />$20<span className="math-pct">(10%)</span></td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Brand cost visibility</td>
-              <td className="math-val-dim"><MathXIcon />Unpredictable</td>
-              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">Guaranteed 5x ROAS</span></td>
+              <td className="math-val-old"><MathXIcon />$4</td>
+              <td className="math-val-new"><MathCheckIcon />$20</td>
             </tr>
             <tr>
               <td className="math-tbl-label">Attribution</td>
@@ -515,64 +534,99 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Why Now */}
-      <div className="deck-slide deck-v8-whynow">
-        <span className="deck-label">Why Now</span>
-        <h2>The wedge is open.</h2>
-        <div className="deck-v8-whynow-grid">
-          <div className="deck-v8-whynow-item">
-            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-fragment">
-              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect className="fragment-box fragment-box-1" x="6" y="6" width="12" height="12" rx="2" />
-                <rect className="fragment-box fragment-box-2" x="30" y="6" width="12" height="12" rx="2" />
-                <rect className="fragment-box fragment-box-3" x="6" y="30" width="12" height="12" rx="2" />
-                <rect className="fragment-box fragment-box-4" x="30" y="30" width="12" height="12" rx="2" />
-              </svg>
-            </div>
-            <h3>Creator tools are fragmenting</h3>
-            <p>Dozens of siloed apps. No unified commerce layer. Creators juggling link-in-bios, affiliate dashboards, and DMs.</p>
+      {/* Slide 9: Technology - vector DB visual discovery demo */}
+      <div className="deck-slide deck-v9-tech">
+        <div className="deck-v9-tech-left">
+          <span className="deck-label">Technology</span>
+          <h2>Visual taste,<br />indexed by AI.</h2>
+          <p className="deck-v9-tech-lede">
+            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
+          </p>
+          <ul className="deck-v9-tech-points">
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Visual embeddings.</strong>
+                <span>Each look becomes a 1024-dim vector capturing composition, garment, color, and mood.</span>
+              </div>
+            </li>
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Nearest-neighbor search.</strong>
+                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
+              </div>
+            </li>
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Discovery that compounds.</strong>
+                <span>Every interaction sharpens the model. The feed gets smarter with every shopper.</span>
+              </div>
+            </li>
+          </ul>
+          <p className="deck-v9-tech-hint">{techActiveSeed === null ? 'Tap any look to see five visual neighbors.' : 'Tap another look to re-query the index.'}</p>
+        </div>
+        <div className="deck-v9-tech-right">
+          <div className="deck-v9-tech-stage">
+            {techVideos.map((src, i) => {
+              const isSeed = techActiveSeed === i;
+              const isFanned = techActiveSeed !== null;
+              return (
+                <button
+                  key={`seed-${i}`}
+                  type="button"
+                  className={`deck-v9-tech-tile deck-v9-tech-seed${isSeed ? ' is-seed' : ''}${isFanned && !isSeed ? ' is-dim' : ''}`}
+                  style={{ '--seed-i': i } as React.CSSProperties}
+                  onClick={() => setTechActiveSeed(isSeed ? null : i)}
+                  aria-label={`Query look ${i + 1}`}
+                >
+                  <video src={`${basePath}/${src}`} autoPlay loop muted playsInline />
+                </button>
+              );
+            })}
+            {techActiveSeed !== null && (
+              <>
+                <svg className="deck-v9-tech-rays" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  {[
+                    { x: 32, y: 50 },
+                    { x: 50, y: 50 },
+                    { x: 68, y: 50 },
+                    { x: 41, y: 82 },
+                    { x: 59, y: 82 },
+                  ].map(({ x, y }, n) => (
+                    <line
+                      key={n}
+                      className="deck-v9-tech-ray"
+                      x1="50"
+                      y1="16"
+                      x2={x}
+                      y2={y}
+                      style={{ '--ray-i': n } as React.CSSProperties}
+                    />
+                  ))}
+                </svg>
+                {[0, 1, 2, 3, 4].map((n) => {
+                  const src = techVideos[(techActiveSeed + n + 1) % techVideos.length];
+                  return (
+                    <div
+                      key={`neighbor-${techActiveSeed}-${n}`}
+                      className="deck-v9-tech-tile deck-v9-tech-neighbor"
+                      style={{ '--n-i': n } as React.CSSProperties}
+                    >
+                      <video src={`${basePath}/${src}`} autoPlay loop muted playsInline />
+                      <span className="deck-v9-tech-neighbor-tag">0.9{9 - n}</span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
-
-          <div className="deck-v8-whynow-item">
-            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-roi">
-              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline className="roi-line" points="6,34 16,22 24,28 34,14 42,20" />
-                <circle className="roi-dot roi-dot-1" cx="6" cy="34" r="1.8" fill="currentColor" />
-                <circle className="roi-dot roi-dot-2" cx="16" cy="22" r="1.8" fill="currentColor" />
-                <circle className="roi-dot roi-dot-3" cx="24" cy="28" r="1.8" fill="currentColor" />
-                <circle className="roi-dot roi-dot-4" cx="34" cy="14" r="1.8" fill="currentColor" />
-                <circle className="roi-dot roi-dot-5" cx="42" cy="20" r="1.8" fill="currentColor" />
-              </svg>
-            </div>
-            <h3>Brands demand measurable ROI</h3>
-            <p>Awareness budgets are shrinking. CFOs want attribution, not impressions. Guaranteed ROAS is the new ask.</p>
-          </div>
-
-          <div className="deck-v8-whynow-item">
-            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-trust">
-              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle className="trust-ring trust-ring-1" cx="24" cy="24" r="6" />
-                <circle className="trust-ring trust-ring-2" cx="24" cy="24" r="12" />
-                <circle className="trust-ring trust-ring-3" cx="24" cy="24" r="18" />
-              </svg>
-            </div>
-            <h3>Gen Z trusts people, not ads</h3>
-            <p>Ad blindness is total. Authentic creator voices convert where paid media flatlines. Trust is the new distribution.</p>
-          </div>
-
-          <div className="deck-v8-whynow-item">
-            <div className="deck-v8-whynow-icon deck-v8-whynow-icon-ai">
-              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path className="ai-sparkle ai-sparkle-1" d="M24 8 L26 20 L38 22 L26 24 L24 36 L22 24 L10 22 L22 20 Z" />
-                <path className="ai-sparkle ai-sparkle-2" d="M38 6 L39 11 L44 12 L39 13 L38 18 L37 13 L32 12 L37 11 Z" />
-                <path className="ai-sparkle ai-sparkle-3" d="M10 32 L11 37 L16 38 L11 39 L10 44 L9 39 L4 38 L9 37 Z" />
-              </svg>
-            </div>
-            <h3>AI is finally ready</h3>
-            <p>Visual search, auto-tagging, and personalized discovery now run at scale. The infrastructure caught up to the vision.</p>
+          <div className="deck-v9-tech-meta">
+            <span className="deck-v9-tech-meta-dot" />
+            <span>Vector index &middot; cosine similarity &middot; ~12ms p99</span>
           </div>
         </div>
-        <p className="deck-v8-whynow-close">Catalog is the commerce layer built for this moment.</p>
       </div>
 
       {/* Slide 10: Traction */}
@@ -623,56 +677,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
       </div>
 
-      {/* Slide 11: Roadmap timeline */}
-      <div className="deck-slide deck-v8-roadmap">
-        <span className="deck-label">Roadmap</span>
-        <h2>16 months to commerce gravity.</h2>
-
-        <div className="deck-v8-roadmap-card">
-          <div className="deck-v8-roadmap-card-header">Timeline overview</div>
-
-          <div className="deck-v8-roadmap-rows">
-            {roadmapPhases.map((phase, idx) => {
-              const leftPct = (phase.start / 16) * 100;
-              const widthPct = ((phase.end - phase.start) / 16) * 100;
-              const months = phase.end - phase.start;
-              return (
-                <div key={phase.label} className="deck-v8-roadmap-row" style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
-                  <div className="deck-v8-roadmap-rowlabel">
-                    <span className="deck-v8-roadmap-rowlabel-title">{phase.label}</span>
-                    <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
-                  </div>
-                  <div className="deck-v8-roadmap-track">
-                    <div
-                      className="deck-v8-roadmap-bar"
-                      style={{
-                        left: `${leftPct}%`,
-                        width: `${widthPct}%`,
-                        background: phase.color,
-                        boxShadow: `0 0 24px ${phase.color}33`,
-                      }}
-                    >
-                      <span className="deck-v8-roadmap-bar-label">{months}mo</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="deck-v8-roadmap-axis">
-            <span>Month 0</span>
-            <span>Month 4</span>
-            <span>Month 8</span>
-            <span>Month 12</span>
-            <span>Month 16</span>
-          </div>
-        </div>
-
-        <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
-      </div>
-
-      {/* Slide 12: The Ask */}
+      {/* Slide 11: The Ask */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
         <h2>Fuel the flywheel.</h2>
@@ -743,7 +748,56 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
         </div>
       </div>
 
-      {/* Slide 12: Final */}
+      {/* Slide 12: Roadmap timeline */}
+      <div className="deck-slide deck-v8-roadmap">
+        <span className="deck-label">Roadmap</span>
+        <h2>16 months to commerce gravity.</h2>
+
+        <div className="deck-v8-roadmap-card">
+          <div className="deck-v8-roadmap-card-header">Timeline overview</div>
+
+          <div className="deck-v8-roadmap-rows">
+            {roadmapPhases.map((phase, idx) => {
+              const leftPct = (phase.start / 16) * 100;
+              const widthPct = ((phase.end - phase.start) / 16) * 100;
+              const months = phase.end - phase.start;
+              return (
+                <div key={phase.label} className="deck-v8-roadmap-row" style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
+                  <div className="deck-v8-roadmap-rowlabel">
+                    <span className="deck-v8-roadmap-rowlabel-title">{phase.label}</span>
+                    <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
+                  </div>
+                  <div className="deck-v8-roadmap-track">
+                    <div
+                      className="deck-v8-roadmap-bar"
+                      style={{
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        background: phase.color,
+                        boxShadow: `0 0 24px ${phase.color}33`,
+                      }}
+                    >
+                      <span className="deck-v8-roadmap-bar-label">{months}mo</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="deck-v8-roadmap-axis">
+            <span>Month 0</span>
+            <span>Month 4</span>
+            <span>Month 8</span>
+            <span>Month 12</span>
+            <span>Month 16</span>
+          </div>
+        </div>
+
+        <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
+      </div>
+
+      {/* Slide 13: Final */}
       <div className="deck-slide deck-cover">
         <CatalogLogo className="deck-logo" />
         <p className="deck-subtitle">Human Taste, Powered by AI</p>
