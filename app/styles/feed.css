@@ -461,11 +461,11 @@
    AD CARD STYLES
    ============================================ */
 
-.ad-card {
+.promo-card {
   position: relative;
 }
 
-.ad-card video {
+.promo-card video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -473,7 +473,7 @@
   inset: 0;
 }
 
-.ad-chip {
+.promo-chip {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -492,11 +492,11 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
-.ad-chip svg {
+.promo-chip svg {
   opacity: 0.9;
 }
 
-.ad-product-info {
+.promo-product-info {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -509,14 +509,14 @@
   z-index: 3;
 }
 
-.ad-product-text {
+.promo-product-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-.ad-product-name {
+.promo-product-name {
   font-size: 12px;
   font-weight: 600;
   color: #fff;
@@ -526,13 +526,13 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.ad-product-brand {
+.promo-product-brand {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.7);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-.ad-product-price {
+.promo-product-price {
   font-size: 12px;
   font-weight: 700;
   color: #fff;
@@ -541,7 +541,7 @@
 }
 
 /* Light mode adjustments */
-.light-mode .ad-chip {
+.light-mode .promo-chip {
   background: rgba(0, 0, 0, 0.3);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.2);
