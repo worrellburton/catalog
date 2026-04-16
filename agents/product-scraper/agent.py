@@ -18,6 +18,7 @@ import json
 import base64
 import re
 import os
+import time
 import argparse
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -29,8 +30,14 @@ load_dotenv()
 # ─── Configuration ────────────────────────────────────────────────────
 
 MODEL = "claude-sonnet-4-20250514"
-MAX_AGENT_TURNS = 15
-MAX_HTML_LENGTH = 80_000
+MAX_AGENT_TURNS = 10
+MAX_HTML_LENGTH = 15_000
+MAX_TEXT_LENGTH = 3_000
+MAX_IMAGES_RETURN = 15
+
+# Rate-limit retry config
+MAX_RETRIES = 3
+RETRY_DELAYS = [5, 15, 30]  # seconds
 
 # ─── Tool definitions ────────────────────────────────────────────────
 
@@ -151,6 +158,41 @@ TOOLS = [
 ]
 
 
+# ─── Image URL helpers ────────────────────────────────────────────────
+
+def _upgrade_image_url(url: str) -> str:
+    """Upgrade CDN image URLs to high-resolution versions.
+
+    Handles Shopify CDN (cdn.shopify.com), Contentful, and other common
+    patterns that use query-string or path-based size constraints.
+    """
+    from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+
+    # Shopify CDN: remove &width=250 or replace with large value
+    if "cdn.shopify.com" in parsed.netloc or ".myshopify.com" in parsed.netloc:
+        params.pop("width", None)
+        params.pop("height", None)
+        params.pop("crop", None)
+        # Also handle Shopify path-based sizing: _250x250. or _250x.
+        path = re.sub(r"_\d+x\d*\.", ".", parsed.path)
+        new_query = urlencode({k: v[0] for k, v in params.items()})
+        return urlunparse(parsed._replace(path=path, query=new_query))
+
+    # Generic: strip width/height/w/h/size query params from any CDN
+    size_params = {"width", "height", "w", "h", "size", "resize", "fit"}
+    if any(k.lower() in size_params for k in params):
+        for k in list(params):
+            if k.lower() in size_params:
+                del params[k]
+        new_query = urlencode({k: v[0] for k, v in params.items()})
+        return urlunparse(parsed._replace(query=new_query))
+
+    return url
+
+
 # ─── Browser session ─────────────────────────────────────────────────
 
 
@@ -216,7 +258,7 @@ class BrowserSession:
         )
 
         text_content = self.page.evaluate(
-            """() => document.body.innerText.substring(0, 5000)"""
+            f"""() => document.body.innerText.substring(0, {MAX_TEXT_LENGTH})"""
         )
 
         return {
@@ -264,20 +306,28 @@ class BrowserSession:
             """() => {
             const srcs = document.querySelectorAll('picture source, img[srcset]');
             const base = window.location.origin;
-            const urls = [];
+            const results = [];
             srcs.forEach(s => {
-                (s.getAttribute('srcset') || '').split(',')
-                    .map(p => p.trim().split(' ')[0])
-                    .filter(Boolean)
-                    .forEach(u => {
-                        try { urls.push(new URL(u, base).href); } catch { urls.push(u); }
-                    });
+                const pairs = (s.getAttribute('srcset') || '').split(',')
+                    .map(p => p.trim().split(/\\s+/))
+                    .filter(p => p[0])
+                    .map(p => ({
+                        url: p[0],
+                        w: parseInt((p[1] || '0').replace('w', '')) || 0,
+                    }));
+                // Pick the largest srcset candidate per element
+                if (pairs.length > 0) {
+                    pairs.sort((a, b) => b.w - a.w);
+                    try { results.push(new URL(pairs[0].url, base).href); }
+                    catch { results.push(pairs[0].url); }
+                }
             });
-            return urls;
+            return results;
         }"""
         )
 
-        return list(dict.fromkeys(images + srcset))[:20]
+        all_urls = list(dict.fromkeys(srcset + images))  # prefer srcset (higher-res) first
+        return [_upgrade_image_url(u) for u in all_urls][:MAX_IMAGES_RETURN]
 
     def screenshot(self) -> bytes:
         return self.page.screenshot(type="png", full_page=False)
@@ -295,6 +345,9 @@ def execute_tool(browser: BrowserSession, name: str, input: dict) -> list:
 
     if name == "visit_page":
         result = browser.visit(input["url"])
+        # Truncate JSON-LD to keep tokens manageable
+        if result.get("json_ld"):
+            result["json_ld"] = [ld[:3000] for ld in result["json_ld"][:2]]
         return [{"type": "text", "text": json.dumps(result, indent=2, default=str)}]
 
     if name == "get_page_html":
@@ -322,6 +375,54 @@ def execute_tool(browser: BrowserSession, name: str, input: dict) -> list:
         return [{"type": "text", "text": "Product data received. Saving…"}]
 
     return [{"type": "text", "text": f"Unknown tool: {name}"}]
+
+
+def _trim_old_tool_results(messages: list):
+    """Replace large tool results from earlier turns with summaries.
+
+    Keeps only the last 2 user messages with tool_results intact.
+    Older tool_result image blocks are dropped and large text blocks
+    are truncated.  This prevents the conversation from ballooning
+    to hundreds of thousands of tokens across many turns.
+    """
+    KEEP_RECENT = 2  # keep the N most-recent tool-result messages untouched
+    TEXT_TRIM_THRESHOLD = 2_000
+
+    # Find indices of user messages that contain tool_result blocks
+    tool_result_indices = []
+    for i, msg in enumerate(messages):
+        if msg.get("role") == "user" and isinstance(msg.get("content"), list):
+            if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in msg["content"]):
+                tool_result_indices.append(i)
+
+    # Only trim older ones, keep the most recent KEEP_RECENT
+    indices_to_trim = tool_result_indices[:-KEEP_RECENT] if len(tool_result_indices) > KEEP_RECENT else []
+
+    for idx in indices_to_trim:
+        msg = messages[idx]
+        trimmed_content = []
+        for block in msg["content"]:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                trimmed_content.append(block)
+                continue
+
+            new_inner = []
+            for inner in block.get("content", []):
+                if isinstance(inner, dict) and inner.get("type") == "image":
+                    # Drop old screenshots entirely
+                    new_inner.append({"type": "text", "text": "[screenshot — trimmed from history]"})
+                elif isinstance(inner, dict) and inner.get("type") == "text":
+                    text = inner["text"]
+                    if len(text) > TEXT_TRIM_THRESHOLD:
+                        new_inner.append({"type": "text", "text": text[:TEXT_TRIM_THRESHOLD] + "\n…[truncated]"})
+                    else:
+                        new_inner.append(inner)
+                else:
+                    new_inner.append(inner)
+
+            block["content"] = new_inner
+            trimmed_content.append(block)
+        msg["content"] = trimmed_content
 
 
 # ─── Supabase storage ────────────────────────────────────────────────
@@ -400,13 +501,28 @@ def run_agent(product_url: str, look_id: str | None = None, save: bool = True) -
         print(f"🌐 Agent started — visiting {product_url}\n")
 
         for turn in range(MAX_AGENT_TURNS):
-            response = client.messages.create(
-                model=MODEL,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages,
-            )
+            # Trim old tool results to keep token usage manageable
+            if turn > 2:
+                _trim_old_tool_results(messages)
+
+            # Call Claude with retry on rate-limit (429)
+            response = None
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    response = client.messages.create(
+                        model=MODEL,
+                        max_tokens=4096,
+                        system=SYSTEM_PROMPT,
+                        tools=TOOLS,
+                        messages=messages,
+                    )
+                    break
+                except anthropic.RateLimitError as e:
+                    if attempt >= MAX_RETRIES:
+                        raise
+                    delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+                    print(f"  ⏳ Rate limited, retrying in {delay}s (attempt {attempt + 1}/{MAX_RETRIES})…")
+                    time.sleep(delay)
 
             # If Claude finished with text only — nudge it to call save_product
             if response.stop_reason == "end_turn":

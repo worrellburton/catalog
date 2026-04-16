@@ -75,7 +75,7 @@ def mark_failed(supabase, product_id: str, error: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Batch product scraper")
-    parser.add_argument("--limit", type=int, default=50, help="Max products to process per run")
+    parser.add_argument("--limit", type=int, default=10, help="Max products to process per run")
     parser.add_argument("--dry-run", action="store_true", help="List pending without scraping")
     args = parser.parse_args()
 

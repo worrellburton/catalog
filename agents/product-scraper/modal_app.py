@@ -50,6 +50,7 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
     secrets=secrets,
     timeout=300,        # 5 min max per product (Playwright + Claude calls)
     retries=1,          # retry once on transient failures
+    max_containers=3,  # max 3 concurrent scrapes to stay within rate limits
 )
 def scrape_and_update(product_id: str, url: str):
     """Scrape a single product URL and write results back to Supabase."""
@@ -144,7 +145,7 @@ def scrape_pending():
         .select("id, url")
         .in_("scrape_status", ["pending", "failed"])
         .not_.is_("url", "null")
-        .limit(50)
+        .limit(10)
         .execute()
     )
 
