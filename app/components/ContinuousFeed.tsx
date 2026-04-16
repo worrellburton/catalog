@@ -103,7 +103,15 @@ export default function ContinuousFeed({
   // Fetch live ads from Supabase
   const [liveAds, setLiveAds] = useState<ProductAd[]>([]);
   useEffect(() => {
-    getLiveAds().then(setLiveAds).catch(() => {});
+    console.log('[ContinuousFeed] fetching live ads...');
+    getLiveAds()
+      .then(ads => {
+        console.log('[ContinuousFeed] received ads:', ads.length, ads.map(a => ({ id: a.id, video_url: a.video_url?.substring(0, 60), status: a.status, enabled: a.enabled })));
+        setLiveAds(ads);
+      })
+      .catch(err => {
+        console.error('[ContinuousFeed] getLiveAds failed:', err);
+      });
   }, []);
 
   // Reset when filters/search/shuffle change
