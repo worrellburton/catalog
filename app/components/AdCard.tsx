@@ -28,7 +28,7 @@ const AdCard = memo(function AdCard({ ad, className = 'look-card', onOpenProduct
       console.log('[AdCard] dimensions \u2014 id:', ad.id,
         'rect:', { w: rect.width, h: rect.height, top: rect.top, left: rect.left },
         'display:', styles.display, 'visibility:', styles.visibility, 'opacity:', styles.opacity,
-        'overflow:', styles.overflow);
+        'overflow:', styles.overflow, 'classes:', card.className);
     }
     if (video) {
       const vRect = video.getBoundingClientRect();
@@ -131,7 +131,7 @@ const AdCard = memo(function AdCard({ ad, className = 'look-card', onOpenProduct
   return (
     <div
       ref={cardRef}
-      className={`${className} ad-card ${loaded ? 'loaded' : ''}`}
+      className={`${className} promo-card ${loaded ? 'loaded' : ''}`}
       onClick={handleClick}
     >
       <div className="card-inner">
@@ -146,24 +146,24 @@ const AdCard = memo(function AdCard({ ad, className = 'look-card', onOpenProduct
         />
         <div className="card-gradient" />
 
-        {/* Bottom overlay: AD chip + product info */}
-        <div className="ad-product-info">
-          <div className="ad-chip">
+        {/* Bottom overlay: sponsored chip + product info */}
+        <div className="promo-product-info">
+          <div className="promo-chip">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2 7v10M6 5v14M11 4l9 4v12l-9-4z"/>
             </svg>
             Ad
           </div>
-          <div className="ad-product-text">
-            <span className="ad-product-name">
+          <div className="promo-product-text">
+            <span className="promo-product-name">
               {ad.product?.name || 'Shop Now'}
             </span>
             {ad.product?.brand && (
-              <span className="ad-product-brand">{ad.product.brand}</span>
+              <span className="promo-product-brand">{ad.product.brand}</span>
             )}
           </div>
           {ad.product?.price && (
-            <span className="ad-product-price">{ad.product.price}</span>
+            <span className="promo-product-price">{ad.product.price}</span>
           )}
         </div>
       </div>
