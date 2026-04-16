@@ -104,14 +104,18 @@ export default function FeedSection({
     let adIdx = 0;
     const adList = ads && ads.length > 0 ? ads : [];
 
+    console.log('[FeedSection] building displayItems — isInitial:', isInitial, 'ads prop length:', ads?.length, 'adList length:', adList.length, 'displayLooks:', displayLooks.length);
+
     for (let i = 0; i < displayLooks.length; i++) {
       items.push({ type: 'look', look: displayLooks[i] });
       // Insert ad after every AD_INTERVAL looks (only for initial feed sections)
       if (isInitial && adList.length > 0 && (i + 1) % AD_INTERVAL === 0) {
+        console.log('[FeedSection] inserting ad at position', i + 1, '— ad id:', adList[adIdx % adList.length]?.id);
         items.push({ type: 'ad', ad: adList[adIdx % adList.length] });
         adIdx++;
       }
     }
+    console.log('[FeedSection] total items:', items.length, 'ads inserted:', adIdx);
     return items;
   }, [displayLooks, ads, isInitial]);
 

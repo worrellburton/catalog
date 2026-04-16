@@ -17,4 +17,6 @@ const supabaseKey =
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   DEFAULT_SUPABASE_ANON_KEY;
 
+console.log('[Supabase] init url:', supabaseUrl?.substring(0, 30) + '...', 'key present:', !!supabaseKey, 'key length:', supabaseKey?.length);
+
 export const supabase = createClient(supabaseUrl, supabaseKey);
