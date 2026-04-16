@@ -1,8 +1,9 @@
-import { useReducer, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { looks as allLooks, type Look, type Product } from '~/data/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
+import { getLiveAds, type ProductAd } from '~/services/product-ads';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -99,6 +100,12 @@ export default function ContinuousFeed({
     seenLookIds: new Set(),
   });
 
+  // Fetch live ads from Supabase
+  const [liveAds, setLiveAds] = useState<ProductAd[]>([]);
+  useEffect(() => {
+    getLiveAds().then(setLiveAds).catch(() => {});
+  }, []);
+
   // Reset when filters/search/shuffle change
   const prevFilterRef = useRef({ activeFilter, searchQuery, shuffleKey });
   useEffect(() => {
@@ -134,6 +141,13 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp]);
 
+  const handleOpenAdProduct = useCallback((ad: ProductAd) => {
+    const url = ad.affiliate_url || ad.product?.url;
+    if (url) {
+      onOpenBrowser(url, ad.product?.name || 'Shop');
+    }
+  }, [onOpenBrowser]);
+
   // Find the last detail segment index for ref assignment
   const lastDetailIdx = useMemo(() => {
     for (let i = state.segments.length - 1; i >= 0; i--) {
@@ -153,6 +167,8 @@ export default function ContinuousFeed({
               onOpenLook={handleOpenLook}
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
+              onOpenAdProduct={handleOpenAdProduct}
+              ads={segment.isInitial ? liveAds : undefined}
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}
