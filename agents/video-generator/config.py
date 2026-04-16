@@ -65,10 +65,13 @@ GENDER_PERSONA_MAP = {
 GENERATION_DEFAULTS = {
     "model": "veo-3.1-fast-generate-preview",
     "duration": 4,            # seconds — minimum for Veo 3.1 Fast
-    "aspect_ratio": "9:16",   # portrait, mobile-first
+    "aspect_ratio": "9:16",   # Veo generation ratio (closest portrait to 3:4)
     "resolution": "720p",
     "person_generation": "allow_adult",  # required for image-to-video with people
 }
+
+# Feed card aspect ratio — videos are cropped to this after generation
+FEED_ASPECT_RATIO = (3, 4)   # width:height — matches .look-card { aspect-ratio: 3/4 }
 
 DEFAULT_STYLE = "editorial_runway"
 DEFAULT_PERSONA = "feminine_editorial"

@@ -47,9 +47,12 @@ export default defineConfig({
             route("products", "routes/admin/products.tsx");
             route("reports", "routes/admin/reports.tsx");
             route("revenue", "routes/admin/revenue.tsx");
+            route("ai-models", "routes/admin/ai-models.tsx");
+            route("product-ads", "routes/admin/product-ads.tsx");
             route("search", "routes/admin/search.tsx");
             route("settings", "routes/admin/settings.tsx");
             route("shoppers", "routes/admin/shoppers.tsx");
+            route("video-generation", "routes/admin/video-generation.tsx");
             route("shoppers/:name", "routes/admin/shoppers.$name.tsx");
             route("shoppers-waitlist", "routes/admin/shoppers-waitlist.tsx");
             route("signup-links", "routes/admin/signup-links.tsx");

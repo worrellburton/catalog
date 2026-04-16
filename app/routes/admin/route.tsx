@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { to: '/admin/activities', label: 'Engagement', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
   { to: '/admin/ai-models', label: 'AI Models', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM16 3.13a4 4 0 0 1 0 7.75' },
   { to: '/admin/video-generation', label: 'Video Gen', icon: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z' },
+  { to: '/admin/product-ads', label: 'Product Ads', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
   { to: '/admin/site-crawls', label: 'Site Crawls', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 ];
 
@@ -40,6 +41,7 @@ const allSearchItems: SearchItem[] = [
   { label: 'Activities', type: 'Page', to: '/admin/activities' },
   { label: 'AI Models', type: 'Page', to: '/admin/ai-models' },
   { label: 'Video Generation', type: 'Page', to: '/admin/video-generation' },
+  { label: 'Product Ads', type: 'Page', to: '/admin/product-ads' },
   { label: 'Reports', type: 'Page', to: '/admin/reports' },
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },

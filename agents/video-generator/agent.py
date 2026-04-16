@@ -21,6 +21,7 @@ from supabase import create_client
 from config import STYLES, GENERATION_DEFAULTS, DEFAULT_STYLE, DEFAULT_PERSONA, GENDER_PERSONA_MAP
 from prompts import build_prompt, enhance_prompt_with_gemini
 from veo_client import generate_video_from_image, generate_video_from_text
+from video_crop import crop_to_aspect
 
 
 def generate_video(
@@ -121,6 +122,13 @@ def generate_video(
             resolution=GENERATION_DEFAULTS["resolution"],
             person_generation=GENERATION_DEFAULTS["person_generation"],
         )
+
+        # Crop to 3:4 (feed card aspect ratio) — Veo only outputs 9:16 or 16:9
+        try:
+            video_bytes = crop_to_aspect(video_bytes, 3, 4)
+            print("  Cropped to 3:4 aspect ratio")
+        except Exception as e:
+            print(f"  ⚠ Crop failed, using original: {e}")
 
         supabase.table("generated_videos").update({"status": "uploading"}).eq("id", job_id).execute()
 
