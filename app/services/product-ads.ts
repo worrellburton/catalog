@@ -67,18 +67,28 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 }
 
 export async function getLiveAds(): Promise<ProductAd[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('product_ads')
-    .select(AD_SELECT)
-    .eq('status', 'live')
-    .eq('enabled', true)
-    .order('created_at', { ascending: false });
-  if (error) {
-    console.error('Failed to load live ads:', error.message);
+  console.log('[getLiveAds] called, supabase client exists:', !!supabase);
+  if (!supabase) {
+    console.warn('[getLiveAds] supabase is null, returning empty');
     return [];
   }
-  return (data || []) as ProductAd[];
+  try {
+    const { data, error } = await supabase
+      .from('product_ads')
+      .select(AD_SELECT)
+      .eq('status', 'live')
+      .eq('enabled', true)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('[getLiveAds] query error:', error.message, error.details, error.hint);
+      return [];
+    }
+    console.log('[getLiveAds] success, count:', data?.length, 'first ad:', data?.[0]?.id, 'video_url:', data?.[0]?.video_url?.substring(0, 60));
+    return (data || []) as ProductAd[];
+  } catch (err) {
+    console.error('[getLiveAds] unexpected error:', err);
+    return [];
+  }
 }
 
 export async function createProductAd(req: CreateAdRequest): Promise<{ data: ProductAd | null; error: string | null }> {

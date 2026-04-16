@@ -15,6 +15,10 @@ const AdCard = memo(function AdCard({ ad, className = 'look-card', onOpenProduct
   const impressionTracked = useRef(false);
 
   useEffect(() => {
+    console.log('[AdCard] mounted \u2014 ad id:', ad.id, 'video_url:', ad.video_url?.substring(0, 80), 'product:', ad.product?.name);
+  }, [ad.id, ad.video_url, ad.product?.name]);
+
+  useEffect(() => {
     const video = videoRef.current;
     const card = cardRef.current;
     if (!video || !card) return;
