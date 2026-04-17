@@ -27,6 +27,7 @@ export default defineConfig({
             route("activities", "routes/admin/activities.tsx");
             route("administrators", "routes/admin/administrators.tsx");
             route("advertisements", "routes/admin/advertisements.tsx");
+            route("agents", "routes/admin/agents.tsx");
             route("appearance", "routes/admin/appearance.tsx");
             route("audiences", "routes/admin/audiences.tsx");
             route("brands", "routes/admin/brands.tsx");
