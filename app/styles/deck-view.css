@@ -4990,15 +4990,15 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: clamp(24px, 3.5vh, 60px) clamp(140px, 14vw, 280px);
+  gap: clamp(16px, 2.5vh, 36px) clamp(140px, 14vw, 280px);
   margin-top: clamp(8px, 1.5vh, 20px);
-  min-height: min(440px, 52vh);
+  min-height: min(320px, 40vh);
 }
 
-.deck-view-v1 .deck-v1-payouts-card-tl { grid-column: 1; grid-row: 1; justify-self: start; }
-.deck-view-v1 .deck-v1-payouts-card-tr { grid-column: 2; grid-row: 1; justify-self: end; }
-.deck-view-v1 .deck-v1-payouts-card-bl { grid-column: 1; grid-row: 2; justify-self: start; }
-.deck-view-v1 .deck-v1-payouts-card-br { grid-column: 2; grid-row: 2; justify-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-tl { grid-column: 1; grid-row: 1; justify-self: start; align-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-tr { grid-column: 2; grid-row: 1; justify-self: end; align-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-bl { grid-column: 1; grid-row: 2; justify-self: start; align-self: start; }
+.deck-view-v1 .deck-v1-payouts-card-br { grid-column: 2; grid-row: 2; justify-self: end; align-self: start; }
 
 .deck-view-v1 .deck-v1-payouts-center {
   position: absolute;
@@ -5349,5 +5349,61 @@
 .deck-view-v1 .deck-v8-roadmap-bar {
   height: clamp(28px, 3.5vh, 38px);
   border-radius: 999px;
+}
+
+/* V1 Math slide — tighter for laptop screens */
+.deck-view-v1 .deck-v8-math {
+  padding: clamp(24px, 4vh, 56px) clamp(24px, 4vw, 64px);
+}
+.deck-view-v1 .deck-v8-math h2 {
+  font-size: clamp(22px, 2.6vw, 38px);
+  margin-bottom: clamp(4px, 1vh, 12px);
+}
+.deck-view-v1 .deck-scenario {
+  margin-top: 2px;
+  margin-bottom: clamp(12px, 2.5vh, 28px);
+  padding: clamp(8px, 1.2vh, 12px) clamp(14px, 1.6vw, 20px);
+  gap: clamp(8px, 1vw, 14px);
+}
+.deck-view-v1 .deck-scenario p {
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v1 .deck-scenario-tag {
+  font-size: 9px;
+  padding: 3px 8px;
+}
+.deck-view-v1 .math-tbl {
+  margin-top: clamp(8px, 1.5vh, 24px);
+}
+.deck-view-v1 .math-tbl th,
+.deck-view-v1 .math-tbl td {
+  padding: clamp(8px, 1.2vh, 14px) clamp(12px, 1.4vw, 20px);
+}
+.deck-view-v1 .math-tbl-label {
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v1 .deck-v9-math-col-title {
+  font-size: clamp(10px, 0.9vw, 12px);
+}
+.deck-view-v1 .deck-v9-math-col-sub {
+  font-size: clamp(9px, 0.8vw, 10.5px);
+  margin-top: 3px;
+}
+.deck-view-v1 .deck-v1-math-budget {
+  font-size: clamp(8px, 0.7vw, 9.5px);
+  padding: 3px 7px;
+  margin-bottom: 6px;
+}
+.deck-view-v1 .math-val-old,
+.deck-view-v1 .math-val-new,
+.deck-view-v1 .math-val-dim {
+  font-size: clamp(12px, 1.1vw, 14px);
+}
+.deck-view-v1 .math-pct {
+  font-size: clamp(10px, 0.85vw, 12px);
+}
+.deck-view-v1 .math-icon {
+  width: clamp(14px, 1.4vw, 18px);
+  height: clamp(14px, 1.4vw, 18px);
 }
 
