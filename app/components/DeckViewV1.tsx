@@ -85,17 +85,18 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
   { n: 5, angle: '288deg', label: 'The loop compounds',   sub: 'CAC drops. LTV climbs. Trust deepens every quarter.',  icon: <CycleIcon /> },
 ];
 
-/* 16-month roadmap phases. Hire Directors runs as a parallel support track
-   alongside the first three product phases. Sequential phases follow below.
-   start/end are months (0..16). Bars render proportionally over a 16-month track. */
-const roadmapPhases: { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean }[] = [
+/* 16-month roadmap phases. Hire Directors and Test run as parallel support tracks.
+   start/end are months (0..16). Bars render proportionally over a 16-month track.
+   These are the initial values — the user can drag to reposition/resize at runtime. */
+type RoadmapPhase = { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean };
+const initialRoadmapPhases: RoadmapPhase[] = [
   { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 3,  color: '#f5c542', parallel: true },
   { label: 'Seed Product with AI',     sub: 'AI-generated imagery and video linked to brand stores, fully automated.',      start: 0,  end: 2,  color: '#a78bfa' },
   { label: 'Shopify Integration',      sub: 'Ship the Shopify App: self-serve onboarding, product sync, attribution.',      start: 1,  end: 2,  color: '#fb923c' },
   { label: 'Onboard First Creators',   sub: 'Invite-only cohort, beta storefronts, early feedback loops.',                  start: 2,  end: 5,  color: '#38bdf8' },
-  { label: 'Test',                     sub: 'Iterate discovery, payouts, and attribution against real sales.',              start: 5,  end: 7,  color: '#34d399' },
-  { label: 'Start GTM 1.0',            sub: 'First public motion \u2014 creators, shoppers, and brand acquisition.',       start: 7,  end: 10, color: '#f97316' },
-  { label: 'Learn GTM',                sub: 'Tighten CAC, ROAS, and retention signals before scaling.',                     start: 10, end: 13, color: '#fde047' },
+  { label: 'Test',                     sub: 'Iterate discovery, payouts, and attribution against real sales.',              start: 2,  end: 5,  color: '#34d399', parallel: true },
+  { label: 'Start GTM 1.0',            sub: 'First public motion \u2014 creators, shoppers, and brand acquisition.',       start: 5,  end: 9,  color: '#f97316' },
+  { label: 'Learn GTM',                sub: 'Tighten CAC, ROAS, and retention signals before scaling.',                     start: 9,  end: 13, color: '#fde047' },
   { label: 'Start GTM 2.1',            sub: 'Scaled go-to-market with proven economics and category expansion.',            start: 13, end: 16, color: '#f43f5e' },
 ];
 
@@ -114,6 +115,49 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
   const [techActiveSeed, setTechActiveSeed] = useState<number | null>(null);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
+  const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
+  const roadmapTrackRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ idx: number; mode: 'move' | 'left' | 'right'; startX: number; start0: number; end0: number } | null>(null);
+
+  const onBarPointerDown = (e: React.PointerEvent<HTMLElement>, idx: number, mode: 'move' | 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    const phase = roadmapPhases[idx];
+    dragRef.current = { idx, mode, startX: e.clientX, start0: phase.start, end0: phase.end };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onBarPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || !roadmapTrackRef.current) return;
+    const rect = roadmapTrackRef.current.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const monthsPerPx = 16 / rect.width;
+    const delta = Math.round((e.clientX - drag.startX) * monthsPerPx);
+    setRoadmapPhases((prev) =>
+      prev.map((p, i) => {
+        if (i !== drag.idx) return p;
+        const duration = drag.end0 - drag.start0;
+        if (drag.mode === 'move') {
+          const newStart = Math.max(0, Math.min(16 - duration, drag.start0 + delta));
+          return { ...p, start: newStart, end: newStart + duration };
+        } else if (drag.mode === 'left') {
+          const newStart = Math.max(0, Math.min(drag.end0 - 1, drag.start0 + delta));
+          return { ...p, start: newStart };
+        } else {
+          const newEnd = Math.max(drag.start0 + 1, Math.min(16, drag.end0 + delta));
+          return { ...p, end: newEnd };
+        }
+      })
+    );
+  };
+
+  const onBarPointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    if (dragRef.current) {
+      dragRef.current = null;
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    }
+  };
   const slideTitles = [
     'Cover',
     'The Dream',
@@ -523,10 +567,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 </div>
               </div>
               <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
-              <button className="deck-v1-seed-next" type="button" onClick={() => setFlywheelView('wheel')}>
-                <span>Next: the creator flywheel</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-              </button>
             </div>
             <div className="flywheel-right">
               <div className="deck-v1-seed-pipeline">
@@ -598,10 +638,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 ))}
               </div>
               <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
-              <button className="deck-v1-seed-next deck-v1-seed-back" type="button" onClick={() => setFlywheelView('seed')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-                <span>Back to product seeding</span>
-              </button>
             </div>
             <div className="flywheel-right">
               <div className="flywheel-center">
@@ -624,6 +660,26 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             </div>
           </div>
         </div>
+        {flywheelView === 'seed' && (
+          <button
+            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-right"
+            type="button"
+            onClick={() => setFlywheelView('wheel')}
+            aria-label="See the creator flywheel"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+          </button>
+        )}
+        {flywheelView === 'wheel' && (
+          <button
+            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-left"
+            type="button"
+            onClick={() => setFlywheelView('seed')}
+            aria-label="Back to product seeding"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+          </button>
+        )}
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}
@@ -724,69 +780,92 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
       {/* Slide 10: Payouts — how creators earn across four streams */}
       <div className="deck-slide deck-v1-payouts">
         <div className="deck-v1-payouts-inner">
-          <span className="deck-label">Payouts</span>
-          <h2>Creators earn everywhere<br />their taste shows up.</h2>
-
-          <div className="deck-v1-payouts-visual" aria-hidden="true">
-            <svg className="deck-v1-payouts-creator-svg" viewBox="0 0 320 160">
-              <defs>
-                <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="2" result="blur" />
-                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-              </defs>
-              {/* Creator figure */}
-              <circle cx="160" cy="42" r="16" fill="none" stroke="#4ade80" strokeWidth="2" />
-              <path d="M160 58 L160 100" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" />
-              <path d="M140 74 L160 68 L180 74" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M148 130 L160 100 L172 130" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              {/* Money flowing in from left */}
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="40" y="55" fill="#4ade80" fontSize="16" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="70" y="80" fill="#4ade80" fontSize="13" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="50" y="105" fill="#4ade80" fontSize="15" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              {/* Money flowing in from right */}
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="270" y="50" fill="#4ade80" fontSize="14" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-5" x="250" y="85" fill="#4ade80" fontSize="16" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-6" x="265" y="115" fill="#4ade80" fontSize="12" fontWeight="700" filter="url(#v1PayGlow)">$</text>
-              {/* Flow lines from sources to creator */}
-              <path className="deck-v1-pay-flow deck-v1-pay-flow-1" d="M55 50 Q110 55 140 65" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
-              <path className="deck-v1-pay-flow deck-v1-pay-flow-2" d="M80 78 Q120 76 140 72" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
-              <path className="deck-v1-pay-flow deck-v1-pay-flow-3" d="M265 48 Q210 52 180 65" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
-              <path className="deck-v1-pay-flow deck-v1-pay-flow-4" d="M260 82 Q210 78 180 72" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
-              {/* Labels */}
-              <text x="20" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">ENGAGEMENT</text>
-              <text x="80" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">AFFILIATE</text>
-              <text x="210" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">SALES</text>
-              <text x="260" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">REFERRAL</text>
-            </svg>
+          <div className="deck-v1-payouts-header">
+            <span className="deck-label">Payouts</span>
+            <h2>Creators earn everywhere<br />their taste shows up.</h2>
           </div>
 
-          <div className="deck-v1-payouts-grid">
-            <div className="deck-v1-payouts-card">
-              <span className="deck-v1-payouts-num">01</span>
-              <h3>Engagement</h3>
-              <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube&rsquo;s ad-revenue model &mdash; paid out daily.</p>
-              <span className="deck-v1-payouts-chip">Daily payouts</span>
+          <div className="deck-v1-payouts-body">
+            <div className="deck-v1-payouts-visual" aria-hidden="true">
+              <svg className="deck-v1-payouts-avatar" viewBox="0 0 240 240">
+                <defs>
+                  <radialGradient id="v1AvatarBg" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="rgba(74,222,128,0.28)" />
+                    <stop offset="70%" stopColor="rgba(74,222,128,0.06)" />
+                    <stop offset="100%" stopColor="rgba(74,222,128,0)" />
+                  </radialGradient>
+                  <linearGradient id="v1AvatarFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ade80" />
+                    <stop offset="100%" stopColor="#22c55e" />
+                  </linearGradient>
+                  <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2.2" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+                {/* Soft green glow behind avatar */}
+                <circle cx="120" cy="120" r="110" fill="url(#v1AvatarBg)" />
+                {/* Avatar ring */}
+                <circle cx="120" cy="120" r="72" fill="rgba(10,15,12,0.85)" stroke="#4ade80" strokeWidth="2" />
+                {/* Profile picture silhouette (head + shoulders) — clipped to ring */}
+                <clipPath id="v1AvatarClip">
+                  <circle cx="120" cy="120" r="70" />
+                </clipPath>
+                <g clipPath="url(#v1AvatarClip)">
+                  <circle cx="120" cy="104" r="24" fill="url(#v1AvatarFill)" />
+                  <path d="M68 200 C68 162 90 148 120 148 C150 148 172 162 172 200 L172 220 L68 220 Z" fill="url(#v1AvatarFill)" />
+                </g>
+                {/* Animated dollars flowing toward avatar from four directions */}
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="18" y="60" fill="#4ade80" fontSize="18" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="206" y="64" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="24" y="196" fill="#4ade80" fontSize="15" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="208" y="192" fill="#4ade80" fontSize="17" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-5" x="116" y="24" fill="#4ade80" fontSize="14" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-6" x="114" y="232" fill="#4ade80" fontSize="14" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                {/* Dashed flow lines from dollars to avatar */}
+                <path className="deck-v1-pay-flow" d="M30 58 Q75 80 60 120" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                <path className="deck-v1-pay-flow" d="M210 62 Q175 82 180 120" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                <path className="deck-v1-pay-flow" d="M34 198 Q70 170 60 130" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                <path className="deck-v1-pay-flow" d="M210 194 Q180 170 180 130" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+              </svg>
             </div>
-            <div className="deck-v1-payouts-card">
-              <span className="deck-v1-payouts-num">02</span>
-              <h3>Affiliate links</h3>
-              <p>Full commissions on sales driven through a creator's own affiliate links &mdash; transparent and fast.</p>
-              <span className="deck-v1-payouts-chip">Pass-through</span>
-            </div>
-            <div className="deck-v1-payouts-card">
-              <span className="deck-v1-payouts-num">03</span>
-              <h3>Catalog sales</h3>
-              <p>Revenue share on every Catalog-attributed sale driven by a creator's look. Direct, no shared pool.</p>
-              <span className="deck-v1-payouts-chip">Rev share</span>
-            </div>
-            <div className="deck-v1-payouts-card">
-              <span className="deck-v1-payouts-num">04</span>
-              <h3>Referrals</h3>
-              <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
-              <span className="deck-v1-payouts-chip">Lifetime</span>
+
+            <div className="deck-v1-payouts-list">
+              <div className="deck-v1-payouts-card">
+                <div className="deck-v1-payouts-card-head">
+                  <span className="deck-v1-payouts-num">01</span>
+                  <h3>Engagement</h3>
+                  <span className="deck-v1-payouts-chip">Daily payouts</span>
+                </div>
+                <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube&rsquo;s ad-revenue model &mdash; paid out daily.</p>
+              </div>
+              <div className="deck-v1-payouts-card">
+                <div className="deck-v1-payouts-card-head">
+                  <span className="deck-v1-payouts-num">02</span>
+                  <h3>Affiliate links</h3>
+                  <span className="deck-v1-payouts-chip">Pass-through</span>
+                </div>
+                <p>Full commissions on sales driven through a creator's own affiliate links &mdash; transparent and fast.</p>
+              </div>
+              <div className="deck-v1-payouts-card">
+                <div className="deck-v1-payouts-card-head">
+                  <span className="deck-v1-payouts-num">03</span>
+                  <h3>Catalog sales</h3>
+                  <span className="deck-v1-payouts-chip">Rev share</span>
+                </div>
+                <p>Revenue share on every Catalog-attributed sale driven by a creator's look. Direct, no shared pool.</p>
+              </div>
+              <div className="deck-v1-payouts-card">
+                <div className="deck-v1-payouts-card-head">
+                  <span className="deck-v1-payouts-num">04</span>
+                  <h3>Referrals</h3>
+                  <span className="deck-v1-payouts-chip">Lifetime</span>
+                </div>
+                <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
+              </div>
             </div>
           </div>
+
           <p className="deck-v1-payouts-note">Post authentically, earn daily.</p>
         </div>
       </div>
@@ -861,9 +940,9 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                     </span>
                     <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
                   </div>
-                  <div className="deck-v8-roadmap-track">
+                  <div className="deck-v8-roadmap-track" ref={idx === 0 ? roadmapTrackRef : undefined}>
                     <div
-                      className={`deck-v8-roadmap-bar${phase.parallel ? ' deck-v1-roadmap-bar-parallel' : ''}`}
+                      className={`deck-v8-roadmap-bar deck-v1-roadmap-bar-draggable${phase.parallel ? ' deck-v1-roadmap-bar-parallel' : ''}`}
                       style={{
                         left: `${leftPct}%`,
                         width: `${widthPct}%`,
@@ -871,8 +950,29 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                         borderColor: phase.parallel ? phase.color : undefined,
                         boxShadow: phase.parallel ? 'none' : `0 0 24px ${phase.color}33`,
                       } as React.CSSProperties}
+                      onPointerDown={(e) => onBarPointerDown(e, idx, 'move')}
+                      onPointerMove={onBarPointerMove}
+                      onPointerUp={onBarPointerUp}
+                      onPointerCancel={onBarPointerUp}
+                      title="Drag to move. Drag edges to resize."
                     >
+                      <span
+                        className="deck-v1-roadmap-handle deck-v1-roadmap-handle-left"
+                        onPointerDown={(e) => onBarPointerDown(e, idx, 'left')}
+                        onPointerMove={onBarPointerMove}
+                        onPointerUp={onBarPointerUp}
+                        onPointerCancel={onBarPointerUp}
+                        aria-hidden="true"
+                      />
                       <span className="deck-v8-roadmap-bar-label" style={phase.parallel ? { color: phase.color } : undefined}>{months}mo</span>
+                      <span
+                        className="deck-v1-roadmap-handle deck-v1-roadmap-handle-right"
+                        onPointerDown={(e) => onBarPointerDown(e, idx, 'right')}
+                        onPointerMove={onBarPointerMove}
+                        onPointerUp={onBarPointerUp}
+                        onPointerCancel={onBarPointerUp}
+                        aria-hidden="true"
+                      />
                     </div>
                   </div>
                 </div>
@@ -895,7 +995,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
       {/* Slide 12: The Ask */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
-        <h2>Fuel the flywheel.</h2>
+        <h2>Build the future.<br />Fuel the flywheel.</h2>
 
         <div className="deck-v8-ask-stage">
           <div className="deck-v8-ask-raise">
