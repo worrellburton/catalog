@@ -22,7 +22,7 @@ const navItems: NavItem[] = [
   { to: '/admin/ai-models', label: 'AI Models', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM16 3.13a4 4 0 0 1 0 7.75' },
   { to: '/admin/video-generation', label: 'Video Gen', icon: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z' },
   { to: '/admin/product-ads', label: 'Product Ads', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
-  { to: '/admin/site-crawls', label: 'Site Crawls', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
+  { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
 ];
 
 interface SearchItem {
@@ -45,7 +45,8 @@ const allSearchItems: SearchItem[] = [
   { label: 'Reports', type: 'Page', to: '/admin/reports' },
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
-  { label: 'Site Crawls', type: 'Page', to: '/admin/site-crawls' },
+  { label: 'Agents', type: 'Page', to: '/admin/agents' },
+  { label: 'Site Crawls', type: 'Page', to: '/admin/agents?tab=site-crawls' },
   // Shoppers
   { label: 'Carla', type: 'Shopper', to: '/admin/shoppers/Carla' },
   { label: 'alfvaz', type: 'Shopper', to: '/admin/shoppers/alfvaz' },
