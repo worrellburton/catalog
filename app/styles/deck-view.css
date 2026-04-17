@@ -572,6 +572,44 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* V.1 math table — budget category pill highlights the accounting line item */
+.deck-view-v1 .deck-v1-math-budget {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+  line-height: 1.2;
+  border: 1px solid transparent;
+}
+
+.deck-view-v1 .deck-v1-math-budget-old {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+.deck-view-v1 .deck-v1-math-budget-new {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.light-mode .deck-view-v1 .deck-v1-math-budget-old {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.light-mode .deck-view-v1 .deck-v1-math-budget-new {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
 .math-tbl tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
@@ -4515,6 +4553,955 @@
     transform: none;
     filter: none;
     transition: none;
+  }
+}
+
+/* ===========================================================
+   V.1 Dream slide subtitle
+   =========================================================== */
+.deck-view-v1 .deck-v1-dream-h2 {
+  font-size: clamp(36px, 5.2vw, 72px);
+  line-height: 1.08;
+}
+.light-mode .deck-view-v1 .deck-v1-dream-sub { color: rgba(0, 0, 0, 0.5); }
+
+/* ===========================================================
+   V.1 Flywheel slide — smooth sliding track between Seed & Wheel
+   =========================================================== */
+/* Flywheel slide — conditional rendering with slide-in animation */
+.deck-view-v1 .deck-v1-flywheel-slide {
+  padding: clamp(60px, 7vh, 100px) clamp(72px, 8vw, 140px) !important;
+}
+
+.deck-view-v1 .deck-v1-fw-view {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(28px, 4vw, 64px);
+  width: 100%;
+  animation: deck-v1-fw-slidein 0.6s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+.deck-view-v1 .deck-v1-fw-view-wheel {
+  animation-name: deck-v1-fw-slidein-right;
+}
+.deck-view-v1 .deck-v1-fw-view-seed {
+  animation-name: deck-v1-fw-slidein-left;
+}
+
+@keyframes deck-v1-fw-slidein-right {
+  from { opacity: 0; transform: translateX(80px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes deck-v1-fw-slidein-left {
+  from { opacity: 0; transform: translateX(-80px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Arrow nav button — natural flex child */
+.deck-view-v1 .deck-v1-flywheel-nav {
+  flex-shrink: 0;
+  align-self: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(245, 197, 66, 0.10);
+  border: 1px solid rgba(245, 197, 66, 0.4);
+  color: #f5c542;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  font-family: inherit;
+  padding: 0;
+  margin: 0 8px;
+}
+.deck-view-v1 .deck-v1-flywheel-nav:hover {
+  background: rgba(245, 197, 66, 0.22);
+  border-color: rgba(245, 197, 66, 0.7);
+  transform: scale(1.08);
+}
+.deck-view-v1 .deck-v1-flywheel-nav-right { margin-left: auto; }
+.deck-view-v1 .deck-v1-flywheel-nav-left  { margin-right: auto; order: -1; }
+
+.deck-view-v1 .deck-v1-flywheel-nav:hover {
+  background: rgba(245, 197, 66, 0.22);
+  border-color: rgba(245, 197, 66, 0.7);
+  transform: scale(1.08);
+}
+
+.light-mode .deck-view-v1 .deck-v1-flywheel-nav {
+  background: rgba(20, 20, 20, 0.06);
+  border-color: rgba(20, 20, 20, 0.25);
+  color: #1a1a1a;
+}
+.light-mode .deck-view-v1 .deck-v1-flywheel-nav:hover {
+  background: rgba(20, 20, 20, 0.12);
+  border-color: rgba(20, 20, 20, 0.4);
+}
+
+.deck-view-v1 .deck-v1-seed-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 22px 0 22px;
+}
+
+.deck-view-v1 .deck-v1-seed-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.deck-view-v1 .deck-v1-seed-step-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f5c542;
+  letter-spacing: 0.12em;
+  flex-shrink: 0;
+  padding-top: 3px;
+  min-width: 22px;
+}
+
+.deck-view-v1 .deck-v1-seed-step p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0;
+}
+
+.deck-view-v1 .deck-v1-seed-step strong {
+  color: #fff;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.deck-view-v1 .deck-v1-seed-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 197, 66, 0.4);
+  background: rgba(245, 197, 66, 0.1);
+  color: #f5c542;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+  font-family: inherit;
+}
+
+.deck-view-v1 .deck-v1-seed-next:hover {
+  background: rgba(245, 197, 66, 0.18);
+  border-color: rgba(245, 197, 66, 0.6);
+  transform: translateY(-1px);
+}
+
+.deck-view-v1 .deck-v1-seed-back {
+  color: rgba(255, 255, 255, 0.65);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.deck-view-v1 .deck-v1-seed-back:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-stage {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(6px);
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: rgba(245, 197, 66, 0.12);
+  color: #f5c542;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-hint {
+  display: block;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.48);
+  margin-top: 3px;
+  letter-spacing: 0.01em;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0 2px 32px;
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #f5c542;
+  opacity: 0.3;
+  animation: deck-v1-seed-flow 2.2s ease-in-out infinite;
+}
+
+@keyframes deck-v1-seed-flow {
+  0%, 100% { opacity: 0.2; transform: translateY(-2px); }
+  50% { opacity: 1; transform: translateY(2px); }
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-stage-terminal {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.05);
+}
+
+.deck-view-v1 .deck-v1-seed-pipeline-stage-terminal .deck-v1-seed-pipeline-icon {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.light-mode .deck-view-v1 .deck-v1-seed-step p { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-seed-step strong { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-seed-pipeline-stage {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .deck-view-v1 .deck-v1-seed-pipeline-label { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-seed-pipeline-hint { color: rgba(0, 0, 0, 0.5); }
+.light-mode .deck-view-v1 .deck-v1-seed-back {
+  color: rgba(0, 0, 0, 0.6);
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+}
+.light-mode .deck-view-v1 .deck-v1-seed-back:hover { color: #1a1a1a; }
+
+/* ===========================================================
+   V.1 Technology slide — two-column layout, text left, phone right
+   =========================================================== */
+.deck-view-v1 .deck-v9-tech {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: clamp(48px, 6vw, 96px);
+  min-height: 0;
+  height: 100vh;
+  padding: clamp(48px, 6vh, 80px) clamp(88px, 10vw, 160px);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.deck-view-v1 .deck-v9-tech-left {
+  flex: 1 1 46%;
+  min-width: 0;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v9-tech-right {
+  flex: 1 1 54%;
+  min-width: 0;
+  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v9-tech-stage {
+  width: min(400px, 100%);
+  max-width: 100%;
+}
+
+.deck-view-v1 .deck-v9-tech-left h2 {
+  font-size: clamp(32px, 3.8vw, 52px);
+  margin: 10px 0 16px;
+}
+
+.deck-view-v1 .deck-v9-tech-lede { margin-bottom: 20px; }
+.deck-view-v1 .deck-v9-tech-points { margin-bottom: 18px; gap: 12px; }
+
+@media (max-height: 820px) {
+  .deck-view-v1 .deck-v9-tech-stage { width: min(340px, 100%); }
+  .deck-view-v1 .deck-v9-tech { padding-top: 40px; padding-bottom: 40px; }
+  .deck-view-v1 .deck-v9-tech-left h2 { font-size: clamp(28px, 3.4vw, 44px); }
+}
+
+/* V.1 Tech stage — 1 seed at top spawning 5 neighbors via animated rays */
+.deck-view-v1 .deck-v1-tech-stage {
+  position: relative;
+  width: min(600px, 100%);
+  aspect-ratio: 6 / 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.deck-view-v1 .deck-v1-tech-seed {
+  width: clamp(120px, 14vw, 170px);
+  aspect-ratio: 9 / 14;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid rgba(245, 197, 66, 0.9);
+  box-shadow: 0 0 30px rgba(245, 197, 66, 0.35);
+  position: relative;
+  z-index: 3;
+}
+.deck-view-v1 .deck-v1-tech-seed video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.deck-view-v1 .deck-v1-tech-rays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.deck-view-v1 .deck-v1-tech-ray {
+  stroke: #f5c542;
+  stroke-width: 1.2;
+  stroke-dasharray: 6 5;
+  opacity: 0.7;
+}
+
+.deck-view-v1 .deck-v1-tech-neighbors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: clamp(6px, 0.6vw, 10px);
+  width: 100%;
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.deck-view-v1 .deck-v1-tech-neighbor {
+  aspect-ratio: 9 / 14;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(245, 197, 66, 0.35);
+  position: relative;
+}
+.deck-view-v1 .deck-v1-tech-neighbor video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.deck-view-v1 .deck-v1-tech-neighbor-tag {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  color: #0a0f0c;
+  background: rgba(245, 197, 66, 0.92);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+
+/* ===========================================================
+   V.1 Payouts slide — four revenue streams for creators
+   =========================================================== */
+.deck-view-v1 .deck-v1-payouts {
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v1-payouts-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.deck-view-v1 .deck-v1-payouts h2 {
+  font-size: clamp(28px, 3.4vw, 48px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 4px 0 10px;
+  color: #fff;
+  max-width: 22ch;
+}
+
+/* Payouts: two-column body — avatar left, vertical card stack right */
+.deck-view-v1 .deck-v1-payouts-header {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Radial payouts layout — creator dead center, 4 glass cards in corners */
+.deck-view-v1 .deck-v1-payouts-radial {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: clamp(16px, 2.5vh, 36px) clamp(140px, 14vw, 280px);
+  margin-top: clamp(8px, 1.5vh, 20px);
+  min-height: min(320px, 40vh);
+}
+
+.deck-view-v1 .deck-v1-payouts-card-tl { grid-column: 1; grid-row: 1; justify-self: start; align-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-tr { grid-column: 2; grid-row: 1; justify-self: end; align-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-bl { grid-column: 1; grid-row: 2; justify-self: start; align-self: start; }
+.deck-view-v1 .deck-v1-payouts-card-br { grid-column: 2; grid-row: 2; justify-self: end; align-self: start; }
+
+.deck-view-v1 .deck-v1-payouts-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(44px, 4vw, 60px);
+  height: clamp(44px, 4vw, 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+.deck-view-v1 .deck-v1-payouts-creator {
+  width: 100%;
+  height: 100%;
+}
+
+/* Flowing green lines from each card toward the creator */
+.deck-view-v1 .deck-v1-payouts-flows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.deck-view-v1 .deck-v1-pay-line {
+  opacity: 0.45;
+  animation: deck-v1-pay-flow-dash 4s linear infinite;
+}
+@keyframes deck-v1-pay-flow-dash {
+  to { stroke-dashoffset: -24; }
+}
+
+/* Glass payout cards — same language as Ask slide glass container */
+.deck-view-v1 .deck-v1-payouts-card {
+  position: relative;
+  max-width: clamp(280px, 28vw, 380px);
+  padding: clamp(12px, 1.5vh, 18px) clamp(16px, 1.6vw, 22px);
+  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    rgba(74, 222, 128, 0.09) 0%,
+    rgba(74, 222, 128, 0.02) 100%
+  );
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
+  opacity: 0;
+  filter: blur(14px);
+  transform: translateY(12px);
+  transition: none;
+}
+.deck-view-v1 .deck-v1-payouts-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 22px;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(74, 222, 128, 0.35) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.deck-view-v1 .deck-slide.visible .deck-v1-payouts-card {
+  animation: deck-v1-pay-card-in 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.deck-view-v1 .deck-slide.visible .deck-v1-payouts-card:nth-child(1) { animation-delay: 0.2s; }
+.deck-view-v1 .deck-slide.visible .deck-v1-payouts-card:nth-child(2) { animation-delay: 0.4s; }
+.deck-view-v1 .deck-slide.visible .deck-v1-payouts-card:nth-child(3) { animation-delay: 0.6s; }
+.deck-view-v1 .deck-slide.visible .deck-v1-payouts-card:nth-child(4) { animation-delay: 0.8s; }
+
+@keyframes deck-v1-pay-card-in {
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.deck-view-v1 .deck-v1-payouts-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deck-view-v1 .deck-v1-payouts-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(74, 222, 128, 0.85);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.deck-view-v1 .deck-v1-payouts-card h3 {
+  font-size: clamp(14px, 1.1vw, 17px);
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.deck-view-v1 .deck-v1-payouts-card p {
+  font-size: clamp(11px, 0.9vw, 12.5px);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0;
+}
+
+.deck-view-v1 .deck-v1-payouts-chip {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(74, 222, 128, 0.95);
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.32);
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.deck-view-v1 .deck-v1-payouts-note {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.42);
+  margin: 10px 0 0;
+  letter-spacing: 0.01em;
+}
+
+.deck-view-v1 .deck-v1-payouts-subtitle {
+  font-size: clamp(16px, 1.4vw, 20px);
+  color: rgba(255, 255, 255, 0.55);
+  margin: 10px 0 0;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-subtitle { color: rgba(0, 0, 0, 0.5); }
+
+.light-mode .deck-view-v1 .deck-v1-payouts h2 { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-card {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-card h3 { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-card p { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-payouts-note { color: rgba(0, 0, 0, 0.5); }
+
+/* Avatar money flow animation */
+.deck-v1-pay-dollar {
+  animation: deck-v1-pay-float 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+.deck-v1-pay-dollar-1 { animation-delay: 0s; }
+.deck-v1-pay-dollar-2 { animation-delay: 0.3s; }
+.deck-v1-pay-dollar-3 { animation-delay: 0.6s; }
+.deck-v1-pay-dollar-4 { animation-delay: 0.9s; }
+.deck-v1-pay-dollar-5 { animation-delay: 1.2s; }
+.deck-v1-pay-dollar-6 { animation-delay: 1.5s; }
+
+@keyframes deck-v1-pay-float {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.deck-v1-pay-flow {
+  animation: deck-v1-pay-dash 3s linear infinite;
+}
+@keyframes deck-v1-pay-dash {
+  to { stroke-dashoffset: -16; }
+}
+
+@media (max-width: 1100px) {
+  .deck-view-v1 .deck-v1-payouts-body {
+    grid-template-columns: 1fr;
+  }
+  .deck-view-v1 .deck-v1-payouts-avatar { width: min(240px, 100%); }
+}
+
+/* ===========================================================
+   V.1 Roadmap slide — parallel tracks + draggable/resizable bars
+   =========================================================== */
+.deck-view-v1 .deck-v1-roadmap-bar-draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.deck-view-v1 .deck-v1-roadmap-bar-draggable:active {
+  cursor: grabbing;
+}
+
+.deck-view-v1 .deck-v1-roadmap-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.15s ease;
+  border-radius: 4px;
+}
+
+.deck-view-v1 .deck-v1-roadmap-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 60%;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.deck-view-v1 .deck-v1-roadmap-handle:hover::after,
+.deck-view-v1 .deck-v1-roadmap-bar-draggable:hover .deck-v1-roadmap-handle::after {
+  opacity: 0.75;
+}
+
+.deck-view-v1 .deck-v1-roadmap-handle-left { left: 0; }
+.deck-view-v1 .deck-v1-roadmap-handle-right { right: 0; }
+
+.deck-view-v1 .deck-v1-roadmap-bar-parallel {
+  border: 1.5px dashed currentColor;
+  background: transparent !important;
+}
+
+.deck-view-v1 .deck-v1-roadmap-row-parallel .deck-v8-roadmap-rowlabel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.deck-view-v1 .deck-v1-roadmap-parallel-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(245, 197, 66, 0.9);
+  background: rgba(245, 197, 66, 0.1);
+  border: 1px solid rgba(245, 197, 66, 0.28);
+  padding: 2px 8px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.deck-view-v1 .deck-v1-roadmap-row-parallel {
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  margin-bottom: 6px;
+}
+
+.light-mode .deck-view-v1 .deck-v1-roadmap-parallel-tag {
+  color: #b45309;
+  background: rgba(245, 197, 66, 0.15);
+  border-color: rgba(245, 197, 66, 0.4);
+}
+.light-mode .deck-view-v1 .deck-v1-roadmap-row-parallel {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V.1 Traction — compact for laptop screens */
+.deck-view-v1 .deck-v8-traction {
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px) !important;
+  gap: clamp(12px, 1.5vh, 20px);
+}
+.deck-view-v1 .deck-v8-traction > h2 {
+  font-size: clamp(24px, 3vw, 42px);
+  margin-bottom: clamp(8px, 1vh, 16px);
+}
+.deck-view-v1 .deck-v8-marquee-phone.deck-app-frame {
+  width: clamp(110px, 11vw, 150px);
+  height: clamp(220px, 22vw, 300px);
+  border-radius: 22px;
+}
+.deck-view-v1 .deck-v8-traction-stats {
+  gap: clamp(24px, 4vw, 56px);
+  margin-top: clamp(6px, 1vh, 12px);
+}
+.deck-view-v1 .deck-v8-traction-num {
+  font-size: clamp(20px, 2.1vw, 30px);
+}
+.deck-view-v1 .deck-v8-traction-label {
+  font-size: 10px;
+}
+.deck-view-v1 .deck-v8-traction-note {
+  margin-top: clamp(8px, 1vh, 14px);
+  font-size: 10.5px;
+}
+
+/* V.1 Roadmap — compact for laptop screens */
+.deck-view-v1 .deck-v8-roadmap {
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px);
+}
+.deck-view-v1 .deck-v8-roadmap > h2 {
+  margin-bottom: clamp(12px, 2vh, 28px);
+  font-size: clamp(24px, 3vw, 42px);
+}
+.deck-view-v1 .deck-v8-roadmap-card {
+  padding: clamp(16px, 2vh, 32px) clamp(20px, 2.5vw, 36px) clamp(14px, 1.8vh, 28px);
+}
+.deck-view-v1 .deck-v8-roadmap-card-header {
+  margin-bottom: clamp(8px, 1.2vh, 22px);
+  font-size: 10px;
+}
+.deck-view-v1 .deck-v8-roadmap-rows {
+  gap: clamp(4px, 0.8vh, 14px);
+}
+.deck-view-v1 .deck-v8-roadmap-row {
+  gap: clamp(12px, 2vw, 24px);
+  grid-template-columns: clamp(160px, 18vw, 240px) 1fr;
+}
+.deck-view-v1 .deck-v8-roadmap-rowlabel-title {
+  font-size: clamp(11px, 1.2vw, 13.5px);
+}
+.deck-view-v1 .deck-v8-roadmap-rowlabel-sub {
+  font-size: clamp(9px, 0.9vw, 11px);
+}
+.deck-view-v1 .deck-v8-roadmap-bar-label {
+  font-size: clamp(10px, 1vw, 12px);
+}
+.deck-view-v1 .deck-v8-roadmap-bar {
+  height: clamp(28px, 3.5vh, 38px);
+  border-radius: 999px;
+}
+
+/* V1 Math slide — tighter for laptop screens */
+.deck-view-v1 .deck-v8-math {
+  padding: clamp(24px, 4vh, 56px) clamp(24px, 4vw, 64px);
+}
+.deck-view-v1 .deck-v8-math h2 {
+  font-size: clamp(22px, 2.6vw, 38px);
+  margin-bottom: clamp(4px, 1vh, 12px);
+}
+.deck-view-v1 .deck-scenario {
+  margin-top: 2px;
+  margin-bottom: clamp(12px, 2.5vh, 28px);
+  padding: clamp(8px, 1.2vh, 12px) clamp(14px, 1.6vw, 20px);
+  gap: clamp(8px, 1vw, 14px);
+}
+.deck-view-v1 .deck-scenario p {
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v1 .deck-scenario-tag {
+  font-size: 9px;
+  padding: 3px 8px;
+}
+.deck-view-v1 .math-tbl {
+  margin-top: clamp(8px, 1.5vh, 24px);
+}
+.deck-view-v1 .math-tbl th,
+.deck-view-v1 .math-tbl td {
+  padding: clamp(8px, 1.2vh, 14px) clamp(12px, 1.4vw, 20px);
+}
+.deck-view-v1 .math-tbl-label {
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v1 .deck-v9-math-col-title {
+  font-size: clamp(10px, 0.9vw, 12px);
+}
+.deck-view-v1 .deck-v9-math-col-sub {
+  font-size: clamp(9px, 0.8vw, 10.5px);
+  margin-top: 3px;
+}
+.deck-view-v1 .deck-v1-math-budget {
+  font-size: clamp(8px, 0.7vw, 9.5px);
+  padding: 3px 7px;
+  margin-bottom: 6px;
+}
+.deck-view-v1 .math-val-old,
+.deck-view-v1 .math-val-new,
+.deck-view-v1 .math-val-dim {
+  font-size: clamp(12px, 1.1vw, 14px);
+}
+.deck-view-v1 .math-pct {
+  font-size: clamp(10px, 0.85vw, 12px);
+}
+.deck-view-v1 .math-icon {
+  width: clamp(14px, 1.4vw, 18px);
+  height: clamp(14px, 1.4vw, 18px);
+}
+
+/* V1 Payouts split layout — list on left, creator icon on right */
+.deck-view-v1 .deck-v1-payouts-split {
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(32px, 5vw, 80px);
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 6vw, 96px);
+}
+.deck-view-v1 .deck-v1-payouts-split-left {
+  flex: 1 1 60%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+}
+.deck-view-v1 .deck-v1-payouts-split-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.deck-view-v1 .deck-v1-payouts-split .deck-v1-payouts-center {
+  position: static;
+  transform: none;
+  width: clamp(120px, 14vw, 200px);
+  height: clamp(120px, 14vw, 200px);
+}
+.deck-view-v1 .deck-v1-payouts-split .deck-v1-payouts-creator {
+  width: 100%;
+  height: 100%;
+}
+.deck-view-v1 .deck-v1-payouts-list {
+  list-style: none;
+  padding: 0;
+  margin: clamp(12px, 2vh, 20px) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.4vh, 18px);
+}
+.deck-view-v1 .deck-v1-payouts-list-item {
+  display: grid;
+  grid-template-columns: clamp(32px, 3vw, 44px) 1fr;
+  gap: clamp(12px, 1.4vw, 20px);
+  align-items: start;
+  padding: clamp(10px, 1.3vh, 16px) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.deck-view-v1 .deck-v1-payouts-list-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.deck-view-v1 .deck-v1-payouts-list-item .deck-v1-payouts-num {
+  font-size: clamp(14px, 1.2vw, 16px);
+  font-weight: 600;
+  color: #4ade80;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+.deck-view-v1 .deck-v1-payouts-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.deck-view-v1 .deck-v1-payouts-list-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 14px);
+  flex-wrap: wrap;
+}
+.deck-view-v1 .deck-v1-payouts-list-item h3 {
+  font-size: clamp(15px, 1.3vw, 19px);
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.deck-view-v1 .deck-v1-payouts-list-item p {
+  font-size: clamp(11px, 0.95vw, 13.5px);
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  line-height: 1.5;
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item h3 { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item p { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item .deck-v1-payouts-num { color: #16a34a; }
+
+@media (max-width: 900px) {
+  .deck-view-v1 .deck-v1-payouts-split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .deck-view-v1 .deck-v1-payouts-split-right {
+    order: -1;
   }
 }
 
