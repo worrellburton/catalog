@@ -4557,9 +4557,48 @@
 }
 
 /* ===========================================================
-   V.1 Flywheel slide — "Seed the product" preview + Next button
+   V.1 Dream slide subtitle
    =========================================================== */
-.deck-view-v1 .deck-v1-flywheel-slide .flywheel-right {
+.deck-view-v1 .deck-v1-dream-sub {
+  font-size: clamp(18px, 2vw, 26px);
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 400;
+  margin: 12px 0 0;
+  letter-spacing: 0.01em;
+}
+.light-mode .deck-view-v1 .deck-v1-dream-sub { color: rgba(0, 0, 0, 0.5); }
+
+/* ===========================================================
+   V.1 Flywheel slide — smooth sliding track between Seed & Wheel
+   =========================================================== */
+.deck-view-v1 .deck-v1-flywheel-slide {
+  overflow: hidden;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+.deck-view-v1 .deck-v1-flywheel-track {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deck-view-v1 .flywheel-view-wheel .deck-v1-flywheel-track {
+  transform: translateX(-50%);
+}
+
+.deck-view-v1 .deck-v1-flywheel-panel {
+  width: 50%;
+  flex-shrink: 0;
+  display: flex;
+  gap: clamp(28px, 4vw, 64px);
+  padding: clamp(60px, 7vh, 100px) clamp(40px, 6vw, 96px);
+  box-sizing: border-box;
+  align-items: center;
+}
+
+.deck-view-v1 .deck-v1-flywheel-panel .flywheel-right {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4880,6 +4919,40 @@
 .light-mode .deck-view-v1 .deck-v1-payouts-card h3 { color: #1a1a1a; }
 .light-mode .deck-view-v1 .deck-v1-payouts-card p { color: rgba(0, 0, 0, 0.6); }
 .light-mode .deck-view-v1 .deck-v1-payouts-note { color: rgba(0, 0, 0, 0.5); }
+
+/* Payouts creator SVG visual */
+.deck-view-v1 .deck-v1-payouts-visual {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 12px;
+}
+
+.deck-view-v1 .deck-v1-payouts-creator-svg {
+  width: min(400px, 100%);
+  height: auto;
+}
+
+.deck-v1-pay-dollar {
+  animation: deck-v1-pay-float 2.4s ease-in-out infinite;
+}
+.deck-v1-pay-dollar-1 { animation-delay: 0s; }
+.deck-v1-pay-dollar-2 { animation-delay: 0.4s; }
+.deck-v1-pay-dollar-3 { animation-delay: 0.8s; }
+.deck-v1-pay-dollar-4 { animation-delay: 0.2s; }
+.deck-v1-pay-dollar-5 { animation-delay: 0.6s; }
+.deck-v1-pay-dollar-6 { animation-delay: 1.0s; }
+
+@keyframes deck-v1-pay-float {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-6px); }
+}
+
+.deck-v1-pay-flow {
+  animation: deck-v1-pay-dash 3s linear infinite;
+}
+@keyframes deck-v1-pay-dash {
+  to { stroke-dashoffset: -16; }
+}
 
 @media (max-width: 1100px) {
   .deck-view-v1 .deck-v1-payouts-grid {

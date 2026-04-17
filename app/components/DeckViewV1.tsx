@@ -89,14 +89,14 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
    alongside the first three product phases. Sequential phases follow below.
    start/end are months (0..16). Bars render proportionally over a 16-month track. */
 const roadmapPhases: { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean }[] = [
-  { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 7,  color: '#f5c542', parallel: true },
-  { label: 'Seed Product with AI',     sub: 'AI-generated imagery and video linked to brand stores, fully automated.',      start: 0,  end: 3,  color: '#a78bfa' },
-  { label: 'Shopify Integration',      sub: 'Ship the Shopify App: self-serve onboarding, product sync, attribution.',      start: 2,  end: 5,  color: '#fb923c' },
-  { label: 'Onboard First Creators',   sub: 'Invite-only cohort, beta storefronts, early feedback loops.',                  start: 4,  end: 7,  color: '#38bdf8' },
-  { label: 'Test',                     sub: 'Iterate discovery, payouts, and attribution against real sales.',              start: 6,  end: 8,  color: '#34d399' },
-  { label: 'Start GTM 1.0',            sub: 'First public motion \u2014 creators, shoppers, and brand acquisition.',       start: 8,  end: 11, color: '#f97316' },
-  { label: 'Learn GTM',                sub: 'Tighten CAC, ROAS, and retention signals before scaling.',                     start: 11, end: 14, color: '#fde047' },
-  { label: 'Start GTM 2.1',            sub: 'Scaled go-to-market with proven economics and category expansion.',            start: 14, end: 16, color: '#f43f5e' },
+  { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 3,  color: '#f5c542', parallel: true },
+  { label: 'Seed Product with AI',     sub: 'AI-generated imagery and video linked to brand stores, fully automated.',      start: 0,  end: 2,  color: '#a78bfa' },
+  { label: 'Shopify Integration',      sub: 'Ship the Shopify App: self-serve onboarding, product sync, attribution.',      start: 1,  end: 2,  color: '#fb923c' },
+  { label: 'Onboard First Creators',   sub: 'Invite-only cohort, beta storefronts, early feedback loops.',                  start: 2,  end: 5,  color: '#38bdf8' },
+  { label: 'Test',                     sub: 'Iterate discovery, payouts, and attribution against real sales.',              start: 5,  end: 7,  color: '#34d399' },
+  { label: 'Start GTM 1.0',            sub: 'First public motion \u2014 creators, shoppers, and brand acquisition.',       start: 7,  end: 10, color: '#f97316' },
+  { label: 'Learn GTM',                sub: 'Tighten CAC, ROAS, and retention signals before scaling.',                     start: 10, end: 13, color: '#fde047' },
+  { label: 'Start GTM 2.1',            sub: 'Scaled go-to-market with proven economics and category expansion.',            start: 13, end: 16, color: '#f43f5e' },
 ];
 
 const DeckViewV1: React.FC<DeckViewV1Props> = ({
@@ -125,8 +125,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
     'Technology',
     'Payouts',
     'Traction',
-    'The Ask',
     'Roadmap',
+    'The Ask',
     'Closing',
   ];
 
@@ -245,7 +245,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">Human taste.<br />Superpowered by AI.</h2>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.</h2>
+          <p className="deck-v1-dream-sub deck-v8-reveal deck-v8-reveal-3">Human taste. Superpowered by AI.</p>
         </div>
       </div>
 
@@ -493,13 +494,14 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Flywheel — opens on Seed view, toggles to Creator Flywheel */}
+      {/* Slide 9: Flywheel — smooth sliding between Seed and Creator Flywheel */}
       <div
         className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
         data-active-step={activeFlywheelStep ?? undefined}
       >
-        {flywheelView === 'seed' ? (
-          <>
+        <div className="deck-v1-flywheel-track">
+          {/* Panel 1: Seed the product */}
+          <div className="deck-v1-flywheel-panel">
             <div className="flywheel-left">
               <span className="deck-label">Step Zero</span>
               <h2>Seed the product.</h2>
@@ -574,9 +576,10 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 </div>
               </div>
             </div>
-          </>
-        ) : (
-          <>
+          </div>
+
+          {/* Panel 2: Creator Flywheel */}
+          <div className="deck-v1-flywheel-panel">
             <div className="flywheel-left">
               <span className="deck-label">Creator Flywheel</span>
               <h2>Build supply first.<br />Demand follows trust.</h2>
@@ -620,8 +623,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 ))}
               </div>
             </div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}
@@ -724,11 +727,46 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         <div className="deck-v1-payouts-inner">
           <span className="deck-label">Payouts</span>
           <h2>Creators earn everywhere<br />their taste shows up.</h2>
+
+          <div className="deck-v1-payouts-visual" aria-hidden="true">
+            <svg className="deck-v1-payouts-creator-svg" viewBox="0 0 320 160">
+              <defs>
+                <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="2" result="blur" />
+                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
+              {/* Creator figure */}
+              <circle cx="160" cy="42" r="16" fill="none" stroke="#4ade80" strokeWidth="2" />
+              <path d="M160 58 L160 100" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" />
+              <path d="M140 74 L160 68 L180 74" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M148 130 L160 100 L172 130" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Money flowing in from left */}
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="40" y="55" fill="#4ade80" fontSize="16" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="70" y="80" fill="#4ade80" fontSize="13" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="50" y="105" fill="#4ade80" fontSize="15" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              {/* Money flowing in from right */}
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="270" y="50" fill="#4ade80" fontSize="14" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-5" x="250" y="85" fill="#4ade80" fontSize="16" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              <text className="deck-v1-pay-dollar deck-v1-pay-dollar-6" x="265" y="115" fill="#4ade80" fontSize="12" fontWeight="700" filter="url(#v1PayGlow)">$</text>
+              {/* Flow lines from sources to creator */}
+              <path className="deck-v1-pay-flow deck-v1-pay-flow-1" d="M55 50 Q110 55 140 65" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
+              <path className="deck-v1-pay-flow deck-v1-pay-flow-2" d="M80 78 Q120 76 140 72" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
+              <path className="deck-v1-pay-flow deck-v1-pay-flow-3" d="M265 48 Q210 52 180 65" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
+              <path className="deck-v1-pay-flow deck-v1-pay-flow-4" d="M260 82 Q210 78 180 72" fill="none" stroke="#4ade8055" strokeWidth="1.2" strokeDasharray="4 4" />
+              {/* Labels */}
+              <text x="20" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">ENGAGEMENT</text>
+              <text x="80" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">AFFILIATE</text>
+              <text x="210" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">SALES</text>
+              <text x="260" y="135" fill="rgba(255,255,255,0.35)" fontSize="9" fontWeight="500">REFERRAL</text>
+            </svg>
+          </div>
+
           <div className="deck-v1-payouts-grid">
             <div className="deck-v1-payouts-card">
               <span className="deck-v1-payouts-num">01</span>
               <h3>Engagement</h3>
-              <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Paid out daily.</p>
+              <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube&rsquo;s ad-revenue model &mdash; paid out daily.</p>
               <span className="deck-v1-payouts-chip">Daily payouts</span>
             </div>
             <div className="deck-v1-payouts-card">
@@ -750,7 +788,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               <span className="deck-v1-payouts-chip">Lifetime</span>
             </div>
           </div>
-          <p className="deck-v1-payouts-note">Four revenue streams. One creator. Paid daily.</p>
+          <p className="deck-v1-payouts-note">Post authentically, earn daily.</p>
         </div>
       </div>
 
@@ -802,7 +840,60 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
       </div>
 
-      {/* Slide 11: The Ask */}
+      {/* Slide 11: Roadmap timeline */}
+      <div className="deck-slide deck-v8-roadmap">
+        <span className="deck-label">Roadmap</span>
+        <h2>16 months to commerce gravity.</h2>
+
+        <div className="deck-v8-roadmap-card">
+          <div className="deck-v8-roadmap-card-header">Timeline overview</div>
+
+          <div className="deck-v8-roadmap-rows">
+            {roadmapPhases.map((phase, idx) => {
+              const leftPct = (phase.start / 16) * 100;
+              const widthPct = ((phase.end - phase.start) / 16) * 100;
+              const months = phase.end - phase.start;
+              return (
+                <div key={phase.label} className={`deck-v8-roadmap-row${phase.parallel ? ' deck-v1-roadmap-row-parallel' : ''}`} style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
+                  <div className="deck-v8-roadmap-rowlabel">
+                    <span className="deck-v8-roadmap-rowlabel-title">
+                      {phase.label}
+                      {phase.parallel && <span className="deck-v1-roadmap-parallel-tag">Parallel</span>}
+                    </span>
+                    <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
+                  </div>
+                  <div className="deck-v8-roadmap-track">
+                    <div
+                      className={`deck-v8-roadmap-bar${phase.parallel ? ' deck-v1-roadmap-bar-parallel' : ''}`}
+                      style={{
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        background: phase.parallel ? 'transparent' : phase.color,
+                        borderColor: phase.parallel ? phase.color : undefined,
+                        boxShadow: phase.parallel ? 'none' : `0 0 24px ${phase.color}33`,
+                      } as React.CSSProperties}
+                    >
+                      <span className="deck-v8-roadmap-bar-label" style={phase.parallel ? { color: phase.color } : undefined}>{months}mo</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="deck-v8-roadmap-axis">
+            <span>Month 0</span>
+            <span>Month 4</span>
+            <span>Month 8</span>
+            <span>Month 12</span>
+            <span>Month 16</span>
+          </div>
+        </div>
+
+        <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
+      </div>
+
+      {/* Slide 12: The Ask */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
         <h2>Fuel the flywheel.</h2>
@@ -871,59 +962,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Slide 12: Roadmap timeline */}
-      <div className="deck-slide deck-v8-roadmap">
-        <span className="deck-label">Roadmap</span>
-        <h2>16 months to commerce gravity.</h2>
-
-        <div className="deck-v8-roadmap-card">
-          <div className="deck-v8-roadmap-card-header">Timeline overview</div>
-
-          <div className="deck-v8-roadmap-rows">
-            {roadmapPhases.map((phase, idx) => {
-              const leftPct = (phase.start / 16) * 100;
-              const widthPct = ((phase.end - phase.start) / 16) * 100;
-              const months = phase.end - phase.start;
-              return (
-                <div key={phase.label} className={`deck-v8-roadmap-row${phase.parallel ? ' deck-v1-roadmap-row-parallel' : ''}`} style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
-                  <div className="deck-v8-roadmap-rowlabel">
-                    <span className="deck-v8-roadmap-rowlabel-title">
-                      {phase.label}
-                      {phase.parallel && <span className="deck-v1-roadmap-parallel-tag">Parallel</span>}
-                    </span>
-                    <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
-                  </div>
-                  <div className="deck-v8-roadmap-track">
-                    <div
-                      className={`deck-v8-roadmap-bar${phase.parallel ? ' deck-v1-roadmap-bar-parallel' : ''}`}
-                      style={{
-                        left: `${leftPct}%`,
-                        width: `${widthPct}%`,
-                        background: phase.parallel ? 'transparent' : phase.color,
-                        borderColor: phase.parallel ? phase.color : undefined,
-                        boxShadow: phase.parallel ? 'none' : `0 0 24px ${phase.color}33`,
-                      } as React.CSSProperties}
-                    >
-                      <span className="deck-v8-roadmap-bar-label" style={phase.parallel ? { color: phase.color } : undefined}>{months}mo</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="deck-v8-roadmap-axis">
-            <span>Month 0</span>
-            <span>Month 4</span>
-            <span>Month 8</span>
-            <span>Month 12</span>
-            <span>Month 16</span>
-          </div>
-        </div>
-
-        <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
       </div>
 
       {/* Slide 13: Final */}
