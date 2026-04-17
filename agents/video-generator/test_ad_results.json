@@ -1,0 +1,38 @@
+[
+  {
+    "test": "prompt_building",
+    "success": true
+  },
+  {
+    "test": "image_selection",
+    "success": true
+  },
+  {
+    "test": "multi_image_cycling",
+    "success": true,
+    "product": {
+      "id": "974d40e1-2603-4ebb-be56-9d4a381af82f",
+      "name": "LUXXFORM BOXER BRIEF THREE-PACK",
+      "image_count": 10
+    }
+  },
+  {
+    "test": "live_generation",
+    "success": true,
+    "ad_id": "46e162e2-a64b-4b15-98dd-e17a5136b4bf",
+    "product": {
+      "id": "974d40e1-2603-4ebb-be56-9d4a381af82f",
+      "name": "LUXXFORM BOXER BRIEF THREE-PACK",
+      "image_count": 10
+    },
+    "result": {
+      "success": true,
+      "ad_id": "46e162e2-a64b-4b15-98dd-e17a5136b4bf",
+      "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/974d40e1-2603-4ebb-be56-9d4a381af82f/studio_clean_single_image_1776338343.mp4",
+      "method": "single_image",
+      "images_sent": 3,
+      "total_images": 10
+    },
+    "elapsed_seconds": 128.8
+  }
+]
