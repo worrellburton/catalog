@@ -572,6 +572,44 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* V.1 math table — budget category pill highlights the accounting line item */
+.deck-view-v1 .deck-v1-math-budget {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+  line-height: 1.2;
+  border: 1px solid transparent;
+}
+
+.deck-view-v1 .deck-v1-math-budget-old {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+.deck-view-v1 .deck-v1-math-budget-new {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.light-mode .deck-view-v1 .deck-v1-math-budget-old {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.light-mode .deck-view-v1 .deck-v1-math-budget-new {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
 .math-tbl tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }

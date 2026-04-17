@@ -282,7 +282,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
       <div className="deck-slide deck-v8-problem deck-v8-wins deck-v9-problem-slide">
         <div className="deck-v8-split-left">
           <span className="deck-label">The Solution</span>
-          <h2>Human taste,<br />amplified by AI.<br />Everyone wins.</h2>
+          <h2>Creators curate.<br />AI connects.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v8-split-right">
           {[
@@ -442,10 +442,12 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             <tr>
               <th className="math-tbl-label"></th>
               <th className="math-tbl-old">
+                <span className="deck-v1-math-budget deck-v1-math-budget-old">Sales expense &middot; Cost of sale</span>
                 <span className="deck-v9-math-col-title">Traditional Affiliate</span>
                 <span className="deck-v9-math-col-sub">Sales commission, paid only on attribution</span>
               </th>
               <th className="math-tbl-new">
+                <span className="deck-v1-math-budget deck-v1-math-budget-new">Advertising &middot; Marketing budget</span>
                 <span className="deck-v9-math-col-title">Catalog (Fixed ROAS)</span>
                 <span className="deck-v9-math-col-sub">Ad spend, locks in a guaranteed sale</span>
               </th>
