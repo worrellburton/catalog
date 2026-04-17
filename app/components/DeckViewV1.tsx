@@ -565,7 +565,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 <div className="deck-v1-seed-pipeline-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
                 </div>
-                <span className="deck-v1-seed-pipeline-label">Catalog Ingest</span>
+                <span className="deck-v1-seed-pipeline-label">AI Agents for Catalog Ingest</span>
                 <span className="deck-v1-seed-pipeline-hint">Proprietary product pipeline</span>
               </div>
               <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
