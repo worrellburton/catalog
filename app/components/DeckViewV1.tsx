@@ -112,8 +112,15 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [flywheelView, setFlywheelView] = useState<'seed' | 'wheel'>('seed');
   const [bgRevealed, setBgRevealed] = useState(false);
-  const [techActiveSeed, setTechActiveSeed] = useState<number | null>(null);
+  const [techActiveSeed, setTechActiveSeed] = useState<number | null>(0);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTechActiveSeed((prev) => ((prev ?? 0) + 1) % techVideos.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
   const roadmapTrackRef = useRef<HTMLDivElement>(null);
@@ -537,45 +544,40 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Flywheel — smooth sliding between Seed and Creator Flywheel */}
+      {/* Slide 9: Flywheel — Seed ↔ Creator Flywheel with arrow nav */}
       <div
-        className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
+        className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
         data-active-step={activeFlywheelStep ?? undefined}
       >
-        <div className="deck-v1-flywheel-track">
-          {/* Panel 1: Seed the product */}
-          <div className="deck-v1-flywheel-panel">
-            <div className="flywheel-left">
+        {flywheelView === 'seed' ? (
+          <>
+            <div className="flywheel-left deck-v1-fw-animate">
               <span className="deck-label">Step Zero</span>
-              <h2>Seed the product.</h2>
+              <h2>Build product.</h2>
               <div className="deck-v1-seed-steps">
                 <div className="deck-v1-seed-step">
                   <span className="deck-v1-seed-step-num">01</span>
-                  <p><strong>Pull brand catalogs.</strong> Ingest product data and imagery direct from brand stores.</p>
+                  <p><strong>Build AI Agent scrapers.</strong> Autonomous agents crawl brand stores and pull product data, imagery, and pricing in real time.</p>
                 </div>
                 <div className="deck-v1-seed-step">
                   <span className="deck-v1-seed-step-num">02</span>
-                  <p><strong>Generate AI imagery.</strong> Static product shots become editorial, lifestyle visuals.</p>
+                  <p><strong>Auto brand products to AI creative.</strong> Static product shots are automatically transformed into editorial imagery and short-form video.</p>
                 </div>
                 <div className="deck-v1-seed-step">
                   <span className="deck-v1-seed-step-num">03</span>
-                  <p><strong>Render AI video.</strong> Stills turn into short-form motion, ready for the feed.</p>
-                </div>
-                <div className="deck-v1-seed-step">
-                  <span className="deck-v1-seed-step-num">04</span>
-                  <p><strong>Index for discovery.</strong> Every look vectorised before a single creator arrives.</p>
+                  <p><strong>Index elegantly.</strong> Every look is vectorised and indexed &mdash; ready for the feed before a single creator arrives.</p>
                 </div>
               </div>
               <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
             </div>
-            <div className="flywheel-right">
+            <div className="flywheel-right deck-v1-fw-animate" style={{ animationDelay: '0.15s' }}>
               <div className="deck-v1-seed-pipeline">
                 <div className="deck-v1-seed-pipeline-stage">
                   <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7h18l-1.5 4.5a3 3 0 0 1-5.7 0 3 3 0 0 1-1.8.5 3 3 0 0 1-1.8-.5 3 3 0 0 1-5.7 0L3 7z" /><path d="M5 11v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
                   </div>
-                  <span className="deck-v1-seed-pipeline-label">Brand catalogs</span>
-                  <span className="deck-v1-seed-pipeline-hint">Shopify + partners</span>
+                  <span className="deck-v1-seed-pipeline-label">AI Agent scrapers</span>
+                  <span className="deck-v1-seed-pipeline-hint">Autonomous data collection</span>
                 </div>
                 <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
                   <span className="deck-v1-seed-pipeline-dot" />
@@ -584,42 +586,35 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 </div>
                 <div className="deck-v1-seed-pipeline-stage">
                   <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
                   </div>
-                  <span className="deck-v1-seed-pipeline-label">AI imagery</span>
-                  <span className="deck-v1-seed-pipeline-hint">Editorial + lifestyle</span>
+                  <span className="deck-v1-seed-pipeline-label">AI creative</span>
+                  <span className="deck-v1-seed-pipeline-hint">Auto-generate from brand products</span>
                 </div>
                 <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.3s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.1s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.9s' }} />
-                </div>
-                <div className="deck-v1-seed-pipeline-stage">
-                  <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z" /><rect x="2" y="6" width="14" height="12" rx="2" /></svg>
-                  </div>
-                  <span className="deck-v1-seed-pipeline-label">AI video</span>
-                  <span className="deck-v1-seed-pipeline-hint">Short-form motion</span>
-                </div>
-                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.6s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.4s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.2s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.2s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.0s' }} />
                 </div>
                 <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
                   <div className="deck-v1-seed-pipeline-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
                   </div>
-                  <span className="deck-v1-seed-pipeline-label">Indexed</span>
+                  <span className="deck-v1-seed-pipeline-label">Indexed elegantly</span>
                   <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Panel 2: Creator Flywheel */}
-          <div className="deck-v1-flywheel-panel">
-            <div className="flywheel-left">
+            <button className="deck-v1-flywheel-nav" type="button" onClick={() => setFlywheelView('wheel')} aria-label="See the creator flywheel">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="deck-v1-flywheel-nav" type="button" onClick={() => setFlywheelView('seed')} aria-label="Back to product seeding">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <div className="flywheel-left deck-v1-fw-animate">
               <span className="deck-label">Creator Flywheel</span>
               <h2>Build supply first.<br />Demand follows trust.</h2>
               <div className="flywheel-labels">
@@ -639,7 +634,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               </div>
               <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
             </div>
-            <div className="flywheel-right">
+            <div className="flywheel-right deck-v1-fw-animate" style={{ animationDelay: '0.15s' }}>
               <div className="flywheel-center">
                 <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
                   <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
@@ -658,27 +653,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-        {flywheelView === 'seed' && (
-          <button
-            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-right"
-            type="button"
-            onClick={() => setFlywheelView('wheel')}
-            aria-label="See the creator flywheel"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-          </button>
-        )}
-        {flywheelView === 'wheel' && (
-          <button
-            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-left"
-            type="button"
-            onClick={() => setFlywheelView('seed')}
-            aria-label="Back to product seeding"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-          </button>
+          </>
         )}
       </div>
 
@@ -713,7 +688,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               </div>
             </li>
           </ul>
-          <p className="deck-v9-tech-hint">{techActiveSeed === null ? 'Tap any look to see five visual neighbors.' : 'Tap another look to re-query the index.'}</p>
+          <p className="deck-v9-tech-hint">Every look finds its five nearest visual neighbors automatically.</p>
         </div>
         <div className="deck-v9-tech-right">
           <div className="deck-v9-tech-stage">
@@ -782,54 +757,10 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         <div className="deck-v1-payouts-inner">
           <div className="deck-v1-payouts-header">
             <span className="deck-label">Payouts</span>
-            <h2>Creators earn everywhere<br />their taste shows up.</h2>
+            <h2>Post once.<br />Earn four ways.</h2>
           </div>
 
           <div className="deck-v1-payouts-body">
-            <div className="deck-v1-payouts-visual" aria-hidden="true">
-              <svg className="deck-v1-payouts-avatar" viewBox="0 0 240 240">
-                <defs>
-                  <radialGradient id="v1AvatarBg" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(74,222,128,0.28)" />
-                    <stop offset="70%" stopColor="rgba(74,222,128,0.06)" />
-                    <stop offset="100%" stopColor="rgba(74,222,128,0)" />
-                  </radialGradient>
-                  <linearGradient id="v1AvatarFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4ade80" />
-                    <stop offset="100%" stopColor="#22c55e" />
-                  </linearGradient>
-                  <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="2.2" result="blur" />
-                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                  </filter>
-                </defs>
-                {/* Soft green glow behind avatar */}
-                <circle cx="120" cy="120" r="110" fill="url(#v1AvatarBg)" />
-                {/* Avatar ring */}
-                <circle cx="120" cy="120" r="72" fill="rgba(10,15,12,0.85)" stroke="#4ade80" strokeWidth="2" />
-                {/* Profile picture silhouette (head + shoulders) — clipped to ring */}
-                <clipPath id="v1AvatarClip">
-                  <circle cx="120" cy="120" r="70" />
-                </clipPath>
-                <g clipPath="url(#v1AvatarClip)">
-                  <circle cx="120" cy="104" r="24" fill="url(#v1AvatarFill)" />
-                  <path d="M68 200 C68 162 90 148 120 148 C150 148 172 162 172 200 L172 220 L68 220 Z" fill="url(#v1AvatarFill)" />
-                </g>
-                {/* Animated dollars flowing toward avatar from four directions */}
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="18" y="60" fill="#4ade80" fontSize="18" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="206" y="64" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="24" y="196" fill="#4ade80" fontSize="15" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="208" y="192" fill="#4ade80" fontSize="17" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-5" x="116" y="24" fill="#4ade80" fontSize="14" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-6" x="114" y="232" fill="#4ade80" fontSize="14" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                {/* Dashed flow lines from dollars to avatar */}
-                <path className="deck-v1-pay-flow" d="M30 58 Q75 80 60 120" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                <path className="deck-v1-pay-flow" d="M210 62 Q175 82 180 120" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                <path className="deck-v1-pay-flow" d="M34 198 Q70 170 60 130" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                <path className="deck-v1-pay-flow" d="M210 194 Q180 170 180 130" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-              </svg>
-            </div>
-
             <div className="deck-v1-payouts-list">
               <div className="deck-v1-payouts-card">
                 <div className="deck-v1-payouts-card-head">
@@ -863,6 +794,49 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 </div>
                 <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
               </div>
+            </div>
+
+            <div className="deck-v1-payouts-visual" aria-hidden="true">
+              <svg className="deck-v1-payouts-avatar" viewBox="0 0 260 260">
+                <defs>
+                  <radialGradient id="v1AvatarBg" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="rgba(74,222,128,0.2)" />
+                    <stop offset="100%" stopColor="rgba(74,222,128,0)" />
+                  </radialGradient>
+                  <linearGradient id="v1AvatarFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ade80" />
+                    <stop offset="100%" stopColor="#22c55e" />
+                  </linearGradient>
+                  <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+                <circle cx="130" cy="130" r="120" fill="url(#v1AvatarBg)" />
+                {/* Small avatar ring */}
+                <circle cx="130" cy="130" r="36" fill="rgba(10,15,12,0.85)" stroke="#4ade80" strokeWidth="1.5" />
+                <clipPath id="v1AvatarClip"><circle cx="130" cy="130" r="34" /></clipPath>
+                <g clipPath="url(#v1AvatarClip)">
+                  <circle cx="130" cy="124" r="11" fill="url(#v1AvatarFill)" />
+                  <path d="M108 170 C108 152 118 146 130 146 C142 146 152 152 152 170 L152 180 L108 180 Z" fill="url(#v1AvatarFill)" />
+                </g>
+                {/* $ with labels — top-left: Engagement */}
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="30" y="58" fill="#4ade80" fontSize="18" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text x="46" y="58" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Engagement</text>
+                <path className="deck-v1-pay-flow" d="M42 64 Q80 86 96 118" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                {/* $ with labels — top-right: Affiliate */}
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="200" y="58" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text x="152" y="48" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Affiliate</text>
+                <path className="deck-v1-pay-flow" d="M208 64 Q180 86 164 118" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                {/* $ with labels — bottom-left: Sales */}
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="30" y="218" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text x="46" y="218" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Sales</text>
+                <path className="deck-v1-pay-flow" d="M42 210 Q80 186 96 154" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                {/* $ with labels — bottom-right: Referrals */}
+                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="200" y="218" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
+                <text x="152" y="228" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Referrals</text>
+                <path className="deck-v1-pay-flow" d="M208 210 Q180 186 164 154" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+              </svg>
             </div>
           </div>
 

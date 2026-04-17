@@ -4571,82 +4571,44 @@
 /* ===========================================================
    V.1 Flywheel slide — smooth sliding track between Seed & Wheel
    =========================================================== */
+/* Flywheel slide — conditional rendering with fade-in animation */
 .deck-view-v1 .deck-v1-flywheel-slide {
-  overflow: hidden;
-  padding: 0 !important;
-  gap: 0 !important;
-  display: block !important;
-  position: relative;
-  width: 100vw;
-  max-width: 100vw;
-  min-height: 100vh;
+  /* inherits flex-direction: row from .deck-slide-flywheel-split */
 }
 
-.deck-view-v1 .deck-v1-flywheel-track {
-  display: flex;
-  width: 200vw;
-  min-height: 100vh;
-  transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform;
+.deck-view-v1 .deck-v1-fw-animate {
+  animation: deck-v1-fw-fadein 0.5s ease both;
 }
 
-.deck-view-v1 .flywheel-view-wheel .deck-v1-flywheel-track {
-  transform: translateX(-100vw);
+@keyframes deck-v1-fw-fadein {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-.deck-view-v1 .deck-v1-flywheel-panel {
-  width: 100vw;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row;
-  gap: clamp(28px, 4vw, 64px);
-  padding: clamp(60px, 7vh, 100px) clamp(56px, 7vw, 120px);
-  box-sizing: border-box;
-  align-items: center;
-}
-
-.deck-view-v1 .deck-v1-flywheel-panel .flywheel-right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Edge arrow nav buttons */
+/* Arrow nav button — natural flex child */
 .deck-view-v1 .deck-v1-flywheel-nav {
-  position: absolute;
-  top: 50%;
-  width: 56px;
-  height: 56px;
+  flex-shrink: 0;
+  align-self: center;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.12);
-  border: 1px solid rgba(245, 197, 66, 0.45);
+  background: rgba(245, 197, 66, 0.10);
+  border: 1px solid rgba(245, 197, 66, 0.4);
   color: #f5c542;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
-  transition: all 0.25s ease;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
   font-family: inherit;
   padding: 0;
+  margin: 0 8px;
 }
 
 .deck-view-v1 .deck-v1-flywheel-nav:hover {
   background: rgba(245, 197, 66, 0.22);
   border-color: rgba(245, 197, 66, 0.7);
-  transform: translateY(-50%) scale(1.08);
-}
-
-.deck-view-v1 .deck-v1-flywheel-nav-right {
-  right: 28px;
-  transform: translateY(-50%);
-}
-
-.deck-view-v1 .deck-v1-flywheel-nav-left {
-  left: 28px;
-  transform: translateY(-50%);
+  transform: scale(1.08);
 }
 
 .light-mode .deck-view-v1 .deck-v1-flywheel-nav {
@@ -4922,7 +4884,7 @@
 
 .deck-view-v1 .deck-v1-payouts-body {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(420px, 1.6fr);
+  grid-template-columns: minmax(380px, 1.5fr) minmax(200px, 1fr);
   gap: clamp(28px, 4vw, 56px);
   align-items: center;
   margin-top: 6px;
@@ -4935,7 +4897,7 @@
 }
 
 .deck-view-v1 .deck-v1-payouts-avatar {
-  width: min(320px, 100%);
+  width: min(260px, 100%);
   height: auto;
 }
 
