@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback } from 'react';
 import {
   listCrawlJobs,
   createCrawlJob,
@@ -294,19 +294,21 @@ function saveAutomation(jobId: string, settings: AutomationSettings) {
   localStorage.setItem(AUTOMATION_STORAGE_KEY, JSON.stringify(all));
 }
 
-function AutomationModal({
-  job,
+function AutomationRow({
   current,
-  onClose,
+  colSpan,
   onSave,
+  onClose,
 }: {
-  job: CrawlJob;
   current: AutomationSettings;
-  onClose: () => void;
+  colSpan: number;
   onSave: (settings: AutomationSettings) => void;
+  onClose: () => void;
 }) {
   const [enabled, setEnabled] = useState(current.enabled);
-  const [frequency, setFrequency] = useState<AutomationFrequency>(current.frequency);
+  const [frequency, setFrequency] = useState<AutomationFrequency>(
+    current.frequency === 'off' ? 'daily' : current.frequency
+  );
 
   const handleSave = () => {
     onSave({ enabled, frequency: enabled ? frequency : 'off' });
@@ -314,29 +316,22 @@ function AutomationModal({
   };
 
   const frequencyOptions: { value: AutomationFrequency; label: string; desc: string }[] = [
-    { value: 'hourly', label: 'Hourly', desc: 'Re-crawl every hour' },
-    { value: 'daily', label: 'Daily', desc: 'Re-crawl once a day' },
-    { value: 'weekly', label: 'Weekly', desc: 'Re-crawl every Monday' },
-    { value: 'monthly', label: 'Monthly', desc: 'Re-crawl on the 1st' },
+    { value: 'hourly', label: 'Hourly', desc: 'Every hour' },
+    { value: 'daily', label: 'Daily', desc: 'Once a day' },
+    { value: 'weekly', label: 'Weekly', desc: 'Every Monday' },
+    { value: 'monthly', label: 'Monthly', desc: 'On the 1st' },
   ];
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="admin-modal-header">
-          <div>
-            <h3>Automation</h3>
-            <p style={{ fontSize: 12, color: '#888', margin: '4px 0 0' }}>
-              {job.site_name || job.site_url}
-            </p>
-          </div>
-          <button className="admin-modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="admin-modal-body">
-          <div className="admin-form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <tr className="admin-automation-row" onClick={(e) => e.stopPropagation()}>
+      <td colSpan={colSpan} style={{ padding: 0, background: '#fafafa' }}>
+        <div className="admin-automation-panel">
+          <div className="admin-automation-header">
             <div>
-              <label style={{ marginBottom: 2 }}>Automated re-crawl</label>
-              <span className="admin-form-hint">Periodically re-run this crawl to keep data fresh</span>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>Automated re-crawl</div>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                Periodically re-run this crawl to keep data fresh
+              </div>
             </div>
             <button
               type="button"
@@ -351,47 +346,35 @@ function AutomationModal({
           </div>
 
           {enabled && (
-            <div className="admin-form-group" style={{ marginTop: 16 }}>
-              <label>Frequency</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
-                {frequencyOptions.map((opt) => (
-                  <label
-                    key={opt.value}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      border: `1px solid ${frequency === opt.value ? '#3b82f6' : '#e6e6e6'}`,
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      background: frequency === opt.value ? 'rgba(59, 130, 246, 0.06)' : 'transparent',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="frequency"
-                      value={opt.value}
-                      checked={frequency === opt.value}
-                      onChange={() => setFrequency(opt.value)}
-                      style={{ margin: 0 }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{opt.label}</span>
-                      <span style={{ fontSize: 11, color: '#888' }}>{opt.desc}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
+            <div className="admin-automation-freq">
+              {frequencyOptions.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`admin-automation-opt ${frequency === opt.value ? 'is-active' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="frequency-inline"
+                    value={opt.value}
+                    checked={frequency === opt.value}
+                    onChange={() => setFrequency(opt.value)}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: '#888' }}>{opt.desc}</div>
+                  </div>
+                </label>
+              ))}
             </div>
           )}
+
+          <div className="admin-automation-actions">
+            <button className="admin-btn admin-btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="admin-btn admin-btn-primary" onClick={handleSave}>Save</button>
+          </div>
         </div>
-        <div className="admin-modal-footer">
-          <button className="admin-btn admin-btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="admin-btn admin-btn-primary" onClick={handleSave}>Save</button>
-        </div>
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -400,7 +383,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
-  const [automationJob, setAutomationJob] = useState<CrawlJob | null>(null);
+  const [expandedAutomationId, setExpandedAutomationId] = useState<string | null>(null);
   const [automations, setAutomations] = useState<Record<string, AutomationSettings>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -563,8 +546,8 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                 const autoSettings = automations[job.id] || { enabled: false, frequency: 'off' as AutomationFrequency };
 
                 return (
+                  <Fragment key={job.id}>
                   <tr
-                    key={job.id}
                     className="admin-table-row-clickable"
                     onClick={() => setSelectedJob(job)}
                     style={{ cursor: 'pointer' }}
@@ -573,7 +556,9 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                       <button
                         className="admin-icon-btn"
                         title={autoSettings.enabled ? `Automation: ${autoSettings.frequency}` : 'Set automation'}
-                        onClick={() => setAutomationJob(job)}
+                        onClick={() =>
+                          setExpandedAutomationId((prev) => (prev === job.id ? null : job.id))
+                        }
                         style={{
                           color: autoSettings.enabled ? '#3b82f6' : 'rgba(0,0,0,0.35)',
                         }}
@@ -682,6 +667,18 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                       </div>
                     </td>
                   </tr>
+                  {expandedAutomationId === job.id && (
+                    <AutomationRow
+                      current={autoSettings}
+                      colSpan={10}
+                      onClose={() => setExpandedAutomationId(null)}
+                      onSave={(settings) => {
+                        saveAutomation(job.id, settings);
+                        setAutomations((prev) => ({ ...prev, [job.id]: settings }));
+                      }}
+                    />
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -702,17 +699,6 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
         />
       )}
 
-      {automationJob && (
-        <AutomationModal
-          job={automationJob}
-          current={automations[automationJob.id] || { enabled: false, frequency: 'off' }}
-          onClose={() => setAutomationJob(null)}
-          onSave={(settings) => {
-            saveAutomation(automationJob.id, settings);
-            setAutomations((prev) => ({ ...prev, [automationJob.id]: settings }));
-          }}
-        />
-      )}
     </>
   );
 }

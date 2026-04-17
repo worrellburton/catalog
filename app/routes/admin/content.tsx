@@ -90,6 +90,7 @@ export default function AdminContent() {
   }, [brandDomains]);
 
   const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
+  const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadCrawled = async () => {
@@ -108,11 +109,19 @@ export default function AdminContent() {
       })) as CrawledProduct[];
       setCrawledProducts(rows);
     };
+    const loadAdProductIds = async () => {
+      if (!supabase) return;
+      const { data } = await supabase
+        .from('product_ads')
+        .select('product_id');
+      if (data) setAdProductIds(new Set(data.map(r => r.product_id)));
+    };
     loadCrawled();
+    loadAdProductIds();
   }, []);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -126,16 +135,20 @@ export default function AdminContent() {
       });
     });
 
-    // Add crawled products (deduped by brand+name)
     crawledProducts.forEach((cp) => {
       const brand = cp.brand || 'Unknown';
       const name = cp.name || 'Untitled';
       const key = `${brand}-${name}`;
       if (productMap.has(key)) {
-        // Product already exists (likely from looks); mark as crawled if scraped
-        if (cp.is_crawled) productMap.get(key)!.connection = 'Crawl';
+        const entry = productMap.get(key)!;
+        entry.id = cp.id;
+        if (adProductIds.has(cp.id)) entry.connection = 'Ad';
+        else if (cp.is_crawled) entry.connection = 'Crawl';
       } else {
+        let connection: 'Look' | 'Crawl' | 'Ad' = cp.is_crawled ? 'Crawl' : 'Look';
+        if (adProductIds.has(cp.id)) connection = 'Ad';
         productMap.set(key, {
+          id: cp.id,
           brand,
           name,
           price: cp.price || '—',
@@ -144,7 +157,7 @@ export default function AdminContent() {
           creators: new Set(),
           saves: 0,
           clicks: 0,
-          connection: cp.is_crawled ? 'Crawl' : 'Look',
+          connection,
         });
       }
     });
@@ -154,7 +167,7 @@ export default function AdminContent() {
       lookCount: p.looks.size,
       creatorCount: p.creators.size,
     }));
-  }, [crawledProducts]);
+  }, [crawledProducts, adProductIds]);
 
   const lookTable = useSortableTable(lookRows);
 

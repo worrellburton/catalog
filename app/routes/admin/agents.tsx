@@ -3,9 +3,12 @@ import { useNavigate, useSearchParams } from '@remix-run/react';
 import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
 import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
 import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
+import VideoGenerationPanel from '~/components/VideoGenerationPanel';
+import ProductAdsPanel from '~/components/ProductAdsPanel';
 
-type Tab = 'overview' | 'crawls';
+type Tab = 'overview' | 'crawls' | 'video-gen';
 type CrawlSubTab = 'full-site' | 'collections' | 'products';
+type VideoSubTab = 'product-ads' | 'look-videos';
 
 interface AgentCard {
   id: string;
@@ -21,15 +24,17 @@ export default function AdminAgents() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const initialTab = ((searchParams.get('tab') as Tab) === 'crawls'
-    ? 'crawls'
-    : searchParams.get('tab') === 'site-crawls'
-      ? 'crawls'
-      : 'overview') as Tab;
-  const initialSub = (searchParams.get('sub') as CrawlSubTab) || 'full-site';
+  const rawTab = searchParams.get('tab') as string;
+  const initialTab: Tab =
+    rawTab === 'crawls' || rawTab === 'site-crawls' ? 'crawls'
+    : rawTab === 'video-gen' ? 'video-gen'
+    : 'overview';
+  const initialCrawlSub = (searchParams.get('sub') as CrawlSubTab) || 'full-site';
+  const initialVideoSub = (searchParams.get('sub') as VideoSubTab) || 'product-ads';
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-  const [crawlSub, setCrawlSub] = useState<CrawlSubTab>(initialSub);
+  const [crawlSub, setCrawlSub] = useState<CrawlSubTab>(initialCrawlSub);
+  const [videoSub, setVideoSub] = useState<VideoSubTab>(initialVideoSub);
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);
@@ -39,14 +44,23 @@ export default function AdminAgents() {
       next.delete('sub');
     } else {
       next.set('tab', tab);
+      next.delete('sub');
     }
     setSearchParams(next, { replace: true });
   };
 
-  const setSub = (sub: CrawlSubTab) => {
+  const setCrawlSubTab = (sub: CrawlSubTab) => {
     setCrawlSub(sub);
     const next = new URLSearchParams(searchParams);
     next.set('tab', 'crawls');
+    next.set('sub', sub);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setVideoSubTab = (sub: VideoSubTab) => {
+    setVideoSub(sub);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'video-gen');
     next.set('sub', sub);
     setSearchParams(next, { replace: true });
   };
@@ -61,28 +75,20 @@ export default function AdminAgents() {
       icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
     },
     {
+      id: 'video-gen',
+      name: 'Video Gen',
+      description: 'Generate AI video ads and look videos from product data using Veo + Claude.',
+      status: 'live',
+      onClick: () => setTab('video-gen'),
+      icon: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
+    },
+    {
       id: 'ai-models',
       name: 'AI Models',
       description: 'Manage AI creator personas used to generate look content.',
       status: 'live',
       to: '/admin/ai-models',
       icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM16 3.13a4 4 0 0 1 0 7.75',
-    },
-    {
-      id: 'video-generation',
-      name: 'Video Generation',
-      description: 'Generate short-form video creative from product data using Veo.',
-      status: 'live',
-      to: '/admin/video-generation',
-      icon: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
-    },
-    {
-      id: 'product-ads',
-      name: 'Product Ads',
-      description: 'Produce and manage product ad creatives for placement on the feed.',
-      status: 'live',
-      to: '/admin/product-ads',
-      icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z',
     },
   ];
 
@@ -105,6 +111,12 @@ export default function AdminAgents() {
           onClick={() => setTab('crawls')}
         >
           Crawls
+        </button>
+        <button
+          className={`admin-tab ${activeTab === 'video-gen' ? 'active' : ''}`}
+          onClick={() => setTab('video-gen')}
+        >
+          Video Gen
         </button>
       </div>
 
@@ -136,24 +148,24 @@ export default function AdminAgents() {
             </button>
           ))}
         </div>
-      ) : (
+      ) : activeTab === 'crawls' ? (
         <div className="admin-agent-subsection">
           <div className="admin-subtabs">
             <button
               className={`admin-subtab ${crawlSub === 'full-site' ? 'active' : ''}`}
-              onClick={() => setSub('full-site')}
+              onClick={() => setCrawlSubTab('full-site')}
             >
               Full Site
             </button>
             <button
               className={`admin-subtab ${crawlSub === 'collections' ? 'active' : ''}`}
-              onClick={() => setSub('collections')}
+              onClick={() => setCrawlSubTab('collections')}
             >
               Collections
             </button>
             <button
               className={`admin-subtab ${crawlSub === 'products' ? 'active' : ''}`}
-              onClick={() => setSub('products')}
+              onClick={() => setCrawlSubTab('products')}
             >
               Products
             </button>
@@ -162,6 +174,26 @@ export default function AdminAgents() {
           {crawlSub === 'full-site' && <SiteCrawlsPanel embedded />}
           {crawlSub === 'collections' && <CollectionCrawlsPanel />}
           {crawlSub === 'products' && <ProductCrawlsPanel />}
+        </div>
+      ) : (
+        <div className="admin-agent-subsection">
+          <div className="admin-subtabs">
+            <button
+              className={`admin-subtab ${videoSub === 'product-ads' ? 'active' : ''}`}
+              onClick={() => setVideoSubTab('product-ads')}
+            >
+              Product Ads
+            </button>
+            <button
+              className={`admin-subtab ${videoSub === 'look-videos' ? 'active' : ''}`}
+              onClick={() => setVideoSubTab('look-videos')}
+            >
+              Look Videos
+            </button>
+          </div>
+
+          {videoSub === 'product-ads' && <ProductAdsPanel embedded />}
+          {videoSub === 'look-videos' && <VideoGenerationPanel embedded />}
         </div>
       )}
     </div>
