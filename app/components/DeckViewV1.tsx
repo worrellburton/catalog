@@ -296,7 +296,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.<br />Human taste. Superpowered by AI.</h2>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.<br /><span className="deck-v1-dream-sub">Human taste. Superpowered by AI.</span></h2>
         </div>
       </div>
 
@@ -337,7 +337,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
       <div className="deck-slide deck-v8-problem deck-v8-wins deck-v9-problem-slide">
         <div className="deck-v8-split-left">
           <span className="deck-label">The Solution</span>
-          <h2>Creators curate.<br />AI connects.<br />Everyone wins.</h2>
+          <h2>Creators curate.<br />AI indexes.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v8-split-right">
           {[
