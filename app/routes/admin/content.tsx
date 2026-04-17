@@ -91,6 +91,7 @@ export default function AdminContent() {
 
   const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
+  const [adVideoMap, setAdVideoMap] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     const loadCrawled = async () => {
@@ -113,21 +114,30 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data } = await supabase
         .from('product_ads')
-        .select('product_id');
-      if (data) setAdProductIds(new Set(data.map(r => r.product_id)));
+        .select('product_id, video_url, status');
+      if (data) {
+        setAdProductIds(new Set(data.map(r => r.product_id)));
+        const videoMap = new Map<string, string>();
+        data.forEach(r => {
+          if (r.video_url && (r.status === 'live' || r.status === 'done') && !videoMap.has(r.product_id)) {
+            videoMap.set(r.product_id, r.video_url);
+          }
+        });
+        setAdVideoMap(videoMap);
+      }
     };
     loadCrawled();
     loadAdProductIds();
   }, []);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_url?: string | null; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
         const key = `${p.brand}-${p.name}`;
         if (!productMap.has(key)) {
-          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, connection: 'Look' });
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, connection: 'Look' });
         }
         const entry = productMap.get(key)!;
         entry.looks.add(look.title);
@@ -142,8 +152,13 @@ export default function AdminContent() {
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
-        if (adProductIds.has(cp.id)) entry.connection = 'Ad';
-        else if (cp.is_crawled) entry.connection = 'Crawl';
+        entry.image_url = cp.image_url;
+        if (adProductIds.has(cp.id)) {
+          entry.connection = 'Ad';
+          entry.video_url = adVideoMap.get(cp.id) || null;
+        } else if (cp.is_crawled) {
+          entry.connection = 'Crawl';
+        }
       } else {
         let connection: 'Look' | 'Crawl' | 'Ad' = cp.is_crawled ? 'Crawl' : 'Look';
         if (adProductIds.has(cp.id)) connection = 'Ad';
@@ -153,6 +168,8 @@ export default function AdminContent() {
           name,
           price: cp.price || '—',
           url: cp.url || '',
+          image_url: cp.image_url,
+          video_url: adVideoMap.get(cp.id) || null,
           looks: new Set(),
           creators: new Set(),
           saves: 0,
@@ -167,7 +184,7 @@ export default function AdminContent() {
       lookCount: p.looks.size,
       creatorCount: p.creators.size,
     }));
-  }, [crawledProducts, adProductIds]);
+  }, [crawledProducts, adProductIds, adVideoMap]);
 
   const lookTable = useSortableTable(lookRows);
 
@@ -315,13 +332,36 @@ export default function AdminContent() {
               {allProducts.map((p, i) => (
                 <tr key={`${p.brand}-${p.name}-${i}`}>
                   <td>
-                    <div className="admin-product-creative">
-                      <img
-                        src={getBrandLogo(p.brand) || ''}
-                        alt={p.brand}
-                        className="admin-brand-logo"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
+                    <div className="admin-product-creative" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {p.image_url ? (
+                        <img
+                          src={p.image_url}
+                          alt={p.name}
+                          style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <img
+                          src={getBrandLogo(p.brand) || ''}
+                          alt={p.brand}
+                          className="admin-brand-logo"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      {p.video_url && (
+                        <div className="admin-look-thumb" style={{ width: 36, height: 48 }}>
+                          <video
+                            src={p.video_url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
+                          />
+                          <div className="admin-look-preview">
+                            <video src={p.video_url} autoPlay muted loop playsInline />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td style={{ textAlign: 'left' }}>
