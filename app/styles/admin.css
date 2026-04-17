@@ -2474,3 +2474,34 @@
 .admin-dark .admin-table-clickable tbody tr.admin-table-row-clickable:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+
+/* ─── Connection pill (Products table) ───────────────────────────── */
+.admin-connection-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-connection-crawl {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.admin-connection-look {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+}
+
+.admin-dark .admin-connection-crawl {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.admin-dark .admin-connection-look {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
