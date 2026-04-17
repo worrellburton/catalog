@@ -4568,49 +4568,36 @@
 /* ===========================================================
    V.1 Flywheel slide — smooth sliding track between Seed & Wheel
    =========================================================== */
-/* Flywheel slide — slide-across animation between Seed & Wheel views */
+/* Flywheel slide — conditional rendering with slide-in animation */
 .deck-view-v1 .deck-v1-flywheel-slide {
-  position: relative;
-  overflow: hidden;
-  padding: 0 !important;
-  display: block !important;
-  min-height: 100vh;
-  width: 100%;
+  padding: clamp(60px, 7vh, 100px) clamp(72px, 8vw, 140px) !important;
 }
 
 .deck-view-v1 .deck-v1-fw-view {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: clamp(28px, 4vw, 64px);
-  padding: clamp(60px, 7vh, 100px) clamp(56px, 7vw, 120px);
-  box-sizing: border-box;
-  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.55s cubic-bezier(0.65, 0, 0.35, 1);
-  will-change: transform, opacity;
+  width: 100%;
+  animation: deck-v1-fw-slidein 0.6s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+.deck-view-v1 .deck-v1-fw-view-wheel {
+  animation-name: deck-v1-fw-slidein-right;
+}
+.deck-view-v1 .deck-v1-fw-view-seed {
+  animation-name: deck-v1-fw-slidein-left;
 }
 
-.deck-view-v1 .flywheel-view-seed .deck-v1-fw-view-seed {
-  transform: translateX(0);
-  opacity: 1;
+@keyframes deck-v1-fw-slidein-right {
+  from { opacity: 0; transform: translateX(80px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-.deck-view-v1 .flywheel-view-seed .deck-v1-fw-view-wheel {
-  transform: translateX(30%);
-  opacity: 0;
-  pointer-events: none;
-}
-.deck-view-v1 .flywheel-view-wheel .deck-v1-fw-view-seed {
-  transform: translateX(-30%);
-  opacity: 0;
-  pointer-events: none;
-}
-.deck-view-v1 .flywheel-view-wheel .deck-v1-fw-view-wheel {
-  transform: translateX(0);
-  opacity: 1;
+@keyframes deck-v1-fw-slidein-left {
+  from { opacity: 0; transform: translateX(-80px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
-/* Arrow nav button — natural flex child on the edge of each view */
+/* Arrow nav button — natural flex child */
 .deck-view-v1 .deck-v1-flywheel-nav {
   flex-shrink: 0;
   align-self: center;
@@ -4628,6 +4615,11 @@
   font-family: inherit;
   padding: 0;
   margin: 0 8px;
+}
+.deck-view-v1 .deck-v1-flywheel-nav:hover {
+  background: rgba(245, 197, 66, 0.22);
+  border-color: rgba(245, 197, 66, 0.7);
+  transform: scale(1.08);
 }
 .deck-view-v1 .deck-v1-flywheel-nav-right { margin-left: auto; }
 .deck-view-v1 .deck-v1-flywheel-nav-left  { margin-right: auto; order: -1; }
@@ -4830,7 +4822,7 @@
   gap: clamp(48px, 6vw, 96px);
   min-height: 0;
   height: 100vh;
-  padding: clamp(48px, 6vh, 80px) clamp(64px, 8vw, 120px);
+  padding: clamp(48px, 6vh, 80px) clamp(88px, 10vw, 160px);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -4894,17 +4886,11 @@
   box-shadow: 0 0 30px rgba(245, 197, 66, 0.35);
   position: relative;
   z-index: 3;
-  animation: deck-v1-tech-seed-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .deck-view-v1 .deck-v1-tech-seed video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-@keyframes deck-v1-tech-seed-in {
-  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .deck-view-v1 .deck-v1-tech-rays {
@@ -4921,16 +4907,7 @@
   stroke: #f5c542;
   stroke-width: 1.2;
   stroke-dasharray: 6 5;
-  opacity: 0;
-  stroke-dashoffset: 300;
-  animation: deck-v1-tech-ray-draw 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) forwards;
-  animation-delay: calc(0.35s + var(--ray-i, 0) * 0.12s);
-}
-
-@keyframes deck-v1-tech-ray-draw {
-  0% { stroke-dashoffset: 300; opacity: 0; }
-  30% { opacity: 0.8; }
-  100% { stroke-dashoffset: 0; opacity: 0.7; }
+  opacity: 0.7;
 }
 
 .deck-view-v1 .deck-v1-tech-neighbors {
@@ -4950,10 +4927,6 @@
   background: #000;
   border: 1px solid rgba(245, 197, 66, 0.35);
   position: relative;
-  opacity: 0;
-  transform: translateY(16px) scale(0.9);
-  animation: deck-v1-tech-neighbor-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  animation-delay: calc(0.85s + var(--n-i, 0) * 0.1s);
 }
 .deck-view-v1 .deck-v1-tech-neighbor video {
   width: 100%;
@@ -4974,9 +4947,6 @@
   letter-spacing: 0.04em;
 }
 
-@keyframes deck-v1-tech-neighbor-in {
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
 
 /* ===========================================================
    V.1 Payouts slide — four revenue streams for creators
@@ -5014,46 +4984,102 @@
   flex-direction: column;
 }
 
-.deck-view-v1 .deck-v1-payouts-body {
-  display: grid;
-  grid-template-columns: minmax(380px, 1.5fr) minmax(200px, 1fr);
-  gap: clamp(28px, 4vw, 56px);
-  align-items: center;
-  margin-top: 6px;
-}
-
-.deck-view-v1 .deck-v1-payouts-visual {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.deck-view-v1 .deck-v1-payouts-avatar {
-  width: min(260px, 100%);
-  height: auto;
-}
-
-.deck-view-v1 .deck-v1-payouts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.deck-view-v1 .deck-v1-payouts-card {
-  border: 1px solid rgba(74, 222, 128, 0.22);
-  background: linear-gradient(135deg, rgba(74, 222, 128, 0.1) 0%, rgba(74, 222, 128, 0.04) 100%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-radius: 16px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* Radial payouts layout — creator dead center, 4 glass cards in corners */
+.deck-view-v1 .deck-v1-payouts-radial {
   position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: clamp(48px, 6vw, 120px) clamp(220px, 20vw, 380px);
+  margin-top: clamp(16px, 2vh, 28px);
+  min-height: min(560px, 56vh);
+}
+
+.deck-view-v1 .deck-v1-payouts-card-tl { grid-column: 1; grid-row: 1; justify-self: start; }
+.deck-view-v1 .deck-v1-payouts-card-tr { grid-column: 2; grid-row: 1; justify-self: end; }
+.deck-view-v1 .deck-v1-payouts-card-bl { grid-column: 1; grid-row: 2; justify-self: start; }
+.deck-view-v1 .deck-v1-payouts-card-br { grid-column: 2; grid-row: 2; justify-self: end; }
+
+.deck-view-v1 .deck-v1-payouts-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(140px, 15vw, 200px);
+  height: clamp(140px, 15vw, 200px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+.deck-view-v1 .deck-v1-payouts-creator {
+  width: 100%;
+  height: 100%;
+}
+
+/* Flowing green lines from each card toward the creator */
+.deck-view-v1 .deck-v1-payouts-flows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.deck-view-v1 .deck-v1-pay-line {
+  opacity: 0.45;
+  animation: deck-v1-pay-flow-dash 4s linear infinite;
+}
+@keyframes deck-v1-pay-flow-dash {
+  to { stroke-dashoffset: -24; }
+}
+
+/* Glass payout cards — same language as Ask slide glass container */
+.deck-view-v1 .deck-v1-payouts-card {
+  position: relative;
+  max-width: 420px;
+  padding: 20px 24px 18px;
+  border-radius: 22px;
+  background: linear-gradient(
+    180deg,
+    rgba(74, 222, 128, 0.09) 0%,
+    rgba(74, 222, 128, 0.02) 100%
+  );
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2;
   opacity: 0;
   filter: blur(14px);
   transform: translateY(12px);
   transition: none;
+}
+.deck-view-v1 .deck-v1-payouts-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 22px;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(74, 222, 128, 0.35) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .deck-view-v1 .deck-slide.visible .deck-v1-payouts-card {

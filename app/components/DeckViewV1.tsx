@@ -112,15 +112,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [flywheelView, setFlywheelView] = useState<'seed' | 'wheel'>('seed');
   const [bgRevealed, setBgRevealed] = useState(false);
-  const [techActiveSeed, setTechActiveSeed] = useState<number | null>(0);
+  const [techActiveSeed] = useState<number | null>(0);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTechActiveSeed((prev) => ((prev ?? 0) + 1) % techVideos.length);
-    }, 3500);
-    return () => clearInterval(interval);
-  }, []);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
   const roadmapTrackRef = useRef<HTMLDivElement>(null);
@@ -553,7 +546,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         <div className="deck-v1-fw-view deck-v1-fw-view-seed" aria-hidden={flywheelView !== 'seed'}>
           <div className="flywheel-left">
             <span className="deck-label">Step Zero</span>
-            <h2>Build product.</h2>
+            <h2>Build and seed product.</h2>
             <div className="deck-v1-seed-steps">
               <div className="deck-v1-seed-step">
                 <span className="deck-v1-seed-step-num">01</span>
@@ -755,80 +748,63 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           </div>
 
-          <div className="deck-v1-payouts-body">
-            <div className="deck-v1-payouts-list">
-              <div className="deck-v1-payouts-card">
-                <div className="deck-v1-payouts-card-head">
-                  <span className="deck-v1-payouts-num">01</span>
-                  <h3>Engagement</h3>
-                  <span className="deck-v1-payouts-chip">Daily payouts</span>
-                </div>
-                <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube&rsquo;s ad-revenue model &mdash; paid out daily.</p>
+          <div className="deck-v1-payouts-body deck-v1-payouts-radial">
+            <div className="deck-v1-payouts-card deck-v1-payouts-card-tl">
+              <div className="deck-v1-payouts-card-head">
+                <span className="deck-v1-payouts-num">01</span>
+                <h3>Engagement</h3>
+                <span className="deck-v1-payouts-chip">Daily payouts</span>
               </div>
-              <div className="deck-v1-payouts-card">
-                <div className="deck-v1-payouts-card-head">
-                  <span className="deck-v1-payouts-num">02</span>
-                  <h3>Affiliate links</h3>
-                  <span className="deck-v1-payouts-chip">Pass-through</span>
-                </div>
-                <p>Full commissions on sales driven through a creator's own affiliate links &mdash; transparent and fast.</p>
+              <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube&rsquo;s ad-revenue model &mdash; paid out daily.</p>
+            </div>
+            <div className="deck-v1-payouts-card deck-v1-payouts-card-tr">
+              <div className="deck-v1-payouts-card-head">
+                <span className="deck-v1-payouts-num">02</span>
+                <h3>Affiliate links</h3>
+                <span className="deck-v1-payouts-chip">Pass-through</span>
               </div>
-              <div className="deck-v1-payouts-card">
-                <div className="deck-v1-payouts-card-head">
-                  <span className="deck-v1-payouts-num">03</span>
-                  <h3>Catalog sales</h3>
-                  <span className="deck-v1-payouts-chip">Rev share</span>
-                </div>
-                <p>Revenue share on every Catalog-attributed sale driven by a creator's look. Direct, no shared pool.</p>
+              <p>Full commissions on sales driven through a creator's own affiliate links &mdash; transparent and fast.</p>
+            </div>
+            <div className="deck-v1-payouts-card deck-v1-payouts-card-bl">
+              <div className="deck-v1-payouts-card-head">
+                <span className="deck-v1-payouts-num">03</span>
+                <h3>Catalog sales</h3>
+                <span className="deck-v1-payouts-chip">Rev share</span>
               </div>
-              <div className="deck-v1-payouts-card">
-                <div className="deck-v1-payouts-card-head">
-                  <span className="deck-v1-payouts-num">04</span>
-                  <h3>Referrals</h3>
-                  <span className="deck-v1-payouts-chip">Lifetime</span>
-                </div>
-                <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
+              <p>Revenue share on every Catalog-attributed sale driven by a creator's look. Direct, no shared pool.</p>
+            </div>
+            <div className="deck-v1-payouts-card deck-v1-payouts-card-br">
+              <div className="deck-v1-payouts-card-head">
+                <span className="deck-v1-payouts-num">04</span>
+                <h3>Referrals</h3>
+                <span className="deck-v1-payouts-chip">Lifetime</span>
               </div>
+              <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
             </div>
 
-            <div className="deck-v1-payouts-visual" aria-hidden="true">
-              <svg className="deck-v1-payouts-avatar" viewBox="0 0 260 260">
+            <svg className="deck-v1-payouts-flows" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+              <path className="deck-v1-pay-line deck-v1-pay-line-1" d="M 260 140 Q 400 260 500 300" fill="none" stroke="#4ade80" strokeWidth="1.5" strokeDasharray="6 6" />
+              <path className="deck-v1-pay-line deck-v1-pay-line-2" d="M 740 140 Q 600 260 500 300" fill="none" stroke="#4ade80" strokeWidth="1.5" strokeDasharray="6 6" />
+              <path className="deck-v1-pay-line deck-v1-pay-line-3" d="M 260 460 Q 400 340 500 300" fill="none" stroke="#4ade80" strokeWidth="1.5" strokeDasharray="6 6" />
+              <path className="deck-v1-pay-line deck-v1-pay-line-4" d="M 740 460 Q 600 340 500 300" fill="none" stroke="#4ade80" strokeWidth="1.5" strokeDasharray="6 6" />
+            </svg>
+
+            <div className="deck-v1-payouts-center" aria-hidden="true">
+              <svg className="deck-v1-payouts-creator" viewBox="0 0 107 107">
                 <defs>
-                  <radialGradient id="v1AvatarBg" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(74,222,128,0.2)" />
+                  <radialGradient id="v1CreatorBg" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="rgba(74,222,128,0.25)" />
                     <stop offset="100%" stopColor="rgba(74,222,128,0)" />
                   </radialGradient>
-                  <filter id="v1PayGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="2" result="blur" />
-                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                  </filter>
                 </defs>
-                <circle cx="130" cy="130" r="120" fill="url(#v1AvatarBg)" />
-                {/* Creator icon — profile with sparkle, centered within 80x80 box (viewBox 107) scaled */}
-                <g transform="translate(85, 85) scale(0.85)">
-                  <path d="M54.0845 6.5C53.7766 6.5 53.4687 6.5 53.1515 6.5C40.7788 6.5 28.9129 11.4151 20.1641 20.1639C11.4153 28.9128 6.5001 40.7787 6.5001 53.1514C6.4873 59.3614 7.7193 65.511 10.1231 71.2368C12.5269 76.9627 16.0537 82.1487 20.4955 86.4886C29.2082 95.0456 40.9395 99.8286 53.1515 99.8029C65.3635 99.8286 77.0948 95.0456 85.8075 86.4886C90.2493 82.1487 93.7761 76.9627 96.1799 71.2368C98.5837 65.511 99.8157 59.3614 99.8029 53.1514C99.8029 52.7782 99.8029 52.4143 99.8029 52.0411" stroke="#4ade80" strokeWidth="9" strokeLinecap="square" strokeLinejoin="round" fill="none"/>
-                  <path d="M26.1079 88.7464C27.2103 82.1192 30.6287 76.0981 35.7544 71.7549C40.8801 67.4118 47.3805 65.0283 54.0988 65.0288C60.8171 65.0283 67.3175 67.4118 72.4432 71.7549C77.5689 76.0981 80.9873 82.1192 82.0897 88.7464" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <path d="M53.8274 64.1333C62.639 64.1333 69.7822 56.99 69.7822 48.1784C69.7822 39.3668 62.639 32.2236 53.8274 32.2236C45.0158 32.2236 37.8726 39.3668 37.8726 48.1784C37.8726 56.99 45.0158 64.1333 53.8274 64.1333Z" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <path d="M89.5453 27.1831L80.1952 32.0835C80.0945 32.1374 79.9804 32.162 79.8661 32.1544C79.7518 32.1468 79.6421 32.1074 79.5496 32.0407C79.4571 31.974 79.3854 31.8827 79.3434 31.7775C79.3013 31.6724 79.2903 31.5576 79.3116 31.4464L81.0983 21.1555C81.1127 21.0596 81.1042 20.9618 81.0731 20.8698C81.0421 20.7779 80.9895 20.6944 80.9197 20.6263L73.3461 13.3442C73.2661 13.265 73.21 13.1656 73.1835 13.0568C73.1571 12.948 73.1615 12.8342 73.1964 12.7278C73.2313 12.6214 73.2953 12.5265 73.3813 12.4537C73.4673 12.3809 73.5719 12.3329 73.6837 12.3151L84.1456 10.8058C84.2446 10.7947 84.3392 10.7592 84.4207 10.7027C84.5022 10.6462 84.568 10.5705 84.6121 10.4823L89.2872 1.1225C89.3366 1.02089 89.414 0.935117 89.5106 0.875086C89.6072 0.815055 89.719 0.783203 89.8332 0.783203C89.9473 0.783203 90.0591 0.815055 90.1557 0.875086C90.2523 0.935117 90.3298 1.02089 90.3791 1.1225L95.0542 10.4823C95.0984 10.5705 95.1641 10.6462 95.2456 10.7027C95.3271 10.7592 95.4217 10.7947 95.5207 10.8058L105.983 12.3151C106.094 12.3329 106.199 12.3809 106.285 12.4537C106.371 12.5265 106.435 12.6214 106.47 12.7278C106.505 12.8342 106.509 12.948 106.483 13.0568C106.456 13.1656 106.4 13.265 106.32 13.3442L98.7466 20.6263C98.6769 20.6944 98.6243 20.7779 98.5932 20.8698C98.5622 20.9618 98.5536 21.0596 98.568 21.1555L100.355 31.4464C100.376 31.5576 100.365 31.6724 100.323 31.7775C100.281 31.8827 100.209 31.974 100.117 32.0407C100.024 32.1074 99.9146 32.1468 99.8003 32.1544C99.686 32.162 99.5719 32.1374 99.4712 32.0835L90.1211 27.1831C90.0314 27.1398 89.9329 27.1172 89.8332 27.1172C89.7334 27.1172 89.6349 27.1398 89.5453 27.1831Z" fill="#4ade80"/>
-                </g>
-                {/* $ with labels — top-left: Engagement */}
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-1" x="30" y="58" fill="#4ade80" fontSize="18" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text x="46" y="58" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Engagement</text>
-                <path className="deck-v1-pay-flow" d="M42 64 Q80 86 96 118" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                {/* $ with labels — top-right: Affiliate */}
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-2" x="200" y="58" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text x="152" y="48" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Affiliate</text>
-                <path className="deck-v1-pay-flow" d="M208 64 Q180 86 164 118" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                {/* $ with labels — bottom-left: Sales */}
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-3" x="30" y="218" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text x="46" y="218" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Sales</text>
-                <path className="deck-v1-pay-flow" d="M42 210 Q80 186 96 154" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
-                {/* $ with labels — bottom-right: Referrals */}
-                <text className="deck-v1-pay-dollar deck-v1-pay-dollar-4" x="200" y="218" fill="#4ade80" fontSize="16" fontWeight="800" filter="url(#v1PayGlow)">$</text>
-                <text x="152" y="228" fill="rgba(74,222,128,0.7)" fontSize="9" fontWeight="600">Referrals</text>
-                <path className="deck-v1-pay-flow" d="M208 210 Q180 186 164 154" fill="none" stroke="rgba(74,222,128,0.35)" strokeWidth="1.2" strokeDasharray="4 4" />
+                <circle cx="53.5" cy="53.5" r="53" fill="url(#v1CreatorBg)" />
+                <path d="M54.0845 6.5C53.7766 6.5 53.4687 6.5 53.1515 6.5C40.7788 6.5 28.9129 11.4151 20.1641 20.1639C11.4153 28.9128 6.5001 40.7787 6.5001 53.1514C6.4873 59.3614 7.7193 65.511 10.1231 71.2368C12.5269 76.9627 16.0537 82.1487 20.4955 86.4886C29.2082 95.0456 40.9395 99.8286 53.1515 99.8029C65.3635 99.8286 77.0948 95.0456 85.8075 86.4886C90.2493 82.1487 93.7761 76.9627 96.1799 71.2368C98.5837 65.511 99.8157 59.3614 99.8029 53.1514C99.8029 52.7782 99.8029 52.4143 99.8029 52.0411" stroke="#4ade80" strokeWidth="9" strokeLinecap="square" strokeLinejoin="round" fill="none" />
+                <path d="M26.1079 88.7464C27.2103 82.1192 30.6287 76.0981 35.7544 71.7549C40.8801 67.4118 47.3805 65.0283 54.0988 65.0288C60.8171 65.0283 67.3175 67.4118 72.4432 71.7549C77.5689 76.0981 80.9873 82.1192 82.0897 88.7464" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M53.8274 64.1333C62.639 64.1333 69.7822 56.99 69.7822 48.1784C69.7822 39.3668 62.639 32.2236 53.8274 32.2236C45.0158 32.2236 37.8726 39.3668 37.8726 48.1784C37.8726 56.99 45.0158 64.1333 53.8274 64.1333Z" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <path d="M89.5453 27.1831L80.1952 32.0835C80.0945 32.1374 79.9804 32.162 79.8661 32.1544C79.7518 32.1468 79.6421 32.1074 79.5496 32.0407C79.4571 31.974 79.3854 31.8827 79.3434 31.7775C79.3013 31.6724 79.2903 31.5576 79.3116 31.4464L81.0983 21.1555C81.1127 21.0596 81.1042 20.9618 81.0731 20.8698C81.0421 20.7779 80.9895 20.6944 80.9197 20.6263L73.3461 13.3442C73.2661 13.265 73.21 13.1656 73.1835 13.0568C73.1571 12.948 73.1615 12.8342 73.1964 12.7278C73.2313 12.6214 73.2953 12.5265 73.3813 12.4537C73.4673 12.3809 73.5719 12.3329 73.6837 12.3151L84.1456 10.8058C84.2446 10.7947 84.3392 10.7592 84.4207 10.7027C84.5022 10.6462 84.568 10.5705 84.6121 10.4823L89.2872 1.1225C89.3366 1.02089 89.414 0.935117 89.5106 0.875086C89.6072 0.815055 89.719 0.783203 89.8332 0.783203C89.9473 0.783203 90.0591 0.815055 90.1557 0.875086C90.2523 0.935117 90.3298 1.02089 90.3791 1.1225L95.0542 10.4823C95.0984 10.5705 95.1641 10.6462 95.2456 10.7027C95.3271 10.7592 95.4217 10.7947 95.5207 10.8058L105.983 12.3151C106.094 12.3329 106.199 12.3809 106.285 12.4537C106.371 12.5265 106.435 12.6214 106.47 12.7278C106.505 12.8342 106.509 12.948 106.483 13.0568C106.456 13.1656 106.4 13.265 106.32 13.3442L98.7466 20.6263C98.6769 20.6944 98.6243 20.7779 98.5932 20.8698C98.5622 20.9618 98.5536 21.0596 98.568 21.1555L100.355 31.4464C100.376 31.5576 100.365 31.6724 100.323 31.7775C100.281 31.8827 100.209 31.974 100.117 32.0407C100.024 32.1074 99.9146 32.1468 99.8003 32.1544C99.686 32.162 99.5719 32.1374 99.4712 32.0835L90.1211 27.1831C90.0314 27.1398 89.9329 27.1172 89.8332 27.1172C89.7334 27.1172 89.6349 27.1398 89.5453 27.1831Z" fill="#4ade80"/>
               </svg>
             </div>
+
           </div>
         </div>
       </div>
