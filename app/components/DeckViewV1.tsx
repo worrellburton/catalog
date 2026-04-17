@@ -110,7 +110,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
-  const [flywheelView, setFlywheelView] = useState<'seed' | 'wheel'>('seed');
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed] = useState<number | null>(0);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
@@ -165,7 +164,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
     'The Solution',
     'Market Opportunity',
     'The Math',
-    'Flywheel',
+    'Seed Product',
+    'Creator Flywheel',
     'Technology',
     'Payouts',
     'Traction',
@@ -537,13 +537,9 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Flywheel — Seed ↔ Creator Flywheel with slide animation */}
-      <div
-        className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
-        data-active-step={activeFlywheelStep ?? undefined}
-      >
-        {flywheelView === 'seed' ? (
-        <div key="seed" className="deck-v1-fw-view deck-v1-fw-view-seed">
+      {/* Slide 9a: Seed Product */}
+      <div className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide">
+        <div className="deck-v1-fw-view deck-v1-fw-view-seed">
           <div className="flywheel-left">
             <span className="deck-label">Step Zero</span>
             <h2>Build and seed product.</h2>
@@ -598,25 +594,15 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               </div>
             </div>
           </div>
-          <button
-            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-right"
-            type="button"
-            onClick={() => setFlywheelView('wheel')}
-            aria-label="See the creator flywheel"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-          </button>
         </div>
-        ) : (
-        <div key="wheel" className="deck-v1-fw-view deck-v1-fw-view-wheel">
-          <button
-            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-left"
-            type="button"
-            onClick={() => setFlywheelView('seed')}
-            aria-label="Back to product seeding"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
-          </button>
+      </div>
+
+      {/* Slide 9b: Creator Flywheel */}
+      <div
+        className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
+        data-active-step={activeFlywheelStep ?? undefined}
+      >
+        <div className="deck-v1-fw-view deck-v1-fw-view-wheel">
           <div className="flywheel-left">
             <span className="deck-label">Creator Flywheel</span>
             <h2>Build supply first.<br />Demand follows trust.</h2>
@@ -657,7 +643,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             </div>
           </div>
         </div>
-        )}
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}

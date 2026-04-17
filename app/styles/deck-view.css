@@ -5102,11 +5102,11 @@
 .deck-view-v1 .deck-v1-payouts-card-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .deck-view-v1 .deck-v1-payouts-num {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: rgba(74, 222, 128, 0.85);
   letter-spacing: 0.14em;
@@ -5114,7 +5114,7 @@
 }
 
 .deck-view-v1 .deck-v1-payouts-card h3 {
-  font-size: clamp(17px, 1.4vw, 20px);
+  font-size: clamp(14px, 1.1vw, 17px);
   font-weight: 600;
   color: #fff;
   margin: 0;
@@ -5123,21 +5123,21 @@
 }
 
 .deck-view-v1 .deck-v1-payouts-card p {
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: clamp(11px, 0.9vw, 12.5px);
+  line-height: 1.45;
   color: rgba(255, 255, 255, 0.62);
   margin: 0;
 }
 
 .deck-view-v1 .deck-v1-payouts-chip {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(74, 222, 128, 0.95);
   background: rgba(74, 222, 128, 0.15);
   border: 1px solid rgba(74, 222, 128, 0.32);
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -5284,6 +5284,35 @@
 }
 .light-mode .deck-view-v1 .deck-v1-roadmap-row-parallel {
   border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V.1 Traction — compact for laptop screens */
+.deck-view-v1 .deck-v8-traction {
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px) !important;
+  gap: clamp(12px, 1.5vh, 20px);
+}
+.deck-view-v1 .deck-v8-traction > h2 {
+  font-size: clamp(24px, 3vw, 42px);
+  margin-bottom: clamp(8px, 1vh, 16px);
+}
+.deck-view-v1 .deck-v8-marquee-phone.deck-app-frame {
+  width: clamp(110px, 11vw, 150px);
+  height: clamp(220px, 22vw, 300px);
+  border-radius: 22px;
+}
+.deck-view-v1 .deck-v8-traction-stats {
+  gap: clamp(24px, 4vw, 56px);
+  margin-top: clamp(6px, 1vh, 12px);
+}
+.deck-view-v1 .deck-v8-traction-num {
+  font-size: clamp(20px, 2.1vw, 30px);
+}
+.deck-view-v1 .deck-v8-traction-label {
+  font-size: 10px;
+}
+.deck-view-v1 .deck-v8-traction-note {
+  margin-top: clamp(8px, 1vh, 14px);
+  font-size: 10.5px;
 }
 
 /* V.1 Roadmap — compact for laptop screens */
