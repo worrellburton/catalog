@@ -4560,7 +4560,7 @@
    V.1 Dream slide subtitle
    =========================================================== */
 .deck-view-v1 .deck-v1-dream-h2 {
-  font-size: clamp(40px, 5.2vw, 72px);
+  font-size: clamp(36px, 5.2vw, 72px);
   line-height: 1.08;
 }
 .light-mode .deck-view-v1 .deck-v1-dream-sub { color: rgba(0, 0, 0, 0.5); }
