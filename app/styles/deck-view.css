@@ -5407,3 +5407,101 @@
   height: clamp(14px, 1.4vw, 18px);
 }
 
+/* V1 Payouts split layout — list on left, creator icon on right */
+.deck-view-v1 .deck-v1-payouts-split {
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(32px, 5vw, 80px);
+  padding: clamp(32px, 5vh, 72px) clamp(32px, 6vw, 96px);
+}
+.deck-view-v1 .deck-v1-payouts-split-left {
+  flex: 1 1 60%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+}
+.deck-view-v1 .deck-v1-payouts-split-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.deck-view-v1 .deck-v1-payouts-split .deck-v1-payouts-center {
+  position: static;
+  transform: none;
+  width: clamp(120px, 14vw, 200px);
+  height: clamp(120px, 14vw, 200px);
+}
+.deck-view-v1 .deck-v1-payouts-split .deck-v1-payouts-creator {
+  width: 100%;
+  height: 100%;
+}
+.deck-view-v1 .deck-v1-payouts-list {
+  list-style: none;
+  padding: 0;
+  margin: clamp(12px, 2vh, 20px) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.4vh, 18px);
+}
+.deck-view-v1 .deck-v1-payouts-list-item {
+  display: grid;
+  grid-template-columns: clamp(32px, 3vw, 44px) 1fr;
+  gap: clamp(12px, 1.4vw, 20px);
+  align-items: start;
+  padding: clamp(10px, 1.3vh, 16px) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.deck-view-v1 .deck-v1-payouts-list-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.deck-view-v1 .deck-v1-payouts-list-item .deck-v1-payouts-num {
+  font-size: clamp(14px, 1.2vw, 16px);
+  font-weight: 600;
+  color: #4ade80;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+.deck-view-v1 .deck-v1-payouts-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.deck-view-v1 .deck-v1-payouts-list-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 14px);
+  flex-wrap: wrap;
+}
+.deck-view-v1 .deck-v1-payouts-list-item h3 {
+  font-size: clamp(15px, 1.3vw, 19px);
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.deck-view-v1 .deck-v1-payouts-list-item p {
+  font-size: clamp(11px, 0.95vw, 13.5px);
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  line-height: 1.5;
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item h3 { color: #1a1a1a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item p { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-payouts-list-item .deck-v1-payouts-num { color: #16a34a; }
+
+@media (max-width: 900px) {
+  .deck-view-v1 .deck-v1-payouts-split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .deck-view-v1 .deck-v1-payouts-split-right {
+    order: -1;
+  }
+}
+
