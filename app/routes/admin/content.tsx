@@ -1,6 +1,19 @@
-import { useState, Fragment, useMemo, useCallback } from 'react';
+import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import { supabase } from '~/utils/supabase';
+
+interface CrawledProduct {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  url: string | null;
+  image_url: string | null;
+  scraped_at: string | null;
+  scrape_status: string;
+  is_crawled: boolean;
+}
 
 function AdminToggle({ on, onChange }: { on: boolean; onChange: (val: boolean) => void }) {
   return (
@@ -76,26 +89,72 @@ export default function AdminContent() {
     return `https://cdn.brandfetch.io/${domain}/w/80/h/80/fallback/lettermark?c=1id3n10pdBTarCHI0db`;
   }, [brandDomains]);
 
+  const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
+
+  useEffect(() => {
+    const loadCrawled = async () => {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, brand, price, url, image_url, scraped_at, scrape_status')
+        .order('scraped_at', { ascending: false });
+      if (error) {
+        console.error('Failed to load crawled products:', error);
+        return;
+      }
+      const rows = (data || []).map((p) => ({
+        ...p,
+        is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+      })) as CrawledProduct[];
+      setCrawledProducts(rows);
+    };
+    loadCrawled();
+  }, []);
+
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number }>();
+    const productMap = new Map<string, { brand: string; name: string; price: string; url: string; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
         const key = `${p.brand}-${p.name}`;
         if (!productMap.has(key)) {
-          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10 });
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, connection: 'Look' });
         }
         const entry = productMap.get(key)!;
         entry.looks.add(look.title);
         entry.creators.add(c?.displayName || look.creator);
       });
     });
+
+    // Add crawled products (deduped by brand+name)
+    crawledProducts.forEach((cp) => {
+      const brand = cp.brand || 'Unknown';
+      const name = cp.name || 'Untitled';
+      const key = `${brand}-${name}`;
+      if (productMap.has(key)) {
+        // Product already exists (likely from looks); mark as crawled if scraped
+        if (cp.is_crawled) productMap.get(key)!.connection = 'Crawl';
+      } else {
+        productMap.set(key, {
+          brand,
+          name,
+          price: cp.price || '—',
+          url: cp.url || '',
+          looks: new Set(),
+          creators: new Set(),
+          saves: 0,
+          clicks: 0,
+          connection: cp.is_crawled ? 'Crawl' : 'Look',
+        });
+      }
+    });
+
     return Array.from(productMap.values()).map(p => ({
       ...p,
       lookCount: p.looks.size,
       creatorCount: p.creators.size,
     }));
-  }, []);
+  }, [crawledProducts]);
 
   const lookTable = useSortableTable(lookRows);
 
@@ -231,6 +290,7 @@ export default function AdminContent() {
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <th style={{ textAlign: 'left' }}>Product</th>
                 <th>Price</th>
+                <th>Connection</th>
                 <th>In Looks</th>
                 <th>Creators</th>
                 <th>Saves</th>
@@ -258,6 +318,11 @@ export default function AdminContent() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
+                  <td>
+                    <span className={`admin-connection-pill admin-connection-${p.connection.toLowerCase()}`}>
+                      {p.connection}
+                    </span>
+                  </td>
                   <td>{p.lookCount}</td>
                   <td>{p.creatorCount}</td>
                   <td>{p.saves}</td>
