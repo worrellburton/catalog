@@ -546,11 +546,11 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             <div className="deck-v1-seed-steps">
               <div className="deck-v1-seed-step">
                 <span className="deck-v1-seed-step-num">01</span>
-                <p><strong>Build AI Agent scrapers.</strong> Autonomous agents crawl brand stores and pull product data, imagery, and pricing in real time.</p>
+                <p><strong>Catalog Ingest Engine.</strong> Proprietary pipeline connects to brand stores and pulls product data, imagery, and pricing in real time.</p>
               </div>
               <div className="deck-v1-seed-step">
                 <span className="deck-v1-seed-step-num">02</span>
-                <p><strong>Auto brand products to AI creative.</strong> Static product shots are automatically transformed into editorial imagery and short-form video.</p>
+                <p><strong>AI creative via Seedance, Grok &amp; Veo.</strong> Static product shots are automatically transformed into editorial imagery and short-form video using frontier generative models.</p>
               </div>
               <div className="deck-v1-seed-step">
                 <span className="deck-v1-seed-step-num">03</span>
@@ -565,8 +565,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 <div className="deck-v1-seed-pipeline-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
                 </div>
-                <span className="deck-v1-seed-pipeline-label">AI Agent scrapers</span>
-                <span className="deck-v1-seed-pipeline-hint">Autonomous data collection</span>
+                <span className="deck-v1-seed-pipeline-label">Catalog Ingest</span>
+                <span className="deck-v1-seed-pipeline-hint">Proprietary product pipeline</span>
               </div>
               <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
                 <span className="deck-v1-seed-pipeline-dot" />
@@ -577,8 +577,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 <div className="deck-v1-seed-pipeline-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
                 </div>
-                <span className="deck-v1-seed-pipeline-label">AI creative</span>
-                <span className="deck-v1-seed-pipeline-hint">Auto-generate from brand products</span>
+                <span className="deck-v1-seed-pipeline-label">Seedance · Grok · Veo</span>
+                <span className="deck-v1-seed-pipeline-hint">AI-generated imagery &amp; video</span>
               </div>
               <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
                 <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
@@ -676,7 +676,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               </div>
             </li>
           </ul>
-          <p className="deck-v9-tech-hint">Every look finds its five nearest visual neighbors automatically.</p>
         </div>
         <div className="deck-v9-tech-right">
           <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
