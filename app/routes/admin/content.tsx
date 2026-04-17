@@ -341,7 +341,9 @@ export default function AdminContent() {
                           <div key={vi} className="admin-look-thumb" style={{ width: 36, height: 48 }}>
                             <video
                               src={v}
+                              autoPlay
                               muted
+                              loop
                               playsInline
                               preload="metadata"
                               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
