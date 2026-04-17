@@ -11,6 +11,8 @@ import DeckView from '~/components/DeckView';
 import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
 import DeckViewV8 from '~/components/DeckViewV8';
+import DeckViewV9 from '~/components/DeckViewV9';
+import DeckViewV1 from '~/components/DeckViewV1';
 import DeckSelector from '~/components/DeckSelector';
 import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
@@ -55,7 +57,7 @@ export default function Home() {
 
   const [isLightMode, setIsLightMode] = useState(false);
   const [fromDeck, setFromDeck] = useState(false);
-  const [activeDeck, setActiveDeck] = useState<'v5' | 'v6' | 'v7' | 'v8'>('v8');
+  const [activeDeck, setActiveDeck] = useState<'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v1'>('v1');
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState(getRandomCatalogName);
@@ -110,6 +112,12 @@ export default function Home() {
     const hash = window.location.hash.replace('#', '');
     if (hash === 'deck' || hash === 'decks') {
       setView('deck-selector');
+    } else if (hash === 'deck/v1' || hash.startsWith('deck/v1/')) {
+      setActiveDeck('v1');
+      setView('deck');
+    } else if (hash === 'deck/v9' || hash.startsWith('deck/v9/')) {
+      setActiveDeck('v9');
+      setView('deck');
     } else if (hash === 'deck/v8' || hash.startsWith('deck/v8/')) {
       setActiveDeck('v8');
       setView('deck');
@@ -206,7 +214,7 @@ export default function Home() {
   }, []);
 
   const handleSelectDeck = useCallback((deckId: string) => {
-    setActiveDeck(deckId as 'v5' | 'v6' | 'v7' | 'v8');
+    setActiveDeck(deckId as 'v5' | 'v6' | 'v7' | 'v8' | 'v9');
     setView('deck');
   }, []);
 
@@ -318,6 +326,26 @@ export default function Home() {
         />
       )}
 
+      {view === 'deck' && activeDeck === 'v1' && (
+        <DeckViewV1
+          onSeeApp={handleDeckToApp}
+          onVisitWebsite={handleDeckToLanding}
+          onBack={handleBackToDeckSelector}
+          isLightMode={isLightMode}
+          onToggleTheme={toggleTheme}
+        />
+      )}
+
+      {view === 'deck' && activeDeck === 'v9' && (
+        <DeckViewV9
+          onSeeApp={handleDeckToApp}
+          onVisitWebsite={handleDeckToLanding}
+          onBack={handleBackToDeckSelector}
+          isLightMode={isLightMode}
+          onToggleTheme={toggleTheme}
+        />
+      )}
+
       {isAppVisible && (
         <>
           {fromDeck && (
@@ -343,6 +371,7 @@ export default function Home() {
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
+                onOpenDecks={() => setView('deck-selector')}
               />
             </div>
           </header>
