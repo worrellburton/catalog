@@ -85,16 +85,18 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
   { n: 5, angle: '288deg', label: 'The loop compounds',   sub: 'CAC drops. LTV climbs. Trust deepens every quarter.',  icon: <CycleIcon /> },
 ];
 
-/* 16-month roadmap phases for the Roadmap timeline slide.
-   start/end are in months (0..16). Bars render proportionally over a 16-month track. */
-const roadmapPhases: { label: string; sub: string; start: number; end: number; color: string }[] = [
-  { label: 'Closed Beta',           sub: 'Invite-only creators, core feed, bookmarking.',          start: 0,  end: 3,  color: '#a78bfa' },
-  { label: 'Creator Tools v1',      sub: 'Storefronts, fast payouts, analytics dashboard.',       start: 1,  end: 5,  color: '#fb923c' },
-  { label: 'AI Visual Discovery',   sub: 'Vector search, auto-tagging, look-to-look recs.',       start: 3,  end: 8,  color: '#38bdf8' },
-  { label: 'Brand Portal + Shopify', sub: 'Self-serve onboarding, product sync, attribution.',    start: 4,  end: 9,  color: '#f97316' },
-  { label: 'Public iOS Launch',     sub: 'Native app, social sharing, growth loops live.',        start: 7,  end: 11, color: '#34d399' },
-  { label: 'Fixed-ROAS Ad Network', sub: 'Guaranteed-outcome placements, audience targeting.',    start: 9,  end: 14, color: '#f5c542' },
-  { label: 'Series A + Scale',      sub: 'Hire to GTM, geo expansion, category breadth.',         start: 13, end: 16, color: '#f43f5e' },
+/* 16-month roadmap phases. Hire Directors runs as a parallel support track
+   alongside the first three product phases. Sequential phases follow below.
+   start/end are months (0..16). Bars render proportionally over a 16-month track. */
+const roadmapPhases: { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean }[] = [
+  { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 7,  color: '#f5c542', parallel: true },
+  { label: 'Seed Product with AI',     sub: 'AI-generated imagery and video linked to brand stores, fully automated.',      start: 0,  end: 3,  color: '#a78bfa' },
+  { label: 'Shopify Integration',      sub: 'Ship the Shopify App: self-serve onboarding, product sync, attribution.',      start: 2,  end: 5,  color: '#fb923c' },
+  { label: 'Onboard First Creators',   sub: 'Invite-only cohort, beta storefronts, early feedback loops.',                  start: 4,  end: 7,  color: '#38bdf8' },
+  { label: 'Test',                     sub: 'Iterate discovery, payouts, and attribution against real sales.',              start: 6,  end: 8,  color: '#34d399' },
+  { label: 'Start GTM 1.0',            sub: 'First public motion \u2014 creators, shoppers, and brand acquisition.',       start: 8,  end: 11, color: '#f97316' },
+  { label: 'Learn GTM',                sub: 'Tighten CAC, ROAS, and retention signals before scaling.',                     start: 11, end: 14, color: '#fde047' },
+  { label: 'Start GTM 2.1',            sub: 'Scaled go-to-market with proven economics and category expansion.',            start: 14, end: 16, color: '#f43f5e' },
 ];
 
 const DeckViewV1: React.FC<DeckViewV1Props> = ({
@@ -107,6 +109,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
+  const [flywheelView, setFlywheelView] = useState<'seed' | 'wheel'>('seed');
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed, setTechActiveSeed] = useState<number | null>(null);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
@@ -120,6 +123,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
     'The Math',
     'Flywheel',
     'Technology',
+    'Payouts',
     'Traction',
     'The Ask',
     'Roadmap',
@@ -489,51 +493,135 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Flywheel */}
+      {/* Slide 9: Flywheel — opens on Seed view, toggles to Creator Flywheel */}
       <div
-        className="deck-slide deck-slide-flywheel-split"
+        className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
         data-active-step={activeFlywheelStep ?? undefined}
       >
-        <div className="flywheel-left">
-          <span className="deck-label">Flywheel</span>
-          <h2>Build supply first.<br />Demand follows trust.</h2>
-          <div className="flywheel-labels">
-            {flywheelSteps.map(({ n, label, sub, icon }) => (
-              <div
-                key={n}
-                className="flywheel-label-item"
-                onMouseEnter={() => setActiveFlywheelStep(n)}
-                onMouseLeave={() => setActiveFlywheelStep(null)}
-              >
-                <span className="fl-num">{icon}</span>
-                <div className="fl-text">
-                  <p className="fl-label">{label}</p>
-                  <p className="fl-sub">{sub}</p>
+        {flywheelView === 'seed' ? (
+          <>
+            <div className="flywheel-left">
+              <span className="deck-label">Step Zero</span>
+              <h2>Seed the product.</h2>
+              <div className="deck-v1-seed-steps">
+                <div className="deck-v1-seed-step">
+                  <span className="deck-v1-seed-step-num">01</span>
+                  <p><strong>Pull brand catalogs.</strong> Ingest product data and imagery direct from brand stores.</p>
+                </div>
+                <div className="deck-v1-seed-step">
+                  <span className="deck-v1-seed-step-num">02</span>
+                  <p><strong>Generate AI imagery.</strong> Static product shots become editorial, lifestyle visuals.</p>
+                </div>
+                <div className="deck-v1-seed-step">
+                  <span className="deck-v1-seed-step-num">03</span>
+                  <p><strong>Render AI video.</strong> Stills turn into short-form motion, ready for the feed.</p>
+                </div>
+                <div className="deck-v1-seed-step">
+                  <span className="deck-v1-seed-step-num">04</span>
+                  <p><strong>Index for discovery.</strong> Every look vectorised before a single creator arrives.</p>
                 </div>
               </div>
-            ))}
-          </div>
-          <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
-        </div>
-        <div className="flywheel-right">
-          <div className="flywheel-center">
-            <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
-              <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-              <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
-            </svg>
-            {flywheelSteps.map(({ n, angle, icon }) => (
-              <div
-                key={n}
-                className="flywheel-node"
-                style={{ '--angle': angle } as React.CSSProperties}
-                onMouseEnter={() => setActiveFlywheelStep(n)}
-                onMouseLeave={() => setActiveFlywheelStep(null)}
-              >
-                <span>{icon}</span>
+              <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
+              <button className="deck-v1-seed-next" type="button" onClick={() => setFlywheelView('wheel')}>
+                <span>Next: the creator flywheel</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+              </button>
+            </div>
+            <div className="flywheel-right">
+              <div className="deck-v1-seed-pipeline">
+                <div className="deck-v1-seed-pipeline-stage">
+                  <div className="deck-v1-seed-pipeline-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7h18l-1.5 4.5a3 3 0 0 1-5.7 0 3 3 0 0 1-1.8.5 3 3 0 0 1-1.8-.5 3 3 0 0 1-5.7 0L3 7z" /><path d="M5 11v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" /></svg>
+                  </div>
+                  <span className="deck-v1-seed-pipeline-label">Brand catalogs</span>
+                  <span className="deck-v1-seed-pipeline-hint">Shopify + partners</span>
+                </div>
+                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
+                  <span className="deck-v1-seed-pipeline-dot" />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.8s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.6s' }} />
+                </div>
+                <div className="deck-v1-seed-pipeline-stage">
+                  <div className="deck-v1-seed-pipeline-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                  </div>
+                  <span className="deck-v1-seed-pipeline-label">AI imagery</span>
+                  <span className="deck-v1-seed-pipeline-hint">Editorial + lifestyle</span>
+                </div>
+                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.3s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.1s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.9s' }} />
+                </div>
+                <div className="deck-v1-seed-pipeline-stage">
+                  <div className="deck-v1-seed-pipeline-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z" /><rect x="2" y="6" width="14" height="12" rx="2" /></svg>
+                  </div>
+                  <span className="deck-v1-seed-pipeline-label">AI video</span>
+                  <span className="deck-v1-seed-pipeline-hint">Short-form motion</span>
+                </div>
+                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.6s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.4s' }} />
+                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.2s' }} />
+                </div>
+                <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
+                  <div className="deck-v1-seed-pipeline-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
+                  </div>
+                  <span className="deck-v1-seed-pipeline-label">Indexed</span>
+                  <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flywheel-left">
+              <span className="deck-label">Creator Flywheel</span>
+              <h2>Build supply first.<br />Demand follows trust.</h2>
+              <div className="flywheel-labels">
+                {flywheelSteps.map(({ n, label, icon }) => (
+                  <div
+                    key={n}
+                    className="flywheel-label-item"
+                    onMouseEnter={() => setActiveFlywheelStep(n)}
+                    onMouseLeave={() => setActiveFlywheelStep(null)}
+                  >
+                    <span className="fl-num">{icon}</span>
+                    <div className="fl-text">
+                      <p className="fl-label">{label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
+              <button className="deck-v1-seed-next deck-v1-seed-back" type="button" onClick={() => setFlywheelView('seed')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+                <span>Back to product seeding</span>
+              </button>
+            </div>
+            <div className="flywheel-right">
+              <div className="flywheel-center">
+                <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
+                  <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
+                  <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
+                </svg>
+                {flywheelSteps.map(({ n, angle, icon }) => (
+                  <div
+                    key={n}
+                    className="flywheel-node"
+                    style={{ '--angle': angle } as React.CSSProperties}
+                    onMouseEnter={() => setActiveFlywheelStep(n)}
+                    onMouseLeave={() => setActiveFlywheelStep(null)}
+                  >
+                    <span>{icon}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}
@@ -631,7 +719,42 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 10: Traction */}
+      {/* Slide 10: Payouts — how creators earn across four streams */}
+      <div className="deck-slide deck-v1-payouts">
+        <div className="deck-v1-payouts-inner">
+          <span className="deck-label">Payouts</span>
+          <h2>Creators earn everywhere<br />their taste shows up.</h2>
+          <div className="deck-v1-payouts-grid">
+            <div className="deck-v1-payouts-card">
+              <span className="deck-v1-payouts-num">01</span>
+              <h3>Engagement</h3>
+              <p>Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Paid out daily.</p>
+              <span className="deck-v1-payouts-chip">Daily payouts</span>
+            </div>
+            <div className="deck-v1-payouts-card">
+              <span className="deck-v1-payouts-num">02</span>
+              <h3>Affiliate links</h3>
+              <p>Full commissions on sales driven through a creator's own affiliate links &mdash; transparent and fast.</p>
+              <span className="deck-v1-payouts-chip">Pass-through</span>
+            </div>
+            <div className="deck-v1-payouts-card">
+              <span className="deck-v1-payouts-num">03</span>
+              <h3>Catalog sales</h3>
+              <p>Revenue share on every Catalog-attributed sale driven by a creator's look. Direct, no shared pool.</p>
+              <span className="deck-v1-payouts-chip">Rev share</span>
+            </div>
+            <div className="deck-v1-payouts-card">
+              <span className="deck-v1-payouts-num">04</span>
+              <h3>Referrals</h3>
+              <p>Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.</p>
+              <span className="deck-v1-payouts-chip">Lifetime</span>
+            </div>
+          </div>
+          <p className="deck-v1-payouts-note">Four revenue streams. One creator. Paid daily.</p>
+        </div>
+      </div>
+
+      {/* Slide 11: Traction */}
       <div className="deck-slide deck-v8-traction">
         <span className="deck-label">Traction</span>
         <h2>Early momentum.</h2>
@@ -764,22 +887,26 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               const widthPct = ((phase.end - phase.start) / 16) * 100;
               const months = phase.end - phase.start;
               return (
-                <div key={phase.label} className="deck-v8-roadmap-row" style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
+                <div key={phase.label} className={`deck-v8-roadmap-row${phase.parallel ? ' deck-v1-roadmap-row-parallel' : ''}`} style={{ ['--row-delay' as string]: `${1.0 + idx * 0.12}s` }}>
                   <div className="deck-v8-roadmap-rowlabel">
-                    <span className="deck-v8-roadmap-rowlabel-title">{phase.label}</span>
+                    <span className="deck-v8-roadmap-rowlabel-title">
+                      {phase.label}
+                      {phase.parallel && <span className="deck-v1-roadmap-parallel-tag">Parallel</span>}
+                    </span>
                     <span className="deck-v8-roadmap-rowlabel-sub">{phase.sub}</span>
                   </div>
                   <div className="deck-v8-roadmap-track">
                     <div
-                      className="deck-v8-roadmap-bar"
+                      className={`deck-v8-roadmap-bar${phase.parallel ? ' deck-v1-roadmap-bar-parallel' : ''}`}
                       style={{
                         left: `${leftPct}%`,
                         width: `${widthPct}%`,
-                        background: phase.color,
-                        boxShadow: `0 0 24px ${phase.color}33`,
-                      }}
+                        background: phase.parallel ? 'transparent' : phase.color,
+                        borderColor: phase.parallel ? phase.color : undefined,
+                        boxShadow: phase.parallel ? 'none' : `0 0 24px ${phase.color}33`,
+                      } as React.CSSProperties}
                     >
-                      <span className="deck-v8-roadmap-bar-label">{months}mo</span>
+                      <span className="deck-v8-roadmap-bar-label" style={phase.parallel ? { color: phase.color } : undefined}>{months}mo</span>
                     </div>
                   </div>
                 </div>
