@@ -2496,6 +2496,11 @@
   color: #6b7280;
 }
 
+.admin-connection-ad {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
 .admin-dark .admin-connection-crawl {
   background: rgba(96, 165, 250, 0.15);
   color: #60a5fa;
@@ -2504,4 +2509,77 @@
 .admin-dark .admin-connection-look {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-dark .admin-connection-ad {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+/* ─── Inline automation expand panel ─────────────────────────── */
+.admin-automation-row td {
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.admin-automation-panel {
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-automation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-automation-freq {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.admin-automation-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.admin-automation-opt input {
+  margin: 0;
+}
+
+.admin-automation-opt.is-active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.admin-automation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-dark .admin-automation-row td {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.admin-dark .admin-automation-opt {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.admin-dark .admin-automation-opt.is-active {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
 }
