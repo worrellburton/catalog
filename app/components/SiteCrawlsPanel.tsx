@@ -403,7 +403,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
         </div>
       ) : (
         <div className="admin-table-wrap">
-          <table className="admin-table">
+          <table className="admin-table admin-table-clickable">
             <thead>
               <tr>
                 <th>Site</th>
@@ -411,6 +411,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                 <th>URLs Found</th>
                 <th>Queued</th>
                 <th>Started</th>
+                <th>Last Synced</th>
                 <th>Duration</th>
                 <th style={{ width: 120 }}>Actions</th>
               </tr>
@@ -422,9 +423,15 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                     ? Math.round((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000)
                     : null;
                 const isActive = job.status === 'pending' || job.status === 'crawling';
+                const lastSynced = job.completed_at || (isActive ? null : job.updated_at);
 
                 return (
-                  <tr key={job.id}>
+                  <tr
+                    key={job.id}
+                    className="admin-table-row-clickable"
+                    onClick={() => setSelectedJob(job)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ fontWeight: 500 }}>{job.site_name || '—'}</span>
@@ -432,6 +439,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                           href={job.site_url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           style={{ fontSize: 11, color: '#888', textDecoration: 'none' }}
                         >
                           {job.site_url}
@@ -448,13 +456,9 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                     </td>
                     <td>
                       {job.total_urls > 0 ? (
-                        <button
-                          className="admin-link-btn"
-                          onClick={() => setSelectedJob(job)}
-                          style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, fontSize: 13 }}
-                        >
+                        <span style={{ color: '#3b82f6', fontWeight: 500, fontSize: 13 }}>
                           {job.total_urls}
-                        </button>
+                        </span>
                       ) : (
                         <span className="admin-cell-muted">—</span>
                       )}
@@ -468,6 +472,9 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                     </td>
                     <td className="admin-cell-muted">{timeAgo(job.created_at)}</td>
                     <td className="admin-cell-muted">
+                      {isActive ? 'syncing…' : timeAgo(lastSynced)}
+                    </td>
+                    <td className="admin-cell-muted">
                       {duration !== null
                         ? duration < 60
                           ? `${duration}s`
@@ -476,7 +483,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                           ? '...'
                           : '—'}
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {job.status === 'failed' && (
                           <button
