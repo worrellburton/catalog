@@ -241,7 +241,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2">Discovery for all commerce.<br />Powered by creators.</h2>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2">Human taste.<br />Superpowered by AI.</h2>
         </div>
       </div>
 
@@ -254,7 +254,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         <div className="deck-v8-split-right">
           {[
             { num: '01', role: 'Shoppers', word: 'Discovery.', sub: 'Fragmented, ad-heavy, impersonal.' },
-            { num: '02', role: 'Creators', word: 'Revenue.', sub: 'Single-digit commissions, no audience ownership.' },
+            { num: '02', role: 'Creators', word: 'Revenue.', sub: 'Single-digit commissions, disorganized and hard.' },
             { num: '03', role: 'Brands', word: 'ROAS.', sub: 'Opaque attribution, no commerce outcomes.' },
           ].map(({ num, role, word, sub }) => (
             <div key={num} className="deck-v8-problem-item deck-v9-problem-item">
