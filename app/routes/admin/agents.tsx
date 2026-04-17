@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
+import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
+import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
 
-type Tab = 'overview' | 'site-crawls';
+type Tab = 'overview' | 'crawls';
+type CrawlSubTab = 'full-site' | 'collections' | 'products';
 
 interface AgentCard {
-  id: Tab | 'ai-models' | 'video-generation' | 'product-ads';
+  id: string;
   name: string;
   description: string;
   status: 'live' | 'coming-soon';
@@ -17,24 +20,44 @@ interface AgentCard {
 export default function AdminAgents() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const initialTab = (searchParams.get('tab') as Tab) || 'overview';
+
+  const initialTab = ((searchParams.get('tab') as Tab) === 'crawls'
+    ? 'crawls'
+    : searchParams.get('tab') === 'site-crawls'
+      ? 'crawls'
+      : 'overview') as Tab;
+  const initialSub = (searchParams.get('sub') as CrawlSubTab) || 'full-site';
+
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [crawlSub, setCrawlSub] = useState<CrawlSubTab>(initialSub);
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);
     const next = new URLSearchParams(searchParams);
-    if (tab === 'overview') next.delete('tab');
-    else next.set('tab', tab);
+    if (tab === 'overview') {
+      next.delete('tab');
+      next.delete('sub');
+    } else {
+      next.set('tab', tab);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const setSub = (sub: CrawlSubTab) => {
+    setCrawlSub(sub);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'crawls');
+    next.set('sub', sub);
     setSearchParams(next, { replace: true });
   };
 
   const cards: AgentCard[] = [
     {
-      id: 'site-crawls',
-      name: 'Site Crawls',
-      description: 'Crawl e-commerce sites to discover product URLs and ingest them into the catalog.',
+      id: 'crawls',
+      name: 'Crawls',
+      description: 'Crawl e-commerce sites, collections, and individual products to populate the catalog.',
       status: 'live',
-      onClick: () => setTab('site-crawls'),
+      onClick: () => setTab('crawls'),
       icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
     },
     {
@@ -78,10 +101,10 @@ export default function AdminAgents() {
           Overview
         </button>
         <button
-          className={`admin-tab ${activeTab === 'site-crawls' ? 'active' : ''}`}
-          onClick={() => setTab('site-crawls')}
+          className={`admin-tab ${activeTab === 'crawls' ? 'active' : ''}`}
+          onClick={() => setTab('crawls')}
         >
-          Site Crawls
+          Crawls
         </button>
       </div>
 
@@ -114,7 +137,32 @@ export default function AdminAgents() {
           ))}
         </div>
       ) : (
-        <SiteCrawlsPanel embedded />
+        <div className="admin-agent-subsection">
+          <div className="admin-subtabs">
+            <button
+              className={`admin-subtab ${crawlSub === 'full-site' ? 'active' : ''}`}
+              onClick={() => setSub('full-site')}
+            >
+              Full Site
+            </button>
+            <button
+              className={`admin-subtab ${crawlSub === 'collections' ? 'active' : ''}`}
+              onClick={() => setSub('collections')}
+            >
+              Collections
+            </button>
+            <button
+              className={`admin-subtab ${crawlSub === 'products' ? 'active' : ''}`}
+              onClick={() => setSub('products')}
+            >
+              Products
+            </button>
+          </div>
+
+          {crawlSub === 'full-site' && <SiteCrawlsPanel embedded />}
+          {crawlSub === 'collections' && <CollectionCrawlsPanel />}
+          {crawlSub === 'products' && <ProductCrawlsPanel />}
+        </div>
       )}
     </div>
   );

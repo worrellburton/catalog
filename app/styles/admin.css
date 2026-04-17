@@ -2405,3 +2405,72 @@
 .admin-dark .admin-agent-card-desc {
   color: rgba(255, 255, 255, 0.5);
 }
+
+/* ─── Agents sub-tabs (nested under main tabs) ───────────────── */
+.admin-agent-subsection {
+  margin-top: 16px;
+}
+
+.admin-subtabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f4f4f4;
+  border-radius: 8px;
+  width: fit-content;
+  margin-bottom: 20px;
+}
+
+.admin-subtab {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+}
+
+.admin-subtab:hover {
+  color: #1a1a1a;
+}
+
+.admin-subtab.active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.admin-dark .admin-subtabs {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-dark .admin-subtab {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.admin-dark .admin-subtab:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.admin-dark .admin-subtab.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: none;
+}
+
+/* ─── Clickable table rows ───────────────────────────────────────── */
+.admin-table-clickable tbody tr.admin-table-row-clickable {
+  transition: background 0.12s ease;
+}
+
+.admin-table-clickable tbody tr.admin-table-row-clickable:hover {
+  background: #f8f8f8;
+}
+
+.admin-dark .admin-table-clickable tbody tr.admin-table-row-clickable:hover {
+  background: rgba(255, 255, 255, 0.04);
+}

@@ -46,7 +46,10 @@ const allSearchItems: SearchItem[] = [
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
-  { label: 'Site Crawls', type: 'Page', to: '/admin/agents?tab=site-crawls' },
+  { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
+  { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
+  { label: 'Collection Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=collections' },
+  { label: 'Product Scrapes', type: 'Page', to: '/admin/agents?tab=crawls&sub=products' },
   // Shoppers
   { label: 'Carla', type: 'Shopper', to: '/admin/shoppers/Carla' },
   { label: 'alfvaz', type: 'Shopper', to: '/admin/shoppers/alfvaz' },
