@@ -15,9 +15,10 @@ interface UserMenuProps {
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
+  onOpenDecks?: () => void;
 }
 
-export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogout }: UserMenuProps) {
+export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogout, onOpenDecks }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -70,6 +71,12 @@ export default function UserMenu({ onOpenBookmarks, bookmarkCount, user, onLogou
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
             <span>Admin</span>
           </button>
+          {onOpenDecks && (
+            <button className="user-menu-item" onClick={() => { onOpenDecks(); setOpen(false); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+              <span>Decks</span>
+            </button>
+          )}
           {onLogout && (
             <>
               <div className="user-menu-divider" />

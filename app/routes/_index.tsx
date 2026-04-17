@@ -368,6 +368,7 @@ export default function Home() {
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
+                onOpenDecks={() => setView('deck-selector')}
               />
             </div>
           </header>
