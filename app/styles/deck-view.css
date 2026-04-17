@@ -4573,21 +4573,49 @@
 /* ===========================================================
    V.1 Flywheel slide — smooth sliding track between Seed & Wheel
    =========================================================== */
-/* Flywheel slide — conditional rendering with fade-in animation */
+/* Flywheel slide — slide-across animation between Seed & Wheel views */
 .deck-view-v1 .deck-v1-flywheel-slide {
-  /* inherits flex-direction: row from .deck-slide-flywheel-split */
+  position: relative;
+  overflow: hidden;
+  padding: 0 !important;
+  display: block !important;
+  min-height: 100vh;
+  width: 100%;
 }
 
-.deck-view-v1 .deck-v1-fw-animate {
-  animation: deck-v1-fw-fadein 0.5s ease both;
+.deck-view-v1 .deck-v1-fw-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(28px, 4vw, 64px);
+  padding: clamp(60px, 7vh, 100px) clamp(56px, 7vw, 120px);
+  box-sizing: border-box;
+  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.55s cubic-bezier(0.65, 0, 0.35, 1);
+  will-change: transform, opacity;
 }
 
-@keyframes deck-v1-fw-fadein {
-  from { opacity: 0; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
+.deck-view-v1 .flywheel-view-seed .deck-v1-fw-view-seed {
+  transform: translateX(0);
+  opacity: 1;
+}
+.deck-view-v1 .flywheel-view-seed .deck-v1-fw-view-wheel {
+  transform: translateX(30%);
+  opacity: 0;
+  pointer-events: none;
+}
+.deck-view-v1 .flywheel-view-wheel .deck-v1-fw-view-seed {
+  transform: translateX(-30%);
+  opacity: 0;
+  pointer-events: none;
+}
+.deck-view-v1 .flywheel-view-wheel .deck-v1-fw-view-wheel {
+  transform: translateX(0);
+  opacity: 1;
 }
 
-/* Arrow nav button — natural flex child */
+/* Arrow nav button — natural flex child on the edge of each view */
 .deck-view-v1 .deck-v1-flywheel-nav {
   flex-shrink: 0;
   align-self: center;
@@ -4601,11 +4629,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   font-family: inherit;
   padding: 0;
   margin: 0 8px;
 }
+.deck-view-v1 .deck-v1-flywheel-nav-right { margin-left: auto; }
+.deck-view-v1 .deck-v1-flywheel-nav-left  { margin-right: auto; order: -1; }
 
 .deck-view-v1 .deck-v1-flywheel-nav:hover {
   background: rgba(245, 197, 66, 0.22);
@@ -4802,10 +4832,10 @@
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
-  gap: clamp(28px, 4vw, 64px);
+  gap: clamp(48px, 6vw, 96px);
   min-height: 0;
   height: 100vh;
-  padding: clamp(48px, 6vh, 80px) clamp(36px, 5vw, 80px);
+  padding: clamp(48px, 6vh, 80px) clamp(64px, 8vw, 120px);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -4846,6 +4876,111 @@
   .deck-view-v1 .deck-v9-tech-stage { width: min(340px, 100%); }
   .deck-view-v1 .deck-v9-tech { padding-top: 40px; padding-bottom: 40px; }
   .deck-view-v1 .deck-v9-tech-left h2 { font-size: clamp(28px, 3.4vw, 44px); }
+}
+
+/* V.1 Tech stage — 1 seed at top spawning 5 neighbors via animated rays */
+.deck-view-v1 .deck-v1-tech-stage {
+  position: relative;
+  width: min(600px, 100%);
+  aspect-ratio: 6 / 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.deck-view-v1 .deck-v1-tech-seed {
+  width: clamp(120px, 14vw, 170px);
+  aspect-ratio: 9 / 14;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid rgba(245, 197, 66, 0.9);
+  box-shadow: 0 0 30px rgba(245, 197, 66, 0.35);
+  position: relative;
+  z-index: 3;
+  animation: deck-v1-tech-seed-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.deck-view-v1 .deck-v1-tech-seed video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@keyframes deck-v1-tech-seed-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.deck-view-v1 .deck-v1-tech-rays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.deck-view-v1 .deck-v1-tech-ray {
+  stroke: #f5c542;
+  stroke-width: 1.2;
+  stroke-dasharray: 6 5;
+  opacity: 0;
+  stroke-dashoffset: 300;
+  animation: deck-v1-tech-ray-draw 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) forwards;
+  animation-delay: calc(0.35s + var(--ray-i, 0) * 0.12s);
+}
+
+@keyframes deck-v1-tech-ray-draw {
+  0% { stroke-dashoffset: 300; opacity: 0; }
+  30% { opacity: 0.8; }
+  100% { stroke-dashoffset: 0; opacity: 0.7; }
+}
+
+.deck-view-v1 .deck-v1-tech-neighbors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: clamp(6px, 0.6vw, 10px);
+  width: 100%;
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.deck-view-v1 .deck-v1-tech-neighbor {
+  aspect-ratio: 9 / 14;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(245, 197, 66, 0.35);
+  position: relative;
+  opacity: 0;
+  transform: translateY(16px) scale(0.9);
+  animation: deck-v1-tech-neighbor-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: calc(0.85s + var(--n-i, 0) * 0.1s);
+}
+.deck-view-v1 .deck-v1-tech-neighbor video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.deck-view-v1 .deck-v1-tech-neighbor-tag {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  color: #0a0f0c;
+  background: rgba(245, 197, 66, 0.92);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+@keyframes deck-v1-tech-neighbor-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ===========================================================
@@ -4992,6 +5127,15 @@
   margin: 10px 0 0;
   letter-spacing: 0.01em;
 }
+
+.deck-view-v1 .deck-v1-payouts-subtitle {
+  font-size: clamp(16px, 1.4vw, 20px);
+  color: rgba(255, 255, 255, 0.55);
+  margin: 10px 0 0;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-subtitle { color: rgba(0, 0, 0, 0.5); }
 
 .light-mode .deck-view-v1 .deck-v1-payouts h2 { color: #1a1a1a; }
 .light-mode .deck-view-v1 .deck-v1-payouts-card {

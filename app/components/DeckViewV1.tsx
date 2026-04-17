@@ -544,117 +544,129 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Flywheel — Seed ↔ Creator Flywheel with arrow nav */}
+      {/* Slide 9: Flywheel — Seed ↔ Creator Flywheel with slide animation */}
       <div
-        className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
+        className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
         data-active-step={activeFlywheelStep ?? undefined}
       >
-        {flywheelView === 'seed' ? (
-          <>
-            <div className="flywheel-left deck-v1-fw-animate">
-              <span className="deck-label">Step Zero</span>
-              <h2>Build product.</h2>
-              <div className="deck-v1-seed-steps">
-                <div className="deck-v1-seed-step">
-                  <span className="deck-v1-seed-step-num">01</span>
-                  <p><strong>Build AI Agent scrapers.</strong> Autonomous agents crawl brand stores and pull product data, imagery, and pricing in real time.</p>
-                </div>
-                <div className="deck-v1-seed-step">
-                  <span className="deck-v1-seed-step-num">02</span>
-                  <p><strong>Auto brand products to AI creative.</strong> Static product shots are automatically transformed into editorial imagery and short-form video.</p>
-                </div>
-                <div className="deck-v1-seed-step">
-                  <span className="deck-v1-seed-step-num">03</span>
-                  <p><strong>Index elegantly.</strong> Every look is vectorised and indexed &mdash; ready for the feed before a single creator arrives.</p>
-                </div>
+        {/* Seed view */}
+        <div className="deck-v1-fw-view deck-v1-fw-view-seed" aria-hidden={flywheelView !== 'seed'}>
+          <div className="flywheel-left">
+            <span className="deck-label">Step Zero</span>
+            <h2>Build product.</h2>
+            <div className="deck-v1-seed-steps">
+              <div className="deck-v1-seed-step">
+                <span className="deck-v1-seed-step-num">01</span>
+                <p><strong>Build AI Agent scrapers.</strong> Autonomous agents crawl brand stores and pull product data, imagery, and pricing in real time.</p>
               </div>
-              <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
-            </div>
-            <div className="flywheel-right deck-v1-fw-animate" style={{ animationDelay: '0.15s' }}>
-              <div className="deck-v1-seed-pipeline">
-                <div className="deck-v1-seed-pipeline-stage">
-                  <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
-                  </div>
-                  <span className="deck-v1-seed-pipeline-label">AI Agent scrapers</span>
-                  <span className="deck-v1-seed-pipeline-hint">Autonomous data collection</span>
-                </div>
-                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                  <span className="deck-v1-seed-pipeline-dot" />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.8s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.6s' }} />
-                </div>
-                <div className="deck-v1-seed-pipeline-stage">
-                  <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
-                  </div>
-                  <span className="deck-v1-seed-pipeline-label">AI creative</span>
-                  <span className="deck-v1-seed-pipeline-hint">Auto-generate from brand products</span>
-                </div>
-                <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.2s' }} />
-                  <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.0s' }} />
-                </div>
-                <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
-                  <div className="deck-v1-seed-pipeline-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                  </div>
-                  <span className="deck-v1-seed-pipeline-label">Indexed elegantly</span>
-                  <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
-                </div>
+              <div className="deck-v1-seed-step">
+                <span className="deck-v1-seed-step-num">02</span>
+                <p><strong>Auto brand products to AI creative.</strong> Static product shots are automatically transformed into editorial imagery and short-form video.</p>
+              </div>
+              <div className="deck-v1-seed-step">
+                <span className="deck-v1-seed-step-num">03</span>
+                <p><strong>Index elegantly.</strong> Every look is vectorised and indexed &mdash; ready for the feed before a single creator arrives.</p>
               </div>
             </div>
-            <button className="deck-v1-flywheel-nav" type="button" onClick={() => setFlywheelView('wheel')} aria-label="See the creator flywheel">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="deck-v1-flywheel-nav" type="button" onClick={() => setFlywheelView('seed')} aria-label="Back to product seeding">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <div className="flywheel-left deck-v1-fw-animate">
-              <span className="deck-label">Creator Flywheel</span>
-              <h2>Build supply first.<br />Demand follows trust.</h2>
-              <div className="flywheel-labels">
-                {flywheelSteps.map(({ n, label, icon }) => (
-                  <div
-                    key={n}
-                    className="flywheel-label-item"
-                    onMouseEnter={() => setActiveFlywheelStep(n)}
-                    onMouseLeave={() => setActiveFlywheelStep(null)}
-                  >
-                    <span className="fl-num">{icon}</span>
-                    <div className="fl-text">
-                      <p className="fl-label">{label}</p>
-                    </div>
-                  </div>
-                ))}
+            <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
+          </div>
+          <div className="flywheel-right">
+            <div className="deck-v1-seed-pipeline">
+              <div className="deck-v1-seed-pipeline-stage">
+                <div className="deck-v1-seed-pipeline-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
+                </div>
+                <span className="deck-v1-seed-pipeline-label">AI Agent scrapers</span>
+                <span className="deck-v1-seed-pipeline-hint">Autonomous data collection</span>
               </div>
-              <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
-            </div>
-            <div className="flywheel-right deck-v1-fw-animate" style={{ animationDelay: '0.15s' }}>
-              <div className="flywheel-center">
-                <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
-                  <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-                  <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
-                </svg>
-                {flywheelSteps.map(({ n, angle, icon }) => (
-                  <div
-                    key={n}
-                    className="flywheel-node"
-                    style={{ '--angle': angle } as React.CSSProperties}
-                    onMouseEnter={() => setActiveFlywheelStep(n)}
-                    onMouseLeave={() => setActiveFlywheelStep(null)}
-                  >
-                    <span>{icon}</span>
-                  </div>
-                ))}
+              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
+                <span className="deck-v1-seed-pipeline-dot" />
+                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.8s' }} />
+                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.6s' }} />
+              </div>
+              <div className="deck-v1-seed-pipeline-stage">
+                <div className="deck-v1-seed-pipeline-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
+                </div>
+                <span className="deck-v1-seed-pipeline-label">AI creative</span>
+                <span className="deck-v1-seed-pipeline-hint">Auto-generate from brand products</span>
+              </div>
+              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
+                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
+                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.2s' }} />
+                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.0s' }} />
+              </div>
+              <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
+                <div className="deck-v1-seed-pipeline-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
+                </div>
+                <span className="deck-v1-seed-pipeline-label">Indexed elegantly</span>
+                <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
               </div>
             </div>
-          </>
-        )}
+          </div>
+          <button
+            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-right"
+            type="button"
+            onClick={() => setFlywheelView('wheel')}
+            aria-label="See the creator flywheel"
+            tabIndex={flywheelView === 'seed' ? 0 : -1}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        </div>
+
+        {/* Wheel view */}
+        <div className="deck-v1-fw-view deck-v1-fw-view-wheel" aria-hidden={flywheelView !== 'wheel'}>
+          <button
+            className="deck-v1-flywheel-nav deck-v1-flywheel-nav-left"
+            type="button"
+            onClick={() => setFlywheelView('seed')}
+            aria-label="Back to product seeding"
+            tabIndex={flywheelView === 'wheel' ? 0 : -1}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <div className="flywheel-left">
+            <span className="deck-label">Creator Flywheel</span>
+            <h2>Build supply first.<br />Demand follows trust.</h2>
+            <div className="flywheel-labels">
+              {flywheelSteps.map(({ n, label, icon }) => (
+                <div
+                  key={n}
+                  className="flywheel-label-item"
+                  onMouseEnter={() => setActiveFlywheelStep(n)}
+                  onMouseLeave={() => setActiveFlywheelStep(null)}
+                >
+                  <span className="fl-num">{icon}</span>
+                  <div className="fl-text">
+                    <p className="fl-label">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
+          </div>
+          <div className="flywheel-right">
+            <div className="flywheel-center">
+              <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
+                <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
+                <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
+              </svg>
+              {flywheelSteps.map(({ n, angle, icon }) => (
+                <div
+                  key={n}
+                  className="flywheel-node"
+                  style={{ '--angle': angle } as React.CSSProperties}
+                  onMouseEnter={() => setActiveFlywheelStep(n)}
+                  onMouseLeave={() => setActiveFlywheelStep(null)}
+                >
+                  <span>{icon}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}
@@ -691,59 +703,41 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
           <p className="deck-v9-tech-hint">Every look finds its five nearest visual neighbors automatically.</p>
         </div>
         <div className="deck-v9-tech-right">
-          <div className="deck-v9-tech-stage">
-            {techVideos.map((src, i) => {
-              const isSeed = techActiveSeed === i;
-              const isFanned = techActiveSeed !== null;
-              return (
-                <button
-                  key={`seed-${i}`}
-                  type="button"
-                  className={`deck-v9-tech-tile deck-v9-tech-seed${isSeed ? ' is-seed' : ''}${isFanned && !isSeed ? ' is-dim' : ''}`}
-                  style={{ '--seed-i': i } as React.CSSProperties}
-                  onClick={() => setTechActiveSeed(isSeed ? null : i)}
-                  aria-label={`Query look ${i + 1}`}
-                >
-                  <video src={`${basePath}/${src}`} autoPlay loop muted playsInline />
-                </button>
-              );
-            })}
-            {techActiveSeed !== null && (
-              <>
-                <svg className="deck-v9-tech-rays" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  {[
-                    { x: 32, y: 50 },
-                    { x: 50, y: 50 },
-                    { x: 68, y: 50 },
-                    { x: 41, y: 82 },
-                    { x: 59, y: 82 },
-                  ].map(({ x, y }, n) => (
-                    <line
-                      key={n}
-                      className="deck-v9-tech-ray"
-                      x1="50"
-                      y1="16"
-                      x2={x}
-                      y2={y}
-                      style={{ '--ray-i': n } as React.CSSProperties}
-                    />
-                  ))}
-                </svg>
-                {[0, 1, 2, 3, 4].map((n) => {
-                  const src = techVideos[(techActiveSeed + n + 1) % techVideos.length];
-                  return (
-                    <div
-                      key={`neighbor-${techActiveSeed}-${n}`}
-                      className="deck-v9-tech-tile deck-v9-tech-neighbor"
-                      style={{ '--n-i': n } as React.CSSProperties}
-                    >
-                      <video src={`${basePath}/${src}`} autoPlay loop muted playsInline />
-                      <span className="deck-v9-tech-neighbor-tag">0.9{9 - n}</span>
-                    </div>
-                  );
-                })}
-              </>
-            )}
+          <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
+            {/* 1 seed creative at top */}
+            <div className="deck-v1-tech-seed">
+              <video src={`${basePath}/${techVideos[techActiveSeed ?? 0]}`} autoPlay loop muted playsInline />
+            </div>
+            {/* 5 rays spawning down to 5 new creatives */}
+            <svg className="deck-v1-tech-rays" viewBox="0 0 600 260" preserveAspectRatio="none" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((n) => {
+                const x2 = 60 + n * 120;
+                return (
+                  <line
+                    key={`ray-${techActiveSeed}-${n}`}
+                    className="deck-v1-tech-ray"
+                    x1="300" y1="8" x2={x2} y2="240"
+                    style={{ '--ray-i': n } as React.CSSProperties}
+                  />
+                );
+              })}
+            </svg>
+            {/* 5 spawned creatives at bottom */}
+            <div className="deck-v1-tech-neighbors">
+              {[0, 1, 2, 3, 4].map((n) => {
+                const src = techVideos[((techActiveSeed ?? 0) + n + 1) % techVideos.length];
+                return (
+                  <div
+                    key={`neighbor-${techActiveSeed}-${n}`}
+                    className="deck-v1-tech-neighbor"
+                    style={{ '--n-i': n } as React.CSSProperties}
+                  >
+                    <video src={`${basePath}/${src}`} autoPlay loop muted playsInline />
+                    <span className="deck-v1-tech-neighbor-tag">0.9{9 - n}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <div className="deck-v9-tech-meta">
             <span className="deck-v9-tech-meta-dot" />
@@ -758,6 +752,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
           <div className="deck-v1-payouts-header">
             <span className="deck-label">Payouts</span>
             <h2>Post once.<br />Earn four ways.</h2>
+            <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           </div>
 
           <div className="deck-v1-payouts-body">
@@ -839,8 +834,6 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
               </svg>
             </div>
           </div>
-
-          <p className="deck-v1-payouts-note">Post authentically, earn daily.</p>
         </div>
       </div>
 
