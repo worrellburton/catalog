@@ -5005,8 +5005,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: clamp(140px, 15vw, 200px);
-  height: clamp(140px, 15vw, 200px);
+  width: clamp(64px, 6vw, 88px);
+  height: clamp(64px, 6vw, 88px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5284,5 +5284,38 @@
 }
 .light-mode .deck-view-v1 .deck-v1-roadmap-row-parallel {
   border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V.1 Roadmap — compact for laptop screens */
+.deck-view-v1 .deck-v8-roadmap > h2 {
+  margin-bottom: clamp(16px, 2.5vh, 36px);
+  font-size: clamp(28px, 4vw, 52px);
+}
+.deck-view-v1 .deck-v8-roadmap-card {
+  padding: clamp(16px, 2vh, 32px) clamp(20px, 2.5vw, 36px) clamp(14px, 1.8vh, 28px);
+}
+.deck-view-v1 .deck-v8-roadmap-card-header {
+  margin-bottom: clamp(8px, 1.2vh, 22px);
+  font-size: 10px;
+}
+.deck-view-v1 .deck-v8-roadmap-rows {
+  gap: clamp(4px, 0.8vh, 14px);
+}
+.deck-view-v1 .deck-v8-roadmap-row {
+  gap: clamp(12px, 2vw, 24px);
+  grid-template-columns: clamp(160px, 18vw, 240px) 1fr;
+}
+.deck-view-v1 .deck-v8-roadmap-rowlabel-title {
+  font-size: clamp(11px, 1.2vw, 13.5px);
+}
+.deck-view-v1 .deck-v8-roadmap-rowlabel-sub {
+  font-size: clamp(9px, 0.9vw, 11px);
+}
+.deck-view-v1 .deck-v8-roadmap-bar-label {
+  font-size: clamp(10px, 1vw, 12px);
+}
+.deck-view-v1 .deck-v8-roadmap-bar {
+  height: clamp(28px, 3.5vh, 38px);
+  border-radius: 999px;
 }
 

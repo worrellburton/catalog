@@ -542,8 +542,8 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         className={`deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide flywheel-view-${flywheelView}`}
         data-active-step={activeFlywheelStep ?? undefined}
       >
-        {/* Seed view */}
-        <div className="deck-v1-fw-view deck-v1-fw-view-seed" aria-hidden={flywheelView !== 'seed'}>
+        {flywheelView === 'seed' ? (
+        <div key="seed" className="deck-v1-fw-view deck-v1-fw-view-seed">
           <div className="flywheel-left">
             <span className="deck-label">Step Zero</span>
             <h2>Build and seed product.</h2>
@@ -603,20 +603,17 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             type="button"
             onClick={() => setFlywheelView('wheel')}
             aria-label="See the creator flywheel"
-            tabIndex={flywheelView === 'seed' ? 0 : -1}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
           </button>
         </div>
-
-        {/* Wheel view */}
-        <div className="deck-v1-fw-view deck-v1-fw-view-wheel" aria-hidden={flywheelView !== 'wheel'}>
+        ) : (
+        <div key="wheel" className="deck-v1-fw-view deck-v1-fw-view-wheel">
           <button
             className="deck-v1-flywheel-nav deck-v1-flywheel-nav-left"
             type="button"
             onClick={() => setFlywheelView('seed')}
             aria-label="Back to product seeding"
-            tabIndex={flywheelView === 'wheel' ? 0 : -1}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
@@ -660,6 +657,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Slide 9: Technology - vector DB visual discovery demo */}
