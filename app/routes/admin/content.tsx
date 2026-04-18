@@ -45,6 +45,36 @@ export default function AdminContent() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+  // Create Look modal state
+  const [showCreateLook, setShowCreateLook] = useState(false);
+  const [createLookSelectedProducts, setCreateLookSelectedProducts] = useState<Set<string>>(new Set());
+  const [createLookProductSearch, setCreateLookProductSearch] = useState('');
+  const [createLookCreator, setCreateLookCreator] = useState('');
+  const [createLookLocation, setCreateLookLocation] = useState('');
+  const [createLookStyle, setCreateLookStyle] = useState('Street Style');
+
+  const openCreateLookModal = useCallback(() => {
+    setCreateLookSelectedProducts(new Set());
+    setCreateLookProductSearch('');
+    setCreateLookCreator('');
+    setCreateLookLocation('');
+    setCreateLookStyle('Street Style');
+    setShowCreateLook(true);
+  }, []);
+
+  const toggleCreateLookProduct = useCallback((id: string) => {
+    setCreateLookSelectedProducts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const creatorOptions = useMemo(() =>
+    Object.entries(creators).map(([key, c]) => ({ key, displayName: c.displayName, avatar: c.avatar })),
+  []);
+
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
 
@@ -94,6 +124,15 @@ export default function AdminContent() {
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   const [adImpressionsMap, setAdImpressionsMap] = useState<Map<string, number>>(new Map());
   const [adClicksMap, setAdClicksMap] = useState<Map<string, number>>(new Map());
+
+  const filteredCreateLookProducts = useMemo(() => {
+    if (!createLookProductSearch.trim()) return crawledProducts;
+    const q = createLookProductSearch.toLowerCase();
+    return crawledProducts.filter(p =>
+      (p.name?.toLowerCase().includes(q)) ||
+      (p.brand?.toLowerCase().includes(q))
+    );
+  }, [crawledProducts, createLookProductSearch]);
 
   useEffect(() => {
     const loadCrawled = async () => {
@@ -234,6 +273,14 @@ export default function AdminContent() {
 
       {activeTab === 'looks' && (
         <div className="admin-table-wrap">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="admin-btn admin-btn-primary" onClick={openCreateLookModal}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Create Look
+            </button>
+          </div>
           <table className="admin-table">
             <thead>
               <tr>
@@ -439,6 +486,192 @@ export default function AdminContent() {
 
       {activeTab === 'places' && (
         <div className="admin-empty">No places data yet</div>
+      )}
+
+      {/* Create Look Modal */}
+      {showCreateLook && (
+        <div className="admin-modal-overlay" onClick={() => setShowCreateLook(false)}>
+          <div className="admin-modal admin-modal-wide" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="admin-modal-header">
+              <div>
+                <h3>Create Look</h3>
+                <p style={{ fontSize: 12, color: '#888', margin: '4px 0 0' }}>
+                  Select products and configure your new look video
+                </p>
+              </div>
+              <button className="admin-modal-close" onClick={() => setShowCreateLook(false)}>&times;</button>
+            </div>
+
+            <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Options row: Creator, Location, Style */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                  <label>Creator (optional)</label>
+                  <select
+                    value={createLookCreator}
+                    onChange={e => setCreateLookCreator(e.target.value)}
+                    style={{
+                      width: '100%', padding: '8px 10px', border: '1px solid #ddd',
+                      borderRadius: 6, fontSize: 13, outline: 'none', background: '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">None</option>
+                    {creatorOptions.map(c => (
+                      <option key={c.key} value={c.key}>{c.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                  <label>Location (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. New York, Paris"
+                    value={createLookLocation}
+                    onChange={e => setCreateLookLocation(e.target.value)}
+                  />
+                </div>
+
+                <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                  <label>Style</label>
+                  <select
+                    value={createLookStyle}
+                    onChange={e => setCreateLookStyle(e.target.value)}
+                    style={{
+                      width: '100%', padding: '8px 10px', border: '1px solid #ddd',
+                      borderRadius: 6, fontSize: 13, outline: 'none', background: '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="Street Style">Street Style</option>
+                    <option value="Editorial">Editorial</option>
+                    <option value="Lifestyle">Lifestyle</option>
+                    <option value="Studio">Studio</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Selected creator preview */}
+              {createLookCreator && (() => {
+                const c = creators[createLookCreator];
+                return c ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8f8f8', borderRadius: 8 }}>
+                    <img src={c.avatar} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{c.displayName}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>@{createLookCreator}</div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Product search */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 }}>
+                  Products
+                </label>
+                <input
+                  type="text"
+                  placeholder="Search products by name or brand..."
+                  value={createLookProductSearch}
+                  onChange={e => setCreateLookProductSearch(e.target.value)}
+                  style={{
+                    width: '100%', padding: '8px 10px', border: '1px solid #ddd',
+                    borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                {createLookSelectedProducts.size > 0 && (
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>
+                    {createLookSelectedProducts.size} product{createLookSelectedProducts.size > 1 ? 's' : ''} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Product list */}
+              <div style={{ flex: 1, overflow: 'auto', minHeight: 0, maxHeight: 320 }}>
+                {filteredCreateLookProducts.length === 0 ? (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+                    {crawledProducts.length === 0 ? 'No products available.' : 'No products match your search.'}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {filteredCreateLookProducts.map(p => {
+                      const isSelected = createLookSelectedProducts.has(p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => toggleCreateLookProduct(p.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px',
+                            borderRadius: 8, cursor: 'pointer',
+                            background: isSelected ? '#f0f7ff' : 'transparent',
+                            border: `1px solid ${isSelected ? '#3b82f6' : 'transparent'}`,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {/* Checkbox */}
+                          <div style={{
+                            width: 20, height: 20, borderRadius: 4,
+                            border: `2px solid ${isSelected ? '#3b82f6' : '#ccc'}`,
+                            background: isSelected ? '#3b82f6' : '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0, transition: 'all 0.15s',
+                          }}>
+                            {isSelected && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+
+                          {/* Product image */}
+                          {p.image_url ? (
+                            <img
+                              src={p.image_url}
+                              alt=""
+                              style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: 40, height: 40, borderRadius: 6, background: '#f0f0f0',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 10, color: '#999', flexShrink: 0,
+                            }}>
+                              No img
+                            </div>
+                          )}
+
+                          {/* Product info */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.name || 'Unnamed product'}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#888' }}>
+                              {p.brand || 'Unknown brand'}{p.price ? ` · ${p.price}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="admin-modal-footer">
+              <button className="admin-btn admin-btn-secondary" onClick={() => setShowCreateLook(false)}>
+                Cancel
+              </button>
+              <button
+                className="admin-btn admin-btn-primary"
+                disabled={createLookSelectedProducts.size === 0}
+              >
+                Generate Look ({createLookSelectedProducts.size} product{createLookSelectedProducts.size !== 1 ? 's' : ''})
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
