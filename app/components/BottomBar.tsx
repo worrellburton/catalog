@@ -8,12 +8,13 @@ interface BottomBarProps {
   onFilterChange: (filter: 'all' | 'men' | 'women') => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onSelectSuggestion?: (query: string) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
 }
 
 export default function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onOpenCreators, catalogName
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName
 }: BottomBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -97,11 +98,15 @@ export default function BottomBar({
     btn.classList.add('tapped');
     setTimeout(() => {
       setLocalSearch(query);
-      onSearchChange(query.toLowerCase());
+      if (onSelectSuggestion) {
+        onSelectSuggestion(query);
+      } else {
+        onSearchChange(query.toLowerCase());
+      }
       setSearchOpen(false);
       btn.classList.remove('tapped');
     }, 600);
-  }, [onSearchChange]);
+  }, [onSearchChange, onSelectSuggestion]);
 
   const handleFilterApply = useCallback(() => {
     // Sync gender filters

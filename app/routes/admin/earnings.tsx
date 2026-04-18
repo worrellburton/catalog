@@ -21,7 +21,6 @@ export default function AdminEarnings() {
   const [dateFilter, setDateFilter] = useState('02/10/2026');
   const [dailyPayout, setDailyPayout] = useState('5');
   const [cac, setCac] = useState('2');
-  const [showSettings, setShowSettings] = useState(false);
   const [showCreatePayout, setShowCreatePayout] = useState(false);
   const [payoutSearch, setPayoutSearch] = useState('');
 
@@ -49,42 +48,38 @@ export default function AdminEarnings() {
           <h1 style={{ margin: 0 }}>Earnings</h1>
           <p className="admin-page-subtitle" style={{ margin: '4px 0 0' }}>Track creator payouts</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="text"
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
-            className="admin-date-input"
-            placeholder="MM/DD/YYYY"
-          />
-          <button className="admin-icon-btn" aria-label="Calendar">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          </button>
-          <button className="admin-icon-btn" aria-label="Export">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <div style={{ position: 'relative' }}>
-            <button className="admin-icon-btn" aria-label="Payout settings" onClick={() => setShowSettings(!showSettings)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/></svg>
-            </button>
-            {showSettings && (
-              <div className="admin-popover">
-                <div className="admin-popover-field">
-                  <label>Daily Payout Value</label>
-                  <div className="admin-popover-input-wrap">
-                    <span className="admin-popover-input-prefix">$</span>
-                    <input type="number" value={dailyPayout} onChange={e => setDailyPayout(e.target.value)} />
-                  </div>
-                </div>
-                <div className="admin-popover-field">
-                  <label>Customer Acquisition Cost</label>
-                  <div className="admin-popover-input-wrap">
-                    <span className="admin-popover-input-prefix">$</span>
-                    <input type="number" value={cac} onChange={e => setCac(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            )}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Daily Payout Value</label>
+            <div className="admin-popover-input-wrap" style={{ width: 120 }}>
+              <span className="admin-popover-input-prefix">$</span>
+              <input type="number" value={dailyPayout} onChange={e => setDailyPayout(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Customer Acquisition Cost</label>
+            <div className="admin-popover-input-wrap" style={{ width: 120 }}>
+              <span className="admin-popover-input-prefix">$</span>
+              <input type="number" value={cac} onChange={e => setCac(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Date</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="text"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+                className="admin-date-input"
+                placeholder="MM/DD/YYYY"
+              />
+              <button className="admin-icon-btn" aria-label="Calendar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </button>
+              <button className="admin-icon-btn" aria-label="Export">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from '@remix-run/react';
+import { useSearchParams } from '@remix-run/react';
 import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
 import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
 import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
@@ -13,19 +13,8 @@ type Tab = 'overview' | 'crawls' | 'video-gen';
 type CrawlSubTab = 'full-site' | 'collections' | 'products';
 type VideoSubTab = 'product-ads' | 'look-videos';
 
-interface AgentCard {
-  id: string;
-  name: string;
-  description: string;
-  status: 'live' | 'coming-soon';
-  to?: string;
-  onClick?: () => void;
-  icon: string;
-}
-
 export default function AdminAgents() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   const rawTab = searchParams.get('tab') as string;
   const initialTab: Tab =
@@ -115,33 +104,6 @@ export default function AdminAgents() {
     setSearchParams(next, { replace: true });
   };
 
-  const cards: AgentCard[] = [
-    {
-      id: 'crawls',
-      name: 'Indexers',
-      description: 'Crawl e-commerce sites, collections, and individual products to populate the catalog.',
-      status: 'live',
-      onClick: () => setTab('crawls'),
-      icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
-    },
-    {
-      id: 'video-gen',
-      name: 'Video Gen',
-      description: 'Generate AI video ads and look videos from product data using Veo + Claude.',
-      status: 'live',
-      onClick: () => setTab('video-gen'),
-      icon: 'M23 7l-7 5 7 5V7zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
-    },
-    {
-      id: 'ai-models',
-      name: 'AI Models',
-      description: 'Manage AI creator personas used to generate look content.',
-      status: 'live',
-      to: '/admin/ai-models',
-      icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM16 3.13a4 4 0 0 1 0 7.75',
-    },
-  ];
-
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -215,33 +177,6 @@ export default function AdminAgents() {
               <span className="admin-stat-value">${statsLoading ? '…' : videoStats.totalCost.toFixed(2)}</span>
               <span className="admin-stat-label">Total cost</span>
             </div>
-          </div>
-          <div className="admin-agents-grid">
-            {cards.map((card) => (
-              <button
-                key={card.id}
-                className="admin-agent-card"
-                onClick={() => {
-                  if (card.onClick) card.onClick();
-                  else if (card.to) navigate(card.to);
-                }}
-              >
-                <div className="admin-agent-card-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={card.icon} />
-                  </svg>
-                </div>
-                <div className="admin-agent-card-body">
-                  <div className="admin-agent-card-head">
-                    <span className="admin-agent-card-name">{card.name}</span>
-                    <span className={`admin-agent-card-status admin-agent-card-status-${card.status}`}>
-                      {card.status === 'live' ? 'Live' : 'Coming soon'}
-                    </span>
-                  </div>
-                  <p className="admin-agent-card-desc">{card.description}</p>
-                </div>
-              </button>
-            ))}
           </div>
         </>
       ) : activeTab === 'crawls' ? (
