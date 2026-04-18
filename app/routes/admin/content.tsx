@@ -77,6 +77,46 @@ export default function AdminContent() {
 
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
+  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(new Set());
+  const [lookOrder, setLookOrder] = useState<number[] | null>(null);
+  const [dragLookId, setDragLookId] = useState<number | null>(null);
+
+  const deleteLook = useCallback((id: number) => {
+    if (!window.confirm('Delete this look? This cannot be undone.')) return;
+    setDeletedLookIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
+  const moveLook = useCallback((id: number, direction: -1 | 1) => {
+    setLookOrder(prev => {
+      const base = prev || looks.map(l => l.id);
+      const idx = base.indexOf(id);
+      if (idx < 0) return prev;
+      const swapIdx = idx + direction;
+      if (swapIdx < 0 || swapIdx >= base.length) return prev;
+      const next = [...base];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const onDropLook = useCallback((targetId: number) => {
+    if (dragLookId === null || dragLookId === targetId) return;
+    setLookOrder(prev => {
+      const base = prev || looks.map(l => l.id);
+      const from = base.indexOf(dragLookId);
+      const to = base.indexOf(targetId);
+      if (from < 0 || to < 0) return prev;
+      const next = [...base];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDragLookId(null);
+  }, [dragLookId]);
 
   const getToggles = useCallback((id: number) => toggles[id] || { platform: true, featured: true, splash: true }, [toggles]);
 
@@ -87,8 +127,16 @@ export default function AdminContent() {
     }));
   }, []);
 
-  const lookRows: LookRow[] = useMemo(() =>
-    looks.map(look => {
+  const lookRows: LookRow[] = useMemo(() => {
+    const filtered = looks.filter(l => !deletedLookIds.has(l.id));
+    const ordered = lookOrder
+      ? [...filtered].sort((a, b) => {
+          const ai = lookOrder.indexOf(a.id);
+          const bi = lookOrder.indexOf(b.id);
+          return (ai === -1 ? 1e9 : ai) - (bi === -1 ? 1e9 : bi);
+        })
+      : filtered;
+    return ordered.map(look => {
       const c = creators[look.creator];
       return {
         id: look.id,
@@ -98,8 +146,8 @@ export default function AdminContent() {
         video: look.video,
         products: look.products.length,
       };
-    }),
-  []);
+    });
+  }, [deletedLookIds, lookOrder]);
 
   // Brand-to-domain mapping for Brandfetch logos
   const brandDomains: Record<string, string> = useMemo(() => ({
@@ -286,6 +334,7 @@ export default function AdminContent() {
           <table className="admin-table">
             <thead>
               <tr>
+                <th style={{ width: 32 }}></th>
                 <th>Creative</th>
                 <SortableTh label="Creator" sortKey="creatorDisplay" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
                 <th>Created At</th>
@@ -294,6 +343,7 @@ export default function AdminContent() {
                 <th>Weight</th>
                 <th>Splash</th>
                 <th>Products</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -302,7 +352,24 @@ export default function AdminContent() {
                 const isExpanded = expandedId === row.id;
                 return (
                   <Fragment key={row.id}>
-                    <tr className="admin-look-main-row" onClick={() => toggleExpand(row.id)} style={{ cursor: 'pointer' }}>
+                    <tr
+                      className="admin-look-main-row"
+                      onClick={() => toggleExpand(row.id)}
+                      style={{ cursor: 'pointer', opacity: dragLookId === row.id ? 0.4 : 1 }}
+                      draggable
+                      onDragStart={(e) => { e.stopPropagation(); setDragLookId(row.id); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropLook(row.id); }}
+                      onDragEnd={() => setDragLookId(null)}
+                    >
+                      <td
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: 'grab', color: '#bbb', textAlign: 'center', fontSize: 16, userSelect: 'none' }}
+                        aria-label="Drag to reorder"
+                        title="Drag to reorder"
+                      >
+                        ⋮⋮
+                      </td>
                       <td>
                         <div className="admin-look-thumb">
                           <video src={`${basePath}/${row.video}`} muted loop playsInline preload="metadata" />
@@ -330,9 +397,22 @@ export default function AdminContent() {
                           </svg>
                         </button>
                       </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-product-actions">
+                          <button className="admin-icon-btn" aria-label="Move up" onClick={() => moveLook(row.id, -1)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                          </button>
+                          <button className="admin-icon-btn" aria-label="Move down" onClick={() => moveLook(row.id, 1)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                          </button>
+                          <button className="admin-icon-btn danger" aria-label="Delete" onClick={() => deleteLook(row.id)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                     <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
-                      <td colSpan={8} style={{ padding: 0 }}>
+                      <td colSpan={10} style={{ padding: 0 }}>
                         <div className="admin-expand-animate">
                           <div className="admin-look-products">
                             <h3 className="admin-products-title">Products</h3>
