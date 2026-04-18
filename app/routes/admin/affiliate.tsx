@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 
 type NetworkType =
   | 'Network'           // multi-brand aggregator (Impact, CJ, Rakuten, ShareASale, Awin)
@@ -20,6 +20,7 @@ interface AffiliateNetwork {
   minPayout: string;
   cookieDuration: string;
   hasApi: boolean;
+  fitRating: number;
   status: 'available' | 'connected' | 'pending';
   apiDocsUrl?: string;
   connectionRequirements?: {
@@ -43,6 +44,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 95,
     status: 'available',
     apiDocsUrl: 'https://developer.impact.com/',
     connectionRequirements: {
@@ -74,6 +76,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 88,
     status: 'available',
     apiDocsUrl: 'https://developers.rakutenadvertising.com/',
     connectionRequirements: {
@@ -107,6 +110,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '45 days',
     hasApi: true,
+    fitRating: 85,
     status: 'available',
     apiDocsUrl: 'https://developers.cj.com/',
     connectionRequirements: {
@@ -139,6 +143,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 78,
     status: 'available',
     apiDocsUrl: 'https://apihelp.shareasale.com/',
     connectionRequirements: {
@@ -171,6 +176,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 82,
     status: 'available',
     apiDocsUrl: 'https://developer.awin.com/',
     connectionRequirements: {
@@ -203,6 +209,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '24 hours',
     hasApi: true,
+    fitRating: 70,
     status: 'available',
     apiDocsUrl: 'https://webservices.amazon.com/paapi5/documentation/',
     connectionRequirements: {
@@ -237,6 +244,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '90 days',
     hasApi: true,
+    fitRating: 35,
     status: 'available',
     apiDocsUrl: 'https://docs.partnerstack.com/',
     connectionRequirements: {
@@ -268,6 +276,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$100',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 98,
     status: 'available',
     apiDocsUrl: 'https://company.shopltk.com/',
     connectionRequirements: {
@@ -299,6 +308,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$65',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 72,
     status: 'available',
     apiDocsUrl: 'https://developers.skimlinks.com/',
     connectionRequirements: {
@@ -330,6 +340,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 75,
     status: 'available',
     apiDocsUrl: 'https://api.partnerize.com/docs/',
     connectionRequirements: {
@@ -361,6 +372,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 55,
     status: 'available',
     apiDocsUrl: 'https://www.flexoffers.com/affiliate-resources/affiliate-api-documentation/',
     connectionRequirements: {
@@ -392,6 +404,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0 (PayPal)',
     cookieDuration: 'Custom',
     hasApi: true,
+    fitRating: 68,
     status: 'available',
     apiDocsUrl: 'https://developers.refersion.com/',
     connectionRequirements: {
@@ -423,6 +436,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '24 hours',
     hasApi: true,
+    fitRating: 45,
     status: 'available',
     apiDocsUrl: 'https://developer.ebay.com/marketplace-insights',
     connectionRequirements: {
@@ -452,6 +466,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '3 days',
     hasApi: true,
+    fitRating: 60,
     status: 'available',
     apiDocsUrl: 'https://developer.walmart.com/',
     connectionRequirements: {
@@ -479,6 +494,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '7 days',
     hasApi: false,
+    fitRating: 73,
     status: 'available',
     apiDocsUrl: 'https://partners.target.com',
     connectionRequirements: {
@@ -505,6 +521,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 65,
     status: 'available',
     apiDocsUrl: 'https://developers.etsy.com/documentation',
     connectionRequirements: {
@@ -532,6 +549,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 40,
     status: 'available',
     apiDocsUrl: 'https://partners.shopify.com/',
     connectionRequirements: {
@@ -560,6 +578,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '€100',
     cookieDuration: 'Session',
     hasApi: true,
+    fitRating: 25,
     status: 'available',
     apiDocsUrl: 'https://developers.booking.com/',
     connectionRequirements: {
@@ -588,6 +607,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 58,
     status: 'available',
     apiDocsUrl: 'https://developers.admitad.com/',
     connectionRequirements: {
@@ -616,6 +636,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '€10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 52,
     status: 'available',
     apiDocsUrl: 'https://dev.tradedoubler.com/',
     connectionRequirements: {
@@ -643,6 +664,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '£5',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 50,
     status: 'available',
     apiDocsUrl: 'https://api.webgains.com/docs/',
     connectionRequirements: {
@@ -670,6 +692,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 62,
     status: 'available',
     apiDocsUrl: 'https://info.sovrn.com/developer-tools',
     connectionRequirements: {
@@ -696,6 +719,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 90,
     status: 'available',
     apiDocsUrl: 'https://magiclinks.com/creators',
     connectionRequirements: {
@@ -722,6 +746,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 92,
     status: 'available',
     apiDocsUrl: 'https://planethowl.com/creators',
     connectionRequirements: {
@@ -749,6 +774,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0',
     cookieDuration: '60 days',
     hasApi: true,
+    fitRating: 30,
     status: 'available',
     apiDocsUrl: 'https://developers.rewardful.com/',
     connectionRequirements: {
@@ -775,6 +801,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0',
     cookieDuration: 'Custom',
     hasApi: true,
+    fitRating: 32,
     status: 'available',
     apiDocsUrl: 'https://tapfiliate.com/docs/rest/',
     connectionRequirements: {
@@ -802,6 +829,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$75',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 94,
     status: 'available',
     apiDocsUrl: 'https://shopstyle.com/collective',
     connectionRequirements: {
@@ -828,6 +856,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '60 days',
     hasApi: true,
+    fitRating: 15,
     status: 'available',
     apiDocsUrl: 'https://api.clickbank.com/',
     connectionRequirements: {
@@ -856,6 +885,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 55,
     status: 'available',
     apiDocsUrl: 'https://www.partnerboost.com/api',
     connectionRequirements: {
@@ -895,6 +925,159 @@ function TypeBadge({ type }: { type: NetworkType }) {
   );
 }
 
+function FitBadge({ rating }: { rating: number }) {
+  let bg = '#888';
+  if (rating >= 80) bg = '#22c55e';
+  else if (rating >= 60) bg = '#3b82f6';
+  else if (rating >= 40) bg = '#f59e0b';
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+      fontSize: 11, fontWeight: 600, background: bg, color: '#fff', whiteSpace: 'nowrap',
+    }}>
+      {rating}%
+    </span>
+  );
+}
+
+function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; onConnect: () => void }) {
+  const n = network;
+  return (
+    <div style={{ padding: '20px 24px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) 2fr', gap: 24 }}>
+        {/* Left: profile summary */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <img
+              src={n.logo}
+              alt={n.name}
+              style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{n.name}</div>
+              <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <TypeBadge type={n.type} />
+                <FitBadge rating={n.fitRating} />
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Payment:</span> <span style={{ fontWeight: 500 }}>{n.paymentSchedule}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Cookie window:</span> <span style={{ fontWeight: 500 }}>{n.cookieDuration}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Min payout:</span> <span style={{ fontWeight: 500 }}>{n.minPayout}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Avg commission:</span> <span style={{ fontWeight: 500 }}>{n.avgCommission}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Merchants:</span> <span style={{ fontWeight: 500 }}>{n.merchants}</span>
+            </div>
+            <div>
+              <span style={{ color: '#6b7280' }}>API:</span>{' '}
+              <span style={{
+                fontWeight: 600,
+                color: n.hasApi ? '#16a34a' : '#dc2626',
+              }}>
+                {n.hasApi ? 'Available' : 'Not available'}
+              </span>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {n.status === 'connected' ? (
+              <span className="admin-status admin-status-online">Connected</span>
+            ) : (
+              <button
+                className="admin-btn admin-btn-primary"
+                style={{ fontSize: 12 }}
+                onClick={(e) => { e.stopPropagation(); onConnect(); }}
+              >
+                Connect {n.name}
+              </button>
+            )}
+            {n.apiDocsUrl && (
+              <a
+                href={n.apiDocsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12, textDecoration: 'none' }}
+              >
+                View API docs →
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Right: categories, brands, connection details */}
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+              Categories
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {n.categories.map(c => (
+                <span key={c} style={{
+                  padding: '3px 8px', borderRadius: 4, fontSize: 11,
+                  background: '#fff', border: '1px solid #e5e7eb', color: '#374151',
+                }}>
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+              Partner Brands
+            </div>
+            <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+              {n.partnerBrands.join(', ')}
+            </div>
+          </div>
+
+          {n.connectionRequirements && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  Auth Method
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 12 }}>
+                  {n.connectionRequirements.authType}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  Prerequisites
+                </div>
+                <ul style={{ paddingLeft: 16, margin: 0, fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+                  {n.connectionRequirements.prerequisites.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  How to connect
+                </div>
+                <ol style={{ paddingLeft: 16, margin: 0, fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+                  {n.connectionRequirements.howToGet.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAffiliate() {
   const [view, setView] = useState<ViewMode>('table');
   const [search, setSearch] = useState('');
@@ -902,6 +1085,9 @@ export default function AdminAffiliate() {
   const [typeFilter, setTypeFilter] = useState<NetworkType | 'all'>('all');
   const [connectTarget, setConnectTarget] = useState<AffiliateNetwork | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<string>('fitRating');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [expandedName, setExpandedName] = useState<string | null>(null);
 
   const allCategories = useMemo(() => {
     const set = new Set<string>();
@@ -910,7 +1096,7 @@ export default function AdminAffiliate() {
   }, []);
 
   const filtered = useMemo(() => {
-    let list = networks;
+    let list = [...networks];
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(n =>
@@ -924,13 +1110,70 @@ export default function AdminAffiliate() {
     if (typeFilter !== 'all') {
       list = list.filter(n => n.type === typeFilter);
     }
+
+    const parseMerchants = (m: string): number => {
+      const cleaned = m.replace(/[^0-9.KkMm+]/g, '');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return 0;
+      if (/m/i.test(m)) return num * 1_000_000;
+      if (/k/i.test(m)) return num * 1_000;
+      return num;
+    };
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case 'type':
+          cmp = a.type.localeCompare(b.type);
+          break;
+        case 'merchants':
+          cmp = parseMerchants(a.merchants) - parseMerchants(b.merchants);
+          break;
+        case 'avgCommission':
+          cmp = a.avgCommission.localeCompare(b.avgCommission);
+          break;
+        case 'cookieDuration':
+          cmp = a.cookieDuration.localeCompare(b.cookieDuration);
+          break;
+        case 'minPayout':
+          cmp = a.minPayout.localeCompare(b.minPayout);
+          break;
+        case 'hasApi':
+          cmp = (a.hasApi ? 1 : 0) - (b.hasApi ? 1 : 0);
+          break;
+        case 'fitRating':
+          cmp = a.fitRating - b.fitRating;
+          break;
+        case 'status':
+          cmp = a.status.localeCompare(b.status);
+          break;
+        default:
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
     return list;
-  }, [search, categoryFilter, typeFilter]);
+  }, [search, categoryFilter, typeFilter, sortKey, sortDir]);
 
   const openConnect = (n: AffiliateNetwork) => {
     setConnectTarget(n);
     setFormValues({});
   };
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'fitRating' || key === 'merchants' || key === 'hasApi' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortArrow = (key: string) => sortKey === key ? (sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
 
   const stats = [
     { label: 'Networks', value: String(networks.length) },
@@ -1016,85 +1259,110 @@ export default function AdminAffiliate() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Network</th>
-                <th>Type</th>
-                <th>Merchants</th>
-                <th>Avg Commission</th>
+                <th style={{ textAlign: 'left', cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('name')}>Network{sortArrow('name')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('merchants')}>Merchants{sortArrow('merchants')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('avgCommission')}>Avg Commission{sortArrow('avgCommission')}</th>
                 <th>Categories</th>
                 <th style={{ textAlign: 'left' }}>Top Partner Brands</th>
-                <th>Cookie</th>
-                <th>Min Payout</th>
-                <th>API</th>
-                <th>Status</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('cookieDuration')}>Cookie{sortArrow('cookieDuration')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('minPayout')}>Min Payout{sortArrow('minPayout')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('hasApi')}>API{sortArrow('hasApi')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('fitRating')}>Fit{sortArrow('fitRating')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('status')}>Status{sortArrow('status')}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(n => (
-                <tr key={n.name}>
-                  <td style={{ textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <img
-                        src={n.logo}
-                        alt={n.name}
-                        style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{n.name}</div>
-                        <div style={{ fontSize: 11, color: '#999' }}>{n.paymentSchedule}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><TypeBadge type={n.type} /></td>
-                  <td style={{ fontSize: 13 }}>{n.merchants}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{n.avgCommission}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                      {n.categories.slice(0, 3).map(c => (
-                        <span key={c} style={{
-                          padding: '2px 6px', borderRadius: 4, fontSize: 10,
-                          background: '#f3f4f6', color: '#555', fontWeight: 500,
+              {filtered.map(n => {
+                const isExpanded = expandedName === n.name;
+                return (
+                  <Fragment key={n.name}>
+                    <tr
+                      onClick={() => setExpandedName(isExpanded ? null : n.name)}
+                      style={{ cursor: 'pointer', background: isExpanded ? '#f9fafb' : undefined }}
+                    >
+                      <td style={{ textAlign: 'left' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: 12,
+                            color: '#999',
+                            fontSize: 10,
+                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.15s',
+                          }}>▶</span>
+                          <img
+                            src={n.logo}
+                            alt={n.name}
+                            style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{n.name}</div>
+                            <div style={{ fontSize: 11, color: '#999' }}>{n.paymentSchedule}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><TypeBadge type={n.type} /></td>
+                      <td style={{ fontSize: 13 }}>{n.merchants}</td>
+                      <td style={{ fontWeight: 600, fontSize: 13 }}>{n.avgCommission}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {n.categories.slice(0, 3).map(c => (
+                            <span key={c} style={{
+                              padding: '2px 6px', borderRadius: 4, fontSize: 10,
+                              background: '#f3f4f6', color: '#555', fontWeight: 500,
+                            }}>
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'left', fontSize: 12, color: '#666' }}>
+                        {n.partnerBrands.slice(0, 4).join(', ')}
+                        {n.partnerBrands.length > 4 && <span style={{ color: '#999' }}> +{n.partnerBrands.length - 4}</span>}
+                      </td>
+                      <td style={{ fontSize: 12 }}>{n.cookieDuration}</td>
+                      <td style={{ fontSize: 12 }}>{n.minPayout}</td>
+                      <td>
+                        <span style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                          fontSize: 11, fontWeight: 600,
+                          background: n.hasApi ? '#dcfce7' : '#fee2e2',
+                          color: n.hasApi ? '#16a34a' : '#dc2626',
                         }}>
-                          {c}
+                          {n.hasApi ? 'Yes' : 'No'}
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12, color: '#666' }}>
-                    {n.partnerBrands.slice(0, 4).join(', ')}
-                    {n.partnerBrands.length > 4 && <span style={{ color: '#999' }}> +{n.partnerBrands.length - 4}</span>}
-                  </td>
-                  <td style={{ fontSize: 12 }}>{n.cookieDuration}</td>
-                  <td style={{ fontSize: 12 }}>{n.minPayout}</td>
-                  <td>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                      fontSize: 11, fontWeight: 600,
-                      background: n.hasApi ? '#dcfce7' : '#fee2e2',
-                      color: n.hasApi ? '#16a34a' : '#dc2626',
-                    }}>
-                      {n.hasApi ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td>
-                    {n.status === 'connected' ? (
-                      <span className="admin-status admin-status-online">connected</span>
-                    ) : n.status === 'pending' ? (
-                      <span className="admin-status" style={{ color: '#f59e0b' }}>pending</span>
-                    ) : (
-                      <button
-                        className="admin-btn admin-btn-primary"
-                        style={{ fontSize: 11, padding: '4px 10px' }}
-                        onClick={() => openConnect(n)}
-                      >
-                        Connect
-                      </button>
+                      </td>
+                      <td><FitBadge rating={n.fitRating} /></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {n.status === 'connected' ? (
+                          <span className="admin-status admin-status-online">connected</span>
+                        ) : n.status === 'pending' ? (
+                          <span className="admin-status" style={{ color: '#f59e0b' }}>pending</span>
+                        ) : (
+                          <button
+                            className="admin-btn admin-btn-primary"
+                            style={{ fontSize: 11, padding: '4px 10px' }}
+                            onClick={() => openConnect(n)}
+                          >
+                            Connect
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={11} style={{ padding: 0, background: '#f9fafb' }}>
+                          <NetworkDetailRow network={n} onConnect={() => openConnect(n)} />
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1123,13 +1391,16 @@ export default function AdminAffiliate() {
                     <div style={{ marginTop: 6 }}><TypeBadge type={n.type} /></div>
                   </div>
                 </div>
-                <span style={{
-                  padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                  background: n.hasApi ? '#dcfce7' : '#fee2e2',
-                  color: n.hasApi ? '#16a34a' : '#dc2626',
-                }}>
-                  API: {n.hasApi ? 'Yes' : 'No'}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: n.hasApi ? '#dcfce7' : '#fee2e2',
+                    color: n.hasApi ? '#16a34a' : '#dc2626',
+                  }}>
+                    API: {n.hasApi ? 'Yes' : 'No'}
+                  </span>
+                  <FitBadge rating={n.fitRating} />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 12, marginBottom: 16 }}>
