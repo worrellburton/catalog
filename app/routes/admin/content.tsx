@@ -337,41 +337,99 @@ export default function AdminContent() {
                             <table className="admin-table admin-products-table">
                               <thead>
                                 <tr>
-                                  <th>#</th>
-                                  <th>Brand</th>
-                                  <th>Name</th>
+                                  <th style={{ textAlign: 'left' }}>Creative</th>
+                                  <th style={{ textAlign: 'left' }}>Photos</th>
+                                  <th style={{ textAlign: 'left' }}>Product</th>
                                   <th>Price</th>
-                                  <th>Links</th>
+                                  <th>Connection</th>
                                   <th>Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {look.products.map((product, pi) => (
-                                  <tr key={pi}>
-                                    <td className="admin-cell-muted">{pi + 1}</td>
-                                    <td className="admin-cell-name">{product.brand}</td>
-                                    <td>{product.name}</td>
-                                    <td style={{ fontWeight: 600 }}>{product.price}</td>
-                                    <td>
-                                      <a href={product.url} target="_blank" rel="noopener noreferrer" className="admin-link-icon">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                      </a>
-                                    </td>
-                                    <td>
-                                      <div className="admin-product-actions">
-                                        <button className="admin-icon-btn" aria-label="Move up">
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                                        </button>
-                                        <button className="admin-icon-btn" aria-label="Move down">
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
-                                        </button>
-                                        <button className="admin-icon-btn danger" aria-label="Delete">
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {look.products.map((product, pi) => {
+                                  const key = `${product.brand}-${product.name}`;
+                                  const matched = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+                                  const videoUrls = matched?.id ? (adVideoMap.get(matched.id) || []) : [];
+                                  const imageUrl = matched?.image_url || (product as any).image || null;
+                                  const connection: 'Look' | 'Crawl' | 'Ad' = matched?.connection || 'Look';
+                                  return (
+                                    <tr key={pi}>
+                                      <td>
+                                        {videoUrls.length > 0 ? (
+                                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                            {videoUrls.slice(0, 3).map((v, vi) => (
+                                              <div key={vi} className="admin-look-thumb" style={{ width: 36, height: 48 }}>
+                                                <video
+                                                  src={v}
+                                                  autoPlay
+                                                  muted
+                                                  loop
+                                                  playsInline
+                                                  preload="metadata"
+                                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
+                                                />
+                                                <div className="admin-look-preview">
+                                                  <video src={v} autoPlay muted loop playsInline />
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {videoUrls.length > 3 && (
+                                              <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
+                                                +{videoUrls.length - 3}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
+                                        )}
+                                      </td>
+                                      <td>
+                                        <div className="admin-product-creative">
+                                          {imageUrl ? (
+                                            <img
+                                              src={imageUrl}
+                                              alt={product.name}
+                                              style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }}
+                                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                            />
+                                          ) : (
+                                            <img
+                                              src={getBrandLogo(product.brand) || ''}
+                                              alt={product.brand}
+                                              className="admin-brand-logo"
+                                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                            />
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td style={{ textAlign: 'left' }}>
+                                        <div>
+                                          <div style={{ fontWeight: 600, fontSize: 12 }}>{product.name}</div>
+                                          <div style={{ fontSize: 10, color: '#999' }}>{product.brand}</div>
+                                        </div>
+                                      </td>
+                                      <td style={{ fontWeight: 600 }}>{product.price}</td>
+                                      <td>
+                                        <span className={`admin-connection-pill admin-connection-${connection.toLowerCase()}`}>
+                                          {connection}
+                                        </span>
+                                      </td>
+                                      <td>
+                                        <div className="admin-product-actions">
+                                          <button className="admin-icon-btn" aria-label="Move up">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                                          </button>
+                                          <button className="admin-icon-btn" aria-label="Move down">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                                          </button>
+                                          <button className="admin-icon-btn danger" aria-label="Delete">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>

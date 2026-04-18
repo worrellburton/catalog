@@ -1,48 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-
-// --- Simulated live data ---
-
-const SEARCH_TERMS = [
-  'summer dresses', 'dior sneakers', 'streetwear', 'white sneakers', 'casual outfits',
-  'minimalist style', 'zara bag', 'linen pants', 'date night outfit', 'mens fashion',
-  'crop top', 'oversized blazer', 'platform shoes', 'gold jewelry', 'vintage sunglasses',
-  'silk skirt', 'chunky sneakers', 'leather jacket', 'boho dress', 'tennis bracelet',
-  'y2k aesthetic', 'quiet luxury', 'mob wife aesthetic', 'coastal grandmother',
-  'ballet flats', 'wide leg jeans', 'linen shirt men', 'crochet top', 'maxi skirt',
-  'running shoes', 'tote bag', 'bucket hat', 'cargo pants', 'mesh top',
-  'statement earrings', 'pleated skirt', 'trench coat', 'kitten heels',
-  'prada loafers', 'gucci belt', 'ralph lauren polo', 'new balance 550',
-  'adidas samba', 'birkenstock boston', 'nike dunk low', 'converse chuck 70',
-];
-
-const USERNAMES = [
-  'Carla', 'alfvaz', 'franky90', 'D1.barbershop', 'lily.rose', 'jakethefit',
-  'mia_styles', 'devonk', 'samira.xx', 'noahcollins', 'ava.trends', 'marcusg',
-  'elena.p', 'bencarter', 'zoeyfit', 'ryankim', 'chloe.j', 'luisgarcia',
-  'priya.m', 'tom.styles', 'natalierose', 'alexmoreno', 'isabellaw',
-];
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '~/utils/supabase';
 
 interface LiveEntry {
-  id: number;
-  timestamp: Date;
-  term: string;
-  user: string;
-  resultCount: number;
-  clickedThrough: boolean;
+  id: string;
+  created_at: string;
+  query: string;
+  user_handle: string | null;
+  results_count: number;
+  clicked: boolean;
 }
 
-function randomItem<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function formatTimestamp(date: Date): string {
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 }
 
 // --- Component ---
 
 export default function AdminSearch() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'live' | 'trends'>('overview');
+  const [activeTab, setActiveTab] = useState<'live' | 'overview' | 'trends'>('live');
 
   return (
     <div className="admin-page">
@@ -52,7 +27,6 @@ export default function AdminSearch() {
       </div>
 
       <div className="admin-tabs">
-        <button className={`admin-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
         <button className={`admin-tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span style={{
@@ -66,6 +40,7 @@ export default function AdminSearch() {
             Live Activity
           </span>
         </button>
+        <button className={`admin-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
         <button className={`admin-tab ${activeTab === 'trends' ? 'active' : ''}`} onClick={() => setActiveTab('trends')}>Trends</button>
       </div>
 
@@ -263,53 +238,47 @@ function OverviewTab() {
 function LiveActivityTab() {
   const [entries, setEntries] = useState<LiveEntry[]>([]);
   const [isPaused, setIsPaused] = useState(false);
-  const nextIdRef = useRef(1);
+  const [loading, setLoading] = useState(true);
   const listRef = useRef<HTMLDivElement>(null);
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
 
-  const addEntry = useCallback(() => {
-    const entry: LiveEntry = {
-      id: nextIdRef.current++,
-      timestamp: new Date(),
-      term: randomItem(SEARCH_TERMS),
-      user: randomItem(USERNAMES),
-      resultCount: Math.floor(Math.random() * 51),
-      clickedThrough: Math.random() > 0.4,
-    };
-    setEntries(prev => [entry, ...prev].slice(0, 50));
+  // Initial fetch
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    supabase
+      .from('search_logs')
+      .select('id, created_at, query, user_handle, results_count, clicked')
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) console.error('[search_logs] load failed:', error.message);
+        if (data) setEntries(data as LiveEntry[]);
+        setLoading(false);
+      });
   }, []);
 
+  // Realtime subscription
   useEffect(() => {
-    // Seed with a few initial entries
-    for (let i = 0; i < 5; i++) {
-      const delay = i * 200;
-      const now = new Date(Date.now() - (5 - i) * 3000);
-      setTimeout(() => {
-        setEntries(prev => {
-          const entry: LiveEntry = {
-            id: nextIdRef.current++,
-            timestamp: now,
-            term: randomItem(SEARCH_TERMS),
-            user: randomItem(USERNAMES),
-            resultCount: Math.floor(Math.random() * 51),
-            clickedThrough: Math.random() > 0.4,
-          };
-          return [entry, ...prev].slice(0, 50);
-        });
-      }, delay);
-    }
+    if (!supabase) return;
+    const channel = supabase
+      .channel('search_logs_live')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'search_logs',
+      }, (payload) => {
+        if (isPausedRef.current) return;
+        const row = payload.new as LiveEntry;
+        setEntries(prev => [row, ...prev].slice(0, 50));
+      })
+      .subscribe();
+    return () => { supabase!.removeChannel(channel); };
   }, []);
-
-  useEffect(() => {
-    if (isPaused) return;
-    const interval = setInterval(() => {
-      addEntry();
-    }, 2000 + Math.random() * 2000);
-    return () => clearInterval(interval);
-  }, [isPaused, addEntry]);
 
   const totalEntries = entries.length;
-  const clickedCount = entries.filter(e => e.clickedThrough).length;
-  const zeroResultCount = entries.filter(e => e.resultCount === 0).length;
+  const clickedCount = entries.filter(e => e.clicked).length;
+  const zeroResultCount = entries.filter(e => e.results_count === 0).length;
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -401,9 +370,14 @@ function LiveActivityTab() {
             overflowY: 'auto',
           }}
         >
-          {entries.length === 0 && (
+          {loading && entries.length === 0 && (
             <div style={{ padding: 40, textAlign: 'center', color: '#666', fontSize: 13 }}>
-              Waiting for search activity...
+              Loading search activity…
+            </div>
+          )}
+          {!loading && entries.length === 0 && (
+            <div style={{ padding: 40, textAlign: 'center', color: '#666', fontSize: 13 }}>
+              No search activity yet. Searches from the consumer feed will appear here in real-time.
             </div>
           )}
           {entries.map((entry, index) => (
@@ -422,23 +396,23 @@ function LiveActivityTab() {
               }}
             >
               <span style={{ color: '#888', fontSize: 11, fontFamily: 'monospace' }}>
-                {formatTimestamp(entry.timestamp)}
+                {formatTimestamp(entry.created_at)}
               </span>
               <span style={{ color: '#fff', fontWeight: 500 }}>
-                {entry.term}
+                {entry.query}
               </span>
               <span style={{ color: '#aaa' }}>
-                {entry.user}
+                {entry.user_handle || '—'}
               </span>
               <span style={{
                 textAlign: 'center',
-                color: entry.resultCount === 0 ? '#f44336' : '#888',
-                fontWeight: entry.resultCount === 0 ? 600 : 400,
+                color: entry.results_count === 0 ? '#f44336' : '#888',
+                fontWeight: entry.results_count === 0 ? 600 : 400,
               }}>
-                {entry.resultCount}
+                {entry.results_count}
               </span>
               <span style={{ textAlign: 'center' }}>
-                {entry.clickedThrough ? (
+                {entry.clicked ? (
                   <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 11 }}>Yes</span>
                 ) : (
                   <span style={{ color: '#555', fontSize: 11 }}>No</span>
