@@ -178,7 +178,15 @@ export default function BottomBar({
               placeholder="Make a catalog for anything."
               value={localSearch}
               onChange={handleSearchInput}
-              onKeyDown={(e) => { if (e.key === 'Enter') closeSearch(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const q = localSearch.trim();
+                  if (q && onSelectSuggestion) {
+                    onSelectSuggestion(q);
+                  }
+                  closeSearch();
+                }
+              }}
             />
           </div>
         )}

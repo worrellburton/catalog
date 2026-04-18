@@ -5,6 +5,7 @@ import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import { getLiveAds, type ProductAd } from '~/services/product-ads';
 import { supabase } from '~/utils/supabase';
+import { useAuth } from '~/hooks/useAuth';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -83,17 +84,20 @@ export default function ContinuousFeed({
   bookmarks,
 }: ContinuousFeedProps) {
   const filteredLooks = useMemo(() => {
-    let filtered = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
+    const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(l =>
+      const matched = base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
         l.description.toLowerCase().includes(q) ||
         l.products.some(p => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q))
       );
+      // Fall back to full set for custom searches so any user-typed catalog
+      // still renders content under that name.
+      return matched.length > 0 ? matched : base;
     }
-    return filtered;
+    return base;
   }, [activeFilter, searchQuery]);
 
   const [state, dispatch] = useReducer(feedReducer, {
@@ -116,6 +120,7 @@ export default function ContinuousFeed({
   }, []);
 
   // Log search queries to Supabase (debounced)
+  const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
     const q = searchQuery.trim();
@@ -123,7 +128,7 @@ export default function ContinuousFeed({
     lastLoggedQueryRef.current = q;
     const timer = setTimeout(() => {
       if (!supabase) return;
-      const handle = localStorage.getItem('catalog_user_handle') || (() => {
+      const handle = user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
         const h = `user_${Math.random().toString(36).slice(2, 8)}`;
         localStorage.setItem('catalog_user_handle', h);
         return h;
@@ -139,7 +144,7 @@ export default function ContinuousFeed({
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [searchQuery, filteredLooks.length, activeFilter]);
+  }, [searchQuery, filteredLooks.length, activeFilter, user]);
 
   // Reset when filters/search/shuffle change
   const prevFilterRef = useRef({ activeFilter, searchQuery, shuffleKey });
