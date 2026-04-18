@@ -128,7 +128,7 @@ export default function AdminAgents() {
           className={`admin-tab ${activeTab === 'video-gen' ? 'active' : ''}`}
           onClick={() => setTab('video-gen')}
         >
-          Video Gen
+          Creative
         </button>
       </div>
 

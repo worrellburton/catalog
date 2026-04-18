@@ -379,15 +379,17 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                       </td>
 
                       {/* Product */}
-                      <td className="admin-cell-name">
-                        {ad.product?.image_url && (
-                          <img
-                            src={ad.product.image_url}
-                            alt=""
-                            style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', marginRight: 8 }}
-                          />
-                        )}
-                        <div style={{ fontSize: 13 }}>{ad.product?.name || ad.product_id.slice(0, 8)}</div>
+                      <td style={{ fontWeight: 600, color: '#111', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {ad.product?.image_url && (
+                            <img
+                              src={ad.product.image_url}
+                              alt=""
+                              style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }}
+                            />
+                          )}
+                          <div style={{ fontSize: 13 }}>{ad.product?.name || ad.product_id.slice(0, 8)}</div>
+                        </div>
                       </td>
 
                       {/* Style */}
@@ -436,7 +438,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                             className="admin-btn admin-btn-secondary"
                             style={{ fontSize: 11, padding: '3px 8px', color: '#ef4444' }}
                             onClick={() => handleDelete(ad.id)}
-                            title="Delete ad"
+                            title="Delete Video"
                           >
                             ✕
                           </button>
