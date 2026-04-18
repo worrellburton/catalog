@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 
 interface LiveEntry {
@@ -12,6 +13,20 @@ interface LiveEntry {
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+}
+
+function initialsOf(name: string): string {
+  const cleaned = name.includes('@') ? name.split('@')[0] : name;
+  const parts = cleaned.replace(/[._-]/g, ' ').trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (cleaned.slice(0, 2) || 'U').toUpperCase();
+}
+
+function avatarColor(name: string): string {
+  const palette = ['#ff6b35', '#f7931e', '#9c27b0', '#3f51b5', '#009688', '#4caf50', '#e91e63', '#00acc1'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return palette[Math.abs(hash) % palette.length];
 }
 
 // --- Component ---
@@ -548,8 +563,28 @@ function LiveActivityTab() {
               <span style={{ color: '#111', fontWeight: 500 }}>
                 {entry.query}
               </span>
-              <span style={{ color: '#666' }}>
-                {entry.user_handle || '—'}
+              <span>
+                {entry.user_handle ? (
+                  <Link
+                    to={`/admin/user/${encodeURIComponent(entry.user_handle)}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      color: '#111', textDecoration: 'none',
+                    }}
+                  >
+                    <span style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: avatarColor(entry.user_handle), color: '#fff',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 9, fontWeight: 600, flexShrink: 0,
+                    }}>
+                      {initialsOf(entry.user_handle)}
+                    </span>
+                    <span style={{ color: '#111', fontWeight: 500 }}>{entry.user_handle}</span>
+                  </Link>
+                ) : (
+                  <span style={{ color: '#999' }}>—</span>
+                )}
               </span>
               <span style={{
                 textAlign: 'center',
