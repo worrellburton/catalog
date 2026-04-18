@@ -1,25 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import { creators, looks } from '~/data/looks';
 
-const engagementData = [
-  { creator: 'emkrama', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'caitlyncoyle98', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'saintgerard', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'alexdelena', avatar: '', incomingTaps: 1, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'joedawson', avatar: '', incomingTaps: 5, outgoingTaps: 0, incomingClickouts: 7, outgoingClickouts: 0 },
-  { creator: 'Anastasia', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'stas', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'andrey', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'agoop', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'cohenzach', avatar: '', incomingTaps: 0, outgoingTaps: 0, incomingClickouts: 0, outgoingClickouts: 0 },
-  { creator: 'martin123', avatar: '', incomingTaps: 0, outgoingTaps: 3, incomingClickouts: 0, outgoingClickouts: 2 },
-];
+function buildEngagementData() {
+  return Object.values(creators).map(creator => {
+    const creatorLooks = looks.filter(look => look.creator === creator.name);
+    const uniqueProducts = new Set(
+      creatorLooks.flatMap(look => look.products.map(p => p.name))
+    );
+    return {
+      creator: creator.displayName,
+      avatar: creator.avatar,
+      incomingTaps: creatorLooks.length,
+      outgoingTaps: uniqueProducts.size,
+      incomingClickouts: 0,
+      outgoingClickouts: 0,
+    };
+  });
+}
 
 type FilterType = 'creators' | 'shoppers';
 
 export default function AdminEngagement() {
   const [filterType, setFilterType] = useState<FilterType>('creators');
   const [search, setSearch] = useState('');
+  const engagementData = useMemo(() => buildEngagementData(), []);
   const table = useSortableTable(engagementData);
 
   const totalInTaps = engagementData.reduce((s, d) => s + d.incomingTaps, 0);
@@ -82,9 +87,17 @@ export default function AdminEngagement() {
               <tr key={row.creator}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="admin-user-avatar" style={{ background: '#e0e0e0', width: 28, height: 28, fontSize: 10 }}>
-                      {row.creator.slice(0, 2).toUpperCase()}
-                    </span>
+                    {row.avatar ? (
+                      <img
+                        src={row.avatar}
+                        alt={row.creator}
+                        style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span className="admin-user-avatar" style={{ background: '#e0e0e0', width: 28, height: 28, fontSize: 10 }}>
+                        {row.creator.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                     <span style={{ fontWeight: 500 }}>{row.creator}</span>
                   </div>
                 </td>

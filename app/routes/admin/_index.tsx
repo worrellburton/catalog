@@ -1,4 +1,149 @@
+import { useState, useEffect, useMemo } from 'react';
+import { looks, creators } from '~/data/looks';
+import { supabase } from '~/utils/supabase';
+
+interface SearchLog {
+  id: string;
+  query: string;
+  user_handle: string | null;
+  results_count: number;
+  created_at: string;
+}
+
+interface DayCount {
+  day: string;
+  label: string;
+  count: number;
+}
+
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function getLast7Days(): { day: string; label: string }[] {
+  const days: { day: string; label: string }[] = [];
+  const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({
+      day: d.toISOString().split('T')[0],
+      label: labels[d.getDay()],
+    });
+  }
+  return days;
+}
+
 export default function AdminHome() {
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [productsCount, setProductsCount] = useState<number | null>(null);
+  const [searchesToday, setSearchesToday] = useState<number | null>(null);
+  const [recentActivity, setRecentActivity] = useState<SearchLog[]>([]);
+  const [allSearchLogs, setAllSearchLogs] = useState<SearchLog[]>([]);
+  const [weeklyData, setWeeklyData] = useState<DayCount[]>([]);
+
+  // Local data counts — single source of truth
+  const creatorsCount = Object.keys(creators).length;
+  const looksCount = looks.length;
+
+  // Count unique products across all looks as fallback
+  const localProductsCount = useMemo(() => {
+    const unique = new Set<string>();
+    for (const look of looks) {
+      for (const p of look.products) {
+        unique.add(`${p.brand}::${p.name}`);
+      }
+    }
+    return unique.size;
+  }, []);
+
+  useEffect(() => {
+    async function fetchStats() {
+      if (!supabase) return;
+      // Total Users from profiles
+      const { count: usersCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+      setTotalUsers(usersCount ?? 0);
+
+      // Products from Supabase, fallback to unique products from looks data
+      const { count: dbProducts } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true });
+      setProductsCount(dbProducts ?? localProductsCount);
+
+      // Searches today
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count: todaySearches } = await supabase
+        .from('search_logs')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', todayStart.toISOString());
+      setSearchesToday(todaySearches ?? 0);
+
+      // Recent activity (last 6 search logs)
+      const { data: recentLogs } = await supabase
+        .from('search_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(6);
+      setRecentActivity(recentLogs ?? []);
+
+      // All search logs for top searches
+      const { data: allLogs } = await supabase
+        .from('search_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setAllSearchLogs(allLogs ?? []);
+
+      // Weekly search data (last 7 days)
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+      const { data: weekLogs } = await supabase
+        .from('search_logs')
+        .select('created_at')
+        .gte('created_at', weekStart.toISOString());
+
+      const last7 = getLast7Days();
+      const dayCounts: DayCount[] = last7.map(({ day, label }) => {
+        const count = (weekLogs ?? []).filter(
+          (log) => log.created_at.split('T')[0] === day
+        ).length;
+        return { day, label, count };
+      });
+      setWeeklyData(dayCounts);
+    }
+
+    fetchStats();
+  }, [localProductsCount]);
+
+  // Top searches: group by query, sort by count
+  const topSearches = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const log of allSearchLogs) {
+      const q = log.query.toLowerCase().trim();
+      counts[q] = (counts[q] || 0) + 1;
+    }
+    const sorted = Object.entries(counts)
+      .map(([term, count]) => ({ term, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    const max = sorted[0]?.count ?? 1;
+    return sorted.map((s) => ({ ...s, pct: (s.count / max) * 100 }));
+  }, [allSearchLogs]);
+
+  const maxWeekly = Math.max(...weeklyData.map((d) => d.count), 1);
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -12,66 +157,48 @@ export default function AdminHome() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div className="admin-stat-label">Total Users</div>
-          <div className="admin-stat-value">4</div>
-          <div className="admin-stat-change positive">+2 this week</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-up" points="0,20 12,18 24,16 36,14 48,12 60,8 72,6 80,4" />
-          </svg>
+          <div className="admin-stat-value">{totalUsers ?? '...'}</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/></svg>
           </div>
           <div className="admin-stat-label">Creators</div>
-          <div className="admin-stat-value">2</div>
-          <div className="admin-stat-change positive">+1 this month</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-up" points="0,18 12,18 24,16 36,16 48,14 60,12 72,8 80,6" />
-          </svg>
+          <div className="admin-stat-value">{creatorsCount}</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           </div>
           <div className="admin-stat-label">Total Looks</div>
-          <div className="admin-stat-value">6</div>
-          <div className="admin-stat-change positive">+3 this week</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-up" points="0,22 12,20 24,18 36,16 48,10 60,8 72,6 80,4" />
-          </svg>
+          <div className="admin-stat-value">{looksCount}</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
           </div>
           <div className="admin-stat-label">Products</div>
-          <div className="admin-stat-value">24</div>
-          <div className="admin-stat-change neutral">No change</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-flat" points="0,12 12,12 24,11 36,12 48,12 60,11 72,12 80,12" />
-          </svg>
+          <div className="admin-stat-value">{productsCount ?? '...'}</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
           <div className="admin-stat-label">Searches Today</div>
-          <div className="admin-stat-value">128</div>
-          <div className="admin-stat-change positive">+18%</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-up" points="0,20 12,16 24,18 36,14 48,10 60,6 72,4 80,2" />
-          </svg>
+          <div className="admin-stat-value">{searchesToday ?? '...'}</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           </div>
           <div className="admin-stat-label">Bookmarks</div>
-          <div className="admin-stat-value">47</div>
-          <div className="admin-stat-change positive">+12 this week</div>
-          <svg className="admin-sparkline" viewBox="0 0 80 24" preserveAspectRatio="none">
-            <polyline className="admin-sparkline-line sparkline-up" points="0,18 12,16 24,14 36,16 48,12 60,8 72,6 80,4" />
-          </svg>
+          <div className="admin-stat-value">0</div>
+          <div className="admin-stat-change neutral">&mdash;</div>
         </div>
       </div>
 
@@ -82,22 +209,26 @@ export default function AdminHome() {
             Recent Activity
           </h3>
           <div className="admin-activity-list">
-            {[
-              { color: '#4caf50', avatar: 'https://i.pravatar.cc/32?img=5', text: 'Carla saved 2 products', time: '5 min ago' },
-              { color: '#2196f3', avatar: 'https://i.pravatar.cc/32?img=47', text: 'Lily Wittman uploaded Look 04', time: '22 min ago' },
-              { color: '#ff9800', avatar: 'https://i.pravatar.cc/32?img=23', text: 'New waitlist signup: jenny_m', time: '1 hr ago' },
-              { color: '#4caf50', avatar: 'https://i.pravatar.cc/32?img=33', text: 'alfvaz followed Lily Wittman', time: '2 hr ago' },
-              { color: '#9c27b0', avatar: 'https://i.pravatar.cc/32?img=12', text: 'Garrett submitted 2 new looks', time: '3 hr ago' },
-              { color: '#2196f3', avatar: 'https://i.pravatar.cc/32?img=59', text: 'franky90 searched "streetwear"', time: '4 hr ago' },
-            ].map((item, i) => (
-              <div key={i} className="admin-activity-item">
-                <img src={item.avatar} alt="" className="admin-activity-avatar" />
-                <div className="admin-activity-content">
-                  <span>{item.text}</span>
-                  <span className="admin-activity-time">{item.time}</span>
+            {recentActivity.length === 0 ? (
+              <div className="admin-activity-empty">No activity yet</div>
+            ) : (
+              recentActivity.map((log) => (
+                <div key={log.id} className="admin-activity-item">
+                  <div className="admin-activity-icon-circle">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </div>
+                  <div className="admin-activity-content">
+                    <span>
+                      {log.user_handle ? log.user_handle : 'Anonymous'}{' '}
+                      searched &ldquo;{log.query}&rdquo;
+                    </span>
+                    <span className="admin-activity-time">
+                      {timeAgo(log.created_at)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -107,24 +238,28 @@ export default function AdminHome() {
             Top Searches
           </h3>
           <div className="admin-home-rank-list">
-            {[
-              { term: 'streetwear', count: 342, pct: 100 },
-              { term: 'minimal outfit', count: 281, pct: 82 },
-              { term: 'summer looks', count: 245, pct: 72 },
-              { term: 'festival', count: 198, pct: 58 },
-              { term: 'casual friday', count: 156, pct: 46 },
-            ].map((item, i) => (
-              <div key={item.term} className="admin-home-rank-item">
-                <span className="admin-home-rank-num">{i + 1}</span>
-                <div className="admin-rank-bar-wrap">
-                  <span className="admin-home-rank-term">{item.term}</span>
-                  <div className="admin-rank-bar">
-                    <div className="admin-rank-bar-fill" style={{ width: `${item.pct}%`, animationDelay: `${i * 0.1}s` }} />
+            {topSearches.length === 0 ? (
+              <div className="admin-activity-empty">No searches yet</div>
+            ) : (
+              topSearches.map((item, i) => (
+                <div key={item.term} className="admin-home-rank-item">
+                  <span className="admin-home-rank-num">{i + 1}</span>
+                  <div className="admin-rank-bar-wrap">
+                    <span className="admin-home-rank-term">{item.term}</span>
+                    <div className="admin-rank-bar">
+                      <div
+                        className="admin-rank-bar-fill"
+                        style={{
+                          width: `${item.pct}%`,
+                          animationDelay: `${i * 0.1}s`,
+                        }}
+                      />
+                    </div>
                   </div>
+                  <span className="admin-home-rank-count">{item.count}</span>
                 </div>
-                <span className="admin-home-rank-count">{item.count}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -136,24 +271,24 @@ export default function AdminHome() {
           <div className="admin-home-pending">
             <div className="admin-home-pending-item">
               <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">9</span>
+                <span className="admin-home-pending-count">0</span>
                 <span>Waitlist signups</span>
               </div>
-              <span className="admin-status admin-status-warning">review</span>
+              <span className="admin-status admin-status-neutral">nothing pending</span>
             </div>
             <div className="admin-home-pending-item">
               <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">3</span>
+                <span className="admin-home-pending-count">0</span>
                 <span>Incoming creators</span>
               </div>
-              <span className="admin-status admin-status-warning">review</span>
+              <span className="admin-status admin-status-neutral">nothing pending</span>
             </div>
             <div className="admin-home-pending-item">
               <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">2</span>
+                <span className="admin-home-pending-count">0</span>
                 <span>Flagged content</span>
               </div>
-              <span className="admin-status admin-status-danger">urgent</span>
+              <span className="admin-status admin-status-neutral">nothing pending</span>
             </div>
           </div>
         </div>
@@ -166,27 +301,30 @@ export default function AdminHome() {
           Weekly Activity
         </h3>
         <div className="admin-weekly-chart">
-          {[
-            { day: 'Mon', searches: 45, signups: 1, looks: 0 },
-            { day: 'Tue', searches: 62, signups: 0, looks: 1 },
-            { day: 'Wed', searches: 38, signups: 1, looks: 0 },
-            { day: 'Thu', searches: 78, signups: 0, looks: 2 },
-            { day: 'Fri', searches: 92, signups: 1, looks: 1 },
-            { day: 'Sat', searches: 128, signups: 2, looks: 2 },
-            { day: 'Sun', searches: 85, signups: 1, looks: 0 },
-          ].map((d, i) => (
+          {weeklyData.map((d, i) => (
             <div key={d.day} className="admin-weekly-col">
               <div className="admin-weekly-bars">
-                <div className="admin-weekly-bar searches" style={{ height: `${(d.searches / 128) * 100}%`, animationDelay: `${i * 0.08}s` }}>
-                  <span className="admin-weekly-tooltip">{d.searches} searches</span>
+                <div
+                  className="admin-weekly-bar searches"
+                  style={{
+                    height: d.count > 0 ? `${(d.count / maxWeekly) * 100}%` : '2%',
+                    animationDelay: `${i * 0.08}s`,
+                  }}
+                >
+                  <span className="admin-weekly-tooltip">
+                    {d.count} searches
+                  </span>
                 </div>
               </div>
-              <span className="admin-weekly-label">{d.day}</span>
+              <span className="admin-weekly-label">{d.label}</span>
             </div>
           ))}
         </div>
         <div className="admin-chart-legend">
-          <span className="admin-legend-item"><span className="admin-legend-dot" style={{ background: '#333' }} />Searches</span>
+          <span className="admin-legend-item">
+            <span className="admin-legend-dot" style={{ background: '#333' }} />
+            Searches
+          </span>
         </div>
       </div>
     </div>

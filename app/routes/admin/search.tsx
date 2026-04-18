@@ -58,63 +58,194 @@ export default function AdminSearch() {
   );
 }
 
-// ─── Overview Tab (original content) ───
+// ─── Overview Tab (real data from Supabase) ───
+
+interface OverviewStats {
+  totalSearches: number;
+  uniqueTerms: number;
+  avgResults: number;
+  clickThrough: number;
+  zeroResultsPct: number;
+  searchesPerUser: number;
+}
+
+interface TopSearch {
+  term: string;
+  count: number;
+}
+
+interface ZeroResultSearch {
+  term: string;
+  count: number;
+  lastSearched: string;
+}
+
+interface TimeSlot {
+  hour: string;
+  searches: number;
+  pct: number;
+}
+
+interface RecentSearch {
+  id: string;
+  user: string;
+  term: string;
+  time: string;
+  clicked: boolean;
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 function OverviewTab() {
-  const topSearches = [
-    { term: 'summer dresses', count: 342, trend: '+18%', results: 12 },
-    { term: 'streetwear', count: 289, trend: '+5%', results: 8 },
-    { term: 'dior sneakers', count: 234, trend: '+42%', results: 3 },
-    { term: 'white sneakers', count: 198, trend: '-2%', results: 6 },
-    { term: 'linen pants', count: 176, trend: '+12%', results: 4 },
-    { term: 'casual outfits', count: 165, trend: '+8%', results: 15 },
-    { term: 'minimalist style', count: 154, trend: '+22%', results: 9 },
-    { term: 'mens fashion', count: 143, trend: '-5%', results: 7 },
-    { term: 'zara bag', count: 132, trend: '+31%', results: 2 },
-    { term: 'date night outfit', count: 121, trend: '+15%', results: 5 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<OverviewStats>({ totalSearches: 0, uniqueTerms: 0, avgResults: 0, clickThrough: 0, zeroResultsPct: 0, searchesPerUser: 0 });
+  const [topSearches, setTopSearches] = useState<TopSearch[]>([]);
+  const [zeroResults, setZeroResults] = useState<ZeroResultSearch[]>([]);
+  const [searchByTime, setSearchByTime] = useState<TimeSlot[]>([]);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
 
-  const zeroResults = [
-    { term: 'nike air max', count: 87, lastSearched: 'Mar 21, 2026' },
-    { term: 'vintage denim', count: 64, lastSearched: 'Mar 20, 2026' },
-    { term: 'louis vuitton', count: 52, lastSearched: 'Mar 21, 2026' },
-    { term: 'corset top', count: 41, lastSearched: 'Mar 19, 2026' },
-    { term: 'cargo pants wide', count: 38, lastSearched: 'Mar 18, 2026' },
-  ];
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
 
-  const searchByTime = [
-    { hour: '12am-4am', searches: 120, pct: 3 },
-    { hour: '4am-8am', searches: 340, pct: 8 },
-    { hour: '8am-12pm', searches: 1250, pct: 28 },
-    { hour: '12pm-4pm', searches: 980, pct: 22 },
-    { hour: '4pm-8pm', searches: 1100, pct: 25 },
-    { hour: '8pm-12am', searches: 610, pct: 14 },
-  ];
+    async function fetchOverviewData() {
+      try {
+        // Fetch all search logs for aggregation
+        const [allLogsRes, recentRes] = await Promise.all([
+          supabase!.from('search_logs').select('query, user_handle, results_count, clicked, created_at'),
+          supabase!.from('search_logs')
+            .select('id, created_at, query, user_handle, clicked')
+            .order('created_at', { ascending: false })
+            .limit(10),
+        ]);
 
-  const recentSearches = [
-    { user: 'Carla', term: 'summer dresses', time: '2 min ago', clicked: true },
-    { user: 'alfvaz', term: 'dior sneakers', time: '5 min ago', clicked: true },
-    { user: 'franky90', term: 'casual outfits', time: '8 min ago', clicked: false },
-    { user: 'D1.barbershop', term: 'barber supplies', time: '12 min ago', clicked: false },
-    { user: 'Carla', term: 'white sneakers', time: '15 min ago', clicked: true },
-    { user: 'alfvaz', term: 'streetwear', time: '22 min ago', clicked: true },
-    { user: 'franky90', term: 'jeans', time: '30 min ago', clicked: false },
-    { user: 'Carla', term: 'linen pants', time: '45 min ago', clicked: true },
-  ];
+        const allLogs = allLogsRes.data || [];
+        const recentData = recentRes.data || [];
 
-  const stats = [
-    { label: 'Total Searches', value: '4,400' },
-    { label: 'Unique Terms', value: '892' },
-    { label: 'Avg. Results', value: '7.2' },
-    { label: 'Click-through', value: '62%' },
-    { label: 'Zero Results', value: '14%' },
-    { label: 'Searches/User', value: '3.8' },
+        // --- Stats ---
+        const total = allLogs.length;
+        const uniqueTermsSet = new Set(allLogs.map(r => r.query?.toLowerCase()));
+        const uniqueTerms = uniqueTermsSet.size;
+        const avgResults = total > 0
+          ? allLogs.reduce((sum, r) => sum + (r.results_count || 0), 0) / total
+          : 0;
+        const clickedCount = allLogs.filter(r => r.clicked).length;
+        const clickThrough = total > 0 ? (clickedCount / total) * 100 : 0;
+        const zeroCount = allLogs.filter(r => r.results_count === 0).length;
+        const zeroResultsPct = total > 0 ? (zeroCount / total) * 100 : 0;
+        const uniqueUsers = new Set(allLogs.map(r => r.user_handle).filter(Boolean));
+        const searchesPerUser = uniqueUsers.size > 0 ? total / uniqueUsers.size : 0;
+
+        setStats({
+          totalSearches: total,
+          uniqueTerms,
+          avgResults: Math.round(avgResults * 10) / 10,
+          clickThrough: Math.round(clickThrough),
+          zeroResultsPct: Math.round(zeroResultsPct),
+          searchesPerUser: Math.round(searchesPerUser * 10) / 10,
+        });
+
+        // --- Top Searches ---
+        const termCounts: Record<string, number> = {};
+        for (const row of allLogs) {
+          const q = row.query?.toLowerCase() || '';
+          termCounts[q] = (termCounts[q] || 0) + 1;
+        }
+        const sortedTerms = Object.entries(termCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([term, count]) => ({ term, count }));
+        setTopSearches(sortedTerms);
+
+        // --- Zero Result Searches ---
+        const zeroLogs = allLogs.filter(r => r.results_count === 0);
+        const zeroTermMap: Record<string, { count: number; lastSearched: string }> = {};
+        for (const row of zeroLogs) {
+          const q = row.query?.toLowerCase() || '';
+          if (!zeroTermMap[q]) {
+            zeroTermMap[q] = { count: 0, lastSearched: row.created_at };
+          }
+          zeroTermMap[q].count += 1;
+          if (row.created_at > zeroTermMap[q].lastSearched) {
+            zeroTermMap[q].lastSearched = row.created_at;
+          }
+        }
+        const sortedZero = Object.entries(zeroTermMap)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 5)
+          .map(([term, data]) => ({
+            term,
+            count: data.count,
+            lastSearched: new Date(data.lastSearched).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          }));
+        setZeroResults(sortedZero);
+
+        // --- Search Volume by Time (4-hour buckets) ---
+        const bucketLabels = ['12am-4am', '4am-8am', '8am-12pm', '12pm-4pm', '4pm-8pm', '8pm-12am'];
+        const bucketCounts = [0, 0, 0, 0, 0, 0];
+        for (const row of allLogs) {
+          const hour = new Date(row.created_at).getHours();
+          const bucketIndex = Math.floor(hour / 4);
+          bucketCounts[bucketIndex] += 1;
+        }
+        const maxBucket = Math.max(...bucketCounts, 1);
+        const timeSlots: TimeSlot[] = bucketLabels.map((label, i) => ({
+          hour: label,
+          searches: bucketCounts[i],
+          pct: Math.round((bucketCounts[i] / maxBucket) * 100),
+        }));
+        setSearchByTime(timeSlots);
+
+        // --- Recent Searches ---
+        const recent: RecentSearch[] = recentData.map(r => ({
+          id: r.id,
+          user: r.user_handle || '—',
+          term: r.query,
+          time: formatRelativeTime(r.created_at),
+          clicked: r.clicked,
+        }));
+        setRecentSearches(recent);
+      } catch (err) {
+        console.error('[OverviewTab] fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchOverviewData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 60, textAlign: 'center', color: '#888', fontSize: 13 }}>
+        Loading overview data...
+      </div>
+    );
+  }
+
+  const hasData = stats.totalSearches > 0;
+
+  const statCards = [
+    { label: 'Total Searches', value: stats.totalSearches.toLocaleString() },
+    { label: 'Unique Terms', value: stats.uniqueTerms.toLocaleString() },
+    { label: 'Avg. Results', value: String(stats.avgResults) },
+    { label: 'Click-through', value: `${stats.clickThrough}%` },
+    { label: 'Zero Results', value: `${stats.zeroResultsPct}%` },
+    { label: 'Searches/User', value: String(stats.searchesPerUser) },
   ];
 
   return (
     <>
       <div className="admin-stats-grid">
-        {stats.map(s => (
+        {statCards.map(s => (
           <div key={s.label} className="admin-stat-card">
             <span className="admin-stat-value">{s.value}</span>
             <span className="admin-stat-label">{s.label}</span>
@@ -126,56 +257,64 @@ function OverviewTab() {
         {/* Top Searches */}
         <div className="admin-detail-card">
           <h3>Top Searches</h3>
-          <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0, marginTop: 8 }}>
-            <table className="admin-table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Term</th>
-                  <th>Count</th>
-                  <th>Trend</th>
-                  <th>Results</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topSearches.map((s, i) => (
-                  <tr key={s.term}>
-                    <td className="admin-cell-muted">{i + 1}</td>
-                    <td className="admin-cell-name">{s.term}</td>
-                    <td>{s.count}</td>
-                    <td style={{ color: s.trend.startsWith('+') ? '#4caf50' : '#f44336', fontWeight: 600 }}>{s.trend}</td>
-                    <td className="admin-cell-muted">{s.results}</td>
+          {topSearches.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>No searches yet</p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0, marginTop: 8 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Term</th>
+                    <th>Count</th>
+                    <th>Trend</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {topSearches.map((s, i) => (
+                    <tr key={s.term}>
+                      <td className="admin-cell-muted">{i + 1}</td>
+                      <td className="admin-cell-name">{s.term}</td>
+                      <td>{s.count}</td>
+                      <td className="admin-cell-muted">—</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Zero Results */}
         <div className="admin-detail-card">
           <h3>Zero Result Searches</h3>
           <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Queries users searched but found nothing</p>
-          <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
-            <table className="admin-table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>Term</th>
-                  <th>Count</th>
-                  <th>Last Searched</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zeroResults.map(s => (
-                  <tr key={s.term}>
-                    <td className="admin-cell-name">{s.term}</td>
-                    <td>{s.count}</td>
-                    <td className="admin-cell-muted">{s.lastSearched}</td>
+          {zeroResults.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>
+              {hasData ? 'No zero-result searches found' : 'No searches yet'}
+            </p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Term</th>
+                    <th>Count</th>
+                    <th>Last Searched</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {zeroResults.map(s => (
+                    <tr key={s.term}>
+                      <td className="admin-cell-name">{s.term}</td>
+                      <td>{s.count}</td>
+                      <td className="admin-cell-muted">{s.lastSearched}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -183,50 +322,58 @@ function OverviewTab() {
         {/* Search by Time */}
         <div className="admin-detail-card">
           <h3>Search Volume by Time</h3>
-          <div style={{ marginTop: 12 }}>
-            {searchByTime.map(s => (
-              <div key={s.hour} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: '#888', width: 70, flexShrink: 0 }}>{s.hour}</span>
-                <div style={{ flex: 1, height: 18, background: 'rgba(128,128,128,0.06)', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ width: `${s.pct}%`, height: '100%', background: '#4caf50', borderRadius: 4, transition: 'width 0.3s' }} />
+          {!hasData ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>No searches yet</p>
+          ) : (
+            <div style={{ marginTop: 12 }}>
+              {searchByTime.map(s => (
+                <div key={s.hour} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: '#888', width: 70, flexShrink: 0 }}>{s.hour}</span>
+                  <div style={{ flex: 1, height: 18, background: 'rgba(128,128,128,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${s.pct}%`, height: '100%', background: '#4caf50', borderRadius: 4, transition: 'width 0.3s' }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: '#666', width: 50, textAlign: 'right' }}>{s.searches}</span>
                 </div>
-                <span style={{ fontSize: 11, color: '#666', width: 50, textAlign: 'right' }}>{s.searches}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Recent Searches */}
         <div className="admin-detail-card">
           <h3>Recent Searches</h3>
-          <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0, marginTop: 8 }}>
-            <table className="admin-table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Query</th>
-                  <th>When</th>
-                  <th>Clicked</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentSearches.map((s, i) => (
-                  <tr key={i}>
-                    <td className="admin-cell-name">{s.user}</td>
-                    <td>{s.term}</td>
-                    <td className="admin-cell-muted">{s.time}</td>
-                    <td>
-                      {s.clicked ? (
-                        <span style={{ color: '#4caf50', fontSize: 11, fontWeight: 600 }}>Yes</span>
-                      ) : (
-                        <span style={{ color: '#ccc', fontSize: 11 }}>No</span>
-                      )}
-                    </td>
+          {recentSearches.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>No searches yet</p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0, marginTop: 8 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Query</th>
+                    <th>When</th>
+                    <th>Clicked</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {recentSearches.map((s) => (
+                    <tr key={s.id}>
+                      <td className="admin-cell-name">{s.user}</td>
+                      <td>{s.term}</td>
+                      <td className="admin-cell-muted">{s.time}</td>
+                      <td>
+                        {s.clicked ? (
+                          <span style={{ color: '#4caf50', fontSize: 11, fontWeight: 600 }}>Yes</span>
+                        ) : (
+                          <span style={{ color: '#ccc', fontSize: 11 }}>No</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -439,17 +586,263 @@ function LiveActivityTab() {
   );
 }
 
-// ─── Trends Tab ───
+// ─── Trends Tab (real data from Supabase) ───
+
+interface TrendTerm {
+  term: string;
+  currentCount: number;
+  previousCount: number;
+  change: number;
+}
+
+interface DailyCount {
+  date: string;
+  count: number;
+}
+
+interface FilterCount {
+  filter: string;
+  count: number;
+  pct: number;
+}
 
 function TrendsTab() {
+  const [loading, setLoading] = useState(true);
+  const [risingTerms, setRisingTerms] = useState<TrendTerm[]>([]);
+  const [decliningTerms, setDecliningTerms] = useState<TrendTerm[]>([]);
+  const [dailyActivity, setDailyActivity] = useState<DailyCount[]>([]);
+  const [filterCounts, setFilterCounts] = useState<FilterCount[]>([]);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+
+    async function fetchTrendsData() {
+      try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Fetch last 14 days of data for trends and daily activity
+        const { data: twoWeekData } = await supabase!
+          .from('search_logs')
+          .select('query, created_at, filter')
+          .gte('created_at', fourteenDaysAgo)
+          .order('created_at', { ascending: false });
+
+        const allRows = twoWeekData || [];
+
+        // --- Rising / Declining Terms ---
+        const currentWeek: Record<string, number> = {};
+        const previousWeek: Record<string, number> = {};
+
+        for (const row of allRows) {
+          const q = row.query?.toLowerCase() || '';
+          if (row.created_at >= sevenDaysAgo) {
+            currentWeek[q] = (currentWeek[q] || 0) + 1;
+          } else {
+            previousWeek[q] = (previousWeek[q] || 0) + 1;
+          }
+        }
+
+        const allTerms = new Set([...Object.keys(currentWeek), ...Object.keys(previousWeek)]);
+        const trendTerms: TrendTerm[] = [];
+        for (const term of allTerms) {
+          const curr = currentWeek[term] || 0;
+          const prev = previousWeek[term] || 0;
+          const change = curr - prev;
+          trendTerms.push({ term, currentCount: curr, previousCount: prev, change });
+        }
+
+        const rising = trendTerms
+          .filter(t => t.change > 0)
+          .sort((a, b) => b.change - a.change)
+          .slice(0, 10);
+        setRisingTerms(rising);
+
+        const declining = trendTerms
+          .filter(t => t.change < 0)
+          .sort((a, b) => a.change - b.change)
+          .slice(0, 10);
+        setDecliningTerms(declining);
+
+        // --- Daily Activity (last 14 days) ---
+        const dailyMap: Record<string, number> = {};
+        for (let i = 13; i >= 0; i--) {
+          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          const key = d.toISOString().slice(0, 10);
+          dailyMap[key] = 0;
+        }
+        for (const row of allRows) {
+          const key = row.created_at.slice(0, 10);
+          if (key in dailyMap) {
+            dailyMap[key] += 1;
+          }
+        }
+        const daily: DailyCount[] = Object.entries(dailyMap).map(([date, count]) => ({ date, count }));
+        setDailyActivity(daily);
+
+        // --- Popular Filters ---
+        const filterMap: Record<string, number> = {};
+        for (const row of allRows) {
+          const f = row.filter || 'all';
+          filterMap[f] = (filterMap[f] || 0) + 1;
+        }
+        const totalFiltered = allRows.length || 1;
+        const filters: FilterCount[] = Object.entries(filterMap)
+          .sort((a, b) => b[1] - a[1])
+          .map(([filter, count]) => ({
+            filter,
+            count,
+            pct: Math.round((count / totalFiltered) * 100),
+          }));
+        setFilterCounts(filters);
+      } catch (err) {
+        console.error('[TrendsTab] fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTrendsData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 60, textAlign: 'center', color: '#888', fontSize: 13 }}>
+        Loading trends data...
+      </div>
+    );
+  }
+
+  const hasData = dailyActivity.some(d => d.count > 0);
+  const maxDaily = Math.max(...dailyActivity.map(d => d.count), 1);
+
   return (
     <div style={{ marginTop: 16 }}>
-      <div className="admin-detail-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>&#x1F4C8;</div>
-        <h3 style={{ marginBottom: 8, color: '#fff' }}>Search Trends Coming Soon</h3>
-        <p style={{ color: '#888', fontSize: 13, maxWidth: 400, margin: '0 auto' }}>
-          Trend analysis will show rising and falling search terms, seasonal patterns, and predictive insights based on user search behavior.
-        </p>
+      <div className="admin-detail-grid">
+        {/* Rising Terms */}
+        <div className="admin-detail-card">
+          <h3>Rising Terms</h3>
+          <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Terms with the most growth (last 7 days vs previous 7 days)</p>
+          {risingTerms.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>
+              {hasData ? 'No rising terms detected in this period' : 'No trend data yet — searches will be analyzed once enough data is collected.'}
+            </p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Term</th>
+                    <th>This Week</th>
+                    <th>Last Week</th>
+                    <th>Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {risingTerms.map(t => (
+                    <tr key={t.term}>
+                      <td className="admin-cell-name">{t.term}</td>
+                      <td>{t.currentCount}</td>
+                      <td className="admin-cell-muted">{t.previousCount}</td>
+                      <td style={{ color: '#4caf50', fontWeight: 600 }}>+{t.change}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Declining Terms */}
+        <div className="admin-detail-card">
+          <h3>Declining Terms</h3>
+          <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Terms with the largest drop-off (last 7 days vs previous 7 days)</p>
+          {decliningTerms.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>
+              {hasData ? 'No declining terms detected in this period' : 'No trend data yet — searches will be analyzed once enough data is collected.'}
+            </p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Term</th>
+                    <th>This Week</th>
+                    <th>Last Week</th>
+                    <th>Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decliningTerms.map(t => (
+                    <tr key={t.term}>
+                      <td className="admin-cell-name">{t.term}</td>
+                      <td>{t.currentCount}</td>
+                      <td className="admin-cell-muted">{t.previousCount}</td>
+                      <td style={{ color: '#f44336', fontWeight: 600 }}>{t.change}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="admin-detail-grid" style={{ marginTop: 16 }}>
+        {/* Daily Search Activity */}
+        <div className="admin-detail-card">
+          <h3>Search Activity Over Time</h3>
+          <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Daily search count for the last 14 days</p>
+          {!hasData ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>No search data yet</p>
+          ) : (
+            <div style={{ marginTop: 12 }}>
+              {dailyActivity.map(d => {
+                const label = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return (
+                  <div key={d.date} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: '#888', width: 55, flexShrink: 0 }}>{label}</span>
+                    <div style={{ flex: 1, height: 16, background: 'rgba(128,128,128,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.round((d.count / maxDaily) * 100)}%`, height: '100%', background: '#4caf50', borderRadius: 4, transition: 'width 0.3s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: '#666', width: 40, textAlign: 'right' }}>{d.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Popular Filters */}
+        <div className="admin-detail-card">
+          <h3>Popular Filters</h3>
+          <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Search filter usage over the last 14 days</p>
+          {filterCounts.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>No search data yet</p>
+          ) : (
+            <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="admin-table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Filter</th>
+                    <th>Searches</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filterCounts.map(f => (
+                    <tr key={f.filter}>
+                      <td className="admin-cell-name" style={{ textTransform: 'capitalize' }}>{f.filter}</td>
+                      <td>{f.count}</td>
+                      <td className="admin-cell-muted">{f.pct}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
