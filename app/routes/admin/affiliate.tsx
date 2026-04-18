@@ -20,6 +20,7 @@ interface AffiliateNetwork {
   minPayout: string;
   cookieDuration: string;
   hasApi: boolean;
+  fitRating: number;
   status: 'available' | 'connected' | 'pending';
   apiDocsUrl?: string;
   connectionRequirements?: {
@@ -43,6 +44,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 95,
     status: 'available',
     apiDocsUrl: 'https://developer.impact.com/',
     connectionRequirements: {
@@ -74,6 +76,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 88,
     status: 'available',
     apiDocsUrl: 'https://developers.rakutenadvertising.com/',
     connectionRequirements: {
@@ -107,6 +110,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '45 days',
     hasApi: true,
+    fitRating: 85,
     status: 'available',
     apiDocsUrl: 'https://developers.cj.com/',
     connectionRequirements: {
@@ -139,6 +143,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 78,
     status: 'available',
     apiDocsUrl: 'https://apihelp.shareasale.com/',
     connectionRequirements: {
@@ -171,6 +176,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 82,
     status: 'available',
     apiDocsUrl: 'https://developer.awin.com/',
     connectionRequirements: {
@@ -203,6 +209,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '24 hours',
     hasApi: true,
+    fitRating: 70,
     status: 'available',
     apiDocsUrl: 'https://webservices.amazon.com/paapi5/documentation/',
     connectionRequirements: {
@@ -237,6 +244,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '90 days',
     hasApi: true,
+    fitRating: 35,
     status: 'available',
     apiDocsUrl: 'https://docs.partnerstack.com/',
     connectionRequirements: {
@@ -268,6 +276,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$100',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 98,
     status: 'available',
     apiDocsUrl: 'https://company.shopltk.com/',
     connectionRequirements: {
@@ -299,6 +308,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$65',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 72,
     status: 'available',
     apiDocsUrl: 'https://developers.skimlinks.com/',
     connectionRequirements: {
@@ -330,6 +340,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 75,
     status: 'available',
     apiDocsUrl: 'https://api.partnerize.com/docs/',
     connectionRequirements: {
@@ -361,6 +372,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 55,
     status: 'available',
     apiDocsUrl: 'https://www.flexoffers.com/affiliate-resources/affiliate-api-documentation/',
     connectionRequirements: {
@@ -392,6 +404,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0 (PayPal)',
     cookieDuration: 'Custom',
     hasApi: true,
+    fitRating: 68,
     status: 'available',
     apiDocsUrl: 'https://developers.refersion.com/',
     connectionRequirements: {
@@ -423,6 +436,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '24 hours',
     hasApi: true,
+    fitRating: 45,
     status: 'available',
     apiDocsUrl: 'https://developer.ebay.com/marketplace-insights',
     connectionRequirements: {
@@ -452,6 +466,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '3 days',
     hasApi: true,
+    fitRating: 60,
     status: 'available',
     apiDocsUrl: 'https://developer.walmart.com/',
     connectionRequirements: {
@@ -479,6 +494,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '7 days',
     hasApi: false,
+    fitRating: 73,
     status: 'available',
     apiDocsUrl: 'https://partners.target.com',
     connectionRequirements: {
@@ -505,6 +521,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 65,
     status: 'available',
     apiDocsUrl: 'https://developers.etsy.com/documentation',
     connectionRequirements: {
@@ -532,6 +549,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 40,
     status: 'available',
     apiDocsUrl: 'https://partners.shopify.com/',
     connectionRequirements: {
@@ -560,6 +578,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '€100',
     cookieDuration: 'Session',
     hasApi: true,
+    fitRating: 25,
     status: 'available',
     apiDocsUrl: 'https://developers.booking.com/',
     connectionRequirements: {
@@ -588,6 +607,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$20',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 58,
     status: 'available',
     apiDocsUrl: 'https://developers.admitad.com/',
     connectionRequirements: {
@@ -616,6 +636,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '€10',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 52,
     status: 'available',
     apiDocsUrl: 'https://dev.tradedoubler.com/',
     connectionRequirements: {
@@ -643,6 +664,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '£5',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 50,
     status: 'available',
     apiDocsUrl: 'https://api.webgains.com/docs/',
     connectionRequirements: {
@@ -670,6 +692,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: 'Varies',
     hasApi: true,
+    fitRating: 62,
     status: 'available',
     apiDocsUrl: 'https://info.sovrn.com/developer-tools',
     connectionRequirements: {
@@ -696,6 +719,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$25',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 90,
     status: 'available',
     apiDocsUrl: 'https://magiclinks.com/creators',
     connectionRequirements: {
@@ -722,6 +746,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 92,
     status: 'available',
     apiDocsUrl: 'https://planethowl.com/creators',
     connectionRequirements: {
@@ -749,6 +774,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0',
     cookieDuration: '60 days',
     hasApi: true,
+    fitRating: 30,
     status: 'available',
     apiDocsUrl: 'https://developers.rewardful.com/',
     connectionRequirements: {
@@ -775,6 +801,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$0',
     cookieDuration: 'Custom',
     hasApi: true,
+    fitRating: 32,
     status: 'available',
     apiDocsUrl: 'https://tapfiliate.com/docs/rest/',
     connectionRequirements: {
@@ -802,6 +829,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$75',
     cookieDuration: '30 days',
     hasApi: false,
+    fitRating: 94,
     status: 'available',
     apiDocsUrl: 'https://shopstyle.com/collective',
     connectionRequirements: {
@@ -828,6 +856,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$10',
     cookieDuration: '60 days',
     hasApi: true,
+    fitRating: 15,
     status: 'available',
     apiDocsUrl: 'https://api.clickbank.com/',
     connectionRequirements: {
@@ -856,6 +885,7 @@ const networks: AffiliateNetwork[] = [
     minPayout: '$50',
     cookieDuration: '30 days',
     hasApi: true,
+    fitRating: 55,
     status: 'available',
     apiDocsUrl: 'https://www.partnerboost.com/api',
     connectionRequirements: {
@@ -895,6 +925,21 @@ function TypeBadge({ type }: { type: NetworkType }) {
   );
 }
 
+function FitBadge({ rating }: { rating: number }) {
+  let bg = '#888';
+  if (rating >= 80) bg = '#22c55e';
+  else if (rating >= 60) bg = '#3b82f6';
+  else if (rating >= 40) bg = '#f59e0b';
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+      fontSize: 11, fontWeight: 600, background: bg, color: '#fff', whiteSpace: 'nowrap',
+    }}>
+      {rating}%
+    </span>
+  );
+}
+
 export default function AdminAffiliate() {
   const [view, setView] = useState<ViewMode>('table');
   const [search, setSearch] = useState('');
@@ -902,6 +947,8 @@ export default function AdminAffiliate() {
   const [typeFilter, setTypeFilter] = useState<NetworkType | 'all'>('all');
   const [connectTarget, setConnectTarget] = useState<AffiliateNetwork | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<string>('fitRating');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const allCategories = useMemo(() => {
     const set = new Set<string>();
@@ -910,7 +957,7 @@ export default function AdminAffiliate() {
   }, []);
 
   const filtered = useMemo(() => {
-    let list = networks;
+    let list = [...networks];
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(n =>
@@ -924,13 +971,70 @@ export default function AdminAffiliate() {
     if (typeFilter !== 'all') {
       list = list.filter(n => n.type === typeFilter);
     }
+
+    const parseMerchants = (m: string): number => {
+      const cleaned = m.replace(/[^0-9.KkMm+]/g, '');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return 0;
+      if (/m/i.test(m)) return num * 1_000_000;
+      if (/k/i.test(m)) return num * 1_000;
+      return num;
+    };
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case 'type':
+          cmp = a.type.localeCompare(b.type);
+          break;
+        case 'merchants':
+          cmp = parseMerchants(a.merchants) - parseMerchants(b.merchants);
+          break;
+        case 'avgCommission':
+          cmp = a.avgCommission.localeCompare(b.avgCommission);
+          break;
+        case 'cookieDuration':
+          cmp = a.cookieDuration.localeCompare(b.cookieDuration);
+          break;
+        case 'minPayout':
+          cmp = a.minPayout.localeCompare(b.minPayout);
+          break;
+        case 'hasApi':
+          cmp = (a.hasApi ? 1 : 0) - (b.hasApi ? 1 : 0);
+          break;
+        case 'fitRating':
+          cmp = a.fitRating - b.fitRating;
+          break;
+        case 'status':
+          cmp = a.status.localeCompare(b.status);
+          break;
+        default:
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
     return list;
-  }, [search, categoryFilter, typeFilter]);
+  }, [search, categoryFilter, typeFilter, sortKey, sortDir]);
 
   const openConnect = (n: AffiliateNetwork) => {
     setConnectTarget(n);
     setFormValues({});
   };
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'fitRating' || key === 'merchants' || key === 'hasApi' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortArrow = (key: string) => sortKey === key ? (sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
 
   const stats = [
     { label: 'Networks', value: String(networks.length) },
@@ -1016,16 +1120,17 @@ export default function AdminAffiliate() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Network</th>
-                <th>Type</th>
-                <th>Merchants</th>
-                <th>Avg Commission</th>
+                <th style={{ textAlign: 'left', cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('name')}>Network{sortArrow('name')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortArrow('type')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('merchants')}>Merchants{sortArrow('merchants')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('avgCommission')}>Avg Commission{sortArrow('avgCommission')}</th>
                 <th>Categories</th>
                 <th style={{ textAlign: 'left' }}>Top Partner Brands</th>
-                <th>Cookie</th>
-                <th>Min Payout</th>
-                <th>API</th>
-                <th>Status</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('cookieDuration')}>Cookie{sortArrow('cookieDuration')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('minPayout')}>Min Payout{sortArrow('minPayout')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('hasApi')}>API{sortArrow('hasApi')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('fitRating')}>Fit{sortArrow('fitRating')}</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('status')}>Status{sortArrow('status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1078,6 +1183,7 @@ export default function AdminAffiliate() {
                       {n.hasApi ? 'Yes' : 'No'}
                     </span>
                   </td>
+                  <td><FitBadge rating={n.fitRating} /></td>
                   <td>
                     {n.status === 'connected' ? (
                       <span className="admin-status admin-status-online">connected</span>
@@ -1123,13 +1229,16 @@ export default function AdminAffiliate() {
                     <div style={{ marginTop: 6 }}><TypeBadge type={n.type} /></div>
                   </div>
                 </div>
-                <span style={{
-                  padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                  background: n.hasApi ? '#dcfce7' : '#fee2e2',
-                  color: n.hasApi ? '#16a34a' : '#dc2626',
-                }}>
-                  API: {n.hasApi ? 'Yes' : 'No'}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: n.hasApi ? '#dcfce7' : '#fee2e2',
+                    color: n.hasApi ? '#16a34a' : '#dc2626',
+                  }}>
+                    API: {n.hasApi ? 'Yes' : 'No'}
+                  </span>
+                  <FitBadge rating={n.fitRating} />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 12, marginBottom: 16 }}>
