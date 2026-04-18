@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
 import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
 import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
 import VideoGenerationPanel from '~/components/VideoGenerationPanel';
 import ProductAdsPanel from '~/components/ProductAdsPanel';
+import { listCrawlJobs, type CrawlJob } from '~/services/site-crawls';
+import { getGeneratedVideos, type GeneratedVideo } from '~/services/video-generation';
+import { getProductAds, type ProductAd } from '~/services/product-ads';
 
 type Tab = 'overview' | 'crawls' | 'video-gen';
 type CrawlSubTab = 'full-site' | 'collections' | 'products';
@@ -35,6 +38,53 @@ export default function AdminAgents() {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [crawlSub, setCrawlSub] = useState<CrawlSubTab>(initialCrawlSub);
   const [videoSub, setVideoSub] = useState<VideoSubTab>(initialVideoSub);
+
+  const [crawls, setCrawls] = useState<CrawlJob[]>([]);
+  const [videos, setVideos] = useState<GeneratedVideo[]>([]);
+  const [ads, setAds] = useState<ProductAd[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (activeTab !== 'overview') return;
+    setStatsLoading(true);
+    Promise.all([
+      listCrawlJobs().catch(() => [] as CrawlJob[]),
+      getGeneratedVideos().catch(() => [] as GeneratedVideo[]),
+      getProductAds().catch(() => [] as ProductAd[]),
+    ]).then(([c, v, a]) => {
+      setCrawls(c);
+      setVideos(v);
+      setAds(a);
+      setStatsLoading(false);
+    });
+  }, [activeTab]);
+
+  const isToday = (iso: string | null | undefined) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear()
+      && d.getMonth() === now.getMonth()
+      && d.getDate() === now.getDate();
+  };
+
+  const indexersToday = crawls.filter(c => isToday(c.completed_at));
+  const indexerStats = {
+    completedToday: indexersToday.length,
+    successToday: indexersToday.filter(c => c.status === 'done').length,
+    failedToday: indexersToday.filter(c => c.status === 'failed').length,
+    activeNow: crawls.filter(c => c.status === 'crawling').length,
+    totalUrls: crawls.reduce((sum, c) => sum + (c.total_urls || 0), 0),
+  };
+
+  const allContent = [...videos, ...ads];
+  const videoStats = {
+    total: allContent.length,
+    done: allContent.filter(v => v.status === 'done' || v.status === 'live').length,
+    failed: allContent.filter(v => v.status === 'failed').length,
+    generating: allContent.filter(v => v.status === 'generating' || v.status === 'pending' || v.status === 'uploading').length,
+    totalCost: allContent.reduce((sum, v) => sum + (v.cost_usd || 0), 0),
+  };
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);
@@ -121,33 +171,79 @@ export default function AdminAgents() {
       </div>
 
       {activeTab === 'overview' ? (
-        <div className="admin-agents-grid">
-          {cards.map((card) => (
-            <button
-              key={card.id}
-              className="admin-agent-card"
-              onClick={() => {
-                if (card.onClick) card.onClick();
-                else if (card.to) navigate(card.to);
-              }}
-            >
-              <div className="admin-agent-card-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={card.icon} />
-                </svg>
-              </div>
-              <div className="admin-agent-card-body">
-                <div className="admin-agent-card-head">
-                  <span className="admin-agent-card-name">{card.name}</span>
-                  <span className={`admin-agent-card-status admin-agent-card-status-${card.status}`}>
-                    {card.status === 'live' ? 'Live' : 'Coming soon'}
-                  </span>
+        <>
+          <div className="admin-stats-grid" style={{ marginBottom: 16 }}>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">{statsLoading ? '…' : indexerStats.completedToday}</span>
+              <span className="admin-stat-label">Indexers completed today</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value" style={{ color: '#16a34a' }}>{statsLoading ? '…' : indexerStats.successToday}</span>
+              <span className="admin-stat-label">Successful today</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value" style={{ color: '#dc2626' }}>{statsLoading ? '…' : indexerStats.failedToday}</span>
+              <span className="admin-stat-label">Failed today</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">{statsLoading ? '…' : indexerStats.activeNow}</span>
+              <span className="admin-stat-label">Active indexers</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">{statsLoading ? '…' : indexerStats.totalUrls.toLocaleString()}</span>
+              <span className="admin-stat-label">URLs discovered</span>
+            </div>
+          </div>
+          <div className="admin-stats-grid" style={{ marginBottom: 24 }}>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">{statsLoading ? '…' : videoStats.total}</span>
+              <span className="admin-stat-label">Videos generated</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value" style={{ color: '#16a34a' }}>{statsLoading ? '…' : videoStats.done}</span>
+              <span className="admin-stat-label">Done</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value" style={{ color: '#dc2626' }}>{statsLoading ? '…' : videoStats.failed}</span>
+              <span className="admin-stat-label">Failed</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">{statsLoading ? '…' : videoStats.generating}</span>
+              <span className="admin-stat-label">In progress</span>
+            </div>
+            <div className="admin-stat-card">
+              <span className="admin-stat-value">${statsLoading ? '…' : videoStats.totalCost.toFixed(2)}</span>
+              <span className="admin-stat-label">Total cost</span>
+            </div>
+          </div>
+          <div className="admin-agents-grid">
+            {cards.map((card) => (
+              <button
+                key={card.id}
+                className="admin-agent-card"
+                onClick={() => {
+                  if (card.onClick) card.onClick();
+                  else if (card.to) navigate(card.to);
+                }}
+              >
+                <div className="admin-agent-card-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={card.icon} />
+                  </svg>
                 </div>
-                <p className="admin-agent-card-desc">{card.description}</p>
-              </div>
-            </button>
-          ))}
-        </div>
+                <div className="admin-agent-card-body">
+                  <div className="admin-agent-card-head">
+                    <span className="admin-agent-card-name">{card.name}</span>
+                    <span className={`admin-agent-card-status admin-agent-card-status-${card.status}`}>
+                      {card.status === 'live' ? 'Live' : 'Coming soon'}
+                    </span>
+                  </div>
+                  <p className="admin-agent-card-desc">{card.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
       ) : activeTab === 'crawls' ? (
         <div className="admin-agent-subsection">
           <div className="admin-subtabs">
