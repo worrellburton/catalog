@@ -119,7 +119,7 @@ export default function AdminContent() {
         setAdProductIds(new Set(data.map(r => r.product_id)));
         const videoMap = new Map<string, string[]>();
         data.forEach(r => {
-          if (r.video_url && (r.status === 'live' || r.status === 'done')) {
+          if (r.video_url) {
             const existing = videoMap.get(r.product_id) || [];
             existing.push(r.video_url);
             videoMap.set(r.product_id, existing);
@@ -133,6 +133,13 @@ export default function AdminContent() {
   }, []);
 
   const allProducts = useMemo(() => {
+    const allVideos: string[] = [];
+    adVideoMap.forEach(vids => vids.forEach(v => allVideos.push(v)));
+    const pickVideos = (count: number, startIdx: number): string[] => {
+      if (allVideos.length === 0) return [];
+      return Array.from({ length: count }, (_, i) => allVideos[(startIdx + i) % allVideos.length]);
+    };
+    let filler = 0;
     const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
@@ -181,11 +188,18 @@ export default function AdminContent() {
       }
     });
 
-    return Array.from(productMap.values()).map(p => ({
-      ...p,
-      lookCount: p.looks.size,
-      creatorCount: p.creators.size,
-    }));
+    return Array.from(productMap.values()).map(p => {
+      const ownVideos = p.video_urls;
+      const videos = ownVideos.length > 0
+        ? ownVideos
+        : pickVideos(3, (filler++ * 3));
+      return {
+        ...p,
+        video_urls: videos,
+        lookCount: p.looks.size,
+        creatorCount: p.creators.size,
+      };
+    });
   }, [crawledProducts, adProductIds, adVideoMap]);
 
   const lookTable = useSortableTable(lookRows);
@@ -337,7 +351,7 @@ export default function AdminContent() {
                   <td>
                     {p.video_urls.length > 0 ? (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        {p.video_urls.slice(0, 2).map((v, vi) => (
+                        {p.video_urls.slice(0, 3).map((v, vi) => (
                           <div key={vi} className="admin-look-thumb" style={{ width: 36, height: 48 }}>
                             <video
                               src={v}
@@ -353,9 +367,9 @@ export default function AdminContent() {
                             </div>
                           </div>
                         ))}
-                        {p.video_urls.length > 2 && (
+                        {p.video_urls.length > 3 && (
                           <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
-                            +{p.video_urls.length - 2}
+                            +{p.video_urls.length - 3}
                           </span>
                         )}
                       </div>
