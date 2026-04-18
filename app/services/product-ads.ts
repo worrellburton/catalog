@@ -3,6 +3,7 @@ import { supabase } from '~/utils/supabase';
 export interface ProductAd {
   id: string;
   product_id: string;
+  look_id: string | null;
   title: string | null;
   description: string | null;
   video_url: string | null;

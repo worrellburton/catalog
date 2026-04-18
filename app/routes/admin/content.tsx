@@ -92,6 +92,8 @@ export default function AdminContent() {
   const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
+  const [adImpressionsMap, setAdImpressionsMap] = useState<Map<string, number>>(new Map());
+  const [adClicksMap, setAdClicksMap] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     const loadCrawled = async () => {
@@ -114,18 +116,24 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data } = await supabase
         .from('product_ads')
-        .select('product_id, video_url, status');
+        .select('product_id, video_url, status, impressions, clicks');
       if (data) {
         setAdProductIds(new Set(data.map(r => r.product_id)));
         const videoMap = new Map<string, string[]>();
+        const impMap = new Map<string, number>();
+        const clkMap = new Map<string, number>();
         data.forEach(r => {
           if (r.video_url) {
             const existing = videoMap.get(r.product_id) || [];
             existing.push(r.video_url);
             videoMap.set(r.product_id, existing);
           }
+          impMap.set(r.product_id, (impMap.get(r.product_id) || 0) + (r.impressions || 0));
+          clkMap.set(r.product_id, (clkMap.get(r.product_id) || 0) + (r.clicks || 0));
         });
         setAdVideoMap(videoMap);
+        setAdImpressionsMap(impMap);
+        setAdClicksMap(clkMap);
       }
     };
     loadCrawled();
@@ -140,13 +148,13 @@ export default function AdminContent() {
       return Array.from({ length: count }, (_, i) => allVideos[(startIdx + i) % allVideos.length]);
     };
     let filler = 0;
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
         const key = `${p.brand}-${p.name}`;
         if (!productMap.has(key)) {
-          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, connection: 'Look' });
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, impressions: 0, connection: 'Look' });
         }
         const entry = productMap.get(key)!;
         entry.looks.add(look.title);
@@ -163,6 +171,8 @@ export default function AdminContent() {
         entry.id = cp.id;
         entry.image_url = cp.image_url;
         entry.video_urls = adVideoMap.get(cp.id) || [];
+        entry.impressions = adImpressionsMap.get(cp.id) || 0;
+        entry.clicks = adClicksMap.get(cp.id) || entry.clicks;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -182,7 +192,8 @@ export default function AdminContent() {
           looks: new Set(),
           creators: new Set(),
           saves: 0,
-          clicks: 0,
+          clicks: adClicksMap.get(cp.id) || 0,
+          impressions: adImpressionsMap.get(cp.id) || 0,
           connection,
         });
       }
@@ -200,7 +211,7 @@ export default function AdminContent() {
         creatorCount: p.creators.size,
       };
     });
-  }, [crawledProducts, adProductIds, adVideoMap]);
+  }, [crawledProducts, adProductIds, adVideoMap, adImpressionsMap, adClicksMap]);
 
   const lookTable = useSortableTable(lookRows);
 
@@ -340,6 +351,7 @@ export default function AdminContent() {
                 <th>Connection</th>
                 <th>In Looks</th>
                 <th>Creators</th>
+                <th>Impressions</th>
                 <th>Saves</th>
                 <th>Clicks</th>
                 <th>Status</th>
@@ -410,6 +422,7 @@ export default function AdminContent() {
                   </td>
                   <td>{p.lookCount}</td>
                   <td>{p.creatorCount}</td>
+                  <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
                   <td><span className="admin-status admin-status-online">active</span></td>
