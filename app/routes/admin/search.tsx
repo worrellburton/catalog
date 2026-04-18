@@ -453,20 +453,20 @@ function LiveActivityTab() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          borderBottom: '1px solid rgba(128,128,128,0.1)',
-          background: 'rgba(0,0,0,0.15)',
+          borderBottom: '1px solid #eee',
+          background: '#fafafa',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: isPaused ? '#666' : '#22c55e',
+              background: isPaused ? '#9ca3af' : '#22c55e',
               display: 'inline-block',
               animation: isPaused ? 'none' : 'adminLivePulse 2s ease-in-out infinite',
               flexShrink: 0,
             }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
               {isPaused ? 'Paused' : 'Live Feed'}
             </span>
             <span style={{ fontSize: 11, color: '#888' }}>
@@ -476,9 +476,9 @@ function LiveActivityTab() {
           <button
             onClick={() => setIsPaused(!isPaused)}
             style={{
-              background: isPaused ? 'rgba(34,197,94,0.15)' : 'rgba(128,128,128,0.15)',
-              border: '1px solid ' + (isPaused ? 'rgba(34,197,94,0.3)' : 'rgba(128,128,128,0.2)'),
-              color: isPaused ? '#22c55e' : '#999',
+              background: isPaused ? 'rgba(34,197,94,0.12)' : '#f3f4f6',
+              border: '1px solid ' + (isPaused ? 'rgba(34,197,94,0.3)' : '#e5e7eb'),
+              color: isPaused ? '#16a34a' : '#374151',
               padding: '4px 12px',
               borderRadius: 6,
               fontSize: 11,
@@ -545,24 +545,24 @@ function LiveActivityTab() {
               <span style={{ color: '#888', fontSize: 11, fontFamily: 'monospace' }}>
                 {formatTimestamp(entry.created_at)}
               </span>
-              <span style={{ color: '#fff', fontWeight: 500 }}>
+              <span style={{ color: '#111', fontWeight: 500 }}>
                 {entry.query}
               </span>
-              <span style={{ color: '#aaa' }}>
+              <span style={{ color: '#666' }}>
                 {entry.user_handle || '—'}
               </span>
               <span style={{
                 textAlign: 'center',
-                color: entry.results_count === 0 ? '#f44336' : '#888',
+                color: entry.results_count === 0 ? '#dc2626' : '#666',
                 fontWeight: entry.results_count === 0 ? 600 : 400,
               }}>
                 {entry.results_count}
               </span>
               <span style={{ textAlign: 'center' }}>
                 {entry.clicked ? (
-                  <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 11 }}>Yes</span>
+                  <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 11 }}>Yes</span>
                 ) : (
-                  <span style={{ color: '#555', fontSize: 11 }}>No</span>
+                  <span style={{ color: '#999', fontSize: 11 }}>No</span>
                 )}
               </span>
             </div>
