@@ -176,7 +176,7 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
   );
 }
 
-function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole) => void }) {
+function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole, error?: string) => void }) {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -210,12 +210,14 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
     if (newRole === role) { setOpen(false); return; }
     setUpdating(true);
     const { error } = await updateUserRole(userId, newRole);
-    if (error) {
-      console.warn('Role update failed (column may not exist yet):', error);
-    }
-    onRoleChange(userId, newRole);
     setUpdating(false);
     setOpen(false);
+    if (error) {
+      console.error('Role update failed:', error);
+      onRoleChange(userId, newRole, error);
+      return;
+    }
+    onRoleChange(userId, newRole);
   };
 
   return (
@@ -279,7 +281,11 @@ export default function AdminUsers() {
     }, 4000);
   }, [dismissToast]);
 
-  const handleRoleChange = useCallback((userId: string, newRole: UserRole) => {
+  const handleRoleChange = useCallback((userId: string, newRole: UserRole, error?: string) => {
+    if (error) {
+      showToast(`Failed to change role: ${error}`, 'warning');
+      return;
+    }
     setAllUsers(prev => {
       const target = prev.find(u => u.id === userId);
       if (target && target.role !== newRole) {

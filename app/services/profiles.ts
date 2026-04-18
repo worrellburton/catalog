@@ -50,10 +50,17 @@ export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
 
 export async function updateUserRole(userId: string, role: UserRole): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .update({ role })
-    .eq('id', userId);
+    .eq('id', userId)
+    .select('id, role');
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: 'Update blocked by RLS. You must be signed in as admin/super_admin to change another user\'s role.' };
+  }
+  if (data[0].role !== role) {
+    return { error: `Role did not persist (got ${data[0].role}, expected ${role}).` };
+  }
   return {};
 }
