@@ -38,6 +38,7 @@ export default defineConfig({
             route("creators", "routes/admin/creators.tsx");
             route("creators/:name", "routes/admin/creators.$name.tsx");
             route("earnings", "routes/admin/earnings.tsx");
+            route("finance", "routes/admin/finance.tsx");
             route("incoming-creators", "routes/admin/incoming-creators.tsx");
             route("incoming-looks", "routes/admin/incoming-looks.tsx");
             route("links", "routes/admin/links.tsx");
