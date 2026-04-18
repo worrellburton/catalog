@@ -461,6 +461,10 @@ export default function Home() {
             onFilterChange={setActiveFilter}
             searchQuery={searchQuery}
             onSearchChange={(q: string) => { setSearchQuery(q); if (q.trim()) setCatalogName(getRandomCatalogName(q)); }}
+            onSelectSuggestion={(q: string) => {
+              setSearchQuery(q.toLowerCase());
+              setCatalogName(q.replace(/\b\w/g, (c) => c.toUpperCase()));
+            }}
             onOpenCreators={() => setCreatorFilter('@lilywittman')}
             catalogName={catalogName}
           />
