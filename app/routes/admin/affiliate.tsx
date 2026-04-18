@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 
 type NetworkType =
   | 'Network'           // multi-brand aggregator (Impact, CJ, Rakuten, ShareASale, Awin)
@@ -940,6 +940,144 @@ function FitBadge({ rating }: { rating: number }) {
   );
 }
 
+function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; onConnect: () => void }) {
+  const n = network;
+  return (
+    <div style={{ padding: '20px 24px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) 2fr', gap: 24 }}>
+        {/* Left: profile summary */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <img
+              src={n.logo}
+              alt={n.name}
+              style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover' }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{n.name}</div>
+              <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <TypeBadge type={n.type} />
+                <FitBadge rating={n.fitRating} />
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Payment:</span> <span style={{ fontWeight: 500 }}>{n.paymentSchedule}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Cookie window:</span> <span style={{ fontWeight: 500 }}>{n.cookieDuration}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Min payout:</span> <span style={{ fontWeight: 500 }}>{n.minPayout}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Avg commission:</span> <span style={{ fontWeight: 500 }}>{n.avgCommission}</span>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ color: '#6b7280' }}>Merchants:</span> <span style={{ fontWeight: 500 }}>{n.merchants}</span>
+            </div>
+            <div>
+              <span style={{ color: '#6b7280' }}>API:</span>{' '}
+              <span style={{
+                fontWeight: 600,
+                color: n.hasApi ? '#16a34a' : '#dc2626',
+              }}>
+                {n.hasApi ? 'Available' : 'Not available'}
+              </span>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {n.status === 'connected' ? (
+              <span className="admin-status admin-status-online">Connected</span>
+            ) : (
+              <button
+                className="admin-btn admin-btn-primary"
+                style={{ fontSize: 12 }}
+                onClick={(e) => { e.stopPropagation(); onConnect(); }}
+              >
+                Connect {n.name}
+              </button>
+            )}
+            {n.apiDocsUrl && (
+              <a
+                href={n.apiDocsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12, textDecoration: 'none' }}
+              >
+                View API docs →
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Right: categories, brands, connection details */}
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+              Categories
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {n.categories.map(c => (
+                <span key={c} style={{
+                  padding: '3px 8px', borderRadius: 4, fontSize: 11,
+                  background: '#fff', border: '1px solid #e5e7eb', color: '#374151',
+                }}>
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+              Partner Brands
+            </div>
+            <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+              {n.partnerBrands.join(', ')}
+            </div>
+          </div>
+
+          {n.connectionRequirements && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  Auth Method
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 12 }}>
+                  {n.connectionRequirements.authType}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  Prerequisites
+                </div>
+                <ul style={{ paddingLeft: 16, margin: 0, fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+                  {n.connectionRequirements.prerequisites.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, fontWeight: 600 }}>
+                  How to connect
+                </div>
+                <ol style={{ paddingLeft: 16, margin: 0, fontSize: 12, lineHeight: 1.6, color: '#374151' }}>
+                  {n.connectionRequirements.howToGet.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAffiliate() {
   const [view, setView] = useState<ViewMode>('table');
   const [search, setSearch] = useState('');
@@ -949,6 +1087,7 @@ export default function AdminAffiliate() {
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string>('fitRating');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [expandedName, setExpandedName] = useState<string | null>(null);
 
   const allCategories = useMemo(() => {
     const set = new Set<string>();
@@ -1134,73 +1273,96 @@ export default function AdminAffiliate() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(n => (
-                <tr key={n.name}>
-                  <td style={{ textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <img
-                        src={n.logo}
-                        alt={n.name}
-                        style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{n.name}</div>
-                        <div style={{ fontSize: 11, color: '#999' }}>{n.paymentSchedule}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td><TypeBadge type={n.type} /></td>
-                  <td style={{ fontSize: 13 }}>{n.merchants}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{n.avgCommission}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                      {n.categories.slice(0, 3).map(c => (
-                        <span key={c} style={{
-                          padding: '2px 6px', borderRadius: 4, fontSize: 10,
-                          background: '#f3f4f6', color: '#555', fontWeight: 500,
+              {filtered.map(n => {
+                const isExpanded = expandedName === n.name;
+                return (
+                  <Fragment key={n.name}>
+                    <tr
+                      onClick={() => setExpandedName(isExpanded ? null : n.name)}
+                      style={{ cursor: 'pointer', background: isExpanded ? '#f9fafb' : undefined }}
+                    >
+                      <td style={{ textAlign: 'left' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: 12,
+                            color: '#999',
+                            fontSize: 10,
+                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.15s',
+                          }}>▶</span>
+                          <img
+                            src={n.logo}
+                            alt={n.name}
+                            style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{n.name}</div>
+                            <div style={{ fontSize: 11, color: '#999' }}>{n.paymentSchedule}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><TypeBadge type={n.type} /></td>
+                      <td style={{ fontSize: 13 }}>{n.merchants}</td>
+                      <td style={{ fontWeight: 600, fontSize: 13 }}>{n.avgCommission}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {n.categories.slice(0, 3).map(c => (
+                            <span key={c} style={{
+                              padding: '2px 6px', borderRadius: 4, fontSize: 10,
+                              background: '#f3f4f6', color: '#555', fontWeight: 500,
+                            }}>
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'left', fontSize: 12, color: '#666' }}>
+                        {n.partnerBrands.slice(0, 4).join(', ')}
+                        {n.partnerBrands.length > 4 && <span style={{ color: '#999' }}> +{n.partnerBrands.length - 4}</span>}
+                      </td>
+                      <td style={{ fontSize: 12 }}>{n.cookieDuration}</td>
+                      <td style={{ fontSize: 12 }}>{n.minPayout}</td>
+                      <td>
+                        <span style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 4,
+                          fontSize: 11, fontWeight: 600,
+                          background: n.hasApi ? '#dcfce7' : '#fee2e2',
+                          color: n.hasApi ? '#16a34a' : '#dc2626',
                         }}>
-                          {c}
+                          {n.hasApi ? 'Yes' : 'No'}
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'left', fontSize: 12, color: '#666' }}>
-                    {n.partnerBrands.slice(0, 4).join(', ')}
-                    {n.partnerBrands.length > 4 && <span style={{ color: '#999' }}> +{n.partnerBrands.length - 4}</span>}
-                  </td>
-                  <td style={{ fontSize: 12 }}>{n.cookieDuration}</td>
-                  <td style={{ fontSize: 12 }}>{n.minPayout}</td>
-                  <td>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                      fontSize: 11, fontWeight: 600,
-                      background: n.hasApi ? '#dcfce7' : '#fee2e2',
-                      color: n.hasApi ? '#16a34a' : '#dc2626',
-                    }}>
-                      {n.hasApi ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td><FitBadge rating={n.fitRating} /></td>
-                  <td>
-                    {n.status === 'connected' ? (
-                      <span className="admin-status admin-status-online">connected</span>
-                    ) : n.status === 'pending' ? (
-                      <span className="admin-status" style={{ color: '#f59e0b' }}>pending</span>
-                    ) : (
-                      <button
-                        className="admin-btn admin-btn-primary"
-                        style={{ fontSize: 11, padding: '4px 10px' }}
-                        onClick={() => openConnect(n)}
-                      >
-                        Connect
-                      </button>
+                      </td>
+                      <td><FitBadge rating={n.fitRating} /></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {n.status === 'connected' ? (
+                          <span className="admin-status admin-status-online">connected</span>
+                        ) : n.status === 'pending' ? (
+                          <span className="admin-status" style={{ color: '#f59e0b' }}>pending</span>
+                        ) : (
+                          <button
+                            className="admin-btn admin-btn-primary"
+                            style={{ fontSize: 11, padding: '4px 10px' }}
+                            onClick={() => openConnect(n)}
+                          >
+                            Connect
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={11} style={{ padding: 0, background: '#f9fafb' }}>
+                          <NetworkDetailRow network={n} onConnect={() => openConnect(n)} />
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
