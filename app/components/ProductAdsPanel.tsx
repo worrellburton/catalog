@@ -312,6 +312,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
               <tr>
                 <th style={{ width: 60 }}>Preview</th>
                 <th>Type</th>
+                <SortableTh label="Brand" sortKey="brand" currentSort={sort} onSort={handleSort} />
                 <SortableTh label="Product" sortKey="product" currentSort={sort} onSort={handleSort} />
                 <SortableTh label="Style" sortKey="style" currentSort={sort} onSort={handleSort} />
                 <SortableTh label="Status" sortKey="status" currentSort={sort} onSort={handleSort} />
@@ -372,6 +373,11 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                         </span>
                       </td>
 
+                      {/* Brand */}
+                      <td style={{ fontSize: 13 }}>
+                        {ad.product?.brand || <span className="admin-cell-muted">—</span>}
+                      </td>
+
                       {/* Product */}
                       <td className="admin-cell-name">
                         {ad.product?.image_url && (
@@ -381,10 +387,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                             style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', marginRight: 8 }}
                           />
                         )}
-                        <div>
-                          <div style={{ fontSize: 13 }}>{ad.product?.name || ad.product_id.slice(0, 8)}</div>
-                          {ad.product?.brand && <div style={{ fontSize: 11, color: '#999' }}>{ad.product.brand}</div>}
-                        </div>
+                        <div style={{ fontSize: 13 }}>{ad.product?.name || ad.product_id.slice(0, 8)}</div>
                       </td>
 
                       {/* Style */}
@@ -417,16 +420,6 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                               title="Set live in feed"
                             >
                               Go Live
-                            </button>
-                          )}
-                          {ad.status === 'live' && (
-                            <button
-                              className="admin-btn admin-btn-secondary"
-                              style={{ fontSize: 11, padding: '3px 8px' }}
-                              onClick={() => handlePause(ad.id)}
-                              title="Pause ad"
-                            >
-                              Pause
                             </button>
                           )}
                           {(ad.status === 'done' || ad.status === 'failed' || ad.status === 'paused') && (

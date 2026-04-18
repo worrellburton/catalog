@@ -213,13 +213,13 @@ export default function AdminAgents() {
               className={`admin-subtab ${videoSub === 'product-ads' ? 'active' : ''}`}
               onClick={() => setVideoSubTab('product-ads')}
             >
-              Product Ads
+              Products
             </button>
             <button
               className={`admin-subtab ${videoSub === 'look-videos' ? 'active' : ''}`}
               onClick={() => setVideoSubTab('look-videos')}
             >
-              Look Videos
+              Looks
             </button>
           </div>
 
