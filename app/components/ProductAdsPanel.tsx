@@ -311,6 +311,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
             <thead>
               <tr>
                 <th style={{ width: 60 }}>Preview</th>
+                <th>Type</th>
                 <SortableTh label="Product" sortKey="product" currentSort={sort} onSort={handleSort} />
                 <SortableTh label="Style" sortKey="style" currentSort={sort} onSort={handleSort} />
                 <SortableTh label="Status" sortKey="status" currentSort={sort} onSort={handleSort} />
@@ -362,6 +363,13 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                             {ad.status === 'failed' ? '✕' : '…'}
                           </div>
                         )}
+                      </td>
+
+                      {/* Type */}
+                      <td>
+                        <span className={`admin-connection-pill admin-connection-${ad.look_id ? 'look' : 'ad'}`}>
+                          {ad.look_id ? 'Look' : 'Product'}
+                        </span>
                       </td>
 
                       {/* Product */}
@@ -446,7 +454,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                     {/* Expanded detail row */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={8} style={{ padding: 0 }}>
+                        <td colSpan={9} style={{ padding: 0 }}>
                           <div style={{ padding: '16px 20px', background: '#fafafa', borderBottom: '1px solid #eee' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                               {/* Left: Details */}

@@ -41,6 +41,7 @@ export default defineConfig({
             route("incoming-creators", "routes/admin/incoming-creators.tsx");
             route("incoming-looks", "routes/admin/incoming-looks.tsx");
             route("links", "routes/admin/links.tsx");
+            route("affiliate", "routes/admin/affiliate.tsx");
             route("looks", "routes/admin/looks.tsx");
             route("moderation", "routes/admin/moderation.tsx");
             route("musics", "routes/admin/musics.tsx");

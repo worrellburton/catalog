@@ -26,7 +26,7 @@ export default function AdminLinks() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1>Links</h1>
+        <h1>Sign Up Links</h1>
         <p className="admin-page-subtitle">Manage signup and referral links</p>
       </div>
       <div className="admin-stats-grid">
