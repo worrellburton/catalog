@@ -68,7 +68,7 @@ export default function AdminAgents() {
   const cards: AgentCard[] = [
     {
       id: 'crawls',
-      name: 'Crawls',
+      name: 'Indexers',
       description: 'Crawl e-commerce sites, collections, and individual products to populate the catalog.',
       status: 'live',
       onClick: () => setTab('crawls'),
@@ -110,7 +110,7 @@ export default function AdminAgents() {
           className={`admin-tab ${activeTab === 'crawls' ? 'active' : ''}`}
           onClick={() => setTab('crawls')}
         >
-          Crawls
+          Indexers
         </button>
         <button
           className={`admin-tab ${activeTab === 'video-gen' ? 'active' : ''}`}

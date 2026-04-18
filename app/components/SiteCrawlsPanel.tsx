@@ -378,12 +378,166 @@ function AutomationRow({
   );
 }
 
+const SITEMAP_DISPLAY_LIMIT = 100;
+
+function SitemapExpandedRow({
+  crawlId,
+  colSpan,
+}: {
+  crawlId: string;
+  colSpan: number;
+}) {
+  const [urls, setUrls] = useState<CrawlDiscoveredUrl[]>([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadUrls = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listDiscoveredUrls(crawlId, { limit: SITEMAP_DISPLAY_LIMIT });
+        if (cancelled) return;
+        setUrls(result.data);
+        setCount(result.count);
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Failed to load sitemap:', e);
+        setError('Failed to load sitemap');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    loadUrls();
+    return () => {
+      cancelled = true;
+    };
+  }, [crawlId]);
+
+  const grouped = urls.reduce<Record<string, CrawlDiscoveredUrl[]>>((acc, u) => {
+    const key = u.collection_name || 'Uncategorized';
+    (acc[key] = acc[key] || []).push(u);
+    return acc;
+  }, {});
+
+  const overflow = Math.max(0, count - urls.length);
+
+  return (
+    <tr className="admin-look-expanded-row open">
+      <td colSpan={colSpan} style={{ padding: 0 }}>
+        <div className="admin-expand-animate">
+          <div className="admin-look-products">
+            <h3 className="admin-products-title">
+              Sitemap ({count} {count === 1 ? 'URL' : 'URLs'})
+            </h3>
+            {loading ? (
+              <div className="admin-empty" style={{ padding: '16px 0' }}>Loading sitemap…</div>
+            ) : error ? (
+              <div className="admin-empty" style={{ padding: '16px 0', color: '#ef4444' }}>{error}</div>
+            ) : urls.length === 0 ? (
+              <div className="admin-empty" style={{ padding: '16px 0' }}>
+                No URLs discovered for this crawl yet.
+              </div>
+            ) : (
+              <>
+                {Object.entries(grouped)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([group, items]) => (
+                    <div key={group} style={{ marginBottom: 16 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          color: '#888',
+                          marginBottom: 6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        {group}
+                        <span
+                          style={{
+                            background: '#f0f0f0',
+                            borderRadius: 10,
+                            padding: '1px 6px',
+                            fontSize: 10,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {items.length}
+                        </span>
+                      </div>
+                      <table className="admin-table admin-products-table" style={{ fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ width: 40 }}>#</th>
+                            <th>URL</th>
+                            <th style={{ width: 100 }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((u, idx) => (
+                            <tr key={u.id}>
+                              <td className="admin-cell-muted">{idx + 1}</td>
+                              <td
+                                style={{
+                                  maxWidth: 600,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <a
+                                  href={u.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{ color: '#3b82f6', textDecoration: 'none' }}
+                                >
+                                  {u.page_title || u.url}
+                                </a>
+                              </td>
+                              <td>
+                                <StatusBadge status={u.status} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                {overflow > 0 && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: '#888',
+                      textAlign: 'center',
+                      padding: '8px 0 4px',
+                    }}
+                  >
+                    +{overflow} more {overflow === 1 ? 'URL' : 'URLs'} not shown
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelProps) {
   const [jobs, setJobs] = useState<CrawlJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
   const [expandedAutomationId, setExpandedAutomationId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [automations, setAutomations] = useState<Record<string, AutomationSettings>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -549,7 +703,9 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                   <Fragment key={job.id}>
                   <tr
                     className="admin-table-row-clickable"
-                    onClick={() => setSelectedJob(job)}
+                    onClick={() =>
+                      setExpandedId((prev) => (prev === job.id ? null : job.id))
+                    }
                     style={{ cursor: 'pointer' }}
                   >
                     <td onClick={(e) => e.stopPropagation()} style={{ width: 48 }}>
@@ -678,6 +834,9 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                       }}
                     />
                   )}
+                  {expandedId === job.id && (
+                    <SitemapExpandedRow crawlId={job.id} colSpan={10} />
+                  )}
                   </Fragment>
                 );
               })}
@@ -691,13 +850,6 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
         onClose={() => setShowAdd(false)}
         onSubmit={handleAdd}
       />
-
-      {selectedJob && (
-        <DiscoveredUrlsPanel
-          job={selectedJob}
-          onClose={() => setSelectedJob(null)}
-        />
-      )}
 
     </>
   );

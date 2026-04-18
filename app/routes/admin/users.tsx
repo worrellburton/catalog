@@ -64,6 +64,118 @@ function profileToRow(p: Profile): UserRow {
 
 type Tab = 'shoppers' | 'shoppers-waitlist' | 'creators' | 'creators-incoming' | 'admins';
 
+type ToastType = 'success' | 'info' | 'warning';
+
+interface Toast {
+  id: number;
+  message: string;
+  type: ToastType;
+  exiting?: boolean;
+}
+
+const TOAST_STYLES: Record<ToastType, { bg: string; border: string; icon: string; iconColor: string }> = {
+  success: { bg: '#10b981', border: '#059669', icon: '\u2713', iconColor: '#ffffff' },
+  info: { bg: '#3b82f6', border: '#2563eb', icon: '\u2139', iconColor: '#ffffff' },
+  warning: { bg: '#f59e0b', border: '#d97706', icon: '\u26A0', iconColor: '#ffffff' },
+};
+
+const TOAST_ANIMATIONS = `
+@keyframes admin-toast-slide-up {
+  from { transform: translateY(120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes admin-toast-slide-down {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(120%); opacity: 0; }
+}
+.admin-toast-enter { animation: admin-toast-slide-up 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.admin-toast-exit { animation: admin-toast-slide-down 240ms cubic-bezier(0.4, 0, 1, 1) both; }
+`;
+
+function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  return (
+    <>
+      <style>{TOAST_ANIMATIONS}</style>
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          zIndex: 10000,
+          pointerEvents: 'none',
+        }}
+      >
+        {toasts.map(t => {
+          const s = TOAST_STYLES[t.type];
+          return (
+            <div
+              key={t.id}
+              className={t.exiting ? 'admin-toast-exit' : 'admin-toast-enter'}
+              style={{
+                width: 320,
+                background: s.bg,
+                color: '#ffffff',
+                borderRadius: 8,
+                boxShadow: '0 10px 25px rgba(0,0,0,0.25), 0 4px 10px rgba(0,0,0,0.15)',
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                pointerEvents: 'auto',
+                border: `1px solid ${s.border}`,
+                fontSize: 14,
+                lineHeight: 1.4,
+              }}
+              role="status"
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.2)',
+                  color: s.iconColor,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: 14,
+                  fontWeight: 700,
+                }}
+              >
+                {s.icon}
+              </span>
+              <span style={{ flex: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{t.message}</span>
+              <button
+                type="button"
+                onClick={() => onDismiss(t.id)}
+                aria-label="Dismiss notification"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.9)',
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  lineHeight: 1,
+                  padding: 0,
+                  marginLeft: 4,
+                  flexShrink: 0,
+                }}
+              >
+                {'\u00d7'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: string; onRoleChange: (id: string, role: UserRole) => void }) {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -143,15 +255,41 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
   const [allUsers, setAllUsers] = useState<UserRow[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     getProfiles().then(profiles => setAllUsers(profiles.map(profileToRow)));
   }, []);
 
-  const handleRoleChange = useCallback((userId: string, newRole: UserRole) => {
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+    window.setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 240);
   }, []);
+
+  const showToast = useCallback((message: string, type: ToastType) => {
+    toastIdRef.current += 1;
+    const id = toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    window.setTimeout(() => {
+      dismissToast(id);
+    }, 4000);
+  }, [dismissToast]);
+
+  const handleRoleChange = useCallback((userId: string, newRole: UserRole) => {
+    setAllUsers(prev => {
+      const target = prev.find(u => u.id === userId);
+      if (target && target.role !== newRole) {
+        const oldLabel = USER_ROLE_LABELS[target.role];
+        const newLabel = USER_ROLE_LABELS[newRole];
+        showToast(`${target.name}'s role changed from ${oldLabel} to ${newLabel}`, 'success');
+      }
+      return prev.map(u => u.id === userId ? { ...u, role: newRole } : u);
+    });
+  }, [showToast]);
 
   const shoppers = allUsers.filter(u => u.role === 'shopper');
   const dbCreators = allUsers.filter(u => u.role === 'creator');
@@ -276,6 +414,7 @@ export default function AdminUsers() {
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
       {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

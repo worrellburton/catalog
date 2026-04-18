@@ -4,6 +4,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import { getLiveAds, type ProductAd } from '~/services/product-ads';
+import { supabase } from '~/utils/supabase';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -113,6 +114,32 @@ export default function ContinuousFeed({
         console.error('[ContinuousFeed] getLiveAds failed:', err);
       });
   }, []);
+
+  // Log search queries to Supabase (debounced)
+  const lastLoggedQueryRef = useRef<string>('');
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || q.length < 2 || q === lastLoggedQueryRef.current) return;
+    lastLoggedQueryRef.current = q;
+    const timer = setTimeout(() => {
+      if (!supabase) return;
+      const handle = localStorage.getItem('catalog_user_handle') || (() => {
+        const h = `user_${Math.random().toString(36).slice(2, 8)}`;
+        localStorage.setItem('catalog_user_handle', h);
+        return h;
+      })();
+      supabase.from('search_logs').insert({
+        query: q,
+        user_handle: handle,
+        results_count: filteredLooks.length,
+        clicked: false,
+        filter: activeFilter,
+      }).then(({ error }) => {
+        if (error) console.error('[search_logs] insert failed:', error.message);
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchQuery, filteredLooks.length, activeFilter]);
 
   // Reset when filters/search/shuffle change
   const prevFilterRef = useRef({ activeFilter, searchQuery, shuffleKey });
