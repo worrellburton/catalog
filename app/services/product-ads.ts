@@ -74,11 +74,14 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     return [];
   }
   try {
+    // Surface any ad with a finished video — both explicitly promoted ('live')
+    // and newly generated but un-promoted ('done'). Failed/paused/pending
+    // ads are excluded since they either have no video or are disabled.
     const { data, error } = await supabase
       .from('product_ads')
       .select(AD_SELECT)
-      .eq('status', 'live')
-      .eq('enabled', true)
+      .in('status', ['live', 'done'])
+      .not('video_url', 'is', null)
       .order('created_at', { ascending: false });
     if (error) {
       console.error('[getLiveAds] query error:', error.message, error.details, error.hint);
