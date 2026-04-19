@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
+import { boostAd } from '~/services/product-ads';
 
 interface SearchLog {
   id: string;
@@ -50,6 +51,62 @@ export default function AdminHome() {
   const [recentActivity, setRecentActivity] = useState<SearchLog[]>([]);
   const [allSearchLogs, setAllSearchLogs] = useState<SearchLog[]>([]);
   const [weeklyData, setWeeklyData] = useState<DayCount[]>([]);
+  const [trending, setTrending] = useState<Array<{
+    id: string;
+    productName: string;
+    brand: string;
+    image: string | null;
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    createdAt: string;
+    boostedUntil: string | null;
+  }>>([]);
+  const [boostingId, setBoostingId] = useState<string | null>(null);
+
+  const loadTrending = useCallback(async () => {
+    if (!supabase) return;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from('product_ads')
+      .select('id, impressions, clicks, created_at, boosted_until, product:products(name, brand, image_url)')
+      .eq('status', 'live')
+      .gte('created_at', sevenDaysAgo)
+      .gte('impressions', 100);
+    if (!data) return;
+    const rows = (data as unknown as Array<{
+      id: string;
+      impressions: number;
+      clicks: number;
+      created_at: string;
+      boosted_until: string | null;
+      product: { name: string | null; brand: string | null; image_url: string | null } | null;
+    }>)
+      .map(r => ({
+        id: r.id,
+        productName: r.product?.name || 'Unnamed',
+        brand: r.product?.brand || '—',
+        image: r.product?.image_url || null,
+        impressions: r.impressions || 0,
+        clicks: r.clicks || 0,
+        ctr: (r.impressions || 0) > 0 ? ((r.clicks || 0) / r.impressions) * 100 : 0,
+        createdAt: r.created_at,
+        boostedUntil: r.boosted_until,
+      }))
+      .filter(r => r.ctr >= 3)
+      .sort((a, b) => b.ctr - a.ctr)
+      .slice(0, 5);
+    setTrending(rows);
+  }, []);
+
+  useEffect(() => { loadTrending(); }, [loadTrending]);
+
+  const handleBoost = async (id: string) => {
+    setBoostingId(id);
+    await boostAd(id, 24);
+    await loadTrending();
+    setBoostingId(null);
+  };
 
   // Local data counts — single source of truth
   const creatorsCount = Object.keys(creators).length;
@@ -208,6 +265,60 @@ export default function AdminHome() {
           <div className="admin-stat-change neutral">&mdash;</div>
         </div>
       </div>
+
+      {/* Trending card */}
+      {trending.length > 0 && (
+        <div className="admin-home-card" style={{ marginBottom: 16, border: '1px solid #fde68a', background: '#fffbeb' }}>
+          <h3 className="admin-home-card-title" style={{ color: '#b45309' }}>
+            🔥 Trending this week
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#92400e', marginLeft: 8 }}>
+              CTR ≥ 3%, last 7 days, 100+ impressions
+            </span>
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+            {trending.map((t, i) => {
+              const isBoosted = t.boostedUntil && new Date(t.boostedUntil).getTime() > Date.now();
+              return (
+                <div key={t.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px',
+                  background: '#fff', borderRadius: 8, border: '1px solid #fde68a',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#b45309', width: 20 }}>#{i + 1}</span>
+                  {t.image && <img src={t.image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.productName}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888' }}>
+                      {t.brand} · {t.impressions.toLocaleString()} imp · {t.clicks.toLocaleString()} clicks
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', minWidth: 56, textAlign: 'right' }}>
+                    {t.ctr.toFixed(2)}%
+                  </div>
+                  {isBoosted ? (
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 999, background: '#f97316', color: '#fff',
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                    }}>
+                      Boosted
+                    </span>
+                  ) : (
+                    <button
+                      className="admin-btn admin-btn-primary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      disabled={boostingId === t.id}
+                      onClick={() => handleBoost(t.id)}
+                    >
+                      {boostingId === t.id ? 'Boosting…' : 'Boost 24h'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="admin-home-grid">
         <div className="admin-home-card">
