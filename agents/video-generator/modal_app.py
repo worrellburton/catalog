@@ -40,7 +40,7 @@ generator_image = (
         "httpx>=0.27.0",
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
-        "replicate>=1.0.0",
+        "fal-client>=0.4.0",
     )
     .add_local_file("config.py", "/root/config.py")
     .add_local_file("prompts.py", "/root/prompts.py")

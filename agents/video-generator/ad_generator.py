@@ -177,30 +177,30 @@ def _generate_with_retry(
     model = model_override or GENERATION_DEFAULTS["model"]
     aspect = style_cfg.get("aspect_ratio", GENERATION_DEFAULTS["aspect_ratio"])
 
-    # Seedance path (Replicate) — uses URL directly, no reference-images concept
-    if model.startswith("seedance-") or model.startswith("bytedance/seedance"):
-        replicate_model = model if "/" in model else f"bytedance/{model}"
+    # Seedance path (fal.ai) — uses URL directly, no reference-images concept
+    if model.startswith("seedance-") or model.startswith("bytedance/seedance") or model.startswith("fal-ai/bytedance/seedance"):
+        seedance_model = model if "/" in model else f"bytedance/{model}"
         if image_urls:
             try:
-                print(f"    → Trying Seedance image-to-video ({replicate_model})…")
+                print(f"    → Trying Seedance image-to-video ({seedance_model})…")
                 video_bytes = seedance_from_image_url(
                     image_url=image_urls[0],
                     prompt=prompt,
-                    model=replicate_model,
+                    model=seedance_model,
                     duration=style_cfg.get("duration", 5),
                     aspect_ratio=aspect,
                 )
-                return (video_bytes, f"seedance_image:{replicate_model}")
+                return (video_bytes, f"seedance_image:{seedance_model}")
             except Exception as e:
                 print(f"    ⚠ Seedance image-to-video failed: {e}")
         print("    → Falling back to Seedance text-only…")
         video_bytes = seedance_from_text(
             prompt=prompt,
-            model=replicate_model,
+            model=seedance_model,
             duration=style_cfg.get("duration", 5),
             aspect_ratio=aspect,
         )
-        return (video_bytes, f"seedance_text:{replicate_model}")
+        return (video_bytes, f"seedance_text:{seedance_model}")
 
     # Strategy 1: Multiple reference images (best quality)
     if len(images_data) >= 2:
