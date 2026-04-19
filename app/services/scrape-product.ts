@@ -45,7 +45,7 @@ export interface ScrapeResult {
  * List all scraped product JSON files from storage.
  */
 export async function listScrapedProducts(prefix?: string): Promise<
-  { name: string; created_at: string }[]
+  { name: string; created_at: string | null }[]
 > {
   if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase.storage

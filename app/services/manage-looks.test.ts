@@ -164,7 +164,7 @@ describe('manage-looks status transitions', () => {
 describe('manage-looks gender constraint', () => {
   const validGenders = ['men', 'women', 'unisex'];
 
-  it.each(validGenders)('accepts gender=%s', (gender) => {
+  it.each(validGenders)('accepts gender=%s', (gender: string) => {
     expect(validGenders).toContain(gender);
   });
 
@@ -249,7 +249,7 @@ describe('manage-looks media insertion', () => {
 describe('manage-looks direct query response mapping', () => {
   // Simulates the shape returned by Supabase .select() with joins
 
-  function mapRow(row: Record<string, unknown>) {
+  function mapRow(row: Record<string, unknown>): Record<string, unknown> {
     return {
       ...row,
       look_photos: (row.look_photos as unknown[]) || [],

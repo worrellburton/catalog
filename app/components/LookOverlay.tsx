@@ -307,7 +307,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             <div className="look-feed-grid">
               {feedLooks.map(fl => (
                 <LookCard
-                  key={`${fl.id}-${'displayIndex' in fl ? fl.displayIndex : fl.id}`}
+                  key={`${fl.id}-${fl.displayIndex}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}

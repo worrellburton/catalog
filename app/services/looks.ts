@@ -66,7 +66,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
 
   // Filter to only looks that have a displayable video (legacy or via look_videos)
   // and are either live or have no status (legacy seed data)
-  const liveLooks = (data as SupabaseLook[]).filter(
+  const liveLooks = (data as unknown as SupabaseLook[]).filter(
     (row) => row.video_path && (!row.status || row.status === 'live')
   );
 

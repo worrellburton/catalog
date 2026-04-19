@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
-import { deleteProductAd, promoteQueuedAds } from '~/services/product-ads';
+import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-ads';
 
 interface NavItem {
   to: string;
@@ -78,14 +78,20 @@ interface GenNotification {
   createdAt: string;
   completedAt: string | null;
   costUsd: number | null;
+  error: string | null;
 }
 
 const ESTIMATED_GEN_SECONDS = 150;
-// Rough per-clip Veo cost used when cost_usd isn't populated yet. Tuned from
-// historical total-cost-per-ad (~$0.05) with some headroom.
+const STUCK_THRESHOLD_SECONDS = 300;
 const ESTIMATED_COST_USD = 0.06;
 
-function GenProgressBar({ n }: { n: GenNotification }) {
+function formatElapsed(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+
+function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (n.status !== 'generating' && n.status !== 'pending') return;
@@ -102,7 +108,28 @@ function GenProgressBar({ n }: { n: GenNotification }) {
     );
   }
   if (n.status === 'failed') {
-    return <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }}>Failed</span>;
+    const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
+    const errorLabel = isQuota ? 'Veo quota exceeded' : (n.error?.split('.')[0] || 'Failed').slice(0, 60);
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }} title={n.error || 'Unknown error'}>
+            {errorLabel}
+          </span>
+          {onRetry && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetry(); }}
+              style={{
+                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
+                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
   if (n.status === 'queued') {
     return (
@@ -113,29 +140,39 @@ function GenProgressBar({ n }: { n: GenNotification }) {
   }
 
   const elapsed = (now - new Date(n.createdAt).getTime()) / 1000;
+  const isStuck = elapsed > STUCK_THRESHOLD_SECONDS;
   const pct = n.status === 'pending'
     ? Math.min(15, (elapsed / 30) * 15)
-    : Math.min(95, (elapsed / ESTIMATED_GEN_SECONDS) * 100);
-  const remaining = Math.max(0, ESTIMATED_GEN_SECONDS - elapsed);
-  const mins = Math.floor(remaining / 60);
-  const secs = Math.floor(remaining % 60);
-  const timeLabel = n.status === 'pending' ? 'Starting…' : remaining > 0 ? `~${mins}:${String(secs).padStart(2, '0')}` : 'Finishing…';
+    : isStuck ? 95 : Math.min(95, (elapsed / ESTIMATED_GEN_SECONDS) * 100);
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: n.status === 'pending' ? '#f59e0b' : '#3b82f6', textTransform: 'uppercase' }}>
-          {n.status === 'pending' ? 'Pending' : 'Generating'}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : '#3b82f6', textTransform: 'uppercase' }}>
+          {isStuck ? 'Stuck' : n.status === 'pending' ? 'Pending' : 'Generating'}
         </span>
-        <span style={{ fontSize: 10, color: '#888' }}>{timeLabel}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: isStuck ? '#ef4444' : '#888' }}>{formatElapsed(elapsed)}</span>
+          {isStuck && onRetry && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetry(); }}
+              style={{
+                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
+                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       </div>
       <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', inset: 0, width: `${pct}%`,
-          background: n.status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+          background: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
           transition: 'width 1s ease',
         }} />
-        {n.status === 'generating' && (
+        {n.status === 'generating' && !isStuck && (
           <div style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
@@ -166,10 +203,19 @@ export default function AdminLayout() {
 
   const pollGenerations = useCallback(async () => {
     if (!supabase) return;
+    // Self-heal: flip any 'generating' row that has an error + completed_at to 'failed'.
+    // Worker sometimes populates the error but forgets the status flip, leaving items stuck.
+    await supabase
+      .from('product_ads')
+      .update({ status: 'failed' })
+      .eq('status', 'generating')
+      .not('error', 'is', null)
+      .not('completed_at', 'is', null);
+
     const { data } = await supabase
       .from('product_ads')
-      .select('id, status, created_at, completed_at, cost_usd, product:products(name, brand)')
-      .in('status', ['queued', 'pending', 'generating'])
+      .select('id, status, created_at, completed_at, cost_usd, error, product:products(name, brand)')
+      .in('status', ['queued', 'pending', 'generating', 'failed'])
       .order('created_at', { ascending: true });
 
     if (!data) return;
@@ -182,6 +228,7 @@ export default function AdminLayout() {
       createdAt: r.created_at,
       completedAt: r.completed_at,
       costUsd: r.cost_usd,
+      error: r.error,
     }));
 
     const currentIds = new Set(active.map(n => n.id));
@@ -433,14 +480,14 @@ export default function AdminLayout() {
             {notifOpen && (
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 8,
-                width: 340, maxHeight: 420, overflowY: 'auto',
-                background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
-                border: '1px solid #e5e7eb', zIndex: 100,
+                width: 360, background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+                border: '1px solid #e5e7eb', zIndex: 100, display: 'flex', flexDirection: 'column',
+                maxHeight: 'calc(100vh - 80px)',
               }}>
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
-                    <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'center' }}>
                       {generatingCount > 0 && (
                         <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
                       )}
@@ -450,9 +497,26 @@ export default function AdminLayout() {
                     </div>
                   </div>
                   {genNotifications.length > 0 && (
-                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. total</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>${totalQueueCost.toFixed(2)}</span>
+                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. total</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>${totalQueueCost.toFixed(2)}</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          for (const n of genNotifications) {
+                            if (n.status !== 'done') await deleteProductAd(n.id);
+                          }
+                          setGenNotifications([]);
+                          prevIdsRef.current.clear();
+                        }}
+                        style={{
+                          fontSize: 10, fontWeight: 600, color: '#ef4444', background: '#fef2f2',
+                          border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
+                        }}
+                      >
+                        Cancel all
+                      </button>
                     </div>
                   )}
                 </div>
@@ -462,7 +526,7 @@ export default function AdminLayout() {
                     No active generations
                   </div>
                 ) : (
-                  <div style={{ padding: '8px 0' }}>
+                  <div style={{ overflowY: 'auto', padding: '4px 0' }}>
                     {genNotifications.map(n => (
                       <div key={n.id} style={{
                         padding: '10px 16px',
@@ -515,7 +579,10 @@ export default function AdminLayout() {
                             )}
                           </div>
                         </div>
-                        <GenProgressBar n={n} />
+                        <GenProgressBar n={n} onRetry={async () => {
+                          await regenerateAd(n.id);
+                          pollGenerations();
+                        }} />
                       </div>
                     ))}
                   </div>
