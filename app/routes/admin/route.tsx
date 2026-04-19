@@ -80,6 +80,8 @@ interface GenNotification {
   completedAt: string | null;
   costUsd: number | null;
   error: string | null;
+  style: string;
+  veoModel: string | null;
 }
 
 const ESTIMATED_GEN_SECONDS = 150;
@@ -215,9 +217,12 @@ export default function AdminLayout() {
       .not('error', 'is', null)
       .not('completed_at', 'is', null);
 
+    // Auto-promote queued items when slots are free
+    await promoteQueuedAds();
+
     const { data } = await supabase
       .from('product_ads')
-      .select('id, status, created_at, updated_at, completed_at, cost_usd, error, product:products(name, brand)')
+      .select('id, status, style, veo_model, created_at, updated_at, completed_at, cost_usd, error, product:products(name, brand)')
       .in('status', ['queued', 'pending', 'generating', 'failed'])
       .order('created_at', { ascending: true });
 
@@ -233,6 +238,8 @@ export default function AdminLayout() {
       completedAt: r.completed_at,
       costUsd: r.cost_usd,
       error: r.error,
+      style: r.style || 'unknown',
+      veoModel: r.veo_model,
     }));
 
     const currentIds = new Set(active.map(n => n.id));
@@ -244,7 +251,7 @@ export default function AdminLayout() {
       if (!currentIds.has(id)) {
         const prev = genNotifications.find(n => n.id === id);
         if (prev && (prev.status === 'generating' || prev.status === 'pending')) {
-          completed.push({ ...prev, status: 'done', completedAt: new Date().toISOString(), costUsd: prev.costUsd ?? ESTIMATED_COST_USD });
+          completed.push({ ...prev, status: 'done' as const, completedAt: new Date().toISOString(), costUsd: prev.costUsd ?? ESTIMATED_COST_USD });
         }
       }
     });
@@ -543,8 +550,16 @@ export default function AdminLayout() {
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {n.productName}
                             </div>
-                            <div style={{ fontSize: 10, color: '#888', display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <div style={{ fontSize: 10, color: '#888', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                               <span>{n.productBrand}</span>
+                              <span style={{ color: '#cbd5e1' }}>·</span>
+                              <span style={{ color: '#6366f1', fontWeight: 600 }}>{n.style.replace(/_/g, ' ')}</span>
+                              {n.veoModel && (
+                                <>
+                                  <span style={{ color: '#cbd5e1' }}>·</span>
+                                  <span style={{ color: '#0891b2', fontWeight: 500 }}>{n.veoModel}</span>
+                                </>
+                              )}
                               <span style={{ color: '#cbd5e1' }}>·</span>
                               <span style={{ color: n.costUsd != null ? '#0f766e' : '#94a3b8', fontWeight: 600 }}>
                                 {n.costUsd != null ? `$${n.costUsd.toFixed(3)}` : `~$${ESTIMATED_COST_USD.toFixed(2)}`}
