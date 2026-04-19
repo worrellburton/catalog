@@ -203,6 +203,81 @@ export default function AdminContent() {
   const [researchError, setResearchError] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
 
+  // Stale product refresh
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const refreshStaleProducts = useCallback(async () => {
+    if (!supabase) return;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Products not refreshed in 7+ days (or never refreshed)
+    const { data: stale } = await supabase
+      .from('products')
+      .select('id, name, brand, url, price')
+      .or(`last_refreshed_at.is.null,last_refreshed_at.lt.${sevenDaysAgo}`)
+      .limit(50);
+    if (!stale || stale.length === 0) {
+      showToast('No stale products — everything checked in the last 7 days');
+      return;
+    }
+    setRefreshing(true);
+    setRefreshProgress({ done: 0, total: stale.length });
+    try {
+      const BATCH = 10;
+      let priceChanges = 0;
+      let oos = 0;
+      for (let i = 0; i < stale.length; i += BATCH) {
+        const batch = stale.slice(i, i + BATCH);
+        const { data, error } = await supabase.functions.invoke('product-refresh', {
+          body: {
+            products: batch.map(p => ({
+              id: p.id,
+              name: p.name || '',
+              brand: p.brand || '',
+              url: p.url,
+              current_price: p.price,
+            })),
+          },
+        });
+        if (error || !data?.success) {
+          console.error('Refresh batch failed:', error || data?.error);
+          setRefreshProgress({ done: i + batch.length, total: stale.length });
+          continue;
+        }
+        const nowIso = new Date().toISOString();
+        await Promise.all((data.results as Array<{ id: string; price?: string; availability: string; priceChanged?: boolean; oldPrice?: string }>).map(async r => {
+          const update: Record<string, unknown> = {
+            availability: r.availability,
+            last_refreshed_at: nowIso,
+          };
+          if (r.price) update.price = r.price;
+          if (r.priceChanged && r.oldPrice) {
+            update.previous_price = r.oldPrice;
+            priceChanges++;
+          }
+          if (r.availability === 'out_of_stock') oos++;
+          await supabase!.from('products').update(update).eq('id', r.id);
+        }));
+        setRefreshProgress({ done: i + batch.length, total: stale.length });
+      }
+      showToast(`Refreshed ${stale.length} — ${priceChanges} price changes, ${oos} out of stock`);
+      // Reload products in the table
+      const { data: reloaded } = await supabase
+        .from('products')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status')
+        .order('scraped_at', { ascending: false });
+      if (reloaded) {
+        setCrawledProducts((reloaded || []).map(p => ({
+          ...p,
+          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+        })) as CrawledProduct[]);
+      }
+    } finally {
+      setRefreshing(false);
+      setRefreshProgress(null);
+    }
+  }, []);
+
   const runResearch = useCallback(async () => {
     if (!researchQuery.trim()) return;
     setResearchLoading(true);
@@ -612,12 +687,31 @@ export default function AdminContent() {
           </button>
         )}
         {activeTab === 'products' && (
-          <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Add Products
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={refreshStaleProducts}
+              disabled={refreshing}
+              title="Re-check prices and availability for products not refreshed in 7+ days"
+            >
+              {refreshing && refreshProgress ? (
+                <>Refreshing {refreshProgress.done}/{refreshProgress.total}…</>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  Refresh stale
+                </>
+              )}
+            </button>
+            <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Products
+            </button>
+          </div>
         )}
       </div>
       <div className="admin-tabs">

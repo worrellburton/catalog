@@ -99,6 +99,109 @@ export default function AdminCatalogs() {
     saveCustom(next);
   };
 
+  // Assemble Look modal state
+  const [assembleCatalog, setAssembleCatalog] = useState<Catalog | null>(null);
+  const [assembling, setAssembling] = useState(false);
+  const [assembleResult, setAssembleResult] = useState<{
+    title: string;
+    description: string;
+    style: string;
+    prompt: string;
+    productIds: string[];
+  } | null>(null);
+  const [savingLook, setSavingLook] = useState(false);
+  const [assembleError, setAssembleError] = useState<string | null>(null);
+
+  const openAssemble = useCallback((catalog: Catalog) => {
+    setAssembleCatalog(catalog);
+    setAssembleResult(null);
+    setAssembleError(null);
+  }, []);
+
+  const runAssemble = useCallback(async () => {
+    if (!assembleCatalog || !supabase) return;
+    const tagged = products.filter(p => (p.catalog_tags || []).includes(assembleCatalog.name));
+    if (tagged.length < 3) {
+      setAssembleError(`Not enough products tagged with "${assembleCatalog.name}" — need at least 3.`);
+      return;
+    }
+    setAssembling(true);
+    setAssembleError(null);
+    setAssembleResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('catalog-assemble-look', {
+        body: {
+          catalog: assembleCatalog.name,
+          products: tagged.map(p => ({
+            id: p.id,
+            name: p.name || '',
+            brand: p.brand || '',
+            image_url: p.image_url,
+          })),
+          count: 5,
+        },
+      });
+      if (error) {
+        setAssembleError(error.message);
+      } else if (!data?.success) {
+        setAssembleError(data?.error || 'Assembly failed');
+      } else {
+        setAssembleResult({
+          title: data.title,
+          description: data.description,
+          style: data.style,
+          prompt: data.prompt,
+          productIds: data.productIds,
+        });
+      }
+    } catch (err) {
+      setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAssembling(false);
+    }
+  }, [assembleCatalog, products]);
+
+  const saveAssembledLook = useCallback(async () => {
+    if (!assembleCatalog || !assembleResult || !supabase) return;
+    setSavingLook(true);
+    try {
+      const { data: lookRow, error: insertErr } = await supabase
+        .from('looks')
+        .insert({
+          title: assembleResult.title,
+          description: assembleResult.description,
+          catalog_tags: [assembleCatalog.name],
+          ai_assembled: true,
+          assembly_prompt: assembleResult.prompt,
+          status: 'pending',
+          enabled: false,
+        })
+        .select('id')
+        .single();
+      if (insertErr || !lookRow) {
+        setAssembleError(insertErr?.message || 'Failed to save look');
+        setSavingLook(false);
+        return;
+      }
+      if (assembleResult.productIds.length > 0) {
+        await supabase.from('look_products').insert(
+          assembleResult.productIds.map((product_id, sort_order) => ({
+            look_id: lookRow.id,
+            product_id,
+            sort_order,
+          }))
+        );
+      }
+      showToast(`Assembled look "${assembleResult.title}" saved`);
+      setAssembleCatalog(null);
+      setAssembleResult(null);
+    } catch (err) {
+      setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingLook(false);
+    }
+  }, [assembleCatalog, assembleResult, showToast]);
+
   // Suggest Products modal state
   const [suggestCatalog, setSuggestCatalog] = useState<Catalog | null>(null);
   const [researchQuery, setResearchQuery] = useState('');
@@ -377,6 +480,15 @@ export default function AdminCatalogs() {
                       onClick={() => openSuggest(c)}
                     >
                       Suggest Products
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => openAssemble(c)}
+                      disabled={productCount < 3}
+                      title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}
+                    >
+                      ✨ Assemble Look
                     </button>
                     {c.source === 'custom' && (
                       <button
@@ -667,6 +779,132 @@ export default function AdminCatalogs() {
                 >
                   {ingesting ? 'Adding…' : `Add ${researchSelected.size || ''} to Products`}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assemble Look modal */}
+      {assembleCatalog && (
+        <div className="admin-modal-overlay" onClick={() => !assembling && !savingLook && setAssembleCatalog(null)}>
+          <div
+            className="admin-modal"
+            style={{ width: 640, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid #f0f0f0' }}>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>
+                ✨ Assemble Look for "{assembleCatalog.name}"
+              </h2>
+              <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
+                Claude picks 5 products tagged with this catalog and writes a look concept ready for video generation.
+              </p>
+            </div>
+
+            <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+              {!assembleResult && !assembling && !assembleError && (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <button
+                    className="admin-btn admin-btn-primary"
+                    onClick={runAssemble}
+                  >
+                    Let Claude assemble this look
+                  </button>
+                  <div style={{ marginTop: 10, fontSize: 12, color: '#888' }}>
+                    {products.filter(p => (p.catalog_tags || []).includes(assembleCatalog.name)).length} products tagged
+                  </div>
+                </div>
+              )}
+
+              {assembling && (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#888', fontSize: 13 }}>
+                  Assembling… Claude is curating the outfit and writing a video concept.
+                </div>
+              )}
+
+              {assembleError && (
+                <div style={{ padding: '10px 14px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+                  {assembleError}
+                </div>
+              )}
+
+              {assembleResult && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Title</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#111' }}>{assembleResult.title}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Description</div>
+                    <div style={{ fontSize: 14, color: '#333' }}>{assembleResult.description}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Style</div>
+                    <span style={{ padding: '3px 10px', borderRadius: 999, background: '#eff6ff', color: '#1d4ed8', fontSize: 12, fontWeight: 600 }}>
+                      {assembleResult.style}
+                    </span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Products ({assembleResult.productIds.length})</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                      {assembleResult.productIds.map(id => {
+                        const p = products.find(x => x.id === id);
+                        if (!p) return null;
+                        return (
+                          <div key={id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
+                            {p.image_url && (
+                              <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                            )}
+                            <div style={{ padding: 6 }}>
+                              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand}</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Video Prompt</div>
+                    <div style={{ fontSize: 12, color: '#444', padding: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                      {assembleResult.prompt}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {assembleResult && (
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    style={{ fontSize: 12 }}
+                    onClick={runAssemble}
+                    disabled={assembling || savingLook}
+                  >
+                    Try another
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setAssembleCatalog(null)}
+                  disabled={assembling || savingLook}
+                >
+                  Cancel
+                </button>
+                {assembleResult && (
+                  <button
+                    className="admin-btn admin-btn-primary"
+                    onClick={saveAssembledLook}
+                    disabled={savingLook}
+                  >
+                    {savingLook ? 'Saving…' : 'Save as look'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
