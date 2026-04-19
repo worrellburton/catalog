@@ -3,7 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
-import { createBatchAds } from '~/services/product-ads';
+import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 
 interface CrawledProduct {
@@ -482,6 +482,9 @@ export default function AdminContent() {
         return next;
       });
       if (anyFinished) void loadAdProductIds();
+      // Drain the queue: whenever a job finishes, promote queued rows
+      // into 'pending' up to the concurrency limit.
+      void promoteQueuedAds();
     }, 3000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [genJobs, loadAdProductIds]);

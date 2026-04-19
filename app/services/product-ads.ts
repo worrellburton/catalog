@@ -13,7 +13,7 @@ export interface ProductAd {
   prompt: string | null;
   style: string;
   veo_model: string | null;
-  status: 'pending' | 'generating' | 'done' | 'failed' | 'live' | 'paused';
+  status: 'queued' | 'pending' | 'generating' | 'done' | 'failed' | 'live' | 'paused';
   duration_seconds: number | null;
   aspect_ratio: string | null;
   resolution: string | null;
@@ -74,14 +74,14 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     return [];
   }
   try {
-    // Surface any ad with a finished video — both explicitly promoted ('live')
-    // and newly generated but un-promoted ('done'). Failed/paused/pending
-    // ads are excluded since they either have no video or are disabled.
+    // Prototype rule: show every ad that has a finished video, regardless
+    // of promotion state. Only fail/paused are filtered since they have no
+    // playable video or are explicitly disabled.
     const { data, error } = await supabase
       .from('product_ads')
       .select(AD_SELECT)
-      .in('status', ['live', 'done'])
       .not('video_url', 'is', null)
+      .not('status', 'in', '(failed,paused)')
       .order('created_at', { ascending: false });
     if (error) {
       console.error('[getLiveAds] query error:', error.message, error.details, error.hint);
@@ -111,6 +111,10 @@ export async function createProductAd(req: CreateAdRequest): Promise<{ data: Pro
   return { data: data as ProductAd, error: null };
 }
 
+// Maximum concurrent generations the backend worker / Veo API can handle
+// without rate-limiting. Anything above this gets queued.
+const CONCURRENCY_LIMIT = 4;
+
 export async function createBatchAds(
   productIds: string[],
   style: string,
@@ -118,13 +122,31 @@ export async function createBatchAds(
 ): Promise<{ data: ProductAd[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase not configured' };
 
-  const rows = productIds.flatMap(product_id =>
+  // Count currently in-flight jobs so we only start up to CONCURRENCY_LIMIT
+  // and queue the rest. Backend worker promotes 'queued' → 'pending' as slots
+  // free up (see promoteQueuedAds below — called from the client poll loop).
+  const { count: activeCount } = await supabase
+    .from('product_ads')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending', 'generating']);
+
+  const inFlight = activeCount || 0;
+  const slotsAvailable = Math.max(0, CONCURRENCY_LIMIT - inFlight);
+
+  const allRows = productIds.flatMap(product_id =>
     Array.from({ length: count }, () => ({
       product_id,
       style,
-      status: 'pending' as const,
+      // Force portrait aspect so the generated video fills the vertical
+      // feed cards end-to-end (no letterboxing).
+      aspect_ratio: '9:16',
     }))
   );
+
+  const rows = allRows.map((row, i) => ({
+    ...row,
+    status: (i < slotsAvailable ? 'pending' : 'queued') as 'pending' | 'queued',
+  }));
 
   const { data, error } = await supabase
     .from('product_ads')
@@ -133,6 +155,41 @@ export async function createBatchAds(
 
   if (error) return { data: [], error: error.message };
   return { data: (data || []) as ProductAd[], error: null };
+}
+
+// Promote oldest queued rows to pending up to the concurrency limit.
+// Called periodically from the client poll loop so queued ads drain as
+// pending/generating ads complete.
+export async function promoteQueuedAds(): Promise<{ promoted: number; error: string | null }> {
+  if (!supabase) return { promoted: 0, error: 'Supabase not configured' };
+
+  const { count: activeCount } = await supabase
+    .from('product_ads')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending', 'generating']);
+
+  const inFlight = activeCount || 0;
+  const slotsAvailable = Math.max(0, CONCURRENCY_LIMIT - inFlight);
+  if (slotsAvailable === 0) return { promoted: 0, error: null };
+
+  const { data: queuedRows, error: queryErr } = await supabase
+    .from('product_ads')
+    .select('id')
+    .eq('status', 'queued')
+    .order('created_at', { ascending: true })
+    .limit(slotsAvailable);
+
+  if (queryErr) return { promoted: 0, error: queryErr.message };
+  const ids = (queuedRows || []).map(r => r.id);
+  if (ids.length === 0) return { promoted: 0, error: null };
+
+  const { error } = await supabase
+    .from('product_ads')
+    .update({ status: 'pending' })
+    .in('id', ids);
+
+  if (error) return { promoted: 0, error: error.message };
+  return { promoted: ids.length, error: null };
 }
 
 export async function regenerateAd(id: string): Promise<{ error: string | null }> {
