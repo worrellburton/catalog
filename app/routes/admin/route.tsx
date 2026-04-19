@@ -94,6 +94,86 @@ function formatElapsed(seconds: number) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
+function FailedErrorView({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
+  const is400 = n.error?.includes('400') || n.error?.includes('INVALID_ARGUMENT');
+  const is500 = n.error?.includes('500') || n.error?.includes('INTERNAL');
+  const label = isQuota
+    ? 'Quota exceeded'
+    : is400 ? 'Invalid request'
+    : is500 ? 'Veo server error'
+    : (n.error?.split(/[.{]/)[0] || 'Failed').slice(0, 60);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          style={{
+            fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
+            border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+            style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          {label}
+        </button>
+        {onRetry && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRetry(); }}
+            style={{
+              fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
+              border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+      {expanded && (
+        <div style={{
+          marginTop: 6, padding: 8, background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 6, fontSize: 10, color: '#7f1d1d', lineHeight: 1.5,
+        }}>
+          {isQuota && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                Model: <code style={{ background: '#fee2e2', padding: '1px 4px', borderRadius: 3 }}>{n.veoModel || 'unknown'}</code>
+              </div>
+              <div style={{ color: '#991b1b' }}>
+                Tier 1 has tight per-minute + daily limits for Veo preview models. Options:
+              </div>
+              <ul style={{ margin: '4px 0 4px 14px', padding: 0 }}>
+                <li>Wait — per-minute limits reset every minute, daily at midnight PDT</li>
+                <li>Upgrade to Tier 2+ at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>aistudio.google.com/apikey</a></li>
+                <li>Switch to a non-preview model (e.g. <code>veo-2.0-generate-001</code>) which has higher limits</li>
+              </ul>
+              <div>
+                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>
+                  Full rate-limit docs →
+                </a>
+              </div>
+            </div>
+          )}
+          <details style={{ marginTop: 4 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Raw error</summary>
+            <pre style={{
+              margin: '4px 0 0', padding: 6, background: '#fff', border: '1px solid #fecaca',
+              borderRadius: 4, overflow: 'auto', maxHeight: 120, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              fontSize: 9, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            }}>
+              {n.error || 'No error message'}
+            </pre>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -111,28 +191,7 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
     );
   }
   if (n.status === 'failed') {
-    const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
-    const errorLabel = isQuota ? 'Veo quota exceeded' : (n.error?.split('.')[0] || 'Failed').slice(0, 60);
-    return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }} title={n.error || 'Unknown error'}>
-            {errorLabel}
-          </span>
-          {onRetry && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRetry(); }}
-              style={{
-                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
-                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      </div>
-    );
+    return <FailedErrorView n={n} onRetry={onRetry} />;
   }
   if (n.status === 'queued') {
     return (

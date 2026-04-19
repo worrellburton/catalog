@@ -128,15 +128,32 @@ export default function AdminModeration() {
               </div>
 
               {/* Product info */}
-              <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5' }}>
-                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {ad.product?.brand || '—'}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {ad.product?.name || 'Unnamed'}
-                </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                  {ad.product?.price || ''}
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5', display: 'flex', gap: 10, alignItems: 'center' }}>
+                {ad.product?.image_url ? (
+                  <img
+                    src={ad.product.image_url}
+                    alt={ad.product.name || ''}
+                    style={{
+                      width: 44, height: 44, flexShrink: 0, borderRadius: 6,
+                      objectFit: 'cover', background: '#f5f5f5', border: '1px solid #e5e7eb',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 44, height: 44, flexShrink: 0, borderRadius: 6,
+                    background: '#f5f5f5', border: '1px solid #e5e7eb',
+                  }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {ad.product?.brand || '—'}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ad.product?.name || 'Unnamed'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                    {ad.product?.price || ''}
+                  </div>
                 </div>
               </div>
 
