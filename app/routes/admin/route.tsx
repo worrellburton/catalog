@@ -76,6 +76,7 @@ interface GenNotification {
   productBrand: string;
   status: 'queued' | 'pending' | 'generating' | 'done' | 'failed';
   createdAt: string;
+  updatedAt: string;
   completedAt: string | null;
   costUsd: number | null;
   error: string | null;
@@ -139,7 +140,9 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
     );
   }
 
-  const elapsed = (now - new Date(n.createdAt).getTime()) / 1000;
+  // Use updatedAt so "elapsed" reflects time in current state, not when row was created.
+  // Rows can sit in 'queued' for hours before being promoted to 'pending'/'generating'.
+  const elapsed = (now - new Date(n.updatedAt).getTime()) / 1000;
   const isStuck = elapsed > STUCK_THRESHOLD_SECONDS;
   const pct = n.status === 'pending'
     ? Math.min(15, (elapsed / 30) * 15)
@@ -214,7 +217,7 @@ export default function AdminLayout() {
 
     const { data } = await supabase
       .from('product_ads')
-      .select('id, status, created_at, completed_at, cost_usd, error, product:products(name, brand)')
+      .select('id, status, created_at, updated_at, completed_at, cost_usd, error, product:products(name, brand)')
       .in('status', ['queued', 'pending', 'generating', 'failed'])
       .order('created_at', { ascending: true });
 
@@ -226,6 +229,7 @@ export default function AdminLayout() {
       productBrand: r.product?.brand || '',
       status: r.status,
       createdAt: r.created_at,
+      updatedAt: r.updated_at || r.created_at,
       completedAt: r.completed_at,
       costUsd: r.cost_usd,
       error: r.error,
