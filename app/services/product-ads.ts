@@ -142,6 +142,7 @@ export async function createBatchAds(
   productIds: string[],
   style: string,
   count: number = 2,
+  model?: string,
 ): Promise<{ data: ProductAd[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase not configured' };
 
@@ -163,6 +164,7 @@ export async function createBatchAds(
       // Force portrait aspect so the generated video fills the vertical
       // feed cards end-to-end (no letterboxing).
       aspect_ratio: '9:16',
+      ...(model ? { veo_model: model } : {}),
     }))
   );
 

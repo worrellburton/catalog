@@ -421,6 +421,7 @@ export default function AdminContent() {
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
   const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(new Set());
+  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(new Set());
   const [lookOrder, setLookOrder] = useState<number[] | null>(null);
   const [dragLookId, setDragLookId] = useState<number | null>(null);
 
@@ -682,8 +683,13 @@ export default function AdminContent() {
   const lookTable = useSortableTable(lookRows);
 
   const filteredProductsList = useMemo(
-    () => allProducts.filter(p => productFilter === 'all' || !p.hasCreative),
-    [allProducts, productFilter]
+    () => allProducts.filter(p => {
+      if (productFilter === 'no-creative' && p.hasCreative) return false;
+      const key = `${p.brand}-${p.name}`;
+      if (deletedProductKeys.has(key)) return false;
+      return true;
+    }),
+    [allProducts, productFilter, deletedProductKeys]
   );
   const productTable = useSortableTable(filteredProductsList);
 
@@ -1172,33 +1178,39 @@ export default function AdminContent() {
                     </button>
                   </td>
                   <td>
-                    {p.id && (
-                      <button
-                        className="admin-btn admin-btn-secondary"
-                        style={{ fontSize: 11, padding: '4px 8px', color: '#dc2626' }}
-                        title="Delete product"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (!supabase || !p.id) return;
-                          if (!window.confirm(`Delete "${p.name}" by ${p.brand}? This will also remove any generated ads.`)) return;
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px', color: '#dc2626' }}
+                      title={p.id ? 'Delete product' : 'Hide from list'}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!window.confirm(`Delete "${p.name}" by ${p.brand}?${p.id ? ' This will also remove any generated ads.' : ''}`)) return;
+                        const key = `${p.brand}-${p.name}`;
+                        if (p.id) {
+                          if (!supabase) return;
                           await supabase.from('product_ads').delete().eq('product_id', p.id);
                           const { error } = await supabase.from('products').delete().eq('id', p.id);
                           if (error) {
                             showToast(`Delete failed: ${error.message}`);
-                          } else {
-                            setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
-                            showToast(`Deleted ${p.name}`);
+                            return;
                           }
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                        </svg>
-                      </button>
-                    )}
+                          setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
+                        }
+                        setDeletedProductKeys(prev => {
+                          const next = new Set(prev);
+                          next.add(key);
+                          return next;
+                        });
+                        showToast(`Deleted ${p.name}`);
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               ))}
