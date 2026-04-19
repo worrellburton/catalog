@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getModerationQueue,
   setAdLive,
@@ -15,26 +15,117 @@ export default function AdminModeration() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<{ id: string; action: Action } | null>(null);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     const data = await getModerationQueue();
     setQueue(data);
+    setFocusIdx(0);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const handle = useCallback(async (id: string, action: Action, fn: () => Promise<{ error: string | null }>) => {
-    setBusyId(id);
-    const { error } = await fn();
+  const showToast = useCallback((id: string, action: Action) => {
+    setLastAction({ id, action });
+    setTimeout(() => setLastAction(null), 2000);
+  }, []);
+
+  const approveCurrent = useCallback(async () => {
+    const ad = queue[focusIdx];
+    if (!ad || busyId) return;
+    setBusyId(ad.id);
+    const { error } = await setAdLive(ad.id);
     setBusyId(null);
     if (!error) {
-      setQueue(prev => prev.filter(a => a.id !== id));
-      setLastAction({ id, action });
-      setTimeout(() => setLastAction(null), 2500);
+      setQueue(prev => prev.filter(a => a.id !== ad.id));
+      setFocusIdx(i => Math.min(i, queue.length - 2));
+      showToast(ad.id, 'approved');
     }
-  }, []);
+  }, [queue, focusIdx, busyId, showToast]);
+
+  const deleteCurrent = useCallback(async () => {
+    const ad = queue[focusIdx];
+    if (!ad || busyId) return;
+    setBusyId(ad.id);
+    const { error } = await deleteProductAd(ad.id);
+    setBusyId(null);
+    if (!error) {
+      setQueue(prev => prev.filter(a => a.id !== ad.id));
+      setFocusIdx(i => Math.min(i, queue.length - 2));
+      showToast(ad.id, 'deleted');
+    }
+  }, [queue, focusIdx, busyId, showToast]);
+
+  const regenerateCurrent = useCallback(async () => {
+    const ad = queue[focusIdx];
+    if (!ad || busyId) return;
+    setBusyId(ad.id);
+    const { error } = await regenerateAd(ad.id);
+    setBusyId(null);
+    if (!error) {
+      // Remove from queue (it's now regenerating, will reappear when done)
+      setQueue(prev => prev.filter(a => a.id !== ad.id));
+      setFocusIdx(i => Math.min(i, queue.length - 2));
+      showToast(ad.id, 'regenerated');
+    }
+  }, [queue, focusIdx, busyId, showToast]);
+
+  const rejectCurrent = useCallback(async () => {
+    const ad = queue[focusIdx];
+    if (!ad || busyId) return;
+    setBusyId(ad.id);
+    const { error } = await rejectAd(ad.id);
+    setBusyId(null);
+    if (!error) {
+      setQueue(prev => prev.filter(a => a.id !== ad.id));
+      setFocusIdx(i => Math.min(i, queue.length - 2));
+      showToast(ad.id, 'rejected');
+    }
+  }, [queue, focusIdx, busyId, showToast]);
+
+  // Scroll focused card into view
+  useEffect(() => {
+    const el = cardRefs.current[focusIdx];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [focusIdx, queue.length]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (queue.length === 0) return;
+      // Ignore when typing
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'ArrowRight') {
+        if (e.shiftKey) {
+          setFocusIdx(i => Math.min(i + 1, queue.length - 1));
+        } else {
+          e.preventDefault();
+          approveCurrent();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (e.shiftKey) {
+          setFocusIdx(i => Math.max(i - 1, 0));
+        } else {
+          e.preventDefault();
+          deleteCurrent();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        regenerateCurrent();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        rejectCurrent();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [queue.length, approveCurrent, deleteCurrent, regenerateCurrent, rejectCurrent]);
 
   return (
     <div className="admin-page">
@@ -42,7 +133,7 @@ export default function AdminModeration() {
         <div>
           <h1>Moderation Queue</h1>
           <p className="admin-page-subtitle">
-            Review newly-generated ads before they go live in the feed. Approved ads start serving immediately.
+            Review newly-generated ads before they go live. Use arrow keys: <kbd style={kbd}>←</kbd> delete, <kbd style={kbd}>→</kbd> approve, <kbd style={kbd}>↑</kbd> regenerate, <kbd style={kbd}>↓</kbd> reject. Hold <kbd style={kbd}>Shift</kbd> + <kbd style={kbd}>←/→</kbd> to navigate without acting.
           </p>
         </div>
         <button className="admin-btn admin-btn-secondary" onClick={load} disabled={loading}>
@@ -53,11 +144,16 @@ export default function AdminModeration() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, padding: '10px 0', marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 20, padding: '10px 0', marginBottom: 12, alignItems: 'baseline' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{queue.length}</span>
           <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Awaiting review</span>
         </div>
+        {queue.length > 0 && (
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            Viewing <strong>{focusIdx + 1}</strong> of {queue.length}
+          </div>
+        )}
       </div>
 
       {lastAction && (
@@ -84,67 +180,83 @@ export default function AdminModeration() {
           <div style={{ fontSize: 12, color: '#888' }}>All finished ads have been reviewed.</div>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-          gap: 20,
-        }}>
-          {queue.map(ad => (
-            <div
-              key={ad.id}
-              style={{
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                opacity: busyId === ad.id ? 0.5 : 1,
-                transition: 'opacity 0.2s',
-              }}
-            >
-              {/* Video preview */}
-              <div style={{
-                aspectRatio: '9 / 16',
-                background: '#000',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                {ad.video_url && (
-                  <video
-                    src={ad.video_url}
-                    autoPlay muted loop playsInline
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                )}
+        <div
+          ref={rowRef}
+          style={{
+            display: 'flex',
+            gap: 20,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            padding: '8px 4px 20px',
+            scrollSnapType: 'x mandatory',
+          }}
+        >
+          {queue.map((ad, idx) => {
+            const isFocus = idx === focusIdx;
+            return (
+              <div
+                ref={el => { cardRefs.current[idx] = el; }}
+                key={ad.id}
+                onClick={() => setFocusIdx(idx)}
+                style={{
+                  flex: '0 0 300px',
+                  scrollSnapAlign: 'center',
+                  background: '#fff',
+                  border: '1px solid',
+                  borderColor: isFocus ? '#3b82f6' : '#e5e7eb',
+                  boxShadow: isFocus ? '0 0 0 3px rgba(59,130,246,0.2)' : 'none',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  opacity: busyId === ad.id ? 0.5 : 1,
+                  transition: 'opacity 0.2s, border-color 0.2s, box-shadow 0.2s',
+                  cursor: 'pointer',
+                }}
+              >
+                {/* Video preview */}
                 <div style={{
-                  position: 'absolute', top: 8, left: 8,
-                  padding: '3px 8px', borderRadius: 4,
-                  background: 'rgba(0,0,0,0.6)', color: '#fff',
-                  fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px',
+                  aspectRatio: '9 / 16',
+                  background: '#000',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}>
-                  {ad.style.replace(/_/g, ' ')}
-                </div>
-              </div>
-
-              {/* Product info */}
-              <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5', display: 'flex', gap: 10, alignItems: 'center' }}>
-                {ad.product?.image_url ? (
-                  <img
-                    src={ad.product.image_url}
-                    alt={ad.product.name || ''}
-                    style={{
-                      width: 44, height: 44, flexShrink: 0, borderRadius: 6,
-                      objectFit: 'cover', background: '#f5f5f5', border: '1px solid #e5e7eb',
-                    }}
-                  />
-                ) : (
+                  {ad.video_url && (
+                    <video
+                      src={ad.video_url}
+                      autoPlay muted loop playsInline
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
                   <div style={{
-                    width: 44, height: 44, flexShrink: 0, borderRadius: 6,
-                    background: '#f5f5f5', border: '1px solid #e5e7eb',
-                  }} />
+                    position: 'absolute', top: 8, left: 8,
+                    padding: '3px 8px', borderRadius: 4,
+                    background: 'rgba(0,0,0,0.6)', color: '#fff',
+                    fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px',
+                  }}>
+                    {ad.style.replace(/_/g, ' ')}
+                  </div>
+                </div>
+
+                {/* Product photo (larger) */}
+                {ad.product?.image_url && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: 12, background: '#f9fafb', borderBottom: '1px solid #f5f5f5',
+                  }}>
+                    <img
+                      src={ad.product.image_url}
+                      alt={ad.product.name || ''}
+                      style={{
+                        maxWidth: '100%', maxHeight: 140,
+                        objectFit: 'contain', borderRadius: 6,
+                      }}
+                    />
+                  </div>
                 )}
-                <div style={{ flex: 1, minWidth: 0 }}>
+
+                {/* Product info */}
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5' }}>
                   <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {ad.product?.brand || '—'}
                   </div>
@@ -155,60 +267,73 @@ export default function AdminModeration() {
                     {ad.product?.price || ''}
                   </div>
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div style={{ padding: 8, display: 'flex', gap: 6 }}>
-                <button
-                  className="admin-btn admin-btn-primary"
-                  style={{ flex: 1, fontSize: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
-                  disabled={busyId === ad.id}
-                  onClick={() => handle(ad.id, 'approved', () => setAdLive(ad.id))}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Approve
-                </button>
-                <button
-                  className="admin-btn admin-btn-secondary"
-                  style={{ fontSize: 12, padding: '6px 10px', color: '#b91c1c' }}
-                  disabled={busyId === ad.id}
-                  onClick={() => handle(ad.id, 'rejected', () => rejectAd(ad.id))}
-                  title="Reject — pause this ad"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-                <button
-                  className="admin-btn admin-btn-secondary"
-                  style={{ fontSize: 12, padding: '6px 10px' }}
-                  disabled={busyId === ad.id}
-                  onClick={() => handle(ad.id, 'regenerated', () => regenerateAd(ad.id))}
-                  title="Regenerate"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                </button>
-                <button
-                  className="admin-btn admin-btn-secondary"
-                  style={{ fontSize: 12, padding: '6px 10px', color: '#64748b' }}
-                  disabled={busyId === ad.id}
-                  onClick={() => handle(ad.id, 'deleted', () => deleteProductAd(ad.id))}
-                  title="Delete"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  </svg>
-                </button>
+                {/* Actions */}
+                <div style={{ padding: 8, display: 'flex', gap: 6 }}>
+                  <button
+                    className="admin-btn admin-btn-primary"
+                    style={{ flex: 1, fontSize: 12, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                    disabled={busyId === ad.id}
+                    onClick={(e) => { e.stopPropagation(); setFocusIdx(idx); approveCurrent(); }}
+                    title="Approve (→)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Approve
+                  </button>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    style={{ fontSize: 12, padding: '6px 10px', color: '#b91c1c' }}
+                    disabled={busyId === ad.id}
+                    onClick={(e) => { e.stopPropagation(); setFocusIdx(idx); rejectCurrent(); }}
+                    title="Reject (↓)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    style={{ fontSize: 12, padding: '6px 10px' }}
+                    disabled={busyId === ad.id}
+                    onClick={(e) => { e.stopPropagation(); setFocusIdx(idx); regenerateCurrent(); }}
+                    title="Regenerate (↑)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                  </button>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    style={{ fontSize: 12, padding: '6px 10px', color: '#64748b' }}
+                    disabled={busyId === ad.id}
+                    onClick={(e) => { e.stopPropagation(); setFocusIdx(idx); deleteCurrent(); }}
+                    title="Delete (←)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
+const kbd: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '1px 6px',
+  fontSize: 10,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  background: '#f3f4f6',
+  border: '1px solid #d1d5db',
+  borderRadius: 4,
+  color: '#374151',
+  margin: '0 2px',
+};
