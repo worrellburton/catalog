@@ -47,6 +47,7 @@ export default function AdminContent() {
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+  const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -320,11 +321,11 @@ export default function AdminContent() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  const handleGenerateCreative = useCallback(async (productId: string, productName: string) => {
+  const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string) => {
     if (generatingIds.has(productId)) return;
     setGeneratingIds(prev => new Set(prev).add(productId));
     showToast(`Agent started generating creative for "${productName}"`);
-    const { error } = await createBatchAds([productId], 'studio_clean', 2);
+    const { error } = await createBatchAds([productId], style, 2);
     setGeneratingIds(prev => {
       const next = new Set(prev);
       next.delete(productId);
@@ -627,7 +628,7 @@ export default function AdminContent() {
                         className="admin-btn admin-btn-primary"
                         style={{ fontSize: 11, padding: '4px 10px' }}
                         disabled={generatingIds.has(p.id)}
-                        onClick={() => p.id && handleGenerateCreative(p.id, p.name)}
+                        onClick={() => p.id && setGeneratePicker({ productId: p.id, productName: p.name })}
                       >
                         {generatingIds.has(p.id) ? 'Starting…' : 'Generate'}
                       </button>
@@ -868,6 +869,66 @@ export default function AdminContent() {
                 disabled={createLookSelectedProducts.size === 0}
               >
                 Generate Look ({createLookSelectedProducts.size} product{createLookSelectedProducts.size !== 1 ? 's' : ''})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {generatePicker && (
+        <div
+          className="admin-modal-overlay"
+          onClick={() => setGeneratePicker(null)}
+        >
+          <div
+            className="admin-modal"
+            style={{ width: 520, maxWidth: '90vw', padding: 24 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Choose a prompt</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+              Pick the style for <strong style={{ color: '#111' }}>{generatePicker.productName}</strong>
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { value: 'studio_clean', label: 'Studio Clean', desc: 'Minimal white-cyc studio. Clean product focus.' },
+                { value: 'editorial_runway', label: 'Editorial Runway', desc: 'High-fashion magazine look, dramatic lighting.' },
+                { value: 'street_style', label: 'Street Style', desc: 'Urban, candid, real-world environments.' },
+                { value: 'lifestyle_context', label: 'Lifestyle', desc: 'Product in everyday use, warm ambient tone.' },
+              ].map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => {
+                    const picker = generatePicker;
+                    setGeneratePicker(null);
+                    handleGenerateCreative(picker.productId, picker.productName, s.value);
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    padding: '12px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #e5e5e5',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#3b82f6';
+                    (e.currentTarget as HTMLElement).style.background = '#f8faff';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#e5e5e5';
+                    (e.currentTarget as HTMLElement).style.background = '#fff';
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: '#666', lineHeight: 1.4 }}>{s.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => setGeneratePicker(null)}>
+                Cancel
               </button>
             </div>
           </div>
