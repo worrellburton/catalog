@@ -58,6 +58,7 @@ export default defineConfig({
             route("settings", "routes/admin/settings.tsx");
             route("shoppers", "routes/admin/shoppers.tsx");
             route("video-generation", "routes/admin/video-generation.tsx");
+            route("whats-new", "routes/admin/whats-new.tsx");
             route("shoppers/:name", "routes/admin/shoppers.$name.tsx");
             route("shoppers-waitlist", "routes/admin/shoppers-waitlist.tsx");
             route("signup-links", "routes/admin/signup-links.tsx");
