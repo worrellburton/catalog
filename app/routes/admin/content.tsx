@@ -857,6 +857,7 @@ export default function AdminContent() {
                 <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -1009,6 +1010,35 @@ export default function AdminContent() {
                     >
                       View
                     </button>
+                  </td>
+                  <td>
+                    {p.id && (
+                      <button
+                        className="admin-btn admin-btn-secondary"
+                        style={{ fontSize: 11, padding: '4px 8px', color: '#dc2626' }}
+                        title="Delete product"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!supabase || !p.id) return;
+                          if (!window.confirm(`Delete "${p.name}" by ${p.brand}? This will also remove any generated ads.`)) return;
+                          await supabase.from('product_ads').delete().eq('product_id', p.id);
+                          const { error } = await supabase.from('products').delete().eq('id', p.id);
+                          if (error) {
+                            showToast(`Delete failed: ${error.message}`);
+                          } else {
+                            setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
+                            showToast(`Deleted ${p.name}`);
+                          }
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

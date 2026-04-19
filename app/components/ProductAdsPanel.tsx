@@ -34,9 +34,12 @@ const AD_STYLES = [
 
 // ─── Status badge ────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
+const ESTIMATED_GENERATION_SECONDS = 150;
+
+function StatusBadge({ status, createdAt }: { status: string; createdAt?: string | null }) {
   const colors: Record<string, string> = {
     pending: '#f59e0b',
+    queued: '#94a3b8',
     generating: '#3b82f6',
     done: '#22c55e',
     failed: '#ef4444',
@@ -44,6 +47,11 @@ function StatusBadge({ status }: { status: string }) {
     paused: '#6b7280',
   };
   const bg = colors[status] || '#6b7280';
+
+  if ((status === 'pending' || status === 'generating') && createdAt) {
+    return <GenerationProgress status={status} createdAt={createdAt} />;
+  }
+
   return (
     <span
       style={{
@@ -60,6 +68,52 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+function GenerationProgress({ status, createdAt }: { status: string; createdAt: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const elapsed = (now - new Date(createdAt).getTime()) / 1000;
+  const pct = status === 'pending'
+    ? Math.min(15, (elapsed / 30) * 15)
+    : Math.min(95, (elapsed / ESTIMATED_GENERATION_SECONDS) * 100);
+  const remaining = Math.max(0, ESTIMATED_GENERATION_SECONDS - elapsed);
+  const mins = Math.floor(remaining / 60);
+  const secs = Math.floor(remaining % 60);
+  const timeLabel = status === 'pending'
+    ? 'Queued…'
+    : remaining > 0
+      ? `~${mins}:${String(secs).padStart(2, '0')} left`
+      : 'Finishing…';
+
+  return (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: status === 'pending' ? '#f59e0b' : '#3b82f6' }}>
+          {status === 'pending' ? 'Pending' : 'Generating'}
+        </span>
+        <span style={{ fontSize: 10, color: '#888' }}>{timeLabel}</span>
+      </div>
+      <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', inset: 0, width: `${pct}%`,
+          background: status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+          transition: 'width 1s ease',
+        }} />
+        {status === 'generating' && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+            animation: 'admin-shimmer 1.4s infinite',
+          }} />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -398,7 +452,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                       </td>
 
                       {/* Status */}
-                      <td><StatusBadge status={ad.status} /></td>
+                      <td><StatusBadge status={ad.status} createdAt={ad.created_at} /></td>
 
                       {/* Impressions */}
                       <td style={{ fontSize: 13 }}>{(ad.impressions || 0).toLocaleString()}</td>
