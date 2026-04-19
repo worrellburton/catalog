@@ -15,6 +15,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast', group: 'Veo (Google)' },
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)' },
   { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)' },
+  { value: 'seedance-2', label: 'Seedance 2 (audio)', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-pro', label: 'Seedance 1 Pro', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-lite', label: 'Seedance 1 Lite', group: 'Seedance (fal.ai)' },
 ];

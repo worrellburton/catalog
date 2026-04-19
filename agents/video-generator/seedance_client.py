@@ -6,18 +6,22 @@ Seedance advantages over Veo:
   - Accepts image URLs directly (no download/upload step)
   - Higher per-day throughput
 
-Limitations vs Veo:
-  - No audio (silent video)
-  - Max 12s duration
+Per-version notes:
+  - v1: silent video, 2-12s duration, 480p/720p/1080p
+  - v2: synchronized audio (generate_audio=true default), 4-15s, 480p/720p
 
 fal.ai model IDs:
-  - fal-ai/bytedance/seedance/v1/pro/image-to-video
-  - fal-ai/bytedance/seedance/v1/pro/text-to-video
-  - fal-ai/bytedance/seedance/v1/lite/image-to-video
-  - fal-ai/bytedance/seedance/v1/lite/text-to-video
+  v1:
+    - fal-ai/bytedance/seedance/v1/pro/image-to-video
+    - fal-ai/bytedance/seedance/v1/pro/text-to-video
+    - fal-ai/bytedance/seedance/v1/lite/image-to-video
+    - fal-ai/bytedance/seedance/v1/lite/text-to-video
+  v2:
+    - bytedance/seedance-2.0/image-to-video
+    - bytedance/seedance-2.0/text-to-video
 
-Legacy model strings ("seedance-1-pro", "bytedance/seedance-1-pro", etc.)
-are mapped to the correct fal.ai endpoint automatically.
+Legacy model strings ("seedance-1-pro", "seedance-2", etc.) are
+mapped to the correct fal.ai endpoint automatically.
 """
 
 import os
@@ -32,8 +36,13 @@ def _ensure_auth() -> None:
 
 def _fal_model_id(model: str, mode: str) -> str:
     """Map legacy model names to fal.ai model IDs. `mode` = image-to-video | text-to-video."""
-    if model.startswith("fal-ai/"):
+    # Already a full fal slug — pass through
+    if model.startswith("fal-ai/") or model.startswith("bytedance/seedance-2"):
         return model
+    # v2 (detected by "2" token — covers seedance-2, seedance-2-pro, bytedance/seedance-2, etc.)
+    if "seedance-2" in model or model.endswith("-2"):
+        return f"bytedance/seedance-2.0/{mode}"
+    # v1 variants
     variant = "lite" if "lite" in model else "pro"
     return f"fal-ai/bytedance/seedance/v1/{variant}/{mode}"
 
