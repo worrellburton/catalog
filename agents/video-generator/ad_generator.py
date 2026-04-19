@@ -31,6 +31,10 @@ from veo_client import (
     generate_video_from_image,
     generate_video_from_text,
 )
+from seedance_client import (
+    generate_video_from_image_url as seedance_from_image_url,
+    generate_video_from_text as seedance_from_text,
+)
 from video_crop import crop_to_aspect
 
 
@@ -163,13 +167,40 @@ def _generate_with_retry(
     images_data: list[tuple[bytes, str]],
     prompt: str,
     style_cfg: dict,
+    image_urls: list[str] | None = None,
+    model_override: str | None = None,
 ) -> tuple[bytes, str]:
     """Try generation with reference images, then single image, then text-only.
 
     Returns (video_bytes, method_used).
     """
-    model = GENERATION_DEFAULTS["model"]
+    model = model_override or GENERATION_DEFAULTS["model"]
     aspect = style_cfg.get("aspect_ratio", GENERATION_DEFAULTS["aspect_ratio"])
+
+    # Seedance path (Replicate) — uses URL directly, no reference-images concept
+    if model.startswith("seedance-") or model.startswith("bytedance/seedance"):
+        replicate_model = model if "/" in model else f"bytedance/{model}"
+        if image_urls:
+            try:
+                print(f"    → Trying Seedance image-to-video ({replicate_model})…")
+                video_bytes = seedance_from_image_url(
+                    image_url=image_urls[0],
+                    prompt=prompt,
+                    model=replicate_model,
+                    duration=style_cfg.get("duration", 5),
+                    aspect_ratio=aspect,
+                )
+                return (video_bytes, f"seedance_image:{replicate_model}")
+            except Exception as e:
+                print(f"    ⚠ Seedance image-to-video failed: {e}")
+        print("    → Falling back to Seedance text-only…")
+        video_bytes = seedance_from_text(
+            prompt=prompt,
+            model=replicate_model,
+            duration=style_cfg.get("duration", 5),
+            aspect_ratio=aspect,
+        )
+        return (video_bytes, f"seedance_text:{replicate_model}")
 
     # Strategy 1: Multiple reference images (best quality)
     if len(images_data) >= 2:
@@ -277,9 +308,20 @@ def generate_ad_video(ad_id: str) -> dict:
         enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
         supabase.table("product_ads").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
 
+        # Respect per-ad model override (e.g. user chose Seedance instead of Veo)
+        ad_model = ad.get("veo_model")
+
+        # Record the model that will actually be used so UI can show it
+        if ad_model:
+            supabase.table("product_ads").update({"veo_model": ad_model}).eq("id", ad_id).execute()
+
         # Generate video with retry cascade
-        print(f"  Generating ad video [{style}] for: {product.get('name', 'unknown')}")
-        video_bytes, method = _generate_with_retry(images_data, enhanced_prompt, style_cfg)
+        print(f"  Generating ad video [{style}] for: {product.get('name', 'unknown')} (model={ad_model or 'default'})")
+        video_bytes, method = _generate_with_retry(
+            images_data, enhanced_prompt, style_cfg,
+            image_urls=selected_urls,
+            model_override=ad_model,
+        )
         print(f"  Generated via: {method}")
 
         # Crop to 3:4 (feed card aspect ratio) — Veo only outputs 9:16 or 16:9
