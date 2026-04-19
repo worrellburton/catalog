@@ -177,19 +177,43 @@ function scoreList(list: Omit<ResearchedProduct, 'thumbnailScore' | 'reason' | '
   }).sort((a, b) => b.thumbnailScore - a.thumbnailScore);
 }
 
-export async function researchProducts(query: string): Promise<ResearchedProduct[]> {
-  // Simulate AI research latency
-  await new Promise(r => setTimeout(r, 900));
-  const q = query.toLowerCase().trim();
-  if (!q) return [];
+interface LiveProduct {
+  name: string;
+  brand: string;
+  price: string;
+  image_url: string;
+  image_urls: string[];
+  url: string;
+  gender: ProductGender;
+}
 
+async function searchLive(query: string): Promise<LiveProduct[] | null> {
+  try {
+    const { supabase } = await import('~/utils/supabase');
+    const { data, error } = await supabase.functions.invoke('product-search', {
+      body: { query },
+    });
+    if (error) {
+      console.warn('[product-search] edge function error:', error.message);
+      return null;
+    }
+    if (!data?.success || !Array.isArray(data.products)) {
+      console.warn('[product-search] bad payload:', data);
+      return null;
+    }
+    return data.products as LiveProduct[];
+  } catch (err) {
+    console.warn('[product-search] fetch failed:', err);
+    return null;
+  }
+}
+
+function seedSearch(q: string): ResearchedProduct[] {
   for (const cat of DB) {
     if (cat.keywords.some(k => q.includes(k) || k.includes(q))) {
       return scoreList(cat.products);
     }
   }
-
-  // Fuzzy fallback — return hits from any category whose keywords share a token
   const tokens = q.split(/\s+/).filter(t => t.length > 2);
   const hits: typeof DB[number]['products'] = [];
   for (const cat of DB) {
@@ -197,6 +221,24 @@ export async function researchProducts(query: string): Promise<ResearchedProduct
     if (matchedKeyword) hits.push(...cat.products);
   }
   if (hits.length > 0) return scoreList(hits).slice(0, 10);
-
   return FALLBACK;
+}
+
+export async function researchProducts(query: string): Promise<ResearchedProduct[]> {
+  const q = query.toLowerCase().trim();
+  if (!q) return [];
+
+  // Prefer live results from Google Shopping (via Supabase edge function)
+  const live = await searchLive(query);
+  if (live && live.length > 0) {
+    return live
+      .map(p => {
+        const { score, reason } = scoreThumbnail({ brand: p.brand, image_url: p.image_url });
+        return { ...p, thumbnailScore: score, reason };
+      })
+      .sort((a, b) => b.thumbnailScore - a.thumbnailScore);
+  }
+
+  // Fallback to seed DB if the edge function isn't configured or returned nothing
+  return seedSearch(q);
 }
