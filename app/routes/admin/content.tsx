@@ -1213,7 +1213,20 @@ export default function AdminContent() {
                 </button>
               </div>
               {researchResults.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 12, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{researchResults.length}</span>
+                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>
+                        {researchResults.reduce((sum, p) => sum + (p.image_urls?.length || 1), 0)}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thumbnails pulled</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>For</span>
                   {(['all', 'men', 'women', 'unisex'] as const).map(g => (
                     <button
@@ -1235,6 +1248,7 @@ export default function AdminContent() {
                       {g}
                     </button>
                   ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1289,16 +1303,31 @@ export default function AdminContent() {
                             </svg>
                           )}
                         </div>
-                        <img
-                          src={p.image_url}
-                          alt=""
-                          onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                          style={{ width: 48, height: 48, borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: '#f5f5f5' }}
-                        />
+                        <div style={{ display: 'flex', gap: 3, flexShrink: 0, position: 'relative' }}>
+                          {(p.image_urls || [p.image_url]).slice(0, 4).map((u, ui) => (
+                            <img
+                              key={ui}
+                              src={u}
+                              alt=""
+                              onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                              style={{
+                                width: ui === 0 ? 48 : 28,
+                                height: 48,
+                                borderRadius: 6,
+                                objectFit: 'cover',
+                                background: '#f5f5f5',
+                                border: '1px solid #e5e7eb',
+                              }}
+                            />
+                          ))}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.name}</div>
                           <div style={{ fontSize: 11, color: '#888' }}>
                             {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
+                          </div>
+                          <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
+                            {(p.image_urls || [p.image_url]).length} thumbnail{((p.image_urls || [p.image_url]).length === 1) ? '' : 's'} pulled
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>

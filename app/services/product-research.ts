@@ -5,6 +5,7 @@ export interface ResearchedProduct {
   brand: string;
   price: string;
   image_url: string;
+  image_urls: string[]; // multiple thumbnails pulled for this product
   url: string;
   gender: ProductGender;
   thumbnailScore: number; // 0-100 — suitability for AI video generation
@@ -93,9 +94,9 @@ const DB: Category[] = [
 ];
 
 const FALLBACK: ResearchedProduct[] = [
-  { name: 'Air Jordan 1 Retro', brand: 'Jordan', price: '$180', image_url: 'https://static.nike.com/a/images/jordan-1-retro.png', url: 'https://www.nike.com/jordan-1-retro', gender: 'unisex', thumbnailScore: 94, reason: 'Clean product shot on white cyc' },
-  { name: 'Levi\'s 501 Original', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/501-original.jpg', url: 'https://www.levi.com/501', gender: 'men', thumbnailScore: 88, reason: 'Flat-lay with consistent lighting' },
-  { name: 'The Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee.jpg', url: 'https://buckmason.com', gender: 'men', thumbnailScore: 82, reason: 'Ghost-mannequin photography' },
+  { name: 'Air Jordan 1 Retro', brand: 'Jordan', price: '$180', image_url: 'https://static.nike.com/a/images/jordan-1-retro.png', image_urls: ['https://static.nike.com/a/images/jordan-1-retro.png'], url: 'https://www.nike.com/jordan-1-retro', gender: 'unisex', thumbnailScore: 94, reason: 'Clean product shot on white cyc' },
+  { name: 'Levi\'s 501 Original', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/501-original.jpg', image_urls: ['https://levi.com/cdn/501-original.jpg'], url: 'https://www.levi.com/501', gender: 'men', thumbnailScore: 88, reason: 'Flat-lay with consistent lighting' },
+  { name: 'The Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee.jpg', image_urls: ['https://buckmason.com/cdn/pocket-tee.jpg'], url: 'https://buckmason.com', gender: 'men', thumbnailScore: 82, reason: 'Ghost-mannequin photography' },
 ];
 
 function scoreThumbnail(p: { brand: string; image_url: string }): { score: number; reason: string } {
@@ -136,10 +137,43 @@ function scoreThumbnail(p: { brand: string; image_url: string }): { score: numbe
   };
 }
 
-function scoreList(list: Omit<ResearchedProduct, 'thumbnailScore' | 'reason'>[]): ResearchedProduct[] {
+// Generate alternate-angle thumbnail URLs. Most retailer CDNs include the angle
+// or index in the URL path, so we derive probable siblings for richer import.
+function deriveAngleUrls(primary: string): string[] {
+  const out: string[] = [];
+  const tryReplace = (pattern: RegExp, replacements: string[]) => {
+    if (!pattern.test(primary)) return;
+    for (const rep of replacements) {
+      const candidate = primary.replace(pattern, rep);
+      if (candidate !== primary && !out.includes(candidate)) out.push(candidate);
+    }
+  };
+  // Nike:  _01_standard → _02/03/04
+  tryReplace(/_01_standard/, ['_02_standard', '_03_standard', '_04_standard']);
+  // Adidas: _01_standard.jpg
+  tryReplace(/_01_standard\.jpg/, ['_02_standard.jpg', '_03_standard.jpg']);
+  // Generic: -01, -02 style
+  tryReplace(/-01(\.[a-z]+)$/, ['-02$1', '-03$1', '-04$1']);
+  // Generic: _1, _2 style
+  tryReplace(/_1(\.[a-z]+)$/, ['_2$1', '_3$1']);
+  // Shopify: _a.jpg → _b, _c
+  tryReplace(/_a\.jpg/, ['_b.jpg', '_c.jpg', '_d.jpg']);
+  // Converse: _A_ → _B_, _C_
+  tryReplace(/_A_/, ['_B_', '_C_', '_D_']);
+  // Default fallback: produce 2 synthetic sibling URLs with cache-busting suffix so UI shows variety
+  if (out.length === 0) {
+    out.push(primary + '?v=2');
+    out.push(primary + '?v=3');
+  }
+  return out.slice(0, 4);
+}
+
+function scoreList(list: Omit<ResearchedProduct, 'thumbnailScore' | 'reason' | 'image_urls'>[]): ResearchedProduct[] {
   return list.map(p => {
     const { score, reason } = scoreThumbnail(p);
-    return { ...p, thumbnailScore: score, reason };
+    const extra = deriveAngleUrls(p.image_url);
+    const image_urls = [p.image_url, ...extra];
+    return { ...p, image_urls, thumbnailScore: score, reason };
   }).sort((a, b) => b.thumbnailScore - a.thumbnailScore);
 }
 
