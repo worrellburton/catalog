@@ -299,20 +299,13 @@ export default function AdminContent() {
   }, []);
 
   const allProducts = useMemo(() => {
-    const allVideos: string[] = [];
-    adVideoMap.forEach(vids => vids.forEach(v => allVideos.push(v)));
-    const pickVideos = (count: number, startIdx: number): string[] => {
-      if (allVideos.length === 0) return [];
-      return Array.from({ length: count }, (_, i) => allVideos[(startIdx + i) % allVideos.length]);
-    };
-    let filler = 0;
     const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
         const key = `${p.brand}-${p.name}`;
         if (!productMap.has(key)) {
-          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: Math.floor(Math.random() * 20), clicks: Math.floor(Math.random() * 150) + 10, impressions: 0, connection: 'Look' });
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: 0, clicks: 0, impressions: 0, connection: 'Look' });
         }
         const entry = productMap.get(key)!;
         entry.looks.add(look.title);
@@ -330,7 +323,7 @@ export default function AdminContent() {
         entry.image_url = cp.image_url;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
-        entry.clicks = adClicksMap.get(cp.id) || entry.clicks;
+        entry.clicks = adClicksMap.get(cp.id) || 0;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -358,14 +351,9 @@ export default function AdminContent() {
     });
 
     return Array.from(productMap.values()).map(p => {
-      const ownVideos = p.video_urls;
-      const hasCreative = ownVideos.length > 0;
-      const videos = hasCreative
-        ? ownVideos
-        : pickVideos(3, (filler++ * 3));
+      const hasCreative = p.video_urls.length > 0;
       return {
         ...p,
-        video_urls: videos,
         hasCreative,
         lookCount: p.looks.size,
         creatorCount: p.creators.size,
