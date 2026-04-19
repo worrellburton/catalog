@@ -656,7 +656,6 @@ export default function AdminContent() {
                 <th>Saves</th>
                 <th>Clicks</th>
                 <th>Links</th>
-                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -747,7 +746,6 @@ export default function AdminContent() {
                       View
                     </button>
                   </td>
-                  <td><span className="admin-status admin-status-online">active</span></td>
                 </tr>
               ))}
             </tbody>
