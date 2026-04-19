@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { to: '/admin/earnings', label: 'Earnings', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
   { to: '/admin/finance', label: 'Finance', icon: 'M3 3v18h18M7 14l4-4 4 4 6-6' },
   { to: '/admin/activities', label: 'Engagement', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
+  { to: '/admin/creative', label: 'Creative', icon: 'M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5zM2 2l7.586 7.586M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0z' },
   { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
 ];
 
@@ -38,6 +39,7 @@ const allSearchItems: SearchItem[] = [
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
   { label: 'Earnings', type: 'Page', to: '/admin/earnings' },
   { label: 'Finance', type: 'Page', to: '/admin/finance' },
+  { label: 'Creative', type: 'Page', to: '/admin/creative' },
   { label: 'Activities', type: 'Page', to: '/admin/activities' },
   { label: 'AI Models', type: 'Page', to: '/admin/ai-models' },
   { label: 'Video Generation', type: 'Page', to: '/admin/agents?tab=video-gen&sub=look-videos' },
