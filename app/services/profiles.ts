@@ -15,12 +15,11 @@ export interface Profile {
 export async function getProfiles(): Promise<Profile[]> {
   if (!supabase) return [];
   // Try with role column first, fall back without if column doesn't exist yet
-  let { data, error } = await supabase
+  let result = await supabase
     .from('profiles')
     .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
     .order('created_at', { ascending: false });
-  if (error) {
-    // role column may not exist yet — retry without it
+  if (result.error) {
     const fallback = await supabase
       .from('profiles')
       .select('id, email, full_name, avatar_url, provider, created_at, last_sign_in_at')
@@ -29,9 +28,19 @@ export async function getProfiles(): Promise<Profile[]> {
       console.error('Failed to load profiles', fallback.error);
       return [];
     }
-    data = fallback.data;
+    result = fallback as unknown as typeof result;
   }
-  return (data || []).map(p => ({ ...p, role: (p as Record<string, unknown>).role as UserRole || 'shopper' }));
+  const rows = (result.data || []) as unknown as Record<string, unknown>[];
+  return rows.map(p => ({
+    id: p.id as string,
+    email: (p.email as string) || null,
+    full_name: (p.full_name as string) || null,
+    avatar_url: (p.avatar_url as string) || null,
+    provider: (p.provider as string) || null,
+    role: (p.role as UserRole) || 'shopper',
+    created_at: p.created_at as string,
+    last_sign_in_at: (p.last_sign_in_at as string) || null,
+  }));
 }
 
 export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {

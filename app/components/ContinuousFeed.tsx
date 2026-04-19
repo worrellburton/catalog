@@ -64,7 +64,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
         segments: [
           { type: 'feed', id: `initial-${Date.now()}`, looks: action.looks, isInitial: true },
         ],
-        seenLookIds: new Set(),
+        seenLookIds: new Set<number>(),
       };
     default:
       return state;
@@ -102,7 +102,7 @@ export default function ContinuousFeed({
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: filteredLooks, isInitial: true }],
-    seenLookIds: new Set(),
+    seenLookIds: new Set<number>(),
   });
 
   // Fetch live ads from Supabase
