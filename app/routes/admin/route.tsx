@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
+import { deleteProductAd } from '~/services/product-ads';
 
 interface NavItem {
   to: string;
@@ -453,16 +454,39 @@ export default function AdminLayout() {
                         opacity: n.status === 'done' ? 0.7 : 1,
                         transition: 'opacity 0.3s',
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 8 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {n.productName}
                             </div>
                             <div style={{ fontSize: 10, color: '#888' }}>{n.productBrand}</div>
                           </div>
-                          {n.status === 'queued' && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', flexShrink: 0, marginLeft: 8 }}>Queued</span>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                            {n.status === 'queued' && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>Queued</span>
+                            )}
+                            {n.status !== 'done' && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await deleteProductAd(n.id);
+                                  setGenNotifications(prev => prev.filter(x => x.id !== n.id));
+                                  prevIdsRef.current.delete(n.id);
+                                }}
+                                title="Cancel generation"
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  padding: 4, borderRadius: 4, color: '#999',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <GenProgressBar n={n} />
                       </div>
