@@ -40,10 +40,12 @@ generator_image = (
         "httpx>=0.27.0",
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
+        "replicate>=1.0.0",
     )
     .add_local_file("config.py", "/root/config.py")
     .add_local_file("prompts.py", "/root/prompts.py")
     .add_local_file("veo_client.py", "/root/veo_client.py")
+    .add_local_file("seedance_client.py", "/root/seedance_client.py")
     .add_local_file("video_crop.py", "/root/video_crop.py")
     .add_local_file("ad_generator.py", "/root/ad_generator.py")
     .add_local_file("agent.py", "/root/agent.py")
