@@ -176,6 +176,18 @@ export default function AdminContent() {
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
+
+  // In-flight generation jobs per product — tracks individual ad rows so we
+  // can show an accurate progress bar bound to the ad statuses in Supabase.
+  interface GenJob {
+    adIds: string[];
+    total: number;
+    done: number;
+    failed: number;
+    generating: number; // currently in the 'generating' status
+    startedAt: number;
+  }
+  const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
   const [linkModal, setLinkModal] = useState<{ name: string; brand: string; url: string } | null>(null);
   const [tagsModal, setTagsModal] = useState<{ name: string; brand: string; tags: string[] } | null>(null);
 
@@ -389,6 +401,31 @@ export default function AdminContent() {
     );
   }, [crawledProducts, createLookProductSearch]);
 
+  const loadAdProductIds = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('product_ads')
+      .select('product_id, video_url, status, impressions, clicks');
+    if (data) {
+      setAdProductIds(new Set(data.map(r => r.product_id)));
+      const videoMap = new Map<string, string[]>();
+      const impMap = new Map<string, number>();
+      const clkMap = new Map<string, number>();
+      data.forEach(r => {
+        if (r.video_url) {
+          const existing = videoMap.get(r.product_id) || [];
+          existing.push(r.video_url);
+          videoMap.set(r.product_id, existing);
+        }
+        impMap.set(r.product_id, (impMap.get(r.product_id) || 0) + (r.impressions || 0));
+        clkMap.set(r.product_id, (clkMap.get(r.product_id) || 0) + (r.clicks || 0));
+      });
+      setAdVideoMap(videoMap);
+      setAdImpressionsMap(impMap);
+      setAdClicksMap(clkMap);
+    }
+  }, []);
+
   useEffect(() => {
     const loadCrawled = async () => {
       if (!supabase) return;
@@ -406,33 +443,48 @@ export default function AdminContent() {
       })) as CrawledProduct[];
       setCrawledProducts(rows);
     };
-    const loadAdProductIds = async () => {
-      if (!supabase) return;
-      const { data } = await supabase
-        .from('product_ads')
-        .select('product_id, video_url, status, impressions, clicks');
-      if (data) {
-        setAdProductIds(new Set(data.map(r => r.product_id)));
-        const videoMap = new Map<string, string[]>();
-        const impMap = new Map<string, number>();
-        const clkMap = new Map<string, number>();
-        data.forEach(r => {
-          if (r.video_url) {
-            const existing = videoMap.get(r.product_id) || [];
-            existing.push(r.video_url);
-            videoMap.set(r.product_id, existing);
-          }
-          impMap.set(r.product_id, (impMap.get(r.product_id) || 0) + (r.impressions || 0));
-          clkMap.set(r.product_id, (clkMap.get(r.product_id) || 0) + (r.clicks || 0));
-        });
-        setAdVideoMap(videoMap);
-        setAdImpressionsMap(impMap);
-        setAdClicksMap(clkMap);
-      }
-    };
     loadCrawled();
     loadAdProductIds();
-  }, []);
+  }, [loadAdProductIds]);
+
+  // Poll active generation jobs — refresh statuses every 3s, remove finished
+  // jobs, and reload adVideoMap when any job completes so the new videos
+  // appear in the Creative column.
+  useEffect(() => {
+    if (genJobs.size === 0 || !supabase) return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      const allIds = Array.from(genJobs.values()).flatMap(j => j.adIds);
+      if (allIds.length === 0) return;
+      const { data } = await supabase
+        .from('product_ads')
+        .select('id, status')
+        .in('id', allIds);
+      if (cancelled || !data) return;
+      const statusById = new Map(data.map((r: { id: string; status: string }) => [r.id, r.status]));
+      let anyFinished = false;
+      setGenJobs(prev => {
+        const next = new Map(prev);
+        for (const [productId, job] of next.entries()) {
+          let done = 0, failed = 0, generating = 0;
+          for (const adId of job.adIds) {
+            const s = statusById.get(adId);
+            if (s === 'done' || s === 'live') done++;
+            else if (s === 'failed') failed++;
+            else if (s === 'generating') generating++;
+          }
+          next.set(productId, { ...job, done, failed, generating });
+          if (done + failed >= job.total) {
+            next.delete(productId);
+            anyFinished = true;
+          }
+        }
+        return next;
+      });
+      if (anyFinished) void loadAdProductIds();
+    }, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
     const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
@@ -520,21 +572,26 @@ export default function AdminContent() {
   }, []);
 
   const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string) => {
-    if (generatingIds.has(productId)) return;
+    if (genJobs.has(productId)) return;
     setGeneratingIds(prev => new Set(prev).add(productId));
     showToast(`Agent started generating creative for "${productName}"`);
-    const { error } = await createBatchAds([productId], style, 2);
+    const { data, error } = await createBatchAds([productId], style, 2);
     setGeneratingIds(prev => {
       const next = new Set(prev);
       next.delete(productId);
       return next;
     });
-    if (error) {
-      showToast(`Agent failed: ${error}`);
-    } else {
-      showToast(`Agent queued. View progress in Agents →`);
+    if (error || !data || data.length === 0) {
+      showToast(`Agent failed: ${error || 'no ads returned'}`);
+      return;
     }
-  }, [generatingIds, showToast]);
+    const adIds = data.map(d => d.id);
+    setGenJobs(prev => {
+      const next = new Map(prev);
+      next.set(productId, { adIds, total: adIds.length, done: 0, failed: 0, generating: 0, startedAt: Date.now() });
+      return next;
+    });
+  }, [genJobs, showToast]);
 
   return (
     <div className="admin-page">
@@ -827,6 +884,43 @@ export default function AdminContent() {
                           </span>
                         )}
                       </div>
+                    ) : p.id && genJobs.has(p.id) ? (
+                      (() => {
+                        const job = genJobs.get(p.id)!;
+                        const pct = Math.max(5, Math.round((job.done / job.total) * 100));
+                        const label = job.generating > 0
+                          ? `Generating ${job.done}/${job.total}`
+                          : job.done < job.total ? `Queued ${job.done}/${job.total}` : `Finalizing…`;
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 110 }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              {label}
+                            </div>
+                            <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  inset: 0,
+                                  width: `${pct}%`,
+                                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                                  transition: 'width 400ms ease',
+                                }}
+                              />
+                              {job.generating > 0 && (
+                                <div
+                                  className="admin-shimmer"
+                                  style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+                                    animation: 'admin-shimmer 1.4s infinite',
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()
                     ) : p.id ? (
                       <button
                         className="admin-btn admin-btn-primary"
