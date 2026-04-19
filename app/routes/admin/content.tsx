@@ -3,6 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
+import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 
@@ -176,6 +177,7 @@ export default function AdminContent() {
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
+  const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
 
   // In-flight generation jobs per product — tracks individual ad rows so we
   // can show an accurate progress bar bound to the ad statuses in Supabase.
@@ -420,38 +422,51 @@ export default function AdminContent() {
 
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
-  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const raw = localStorage.getItem('admin-deleted-look-ids');
-      return new Set<number>(raw ? JSON.parse(raw) : []);
-    } catch { return new Set(); }
-  });
-  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const raw = localStorage.getItem('admin-deleted-product-keys');
-      return new Set<string>(raw ? JSON.parse(raw) : []);
-    } catch { return new Set(); }
-  });
+  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(new Set());
+  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(new Set());
 
+  // Load hidden sets from Supabase on mount
   useEffect(() => {
-    try { localStorage.setItem('admin-deleted-look-ids', JSON.stringify([...deletedLookIds])); } catch {}
-  }, [deletedLookIds]);
-
-  useEffect(() => {
-    try { localStorage.setItem('admin-deleted-product-keys', JSON.stringify([...deletedProductKeys])); } catch {}
-  }, [deletedProductKeys]);
+    if (!supabase) return;
+    (async () => {
+      const [looksRes, prodsRes] = await Promise.all([
+        supabase.from('admin_hidden_looks').select('look_id'),
+        supabase.from('admin_hidden_products').select('brand, name'),
+      ]);
+      if (looksRes.data) {
+        setDeletedLookIds(new Set(looksRes.data.map((r: { look_id: number }) => r.look_id)));
+      }
+      if (prodsRes.data) {
+        setDeletedProductKeys(new Set(
+          prodsRes.data.map((r: { brand: string; name: string }) => `${r.brand}-${r.name}`)
+        ));
+      }
+    })();
+  }, []);
   const [lookOrder, setLookOrder] = useState<number[] | null>(null);
   const [dragLookId, setDragLookId] = useState<number | null>(null);
 
-  const deleteLook = useCallback((id: number) => {
+  const deleteLook = useCallback(async (id: number) => {
     if (!window.confirm('Delete this look? This cannot be undone.')) return;
+    // Optimistic
     setDeletedLookIds(prev => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('admin_hidden_looks')
+      .upsert({ look_id: id }, { onConflict: 'look_id' });
+    if (error) {
+      // Rollback
+      setDeletedLookIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      window.alert(`Delete failed: ${error.message}`);
+    }
   }, []);
 
   const moveLook = useCallback((id: number, direction: -1 | 1) => {
@@ -724,11 +739,11 @@ export default function AdminContent() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string) => {
+  const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string, model: string) => {
     if (genJobs.has(productId)) return;
     setGeneratingIds(prev => new Set(prev).add(productId));
     showToast(`Agent started generating creative for "${productName}"`);
-    const { data, error } = await createBatchAds([productId], style, 2);
+    const { data, error } = await createBatchAds([productId], style, 2, model);
     setGeneratingIds(prev => {
       const next = new Set(prev);
       next.delete(productId);
@@ -1216,11 +1231,26 @@ export default function AdminContent() {
                           }
                           setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
                         }
+                        // Optimistic hide
                         setDeletedProductKeys(prev => {
                           const next = new Set(prev);
                           next.add(key);
                           return next;
                         });
+                        if (supabase) {
+                          const { error } = await supabase
+                            .from('admin_hidden_products')
+                            .upsert({ brand: p.brand, name: p.name }, { onConflict: 'brand,name' });
+                          if (error) {
+                            setDeletedProductKeys(prev => {
+                              const next = new Set(prev);
+                              next.delete(key);
+                              return next;
+                            });
+                            showToast(`Hide failed: ${error.message}`);
+                            return;
+                          }
+                        }
                         showToast(`Deleted ${p.name}`);
                       }}
                     >
@@ -1448,6 +1478,28 @@ export default function AdminContent() {
             <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
               Pick the style for <strong style={{ color: '#111' }}>{generatePicker.productName}</strong>
             </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Video Model</label>
+              <select
+                value={genModel}
+                onChange={e => setGenModel(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 6,
+                  border: '1px solid #ddd', fontSize: 13, background: '#fff',
+                }}
+              >
+                <optgroup label="Veo (Google)">
+                  {VIDEO_MODELS.filter(m => m.group === 'Veo (Google)').map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Seedance (fal.ai)">
+                  {VIDEO_MODELS.filter(m => m.group === 'Seedance (fal.ai)').map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
                 { value: 'studio_clean', label: 'Studio Clean', desc: 'Minimal white-cyc studio. Clean product focus.' },
@@ -1460,7 +1512,7 @@ export default function AdminContent() {
                   onClick={() => {
                     const picker = generatePicker;
                     setGeneratePicker(null);
-                    handleGenerateCreative(picker.productId, picker.productName, s.value);
+                    handleGenerateCreative(picker.productId, picker.productName, s.value, genModel);
                   }}
                   style={{
                     textAlign: 'left',
