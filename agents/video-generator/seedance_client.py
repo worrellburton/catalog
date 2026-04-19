@@ -36,11 +36,11 @@ def _ensure_auth() -> None:
 
 def _fal_model_id(model: str, mode: str) -> str:
     """Map legacy model names to fal.ai model IDs. `mode` = image-to-video | text-to-video."""
-    # Already a full fal slug — pass through
-    if model.startswith("fal-ai/") or model.startswith("bytedance/seedance-2"):
+    # Already a full fal slug (has a concrete endpoint path) — pass through
+    if model.startswith("fal-ai/") or model.startswith("bytedance/seedance-2.0/"):
         return model
-    # v2 (detected by "2" token — covers seedance-2, seedance-2-pro, bytedance/seedance-2, etc.)
-    if "seedance-2" in model or model.endswith("-2"):
+    # v2 shorthand — covers "seedance-2", "bytedance/seedance-2", "seedance-2-foo"
+    if "seedance-2" in model:
         return f"bytedance/seedance-2.0/{mode}"
     # v1 variants
     variant = "lite" if "lite" in model else "pro"
