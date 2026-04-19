@@ -14,7 +14,7 @@ export interface ResearchedProduct {
 
 interface Category {
   keywords: string[];
-  products: Omit<ResearchedProduct, 'thumbnailScore' | 'reason'>[];
+  products: Omit<ResearchedProduct, 'thumbnailScore' | 'reason' | 'image_urls'>[];
 }
 
 const DB: Category[] = [
@@ -187,24 +187,35 @@ interface LiveProduct {
   gender: ProductGender;
 }
 
-async function searchLive(query: string): Promise<LiveProduct[] | null> {
+interface LiveSearchResult {
+  products: LiveProduct[];
+  error: string | null;
+}
+
+async function searchLive(query: string): Promise<LiveSearchResult> {
   try {
     const { supabase } = await import('~/utils/supabase');
     const { data, error } = await supabase.functions.invoke('product-search', {
       body: { query },
     });
     if (error) {
-      console.warn('[product-search] edge function error:', error.message);
-      return null;
+      const msg = `Edge function error: ${error.message}`;
+      console.warn('[product-search]', msg);
+      return { products: [], error: msg };
     }
-    if (!data?.success || !Array.isArray(data.products)) {
-      console.warn('[product-search] bad payload:', data);
-      return null;
+    if (!data?.success) {
+      const msg = data?.error || 'Unknown error from edge function';
+      console.warn('[product-search] failed:', msg);
+      return { products: [], error: msg };
     }
-    return data.products as LiveProduct[];
+    if (!Array.isArray(data.products)) {
+      return { products: [], error: 'Bad payload — no products array' };
+    }
+    return { products: data.products as LiveProduct[], error: null };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn('[product-search] fetch failed:', err);
-    return null;
+    return { products: [], error: `Fetch failed: ${msg}` };
   }
 }
 
@@ -228,24 +239,33 @@ export interface ResearchOptions {
   liveOnly?: boolean; // when true, skip seed DB fallback — only real Google Shopping results
 }
 
-export async function researchProducts(query: string, opts: ResearchOptions = {}): Promise<ResearchedProduct[]> {
+export interface ResearchResult {
+  products: ResearchedProduct[];
+  source: 'live' | 'seed';
+  error: string | null; // populated when live search fails
+}
+
+export async function researchProducts(query: string, opts: ResearchOptions = {}): Promise<ResearchResult> {
   const q = query.toLowerCase().trim();
-  if (!q) return [];
+  if (!q) return { products: [], source: 'live', error: null };
 
   // Prefer live results from Google Shopping (via Supabase edge function)
   const live = await searchLive(query);
-  if (live && live.length > 0) {
-    return live
+  if (live.products.length > 0) {
+    const products = live.products
       .map(p => {
         const { score, reason } = scoreThumbnail({ brand: p.brand, image_url: p.image_url });
         return { ...p, thumbnailScore: score, reason };
       })
       .sort((a, b) => b.thumbnailScore - a.thumbnailScore);
+    return { products, source: 'live', error: null };
   }
 
-  // When caller wants live-only, return empty instead of seed results
-  if (opts.liveOnly) return [];
+  // When caller wants live-only, surface the error instead of silently falling back
+  if (opts.liveOnly) {
+    return { products: [], source: 'live', error: live.error || 'No live results' };
+  }
 
   // Fallback to seed DB if the edge function isn't configured or returned nothing
-  return seedSearch(q);
+  return { products: seedSearch(q), source: 'seed', error: live.error };
 }
