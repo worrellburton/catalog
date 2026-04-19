@@ -420,8 +420,28 @@ export default function AdminContent() {
 
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
-  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(new Set());
-  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(new Set());
+  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem('admin-deleted-look-ids');
+      return new Set<number>(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem('admin-deleted-product-keys');
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('admin-deleted-look-ids', JSON.stringify([...deletedLookIds])); } catch {}
+  }, [deletedLookIds]);
+
+  useEffect(() => {
+    try { localStorage.setItem('admin-deleted-product-keys', JSON.stringify([...deletedProductKeys])); } catch {}
+  }, [deletedProductKeys]);
   const [lookOrder, setLookOrder] = useState<number[] | null>(null);
   const [dragLookId, setDragLookId] = useState<number | null>(null);
 
