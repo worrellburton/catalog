@@ -192,7 +192,24 @@ export default function AdminCatalogs() {
           }))
         );
       }
-      showToast(`Assembled look "${assembleResult.title}" saved`);
+
+      // Kick off Veo video generation — use the hero (first) product as the
+      // anchor and feed Claude's assembly_prompt directly so Veo renders the
+      // scene Claude imagined.
+      const heroProductId = assembleResult.productIds[0];
+      if (heroProductId) {
+        const styleSlug = assembleResult.style.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        await supabase.from('generated_videos').insert({
+          product_id: heroProductId,
+          look_id: lookRow.id,
+          style: styleSlug || 'lifestyle_context',
+          prompt: assembleResult.prompt,
+          status: 'pending',
+          aspect_ratio: '9:16',
+        });
+      }
+
+      showToast(`Look "${assembleResult.title}" saved — video queued for generation`);
       setAssembleCatalog(null);
       setAssembleResult(null);
     } catch (err) {

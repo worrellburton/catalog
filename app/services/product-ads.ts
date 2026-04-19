@@ -71,17 +71,29 @@ export async function getLiveAds(): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Only surface explicitly approved (status='live') ads in the consumer feed.
   // New ads land at 'done' and must pass through the moderation queue first.
+  // Boosted ads (boosted_until > now) sort to the top.
   const { data, error } = await supabase
     .from('product_ads')
     .select(AD_SELECT)
     .eq('status', 'live')
     .not('video_url', 'is', null)
+    .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
   if (error) {
     console.error('[getLiveAds] query error:', error.message);
     return [];
   }
   return (data || []) as ProductAd[];
+}
+
+export async function boostAd(id: string, hours = 24): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from('product_ads')
+    .update({ boosted_until: until })
+    .eq('id', id);
+  return { error: error?.message || null };
 }
 
 export async function getModerationQueue(): Promise<ProductAd[]> {

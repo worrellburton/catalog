@@ -207,6 +207,55 @@ export default function AdminContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // AI copywriter
+  const [copywriting, setCopywriting] = useState(false);
+  const [copywriteProgress, setCopywriteProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const runCopywriter = useCallback(async () => {
+    if (!supabase) return;
+    // Rewrite products that don't have a display_name yet. Cap at 100 per run.
+    const { data: toRewrite } = await supabase
+      .from('products')
+      .select('id, name, brand, price')
+      .is('display_name', null)
+      .limit(100);
+    if (!toRewrite || toRewrite.length === 0) {
+      showToast('All products already have Claude-written copy.');
+      return;
+    }
+    setCopywriting(true);
+    setCopywriteProgress({ done: 0, total: toRewrite.length });
+    try {
+      const BATCH = 30;
+      let totalDone = 0;
+      for (let i = 0; i < toRewrite.length; i += BATCH) {
+        const batch = toRewrite.slice(i, i + BATCH);
+        const { data, error } = await supabase.functions.invoke('product-copywriter', {
+          body: { products: batch.map(p => ({ id: p.id, name: p.name || '', brand: p.brand || '', price: p.price })) },
+        });
+        if (!error && data?.success && data.results) {
+          const nowIso = new Date().toISOString();
+          await Promise.all(
+            Object.entries(data.results as Record<string, { display_name: string; hook_copy: string }>)
+              .map(([id, r]) =>
+                supabase!.from('products').update({
+                  display_name: r.display_name,
+                  hook_copy: r.hook_copy,
+                  rewritten_at: nowIso,
+                }).eq('id', id)
+              )
+          );
+        }
+        totalDone += batch.length;
+        setCopywriteProgress({ done: totalDone, total: toRewrite.length });
+      }
+      showToast(`Rewrote ${totalDone} product name${totalDone === 1 ? '' : 's'}`);
+    } finally {
+      setCopywriting(false);
+      setCopywriteProgress(null);
+    }
+  }, []);
+
   const refreshStaleProducts = useCallback(async () => {
     if (!supabase) return;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -688,6 +737,23 @@ export default function AdminContent() {
         )}
         {activeTab === 'products' && (
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={runCopywriter}
+              disabled={copywriting}
+              title="Claude rewrites product names and adds a hook — only runs on products without display_name"
+            >
+              {copywriting && copywriteProgress ? (
+                <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  Rewrite with Claude
+                </>
+              )}
+            </button>
             <button
               className="admin-btn admin-btn-secondary"
               onClick={refreshStaleProducts}
