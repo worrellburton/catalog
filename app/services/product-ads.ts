@@ -68,31 +68,41 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 }
 
 export async function getLiveAds(): Promise<ProductAd[]> {
-  console.log('[getLiveAds] called, supabase client exists:', !!supabase);
-  if (!supabase) {
-    console.warn('[getLiveAds] supabase is null, returning empty');
+  if (!supabase) return [];
+  // Only surface explicitly approved (status='live') ads in the consumer feed.
+  // New ads land at 'done' and must pass through the moderation queue first.
+  const { data, error } = await supabase
+    .from('product_ads')
+    .select(AD_SELECT)
+    .eq('status', 'live')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[getLiveAds] query error:', error.message);
     return [];
   }
-  try {
-    // Prototype rule: show every ad that has a finished video, regardless
-    // of promotion state. Only fail/paused are filtered since they have no
-    // playable video or are explicitly disabled.
-    const { data, error } = await supabase
-      .from('product_ads')
-      .select(AD_SELECT)
-      .not('video_url', 'is', null)
-      .not('status', 'in', '(failed,paused)')
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('[getLiveAds] query error:', error.message, error.details, error.hint);
-      return [];
-    }
-    console.log('[getLiveAds] success, count:', data?.length, 'first ad:', data?.[0]?.id, 'video_url:', data?.[0]?.video_url?.substring(0, 60));
-    return (data || []) as ProductAd[];
-  } catch (err) {
-    console.error('[getLiveAds] unexpected error:', err);
-    return [];
-  }
+  return (data || []) as ProductAd[];
+}
+
+export async function getModerationQueue(): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('product_ads')
+    .select(AD_SELECT)
+    .eq('status', 'done')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return (data || []) as ProductAd[];
+}
+
+export async function rejectAd(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('product_ads')
+    .update({ status: 'paused', enabled: false })
+    .eq('id', id);
+  return { error: error?.message || null };
 }
 
 export async function createProductAd(req: CreateAdRequest): Promise<{ data: ProductAd | null; error: string | null }> {

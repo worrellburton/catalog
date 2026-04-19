@@ -11,7 +11,14 @@ interface GalleryVideo {
   style: string;
   status: string;
   created_at: string;
+  // A/B variant metadata (only for product ads)
+  product_id?: string;
+  impressions?: number;
+  clicks?: number;
+  ctr?: number;
 }
+
+const VARIANT_MIN_IMPRESSIONS = 500;
 
 function toGallery(videos: GeneratedVideo[], ads: ProductAd[]): GalleryVideo[] {
   const v: GalleryVideo[] = videos
@@ -28,17 +35,45 @@ function toGallery(videos: GeneratedVideo[], ads: ProductAd[]): GalleryVideo[] {
     }));
   const a: GalleryVideo[] = ads
     .filter(x => x.video_url)
-    .map(x => ({
-      id: x.id,
-      source: 'product',
-      video_url: x.video_url as string,
-      label: x.product?.name || x.title || 'Product ad',
-      sublabel: x.product?.brand || '',
-      style: x.style,
-      status: x.status,
-      created_at: x.created_at,
-    }));
+    .map(x => {
+      const impressions = x.impressions || 0;
+      const clicks = x.clicks || 0;
+      return {
+        id: x.id,
+        source: 'product' as const,
+        video_url: x.video_url as string,
+        label: x.product?.name || x.title || 'Product ad',
+        sublabel: x.product?.brand || '',
+        style: x.style,
+        status: x.status,
+        created_at: x.created_at,
+        product_id: x.product_id,
+        impressions,
+        clicks,
+        ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+      };
+    });
   return [...v, ...a].sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
+}
+
+// For each product+style variant group with ≥ 2 entries and every variant having
+// the min impression threshold, return the winner id.
+function computeWinners(gallery: GalleryVideo[]): Set<string> {
+  const groups = new Map<string, GalleryVideo[]>();
+  gallery.forEach(v => {
+    if (v.source !== 'product' || !v.product_id) return;
+    const key = `${v.product_id}|${v.style}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(v);
+  });
+  const winners = new Set<string>();
+  groups.forEach(variants => {
+    if (variants.length < 2) return;
+    if (!variants.every(v => (v.impressions || 0) >= VARIANT_MIN_IMPRESSIONS)) return;
+    const best = variants.reduce((a, b) => (b.ctr || 0) > (a.ctr || 0) ? b : a);
+    winners.add(best.id);
+  });
+  return winners;
 }
 
 type FilterTab = 'all' | 'product' | 'look';
@@ -89,6 +124,8 @@ export default function AdminCreative() {
     }
     return list;
   })();
+
+  const winners = computeWinners(videos);
 
   const toggle = (v: GalleryVideo) => {
     setSelected(prev => {
@@ -365,6 +402,7 @@ export default function AdminCreative() {
           {filtered.map(v => {
             const k = selectionKey(v);
             const isSelected = selected.has(k);
+            const isWinner = winners.has(v.id);
             return (
               <div
                 key={k}
@@ -378,7 +416,9 @@ export default function AdminCreative() {
                   background: '#000',
                   boxShadow: isSelected
                     ? '0 0 0 3px #3b82f6, 0 1px 3px rgba(0,0,0,0.12)'
-                    : '0 1px 3px rgba(0,0,0,0.12)',
+                    : isWinner
+                      ? '0 0 0 2px #16a34a, 0 1px 3px rgba(0,0,0,0.12)'
+                      : '0 1px 3px rgba(0,0,0,0.12)',
                   cursor: 'pointer',
                   transition: 'box-shadow 0.15s',
                 }}
@@ -398,23 +438,38 @@ export default function AdminCreative() {
                     pointerEvents: 'none',
                   }}
                 />
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 4,
-                    left: 4,
-                    padding: '2px 5px',
-                    borderRadius: 3,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    background: v.source === 'product' ? 'rgba(59,130,246,0.9)' : 'rgba(139,92,246,0.9)',
-                    color: '#fff',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {v.source}
+                <div style={{ position: 'absolute', top: 4, left: 4, display: 'flex', gap: 4, pointerEvents: 'none' }}>
+                  <div
+                    style={{
+                      padding: '2px 5px',
+                      borderRadius: 3,
+                      fontSize: 9,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      background: v.source === 'product' ? 'rgba(59,130,246,0.9)' : 'rgba(139,92,246,0.9)',
+                      color: '#fff',
+                    }}
+                  >
+                    {v.source}
+                  </div>
+                  {isWinner && (
+                    <div
+                      style={{
+                        padding: '2px 5px',
+                        borderRadius: 3,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        background: 'rgba(22,163,74,0.95)',
+                        color: '#fff',
+                      }}
+                      title={`Winner — ${(v.ctr || 0).toFixed(2)}% CTR over ${(v.impressions || 0).toLocaleString()} impressions`}
+                    >
+                      🏆 Winner
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{
