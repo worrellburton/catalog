@@ -42,6 +42,7 @@ type Tab = 'looks' | 'products' | 'musics' | 'places';
 
 export default function AdminContent() {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative'>('all');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -527,6 +528,23 @@ export default function AdminContent() {
       )}
 
       {activeTab === 'products' && (
+        <>
+          <div className="admin-tabs" style={{ marginBottom: 12 }}>
+            <button
+              className={`admin-tab ${productFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setProductFilter('all')}
+            >
+              Show all
+              <span className="admin-tab-badge">{allProducts.length}</span>
+            </button>
+            <button
+              className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
+              onClick={() => setProductFilter('no-creative')}
+            >
+              Show without creative
+              <span className="admin-tab-badge">{allProducts.filter(p => p.video_urls.length === 0).length}</span>
+            </button>
+          </div>
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -545,7 +563,9 @@ export default function AdminContent() {
               </tr>
             </thead>
             <tbody>
-              {allProducts.map((p, i) => (
+              {allProducts
+                .filter(p => productFilter === 'all' || p.video_urls.length === 0)
+                .map((p, i) => (
                 <tr key={`${p.brand}-${p.name}-${i}`}>
                   <td>
                     {p.video_urls.length > 0 ? (
@@ -618,6 +638,7 @@ export default function AdminContent() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {activeTab === 'musics' && (
