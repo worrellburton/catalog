@@ -47,54 +47,55 @@ const DB: Category[] = [
   {
     keywords: ['sunglasses', 'shades', 'eyewear'],
     products: [
-      { name: 'Wayfarer Classic', brand: 'Ray-Ban', price: '$171', image_url: 'https://imagedelivery.net/ray-ban/wayfarer-classic.jpg', url: 'https://www.ray-ban.com/usa/sunglasses/wayfarer' },
-      { name: 'Aviator Metal II', brand: 'Ray-Ban', price: '$191', image_url: 'https://imagedelivery.net/ray-ban/aviator-metal.jpg', url: 'https://www.ray-ban.com/usa/sunglasses/aviator' },
-      { name: 'Leonard', brand: 'Oliver Peoples', price: '$458', image_url: 'https://oliverpeoples.com/cdn/leonard.jpg', url: 'https://www.oliverpeoples.com/us/leonard-sun' },
-      { name: 'Dahlen', brand: 'Warby Parker', price: '$195', image_url: 'https://warbyparker.com/cdn/dahlen.jpg', url: 'https://www.warbyparker.com/sunglasses/men/dahlen' },
-      { name: 'Bayton', brand: 'Persol', price: '$340', image_url: 'https://persol.com/cdn/bayton.jpg', url: 'https://www.persol.com/usa/bayton.html' },
+      { name: 'Wayfarer Classic', brand: 'Ray-Ban', price: '$171', image_url: 'https://imagedelivery.net/ray-ban/wayfarer-classic.jpg', url: 'https://www.ray-ban.com/usa/sunglasses/wayfarer', gender: 'unisex' },
+      { name: 'Aviator Metal II', brand: 'Ray-Ban', price: '$191', image_url: 'https://imagedelivery.net/ray-ban/aviator-metal.jpg', url: 'https://www.ray-ban.com/usa/sunglasses/aviator', gender: 'unisex' },
+      { name: 'Leonard', brand: 'Oliver Peoples', price: '$458', image_url: 'https://oliverpeoples.com/cdn/leonard.jpg', url: 'https://www.oliverpeoples.com/us/leonard-sun', gender: 'men' },
+      { name: 'Dahlen', brand: 'Warby Parker', price: '$195', image_url: 'https://warbyparker.com/cdn/dahlen.jpg', url: 'https://www.warbyparker.com/sunglasses/men/dahlen', gender: 'men' },
+      { name: 'Bayton', brand: 'Persol', price: '$340', image_url: 'https://persol.com/cdn/bayton.jpg', url: 'https://www.persol.com/usa/bayton.html', gender: 'unisex' },
     ],
   },
   {
     keywords: ['white tee', 'white t-shirt', 'white shirt', 'plain tee'],
     products: [
-      { name: 'Essential Cotton Tee', brand: 'Uniqlo', price: '$19.90', image_url: 'https://uniqlo.com/cdn/essential-cotton-tee-white.jpg', url: 'https://www.uniqlo.com/us/en/products/essential-cotton-tee' },
-      { name: 'Heavyweight Classic', brand: 'Everlane', price: '$35', image_url: 'https://everlane.com/cdn/heavyweight-classic-white.jpg', url: 'https://www.everlane.com/products/mens-heavyweight-white' },
-      { name: 'Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee-white.jpg', url: 'https://www.buckmason.com/products/pocket-tee-white' },
-      { name: 'Supima Crew', brand: 'Uniqlo U', price: '$24.90', image_url: 'https://uniqlo.com/cdn/supima-crew-white.jpg', url: 'https://www.uniqlo.com/us/en/products/supima-u-crew' },
+      { name: 'Essential Cotton Tee (Men\'s)', brand: 'Uniqlo', price: '$19.90', image_url: 'https://uniqlo.com/cdn/essential-cotton-tee-white-m.jpg', url: 'https://www.uniqlo.com/us/en/products/essential-cotton-tee-men', gender: 'men' },
+      { name: 'Essential Cotton Tee (Women\'s)', brand: 'Uniqlo', price: '$19.90', image_url: 'https://uniqlo.com/cdn/essential-cotton-tee-white-w.jpg', url: 'https://www.uniqlo.com/us/en/products/essential-cotton-tee-women', gender: 'women' },
+      { name: 'Heavyweight Classic', brand: 'Everlane', price: '$35', image_url: 'https://everlane.com/cdn/heavyweight-classic-white.jpg', url: 'https://www.everlane.com/products/mens-heavyweight-white', gender: 'men' },
+      { name: 'Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee-white.jpg', url: 'https://www.buckmason.com/products/pocket-tee-white', gender: 'men' },
+      { name: 'Supima Crew', brand: 'Uniqlo U', price: '$24.90', image_url: 'https://uniqlo.com/cdn/supima-crew-white.jpg', url: 'https://www.uniqlo.com/us/en/products/supima-u-crew', gender: 'unisex' },
     ],
   },
   {
     keywords: ['denim jacket', 'jean jacket'],
     products: [
-      { name: 'Trucker Jacket', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/trucker-jacket.jpg', url: 'https://www.levi.com/US/en_US/clothing/men/outerwear/trucker-jacket' },
-      { name: 'Vintage Denim Jacket', brand: 'AGOLDE', price: '$258', image_url: 'https://agolde.com/cdn/vintage-denim.jpg', url: 'https://www.agolde.com/products/vintage-denim-jacket' },
-      { name: 'Selvedge Type III', brand: 'Naked & Famous', price: '$245', image_url: 'https://nakedandfamous.com/cdn/selvedge-type-iii.jpg', url: 'https://www.nakedandfamousdenim.com/products/selvedge-type-iii' },
+      { name: 'Trucker Jacket', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/trucker-jacket.jpg', url: 'https://www.levi.com/US/en_US/clothing/men/outerwear/trucker-jacket', gender: 'men' },
+      { name: 'Vintage Denim Jacket', brand: 'AGOLDE', price: '$258', image_url: 'https://agolde.com/cdn/vintage-denim.jpg', url: 'https://www.agolde.com/products/vintage-denim-jacket', gender: 'women' },
+      { name: 'Selvedge Type III', brand: 'Naked & Famous', price: '$245', image_url: 'https://nakedandfamous.com/cdn/selvedge-type-iii.jpg', url: 'https://www.nakedandfamousdenim.com/products/selvedge-type-iii', gender: 'men' },
     ],
   },
   {
     keywords: ['handbag', 'bag', 'purse', 'tote'],
     products: [
-      { name: 'Small Bayswater', brand: 'Mulberry', price: '$1,495', image_url: 'https://mulberry.com/cdn/bayswater-small.jpg', url: 'https://www.mulberry.com/us/small-bayswater' },
-      { name: 'Pochette Accessoires', brand: 'Louis Vuitton', price: '$1,090', image_url: 'https://louisvuitton.com/cdn/pochette-accessoires.jpg', url: 'https://us.louisvuitton.com/eng-us/products/pochette-accessoires' },
-      { name: 'Medium Tabby', brand: 'Coach', price: '$450', image_url: 'https://coach.com/cdn/tabby-26.jpg', url: 'https://www.coach.com/products/tabby-shoulder-bag-26' },
-      { name: 'The Row Park Tote', brand: 'The Row', price: '$1,490', image_url: 'https://therow.com/cdn/park-tote.jpg', url: 'https://www.therow.com/park-tote' },
+      { name: 'Small Bayswater', brand: 'Mulberry', price: '$1,495', image_url: 'https://mulberry.com/cdn/bayswater-small.jpg', url: 'https://www.mulberry.com/us/small-bayswater', gender: 'women' },
+      { name: 'Pochette Accessoires', brand: 'Louis Vuitton', price: '$1,090', image_url: 'https://louisvuitton.com/cdn/pochette-accessoires.jpg', url: 'https://us.louisvuitton.com/eng-us/products/pochette-accessoires', gender: 'women' },
+      { name: 'Medium Tabby', brand: 'Coach', price: '$450', image_url: 'https://coach.com/cdn/tabby-26.jpg', url: 'https://www.coach.com/products/tabby-shoulder-bag-26', gender: 'women' },
+      { name: 'The Row Park Tote', brand: 'The Row', price: '$1,490', image_url: 'https://therow.com/cdn/park-tote.jpg', url: 'https://www.therow.com/park-tote', gender: 'women' },
     ],
   },
   {
     keywords: ['watch', 'watches', 'timepiece'],
     products: [
-      { name: 'Submariner Date', brand: 'Rolex', price: '$10,100', image_url: 'https://rolex.com/cdn/submariner-date.jpg', url: 'https://www.rolex.com/watches/submariner' },
-      { name: 'Tank Must', brand: 'Cartier', price: '$3,050', image_url: 'https://cartier.com/cdn/tank-must.jpg', url: 'https://www.cartier.com/en-us/watches/tank-must' },
-      { name: 'Seamaster Aqua Terra', brand: 'Omega', price: '$6,300', image_url: 'https://omega.com/cdn/seamaster-aqua-terra.jpg', url: 'https://www.omegawatches.com/watches/seamaster/aqua-terra' },
-      { name: 'Carrera Chronograph', brand: 'TAG Heuer', price: '$5,250', image_url: 'https://tagheuer.com/cdn/carrera-chronograph.jpg', url: 'https://www.tagheuer.com/us/en/watches/carrera' },
+      { name: 'Submariner Date', brand: 'Rolex', price: '$10,100', image_url: 'https://rolex.com/cdn/submariner-date.jpg', url: 'https://www.rolex.com/watches/submariner', gender: 'men' },
+      { name: 'Tank Must', brand: 'Cartier', price: '$3,050', image_url: 'https://cartier.com/cdn/tank-must.jpg', url: 'https://www.cartier.com/en-us/watches/tank-must', gender: 'unisex' },
+      { name: 'Seamaster Aqua Terra', brand: 'Omega', price: '$6,300', image_url: 'https://omega.com/cdn/seamaster-aqua-terra.jpg', url: 'https://www.omegawatches.com/watches/seamaster/aqua-terra', gender: 'men' },
+      { name: 'Carrera Chronograph', brand: 'TAG Heuer', price: '$5,250', image_url: 'https://tagheuer.com/cdn/carrera-chronograph.jpg', url: 'https://www.tagheuer.com/us/en/watches/carrera', gender: 'men' },
     ],
   },
 ];
 
 const FALLBACK: ResearchedProduct[] = [
-  { name: 'Air Jordan 1 Retro', brand: 'Jordan', price: '$180', image_url: 'https://static.nike.com/a/images/jordan-1-retro.png', url: 'https://www.nike.com/jordan-1-retro', thumbnailScore: 94, reason: 'Clean product shot on white cyc' },
-  { name: 'Levi\'s 501 Original', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/501-original.jpg', url: 'https://www.levi.com/501', thumbnailScore: 88, reason: 'Flat-lay with consistent lighting' },
-  { name: 'The Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee.jpg', url: 'https://buckmason.com', thumbnailScore: 82, reason: 'Ghost-mannequin photography' },
+  { name: 'Air Jordan 1 Retro', brand: 'Jordan', price: '$180', image_url: 'https://static.nike.com/a/images/jordan-1-retro.png', url: 'https://www.nike.com/jordan-1-retro', gender: 'unisex', thumbnailScore: 94, reason: 'Clean product shot on white cyc' },
+  { name: 'Levi\'s 501 Original', brand: 'Levi\'s', price: '$98', image_url: 'https://levi.com/cdn/501-original.jpg', url: 'https://www.levi.com/501', gender: 'men', thumbnailScore: 88, reason: 'Flat-lay with consistent lighting' },
+  { name: 'The Pocket Tee', brand: 'Buck Mason', price: '$38', image_url: 'https://buckmason.com/cdn/pocket-tee.jpg', url: 'https://buckmason.com', gender: 'men', thumbnailScore: 82, reason: 'Ghost-mannequin photography' },
 ];
 
 function scoreThumbnail(p: { brand: string; image_url: string }): { score: number; reason: string } {
