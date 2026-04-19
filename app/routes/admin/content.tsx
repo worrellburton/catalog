@@ -1,7 +1,9 @@
 import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
+import { createBatchAds } from '~/services/product-ads';
 
 interface CrawledProduct {
   id: string;
@@ -43,6 +45,8 @@ type Tab = 'looks' | 'products' | 'musics' | 'places';
 export default function AdminContent() {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative'>('all');
+  const [toast, setToast] = useState<string | null>(null);
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -289,12 +293,14 @@ export default function AdminContent() {
 
     return Array.from(productMap.values()).map(p => {
       const ownVideos = p.video_urls;
-      const videos = ownVideos.length > 0
+      const hasCreative = ownVideos.length > 0;
+      const videos = hasCreative
         ? ownVideos
         : pickVideos(3, (filler++ * 3));
       return {
         ...p,
         video_urls: videos,
+        hasCreative,
         lookCount: p.looks.size,
         creatorCount: p.creators.size,
       };
@@ -306,6 +312,30 @@ export default function AdminContent() {
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
   };
+
+  const navigate = useNavigate();
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  const handleGenerateCreative = useCallback(async (productId: string, productName: string) => {
+    if (generatingIds.has(productId)) return;
+    setGeneratingIds(prev => new Set(prev).add(productId));
+    showToast(`Agent started generating creative for "${productName}"`);
+    const { error } = await createBatchAds([productId], 'studio_clean', 2);
+    setGeneratingIds(prev => {
+      const next = new Set(prev);
+      next.delete(productId);
+      return next;
+    });
+    if (error) {
+      showToast(`Agent failed: ${error}`);
+    } else {
+      showToast(`Agent queued. View progress in Agents →`);
+    }
+  }, [generatingIds, showToast]);
 
   return (
     <div className="admin-page">
@@ -542,7 +572,7 @@ export default function AdminContent() {
               onClick={() => setProductFilter('no-creative')}
             >
               Show without creative
-              <span className="admin-tab-badge">{allProducts.filter(p => p.video_urls.length === 0).length}</span>
+              <span className="admin-tab-badge">{allProducts.filter(p => !p.hasCreative).length}</span>
             </button>
           </div>
         <div className="admin-table-wrap">
@@ -564,11 +594,11 @@ export default function AdminContent() {
             </thead>
             <tbody>
               {allProducts
-                .filter(p => productFilter === 'all' || p.video_urls.length === 0)
+                .filter(p => productFilter === 'all' || !p.hasCreative)
                 .map((p, i) => (
                 <tr key={`${p.brand}-${p.name}-${i}`}>
                   <td>
-                    {p.video_urls.length > 0 ? (
+                    {p.hasCreative ? (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         {p.video_urls.slice(0, 3).map((v, vi) => (
                           <div key={vi} className="admin-look-thumb" style={{ width: 36, height: 48 }}>
@@ -592,6 +622,15 @@ export default function AdminContent() {
                           </span>
                         )}
                       </div>
+                    ) : p.id ? (
+                      <button
+                        className="admin-btn admin-btn-primary"
+                        style={{ fontSize: 11, padding: '4px 10px' }}
+                        disabled={generatingIds.has(p.id)}
+                        onClick={() => p.id && handleGenerateCreative(p.id, p.name)}
+                      >
+                        {generatingIds.has(p.id) ? 'Starting…' : 'Generate'}
+                      </button>
                     ) : (
                       <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
                     )}
@@ -832,6 +871,34 @@ export default function AdminContent() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          onClick={() => navigate('/admin/agents?tab=video-gen&sub=product-ads')}
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#111',
+            color: '#fff',
+            padding: '12px 20px',
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 500,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            animation: 'toastSlideUp 0.2s ease-out',
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px rgba(34,197,94,0.2)' }} />
+          {toast}
         </div>
       )}
     </div>
