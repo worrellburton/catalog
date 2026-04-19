@@ -151,7 +151,14 @@ export default function AdminHome() {
         <p className="admin-page-subtitle">Platform overview</p>
       </div>
 
-      <div className="admin-stats-grid">
+      <div
+        className="admin-stats-grid"
+        style={{
+          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+          gap: 12,
+          marginBottom: 20,
+        }}
+      >
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
