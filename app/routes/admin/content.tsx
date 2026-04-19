@@ -363,6 +363,12 @@ export default function AdminContent() {
 
   const lookTable = useSortableTable(lookRows);
 
+  const filteredProductsList = useMemo(
+    () => allProducts.filter(p => productFilter === 'all' || !p.hasCreative),
+    [allProducts, productFilter]
+  );
+  const productTable = useSortableTable(filteredProductsList);
+
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
   };
@@ -635,21 +641,18 @@ export default function AdminContent() {
               <tr>
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <th style={{ textAlign: 'left' }}>Photos</th>
-                <th style={{ textAlign: 'left' }}>Product</th>
-                <th>Price</th>
-                <th>Connection</th>
-                <th>In Looks</th>
-                <th>Creators</th>
-                <th>Impressions</th>
-                <th>Saves</th>
-                <th>Clicks</th>
+                <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Links</th>
               </tr>
             </thead>
             <tbody>
-              {allProducts
-                .filter(p => productFilter === 'all' || !p.hasCreative)
-                .map((p, i) => (
+              {productTable.sortedData.map((p, i) => (
                 <tr key={`${p.brand}-${p.name}-${i}`}>
                   <td>
                     {p.hasCreative ? (
@@ -715,11 +718,6 @@ export default function AdminContent() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  <td>
-                    <span className={`admin-connection-pill admin-connection-${p.connection.toLowerCase()}`}>
-                      {p.connection}
-                    </span>
-                  </td>
                   <td>{p.lookCount}</td>
                   <td>{p.creatorCount}</td>
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
