@@ -46,5 +46,12 @@ Desktop.ini
 *.sln
 *.sw?
 
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
 # misc
 trademark.pdf
