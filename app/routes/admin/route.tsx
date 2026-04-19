@@ -1,7 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
+import { supabase } from '~/utils/supabase';
 
 interface NavItem {
   to: string;
@@ -66,6 +67,79 @@ const allSearchItems: SearchItem[] = [
   { label: 'apple', type: 'Creator', to: '/admin/creators/apple' },
 ];
 
+interface GenNotification {
+  id: string;
+  productName: string;
+  productBrand: string;
+  status: 'queued' | 'pending' | 'generating' | 'done' | 'failed';
+  createdAt: string;
+  completedAt: string | null;
+}
+
+const ESTIMATED_GEN_SECONDS = 150;
+
+function GenProgressBar({ n }: { n: GenNotification }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (n.status !== 'generating' && n.status !== 'pending') return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [n.status]);
+
+  if (n.status === 'done') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#22c55e' }}>Complete</span>
+      </div>
+    );
+  }
+  if (n.status === 'failed') {
+    return <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }}>Failed</span>;
+  }
+  if (n.status === 'queued') {
+    return (
+      <div style={{ height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
+        <div style={{ width: '0%', height: '100%', background: '#94a3b8' }} />
+      </div>
+    );
+  }
+
+  const elapsed = (now - new Date(n.createdAt).getTime()) / 1000;
+  const pct = n.status === 'pending'
+    ? Math.min(15, (elapsed / 30) * 15)
+    : Math.min(95, (elapsed / ESTIMATED_GEN_SECONDS) * 100);
+  const remaining = Math.max(0, ESTIMATED_GEN_SECONDS - elapsed);
+  const mins = Math.floor(remaining / 60);
+  const secs = Math.floor(remaining % 60);
+  const timeLabel = n.status === 'pending' ? 'Starting…' : remaining > 0 ? `~${mins}:${String(secs).padStart(2, '0')}` : 'Finishing…';
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: n.status === 'pending' ? '#f59e0b' : '#3b82f6', textTransform: 'uppercase' }}>
+          {n.status === 'pending' ? 'Pending' : 'Generating'}
+        </span>
+        <span style={{ fontSize: 10, color: '#888' }}>{timeLabel}</span>
+      </div>
+      <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', inset: 0, width: `${pct}%`,
+          background: n.status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+          transition: 'width 1s ease',
+        }} />
+        {n.status === 'generating' && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
+            animation: 'admin-shimmer 1.4s infinite',
+          }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -76,6 +150,84 @@ export default function AdminLayout() {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Generation notifications
+  const [genNotifications, setGenNotifications] = useState<GenNotification[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const prevIdsRef = useRef<Set<string>>(new Set());
+
+  const pollGenerations = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('product_ads')
+      .select('id, status, created_at, completed_at, product:products(name, brand)')
+      .in('status', ['queued', 'pending', 'generating'])
+      .order('created_at', { ascending: true });
+
+    if (!data) return;
+
+    const active: GenNotification[] = data.map((r: any) => ({
+      id: r.id,
+      productName: r.product?.name || 'Unknown',
+      productBrand: r.product?.brand || '',
+      status: r.status,
+      createdAt: r.created_at,
+      completedAt: r.completed_at,
+    }));
+
+    const currentIds = new Set(active.map(n => n.id));
+    const prevIds = prevIdsRef.current;
+
+    // Detect completions: IDs that were in prev but not in current
+    const completed: GenNotification[] = [];
+    prevIds.forEach(id => {
+      if (!currentIds.has(id)) {
+        const prev = genNotifications.find(n => n.id === id);
+        if (prev && (prev.status === 'generating' || prev.status === 'pending')) {
+          completed.push({ ...prev, status: 'done', completedAt: new Date().toISOString() });
+        }
+      }
+    });
+
+    prevIdsRef.current = currentIds;
+
+    if (completed.length > 0) {
+      setGenNotifications([...active, ...completed]);
+      // Auto-dismiss completed after 5 seconds
+      setTimeout(() => {
+        setGenNotifications(prev => prev.filter(n => n.status !== 'done'));
+      }, 5000);
+    } else {
+      setGenNotifications(prev => {
+        // Keep any 'done' items still showing (they'll be removed by their own timeout)
+        const doneItems = prev.filter(n => n.status === 'done');
+        return [...active, ...doneItems];
+      });
+    }
+  }, [genNotifications]);
+
+  useEffect(() => {
+    pollGenerations();
+    const interval = setInterval(pollGenerations, 5000);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
+
+  const generatingCount = genNotifications.filter(n => n.status === 'generating' || n.status === 'pending').length;
+  const queuedCount = genNotifications.filter(n => n.status === 'queued').length;
+  const completedCount = genNotifications.filter(n => n.status === 'done').length;
+  const totalActiveCount = genNotifications.length;
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -240,6 +392,86 @@ export default function AdminLayout() {
               ))}
             </div>
           )}
+
+          {/* Notifications bell */}
+          <div ref={notifRef} style={{ position: 'relative', marginLeft: 'auto' }}>
+            <button
+              onClick={() => setNotifOpen(o => !o)}
+              style={{
+                position: 'relative', background: 'none', border: 'none', cursor: 'pointer',
+                padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center',
+              }}
+              aria-label="Notifications"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={totalActiveCount > 0 ? '#111' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {totalActiveCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  width: 16, height: 16, borderRadius: '50%',
+                  background: completedCount > 0 ? '#22c55e' : '#3b82f6',
+                  color: '#fff', fontSize: 10, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  lineHeight: 1,
+                }}>
+                  {totalActiveCount}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 8,
+                width: 340, maxHeight: 420, overflowY: 'auto',
+                background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                border: '1px solid #e5e7eb', zIndex: 100,
+              }}>
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                    {generatingCount > 0 && (
+                      <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
+                    )}
+                    {queuedCount > 0 && (
+                      <span style={{ color: '#94a3b8', fontWeight: 600 }}>{queuedCount} queued</span>
+                    )}
+                  </div>
+                </div>
+
+                {genNotifications.length === 0 ? (
+                  <div style={{ padding: '24px 16px', textAlign: 'center', color: '#999', fontSize: 13 }}>
+                    No active generations
+                  </div>
+                ) : (
+                  <div style={{ padding: '8px 0' }}>
+                    {genNotifications.map(n => (
+                      <div key={n.id} style={{
+                        padding: '10px 16px',
+                        borderBottom: '1px solid #f5f5f5',
+                        opacity: n.status === 'done' ? 0.7 : 1,
+                        transition: 'opacity 0.3s',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {n.productName}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#888' }}>{n.productBrand}</div>
+                          </div>
+                          {n.status === 'queued' && (
+                            <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', flexShrink: 0, marginLeft: 8 }}>Queued</span>
+                          )}
+                        </div>
+                        <GenProgressBar n={n} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <Outlet />
       </main>

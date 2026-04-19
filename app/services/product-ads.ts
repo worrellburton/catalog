@@ -113,7 +113,7 @@ export async function createProductAd(req: CreateAdRequest): Promise<{ data: Pro
 
 // Maximum concurrent generations the backend worker / Veo API can handle
 // without rate-limiting. Anything above this gets queued.
-const CONCURRENCY_LIMIT = 4;
+const CONCURRENCY_LIMIT = 2;
 
 export async function createBatchAds(
   productIds: string[],
