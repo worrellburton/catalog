@@ -14,7 +14,7 @@ export interface ResearchedProduct {
 
 interface Category {
   keywords: string[];
-  products: Omit<ResearchedProduct, 'thumbnailScore' | 'reason'>[];
+  products: Omit<ResearchedProduct, 'thumbnailScore' | 'reason' | 'image_urls'>[];
 }
 
 const DB: Category[] = [
@@ -177,19 +177,54 @@ function scoreList(list: Omit<ResearchedProduct, 'thumbnailScore' | 'reason' | '
   }).sort((a, b) => b.thumbnailScore - a.thumbnailScore);
 }
 
-export async function researchProducts(query: string): Promise<ResearchedProduct[]> {
-  // Simulate AI research latency
-  await new Promise(r => setTimeout(r, 900));
-  const q = query.toLowerCase().trim();
-  if (!q) return [];
+interface LiveProduct {
+  name: string;
+  brand: string;
+  price: string;
+  image_url: string;
+  image_urls: string[];
+  url: string;
+  gender: ProductGender;
+}
 
+interface LiveSearchResult {
+  products: LiveProduct[];
+  error: string | null;
+}
+
+async function searchLive(query: string): Promise<LiveSearchResult> {
+  try {
+    const { supabase } = await import('~/utils/supabase');
+    const { data, error } = await supabase.functions.invoke('product-search', {
+      body: { query },
+    });
+    if (error) {
+      const msg = `Edge function error: ${error.message}`;
+      console.warn('[product-search]', msg);
+      return { products: [], error: msg };
+    }
+    if (!data?.success) {
+      const msg = data?.error || 'Unknown error from edge function';
+      console.warn('[product-search] failed:', msg);
+      return { products: [], error: msg };
+    }
+    if (!Array.isArray(data.products)) {
+      return { products: [], error: 'Bad payload — no products array' };
+    }
+    return { products: data.products as LiveProduct[], error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[product-search] fetch failed:', err);
+    return { products: [], error: `Fetch failed: ${msg}` };
+  }
+}
+
+function seedSearch(q: string): ResearchedProduct[] {
   for (const cat of DB) {
     if (cat.keywords.some(k => q.includes(k) || k.includes(q))) {
       return scoreList(cat.products);
     }
   }
-
-  // Fuzzy fallback — return hits from any category whose keywords share a token
   const tokens = q.split(/\s+/).filter(t => t.length > 2);
   const hits: typeof DB[number]['products'] = [];
   for (const cat of DB) {
@@ -197,6 +232,40 @@ export async function researchProducts(query: string): Promise<ResearchedProduct
     if (matchedKeyword) hits.push(...cat.products);
   }
   if (hits.length > 0) return scoreList(hits).slice(0, 10);
-
   return FALLBACK;
+}
+
+export interface ResearchOptions {
+  liveOnly?: boolean; // when true, skip seed DB fallback — only real Google Shopping results
+}
+
+export interface ResearchResult {
+  products: ResearchedProduct[];
+  source: 'live' | 'seed';
+  error: string | null; // populated when live search fails
+}
+
+export async function researchProducts(query: string, opts: ResearchOptions = {}): Promise<ResearchResult> {
+  const q = query.toLowerCase().trim();
+  if (!q) return { products: [], source: 'live', error: null };
+
+  // Prefer live results from Google Shopping (via Supabase edge function)
+  const live = await searchLive(query);
+  if (live.products.length > 0) {
+    const products = live.products
+      .map(p => {
+        const { score, reason } = scoreThumbnail({ brand: p.brand, image_url: p.image_url });
+        return { ...p, thumbnailScore: score, reason };
+      })
+      .sort((a, b) => b.thumbnailScore - a.thumbnailScore);
+    return { products, source: 'live', error: null };
+  }
+
+  // When caller wants live-only, surface the error instead of silently falling back
+  if (opts.liveOnly) {
+    return { products: [], source: 'live', error: live.error || 'No live results' };
+  }
+
+  // Fallback to seed DB if the edge function isn't configured or returned nothing
+  return { products: seedSearch(q), source: 'seed', error: live.error };
 }

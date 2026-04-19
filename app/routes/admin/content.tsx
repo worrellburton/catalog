@@ -185,16 +185,22 @@ export default function AdminContent() {
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
   const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
+  const [researchLiveOnly, setResearchLiveOnly] = useState(true);
+  const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
+  const [researchError, setResearchError] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
 
   const runResearch = useCallback(async () => {
     if (!researchQuery.trim()) return;
     setResearchLoading(true);
     setResearchSelected(new Set());
-    const results = await researchProducts(researchQuery);
-    setResearchResults(results);
+    setResearchError(null);
+    const { products, source, error } = await researchProducts(researchQuery, { liveOnly: researchLiveOnly });
+    setResearchResults(products);
+    setResearchSource(source);
+    setResearchError(error);
     setResearchLoading(false);
-  }, [researchQuery]);
+  }, [researchQuery, researchLiveOnly]);
 
   const ingestSelectedProducts = useCallback(async () => {
     if (!supabase || researchSelected.size === 0) return;
@@ -1212,6 +1218,26 @@ export default function AdminContent() {
                   {researchLoading ? 'Researching…' : 'Research'}
                 </button>
               </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={researchLiveOnly}
+                  onChange={e => setResearchLiveOnly(e.target.checked)}
+                  style={{ margin: 0, cursor: 'pointer' }}
+                />
+                Only search Google Shopping API
+              </label>
+              {researchError && (
+                <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+                  <strong>Live search failed:</strong> {researchError}
+                </div>
+              )}
+              {researchResults.length > 0 && researchSource && (
+                <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 999, background: researchSource === 'live' ? '#ecfdf5' : '#fffbeb', border: '1px solid', borderColor: researchSource === 'live' ? '#a7f3d0' : '#fde68a', fontSize: 11, fontWeight: 600, color: researchSource === 'live' ? '#047857' : '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: researchSource === 'live' ? '#10b981' : '#f59e0b' }} />
+                  {researchSource === 'live' ? 'Live Google Shopping' : 'Seed (offline)'}
+                </div>
+              )}
               {researchResults.length > 0 && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
