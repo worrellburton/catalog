@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
-import { deleteProductAd } from '~/services/product-ads';
+import { deleteProductAd, promoteQueuedAds } from '~/services/product-ads';
 
 interface NavItem {
   to: string;
@@ -75,9 +75,13 @@ interface GenNotification {
   status: 'queued' | 'pending' | 'generating' | 'done' | 'failed';
   createdAt: string;
   completedAt: string | null;
+  costUsd: number | null;
 }
 
 const ESTIMATED_GEN_SECONDS = 150;
+// Rough per-clip Veo cost used when cost_usd isn't populated yet. Tuned from
+// historical total-cost-per-ad (~$0.05) with some headroom.
+const ESTIMATED_COST_USD = 0.06;
 
 function GenProgressBar({ n }: { n: GenNotification }) {
   const [now, setNow] = useState(Date.now());
@@ -162,7 +166,7 @@ export default function AdminLayout() {
     if (!supabase) return;
     const { data } = await supabase
       .from('product_ads')
-      .select('id, status, created_at, completed_at, product:products(name, brand)')
+      .select('id, status, created_at, completed_at, cost_usd, product:products(name, brand)')
       .in('status', ['queued', 'pending', 'generating'])
       .order('created_at', { ascending: true });
 
@@ -175,6 +179,7 @@ export default function AdminLayout() {
       status: r.status,
       createdAt: r.created_at,
       completedAt: r.completed_at,
+      costUsd: r.cost_usd,
     }));
 
     const currentIds = new Set(active.map(n => n.id));
@@ -186,7 +191,7 @@ export default function AdminLayout() {
       if (!currentIds.has(id)) {
         const prev = genNotifications.find(n => n.id === id);
         if (prev && (prev.status === 'generating' || prev.status === 'pending')) {
-          completed.push({ ...prev, status: 'done', completedAt: new Date().toISOString() });
+          completed.push({ ...prev, status: 'done', completedAt: new Date().toISOString(), costUsd: prev.costUsd ?? ESTIMATED_COST_USD });
         }
       }
     });
@@ -229,6 +234,7 @@ export default function AdminLayout() {
   const queuedCount = genNotifications.filter(n => n.status === 'queued').length;
   const completedCount = genNotifications.filter(n => n.status === 'done').length;
   const totalActiveCount = genNotifications.length;
+  const totalQueueCost = genNotifications.reduce((sum, n) => sum + (n.costUsd ?? ESTIMATED_COST_USD), 0);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -429,16 +435,24 @@ export default function AdminLayout() {
                 background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
                 border: '1px solid #e5e7eb', zIndex: 100,
               }}>
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
-                    {generatingCount > 0 && (
-                      <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
-                    )}
-                    {queuedCount > 0 && (
-                      <span style={{ color: '#94a3b8', fontWeight: 600 }}>{queuedCount} queued</span>
-                    )}
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                      {generatingCount > 0 && (
+                        <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
+                      )}
+                      {queuedCount > 0 && (
+                        <span style={{ color: '#94a3b8', fontWeight: 600 }}>{queuedCount} queued</span>
+                      )}
+                    </div>
                   </div>
+                  {genNotifications.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. total</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>${totalQueueCost.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {genNotifications.length === 0 ? (
@@ -459,7 +473,13 @@ export default function AdminLayout() {
                             <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {n.productName}
                             </div>
-                            <div style={{ fontSize: 10, color: '#888' }}>{n.productBrand}</div>
+                            <div style={{ fontSize: 10, color: '#888', display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span>{n.productBrand}</span>
+                              <span style={{ color: '#cbd5e1' }}>·</span>
+                              <span style={{ color: n.costUsd != null ? '#0f766e' : '#94a3b8', fontWeight: 600 }}>
+                                {n.costUsd != null ? `$${n.costUsd.toFixed(3)}` : `~$${ESTIMATED_COST_USD.toFixed(2)}`}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                             {n.status === 'queued' && (
@@ -469,9 +489,14 @@ export default function AdminLayout() {
                               <button
                                 onClick={async (e) => {
                                   e.stopPropagation();
+                                  const wasActive = n.status === 'generating' || n.status === 'pending';
                                   await deleteProductAd(n.id);
                                   setGenNotifications(prev => prev.filter(x => x.id !== n.id));
                                   prevIdsRef.current.delete(n.id);
+                                  if (wasActive) {
+                                    await promoteQueuedAds();
+                                    pollGenerations();
+                                  }
                                 }}
                                 title="Cancel generation"
                                 style={{
