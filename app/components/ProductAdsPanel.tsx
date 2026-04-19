@@ -244,7 +244,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <p className="admin-page-subtitle" style={{ margin: 0 }}>Generate and manage AI video ads for products</p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="admin-btn admin-btn-secondary" onClick={loadAds} disabled={loading}>
@@ -259,18 +259,18 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
         </div>
       )}
 
-      {/* Stats */}
-      <div className="admin-stats-grid">
+      {/* Stats bar */}
+      <div style={{ display: 'flex', gap: 20, padding: '10px 0', marginBottom: 8, flexWrap: 'wrap' }}>
         {stats.map(s => (
-          <div key={s.label} className="admin-stat-card">
-            <span className="admin-stat-value">{s.value}</span>
-            <span className="admin-stat-label">{s.label}</span>
+          <div key={s.label} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{s.value}</span>
+            <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* Filter tabs */}
-      <div className="admin-tabs" style={{ marginBottom: 16 }}>
+      <div className="admin-tabs" style={{ marginBottom: 12 }}>
         {FILTER_TABS.map(tab => {
           const count = tab.key === 'all'
             ? ads.length
