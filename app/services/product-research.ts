@@ -224,7 +224,11 @@ function seedSearch(q: string): ResearchedProduct[] {
   return FALLBACK;
 }
 
-export async function researchProducts(query: string): Promise<ResearchedProduct[]> {
+export interface ResearchOptions {
+  liveOnly?: boolean; // when true, skip seed DB fallback — only real Google Shopping results
+}
+
+export async function researchProducts(query: string, opts: ResearchOptions = {}): Promise<ResearchedProduct[]> {
   const q = query.toLowerCase().trim();
   if (!q) return [];
 
@@ -238,6 +242,9 @@ export async function researchProducts(query: string): Promise<ResearchedProduct
       })
       .sort((a, b) => b.thumbnailScore - a.thumbnailScore);
   }
+
+  // When caller wants live-only, return empty instead of seed results
+  if (opts.liveOnly) return [];
 
   // Fallback to seed DB if the edge function isn't configured or returned nothing
   return seedSearch(q);

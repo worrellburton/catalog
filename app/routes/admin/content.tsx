@@ -185,16 +185,17 @@ export default function AdminContent() {
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
   const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
+  const [researchLiveOnly, setResearchLiveOnly] = useState(true);
   const [ingesting, setIngesting] = useState(false);
 
   const runResearch = useCallback(async () => {
     if (!researchQuery.trim()) return;
     setResearchLoading(true);
     setResearchSelected(new Set());
-    const results = await researchProducts(researchQuery);
+    const results = await researchProducts(researchQuery, { liveOnly: researchLiveOnly });
     setResearchResults(results);
     setResearchLoading(false);
-  }, [researchQuery]);
+  }, [researchQuery, researchLiveOnly]);
 
   const ingestSelectedProducts = useCallback(async () => {
     if (!supabase || researchSelected.size === 0) return;
@@ -1212,6 +1213,15 @@ export default function AdminContent() {
                   {researchLoading ? 'Researching…' : 'Research'}
                 </button>
               </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={researchLiveOnly}
+                  onChange={e => setResearchLiveOnly(e.target.checked)}
+                  style={{ margin: 0, cursor: 'pointer' }}
+                />
+                Only search Google Shopping API
+              </label>
               {researchResults.length > 0 && (
                 <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
