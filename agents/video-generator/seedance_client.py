@@ -54,15 +54,87 @@ def _download(url: str) -> bytes:
 
 
 def _extract_video_url(result: dict) -> str:
-    video = result.get("video") or {}
-    url = video.get("url")
-    if not url:
-        raise RuntimeError(f"Unexpected fal.ai output format: {result}")
-    return url
+    """Best-effort extraction that handles the common fal.ai response shapes."""
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Unexpected fal.ai output (not a dict): {result}")
+    # Shape 1: {"video": {"url": "..."}}
+    video = result.get("video")
+    if isinstance(video, dict) and video.get("url"):
+        return video["url"]
+    # Shape 2: {"video": "https://..."}
+    if isinstance(video, str) and video:
+        return video
+    # Shape 3: {"videos": [{"url": "..."}]} or [{..., "url"}, ...]
+    videos = result.get("videos")
+    if isinstance(videos, list) and videos:
+        first = videos[0]
+        if isinstance(first, dict) and first.get("url"):
+            return first["url"]
+        if isinstance(first, str):
+            return first
+    # Shape 4: {"output": {"video": {...}}} (rare)
+    output = result.get("output")
+    if isinstance(output, dict):
+        nested = _safe_extract_url(output)
+        if nested:
+            return nested
+    raise RuntimeError(f"Unexpected fal.ai output format: {result}")
+
+
+def _safe_extract_url(d: dict) -> str | None:
+    v = d.get("video")
+    if isinstance(v, dict) and v.get("url"):
+        return v["url"]
+    if isinstance(v, str):
+        return v
+    return None
 
 
 def _is_v2(fal_model: str) -> bool:
     return fal_model.startswith("bytedance/seedance-2")
+
+
+def generate_from_fal_model(
+    fal_slug: str,
+    prompt: str,
+    *,
+    image_url: str | None = None,
+    duration: int = 5,
+    aspect_ratio: str = "9:16",
+) -> bytes:
+    """Generic fal.ai video generation — works for any fal model whose input
+    schema includes prompt + optional image_url.
+
+    Sends {prompt, image_url?, duration, aspect_ratio} with two retries on
+    400 (each omitting one arg) so a model that doesn't accept our optional
+    params still runs on its own defaults.
+    """
+    _ensure_auth()
+    base: dict = {"prompt": prompt}
+    if image_url:
+        base["image_url"] = image_url
+    if _is_v2(fal_slug):
+        base["generate_audio"] = False
+
+    # Try most-specific args first, then degrade.
+    arg_attempts: list[dict] = [
+        {**base, "duration": str(duration), "aspect_ratio": aspect_ratio},
+        {**base, "duration": str(duration)},
+        base,
+    ]
+    last_err: Exception | None = None
+    for args in arg_attempts:
+        try:
+            result = fal_client.subscribe(fal_slug, arguments=args)
+            return _download(_extract_video_url(result))
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            # Only retry on argument validation failures
+            if "400" not in msg and "validation" not in msg and "invalid" not in msg:
+                raise
+            print(f"    ⚠ {fal_slug} rejected args {list(args.keys())}: {e}")
+    raise RuntimeError(f"fal model {fal_slug} rejected all arg sets: {last_err}")
 
 
 def generate_video_from_image_url(

@@ -34,6 +34,7 @@ from veo_client import (
 from seedance_client import (
     generate_video_from_image_url as seedance_from_image_url,
     generate_video_from_text as seedance_from_text,
+    generate_from_fal_model,
 )
 from video_crop import crop_to_aspect
 
@@ -178,7 +179,12 @@ def _generate_with_retry(
     aspect = style_cfg.get("aspect_ratio", GENERATION_DEFAULTS["aspect_ratio"])
 
     # Seedance path (fal.ai) — uses URL directly, no reference-images concept
-    if model.startswith("seedance-") or model.startswith("bytedance/seedance") or model.startswith("fal-ai/bytedance/seedance"):
+    is_seedance = (
+        model.startswith("seedance-")
+        or model.startswith("bytedance/seedance")
+        or model.startswith("fal-ai/bytedance/seedance")
+    )
+    if is_seedance:
         seedance_model = model if "/" in model else f"bytedance/{model}"
         if image_urls:
             try:
@@ -201,6 +207,19 @@ def _generate_with_retry(
             aspect_ratio=aspect,
         )
         return (video_bytes, f"seedance_text:{seedance_model}")
+
+    # Generic fal.ai path — any non-Seedance fal slug
+    # (Kling, Sora, PixVerse, MiniMax Hailuo, Wan, LTX, Veo via fal, …)
+    if model.startswith("fal-ai/") or model.startswith("bytedance/"):
+        print(f"    → Trying fal.ai model: {model}")
+        video_bytes = generate_from_fal_model(
+            fal_slug=model,
+            prompt=prompt,
+            image_url=image_urls[0] if image_urls else None,
+            duration=style_cfg.get("duration", 5),
+            aspect_ratio=aspect,
+        )
+        return (video_bytes, f"fal:{model}")
 
     # Strategy 1: Multiple reference images (best quality)
     if len(images_data) >= 2:

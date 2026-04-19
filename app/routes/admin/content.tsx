@@ -1488,16 +1488,13 @@ export default function AdminContent() {
                   border: '1px solid #ddd', fontSize: 13, background: '#fff',
                 }}
               >
-                <optgroup label="Veo (Google)">
-                  {VIDEO_MODELS.filter(m => m.group === 'Veo (Google)').map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Seedance (fal.ai)">
-                  {VIDEO_MODELS.filter(m => m.group === 'Seedance (fal.ai)').map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </optgroup>
+                {Array.from(new Set(VIDEO_MODELS.map(m => m.group))).map(group => (
+                  <optgroup key={group} label={group}>
+                    {VIDEO_MODELS.filter(m => m.group === group).map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
