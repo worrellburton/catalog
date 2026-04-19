@@ -17,6 +17,70 @@ interface CrawledProduct {
   is_crawled: boolean;
 }
 
+interface AffiliateProvider {
+  network: string;
+  rate: string;
+  rateNumeric: number;
+  signupUrl: string;
+  note?: string;
+}
+
+const BRAND_AFFILIATES: Record<string, AffiliateProvider[]> = {
+  'Nike': [
+    { network: 'FlexOffers', rate: '11%', rateNumeric: 11, signupUrl: 'https://www.flexoffers.com/', note: 'Top published rate' },
+    { network: 'Impact', rate: '8%', rateNumeric: 8, signupUrl: 'https://impact.com/' },
+    { network: 'Rakuten Advertising', rate: '5–8%', rateNumeric: 6.5, signupUrl: 'https://rakutenadvertising.com/' },
+  ],
+  'Zara': [
+    { network: 'Skimlinks (auto)', rate: '~5%', rateNumeric: 5, signupUrl: 'https://skimlinks.com/', note: 'No official program' },
+    { network: 'Sovrn //Commerce', rate: '~4%', rateNumeric: 4, signupUrl: 'https://www.sovrn.com/commerce/' },
+  ],
+  'Gucci': [
+    { network: 'Rakuten Advertising', rate: '7%', rateNumeric: 7, signupUrl: 'https://rakutenadvertising.com/' },
+    { network: 'Awin', rate: '6%', rateNumeric: 6, signupUrl: 'https://www.awin.com/' },
+  ],
+  'Diesel': [
+    { network: 'Awin', rate: '8%', rateNumeric: 8, signupUrl: 'https://www.awin.com/' },
+    { network: 'Rakuten Advertising', rate: '6%', rateNumeric: 6, signupUrl: 'https://rakutenadvertising.com/' },
+  ],
+  'Vince': [
+    { network: 'Rakuten Advertising', rate: '10%', rateNumeric: 10, signupUrl: 'https://rakutenadvertising.com/' },
+    { network: 'ShareASale', rate: '7%', rateNumeric: 7, signupUrl: 'https://www.shareasale.com/' },
+  ],
+  'Suitsupply': [
+    { network: 'Awin', rate: '9%', rateNumeric: 9, signupUrl: 'https://www.awin.com/' },
+    { network: 'Impact', rate: '6%', rateNumeric: 6, signupUrl: 'https://impact.com/' },
+  ],
+  'Pavoi': [
+    { network: 'Amazon Associates', rate: '4%', rateNumeric: 4, signupUrl: 'https://affiliate-program.amazon.com/', note: 'Jewelry tier' },
+  ],
+  'Windsor': [
+    { network: 'ShareASale', rate: '6%', rateNumeric: 6, signupUrl: 'https://www.shareasale.com/' },
+  ],
+  'Fujifilm': [
+    { network: 'Impact', rate: '5%', rateNumeric: 5, signupUrl: 'https://impact.com/' },
+    { network: 'Amazon Associates', rate: '2%', rateNumeric: 2, signupUrl: 'https://affiliate-program.amazon.com/', note: 'Electronics tier' },
+  ],
+  'LUXXFORM': [
+    { network: 'Shopify Collabs', rate: '15%', rateNumeric: 15, signupUrl: 'https://www.shopify.com/collabs', note: 'DTC brand' },
+  ],
+  'Wolf\'s Collections': [
+    { network: 'Shopify Collabs', rate: '12%', rateNumeric: 12, signupUrl: 'https://www.shopify.com/collabs', note: 'DTC brand' },
+  ],
+};
+
+const DEFAULT_AFFILIATES: AffiliateProvider[] = [
+  { network: 'Amazon Associates', rate: '3–10%', rateNumeric: 6.5, signupUrl: 'https://affiliate-program.amazon.com/', note: 'Rate varies by category' },
+  { network: 'ShareASale', rate: 'Varies', rateNumeric: 5, signupUrl: 'https://www.shareasale.com/', note: 'Brand-negotiated' },
+  { network: 'Skimlinks', rate: '~5%', rateNumeric: 5, signupUrl: 'https://skimlinks.com/', note: 'Automatic monetization' },
+  { network: 'Impact', rate: 'Varies', rateNumeric: 5, signupUrl: 'https://impact.com/', note: 'Brand-negotiated' },
+];
+
+function getAffiliatesFor(brand: string): AffiliateProvider[] {
+  const list = BRAND_AFFILIATES[brand] || DEFAULT_AFFILIATES;
+  return [...list].sort((a, b) => b.rateNumeric - a.rateNumeric);
+}
+
 function AdminToggle({ on, onChange }: { on: boolean; onChange: (val: boolean) => void }) {
   return (
     <button
@@ -48,6 +112,7 @@ export default function AdminContent() {
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
+  const [linkModal, setLinkModal] = useState<{ name: string; brand: string; url: string } | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -590,6 +655,7 @@ export default function AdminContent() {
                 <th>Impressions</th>
                 <th>Saves</th>
                 <th>Clicks</th>
+                <th>Links</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -672,6 +738,15 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
+                  <td>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => setLinkModal({ name: p.name, brand: p.brand, url: p.url || '' })}
+                    >
+                      View
+                    </button>
+                  </td>
                   <td><span className="admin-status admin-status-online">active</span></td>
                 </tr>
               ))}
@@ -929,6 +1004,125 @@ export default function AdminContent() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
               <button className="admin-btn admin-btn-secondary" onClick={() => setGeneratePicker(null)}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkModal && (
+        <div className="admin-modal-overlay" onClick={() => setLinkModal(null)}>
+          <div
+            className="admin-modal"
+            style={{ width: 600, maxWidth: '92vw', padding: 24 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Product links &amp; affiliates</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+              <strong style={{ color: '#111' }}>{linkModal.name}</strong> · {linkModal.brand}
+            </p>
+
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                Product URL
+              </div>
+              {linkModal.url ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <a
+                    href={linkModal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      flex: 1,
+                      fontSize: 12,
+                      color: '#3b82f6',
+                      textDecoration: 'none',
+                      padding: '8px 10px',
+                      background: '#f5f7fb',
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {linkModal.url}
+                  </a>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    style={{ fontSize: 11, padding: '6px 10px' }}
+                    onClick={() => navigator.clipboard.writeText(linkModal.url)}
+                  >
+                    Copy
+                  </button>
+                  <a
+                    className="admin-btn admin-btn-primary"
+                    href={linkModal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 11, padding: '6px 10px', textDecoration: 'none' }}
+                  >
+                    Open ↗
+                  </a>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No URL recorded</div>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                Affiliate providers — {linkModal.brand} <span style={{ textTransform: 'none', color: '#bbb', letterSpacing: 0 }}>(sorted by rate)</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {getAffiliatesFor(linkModal.brand).map((a, i) => (
+                  <div
+                    key={a.network}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 12px',
+                      background: i === 0 ? '#f0f9f3' : '#fafafa',
+                      border: `1px solid ${i === 0 ? '#c6efd6' : '#eee'}`,
+                      borderRadius: 8,
+                    }}
+                  >
+                    {i === 0 && (
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                        BEST
+                      </span>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{a.network}</div>
+                      {a.note && (
+                        <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{a.note}</div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? '#16a34a' : '#111' }}>
+                      {a.rate}
+                    </div>
+                    <a
+                      href={a.signupUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px', textDecoration: 'none' }}
+                    >
+                      Sign up ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+              {!BRAND_AFFILIATES[linkModal.brand] && (
+                <div style={{ fontSize: 11, color: '#999', marginTop: 8, fontStyle: 'italic' }}>
+                  No direct brand program on file. Showing default aggregator networks.
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => setLinkModal(null)}>
+                Close
               </button>
             </div>
           </div>
