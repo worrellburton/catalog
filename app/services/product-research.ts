@@ -269,3 +269,85 @@ export async function researchProducts(query: string, opts: ResearchOptions = {}
   // Fallback to seed DB if the edge function isn't configured or returned nothing
   return { products: seedSearch(q), source: 'seed', error: live.error };
 }
+
+// ─── Catalog brainstorm flow ───────────────────────────────────────────
+// For a catalog name (e.g. "brunch outfit"), ask Claude to generate specific
+// product search queries, then fan those out to Google Shopping. Returns all
+// products with the Claude-query they came from, deduped by brand+name.
+
+export interface BrainstormedProduct extends ResearchedProduct {
+  sourceQuery: string;
+}
+
+export interface BrainstormResult {
+  queries: string[];          // Claude-generated search queries
+  products: BrainstormedProduct[];
+  error: string | null;
+}
+
+export interface BrainstormProgress {
+  phase: 'brainstorming' | 'searching' | 'done';
+  queries?: string[];
+  completedQueries?: number;
+  products?: BrainstormedProduct[];
+}
+
+async function brainstormQueries(catalog: string, count: number): Promise<{ queries: string[]; error: string | null }> {
+  try {
+    const { supabase } = await import('~/utils/supabase');
+    const { data, error } = await supabase.functions.invoke('catalog-brainstorm', {
+      body: { catalog, count },
+    });
+    if (error) return { queries: [], error: error.message };
+    if (!data?.success) return { queries: [], error: data?.error || 'Brainstorm failed' };
+    return { queries: Array.isArray(data.queries) ? data.queries : [], error: null };
+  } catch (err) {
+    return { queries: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function brainstormCatalogProducts(
+  catalog: string,
+  opts: { count?: number; onProgress?: (p: BrainstormProgress) => void } = {},
+): Promise<BrainstormResult> {
+  const count = opts.count ?? 8;
+  const onProgress = opts.onProgress;
+
+  onProgress?.({ phase: 'brainstorming' });
+
+  const { queries, error: brainstormErr } = await brainstormQueries(catalog, count);
+  if (queries.length === 0) {
+    return { queries: [], products: [], error: brainstormErr || 'No queries generated' };
+  }
+
+  onProgress?.({ phase: 'searching', queries, completedQueries: 0 });
+
+  const seen = new Set<string>();
+  const all: BrainstormedProduct[] = [];
+  let firstError: string | null = null;
+  let completed = 0;
+
+  // Run searches in parallel but throttle to 3 concurrent to avoid rate limits
+  const PARALLEL = 3;
+  for (let i = 0; i < queries.length; i += PARALLEL) {
+    const batch = queries.slice(i, i + PARALLEL);
+    const results = await Promise.all(batch.map(async q => ({ q, res: await searchLive(q) })));
+
+    for (const { q, res } of results) {
+      if (res.error && !firstError) firstError = res.error;
+      for (const p of res.products) {
+        const key = `${p.brand}|${p.name}`.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const { score, reason } = scoreThumbnail({ brand: p.brand, image_url: p.image_url });
+        all.push({ ...p, thumbnailScore: score, reason, sourceQuery: q });
+      }
+    }
+    completed += batch.length;
+    onProgress?.({ phase: 'searching', queries, completedQueries: completed, products: [...all] });
+  }
+
+  all.sort((a, b) => b.thumbnailScore - a.thumbnailScore);
+  onProgress?.({ phase: 'done', queries, completedQueries: completed, products: all });
+  return { queries, products: all, error: firstError };
+}

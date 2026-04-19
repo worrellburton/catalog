@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
-import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
+import {
+  researchProducts,
+  brainstormCatalogProducts,
+  type ResearchedProduct,
+  type BrainstormedProduct,
+  type ProductGender,
+} from '~/services/product-research';
 
 interface Catalog {
   id: string;
@@ -98,12 +104,15 @@ export default function AdminCatalogs() {
   const [researchQuery, setResearchQuery] = useState('');
   const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
   const [researchLoading, setResearchLoading] = useState(false);
-  const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
+  const [researchResults, setResearchResults] = useState<BrainstormedProduct[]>([]);
   const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
   const [researchLiveOnly, setResearchLiveOnly] = useState(true);
   const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
   const [researchError, setResearchError] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
+  const [brainstormPhase, setBrainstormPhase] = useState<'idle' | 'brainstorming' | 'searching' | 'done'>('idle');
+  const [brainstormQueries, setBrainstormQueries] = useState<string[]>([]);
+  const [brainstormProgress, setBrainstormProgress] = useState<{ done: number; total: number } | null>(null);
 
   const openSuggest = useCallback((catalog: Catalog) => {
     setSuggestCatalog(catalog);
@@ -113,6 +122,9 @@ export default function AdminCatalogs() {
     setResearchSelected(new Set());
     setResearchError(null);
     setResearchSource(null);
+    setBrainstormQueries([]);
+    setBrainstormPhase('idle');
+    setBrainstormProgress(null);
   }, []);
 
   const closeSuggest = useCallback(() => {
@@ -129,12 +141,30 @@ export default function AdminCatalogs() {
     setResearchLoading(true);
     setResearchSelected(new Set());
     setResearchError(null);
-    const { products, source, error } = await researchProducts(researchQuery, { liveOnly: researchLiveOnly });
+    setResearchResults([]);
+    setBrainstormQueries([]);
+    setBrainstormPhase('brainstorming');
+    setBrainstormProgress(null);
+
+    const { queries, products, error } = await brainstormCatalogProducts(researchQuery, {
+      count: 8,
+      onProgress: (p) => {
+        setBrainstormPhase(p.phase);
+        if (p.queries) setBrainstormQueries(p.queries);
+        if (p.completedQueries !== undefined && p.queries) {
+          setBrainstormProgress({ done: p.completedQueries, total: p.queries.length });
+        }
+        if (p.products) setResearchResults(p.products);
+      },
+    });
+
+    setBrainstormQueries(queries);
     setResearchResults(products);
-    setResearchSource(source);
+    setResearchSource('live');
     setResearchError(error);
     setResearchLoading(false);
-  }, [researchQuery, researchLiveOnly]);
+    setBrainstormPhase('done');
+  }, [researchQuery]);
 
   const ingestSelectedProducts = useCallback(async () => {
     if (!supabase || researchSelected.size === 0) return;
@@ -151,6 +181,8 @@ export default function AdminCatalogs() {
         images: p.image_urls || [p.image_url].filter(Boolean),
         scrape_status: 'done',
         scraped_at: nowIso,
+        // Auto-tag with the catalog since these were suggested specifically for it
+        catalog_tags: suggestCatalog ? [suggestCatalog.name] : [],
       };
     });
     const { error } = await supabase
@@ -161,6 +193,7 @@ export default function AdminCatalogs() {
     if (!error) {
       showToast(`Added ${rows.length} product${rows.length === 1 ? '' : 's'} from "${suggestCatalog?.name}"`);
       closeSuggest();
+      loadProducts();
     } else {
       showToast(`Ingest failed: ${error.message}`);
     }
@@ -419,13 +452,13 @@ export default function AdminCatalogs() {
                 Suggest Products for "{suggestCatalog.name}"
               </h2>
               <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
-                Search for products that fit this catalog. Select the ones you want to add.
+                Claude brainstorms specific product ideas for this vibe, then searches Google Shopping for each.
               </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   type="text"
                   autoFocus
-                  placeholder='e.g. "white shoes", "black dresses", "sunglasses"'
+                  placeholder='e.g. "brunch outfit", "quiet luxury", "make me hot"'
                   value={researchQuery}
                   onChange={e => setResearchQuery(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') runResearch(); }}
@@ -436,18 +469,33 @@ export default function AdminCatalogs() {
                   onClick={runResearch}
                   disabled={researchLoading || !researchQuery.trim()}
                 >
-                  {researchLoading ? 'Searching…' : 'Search'}
+                  {brainstormPhase === 'brainstorming'
+                    ? 'Brainstorming…'
+                    : brainstormPhase === 'searching' && brainstormProgress
+                      ? `Searching ${brainstormProgress.done}/${brainstormProgress.total}…`
+                      : researchLoading
+                        ? 'Searching…'
+                        : 'Suggest'}
                 </button>
               </div>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={researchLiveOnly}
-                  onChange={e => setResearchLiveOnly(e.target.checked)}
-                  style={{ margin: 0, cursor: 'pointer' }}
-                />
-                Only search Google Shopping API
-              </label>
+              {brainstormQueries.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', alignSelf: 'center' }}>Claude searched:</span>
+                  {brainstormQueries.map((q, i) => (
+                    <span key={i} style={{
+                      padding: '3px 10px',
+                      borderRadius: 999,
+                      background: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
+                      fontSize: 11,
+                      color: '#475569',
+                      fontWeight: 500,
+                    }}>
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              )}
               {researchError && (
                 <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
                   <strong>Search failed:</strong> {researchError}
@@ -501,13 +549,17 @@ export default function AdminCatalogs() {
             </div>
 
             <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
-              {researchLoading ? (
+              {researchLoading && researchResults.length === 0 ? (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                  Searching for products…
+                  {brainstormPhase === 'brainstorming'
+                    ? 'Asking Claude for product ideas…'
+                    : brainstormPhase === 'searching' && brainstormProgress
+                      ? `Searching Google Shopping for each query (${brainstormProgress.done}/${brainstormProgress.total})…`
+                      : 'Searching…'}
                 </div>
               ) : researchResults.length === 0 ? (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                  Press Search to find products for this catalog.
+                  Press Suggest to have Claude brainstorm products for this catalog.
                 </div>
               ) : visibleResearchResults.length === 0 ? (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
@@ -573,6 +625,14 @@ export default function AdminCatalogs() {
                           <div style={{ fontSize: 11, color: '#888' }}>
                             {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
                           </div>
+                          {p.sourceQuery && (
+                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                              </svg>
+                              <span>{p.sourceQuery}</span>
+                            </div>
+                          )}
                           <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
                             {(p.image_urls || [p.image_url]).length} thumbnail{((p.image_urls || [p.image_url]).length === 1) ? '' : 's'} pulled
                           </div>
