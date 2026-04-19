@@ -4,7 +4,7 @@ import AdCard from './AdCard';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-ads';
 
-const AD_INTERVAL = 6; // Insert an ad every N looks
+const AD_INTERVAL = 2; // Insert an ad every N looks
 
 interface FeedSectionProps {
   looks: Look[];

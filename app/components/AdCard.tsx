@@ -146,21 +146,15 @@ const AdCard = memo(function AdCard({ ad, className = 'look-card', onOpenProduct
         />
         <div className="card-gradient" />
 
-        {/* Bottom overlay: sponsored chip + product info */}
+        {/* Bottom overlay: brand + product name + price */}
         <div className="promo-product-info">
-          <div className="promo-chip">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 7v10M6 5v14M11 4l9 4v12l-9-4z"/>
-            </svg>
-            Ad
-          </div>
           <div className="promo-product-text">
-            <span className="promo-product-name">
-              {ad.product?.name || 'Shop Now'}
-            </span>
             {ad.product?.brand && (
               <span className="promo-product-brand">{ad.product.brand}</span>
             )}
+            <span className="promo-product-name">
+              {ad.product?.name || 'Shop Now'}
+            </span>
           </div>
           {ad.product?.price && (
             <span className="promo-product-price">{ad.product.price}</span>
