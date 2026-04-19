@@ -78,6 +78,7 @@ interface GenNotification {
   createdAt: string;
   completedAt: string | null;
   costUsd: number | null;
+  error: string | null;
 }
 
 const ESTIMATED_GEN_SECONDS = 150;
@@ -107,7 +108,28 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
     );
   }
   if (n.status === 'failed') {
-    return <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }}>Failed</span>;
+    const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
+    const errorLabel = isQuota ? 'Veo quota exceeded' : (n.error?.split('.')[0] || 'Failed').slice(0, 60);
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444' }} title={n.error || 'Unknown error'}>
+            {errorLabel}
+          </span>
+          {onRetry && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetry(); }}
+              style={{
+                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
+                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
   if (n.status === 'queued') {
     return (
@@ -181,10 +203,19 @@ export default function AdminLayout() {
 
   const pollGenerations = useCallback(async () => {
     if (!supabase) return;
+    // Self-heal: flip any 'generating' row that has an error + completed_at to 'failed'.
+    // Worker sometimes populates the error but forgets the status flip, leaving items stuck.
+    await supabase
+      .from('product_ads')
+      .update({ status: 'failed' })
+      .eq('status', 'generating')
+      .not('error', 'is', null)
+      .not('completed_at', 'is', null);
+
     const { data } = await supabase
       .from('product_ads')
-      .select('id, status, created_at, completed_at, cost_usd, product:products(name, brand)')
-      .in('status', ['queued', 'pending', 'generating'])
+      .select('id, status, created_at, completed_at, cost_usd, error, product:products(name, brand)')
+      .in('status', ['queued', 'pending', 'generating', 'failed'])
       .order('created_at', { ascending: true });
 
     if (!data) return;
@@ -197,6 +228,7 @@ export default function AdminLayout() {
       createdAt: r.created_at,
       completedAt: r.completed_at,
       costUsd: r.cost_usd,
+      error: r.error,
     }));
 
     const currentIds = new Set(active.map(n => n.id));
