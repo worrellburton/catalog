@@ -56,6 +56,8 @@ export default function AdminCreative() {
   const [deleting, setDeleting] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [cols, setCols] = useState(6);
+  const [search, setSearch] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Drag-to-select marquee state
   const gridRef = useRef<HTMLDivElement>(null);
@@ -75,7 +77,18 @@ export default function AdminCreative() {
 
   useEffect(() => { loadAll(); }, []);
 
-  const filtered = filter === 'all' ? videos : videos.filter(v => v.source === filter);
+  const filtered = (() => {
+    let list = filter === 'all' ? videos : videos.filter(v => v.source === filter);
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(v =>
+        v.label.toLowerCase().includes(q) ||
+        v.sublabel.toLowerCase().includes(q) ||
+        v.style.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  })();
 
   const toggle = (v: GalleryVideo) => {
     setSelected(prev => {
@@ -89,10 +102,14 @@ export default function AdminCreative() {
   const clearSelection = () => setSelected(new Set());
   const selectAll = () => setSelected(new Set(filtered.map(selectionKey)));
 
-  const handleDelete = async () => {
+  const requestDelete = () => {
     if (selected.size === 0) return;
-    const n = selected.size;
-    if (!confirm(`Delete ${n} video${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (selected.size === 0) return;
+    setShowDeleteConfirm(false);
     setDeleting(true);
     const keys = Array.from(selected);
     await Promise.all(keys.map(async k => {
@@ -195,15 +212,25 @@ export default function AdminCreative() {
     setIsDragging(false);
   }, []);
 
-  // Escape exits fullscreen
+  // Keyboard shortcuts: Escape exits fullscreen; Cmd/Ctrl+Delete triggers delete confirm
   useEffect(() => {
-    if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFullscreen(false);
+      if (e.key === 'Escape') {
+        if (showDeleteConfirm) setShowDeleteConfirm(false);
+        else if (fullscreen) setFullscreen(false);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'Backspace' || e.key === 'Delete')) {
+        const active = document.activeElement as HTMLElement | null;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+        if (selected.size === 0) return;
+        e.preventDefault();
+        setShowDeleteConfirm(true);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fullscreen]);
+  }, [fullscreen, selected.size, showDeleteConfirm]);
 
   const content = (
     <>
@@ -226,6 +253,20 @@ export default function AdminCreative() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="search"
+            placeholder="Search by brand, product, style…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #ddd',
+              fontSize: 12,
+              minWidth: 260,
+              background: '#fff',
+            }}
+          />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666' }}>
             <span>Columns</span>
             <select
@@ -300,7 +341,7 @@ export default function AdminCreative() {
               <button
                 className="admin-btn admin-btn-primary"
                 style={{ background: '#dc2626', borderColor: '#dc2626' }}
-                onClick={handleDelete}
+                onClick={requestDelete}
                 disabled={deleting}
               >
                 {deleting ? 'Deleting…' : `Delete ${selected.size}`}
@@ -367,7 +408,7 @@ export default function AdminCreative() {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                     display: 'block',
                     pointerEvents: 'none',
                   }}
@@ -455,6 +496,77 @@ export default function AdminCreative() {
               }}
             />
           )}
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: 440,
+              maxWidth: '92vw',
+              padding: 24,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  background: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  fontSize: 22,
+                  fontWeight: 700,
+                }}
+              >
+                !
+              </div>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>Warning — hard delete</h2>
+            </div>
+            <p style={{ margin: '0 0 6px', fontSize: 13, color: '#444', lineHeight: 1.5 }}>
+              This will <strong>permanently delete {selected.size} video{selected.size === 1 ? '' : 's'}</strong> from the database and storage.
+            </p>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#888' }}>
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                className="admin-btn admin-btn-secondary"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+              >
+                No, cancel
+              </button>
+              <button
+                className="admin-btn admin-btn-primary"
+                style={{ background: '#dc2626', borderColor: '#dc2626' }}
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                Yes, delete permanently
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
