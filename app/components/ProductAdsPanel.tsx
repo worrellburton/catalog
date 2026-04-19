@@ -32,6 +32,18 @@ const AD_STYLES = [
   { value: 'lifestyle_context', label: 'Lifestyle' },
 ];
 
+// ─── Video models ────────────────────────────────────────────────────
+
+const VIDEO_MODELS = [
+  { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast', group: 'Veo (Google)' },
+  { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)' },
+  { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)' },
+  { value: 'seedance-1-pro', label: 'Seedance 1 Pro', group: 'Seedance (fal.ai)' },
+  { value: 'seedance-1-lite', label: 'Seedance 1 Lite', group: 'Seedance (fal.ai)' },
+];
+
+const DEFAULT_MODEL = 'veo-3.1-fast-generate-preview';
+
 // ─── Status badge ────────────────────────────────────────────────────
 
 const ESTIMATED_GENERATION_SECONDS = 150;
@@ -163,6 +175,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
   const [showCreate, setShowCreate] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [selectedStyle, setSelectedStyle] = useState('studio_clean');
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [adCount, setAdCount] = useState(2);
   const [creating, setCreating] = useState(false);
   const [productSearch, setProductSearch] = useState('');
@@ -239,6 +252,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
       Array.from(selectedProducts),
       selectedStyle,
       adCount,
+      selectedModel,
     );
     setCreating(false);
     if (!error) {
@@ -514,7 +528,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                                   <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{ad.id}</span>
                                   <span style={{ color: '#888' }}>Style</span>
                                   <span style={{ textTransform: 'capitalize' }}>{ad.style.replace(/_/g, ' ')}</span>
-                                  <span style={{ color: '#888' }}>Veo Model</span>
+                                  <span style={{ color: '#888' }}>Model</span>
                                   <span>{ad.veo_model || '—'}</span>
                                   <span style={{ color: '#888' }}>Duration</span>
                                   <span>{ad.duration_seconds}s</span>
@@ -676,11 +690,33 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
             <div style={{ padding: '20px 24px 0' }}>
               <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Generate Product Ads</h2>
               <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>
-                Select products and generate AI video ads using Veo + Claude
+                Select products and generate AI video ads using Veo or Seedance
               </p>
 
-              {/* Style & Count */}
+              {/* Model, Style & Count */}
               <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Video Model</label>
+                  <select
+                    value={selectedModel}
+                    onChange={e => setSelectedModel(e.target.value)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      border: '1px solid #ddd', fontSize: 13, background: '#fff',
+                    }}
+                  >
+                    <optgroup label="Veo (Google)">
+                      {VIDEO_MODELS.filter(m => m.group === 'Veo (Google)').map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Seedance (fal.ai)">
+                      {VIDEO_MODELS.filter(m => m.group === 'Seedance (fal.ai)').map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Video Style</label>
                   <select
