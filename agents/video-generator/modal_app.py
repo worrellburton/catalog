@@ -184,6 +184,30 @@ def generate_pending():
         os.environ["SUPABASE_SERVICE_ROLE_KEY"],
     )
 
+    # ── 0. Promote queued → pending (max 2 slots) ──────────────────
+    active = (
+        supabase.table("product_ads")
+        .select("id", count="exact")
+        .in_("status", ["pending", "generating"])
+        .execute()
+    )
+    in_flight = active.count or 0
+    slots = max(0, 2 - in_flight)
+    if slots > 0:
+        queued = (
+            supabase.table("product_ads")
+            .select("id")
+            .eq("status", "queued")
+            .order("created_at")
+            .limit(slots)
+            .execute()
+        )
+        promote_ids = [r["id"] for r in (queued.data or [])]
+        if promote_ids:
+            for pid in promote_ids:
+                supabase.table("product_ads").update({"status": "pending"}).eq("id", pid).execute()
+            print(f"Promoted {len(promote_ids)} queued → pending")
+
     # ── 1. Retry pending/failed product_ads ───────────────────────────
     ads = (
         supabase.table("product_ads")
