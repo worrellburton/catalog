@@ -192,7 +192,8 @@ def generate_pending():
         .execute()
     )
     in_flight = active.count or 0
-    slots = max(0, 2 - in_flight)
+    # Keep concurrency at 1 to stay under Tier 1 Veo rate limits.
+    slots = max(0, 1 - in_flight)
     if slots > 0:
         queued = (
             supabase.table("product_ads")
