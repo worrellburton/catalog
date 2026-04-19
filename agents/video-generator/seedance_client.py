@@ -61,6 +61,10 @@ def _extract_video_url(result: dict) -> str:
     return url
 
 
+def _is_v2(fal_model: str) -> bool:
+    return fal_model.startswith("bytedance/seedance-2")
+
+
 def generate_video_from_image_url(
     image_url: str,
     prompt: str,
@@ -74,16 +78,18 @@ def generate_video_from_image_url(
     _ensure_auth()
     fal_model = _fal_model_id(model, "image-to-video")
 
-    result = fal_client.subscribe(
-        fal_model,
-        arguments={
-            "prompt": prompt,
-            "image_url": image_url,
-            "duration": str(duration),
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-        },
-    )
+    args: dict = {
+        "prompt": prompt,
+        "image_url": image_url,
+        "duration": str(duration),
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+    }
+    # Seedance v2 adds audio by default; we generate silent ad videos.
+    if _is_v2(fal_model):
+        args["generate_audio"] = False
+
+    result = fal_client.subscribe(fal_model, arguments=args)
     return _download(_extract_video_url(result))
 
 
@@ -99,13 +105,14 @@ def generate_video_from_text(
     _ensure_auth()
     fal_model = _fal_model_id(model, "text-to-video")
 
-    result = fal_client.subscribe(
-        fal_model,
-        arguments={
-            "prompt": prompt,
-            "duration": str(duration),
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-        },
-    )
+    args: dict = {
+        "prompt": prompt,
+        "duration": str(duration),
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+    }
+    if _is_v2(fal_model):
+        args["generate_audio"] = False
+
+    result = fal_client.subscribe(fal_model, arguments=args)
     return _download(_extract_video_url(result))
