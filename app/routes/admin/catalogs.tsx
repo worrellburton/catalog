@@ -28,11 +28,22 @@ function saveCustom(list: Catalog[]) {
   localStorage.setItem(CUSTOM_KEY, JSON.stringify(list));
 }
 
+interface ProductRow {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  image_url: string | null;
+  catalog_tags: string[] | null;
+}
+
 export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [autoTagging, setAutoTagging] = useState(false);
+  const [autoTagProgress, setAutoTagProgress] = useState<{ done: number; total: number } | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -40,6 +51,16 @@ export default function AdminCatalogs() {
   }, []);
 
   useEffect(() => { setCustom(loadCustom()); }, []);
+
+  const loadProducts = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('products')
+      .select('id, name, brand, image_url, catalog_tags');
+    if (data) setProducts(data as ProductRow[]);
+  }, []);
+
+  useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const featured: Catalog[] = searchSuggestions.map((name, i) => ({
     id: `featured-${i}`,
@@ -151,6 +172,70 @@ export default function AdminCatalogs() {
     ),
   [researchResults, researchGender]);
 
+  // Count products tagged with each catalog
+  const catalogProductCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    products.forEach(p => {
+      (p.catalog_tags || []).forEach(tag => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [products]);
+
+  const runAutoTag = useCallback(async () => {
+    if (!supabase || products.length === 0) return;
+    const allCatalogs = all.map(c => c.name);
+    if (allCatalogs.length === 0) {
+      showToast('No catalogs to tag against');
+      return;
+    }
+    setAutoTagging(true);
+    setAutoTagProgress({ done: 0, total: products.length });
+
+    try {
+      const BATCH = 30;
+      let done = 0;
+      for (let i = 0; i < products.length; i += BATCH) {
+        const batch = products.slice(i, i + BATCH);
+        const { data, error } = await supabase.functions.invoke('catalog-auto-tag', {
+          body: {
+            products: batch.map(p => ({
+              id: p.id,
+              name: p.name || '',
+              brand: p.brand || '',
+              image_url: p.image_url,
+            })),
+            catalogs: allCatalogs,
+          },
+        });
+        if (error) {
+          console.error('Auto-tag batch failed:', error);
+          break;
+        }
+        if (data?.success && data.results) {
+          // Persist tags in parallel
+          const updates = Object.entries(data.results as Record<string, string[]>);
+          await Promise.all(
+            updates.map(([id, tags]) =>
+              supabase!.from('products').update({ catalog_tags: tags }).eq('id', id)
+            )
+          );
+        }
+        done += batch.length;
+        setAutoTagProgress({ done, total: products.length });
+      }
+      await loadProducts();
+      showToast(`Tagged ${done} product${done === 1 ? '' : 's'}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Auto-tag failed: ${msg}`);
+    } finally {
+      setAutoTagging(false);
+      setAutoTagProgress(null);
+    }
+  }, [products, all, loadProducts, showToast]);
+
   return (
     <div className="admin-page">
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -158,12 +243,32 @@ export default function AdminCatalogs() {
           <h1>Catalogs</h1>
           <p className="admin-page-subtitle">Featured catalog ideas that scroll in the suggestor on the main screen</p>
         </div>
-        <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Add new catalog
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={runAutoTag}
+            disabled={autoTagging || products.length === 0}
+            title="Use Claude to tag all products with relevant catalogs"
+          >
+            {autoTagging && autoTagProgress ? (
+              <>Auto-tagging {autoTagProgress.done}/{autoTagProgress.total}…</>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                  <line x1="7" y1="7" x2="7.01" y2="7" />
+                </svg>
+                Auto-tag with Claude
+              </>
+            )}
+          </button>
+          <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add new catalog
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 20, padding: '10px 0', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -187,12 +292,15 @@ export default function AdminCatalogs() {
             <tr>
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Source</th>
+              <th>Products</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {all.map(c => (
+            {all.map(c => {
+              const productCount = catalogProductCounts.get(c.name) || 0;
+              return (
               <tr key={c.id}>
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>{c.name}</td>
                 <td>
@@ -208,6 +316,22 @@ export default function AdminCatalogs() {
                   }}>
                     {c.source}
                   </span>
+                </td>
+                <td>
+                  {productCount > 0 ? (
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                    }}>
+                      {productCount}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
+                  )}
                 </td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === '—' ? '—' : new Date(c.createdAt).toLocaleDateString()}
@@ -233,7 +357,8 @@ export default function AdminCatalogs() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
