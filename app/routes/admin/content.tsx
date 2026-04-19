@@ -13,6 +13,7 @@ interface CrawledProduct {
   price: string | null;
   url: string | null;
   image_url: string | null;
+  images?: string[] | null;
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
@@ -205,6 +206,7 @@ export default function AdminContent() {
   const ingestSelectedProducts = useCallback(async () => {
     if (!supabase || researchSelected.size === 0) return;
     setIngesting(true);
+    const nowIso = new Date().toISOString();
     const rows = Array.from(researchSelected).map(i => {
       const p = researchResults[i];
       return {
@@ -213,10 +215,15 @@ export default function AdminContent() {
         price: p.price,
         url: p.url,
         image_url: p.image_url,
+        images: p.image_urls || [p.image_url].filter(Boolean),
         scrape_status: 'done',
+        scraped_at: nowIso,
       };
     });
-    const { error } = await supabase.from('products').insert(rows);
+    const { data: inserted, error } = await supabase
+      .from('products')
+      .insert(rows)
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -224,17 +231,16 @@ export default function AdminContent() {
       setResearchQuery('');
       setResearchResults([]);
       setResearchSelected(new Set());
-      // Reload crawled products to show them in the table
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, brand, price, url, image_url, scraped_at, scrape_status')
-        .order('scraped_at', { ascending: false });
-      if (data) {
-        setCrawledProducts((data || []).map((p) => ({
-          ...p,
-          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-        })) as CrawledProduct[]);
-      }
+      // Prepend the newly ingested rows so they appear at the top of the list
+      // immediately, then reconcile with a full reload from the DB.
+      const newRows = (inserted || []).map((p) => ({
+        ...p,
+        is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+      })) as CrawledProduct[];
+      setCrawledProducts(prev => [
+        ...newRows,
+        ...prev.filter(r => !newRows.some(n => n.id === r.id)),
+      ]);
     } else {
       showToast(`Ingest failed: ${error.message}`);
     }
@@ -388,7 +394,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, scraped_at, scrape_status')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -429,7 +435,7 @@ export default function AdminContent() {
   }, []);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -447,10 +453,12 @@ export default function AdminContent() {
       const brand = cp.brand || 'Unknown';
       const name = cp.name || 'Untitled';
       const key = `${brand}-${name}`;
+      const images = Array.isArray(cp.images) ? cp.images.filter((u): u is string => typeof u === 'string') : [];
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
         entry.image_url = cp.image_url;
+        entry.images = images;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
@@ -469,6 +477,7 @@ export default function AdminContent() {
           price: cp.price || '—',
           url: cp.url || '',
           image_url: cp.image_url,
+          images,
           video_urls: adVideoMap.get(cp.id) || [],
           looks: new Set(),
           creators: new Set(),
@@ -832,22 +841,42 @@ export default function AdminContent() {
                     )}
                   </td>
                   <td>
-                    <div className="admin-product-creative">
-                      {p.image_url ? (
-                        <img
-                          src={p.image_url}
-                          alt={p.name}
-                          style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        <img
-                          src={getBrandLogo(p.brand) || ''}
-                          alt={p.brand}
-                          className="admin-brand-logo"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      )}
+                    <div className="admin-product-creative" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {(() => {
+                        const allImages: string[] = (p.images && p.images.length > 0)
+                          ? p.images
+                          : (p.image_url ? [p.image_url] : []);
+                        if (allImages.length === 0) {
+                          return (
+                            <img
+                              src={getBrandLogo(p.brand) || ''}
+                              alt={p.brand}
+                              className="admin-brand-logo"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          );
+                        }
+                        const shown = allImages.slice(0, 3);
+                        const extra = allImages.length - shown.length;
+                        return (
+                          <>
+                            {shown.map((src, ii) => (
+                              <img
+                                key={ii}
+                                src={src}
+                                alt={p.name}
+                                style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', border: '1px solid #eee' }}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ))}
+                            {extra > 0 && (
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', borderRadius: 6, padding: '0 6px', height: 40, display: 'inline-flex', alignItems: 'center' }}>
+                                +{extra}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td style={{ textAlign: 'left' }}>
