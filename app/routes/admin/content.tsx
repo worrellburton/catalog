@@ -4,6 +4,7 @@ import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import { createBatchAds } from '~/services/product-ads';
+import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 
 interface CrawledProduct {
   id: string;
@@ -15,6 +16,68 @@ interface CrawledProduct {
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
+}
+
+const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
+const MATERIAL_WORDS = ['leather', 'denim', 'cotton', 'silk', 'satin', 'wool', 'cashmere', 'linen', 'suede', 'velvet', 'knit', 'canvas', 'nylon', 'polyester'];
+const TYPE_WORDS = [
+  { match: ['shoulder bag', 'tote', 'crossbody', 'handbag', 'clutch', 'purse'], tag: 'Bag' },
+  { match: ['sunglasses', 'eyewear', 'shades'], tag: 'Sunglasses' },
+  { match: ['sneaker', 'trainer'], tag: 'Sneakers' },
+  { match: ['shoe', 'boot', 'heel', 'loafer'], tag: 'Shoes' },
+  { match: ['iphone case', 'phone case', 'case for'], tag: 'Phone Case' },
+  { match: ['necklace', 'pendant'], tag: 'Necklace' },
+  { match: ['ring '], tag: 'Ring' },
+  { match: ['earring'], tag: 'Earrings' },
+  { match: ['bracelet'], tag: 'Bracelet' },
+  { match: ['watch'], tag: 'Watch' },
+  { match: ['jean', 'denim'], tag: 'Denim' },
+  { match: ['pant', 'trouser', 'chino'], tag: 'Pants' },
+  { match: ['dress'], tag: 'Dress' },
+  { match: ['skirt'], tag: 'Skirt' },
+  { match: ['shirt', 't-shirt', 'tee', 'henley', 'polo'], tag: 'Top' },
+  { match: ['short-sleeve', 'ss '], tag: 'Short Sleeve' },
+  { match: ['long-sleeve', 'ls-', 'ls '], tag: 'Long Sleeve' },
+  { match: ['jacket', 'coat', 'parka', 'blazer'], tag: 'Outerwear' },
+  { match: ['hat', 'cap', 'beanie'], tag: 'Hat' },
+  { match: ['sweater', 'hoodie', 'pullover'], tag: 'Sweater' },
+  { match: ['boxer', 'brief', 'underwear'], tag: 'Underwear' },
+  { match: ['camera'], tag: 'Camera' },
+];
+
+function deriveTags(name: string, brand: string): string[] {
+  const lower = (name || '').toLowerCase();
+  const tags = new Set<string>();
+
+  // Type tag
+  for (const { match, tag } of TYPE_WORDS) {
+    if (match.some(m => lower.includes(m))) {
+      tags.add(tag);
+    }
+  }
+
+  // Color tag
+  const colors = COLOR_WORDS.filter(c => new RegExp(`\\b${c}\\b`, 'i').test(lower));
+
+  // Material tag
+  const materials = MATERIAL_WORDS.filter(m => lower.includes(m));
+
+  // Combined color + type (e.g. "white hat", "black dress")
+  const typeTag = Array.from(tags)[0];
+  if (typeTag && colors.length > 0) {
+    tags.add(`${colors[0].charAt(0).toUpperCase()}${colors[0].slice(1)} ${typeTag}`);
+  }
+
+  // Individual color tags
+  colors.forEach(c => tags.add(c.charAt(0).toUpperCase() + c.slice(1)));
+
+  // Material tags
+  materials.forEach(m => tags.add(m.charAt(0).toUpperCase() + m.slice(1)));
+
+  // Brand
+  if (brand) tags.add(brand);
+
+  return Array.from(tags);
 }
 
 interface AffiliateProvider {
@@ -113,6 +176,67 @@ export default function AdminContent() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
   const [linkModal, setLinkModal] = useState<{ name: string; brand: string; url: string } | null>(null);
+  const [tagsModal, setTagsModal] = useState<{ name: string; brand: string; tags: string[] } | null>(null);
+
+  // Add Products research modal
+  const [showAddProducts, setShowAddProducts] = useState(false);
+  const [researchQuery, setResearchQuery] = useState('');
+  const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
+  const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
+  const [ingesting, setIngesting] = useState(false);
+
+  const runResearch = useCallback(async () => {
+    if (!researchQuery.trim()) return;
+    setResearchLoading(true);
+    setResearchSelected(new Set());
+    const results = await researchProducts(researchQuery);
+    setResearchResults(results);
+    setResearchLoading(false);
+  }, [researchQuery]);
+
+  const ingestSelectedProducts = useCallback(async () => {
+    if (!supabase || researchSelected.size === 0) return;
+    setIngesting(true);
+    const rows = Array.from(researchSelected).map(i => {
+      const p = researchResults[i];
+      return {
+        name: p.name,
+        brand: p.brand,
+        price: p.price,
+        url: p.url,
+        image_url: p.image_url,
+        scrape_status: 'done',
+      };
+    });
+    const { error } = await supabase.from('products').insert(rows);
+    setIngesting(false);
+    if (!error) {
+      showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
+      setShowAddProducts(false);
+      setResearchQuery('');
+      setResearchResults([]);
+      setResearchSelected(new Set());
+      // Reload crawled products to show them in the table
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, brand, price, url, image_url, scraped_at, scrape_status')
+        .order('scraped_at', { ascending: false });
+      if (data) {
+        setCrawledProducts((data || []).map((p) => ({
+          ...p,
+          is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+        })) as CrawledProduct[]);
+      }
+    } else {
+      showToast(`Ingest failed: ${error.message}`);
+    }
+  }, [researchSelected, researchResults]);
+
+  const visibleResearchResults = researchResults.filter(
+    p => researchGender === 'all' || p.gender === researchGender || p.gender === 'unisex'
+  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -412,6 +536,14 @@ export default function AdminContent() {
             Create Look
           </button>
         )}
+        {activeTab === 'products' && (
+          <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Products
+          </button>
+        )}
       </div>
       <div className="admin-tabs">
         <button className={`admin-tab ${activeTab === 'looks' ? 'active' : ''}`} onClick={() => setActiveTab('looks')}>Looks</button>
@@ -648,6 +780,7 @@ export default function AdminContent() {
                 <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th>Tags</th>
                 <th>Links</th>
               </tr>
             </thead>
@@ -723,6 +856,19 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
+                  <td>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => setTagsModal({ name: p.name, brand: p.brand, tags: deriveTags(p.name, p.brand) })}
+                      title="View tags"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                        <line x1="7" y1="7" x2="7.01" y2="7" />
+                      </svg>
+                    </button>
+                  </td>
                   <td>
                     <button
                       className="admin-btn admin-btn-secondary"
@@ -989,6 +1135,203 @@ export default function AdminContent() {
               <button className="admin-btn admin-btn-secondary" onClick={() => setGeneratePicker(null)}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tagsModal && (
+        <div className="admin-modal-overlay" onClick={() => setTagsModal(null)}>
+          <div
+            className="admin-modal"
+            style={{ width: 460, maxWidth: '90vw', padding: 24 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Tags</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+              <strong style={{ color: '#111' }}>{tagsModal.name}</strong> · {tagsModal.brand}
+            </p>
+            {tagsModal.tags.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No tags derived yet</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {tagsModal.tags.map(t => (
+                  <span
+                    key={t}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 999,
+                      background: '#f1f5f9',
+                      color: '#0f172a',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => setTagsModal(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddProducts && (
+        <div className="admin-modal-overlay" onClick={() => !ingesting && setShowAddProducts(false)}>
+          <div
+            className="admin-modal"
+            style={{ width: 720, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '20px 24px 12px' }}>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add Products</h2>
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
+                Describe what you want to add — Claude will research popular matching products.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder='e.g. "white shoes", "black dresses", "sunglasses"'
+                  value={researchQuery}
+                  onChange={e => setResearchQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') runResearch(); }}
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
+                />
+                <button
+                  className="admin-btn admin-btn-primary"
+                  onClick={runResearch}
+                  disabled={researchLoading || !researchQuery.trim()}
+                >
+                  {researchLoading ? 'Researching…' : 'Research'}
+                </button>
+              </div>
+              {researchResults.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 12, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>For</span>
+                  {(['all', 'men', 'women', 'unisex'] as const).map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setResearchGender(g)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        border: '1px solid',
+                        borderColor: researchGender === g ? '#111' : '#e2e8f0',
+                        background: researchGender === g ? '#111' : '#fff',
+                        color: researchGender === g ? '#fff' : '#111',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
+              {researchLoading ? (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+                  Researching popular products…
+                </div>
+              ) : researchResults.length === 0 ? (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+                  Type a query and press Research.
+                </div>
+              ) : visibleResearchResults.length === 0 ? (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+                  No results for that gender.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {visibleResearchResults.map(p => {
+                    const idx = researchResults.indexOf(p);
+                    const isSelected = researchSelected.has(idx);
+                    const scoreColor = p.thumbnailScore >= 85 ? '#16a34a' : p.thumbnailScore >= 70 ? '#ca8a04' : '#dc2626';
+                    const scoreLabel = p.thumbnailScore >= 90 ? 'Excellent' : p.thumbnailScore >= 75 ? 'Good' : p.thumbnailScore >= 60 ? 'Fair' : 'Poor';
+                    return (
+                      <div
+                        key={`${p.brand}-${p.name}-${idx}`}
+                        onClick={() => {
+                          setResearchSelected(prev => {
+                            const next = new Set(prev);
+                            if (next.has(idx)) next.delete(idx); else next.add(idx);
+                            return next;
+                          });
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                          borderRadius: 8, cursor: 'pointer',
+                          background: isSelected ? '#f0f7ff' : 'transparent',
+                          border: `1px solid ${isSelected ? '#3b82f6' : '#eee'}`,
+                        }}
+                      >
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 4,
+                          border: `2px solid ${isSelected ? '#3b82f6' : '#ccc'}`,
+                          background: isSelected ? '#3b82f6' : '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          {isSelected && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </div>
+                        <img
+                          src={p.image_url}
+                          alt=""
+                          onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                          style={{ width: 48, height: 48, borderRadius: 6, objectFit: 'cover', flexShrink: 0, background: '#f5f5f5' }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: '#888' }}>
+                            {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: '#888' }}>Thumbnail</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor }}>{p.thumbnailScore}</span>
+                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: `${scoreColor}18`, color: scoreColor, fontWeight: 600 }}>{scoreLabel}</span>
+                          </div>
+                          <div style={{ fontSize: 10, color: '#999' }}>{p.reason}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: '#888' }}>
+                {researchSelected.size > 0 ? `${researchSelected.size} selected` : ''}
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="admin-btn admin-btn-secondary" onClick={() => !ingesting && setShowAddProducts(false)} disabled={ingesting}>
+                  Cancel
+                </button>
+                <button
+                  className="admin-btn admin-btn-primary"
+                  onClick={ingestSelectedProducts}
+                  disabled={ingesting || researchSelected.size === 0}
+                >
+                  {ingesting ? 'Ingesting…' : `Ingest ${researchSelected.size || ''}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
