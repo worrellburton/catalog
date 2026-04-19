@@ -53,6 +53,7 @@ const allSearchItems: SearchItem[] = [
   { label: 'Reports', type: 'Page', to: '/admin/reports' },
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
+  { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
@@ -436,6 +437,16 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="admin-sidebar-footer" ref={userMenuRef}>
+          <NavLink
+            to="/admin/whats-new"
+            className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+            style={{ marginBottom: 6 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z" />
+            </svg>
+            <span>What's New</span>
+          </NavLink>
           {userMenuOpen && (
             <div className="admin-user-popup">
               <button className="admin-user-popup-item" onClick={() => { setIsDark(d => !d); setUserMenuOpen(false); }}>
