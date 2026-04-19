@@ -55,7 +55,7 @@ export default function AdminCreative() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [cols, setCols] = useState(6);
+  const [cols, setCols] = useState(6); // controlled by the bottom zoom slider
   const [search, setSearch] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -267,24 +267,6 @@ export default function AdminCreative() {
               background: '#fff',
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666' }}>
-            <span>Columns</span>
-            <select
-              value={cols}
-              onChange={e => setCols(Number(e.target.value))}
-              style={{
-                padding: '4px 8px',
-                borderRadius: 6,
-                border: '1px solid #ddd',
-                fontSize: 12,
-                background: '#fff',
-              }}
-            >
-              {[3, 4, 5, 6, 8, 10, 12, 15].map(n => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
           <button
             className="admin-btn admin-btn-secondary"
             onClick={() => setMuted(m => !m)}
@@ -368,13 +350,16 @@ export default function AdminCreative() {
           onMouseLeave={onMouseLeave}
           style={{
             position: 'relative',
-            display: 'grid',
-            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-            gap: 8,
+            // CSS columns → masonry layout. Each tile keeps its natural
+            // aspect and stacks vertically within a column; the zoom slider
+            // changes column count so tiles get bigger / smaller.
+            columnCount: cols,
+            columnGap: 8,
             userSelect: 'none',
             flex: fullscreen ? 1 : undefined,
             overflow: fullscreen ? 'auto' : undefined,
             minHeight: 0,
+            paddingBottom: 72, // leave room for the bottom slider bar
           }}
         >
           {filtered.map(v => {
@@ -386,7 +371,8 @@ export default function AdminCreative() {
                 data-tile-key={k}
                 style={{
                   position: 'relative',
-                  aspectRatio: '9 / 16',
+                  breakInside: 'avoid',
+                  marginBottom: 8,
                   borderRadius: 6,
                   overflow: 'hidden',
                   background: '#000',
@@ -407,8 +393,7 @@ export default function AdminCreative() {
                   draggable={false}
                   style={{
                     width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
+                    height: 'auto',
                     display: 'block',
                     pointerEvents: 'none',
                   }}
@@ -496,6 +481,48 @@ export default function AdminCreative() {
               }}
             />
           )}
+        </div>
+      )}
+
+      {/* Bottom zoom slider — controls column count for the masonry layout.
+          Higher = more columns = smaller tiles = see more at once. */}
+      {filtered.length > 0 && (
+        <div
+          style={{
+            position: fullscreen ? 'fixed' : 'sticky',
+            bottom: fullscreen ? 20 : 16,
+            left: fullscreen ? '50%' : 'auto',
+            transform: fullscreen ? 'translateX(-50%)' : undefined,
+            margin: fullscreen ? 0 : '0 auto',
+            maxWidth: 420,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '10px 16px',
+            background: 'rgba(20, 20, 20, 0.88)',
+            color: '#fff',
+            borderRadius: 999,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 50,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Fewer columns">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+          <input
+            type="range"
+            min={2}
+            max={24}
+            step={1}
+            value={cols}
+            onChange={e => setCols(Number(e.target.value))}
+            style={{ flex: 1, accentColor: '#3b82f6', cursor: 'pointer' }}
+          />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="More columns">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 18, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{cols}</span>
         </div>
       )}
 
