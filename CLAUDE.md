@@ -5,12 +5,35 @@
 
 ## Table of Contents
 
+0. [Session Startup Checklist](#section-0--session-startup-checklist)
 1. [Consumer App (Catalog)](#section-1--consumer-app-catalog)
 2. [Admin Panel — Frontend](#section-2--admin-panel-frontend)
 3. [Partners / Brands Portal — Frontend](#section-3--partners--brands-portal-frontend)
 4. [Admin Backend](#section-4--admin-backend)
 5. [Brands Backend](#section-5--brands-backend)
 6. [Development Guidelines](#section-6--development-guidelines)
+7. [Supabase Operations (Claude)](#section-7--supabase-operations-claude)
+
+---
+
+# SECTION 0 — Session Startup Checklist
+
+**Read this first, every session.** Before doing anything else:
+
+1. **Authenticate the Supabase MCP server** if its tools aren't already
+   available. Call `mcp__supabase__authenticate`, share the auth URL with
+   the user, wait for them to paste the `localhost:64489/callback?...`
+   URL, then call `mcp__supabase__complete_authentication`.
+   - Confirmation it worked: `mcp__supabase__list_tables` returns real
+     tables without an "unauthorized" error.
+   - Once authenticated, you can apply migrations, execute SQL, deploy
+     edge functions, and read logs directly from chat — no need to ask
+     the user to paste the DB password or run the `supabase` CLI.
+2. If the Supabase MCP isn't listed as a deferred tool at all, skip
+   step 1 — fall back to asking the user to run migrations/deploys
+   from their machine.
+3. Project ref is `vtarjrnqvcqbhoclvcur`. See Section 7 for the full
+   operational reference.
 
 ---
 
@@ -977,3 +1000,97 @@ Build a system that:
 ---
 
 **End of Guidelines**
+
+---
+
+# SECTION 7 — Supabase Operations (Claude)
+
+This repo is wired to a single Supabase project. Claude should prefer
+the Supabase MCP server for all cloud ops so work stays in chat.
+
+## Project
+
+| Field | Value |
+|---|---|
+| Project ref | `vtarjrnqvcqbhoclvcur` |
+| URL | `https://vtarjrnqvcqbhoclvcur.supabase.co` |
+| Dashboard | https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur |
+| Default client URL | `DEFAULT_SUPABASE_URL` in `app/utils/supabase.ts` |
+
+## MCP Authentication Flow
+
+The Supabase MCP server uses OAuth. Do this at session start whenever
+the `mcp__supabase__*` tools aren't already loaded:
+
+1. Call `mcp__supabase__authenticate` — returns an auth URL.
+2. Share the URL with the user; they click through Supabase's consent screen.
+3. The browser redirects to `http://localhost:64489/callback?code=...` and
+   shows a connection error — that's expected in a remote session.
+4. Ask the user to paste the full callback URL from the browser address bar.
+5. Call `mcp__supabase__complete_authentication` with that URL as
+   `callback_url`.
+
+Confirm by listing tables / migrations. If any MCP tool returns an
+"unauthorized" error later in the session, re-run the flow.
+
+## Common Operations (via MCP)
+
+| Task | Tool |
+|---|---|
+| Apply a new migration | `mcp__supabase__apply_migration` |
+| List current migrations | `mcp__supabase__list_migrations` |
+| Run ad-hoc SQL | `mcp__supabase__execute_sql` |
+| Deploy an edge function | `mcp__supabase__deploy_edge_function` |
+| List / fetch edge functions | `mcp__supabase__list_edge_functions`, `mcp__supabase__get_edge_function` |
+| Read edge-function / DB logs | `mcp__supabase__get_logs` |
+| Inspect tables / extensions | `mcp__supabase__list_tables`, `mcp__supabase__list_extensions` |
+
+After applying DB migrations, keep the SQL file committed under
+`supabase/migrations/NNN_<snake_case>.sql` so the repo stays the source
+of truth. Migration numbers are sequential (most recent: `019_…`).
+
+## Edge Functions Deployed
+
+| Function | Purpose | Secrets used |
+|---|---|---|
+| `product-search` | Google Shopping via SerpAPI | `SERPAPI_KEY` |
+| `catalog-brainstorm` | Claude-generated catalog queries | `ANTHROPIC_API_KEY` |
+| `manage-looks` | Look CRUD (service-role, JWT-auth'd) | — |
+| `scrape-product` | URL → product scrape | — |
+
+Source lives under `supabase/functions/<name>/index.ts`. Prefer
+`mcp__supabase__deploy_edge_function` over the CLI.
+
+## Secrets
+
+Required for current features:
+- `ANTHROPIC_API_KEY` — Claude API key (Messages API).
+- `SERPAPI_KEY` — Google Shopping search.
+- `GOOGLE_API_KEY` / `FAL_KEY` — for the video-generation worker
+  (`agents/video-generator`), not used by edge functions directly.
+
+Manage at https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur/functions/secrets
+
+## Admin-Hide Tables
+
+Admin deletes soft-hide content via two tables (migration 017):
+
+| Table | Purpose |
+|---|---|
+| `admin_hidden_looks` (`look_id`) | Looks removed from the consumer feed |
+| `admin_hidden_products` (`brand`, `name`) | Products removed from the feed and from each look |
+
+Client reads them via `useHiddenLooks` / `useHiddenProductKeys`
+(`app/hooks/useHiddenLooks.ts`), with a localStorage fallback so
+deletes stick even when the migration hasn't been applied yet.
+
+## Key Tables
+
+- `products`, `product_ads` — core ad catalog (migration 015; 018 adds
+  `duration_seconds` + `with_audio`; 019 adds `prompt_extra`).
+- `admin_hidden_looks`, `admin_hidden_products` — soft deletes (017).
+- `generated_videos`, `look_products`, `ai_models` — see earlier migrations.
+
+Full model/controller reference lives in Section 4 (Admin Backend).
+
+---
