@@ -225,6 +225,8 @@ export default function AdminCatalogs() {
   const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchResults, setResearchResults] = useState<BrainstormedProduct[]>([]);
+  // Hover preview (big thumbnail next to cursor) when scanning research rows.
+  const [previewImg, setPreviewImg] = useState<{ url: string; x: number; y: number } | null>(null);
   const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
   const [researchLiveOnly, setResearchLiveOnly] = useState(true);
   const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
@@ -571,6 +573,30 @@ export default function AdminCatalogs() {
       {/* Suggest Products modal */}
       {suggestCatalog && (
         <div className="admin-modal-overlay" onClick={closeSuggest}>
+          {previewImg && (
+            <div
+              style={{
+                position: 'fixed',
+                left: Math.min(previewImg.x, (typeof window !== 'undefined' ? window.innerWidth : 1600) - 280),
+                top: Math.max(10, previewImg.y),
+                width: 260,
+                height: 340,
+                borderRadius: 10,
+                overflow: 'hidden',
+                background: '#111',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+                zIndex: 10000,
+                pointerEvents: 'none',
+              }}
+            >
+              <img
+                src={previewImg.url}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            </div>
+          )}
           <div
             className="admin-modal"
             style={{ width: 720, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
@@ -711,6 +737,14 @@ export default function AdminCatalogs() {
                             return next;
                           });
                         }}
+                        onMouseEnter={e => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setPreviewImg({ url: p.image_url, x: r.right + 12, y: r.top });
+                        }}
+                        onMouseMove={e => {
+                          setPreviewImg(prev => prev ? { ...prev, x: e.clientX + 16, y: e.clientY - 80 } : prev);
+                        }}
+                        onMouseLeave={() => setPreviewImg(null)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
                           borderRadius: 8, cursor: 'pointer',
