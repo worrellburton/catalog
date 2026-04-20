@@ -148,7 +148,7 @@ export async function createBatchAds(
   productIds: string[],
   style: string,
   count: number = 2,
-  model?: string,
+  model?: string | string[],
   options: GenerationOptions = {},
 ): Promise<{ data: ProductAd[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase not configured' };
@@ -164,17 +164,28 @@ export async function createBatchAds(
   const inFlight = activeCount || 0;
   const slotsAvailable = Math.max(0, CONCURRENCY_LIMIT - inFlight);
 
+  // When `model` is an array, each entry maps 1:1 to a generated row so you
+  // can, e.g., run one Veo + one Seedance for the same product in one batch.
+  // When it's a single string (or undefined), all rows share that model.
+  const pickModel = (i: number): string | undefined => {
+    if (Array.isArray(model)) return model[i % model.length];
+    return model;
+  };
+
   const allRows = productIds.flatMap(product_id =>
-    Array.from({ length: count }, () => ({
-      product_id,
-      style,
-      // Force portrait aspect so the generated video fills the vertical
-      // feed cards end-to-end (no letterboxing).
-      aspect_ratio: '9:16',
-      ...(model ? { veo_model: model } : {}),
-      ...(options.durationSeconds != null ? { duration_seconds: options.durationSeconds } : {}),
-      ...(options.withAudio != null ? { with_audio: options.withAudio } : {}),
-    }))
+    Array.from({ length: count }, (_, i) => {
+      const m = pickModel(i);
+      return {
+        product_id,
+        style,
+        // Force portrait aspect so the generated video fills the vertical
+        // feed cards end-to-end (no letterboxing).
+        aspect_ratio: '9:16',
+        ...(m ? { veo_model: m } : {}),
+        ...(options.durationSeconds != null ? { duration_seconds: options.durationSeconds } : {}),
+        ...(options.withAudio != null ? { with_audio: options.withAudio } : {}),
+      };
+    })
   );
 
   const rows = allRows.map((row, i) => ({

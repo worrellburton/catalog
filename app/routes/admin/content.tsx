@@ -179,6 +179,9 @@ export default function AdminContent() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
+  // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
+  const [genSplit, setGenSplit] = useState<boolean>(false);
+  const [genModel2, setGenModel2] = useState<string>('seedance-2');
   const [hoverPreview, setHoverPreview] = useState<{ url: string; x: number; y: number } | null>(null);
 
   // Multi-row selection on the Products table. Keyed by `${brand}-${name}` to
@@ -822,7 +825,7 @@ export default function AdminContent() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string, model: string) => {
+  const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string, model: string | string[]) => {
     if (genJobs.has(productId)) return;
     setGeneratingIds(prev => new Set(prev).add(productId));
     showToast(`Agent started generating creative for "${productName}"`);
@@ -1427,8 +1430,35 @@ export default function AdminContent() {
                   <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
                     {p.brand}
                   </td>
-                  <td style={{ textAlign: 'left' }}>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                  <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
+                    {p.url ? (
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${p.name} on ${p.brand}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontWeight: 600,
+                          fontSize: 12,
+                          color: '#0f172a',
+                          textDecoration: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#3b82f6'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#0f172a'; }}
+                      >
+                        {p.name}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.55, flexShrink: 0 }}>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                    )}
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
                   <td>{p.lookCount}</td>
@@ -1892,7 +1922,20 @@ export default function AdminContent() {
               Pick the style for <strong style={{ color: '#111' }}>{generatePicker.productName}</strong>
             </p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Video Model</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600 }}>
+                  {genSplit ? 'Ad 1 model' : 'Video Model'}
+                </label>
+                <label style={{ fontSize: 11, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={genSplit}
+                    onChange={e => setGenSplit(e.target.checked)}
+                    style={{ margin: 0 }}
+                  />
+                  Split (A/B two models)
+                </label>
+              </div>
               <select
                 value={genModel}
                 onChange={e => setGenModel(e.target.value)}
@@ -1909,6 +1952,30 @@ export default function AdminContent() {
                   </optgroup>
                 ))}
               </select>
+              {genSplit && (
+                <>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', margin: '10px 0 4px' }}>Ad 2 model</label>
+                  <select
+                    value={genModel2}
+                    onChange={e => setGenModel2(e.target.value)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      border: '1px solid #ddd', fontSize: 13, background: '#fff',
+                    }}
+                  >
+                    {Array.from(new Set(VIDEO_MODELS.map(m => m.group))).map(group => (
+                      <optgroup key={group} label={group}>
+                        {VIDEO_MODELS.filter(m => m.group === group).map(m => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
+                    One ad generated per model so you can compare side-by-side.
+                  </p>
+                </>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
@@ -1922,7 +1989,8 @@ export default function AdminContent() {
                   onClick={() => {
                     const picker = generatePicker;
                     setGeneratePicker(null);
-                    handleGenerateCreative(picker.productId, picker.productName, s.value, genModel);
+                    const models = genSplit ? [genModel, genModel2] : genModel;
+                    handleGenerateCreative(picker.productId, picker.productName, s.value, models);
                   }}
                   style={{
                     textAlign: 'left',
