@@ -1,5 +1,5 @@
 import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate } from '@remix-run/react';
+import { useNavigate, useSearchParams } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
@@ -173,7 +173,19 @@ interface LookRow {
 type Tab = 'looks' | 'products' | 'musics' | 'places';
 
 export default function AdminContent() {
-  const [activeTab, setActiveTab] = useState<Tab>('looks');
+  // Subtab state is mirrored onto the URL query (?tab=products) so each view
+  // is deep-linkable and the browser back button works like users expect.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = (searchParams.get('tab') as Tab | null) || 'looks';
+  const activeTab: Tab = (['looks', 'products', 'musics', 'places'].includes(urlTab) ? urlTab : 'looks') as Tab;
+  const setActiveTab = useCallback((next: Tab) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (next === 'looks') p.delete('tab');
+      else p.set('tab', next);
+      return p;
+    }, { replace: false });
+  }, [setSearchParams]);
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
