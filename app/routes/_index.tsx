@@ -106,6 +106,20 @@ function getRandomCatalogName(query?: string): string {
 
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
+  // First-visit splash: if the user has never been to catalog on this device,
+  // show a branded splash for ~2s before surfacing the gate / landing. The
+  // flag is written once and never revisited so repeat visitors skip it.
+  const [firstVisit, setFirstVisit] = useState(() => {
+    try {
+      return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
+    } catch { return false; }
+  });
+  useEffect(() => {
+    if (!firstVisit) return;
+    try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
+    const t = setTimeout(() => setFirstVisit(false), 1900);
+    return () => clearTimeout(t);
+  }, [firstVisit]);
   const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
@@ -283,6 +297,7 @@ export default function Home() {
       )}
 
       {showSplash && <SplashScreen />}
+      {firstVisit && <SplashScreen />}
 
       {view === 'landing' && (
         <LandingPage onStartBrowsing={handleLandingToApp} />
