@@ -1,6 +1,7 @@
 
 import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
-import { looks, creators, Look } from '~/data/looks';
+import { looks as rawLooks, creators, Look } from '~/data/looks';
+import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import LookCard from './LookCard';
 
 interface GridViewProps {
@@ -128,6 +129,18 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
+  // Hide admin-deleted looks + strip admin-deleted products from remaining looks.
+  const hiddenLookIds = useHiddenLooks();
+  const hiddenProductKeys = useHiddenProductKeys();
+  const looks = useMemo(() => (
+    rawLooks
+      .filter(l => !hiddenLookIds.has(l.id))
+      .map(l => ({
+        ...l,
+        products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
+      }))
+  ), [hiddenLookIds, hiddenProductKeys]);
+
   const filteredLooks = useMemo(() => {
     let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
     if (searchQuery) {
@@ -140,7 +153,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
       );
     }
     return filtered;
-  }, [activeFilter, searchQuery]);
+  }, [activeFilter, searchQuery, looks]);
 
   // Build an infinite pool by repeating looks
   const infinitePool = useMemo(() => {

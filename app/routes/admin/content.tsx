@@ -219,17 +219,13 @@ export default function AdminContent() {
     };
   }, [openTagsRow]);
 
-  // Same dismiss behaviour for the Links dropdown.
+  // Links is now an inline expanded row (not a floating popup) so the only
+  // way to close it is to click View again or press Escape.
   useEffect(() => {
     if (!openLinksRow) return;
-    const handler = () => setOpenLinksRow(null);
     const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenLinksRow(null); };
-    document.addEventListener('mousedown', handler);
     document.addEventListener('keydown', keyHandler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', keyHandler);
-    };
+    return () => document.removeEventListener('keydown', keyHandler);
   }, [openLinksRow]);
 
   // Add Products research modal
@@ -1284,9 +1280,11 @@ export default function AdminContent() {
                   });
                   setLastSelectedIndex(i);
                 };
+                const linksOpen = openLinksRow === rowKey;
+                const affiliates = linksOpen ? getAffiliatesFor(p.brand) : [];
                 return (
+                <Fragment key={`${p.brand}-${p.name}-${i}`}>
                 <tr
-                  key={`${p.brand}-${p.name}-${i}`}
                   style={isSelected ? { background: '#eef2ff' } : undefined}
                 >
                   <td onClick={(e) => e.stopPropagation()}>
@@ -1538,112 +1536,22 @@ export default function AdminContent() {
                       );
                     })()}
                   </td>
-                  <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-                    {(() => {
-                      const isOpen = openLinksRow === rowKey;
-                      const affiliates = getAffiliatesFor(p.brand);
-                      return (
-                        <>
-                          <button
-                            className="admin-btn admin-btn-secondary"
-                            style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenLinksRow(isOpen ? null : rowKey);
-                            }}
-                          >
-                            View
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                              style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-                            >
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </button>
-                          {isOpen && (
-                            <div
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 4px)',
-                                right: 0,
-                                zIndex: 50,
-                                width: 340,
-                                padding: 12,
-                                background: '#fff',
-                                border: '1px solid #e5e5e5',
-                                borderRadius: 8,
-                                boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
-                              }}
-                            >
-                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-                                Product URL
-                              </div>
-                              {p.url ? (
-                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12 }}>
-                                  <a
-                                    href={p.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                      flex: 1, fontSize: 11, color: '#3b82f6', textDecoration: 'none',
-                                      padding: '6px 8px', background: '#f5f7fb', borderRadius: 6,
-                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {p.url}
-                                  </a>
-                                  <button
-                                    className="admin-btn admin-btn-secondary"
-                                    style={{ fontSize: 10, padding: '4px 8px' }}
-                                    onClick={() => navigator.clipboard.writeText(p.url!)}
-                                  >
-                                    Copy
-                                  </button>
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 11, color: '#999', fontStyle: 'italic', marginBottom: 12 }}>No URL recorded</div>
-                              )}
-                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-                                Affiliate providers
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {affiliates.map((a, i) => (
-                                  <div
-                                    key={a.network}
-                                    style={{
-                                      display: 'flex', alignItems: 'center', gap: 8,
-                                      padding: '6px 8px',
-                                      background: i === 0 ? '#f0f9f3' : '#fafafa',
-                                      border: `1px solid ${i === 0 ? '#c6efd6' : '#eee'}`,
-                                      borderRadius: 6,
-                                    }}
-                                  >
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.network}</div>
-                                      {a.note && (
-                                        <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>{a.note}</div>
-                                      )}
-                                    </div>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: i === 0 ? '#16a34a' : '#111' }}>
-                                      {a.rate}
-                                    </div>
-                                    <a
-                                      href={a.signupUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="admin-btn admin-btn-secondary"
-                                      style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none' }}
-                                    >
-                                      Sign up ↗
-                                    </a>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenLinksRow(linksOpen ? null : rowKey);
+                      }}
+                    >
+                      View
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ transform: linksOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
                   </td>
                   <td>
                     <button
@@ -1705,6 +1613,86 @@ export default function AdminContent() {
                     </button>
                   </td>
                 </tr>
+                {linksOpen && (
+                  <tr className="admin-product-links-row">
+                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                              Product URL
+                            </div>
+                            {p.url ? (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <a
+                                  href={p.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    flex: 1, fontSize: 12, color: '#3b82f6', textDecoration: 'none',
+                                    padding: '8px 10px', background: '#f5f7fb', borderRadius: 6,
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {p.url}
+                                </a>
+                                <button
+                                  className="admin-btn admin-btn-secondary"
+                                  style={{ fontSize: 11, padding: '6px 10px' }}
+                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.url!); }}
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No URL recorded</div>
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                              Affiliate providers
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {affiliates.map((a, ai) => (
+                                <div
+                                  key={a.network}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '6px 10px',
+                                    background: ai === 0 ? '#f0f9f3' : '#fff',
+                                    border: `1px solid ${ai === 0 ? '#c6efd6' : '#eee'}`,
+                                    borderRadius: 6,
+                                  }}
+                                >
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.network}</div>
+                                    {a.note && (
+                                      <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>{a.note}</div>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: ai === 0 ? '#16a34a' : '#111' }}>
+                                    {a.rate}
+                                  </div>
+                                  <a
+                                    href={a.signupUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="admin-btn admin-btn-secondary"
+                                    style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none' }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Sign up ↗
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
                 );
               })}
             </tbody>

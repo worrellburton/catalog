@@ -1,11 +1,12 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
-import { looks as allLooks, type Look, type Product } from '~/data/looks';
+import { looks as allLooksRaw, type Look, type Product } from '~/data/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import { getLiveAds, type ProductAd } from '~/services/product-ads';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -37,13 +38,13 @@ type FeedState = {
 };
 
 type FeedAction =
-  | { type: 'OPEN_LOOK'; look: Look }
+  | { type: 'OPEN_LOOK'; look: Look; allLooks: Look[] }
   | { type: 'RESET'; looks: Look[] };
 
 function feedReducer(state: FeedState, action: FeedAction): FeedState {
   switch (action.type) {
     case 'OPEN_LOOK': {
-      const { look } = action;
+      const { look, allLooks } = action;
       const newSeen = new Set(state.seenLookIds);
       newSeen.add(look.id);
 
@@ -83,6 +84,19 @@ export default function ContinuousFeed({
   onCreateCatalog,
   bookmarks,
 }: ContinuousFeedProps) {
+  // Respect admin deletes: looks/products hidden via the Content admin panel
+  // must never appear in the consumer feed, detail pages, or similar-look rows.
+  const hiddenLookIds = useHiddenLooks();
+  const hiddenProductKeys = useHiddenProductKeys();
+  const allLooks = useMemo(() => {
+    return allLooksRaw
+      .filter(l => !hiddenLookIds.has(l.id))
+      .map(l => ({
+        ...l,
+        products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
+      }));
+  }, [hiddenLookIds, hiddenProductKeys]);
+
   const filteredLooks = useMemo(() => {
     const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
     if (searchQuery) {
@@ -98,7 +112,7 @@ export default function ContinuousFeed({
       return matched.length > 0 ? matched : base;
     }
     return base;
-  }, [activeFilter, searchQuery]);
+  }, [activeFilter, searchQuery, allLooks]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: filteredLooks, isInitial: true }],
@@ -177,9 +191,9 @@ export default function ContinuousFeed({
     if (onOpenLookProp) {
       onOpenLookProp(look);
     } else {
-      dispatch({ type: 'OPEN_LOOK', look });
+      dispatch({ type: 'OPEN_LOOK', look, allLooks });
     }
-  }, [onOpenLookProp]);
+  }, [onOpenLookProp, allLooks]);
 
   const handleOpenAdProduct = useCallback((ad: ProductAd) => {
     const url = ad.affiliate_url || ad.product?.url;
