@@ -238,12 +238,14 @@ export default function AdminModeration() {
                   </div>
                 </div>
 
-                {/* Product photo (larger) */}
-                {ad.product?.image_url && (
-                  <div style={{
+                {/* Product photo (larger) — links to product page */}
+                {ad.product?.image_url && (() => {
+                  const productHref = ad.affiliate_url || ad.product?.url || null;
+                  const wrapperStyle = {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     padding: 12, background: '#f9fafb', borderBottom: '1px solid #f5f5f5',
-                  }}>
+                  } as const;
+                  const img = (
                     <img
                       src={ad.product.image_url}
                       alt={ad.product.name || ''}
@@ -252,17 +254,47 @@ export default function AdminModeration() {
                         objectFit: 'contain', borderRadius: 6,
                       }}
                     />
-                  </div>
-                )}
+                  );
+                  if (productHref) {
+                    return (
+                      <a
+                        href={productHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Open product page"
+                        style={{ ...wrapperStyle, cursor: 'pointer', textDecoration: 'none' }}
+                      >
+                        {img}
+                      </a>
+                    );
+                  }
+                  return <div style={wrapperStyle}>{img}</div>;
+                })()}
 
-                {/* Product info */}
+                {/* Product info — name links to product page */}
                 <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5' }}>
                   <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {ad.product?.brand || '—'}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ad.product?.name || 'Unnamed'}
-                  </div>
+                  {(() => {
+                    const productHref = ad.affiliate_url || ad.product?.url || null;
+                    const nameStyle = { fontSize: 13, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
+                    if (productHref) {
+                      return (
+                        <a
+                          href={productHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ ...nameStyle, display: 'block', textDecoration: 'none' }}
+                        >
+                          {ad.product?.name || 'Unnamed'}
+                        </a>
+                      );
+                    }
+                    return <div style={nameStyle}>{ad.product?.name || 'Unnamed'}</div>;
+                  })()}
                   <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                     {ad.product?.price || ''}
                   </div>
