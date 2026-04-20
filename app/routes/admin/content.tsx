@@ -198,8 +198,23 @@ export default function AdminContent() {
     startedAt: number;
   }
   const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
-  const [linkModal, setLinkModal] = useState<{ name: string; brand: string; url: string } | null>(null);
-  const [tagsModal, setTagsModal] = useState<{ name: string; brand: string; tags: string[] } | null>(null);
+  // Which row's inline Links/affiliates dropdown is open.
+  const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
+  // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
+  const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
+
+  // Dismiss the open Tags dropdown on any outside click or Escape.
+  useEffect(() => {
+    if (!openTagsRow) return;
+    const handler = () => setOpenTagsRow(null);
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenTagsRow(null); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+  }, [openTagsRow]);
 
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
@@ -1391,18 +1406,77 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
-                  <td>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => setTagsModal({ name: p.name, brand: p.brand, tags: deriveTags(p.name, p.brand) })}
-                      title="View tags"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                        <line x1="7" y1="7" x2="7.01" y2="7" />
-                      </svg>
-                    </button>
+                  <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const tags = deriveTags(p.name, p.brand);
+                      const isOpen = openTagsRow === rowKey;
+                      return (
+                        <>
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenTagsRow(isOpen ? null : rowKey);
+                            }}
+                            title={isOpen ? 'Close tags' : 'View tags'}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                              <line x1="7" y1="7" x2="7.01" y2="7" />
+                            </svg>
+                            <span style={{ fontSize: 10, color: '#888' }}>{tags.length}</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </button>
+                          {isOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 4px)',
+                                left: 0,
+                                zIndex: 50,
+                                minWidth: 220,
+                                maxWidth: 300,
+                                padding: 10,
+                                background: '#fff',
+                                border: '1px solid #e5e5e5',
+                                borderRadius: 8,
+                                boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {tags.length === 0 ? (
+                                <div style={{ fontSize: 11, color: '#999', fontStyle: 'italic' }}>
+                                  No tags derived yet
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {tags.map(t => (
+                                    <span
+                                      key={t}
+                                      style={{
+                                        padding: '3px 8px',
+                                        borderRadius: 999,
+                                        background: '#f1f5f9',
+                                        color: '#0f172a',
+                                        fontSize: 11,
+                                        fontWeight: 500,
+                                      }}
+                                    >
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td>
                     <button
@@ -1748,48 +1822,6 @@ export default function AdminContent() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
               <button className="admin-btn admin-btn-secondary" onClick={() => setGeneratePicker(null)}>
                 Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tagsModal && (
-        <div className="admin-modal-overlay" onClick={() => setTagsModal(null)}>
-          <div
-            className="admin-modal"
-            style={{ width: 460, maxWidth: '90vw', padding: 24 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Tags</h2>
-            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
-              <strong style={{ color: '#111' }}>{tagsModal.name}</strong> · {tagsModal.brand}
-            </p>
-            {tagsModal.tags.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No tags derived yet</div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {tagsModal.tags.map(t => (
-                  <span
-                    key={t}
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 999,
-                      background: '#f1f5f9',
-                      color: '#0f172a',
-                      fontSize: 12,
-                      fontWeight: 500,
-                      border: '1px solid #e2e8f0',
-                    }}
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-              <button className="admin-btn admin-btn-secondary" onClick={() => setTagsModal(null)}>
-                Close
               </button>
             </div>
           </div>

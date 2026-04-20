@@ -139,11 +139,17 @@ export async function createProductAd(req: CreateAdRequest): Promise<{ data: Pro
 // up to 40 with credit purchases).
 const CONCURRENCY_LIMIT = 2;
 
+export interface GenerationOptions {
+  durationSeconds?: number;
+  withAudio?: boolean;
+}
+
 export async function createBatchAds(
   productIds: string[],
   style: string,
   count: number = 2,
   model?: string,
+  options: GenerationOptions = {},
 ): Promise<{ data: ProductAd[]; error: string | null }> {
   if (!supabase) return { data: [], error: 'Supabase not configured' };
 
@@ -166,6 +172,8 @@ export async function createBatchAds(
       // feed cards end-to-end (no letterboxing).
       aspect_ratio: '9:16',
       ...(model ? { veo_model: model } : {}),
+      ...(options.durationSeconds != null ? { duration_seconds: options.durationSeconds } : {}),
+      ...(options.withAudio != null ? { with_audio: options.withAudio } : {}),
     }))
   );
 
