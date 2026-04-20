@@ -283,6 +283,7 @@ export interface BrainstormResult {
   queries: string[];          // Claude-generated search queries
   products: BrainstormedProduct[];
   error: string | null;
+  source: 'live' | 'seed';    // 'seed' when live search fell back to offline DB
 }
 
 export interface BrainstormProgress {
@@ -351,7 +352,7 @@ export async function brainstormCatalogProducts(
 
   const { queries, error: brainstormErr } = await brainstormQueries(catalog, count);
   if (queries.length === 0) {
-    return { queries: [], products: [], error: brainstormErr || 'No queries generated' };
+    return { queries: [], products: [], error: brainstormErr || 'No queries generated', source: 'live' };
   }
 
   onProgress?.({ phase: 'searching', queries, completedQueries: 0 });
@@ -381,7 +382,27 @@ export async function brainstormCatalogProducts(
     onProgress?.({ phase: 'searching', queries, completedQueries: completed, products: [...all] });
   }
 
+  // If live search returned nothing for any query (usually: SERPAPI_KEY not
+  // configured → product-search edge function 500s), fall back to the offline
+  // seed DB so the modal still surfaces useful products instead of a red
+  // "non-2xx" banner. Caller can inspect `error` to show a warning if desired.
+  let source: 'live' | 'seed' = 'live';
+  if (all.length === 0) {
+    source = 'seed';
+    for (const q of queries) {
+      for (const p of seedSearch(q.toLowerCase())) {
+        const key = `${p.brand}|${p.name}`.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        all.push({ ...p, sourceQuery: q });
+      }
+    }
+  }
+
   all.sort((a, b) => b.thumbnailScore - a.thumbnailScore);
   onProgress?.({ phase: 'done', queries, completedQueries: completed, products: all });
-  return { queries, products: all, error: firstError };
+  // Only bubble up the live-search error when we truly have nothing to show,
+  // so a partial success doesn't paint the whole modal red.
+  const error = all.length === 0 ? firstError : null;
+  return { queries, products: all, error, source };
 }

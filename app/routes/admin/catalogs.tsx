@@ -266,7 +266,7 @@ export default function AdminCatalogs() {
     setBrainstormPhase('brainstorming');
     setBrainstormProgress(null);
 
-    const { queries, products, error } = await brainstormCatalogProducts(researchQuery, {
+    const { queries, products, error, source } = await brainstormCatalogProducts(researchQuery, {
       count: 8,
       onProgress: (p) => {
         setBrainstormPhase(p.phase);
@@ -280,7 +280,7 @@ export default function AdminCatalogs() {
 
     setBrainstormQueries(queries);
     setResearchResults(products);
-    setResearchSource('live');
+    setResearchSource(source);
     setResearchError(error);
     setResearchLoading(false);
     setBrainstormPhase('done');
