@@ -178,6 +178,9 @@ export default function AdminContent() {
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
+  // Batch variant: fires handleGenerateCreative for every item in the list
+  // when the user picks a style.
+  const [batchPicker, setBatchPicker] = useState<{ items: { id: string; name: string }[] } | null>(null);
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
   const [genSplit, setGenSplit] = useState<boolean>(false);
@@ -1168,6 +1171,26 @@ export default function AdminContent() {
               Clear
             </button>
             <button
+              className="admin-btn admin-btn-primary"
+              style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => {
+                // Resolve to the subset with real cloud ids — only those can
+                // drive the ad-generation pipeline.
+                const selectedIds: { id: string; name: string }[] = [];
+                for (const k of selectedProductKeys) {
+                  const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === k);
+                  if (match?.id) selectedIds.push({ id: match.id, name: match.name });
+                }
+                if (selectedIds.length === 0) {
+                  showToast('None of the selected products are saved in the cloud yet.');
+                  return;
+                }
+                setBatchPicker({ items: selectedIds });
+              }}
+            >
+              Generate selected
+            </button>
+            <button
               className="admin-btn admin-btn-secondary"
               style={{ fontSize: 12, padding: '4px 10px', color: '#dc2626' }}
               onClick={async () => {
@@ -1285,7 +1308,11 @@ export default function AdminContent() {
                 return (
                 <Fragment key={`${p.brand}-${p.name}-${i}`}>
                 <tr
-                  style={isSelected ? { background: '#eef2ff' } : undefined}
+                  onClick={(e) => toggleRow(e.shiftKey)}
+                  style={{
+                    ...(isSelected ? { background: '#eef2ff' } : undefined),
+                    cursor: 'pointer',
+                  }}
                 >
                   <td
                     onClick={(e) => {
@@ -1384,7 +1411,7 @@ export default function AdminContent() {
                         className="admin-btn admin-btn-primary"
                         style={{ fontSize: 11, padding: '4px 10px' }}
                         disabled={generatingIds.has(p.id)}
-                        onClick={() => p.id && setGeneratePicker({ productId: p.id, productName: p.name })}
+                        onClick={(e) => { e.stopPropagation(); if (p.id) setGeneratePicker({ productId: p.id, productName: p.name }); }}
                       >
                         {generatingIds.has(p.id) ? 'Queued' : 'Generate'}
                       </button>
@@ -2011,6 +2038,112 @@ export default function AdminContent() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
               <button className="admin-btn admin-btn-secondary" onClick={() => setGeneratePicker(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {batchPicker && (
+        <div
+          className="admin-modal-overlay"
+          onClick={() => setBatchPicker(null)}
+        >
+          <div
+            className="admin-modal"
+            style={{ width: 520, maxWidth: '90vw', padding: 24 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Batch generate</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+              Generating for <strong style={{ color: '#111' }}>{batchPicker.items.length}</strong> product{batchPicker.items.length === 1 ? '' : 's'}.
+              Each product gets {genSplit ? '1 ad per model (A/B)' : '2 ads'}.
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600 }}>
+                  {genSplit ? 'Ad 1 model' : 'Video Model'}
+                </label>
+                <label style={{ fontSize: 11, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={genSplit} onChange={e => setGenSplit(e.target.checked)} style={{ margin: 0 }} />
+                  Split (A/B two models)
+                </label>
+              </div>
+              <select
+                value={genModel}
+                onChange={e => setGenModel(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, background: '#fff' }}
+              >
+                {Array.from(new Set(VIDEO_MODELS.map(m => m.group))).map(group => (
+                  <optgroup key={group} label={group}>
+                    {VIDEO_MODELS.filter(m => m.group === group).map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {genSplit && (
+                <>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', margin: '10px 0 4px' }}>Ad 2 model</label>
+                  <select
+                    value={genModel2}
+                    onChange={e => setGenModel2(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, background: '#fff' }}
+                  >
+                    {Array.from(new Set(VIDEO_MODELS.map(m => m.group))).map(group => (
+                      <optgroup key={group} label={group}>
+                        {VIDEO_MODELS.filter(m => m.group === group).map(m => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { value: 'studio_clean', label: 'Studio Clean', desc: 'Minimal white-cyc studio. Clean product focus.' },
+                { value: 'editorial_runway', label: 'Editorial Runway', desc: 'High-fashion magazine look, dramatic lighting.' },
+                { value: 'street_style', label: 'Street Style', desc: 'Urban, candid, real-world environments.' },
+                { value: 'lifestyle_context', label: 'Lifestyle', desc: 'Product in everyday use, warm ambient tone.' },
+              ].map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => {
+                    const picker = batchPicker;
+                    setBatchPicker(null);
+                    const models = genSplit ? [genModel, genModel2] : genModel;
+                    showToast(`Queued ${picker.items.length} product${picker.items.length === 1 ? '' : 's'} for generation`);
+                    // Fire-and-forget per product so the UI stays responsive.
+                    picker.items.forEach(it => {
+                      handleGenerateCreative(it.id, it.name, s.value, models);
+                    });
+                    setSelectedProductKeys(new Set());
+                    setLastSelectedIndex(null);
+                  }}
+                  style={{
+                    textAlign: 'left', padding: '12px 14px', borderRadius: 8,
+                    border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#3b82f6';
+                    (e.currentTarget as HTMLElement).style.background = '#f8faff';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#e5e5e5';
+                    (e.currentTarget as HTMLElement).style.background = '#fff';
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: '#666', lineHeight: 1.4 }}>{s.desc}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => setBatchPicker(null)}>
                 Cancel
               </button>
             </div>
