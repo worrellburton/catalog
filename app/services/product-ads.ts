@@ -133,10 +133,11 @@ export async function createProductAd(req: CreateAdRequest): Promise<{ data: Pro
   return { data: data as ProductAd, error: null };
 }
 
-// Maximum concurrent generations the backend worker / Veo API can handle
-// without rate-limiting. Anything above this gets queued.
-// Set to 1 to stay under Tier 1 per-minute rate limits for Veo preview models.
-const CONCURRENCY_LIMIT = 1;
+// Maximum concurrent generations the backend worker / Fal.ai account can run
+// in parallel. Anything above this gets queued. Set to 2 to match Fal.ai's
+// default starter concurrency (new accounts get 2 concurrent requests; scales
+// up to 40 with credit purchases).
+const CONCURRENCY_LIMIT = 2;
 
 export async function createBatchAds(
   productIds: string[],
