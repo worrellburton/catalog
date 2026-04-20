@@ -209,17 +209,13 @@ export default function AdminContent() {
   // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
   const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
 
-  // Dismiss the open Tags dropdown on any outside click or Escape.
+  // Tags is now an inline expanded row like Links — close only via the button
+  // or Escape.
   useEffect(() => {
     if (!openTagsRow) return;
-    const handler = () => setOpenTagsRow(null);
     const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenTagsRow(null); };
-    document.addEventListener('mousedown', handler);
     document.addEventListener('keydown', keyHandler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', keyHandler);
-    };
+    return () => document.removeEventListener('keydown', keyHandler);
   }, [openTagsRow]);
 
   // Links is now an inline expanded row (not a floating popup) so the only
@@ -1304,7 +1300,9 @@ export default function AdminContent() {
                   setLastSelectedIndex(i);
                 };
                 const linksOpen = openLinksRow === rowKey;
+                const tagsOpen = openTagsRow === rowKey;
                 const affiliates = linksOpen ? getAffiliatesFor(p.brand) : [];
+                const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
                 return (
                 <Fragment key={`${p.brand}-${p.name}-${i}`}>
                 <tr
@@ -1497,77 +1495,27 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
-                  <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-                    {(() => {
-                      const tags = deriveTags(p.name, p.brand);
-                      const isOpen = openTagsRow === rowKey;
-                      return (
-                        <>
-                          <button
-                            className="admin-btn admin-btn-secondary"
-                            style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenTagsRow(isOpen ? null : rowKey);
-                            }}
-                            title={isOpen ? 'Close tags' : 'View tags'}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                              <line x1="7" y1="7" x2="7.01" y2="7" />
-                            </svg>
-                            <span style={{ fontSize: 10, color: '#888' }}>{tags.length}</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                              style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-                            >
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </button>
-                          {isOpen && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 4px)',
-                                left: 0,
-                                zIndex: 50,
-                                minWidth: 220,
-                                maxWidth: 300,
-                                padding: 10,
-                                background: '#fff',
-                                border: '1px solid #e5e5e5',
-                                borderRadius: 8,
-                                boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {tags.length === 0 ? (
-                                <div style={{ fontSize: 11, color: '#999', fontStyle: 'italic' }}>
-                                  No tags derived yet
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                  {tags.map(t => (
-                                    <span
-                                      key={t}
-                                      style={{
-                                        padding: '3px 8px',
-                                        borderRadius: 999,
-                                        background: '#f1f5f9',
-                                        color: '#0f172a',
-                                        fontSize: 11,
-                                        fontWeight: 500,
-                                      }}
-                                    >
-                                      {t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenTagsRow(tagsOpen ? null : rowKey);
+                      }}
+                      title={tagsOpen ? 'Close tags' : 'View tags'}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                        <line x1="7" y1="7" x2="7.01" y2="7" />
+                      </svg>
+                      <span style={{ fontSize: 10, color: '#888' }}>{deriveTags(p.name, p.brand).length}</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ transform: tagsOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
@@ -1646,6 +1594,31 @@ export default function AdminContent() {
                     </button>
                   </td>
                 </tr>
+                {tagsOpen && (
+                  <tr className="admin-product-tags-row">
+                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                      <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                          Tags
+                        </div>
+                        {rowTags.length === 0 ? (
+                          <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No tags derived yet</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {rowTags.map(t => (
+                              <span
+                                key={t}
+                                style={{ padding: '4px 10px', borderRadius: 999, background: '#f1f5f9', color: '#0f172a', fontSize: 12, fontWeight: 500, border: '1px solid #e2e8f0' }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
                     <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
