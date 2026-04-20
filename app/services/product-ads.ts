@@ -73,6 +73,9 @@ export async function getLiveAds(): Promise<ProductAd[]> {
   // Only surface explicitly approved (status='live') ads in the consumer feed.
   // New ads land at 'done' and must pass through the moderation queue first.
   // Boosted ads (boosted_until > now) sort to the top.
+  // Also respect the product.is_active toggle — deactivating a product
+  // should immediately pull its ads off the feed without requiring the
+  // admin to individually pause each ad.
   const { data, error } = await supabase
     .from('product_ads')
     .select(AD_SELECT)
@@ -84,7 +87,14 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     console.error('[getLiveAds] query error:', error.message);
     return [];
   }
-  return (data || []) as ProductAd[];
+  const rows = (data || []) as ProductAd[];
+  return rows.filter(ad => {
+    // When the join returned a product row, it must be active. If the join
+    // was filtered out (product deleted), keep the ad — the client-side
+    // admin_hidden_products filter handles that case.
+    const active = (ad.product as any)?.is_active;
+    return active !== false;
+  });
 }
 
 export async function boostAd(id: string, hours = 24): Promise<{ error: string | null }> {

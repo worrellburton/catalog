@@ -647,6 +647,9 @@ export default function AdminContent() {
   const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
+  // Model + prompt metadata keyed by video_url so each rendered thumb can
+  // label the model used and surface the prompt on hover.
+  const [adMetaByUrl, setAdMetaByUrl] = useState<Map<string, { model: string | null; prompt: string | null }>>(new Map());
   const [adImpressionsMap, setAdImpressionsMap] = useState<Map<string, number>>(new Map());
   const [adClicksMap, setAdClicksMap] = useState<Map<string, number>>(new Map());
 
@@ -663,17 +666,22 @@ export default function AdminContent() {
     if (!supabase) return;
     const { data } = await supabase
       .from('product_ads')
-      .select('product_id, video_url, status, impressions, clicks');
+      .select('product_id, video_url, status, impressions, clicks, veo_model, prompt');
     if (data) {
       setAdProductIds(new Set(data.map(r => r.product_id)));
       const videoMap = new Map<string, string[]>();
       const impMap = new Map<string, number>();
       const clkMap = new Map<string, number>();
+      const metaMap = new Map<string, { model: string | null; prompt: string | null }>();
       data.forEach(r => {
         if (r.video_url) {
           const existing = videoMap.get(r.product_id) || [];
           existing.push(r.video_url);
           videoMap.set(r.product_id, existing);
+          metaMap.set(r.video_url, {
+            model: (r as any).veo_model ?? null,
+            prompt: (r as any).prompt ?? null,
+          });
         }
         impMap.set(r.product_id, (impMap.get(r.product_id) || 0) + (r.impressions || 0));
         clkMap.set(r.product_id, (clkMap.get(r.product_id) || 0) + (r.clicks || 0));
@@ -681,6 +689,7 @@ export default function AdminContent() {
       setAdVideoMap(videoMap);
       setAdImpressionsMap(impMap);
       setAdClicksMap(clkMap);
+      setAdMetaByUrl(metaMap);
     }
   }, []);
 
@@ -1707,19 +1716,41 @@ export default function AdminContent() {
                               <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No videos generated yet.</div>
                             ) : (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8 }}>
-                                {p.video_urls.map((v, vi) => (
-                                  <div
-                                    key={vi}
-                                    style={{ aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000' }}
-                                    onMouseEnter={(ev) => {
-                                      const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                                      setHoverPreview({ url: v, x: r.right + 8, y: r.top });
-                                    }}
-                                    onMouseLeave={() => setHoverPreview(null)}
-                                  >
-                                    <video src={v} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </div>
-                                ))}
+                                {p.video_urls.map((v, vi) => {
+                                  const meta = adMetaByUrl.get(v);
+                                  const modelLabel = meta?.model
+                                    ? (VIDEO_MODELS.find(m => m.value === meta.model)?.label ?? meta.model)
+                                    : null;
+                                  const hoverTitle = meta?.prompt
+                                    ? `${modelLabel ?? 'Unknown model'}\n\nPrompt:\n${meta.prompt}`
+                                    : (modelLabel ?? 'Model unknown');
+                                  return (
+                                    <div key={vi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      <div
+                                        style={{ aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
+                                        title={hoverTitle}
+                                        onMouseEnter={(ev) => {
+                                          const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                                          setHoverPreview({ url: v, x: r.right + 8, y: r.top });
+                                        }}
+                                        onMouseLeave={() => setHoverPreview(null)}
+                                      >
+                                        <video src={v} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      </div>
+                                      <div
+                                        title={hoverTitle}
+                                        style={{
+                                          fontSize: 9, fontWeight: 600, color: '#475569',
+                                          textTransform: 'uppercase', letterSpacing: '0.3px',
+                                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                          cursor: 'help',
+                                        }}
+                                      >
+                                        {modelLabel ?? '—'}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
