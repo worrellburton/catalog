@@ -825,23 +825,52 @@ export default function AdminContent() {
     });
   }, [crawledProducts, adProductIds, adVideoMap, adImpressionsMap, adClicksMap]);
 
-  // Flip products.is_active for a single product. Defined here (after
-  // allProducts + selectedProductKeys) so its useCallback deps array
-  // doesn't hit a temporal dead zone on the first render.
+  // "Active" toggle controls whether this product is actually on the feed.
+  //   ON  → set products.is_active = true AND promote the newest `done` or
+  //         `paused` ad for this product to `live` so it starts serving.
+  //   OFF → set products.is_active = false AND pause every live ad for the
+  //         product so it falls off the feed immediately.
   const toggleProductActive = useCallback(async (productId: string, active: boolean) => {
     setCrawledProducts(prev =>
       prev.map(r => (r.id === productId ? { ...r, is_active: active } : r))
     );
     if (!supabase) return;
-    const { error } = await supabase
+    const { error: updateErr } = await supabase
       .from('products')
       .update({ is_active: active })
       .eq('id', productId);
-    if (error) {
+    if (updateErr) {
       setCrawledProducts(prev =>
         prev.map(r => (r.id === productId ? { ...r, is_active: !active } : r))
       );
-      console.error('toggleProductActive failed:', error.message);
+      console.error('toggleProductActive failed:', updateErr.message);
+      return;
+    }
+    if (active) {
+      // Auto-approve: find the newest ad with a finished video and flip it
+      // to live. If every ad is already live or still generating, this is a
+      // no-op — no harm done.
+      const { data: candidate } = await supabase
+        .from('product_ads')
+        .select('id')
+        .eq('product_id', productId)
+        .in('status', ['done', 'paused'])
+        .not('video_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (candidate && candidate.length > 0) {
+        await supabase
+          .from('product_ads')
+          .update({ status: 'live', enabled: true })
+          .eq('id', (candidate[0] as { id: string }).id);
+      }
+    } else {
+      // Pause anything currently live for this product so it falls off feed.
+      await supabase
+        .from('product_ads')
+        .update({ status: 'paused', enabled: false })
+        .eq('product_id', productId)
+        .eq('status', 'live');
     }
   }, []);
 
@@ -855,8 +884,32 @@ export default function AdminContent() {
     setCrawledProducts(prev =>
       prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
     );
-    if (supabase) {
-      await supabase.from('products').update({ is_active: active }).in('id', ids);
+    if (!supabase) return;
+    await supabase.from('products').update({ is_active: active }).in('id', ids);
+    if (active) {
+      // Promote newest finished ad per product, in parallel.
+      await Promise.all(ids.map(async (pid) => {
+        const { data: candidate } = await supabase!
+          .from('product_ads')
+          .select('id')
+          .eq('product_id', pid)
+          .in('status', ['done', 'paused'])
+          .not('video_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (candidate && candidate.length > 0) {
+          await supabase!
+            .from('product_ads')
+            .update({ status: 'live', enabled: true })
+            .eq('id', (candidate[0] as { id: string }).id);
+        }
+      }));
+    } else {
+      await supabase
+        .from('product_ads')
+        .update({ status: 'paused', enabled: false })
+        .in('product_id', ids)
+        .eq('status', 'live');
     }
   }, [selectedProductKeys, allProducts]);
 
