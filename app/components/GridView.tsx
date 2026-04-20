@@ -1,6 +1,7 @@
 
 import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
-import { looks as rawLooks, creators, Look } from '~/data/looks';
+import { looks as staticRawLooks, creators, Look } from '~/data/looks';
+import { getLooks } from '~/services/looks';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import LookCard from './LookCard';
 
@@ -132,14 +133,31 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   // Hide admin-deleted looks + strip admin-deleted products from remaining looks.
   const hiddenLookIds = useHiddenLooks();
   const hiddenProductKeys = useHiddenProductKeys();
+
+  // Pull the live look set from Supabase so the grid mirrors the admin's
+  // Content → Looks tab exactly. Static seed is only the fallback.
+  const [dbLooks, setDbLooks] = useState<Look[]>(staticRawLooks);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fetched = await getLooks();
+        if (!cancelled && fetched.length > 0) setDbLooks(fetched);
+      } catch {
+        // keep static fallback
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const looks = useMemo(() => (
-    rawLooks
+    dbLooks
       .filter(l => !hiddenLookIds.has(l.id))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
       }))
-  ), [hiddenLookIds, hiddenProductKeys]);
+  ), [dbLooks, hiddenLookIds, hiddenProductKeys]);
 
   const filteredLooks = useMemo(() => {
     let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
@@ -155,24 +173,15 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return filtered;
   }, [activeFilter, searchQuery, looks]);
 
-  // Build an infinite pool by repeating looks. Shuffle each full deck and
-  // dedupe by video path so the same mp4 can't appear twice in one pass
-  // (current seed has 12 looks but only 2 unique videos).
+  // Infinite pool = shuffle the full admin look set, lay it down, repeat.
   const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];
     const poolSize = 200;
     const result: (Look & { displayIndex: number })[] = [];
     let displayIndex = 0;
-    void shuffleKey; // consumed for memo invalidation only; shuffling below
-
-    const byVideo = new Map<string, Look>();
-    for (const l of filteredLooks) {
-      if (!byVideo.has(l.video)) byVideo.set(l.video, l);
-    }
-    const uniqueLooks = [...byVideo.values()];
-
+    void shuffleKey;
     while (result.length < poolSize) {
-      const deck = [...uniqueLooks];
+      const deck = [...filteredLooks];
       for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];

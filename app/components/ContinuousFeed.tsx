@@ -1,5 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
-import { looks as allLooksRaw, type Look, type Product } from '~/data/looks';
+import { looks as staticLooksRaw, type Look, type Product } from '~/data/looks';
+import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
@@ -88,14 +89,32 @@ export default function ContinuousFeed({
   // must never appear in the consumer feed, detail pages, or similar-look rows.
   const hiddenLookIds = useHiddenLooks();
   const hiddenProductKeys = useHiddenProductKeys();
+
+  // Load looks live from Supabase so the feed mirrors whatever the admin's
+  // Content tab shows. Static seed is only used as a fallback while the
+  // fetch is in flight or if Supabase is unreachable.
+  const [dbLooks, setDbLooks] = useState<Look[]>(staticLooksRaw);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fetched = await getLooks();
+        if (!cancelled && fetched.length > 0) setDbLooks(fetched);
+      } catch {
+        // keep static fallback
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const allLooks = useMemo(() => {
-    return allLooksRaw
+    return dbLooks
       .filter(l => !hiddenLookIds.has(l.id))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
       }));
-  }, [hiddenLookIds, hiddenProductKeys]);
+  }, [dbLooks, hiddenLookIds, hiddenProductKeys]);
 
   const filteredLooks = useMemo(() => {
     const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
