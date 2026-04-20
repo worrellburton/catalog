@@ -4,6 +4,7 @@ import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
+import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 
@@ -512,8 +513,17 @@ export default function AdminContent() {
     }));
   }, []);
 
+  const adminQuery = useAdminSearch();
+
   const lookRows: LookRow[] = useMemo(() => {
-    const filtered = looks.filter(l => !deletedLookIds.has(l.id));
+    let filtered = looks.filter(l => !deletedLookIds.has(l.id));
+    if (adminQuery) {
+      filtered = filtered.filter(l => {
+        const c = creators[l.creator];
+        const hay = `${l.creator} ${c?.displayName || ''} ${l.title || ''} ${l.products.map(p => `${p.brand} ${p.name}`).join(' ')}`.toLowerCase();
+        return hay.includes(adminQuery);
+      });
+    }
     const ordered = lookOrder
       ? [...filtered].sort((a, b) => {
           const ai = lookOrder.indexOf(a.id);
@@ -532,7 +542,7 @@ export default function AdminContent() {
         products: look.products.length,
       };
     });
-  }, [deletedLookIds, lookOrder]);
+  }, [deletedLookIds, lookOrder, adminQuery]);
 
   // Brand-to-domain mapping for Brandfetch logos
   const brandDomains: Record<string, string> = useMemo(() => ({
@@ -728,9 +738,13 @@ export default function AdminContent() {
       if (productFilter === 'no-creative' && p.hasCreative) return false;
       const key = `${p.brand}-${p.name}`;
       if (deletedProductKeys.has(key)) return false;
+      if (adminQuery) {
+        const hay = `${p.brand} ${p.name}`.toLowerCase();
+        if (!hay.includes(adminQuery)) return false;
+      }
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys]
+    [allProducts, productFilter, deletedProductKeys, adminQuery]
   );
   const productTable = useSortableTable(filteredProductsList);
 

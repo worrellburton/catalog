@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Outlet, NavLink, useNavigate } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
@@ -251,10 +251,28 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Sync the topbar query to the URL ?q= so any admin page can read it
+  // via useAdminSearch() and live-filter its visible data. Debounced so
+  // typing doesn't spam history; replaceState so the back button still
+  // works as expected.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(searchParams);
+      if (searchQuery) next.set('q', searchQuery);
+      else next.delete('q');
+      // Only update if changed
+      if ((next.get('q') || '') !== (searchParams.get('q') || '')) {
+        setSearchParams(next, { replace: true });
+      }
+    }, 120);
+    return () => clearTimeout(t);
+  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -508,7 +526,7 @@ export default function AdminLayout() {
               ref={searchInputRef}
               className="admin-search-input"
               type="text"
-              placeholder="Search pages, shoppers, creators..."
+              placeholder="Search pages or filter this view…"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
               onFocus={() => setSearchOpen(true)}
