@@ -1,6 +1,7 @@
 
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { searchSuggestions } from '~/data/looks';
+import { useAuth } from '~/hooks/useAuth';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 
 interface BottomBarProps {
@@ -16,6 +17,8 @@ interface BottomBarProps {
 export default function BottomBar({
   activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName
 }: BottomBarProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -134,14 +137,16 @@ export default function BottomBar({
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
           <div className="search-suggestions-track" ref={trackRef}>
-            <button
-              className="search-suggestion"
-              onClick={(e) => handleSuggestionClick('', e)}
-              style={{ fontWeight: 700, opacity: 0.95 }}
-              title="Show every available look and product"
-            >
-              Show all
-            </button>
+            {isAdmin && (
+              <button
+                className="search-suggestion"
+                onClick={(e) => handleSuggestionClick('', e)}
+                style={{ fontWeight: 700, opacity: 0.95 }}
+                title="Admin-only: show every available look and product without a catalog filter"
+              >
+                Show all
+              </button>
+            )}
             {shuffledSuggestions.map((s, i) => (
               <button
                 key={i}
