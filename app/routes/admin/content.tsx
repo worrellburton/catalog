@@ -1,6 +1,8 @@
 import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
-import { looks, creators } from '~/data/looks';
+import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
+import type { Look, Creator } from '~/data/looks';
+import { getLooks, getCreators } from '~/services/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -194,6 +196,31 @@ export default function AdminContent() {
   // Batch variant: fires handleGenerateCreative for every item in the list
   // when the user picks a style.
   const [batchPicker, setBatchPicker] = useState<{ items: { id: string; name: string }[] } | null>(null);
+
+  // Looks + creators are loaded from Supabase so the admin view reflects the
+  // live DB instead of the hardcoded seed in app/data/looks.ts. Fall back to
+  // the static module only if the Supabase fetch returns nothing (e.g.
+  // offline or first-boot before seed has been applied).
+  const [looks, setLooks] = useState<Look[]>(staticLooks);
+  const [creators, setCreators] = useState<Record<string, Creator>>(staticCreators);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [fetchedLooks, fetchedCreators] = await Promise.all([
+          getLooks(),
+          getCreators(),
+        ]);
+        if (cancelled) return;
+        if (fetchedLooks.length > 0) setLooks(fetchedLooks);
+        if (Object.keys(fetchedCreators).length > 0) setCreators(fetchedCreators);
+      } catch (err) {
+        console.warn('[AdminContent] live looks fetch failed, keeping static seed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
   const [genSplit, setGenSplit] = useState<boolean>(false);
