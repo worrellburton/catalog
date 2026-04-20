@@ -217,29 +217,12 @@ export default function AdminWhatsNew() {
         color: '#0a0a0a',
       }}
     >
-      <header style={{ marginBottom: 40, paddingBottom: 24, borderBottom: '1px solid #e5e5e7' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#86868b', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
-          Changelog
-        </div>
-        <h1 style={{
-          fontSize: 32,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.1,
-          margin: 0,
-        }}>
-          What's New
-        </h1>
-        <p style={{
-          marginTop: 8,
-          fontSize: 15,
-          color: '#6e6e73',
-          letterSpacing: '-0.005em',
-          margin: '8px 0 0',
-        }}>
+      <div className="admin-page-header" style={{ marginBottom: 20 }}>
+        <h1>What's New</h1>
+        <div className="admin-page-subtitle">
           Plain-English updates from the team. Every change shipped to Catalog.
-        </p>
-      </header>
+        </div>
+      </div>
 
       {loading && (
         <div style={{ color: '#6e6e73', fontSize: 15 }}>Loading…</div>
