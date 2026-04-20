@@ -181,6 +181,12 @@ export default function AdminContent() {
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   const [hoverPreview, setHoverPreview] = useState<{ url: string; x: number; y: number } | null>(null);
 
+  // Multi-row selection on the Products table. Keyed by `${brand}-${name}` to
+  // match deletedProductKeys. Shift-click extends the range from the last
+  // explicit toggle; plain click toggles a single row.
+  const [selectedProductKeys, setSelectedProductKeys] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
   // In-flight generation jobs per product — tracks individual ad rows so we
   // can show an accurate progress bar bound to the ad statuses in Supabase.
   interface GenJob {
@@ -424,10 +430,28 @@ export default function AdminContent() {
 
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
-  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(new Set());
-  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(new Set());
+  // localStorage keys act as a durable fallback when the Supabase
+  // admin_hidden_* migrations haven't been applied — otherwise deletes would
+  // vanish on page refresh and look "undone" to the admin.
+  const LOCAL_LOOKS_KEY = 'admin:hiddenLookIds';
+  const LOCAL_PRODUCTS_KEY = 'admin:hiddenProductKeys';
+  const readLocalSet = <T extends string | number>(key: string): Set<T> => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch { return new Set(); }
+  };
+  const writeLocalSet = (key: string, set: Set<string | number>) => {
+    try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
+  };
 
-  // Load hidden sets from Supabase on mount
+  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(() => readLocalSet<number>(LOCAL_LOOKS_KEY));
+  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => readLocalSet<string>(LOCAL_PRODUCTS_KEY));
+
+  // Merge Supabase hidden sets on top of the local fallback. If the remote
+  // table is missing or errors, the local set still wins — deletions stick.
   useEffect(() => {
     if (!supabase) return;
     (async () => {
@@ -436,12 +460,20 @@ export default function AdminContent() {
         supabase.from('admin_hidden_products').select('brand, name'),
       ]);
       if (looksRes.data) {
-        setDeletedLookIds(new Set(looksRes.data.map((r: { look_id: number }) => r.look_id)));
+        setDeletedLookIds(prev => {
+          const merged = new Set(prev);
+          for (const r of looksRes.data as { look_id: number }[]) merged.add(r.look_id);
+          writeLocalSet(LOCAL_LOOKS_KEY, merged);
+          return merged;
+        });
       }
       if (prodsRes.data) {
-        setDeletedProductKeys(new Set(
-          prodsRes.data.map((r: { brand: string; name: string }) => `${r.brand}-${r.name}`)
-        ));
+        setDeletedProductKeys(prev => {
+          const merged = new Set(prev);
+          for (const r of prodsRes.data as { brand: string; name: string }[]) merged.add(`${r.brand}-${r.name}`);
+          writeLocalSet(LOCAL_PRODUCTS_KEY, merged);
+          return merged;
+        });
       }
     })();
   }, []);
@@ -450,10 +482,11 @@ export default function AdminContent() {
 
   const deleteLook = useCallback(async (id: number) => {
     if (!window.confirm('Delete this look? This cannot be undone.')) return;
-    // Optimistic
+    // Optimistic + durable local persist so refresh keeps the deletion.
     setDeletedLookIds(prev => {
       const next = new Set(prev);
       next.add(id);
+      writeLocalSet(LOCAL_LOOKS_KEY, next);
       return next;
     });
     if (!supabase) return;
@@ -461,15 +494,17 @@ export default function AdminContent() {
       .from('admin_hidden_looks')
       .upsert({ look_id: id }, { onConflict: 'look_id' });
     if (error) {
-      // Missing table = migration not applied yet. Keep hide in-memory only.
+      // Missing table = migration not applied yet. Local state already
+      // persisted via localStorage, so the deletion still survives refresh.
       const tableMissing =
         error.code === 'PGRST205' ||
         /schema cache|does not exist|admin_hidden_looks/i.test(error.message);
       if (tableMissing) return;
-      // Rollback on real error
+      // Rollback on real error — keep user's data in sync with the server.
       setDeletedLookIds(prev => {
         const next = new Set(prev);
         next.delete(id);
+        writeLocalSet(LOCAL_LOOKS_KEY, next);
         return next;
       });
       window.alert(`Delete failed: ${error.message}`);
@@ -1089,10 +1124,78 @@ export default function AdminContent() {
               <span className="admin-tab-badge">{allProducts.filter(p => !p.hasCreative).length}</span>
             </button>
           </div>
+        {selectedProductKeys.size > 0 && (
+          <div className="admin-bulk-bar" style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 14px', marginBottom: 8,
+            background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8,
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#3730a3' }}>
+              {selectedProductKeys.size} selected
+            </span>
+            <button
+              className="admin-btn admin-btn-secondary"
+              style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => { setSelectedProductKeys(new Set()); setLastSelectedIndex(null); }}
+            >
+              Clear
+            </button>
+            <button
+              className="admin-btn admin-btn-secondary"
+              style={{ fontSize: 12, padding: '4px 10px', color: '#dc2626' }}
+              onClick={async () => {
+                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}?`)) return;
+                // Mirror the single-delete path: optimistic hide + persist.
+                setDeletedProductKeys(prev => {
+                  const next = new Set(prev);
+                  for (const k of selectedProductKeys) next.add(k);
+                  writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+                  return next;
+                });
+                if (supabase) {
+                  const rows = [...selectedProductKeys].map(k => {
+                    const [brand, ...rest] = k.split('-');
+                    return { brand, name: rest.join('-') };
+                  });
+                  await supabase.from('admin_hidden_products').upsert(rows, { onConflict: 'brand,name' });
+                }
+                showToast(`Deleted ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                setSelectedProductKeys(new Set());
+                setLastSelectedIndex(null);
+              }}
+            >
+              Delete selected
+            </button>
+          </div>
+        )}
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all on this page"
+                    checked={productTable.sortedData.length > 0 && productTable.sortedData.every(p => selectedProductKeys.has(`${p.brand}-${p.name}`))}
+                    ref={el => {
+                      if (!el) return;
+                      const visible = productTable.sortedData.map(p => `${p.brand}-${p.name}`);
+                      const some = visible.some(k => selectedProductKeys.has(k));
+                      const all = visible.length > 0 && visible.every(k => selectedProductKeys.has(k));
+                      el.indeterminate = some && !all;
+                    }}
+                    onChange={(e) => {
+                      const visible = productTable.sortedData.map(p => `${p.brand}-${p.name}`);
+                      setSelectedProductKeys(prev => {
+                        const next = new Set(prev);
+                        if (e.target.checked) visible.forEach(k => next.add(k));
+                        else visible.forEach(k => next.delete(k));
+                        return next;
+                      });
+                      setLastSelectedIndex(null);
+                    }}
+                  />
+                </th>
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <th style={{ textAlign: 'left' }}>Photos</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -1109,8 +1212,49 @@ export default function AdminContent() {
               </tr>
             </thead>
             <tbody>
-              {productTable.sortedData.map((p, i) => (
-                <tr key={`${p.brand}-${p.name}-${i}`}>
+              {productTable.sortedData.map((p, i) => {
+                const rowKey = `${p.brand}-${p.name}`;
+                const isSelected = selectedProductKeys.has(rowKey);
+                const toggleRow = (shiftKey: boolean) => {
+                  setSelectedProductKeys(prev => {
+                    const next = new Set(prev);
+                    if (shiftKey && lastSelectedIndex !== null) {
+                      // Shift-click: select every row between lastSelectedIndex and i
+                      // (inclusive), matching the target row's resulting state so a
+                      // shift-click after a deselect clears the range too.
+                      const from = Math.min(lastSelectedIndex, i);
+                      const to = Math.max(lastSelectedIndex, i);
+                      const shouldSelect = !isSelected;
+                      for (let j = from; j <= to; j++) {
+                        const k = `${productTable.sortedData[j].brand}-${productTable.sortedData[j].name}`;
+                        if (shouldSelect) next.add(k); else next.delete(k);
+                      }
+                    } else {
+                      if (isSelected) next.delete(rowKey); else next.add(rowKey);
+                    }
+                    return next;
+                  });
+                  setLastSelectedIndex(i);
+                };
+                return (
+                <tr
+                  key={`${p.brand}-${p.name}-${i}`}
+                  style={isSelected ? { background: '#eef2ff' } : undefined}
+                >
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${p.name}`}
+                      checked={isSelected}
+                      onClick={(e) => {
+                        // Intercept the click so we can read shiftKey; prevent the
+                        // browser's default toggle because we manage state ourselves.
+                        e.preventDefault();
+                        toggleRow(e.shiftKey);
+                      }}
+                      onChange={() => { /* handled in onClick */ }}
+                    />
+                  </td>
                   <td>
                     {p.hasCreative ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1190,7 +1334,7 @@ export default function AdminContent() {
                         disabled={generatingIds.has(p.id)}
                         onClick={() => p.id && setGeneratePicker({ productId: p.id, productName: p.name })}
                       >
-                        {generatingIds.has(p.id) ? 'Starting…' : 'Generate'}
+                        {generatingIds.has(p.id) ? 'Queued' : 'Generate'}
                       </button>
                     ) : (
                       <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
@@ -1288,10 +1432,11 @@ export default function AdminContent() {
                           }
                           setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
                         }
-                        // Optimistic hide
+                        // Optimistic hide + durable local persist.
                         setDeletedProductKeys(prev => {
                           const next = new Set(prev);
                           next.add(key);
+                          writeLocalSet(LOCAL_PRODUCTS_KEY, next);
                           return next;
                         });
                         if (supabase) {
@@ -1299,17 +1444,16 @@ export default function AdminContent() {
                             .from('admin_hidden_products')
                             .upsert({ brand: p.brand, name: p.name }, { onConflict: 'brand,name' });
                           if (error) {
-                            // Missing table (PGRST205 / "schema cache") = migration not applied yet.
-                            // Keep the hide in-memory only so the admin can still dismiss rows.
+                            // Missing table = migration not applied yet. localStorage
+                            // is the source of truth in that case, so the hide sticks.
                             const tableMissing =
                               error.code === 'PGRST205' ||
                               /schema cache|does not exist|admin_hidden_products/i.test(error.message);
-                            if (tableMissing) {
-                              showToast(`Hidden locally (run migration 017 to persist).`);
-                            } else {
+                            if (!tableMissing) {
                               setDeletedProductKeys(prev => {
                                 const next = new Set(prev);
                                 next.delete(key);
+                                writeLocalSet(LOCAL_PRODUCTS_KEY, next);
                                 return next;
                               });
                               showToast(`Hide failed: ${error.message}`);
@@ -1329,7 +1473,8 @@ export default function AdminContent() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

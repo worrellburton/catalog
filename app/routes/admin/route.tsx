@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
+import LiveCursors from '~/components/LiveCursors';
 import { useAuth } from '~/hooks/useAuth';
+import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-ads';
 
@@ -28,6 +30,7 @@ const navItems: NavItem[] = [
   { to: '/admin/moderation', label: 'Moderation', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
   { to: '/admin/revenue', label: 'Performance', icon: 'M3 3v18h18M7 14l4-4 4 4 6-6' },
   { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
+  { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
 ];
 
 interface SearchItem {
@@ -54,6 +57,7 @@ const allSearchItems: SearchItem[] = [
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
+  { label: 'Decks', type: 'Page', to: '/admin/decks' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
@@ -423,12 +427,19 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
 
+  const liveCursors = useLiveCursors({
+    selfId: user?.id,
+    selfName: user?.displayName || user?.email?.split('@')[0] || 'Admin',
+    enabled: !!user,
+  });
+
   if (loading || !user) {
     return null;
   }
 
   return (
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'}`}>
+      <LiveCursors cursors={liveCursors} />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <CatalogLogo className="admin-logo" />
@@ -559,8 +570,9 @@ export default function AdminLayout() {
               aria-label="Notifications"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={totalActiveCount > 0 ? '#111' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+                <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" />
+                <path d="M5 14l.6 1.4L7 16l-1.4.6L5 18l-.6-1.4L3 16l1.4-.6L5 14z" />
               </svg>
               {totalActiveCount > 0 && (
                 <span style={{

@@ -7,13 +7,6 @@ import ContinuousFeed from '~/components/ContinuousFeed';
 import CreatorPage from '~/components/CreatorPage';
 import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
-import DeckView from '~/components/DeckView';
-import DeckViewV6 from '~/components/DeckViewV6';
-import DeckViewV7 from '~/components/DeckViewV7';
-import DeckViewV8 from '~/components/DeckViewV8';
-import DeckViewV9 from '~/components/DeckViewV9';
-import DeckViewV1 from '~/components/DeckViewV1';
-import DeckSelector from '~/components/DeckSelector';
 import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -24,7 +17,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'deck-selector' | 'deck';
+type AppView = 'locked' | 'splash' | 'landing' | 'app';
 
 // Map individual search words to catalogNames keys so queries like
 // "first date fit", "gym fits", or "cozy fall vibes" land on themed names.
@@ -123,8 +116,6 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [isLightMode, setIsLightMode] = useState(false);
-  const [fromDeck, setFromDeck] = useState(false);
-  const [activeDeck, setActiveDeck] = useState<'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v1'>('v1');
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState(getRandomCatalogName);
@@ -177,27 +168,7 @@ export default function Home() {
   // Read hash on mount for deep linking
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'deck' || hash === 'decks') {
-      setView('deck-selector');
-    } else if (hash === 'deck/v1' || hash.startsWith('deck/v1/')) {
-      setActiveDeck('v1');
-      setView('deck');
-    } else if (hash === 'deck/v9' || hash.startsWith('deck/v9/')) {
-      setActiveDeck('v9');
-      setView('deck');
-    } else if (hash === 'deck/v8' || hash.startsWith('deck/v8/')) {
-      setActiveDeck('v8');
-      setView('deck');
-    } else if (hash === 'deck/v7' || hash.startsWith('deck/v7/')) {
-      setActiveDeck('v7');
-      setView('deck');
-    } else if (hash === 'deck/v6' || hash.startsWith('deck/v6/')) {
-      setActiveDeck('v6');
-      setView('deck');
-    } else if (hash === 'deck/v5' || hash.startsWith('deck/v5/')) {
-      setActiveDeck('v5');
-      setView('deck');
-    } else if (hash === 'app') {
+    if (hash === 'app') {
       setView('app');
     } else if (hash === 'landing') {
       setView('landing');
@@ -210,9 +181,7 @@ export default function Home() {
     if (window.location.hash.includes('access_token')) return;
 
     let hash = '';
-    if (view === 'deck-selector') hash = 'deck';
-    else if (view === 'deck') hash = `deck/${activeDeck}`;
-    else if (view === 'app') hash = 'app';
+    if (view === 'app') hash = 'app';
     else if (view === 'landing') hash = 'landing';
     else if (view === 'locked') hash = '';
 
@@ -221,15 +190,11 @@ export default function Home() {
     } else {
       window.history.replaceState(null, '', window.location.pathname);
     }
-  }, [view, activeDeck]);
+  }, [view]);
 
   const handlePasswordSubmit = useCallback((password: string): boolean => {
     if (password === 'awds') {
       navigate('/admin');
-      return true;
-    }
-    if (password === 'deck') {
-      setView('deck-selector');
       return true;
     }
     if (password === '123') {
@@ -269,29 +234,6 @@ export default function Home() {
       setView('app');
       setShowSplash(false);
     }, 1200);
-  }, []);
-
-  const handleDeckToApp = useCallback(() => {
-    setFromDeck(true);
-    setView('app');
-  }, []);
-
-  const handleDeckToLanding = useCallback(() => {
-    setView('landing');
-  }, []);
-
-  const handleSelectDeck = useCallback((deckId: string) => {
-    setActiveDeck(deckId as 'v5' | 'v6' | 'v7' | 'v8' | 'v9');
-    setView('deck');
-  }, []);
-
-  const handleBackToDeckSelector = useCallback(() => {
-    setView('deck-selector');
-  }, []);
-
-  const handleBackToDeck = useCallback(() => {
-    setFromDeck(false);
-    setView('deck-selector');
   }, []);
 
   const handleOpenLook = useCallback((look: Look) => {
@@ -346,81 +288,8 @@ export default function Home() {
         <LandingPage onStartBrowsing={handleLandingToApp} />
       )}
 
-      {view === 'deck-selector' && (
-        <DeckSelector
-          onSelectDeck={handleSelectDeck}
-          onBack={() => setView('locked')}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v5' && (
-        <DeckView
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v6' && (
-        <DeckViewV6
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v7' && (
-        <DeckViewV7
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v8' && (
-        <DeckViewV8
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v1' && (
-        <DeckViewV1
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
-      {view === 'deck' && activeDeck === 'v9' && (
-        <DeckViewV9
-          onSeeApp={handleDeckToApp}
-          onVisitWebsite={handleDeckToLanding}
-          onBack={handleBackToDeckSelector}
-          isLightMode={isLightMode}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-
       {isAppVisible && (
         <>
-          {fromDeck && (
-            <button className="back-to-deck-btn" onClick={handleBackToDeck}>
-              &larr; Back to deck
-            </button>
-          )}
-
           <header>
             <div className="header-left">
               <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
@@ -438,7 +307,6 @@ export default function Home() {
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
-                onOpenDecks={() => setView('deck-selector')}
               />
             </div>
           </header>
