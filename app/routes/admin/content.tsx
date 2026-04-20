@@ -178,6 +178,7 @@ export default function AdminContent() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
+  const [hoverPreview, setHoverPreview] = useState<{ url: string; x: number; y: number } | null>(null);
 
   // In-flight generation jobs per product — tracks individual ad rows so we
   // can show an accurate progress bar bound to the ad statuses in Supabase.
@@ -459,7 +460,12 @@ export default function AdminContent() {
       .from('admin_hidden_looks')
       .upsert({ look_id: id }, { onConflict: 'look_id' });
     if (error) {
-      // Rollback
+      // Missing table = migration not applied yet. Keep hide in-memory only.
+      const tableMissing =
+        error.code === 'PGRST205' ||
+        /schema cache|does not exist|admin_hidden_looks/i.test(error.message);
+      if (tableMissing) return;
+      // Rollback on real error
       setDeletedLookIds(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -763,6 +769,32 @@ export default function AdminContent() {
 
   return (
     <div className="admin-page">
+      {hoverPreview && (
+        <div
+          style={{
+            position: 'fixed',
+            left: hoverPreview.x,
+            top: hoverPreview.y,
+            width: 220,
+            height: 290,
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: '#000',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        >
+          <video
+            src={hoverPreview.url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
+      )}
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1>Content</h1>
@@ -1049,6 +1081,7 @@ export default function AdminContent() {
               <tr>
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <th style={{ textAlign: 'left' }}>Photos</th>
+                <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -1066,28 +1099,38 @@ export default function AdminContent() {
                 <tr key={`${p.brand}-${p.name}-${i}`}>
                   <td>
                     {p.hasCreative ? (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        {p.video_urls.slice(0, 3).map((v, vi) => (
-                          <div key={vi} className="admin-look-thumb" style={{ width: 36, height: 48 }}>
-                            <video
-                              src={v}
-                              autoPlay
-                              muted
-                              loop
-                              playsInline
-                              preload="metadata"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
-                            />
-                            <div className="admin-look-preview">
-                              <video src={v} autoPlay muted loop playsInline />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {p.video_urls.slice(0, 3).map((v, vi) => (
+                            <div
+                              key={vi}
+                              style={{ width: 36, height: 48, borderRadius: 4, overflow: 'hidden', cursor: 'pointer' }}
+                              onMouseEnter={(e) => {
+                                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                setHoverPreview({ url: v, x: r.right + 8, y: r.top });
+                              }}
+                              onMouseLeave={() => setHoverPreview(null)}
+                            >
+                              <video
+                                src={v}
+                                autoPlay
+                                muted
+                                loop
+                                playsInline
+                                preload="metadata"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
                             </div>
-                          </div>
-                        ))}
-                        {p.video_urls.length > 3 && (
-                          <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
-                            +{p.video_urls.length - 3}
-                          </span>
-                        )}
+                          ))}
+                          {p.video_urls.length > 3 && (
+                            <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
+                              +{p.video_urls.length - 3}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>
+                          {p.video_urls.length} video{p.video_urls.length === 1 ? '' : 's'}
+                        </div>
                       </div>
                     ) : p.id && genJobs.has(p.id) ? (
                       (() => {
@@ -1178,11 +1221,11 @@ export default function AdminContent() {
                       })()}
                     </div>
                   </td>
+                  <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
+                    {p.brand}
+                  </td>
                   <td style={{ textAlign: 'left' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
-                      <div style={{ fontSize: 10, color: '#999' }}>{p.brand}</div>
-                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
                   <td>{p.lookCount}</td>
@@ -1242,13 +1285,22 @@ export default function AdminContent() {
                             .from('admin_hidden_products')
                             .upsert({ brand: p.brand, name: p.name }, { onConflict: 'brand,name' });
                           if (error) {
-                            setDeletedProductKeys(prev => {
-                              const next = new Set(prev);
-                              next.delete(key);
-                              return next;
-                            });
-                            showToast(`Hide failed: ${error.message}`);
-                            return;
+                            // Missing table (PGRST205 / "schema cache") = migration not applied yet.
+                            // Keep the hide in-memory only so the admin can still dismiss rows.
+                            const tableMissing =
+                              error.code === 'PGRST205' ||
+                              /schema cache|does not exist|admin_hidden_products/i.test(error.message);
+                            if (tableMissing) {
+                              showToast(`Hidden locally (run migration 017 to persist).`);
+                            } else {
+                              setDeletedProductKeys(prev => {
+                                const next = new Set(prev);
+                                next.delete(key);
+                                return next;
+                              });
+                              showToast(`Hide failed: ${error.message}`);
+                              return;
+                            }
                           }
                         }
                         showToast(`Deleted ${p.name}`);
