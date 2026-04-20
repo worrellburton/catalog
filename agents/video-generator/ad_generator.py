@@ -305,12 +305,13 @@ def generate_ad_video(ad_id: str) -> dict:
         print(f"  Product has {len(all_images)} image(s)")
 
         # Multi-reference models (Vidu reference-to-video) want every product
-        # image fed in at once — no per-ad cycling. Capped at 7 to match
-        # Vidu's API limit.
+        # image fed in at once — no per-ad cycling. fal.ai's Vidu caps at 3
+        # reference images, so trim aggressively even though direct Vidu
+        # would accept up to 7.
         ad_model_for_image_pick = ad.get("veo_model") or ""
         if "reference-to-video" in ad_model_for_image_pick:
-            selected_urls = list(all_images[:7])
-            print(f"  Multi-reference model: passing all {len(selected_urls)} image(s)")
+            selected_urls = list(all_images[:3])
+            print(f"  Multi-reference model: passing {len(selected_urls)} image(s)")
         else:
             # Pick images for this specific ad (cycles through for different ads)
             ad_index = _get_ad_index_for_product(supabase, ad["product_id"], ad_id)

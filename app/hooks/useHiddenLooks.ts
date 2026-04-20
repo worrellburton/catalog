@@ -108,13 +108,27 @@ export function useHiddenProductKeys(): Set<string> {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      // Admin-hidden products (soft delete)
+      const { data: hiddenData } = await supabase
         .from('admin_hidden_products')
         .select('brand, name');
-      if (cancelled || error || !data) return;
-      const keys = new Set<string>(
-        (data as { brand: string; name: string }[]).map(r => `${r.brand}-${r.name}`),
-      );
+      // Deactivated products (admin toggle off) — treat as hidden from feed
+      const { data: inactiveData } = await supabase
+        .from('products')
+        .select('brand, name')
+        .eq('is_active', false);
+      if (cancelled) return;
+      const keys = new Set<string>();
+      if (hiddenData) {
+        for (const r of hiddenData as { brand: string; name: string }[]) {
+          keys.add(`${r.brand}-${r.name}`);
+        }
+      }
+      if (inactiveData) {
+        for (const r of inactiveData as { brand: string; name: string }[]) {
+          keys.add(`${r.brand}-${r.name}`);
+        }
+      }
       setHidden(prev => {
         const merged = new Set(prev);
         keys.forEach(k => merged.add(k));

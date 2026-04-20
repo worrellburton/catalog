@@ -558,6 +558,42 @@ export default function AdminContent() {
     }
   }, []);
 
+  // Flip products.is_active for a single product. Updates local state
+  // immediately + persists to Supabase.
+  const toggleProductActive = useCallback(async (productId: string, active: boolean) => {
+    setCrawledProducts(prev =>
+      prev.map(r => (r.id === productId ? { ...r, is_active: active } : r))
+    );
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: active })
+      .eq('id', productId);
+    if (error) {
+      // Rollback on real error.
+      setCrawledProducts(prev =>
+        prev.map(r => (r.id === productId ? { ...r, is_active: !active } : r))
+      );
+      console.error('toggleProductActive failed:', error.message);
+    }
+  }, []);
+
+  // Bulk set is_active for the currently-selected product rows.
+  const bulkSetActive = useCallback(async (active: boolean) => {
+    const ids: string[] = [];
+    for (const key of selectedProductKeys) {
+      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+      if (match?.id) ids.push(match.id);
+    }
+    if (ids.length === 0) return;
+    setCrawledProducts(prev =>
+      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
+    );
+    if (supabase) {
+      await supabase.from('products').update({ is_active: active }).in('id', ids);
+    }
+  }, [selectedProductKeys, allProducts]);
+
   const moveLook = useCallback((id: number, direction: -1 | 1) => {
     setLookOrder(prev => {
       const base = prev || looks.map(l => l.id);
@@ -1271,6 +1307,26 @@ export default function AdminContent() {
             >
               Delete selected
             </button>
+            <button
+              className="admin-btn admin-btn-secondary"
+              style={{ fontSize: 12, padding: '4px 10px', color: '#16a34a' }}
+              onClick={async () => {
+                await bulkSetActive(true);
+                showToast(`Activated ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+              }}
+            >
+              Activate
+            </button>
+            <button
+              className="admin-btn admin-btn-secondary"
+              style={{ fontSize: 12, padding: '4px 10px', color: '#64748b' }}
+              onClick={async () => {
+                await bulkSetActive(false);
+                showToast(`Deactivated ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+              }}
+            >
+              Deactivate
+            </button>
           </div>
         )}
         <div className="admin-table-wrap">
@@ -1511,6 +1567,16 @@ export default function AdminContent() {
                       </a>
                     ) : (
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {p.id ? (
+                      <AdminToggle
+                        on={(p as any).is_active !== false}
+                        onChange={v => toggleProductActive(p.id!, v)}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
                     )}
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
@@ -2082,7 +2148,7 @@ export default function AdminContent() {
                   background: '#ecfdf5', border: '1px solid #a7f3d0',
                   fontSize: 11, color: '#047857',
                 }}>
-                  <strong>Multi-image mode:</strong> Vidu will receive every product photo (up to 7) as references for consistent on-model output.
+                  <strong>Multi-image mode:</strong> Vidu will receive up to 3 product photos as references (fal.ai limit) for consistent on-model output.
                 </div>
               )}
               {genSplit && (
@@ -2110,7 +2176,7 @@ export default function AdminContent() {
                       background: '#ecfdf5', border: '1px solid #a7f3d0',
                       fontSize: 11, color: '#047857',
                     }}>
-                      <strong>Multi-image mode:</strong> Vidu will receive every product photo (up to 7) as references.
+                      <strong>Multi-image mode:</strong> Vidu will receive up to 3 product photos as references (fal.ai limit).
                     </div>
                   )}
                   <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>

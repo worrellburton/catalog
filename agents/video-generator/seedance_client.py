@@ -144,8 +144,9 @@ def generate_from_fal_model(
     # reference URLs under `reference_image_urls`. Fall back to a single
     # `image_url` for the more common image-to-video models.
     if image_urls and "reference" in fal_slug:
-        # Vidu caps at 7 reference images; trim defensively.
-        base["reference_image_urls"] = list(image_urls[:7])
+        # fal.ai's Vidu reference-to-video caps at 3 reference images
+        # (even though direct Vidu supports 7). Trim defensively.
+        base["reference_image_urls"] = list(image_urls[:3])
     elif image_url:
         base["image_url"] = image_url
     elif image_urls:
