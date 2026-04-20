@@ -1,6 +1,8 @@
 
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { Look, creators } from '~/data/looks';
+import { useAuth } from '~/hooks/useAuth';
+import { hideLookId } from '~/hooks/useHiddenLooks';
 
 interface LookCardProps {
   look: Look;
@@ -15,6 +17,22 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const cardRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // Close the admin right-click menu on any outside click or Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
 
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -72,6 +90,10 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           onOpenLook(look);
         }
       }}
+      onContextMenu={isAdmin ? (e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      } : undefined}
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
@@ -114,6 +136,58 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           </span>
         </div>
       </div>
+      {menu && isAdmin && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: menu.x,
+            top: menu.y,
+            zIndex: 10000,
+            background: '#1a1a1a',
+            color: '#fff',
+            borderRadius: 8,
+            padding: 4,
+            minWidth: 160,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            border: '1px solid #333',
+            fontSize: 13,
+          }}
+        >
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              setMenu(null);
+              await hideLookId(look.id);
+            }}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 12px',
+              background: 'transparent',
+              border: 'none',
+              color: '#fca5a5',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#2a1616'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+            Delete look (admin)
+          </button>
+        </div>
+      )}
     </div>
   );
 });
