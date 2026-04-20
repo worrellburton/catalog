@@ -155,17 +155,24 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return filtered;
   }, [activeFilter, searchQuery, looks]);
 
-  // Build an infinite pool by repeating looks. Always shuffle each full
-  // deck before appending it, so every unique look appears once before
-  // any duplicate — no more "same face four times on first screen".
+  // Build an infinite pool by repeating looks. Shuffle each full deck and
+  // dedupe by video path so the same mp4 can't appear twice in one pass
+  // (current seed has 12 looks but only 2 unique videos).
   const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];
     const poolSize = 200;
     const result: (Look & { displayIndex: number })[] = [];
     let displayIndex = 0;
     void shuffleKey; // consumed for memo invalidation only; shuffling below
+
+    const byVideo = new Map<string, Look>();
+    for (const l of filteredLooks) {
+      if (!byVideo.has(l.video)) byVideo.set(l.video, l);
+    }
+    const uniqueLooks = [...byVideo.values()];
+
     while (result.length < poolSize) {
-      const deck = [...filteredLooks];
+      const deck = [...uniqueLooks];
       for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];

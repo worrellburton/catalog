@@ -65,16 +65,25 @@ export default function FeedSection({
   }, [layoutMode]);
 
   // Create infinite pool by repeating looks — but shuffle each full deck
-  // so every look appears once before any repeat. Without this the feed
-  // would cycle looks[0], looks[1]... and the first screen could show
-  // duplicate cards when there are fewer looks than visible tiles.
+  // AND dedupe by video_path so the same mp4 never appears twice in a
+  // single on-screen deck. In the current seed 12 look rows only map to
+  // 2 unique videos; without this guard the feed would look like an
+  // endless loop of the same face.
   const pool = useMemo(() => {
     if (looks.length === 0) return [];
     const poolSize = isInitial ? 200 : 50;
+
+    // Collapse by video path; keep one representative look per distinct clip.
+    const byVideo = new Map<string, Look>();
+    for (const l of looks) {
+      if (!byVideo.has(l.video)) byVideo.set(l.video, l);
+    }
+    const uniqueLooks = [...byVideo.values()];
+
     const result: (Look & { displayIndex: number })[] = [];
     let displayIndex = 0;
     while (result.length < poolSize) {
-      const deck = [...looks];
+      const deck = [...uniqueLooks];
       for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];
