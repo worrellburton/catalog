@@ -292,17 +292,51 @@ export interface BrainstormProgress {
   products?: BrainstormedProduct[];
 }
 
+// Deterministic fallback used when the catalog-brainstorm edge function isn't
+// deployed or the Claude call fails — keeps the Suggest Products flow usable.
+function heuristicQueries(catalog: string, count: number): string[] {
+  const c = catalog.trim().toLowerCase();
+  const base = [
+    `${c} outfit`,
+    `women's ${c} dress`,
+    `men's ${c} shirt`,
+    `${c} shoes`,
+    `${c} bag`,
+    `${c} sunglasses`,
+    `${c} accessories`,
+    `${c} jewelry`,
+    `${c} jacket`,
+    `${c} hat`,
+    `${c} pants`,
+    `${c} sandals`,
+  ];
+  return base.slice(0, count);
+}
+
 async function brainstormQueries(catalog: string, count: number): Promise<{ queries: string[]; error: string | null }> {
   try {
     const { supabase } = await import('~/utils/supabase');
     const { data, error } = await supabase.functions.invoke('catalog-brainstorm', {
       body: { catalog, count },
     });
-    if (error) return { queries: [], error: error.message };
-    if (!data?.success) return { queries: [], error: data?.error || 'Brainstorm failed' };
-    return { queries: Array.isArray(data.queries) ? data.queries : [], error: null };
+    if (error) {
+      // Edge function missing or errored — fall back to heuristic queries so
+      // the user can still run the product search.
+      console.warn('[catalog-brainstorm] edge function failed, using heuristic:', error.message);
+      return { queries: heuristicQueries(catalog, count), error: null };
+    }
+    if (!data?.success) {
+      console.warn('[catalog-brainstorm] non-success payload, using heuristic:', data?.error);
+      return { queries: heuristicQueries(catalog, count), error: null };
+    }
+    const queries = Array.isArray(data.queries) ? data.queries : [];
+    if (queries.length === 0) {
+      return { queries: heuristicQueries(catalog, count), error: null };
+    }
+    return { queries, error: null };
   } catch (err) {
-    return { queries: [], error: err instanceof Error ? err.message : String(err) };
+    console.warn('[catalog-brainstorm] fetch failed, using heuristic:', err);
+    return { queries: heuristicQueries(catalog, count), error: null };
   }
 }
 

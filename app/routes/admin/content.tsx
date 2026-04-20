@@ -1172,8 +1172,18 @@ export default function AdminContent() {
               className="admin-btn admin-btn-secondary"
               style={{ fontSize: 12, padding: '4px 10px', color: '#dc2626' }}
               onClick={async () => {
-                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}?`)) return;
-                // Mirror the single-delete path: optimistic hide + persist.
+                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}? This will also remove any generated ads.`)) return;
+                // Resolve IDs for real cloud deletes; anything without an id
+                // falls back to the admin_hidden_products table.
+                const selected = [...selectedProductKeys];
+                const idsToDelete: string[] = [];
+                const rowsToHide: { brand: string; name: string }[] = [];
+                for (const k of selected) {
+                  const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === k);
+                  if (match?.id) idsToDelete.push(match.id);
+                  else if (match) rowsToHide.push({ brand: match.brand, name: match.name });
+                }
+                // Optimistic hide + persist so UI updates even if cloud is slow.
                 setDeletedProductKeys(prev => {
                   const next = new Set(prev);
                   for (const k of selectedProductKeys) next.add(k);
@@ -1181,11 +1191,18 @@ export default function AdminContent() {
                   return next;
                 });
                 if (supabase) {
-                  const rows = [...selectedProductKeys].map(k => {
-                    const [brand, ...rest] = k.split('-');
-                    return { brand, name: rest.join('-') };
-                  });
-                  await supabase.from('admin_hidden_products').upsert(rows, { onConflict: 'brand,name' });
+                  if (idsToDelete.length > 0) {
+                    await supabase.from('product_ads').delete().in('product_id', idsToDelete);
+                    const { error } = await supabase.from('products').delete().in('id', idsToDelete);
+                    if (error) {
+                      showToast(`Delete failed: ${error.message}`);
+                      return;
+                    }
+                    setCrawledProducts(prev => prev.filter(r => !idsToDelete.includes(r.id)));
+                  }
+                  if (rowsToHide.length > 0) {
+                    await supabase.from('admin_hidden_products').upsert(rowsToHide, { onConflict: 'brand,name' });
+                  }
                 }
                 showToast(`Deleted ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
                 setSelectedProductKeys(new Set());
