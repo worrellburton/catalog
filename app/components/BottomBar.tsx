@@ -134,6 +134,14 @@ export default function BottomBar({
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
           <div className="search-suggestions-track" ref={trackRef}>
+            <button
+              className="search-suggestion"
+              onClick={(e) => handleSuggestionClick('', e)}
+              style={{ fontWeight: 700, opacity: 0.95 }}
+              title="Show every available look and product"
+            >
+              Show all
+            </button>
             {shuffledSuggestions.map((s, i) => (
               <button
                 key={i}

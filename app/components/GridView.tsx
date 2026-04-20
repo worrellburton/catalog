@@ -155,23 +155,24 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
     return filtered;
   }, [activeFilter, searchQuery, looks]);
 
-  // Build an infinite pool by repeating looks
+  // Build an infinite pool by repeating looks. Always shuffle each full
+  // deck before appending it, so every unique look appears once before
+  // any duplicate — no more "same face four times on first screen".
   const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];
-    // Pre-generate a large pool
     const poolSize = 200;
     const result: (Look & { displayIndex: number })[] = [];
-    for (let i = 0; i < poolSize; i++) {
-      result.push({ ...filteredLooks[i % filteredLooks.length], displayIndex: i });
-    }
-    if (shuffleKey > 0) {
-      // Shuffle in chunks to keep variety
-      for (let chunk = 0; chunk < poolSize; chunk += filteredLooks.length) {
-        const end = Math.min(chunk + filteredLooks.length, poolSize);
-        for (let i = end - 1; i > chunk; i--) {
-          const j = chunk + Math.floor(Math.random() * (i - chunk + 1));
-          [result[i], result[j]] = [result[j], result[i]];
-        }
+    let displayIndex = 0;
+    void shuffleKey; // consumed for memo invalidation only; shuffling below
+    while (result.length < poolSize) {
+      const deck = [...filteredLooks];
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      for (const look of deck) {
+        if (result.length >= poolSize) break;
+        result.push({ ...look, displayIndex: displayIndex++ });
       }
     }
     return result;

@@ -64,13 +64,25 @@ export default function FeedSection({
     return 'look-card';
   }, [layoutMode]);
 
-  // Create infinite pool by repeating looks
+  // Create infinite pool by repeating looks — but shuffle each full deck
+  // so every look appears once before any repeat. Without this the feed
+  // would cycle looks[0], looks[1]... and the first screen could show
+  // duplicate cards when there are fewer looks than visible tiles.
   const pool = useMemo(() => {
     if (looks.length === 0) return [];
     const poolSize = isInitial ? 200 : 50;
     const result: (Look & { displayIndex: number })[] = [];
-    for (let i = 0; i < poolSize; i++) {
-      result.push({ ...looks[i % looks.length], displayIndex: i });
+    let displayIndex = 0;
+    while (result.length < poolSize) {
+      const deck = [...looks];
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      for (const look of deck) {
+        if (result.length >= poolSize) break;
+        result.push({ ...look, displayIndex: displayIndex++ });
+      }
     }
     return result;
   }, [looks, isInitial]);
