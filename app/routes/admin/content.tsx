@@ -19,6 +19,7 @@ interface CrawledProduct {
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
+  is_active?: boolean;
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -186,7 +187,7 @@ export default function AdminContent() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
@@ -369,7 +370,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -415,7 +416,7 @@ export default function AdminContent() {
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -688,7 +689,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -766,6 +767,7 @@ export default function AdminContent() {
       const name = cp.name || 'Untitled';
       const key = `${brand}-${name}`;
       const images = Array.isArray(cp.images) ? cp.images.filter((u): u is string => typeof u === 'string') : [];
+      const active = cp.is_active !== false; // default true for legacy rows
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
@@ -774,6 +776,7 @@ export default function AdminContent() {
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
+        entry.is_active = active;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -797,6 +800,7 @@ export default function AdminContent() {
           clicks: adClicksMap.get(cp.id) || 0,
           impressions: adImpressionsMap.get(cp.id) || 0,
           connection,
+          is_active: active,
         });
       }
     });
@@ -817,6 +821,8 @@ export default function AdminContent() {
   const filteredProductsList = useMemo(
     () => allProducts.filter(p => {
       if (productFilter === 'no-creative' && p.hasCreative) return false;
+      if (productFilter === 'active' && (p as any).is_active === false) return false;
+      if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
       const key = `${p.brand}-${p.name}`;
       if (deletedProductKeys.has(key)) return false;
       if (adminQuery) {
@@ -1163,6 +1169,22 @@ export default function AdminContent() {
               <span className="admin-tab-badge">{allProducts.length}</span>
             </button>
             <button
+              className={`admin-tab ${productFilter === 'active' ? 'active' : ''}`}
+              onClick={() => setProductFilter('active')}
+              title="Products eligible to serve on the feed"
+            >
+              Active
+              <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active !== false).length}</span>
+            </button>
+            <button
+              className={`admin-tab ${productFilter === 'inactive' ? 'active' : ''}`}
+              onClick={() => setProductFilter('inactive')}
+              title="Products hidden from the feed — often missing a URL, price, or creative"
+            >
+              Inactive
+              <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active === false).length}</span>
+            </button>
+            <button
               className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
               onClick={() => setProductFilter('no-creative')}
             >
@@ -1282,6 +1304,7 @@ export default function AdminContent() {
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ textAlign: 'center' }} title="Eligible to serve on the consumer feed">Active</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
