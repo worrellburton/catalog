@@ -1287,18 +1287,24 @@ export default function AdminContent() {
                 <tr
                   style={isSelected ? { background: '#eef2ff' } : undefined}
                 >
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td
+                    onClick={(e) => {
+                      // Click anywhere in the checkbox cell toggles the row.
+                      // Reads shiftKey for range select from the native event.
+                      e.stopPropagation();
+                      toggleRow(e.shiftKey);
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                  >
                     <input
                       type="checkbox"
                       aria-label={`Select ${p.name}`}
                       checked={isSelected}
-                      onClick={(e) => {
-                        // Intercept the click so we can read shiftKey; prevent the
-                        // browser's default toggle because we manage state ourselves.
-                        e.preventDefault();
-                        toggleRow(e.shiftKey);
-                      }}
-                      onChange={() => { /* handled in onClick */ }}
+                      onChange={() => { /* handled by the td onClick */ }}
+                      // Prevent the native click from double-toggling — the parent
+                      // td already called toggleRow on the way down.
+                      onClick={(e) => e.preventDefault()}
+                      style={{ pointerEvents: 'none' }}
                     />
                   </td>
                   <td>

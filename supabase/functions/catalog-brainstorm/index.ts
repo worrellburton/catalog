@@ -26,11 +26,33 @@ interface ClaudeResponse {
 }
 
 async function brainstormWithClaude(catalog: string, count: number, apiKey: string): Promise<string[]> {
-  const prompt = `You are helping build a shoppable fashion lookbook. The catalog vibe is: "${catalog}".
+  const prompt = `You are a creative merchandiser building a shoppable fashion catalog.
+The catalog is titled: "${catalog}".
 
-Generate exactly ${count} concise Google Shopping search queries that would surface real, purchasable products fitting this vibe. Mix product categories (apparel, footwear, accessories, bags, eyewear, etc.) and gender where appropriate. Favor specific queries that return clean product photography.
+STEP 1 — Interpret the catalog name.
+In 1–2 sentences, figure out what this catalog is really about: the vibe,
+the wearer, the occasion, the aesthetic. "omg shoes" isn't 8 products
+with "omg shoes" in the name — it's a curated shoe drop (statement heels,
+cult sneakers, viral-worthy footwear). "quiet luxury" is neutral cashmere,
+Margiela Tabis, The Row bags. "beach day" is swim, raffia bags, flip flops,
+oversized linen, straw hats.
 
-Return ONLY a JSON array of ${count} strings — no prose, no code fences. Example: ["women's white linen midi dress","raffia tote bag","men's swim trunks"]`;
+STEP 2 — Pick ${count} hero products.
+Brainstorm ${count} specific Google Shopping queries that would return
+real, purchasable products matching that vibe. Rules:
+  • Be specific — "studded combat boots" beats "cool shoes".
+  • Mix categories naturally (apparel, footwear, bags, accessories, jewelry,
+    eyewear) UNLESS the catalog is category-specific (e.g. "omg shoes" →
+    all shoes, "sunglasses summer" → all eyewear).
+  • Include gender only when it matters ("men's swim trunks", "women's
+    slip dress"). Default unisex where possible.
+  • Favor queries that return clean product photography over vague
+    trend searches.
+  • Don't repeat the catalog name in every query — that's lazy.
+
+Return ONLY a JSON array of ${count} query strings. No prose, no code
+fences, no keys. Example:
+["Margiela Tabi Mary Janes","Salomon XT-6 black","Alaïa mesh ballet flats"]`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
