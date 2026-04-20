@@ -208,6 +208,14 @@ export default function AdminContent() {
   const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
   // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
   const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
+  // Which row's inline Creative+Photos dropdown is open.
+  const [openCreativeRow, setOpenCreativeRow] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openCreativeRow) return;
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenCreativeRow(null); };
+    document.addEventListener('keydown', keyHandler);
+    return () => document.removeEventListener('keydown', keyHandler);
+  }, [openCreativeRow]);
 
   // Tags is now an inline expanded row like Links — close only via the button
   // or Escape.
@@ -1260,7 +1268,6 @@ export default function AdminContent() {
                   />
                 </th>
                 <th style={{ textAlign: 'left' }}>Creative</th>
-                <th style={{ textAlign: 'left' }}>Photos</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -1301,8 +1308,12 @@ export default function AdminContent() {
                 };
                 const linksOpen = openLinksRow === rowKey;
                 const tagsOpen = openTagsRow === rowKey;
+                const creativeOpen = openCreativeRow === rowKey;
                 const affiliates = linksOpen ? getAffiliatesFor(p.brand) : [];
                 const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
+                const rowImages: string[] = (p.images && p.images.length > 0)
+                  ? p.images
+                  : (p.image_url ? [p.image_url] : []);
                 return (
                 <Fragment key={`${p.brand}-${p.name}-${i}`}>
                 <tr
@@ -1332,44 +1343,19 @@ export default function AdminContent() {
                       style={{ pointerEvents: 'none' }}
                     />
                   </td>
-                  <td>
-                    {p.hasCreative ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          {p.video_urls.slice(0, 3).map((v, vi) => (
-                            <div
-                              key={vi}
-                              style={{ width: 36, height: 48, borderRadius: 4, overflow: 'hidden', cursor: 'pointer' }}
-                              onMouseEnter={(e) => {
-                                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                setHoverPreview({ url: v, x: r.right + 8, y: r.top });
-                              }}
-                              onMouseLeave={() => setHoverPreview(null)}
-                            >
-                              <video
-                                src={v}
-                                autoPlay
-                                muted
-                                loop
-                                playsInline
-                                preload="metadata"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              />
-                            </div>
-                          ))}
-                          {p.video_urls.length > 3 && (
-                            <span style={{ fontSize: 11, color: '#888', fontWeight: 600 }}>
-                              +{p.video_urls.length - 3}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#94a3b8' }}>
-                          {p.video_urls.length} video{p.video_urls.length === 1 ? '' : 's'}
-                        </div>
-                      </div>
-                    ) : p.id && genJobs.has(p.id) ? (
-                      (() => {
-                        const job = genJobs.get(p.id)!;
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const allImages: string[] = (p.images && p.images.length > 0)
+                        ? p.images
+                        : (p.image_url ? [p.image_url] : []);
+                      const videoCount = p.video_urls.length;
+                      const photoCount = allImages.length;
+                      const firstThumb = videoCount > 0 ? p.video_urls[0] : (allImages[0] || null);
+                      const isGenerating = p.id && genJobs.has(p.id);
+                      // Progress bar takes over the cell while a generation job
+                      // is in flight so the admin sees live progress.
+                      if (isGenerating) {
+                        const job = genJobs.get(p.id!)!;
                         const pct = Math.max(5, Math.round((job.done / job.total) * 100));
                         const label = job.generating > 0
                           ? `Generating ${job.done}/${job.total}`
@@ -1380,81 +1366,84 @@ export default function AdminContent() {
                               {label}
                             </div>
                             <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  inset: 0,
-                                  width: `${pct}%`,
-                                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-                                  transition: 'width 400ms ease',
-                                }}
-                              />
+                              <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', transition: 'width 400ms ease' }} />
                               {job.generating > 0 && (
-                                <div
-                                  className="admin-shimmer"
-                                  style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
-                                    animation: 'admin-shimmer 1.4s infinite',
-                                  }}
-                                />
+                                <div className="admin-shimmer" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)', animation: 'admin-shimmer 1.4s infinite' }} />
                               )}
                             </div>
                           </div>
                         );
-                      })()
-                    ) : p.id ? (
-                      <button
-                        className="admin-btn admin-btn-primary"
-                        style={{ fontSize: 11, padding: '4px 10px' }}
-                        disabled={generatingIds.has(p.id)}
-                        onClick={(e) => { e.stopPropagation(); if (p.id) setGeneratePicker({ productId: p.id, productName: p.name }); }}
-                      >
-                        {generatingIds.has(p.id) ? 'Queued' : 'Generate'}
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
-                    )}
-                  </td>
-                  <td>
-                    <div className="admin-product-creative" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {(() => {
-                        const allImages: string[] = (p.images && p.images.length > 0)
-                          ? p.images
-                          : (p.image_url ? [p.image_url] : []);
-                        if (allImages.length === 0) {
-                          return (
-                            <img
-                              src={getBrandLogo(p.brand) || ''}
-                              alt={p.brand}
-                              className="admin-brand-logo"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          );
-                        }
-                        const shown = allImages.slice(0, 3);
-                        const extra = allImages.length - shown.length;
+                      }
+                      // Nothing to preview + no cloud id → show the brand logo placeholder
+                      if (videoCount === 0 && photoCount === 0 && !p.id) {
                         return (
-                          <>
-                            {shown.map((src, ii) => (
-                              <img
-                                key={ii}
-                                src={src}
-                                alt={p.name}
-                                style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', border: '1px solid #eee' }}
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            ))}
-                            {extra > 0 && (
-                              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f1f5f9', borderRadius: 6, padding: '0 6px', height: 40, display: 'inline-flex', alignItems: 'center' }}>
-                                +{extra}
-                              </span>
-                            )}
-                          </>
+                          <img
+                            src={getBrandLogo(p.brand) || ''}
+                            alt={p.brand}
+                            className="admin-brand-logo"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
                         );
-                      })()}
-                    </div>
+                      }
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // No video and no photo yet but we do have a cloud id → act as the Generate entry point.
+                            if (videoCount === 0 && photoCount === 0 && p.id) {
+                              setGeneratePicker({ productId: p.id, productName: p.name });
+                              return;
+                            }
+                            setOpenCreativeRow(creativeOpen ? null : rowKey);
+                          }}
+                          title={videoCount === 0 && photoCount === 0 ? 'Generate creative' : 'View all creative'}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                            padding: 4, border: `1px solid ${creativeOpen ? '#3b82f6' : '#e5e7eb'}`,
+                            background: creativeOpen ? '#eef4ff' : '#fff',
+                            borderRadius: 8, cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', flexShrink: 0 }}>
+                            {firstThumb ? (
+                              videoCount > 0 ? (
+                                <video src={firstThumb} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <img src={firstThumb} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              )
+                            ) : (
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+                                {videoCount === 0 && photoCount === 0 ? '+' : ''}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <span
+                              title={`${videoCount} video${videoCount === 1 ? '' : 's'}`}
+                              style={{
+                                minWidth: 28, padding: '1px 7px', height: 18,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
+                                background: videoCount > 0 ? '#7c3aed' : '#cbd5e1',
+                              }}
+                            >
+                              ▶ {videoCount}
+                            </span>
+                            <span
+                              title={`${photoCount} photo${photoCount === 1 ? '' : 's'}`}
+                              style={{
+                                minWidth: 28, padding: '1px 7px', height: 18,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
+                                background: photoCount > 0 ? '#059669' : '#cbd5e1',
+                              }}
+                            >
+                              ◇ {photoCount}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
                     {p.brand}
@@ -1594,9 +1583,74 @@ export default function AdminContent() {
                     </button>
                   </td>
                 </tr>
+                {creativeOpen && (
+                  <tr className="admin-product-creative-row">
+                    <td colSpan={13} style={{ padding: 0, background: '#fafbff' }}>
+                      <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Videos <span style={{ color: '#7c3aed', fontWeight: 700 }}>{p.video_urls.length}</span>
+                              </div>
+                              {p.id && (
+                                <button
+                                  className="admin-btn admin-btn-primary"
+                                  style={{ fontSize: 11, padding: '3px 10px' }}
+                                  onClick={(e) => { e.stopPropagation(); setGeneratePicker({ productId: p.id!, productName: p.name }); }}
+                                >
+                                  + Generate
+                                </button>
+                              )}
+                            </div>
+                            {p.video_urls.length === 0 ? (
+                              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No videos generated yet.</div>
+                            ) : (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8 }}>
+                                {p.video_urls.map((v, vi) => (
+                                  <div
+                                    key={vi}
+                                    style={{ aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000' }}
+                                    onMouseEnter={(ev) => {
+                                      const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                                      setHoverPreview({ url: v, x: r.right + 8, y: r.top });
+                                    }}
+                                    onMouseLeave={() => setHoverPreview(null)}
+                                  >
+                                    <video src={v} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                              Photos <span style={{ color: '#059669', fontWeight: 700 }}>{rowImages.length}</span>
+                            </div>
+                            {rowImages.length === 0 ? (
+                              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No product photos.</div>
+                            ) : (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 8 }}>
+                                {rowImages.map((src, ii) => (
+                                  <img
+                                    key={ii}
+                                    src={src}
+                                    alt={p.name}
+                                    style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 6, objectFit: 'cover', border: '1px solid #e5e7eb' }}
+                                    onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={13} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -1621,7 +1675,7 @@ export default function AdminContent() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={13} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
