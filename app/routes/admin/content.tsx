@@ -1694,30 +1694,71 @@ export default function AdminContent() {
                             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                               Product URL
                             </div>
-                            {p.url ? (
+                            {p.url ? (() => {
+                              // Shorten the URL: show just the host so the row
+                              // stays tidy. Hover or click still takes you to
+                              // the full link.
+                              let host = '';
+                              try { host = new URL(p.url).hostname.replace(/^www\./, ''); }
+                              catch { host = p.url; }
+                              return (
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <a
+                                    href={p.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={p.url}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                                      fontSize: 12, color: '#0f172a', textDecoration: 'none',
+                                      padding: '6px 10px', background: '#eef2ff', borderRadius: 6,
+                                      border: '1px solid #c7d2fe', fontWeight: 600,
+                                    }}
+                                  >
+                                    <span>{host}</span>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                      <polyline points="15 3 21 3 21 9" />
+                                      <line x1="10" y1="14" x2="21" y2="3" />
+                                    </svg>
+                                  </a>
+                                  <button
+                                    className="admin-btn admin-btn-secondary"
+                                    style={{ fontSize: 11, padding: '6px 10px' }}
+                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.url!); showToast('Copied URL to clipboard'); }}
+                                  >
+                                    Copy
+                                  </button>
+                                  <button
+                                    className="admin-btn admin-btn-primary"
+                                    style={{ fontSize: 11, padding: '6px 10px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Kick a Google search scoped to the product — the admin can
+                                      // then pick a direct retailer URL or an affiliate-friendly one.
+                                      const q = encodeURIComponent(`${p.brand} ${p.name}`.trim());
+                                      window.open(`https://www.google.com/search?q=${q}&tbm=shop`, '_blank', 'noopener');
+                                    }}
+                                  >
+                                    Locate more URLs ↗
+                                  </button>
+                                </div>
+                              );
+                            })() : (
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <a
-                                  href={p.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    flex: 1, fontSize: 12, color: '#3b82f6', textDecoration: 'none',
-                                    padding: '8px 10px', background: '#f5f7fb', borderRadius: 6,
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No URL recorded</div>
+                                <button
+                                  className="admin-btn admin-btn-primary"
+                                  style={{ fontSize: 11, padding: '6px 10px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const q = encodeURIComponent(`${p.brand} ${p.name}`.trim());
+                                    window.open(`https://www.google.com/search?q=${q}&tbm=shop`, '_blank', 'noopener');
                                   }}
                                 >
-                                  {p.url}
-                                </a>
-                                <button
-                                  className="admin-btn admin-btn-secondary"
-                                  style={{ fontSize: 11, padding: '6px 10px' }}
-                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.url!); }}
-                                >
-                                  Copy
+                                  Locate more URLs ↗
                                 </button>
                               </div>
-                            ) : (
-                              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No URL recorded</div>
                             )}
                           </div>
                           <div>
