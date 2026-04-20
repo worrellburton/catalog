@@ -1295,9 +1295,9 @@ export default function AdminContent() {
             <button
               className={`admin-tab ${productFilter === 'active' ? 'active' : ''}`}
               onClick={() => setProductFilter('active')}
-              title="Products eligible to serve on the feed"
+              title="Products currently shown on the feed"
             >
-              Active
+              Showing
               <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active !== false).length}</span>
             </button>
             <button
@@ -1305,7 +1305,7 @@ export default function AdminContent() {
               onClick={() => setProductFilter('inactive')}
               title="Products hidden from the feed — often missing a URL, price, or creative"
             >
-              Inactive
+              Hidden
               <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active === false).length}</span>
             </button>
             <button
@@ -1400,20 +1400,20 @@ export default function AdminContent() {
               style={{ fontSize: 12, padding: '4px 10px', color: '#16a34a' }}
               onClick={async () => {
                 await bulkSetActive(true);
-                showToast(`Activated ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                showToast(`Showing ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'} on the feed`);
               }}
             >
-              Activate
+              Show on feed
             </button>
             <button
               className="admin-btn admin-btn-secondary"
               style={{ fontSize: 12, padding: '4px 10px', color: '#64748b' }}
               onClick={async () => {
                 await bulkSetActive(false);
-                showToast(`Deactivated ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                showToast(`Hid ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'} from the feed`);
               }}
             >
-              Deactivate
+              Hide from feed
             </button>
           </div>
         )}
@@ -1448,7 +1448,7 @@ export default function AdminContent() {
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ textAlign: 'center' }} title="Eligible to serve on the consumer feed">Active</th>
+                <th style={{ textAlign: 'center' }} title="When on, this product is shown on the consumer feed">Show</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
