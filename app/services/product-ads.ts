@@ -11,6 +11,7 @@ export interface ProductAd {
   thumbnail_url: string | null;
   affiliate_url: string | null;
   prompt: string | null;
+  prompt_extra: string | null;
   style: string;
   veo_model: string | null;
   status: 'queued' | 'pending' | 'generating' | 'done' | 'failed' | 'live' | 'paused';
@@ -237,19 +238,22 @@ export async function promoteQueuedAds(): Promise<{ promoted: number; error: str
   return { promoted: ids.length, error: null };
 }
 
-export async function regenerateAd(id: string): Promise<{ error: string | null }> {
+export async function regenerateAd(id: string, promptExtra?: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
-  const { error } = await supabase
-    .from('product_ads')
-    .update({
-      status: 'pending',
-      error: null,
-      video_url: null,
-      storage_path: null,
-      prompt: null,
-      completed_at: null,
-    })
-    .eq('id', id);
+  // prompt_extra is appended by the video-generator worker onto the freshly
+  // generated prompt at regeneration time. Empty string clears it.
+  const patch: Record<string, unknown> = {
+    status: 'pending',
+    error: null,
+    video_url: null,
+    storage_path: null,
+    prompt: null,
+    completed_at: null,
+  };
+  if (promptExtra !== undefined) {
+    patch.prompt_extra = promptExtra.trim() ? promptExtra.trim() : null;
+  }
+  const { error } = await supabase.from('product_ads').update(patch).eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
 }

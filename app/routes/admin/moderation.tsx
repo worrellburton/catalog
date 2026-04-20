@@ -60,19 +60,33 @@ export default function AdminModeration() {
     }
   }, [queue, focusIdx, busyId, showToast]);
 
-  const regenerateCurrent = useCallback(async () => {
+  // Regenerate modal — lets the admin tweak the prompt before kicking off a
+  // new video. Shown when the user clicks the regenerate button or hits ↑.
+  const [regenPrompt, setRegenPrompt] = useState<{ adId: string; prompt: string | null; extra: string } | null>(null);
+
+  const openRegenerate = useCallback(() => {
     const ad = queue[focusIdx];
     if (!ad || busyId) return;
-    setBusyId(ad.id);
-    const { error } = await regenerateAd(ad.id);
+    setRegenPrompt({ adId: ad.id, prompt: ad.prompt, extra: ad.prompt_extra || '' });
+  }, [queue, focusIdx, busyId]);
+
+  const submitRegenerate = useCallback(async (extra: string) => {
+    if (!regenPrompt) return;
+    const adId = regenPrompt.adId;
+    setBusyId(adId);
+    const { error } = await regenerateAd(adId, extra);
     setBusyId(null);
+    setRegenPrompt(null);
     if (!error) {
-      // Remove from queue (it's now regenerating, will reappear when done)
-      setQueue(prev => prev.filter(a => a.id !== ad.id));
+      setQueue(prev => prev.filter(a => a.id !== adId));
       setFocusIdx(i => Math.min(i, queue.length - 2));
-      showToast(ad.id, 'regenerated');
+      showToast(adId, 'regenerated');
     }
-  }, [queue, focusIdx, busyId, showToast]);
+  }, [regenPrompt, queue.length, showToast]);
+
+  const regenerateCurrent = useCallback(() => {
+    openRegenerate();
+  }, [openRegenerate]);
 
   const rejectCurrent = useCallback(async () => {
     const ad = queue[focusIdx];
@@ -354,6 +368,121 @@ export default function AdminModeration() {
           })}
         </div>
       )}
+
+      {regenPrompt && (
+        <RegenerateModal
+          prompt={regenPrompt.prompt}
+          initialExtra={regenPrompt.extra}
+          onCancel={() => setRegenPrompt(null)}
+          onSubmit={submitRegenerate}
+          busy={!!busyId}
+        />
+      )}
+    </div>
+  );
+}
+
+function RegenerateModal({
+  prompt,
+  initialExtra,
+  onCancel,
+  onSubmit,
+  busy,
+}: {
+  prompt: string | null;
+  initialExtra: string;
+  onCancel: () => void;
+  onSubmit: (extra: string) => void;
+  busy: boolean;
+}) {
+  const [extra, setExtra] = useState(initialExtra);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSubmit(extra);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [extra, onCancel, onSubmit]);
+
+  return (
+    <div
+      className="admin-modal-overlay"
+      onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
+    >
+      <div
+        className="admin-modal"
+        style={{ width: 620, maxWidth: '92vw', padding: 24, background: '#fff', borderRadius: 10, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Regenerate video</h2>
+        <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+          Add guidance for the next attempt. It will be appended to the auto-generated prompt.
+        </p>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+            Previous prompt
+          </label>
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.5,
+              padding: '10px 12px',
+              background: '#f5f7fb',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              color: '#334155',
+              maxHeight: 200,
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            }}
+          >
+            {prompt || <em style={{ color: '#94a3b8' }}>No prompt recorded for the previous run.</em>}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 6 }}>
+            Additional instructions (appended)
+          </label>
+          <textarea
+            autoFocus
+            value={extra}
+            onChange={e => setExtra(e.target.value)}
+            rows={4}
+            placeholder='e.g. "Keep the model looking at camera. Sunset lighting. No text overlays."'
+            style={{
+              width: '100%',
+              fontSize: 13,
+              padding: '10px 12px',
+              borderRadius: 6,
+              border: '1px solid #ddd',
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+            Tip: ⌘/Ctrl+Enter to regenerate, Esc to cancel.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="admin-btn admin-btn-secondary" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+          <button
+            className="admin-btn admin-btn-primary"
+            onClick={() => onSubmit(extra)}
+            disabled={busy}
+          >
+            {busy ? 'Regenerating…' : 'Regenerate'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
