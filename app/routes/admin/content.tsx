@@ -216,6 +216,19 @@ export default function AdminContent() {
     };
   }, [openTagsRow]);
 
+  // Same dismiss behaviour for the Links dropdown.
+  useEffect(() => {
+    if (!openLinksRow) return;
+    const handler = () => setOpenLinksRow(null);
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenLinksRow(null); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', keyHandler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+  }, [openLinksRow]);
+
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
   const [researchQuery, setResearchQuery] = useState('');
@@ -1478,14 +1491,112 @@ export default function AdminContent() {
                       );
                     })()}
                   </td>
-                  <td>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px' }}
-                      onClick={() => setLinkModal({ name: p.name, brand: p.brand, url: p.url || '' })}
-                    >
-                      View
-                    </button>
+                  <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const isOpen = openLinksRow === rowKey;
+                      const affiliates = getAffiliatesFor(p.brand);
+                      return (
+                        <>
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenLinksRow(isOpen ? null : rowKey);
+                            }}
+                          >
+                            View
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                            >
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </button>
+                          {isOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 4px)',
+                                right: 0,
+                                zIndex: 50,
+                                width: 340,
+                                padding: 12,
+                                background: '#fff',
+                                border: '1px solid #e5e5e5',
+                                borderRadius: 8,
+                                boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                              }}
+                            >
+                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                                Product URL
+                              </div>
+                              {p.url ? (
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12 }}>
+                                  <a
+                                    href={p.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      flex: 1, fontSize: 11, color: '#3b82f6', textDecoration: 'none',
+                                      padding: '6px 8px', background: '#f5f7fb', borderRadius: 6,
+                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {p.url}
+                                  </a>
+                                  <button
+                                    className="admin-btn admin-btn-secondary"
+                                    style={{ fontSize: 10, padding: '4px 8px' }}
+                                    onClick={() => navigator.clipboard.writeText(p.url!)}
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 11, color: '#999', fontStyle: 'italic', marginBottom: 12 }}>No URL recorded</div>
+                              )}
+                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                                Affiliate providers
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {affiliates.map((a, i) => (
+                                  <div
+                                    key={a.network}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 8,
+                                      padding: '6px 8px',
+                                      background: i === 0 ? '#f0f9f3' : '#fafafa',
+                                      border: `1px solid ${i === 0 ? '#c6efd6' : '#eee'}`,
+                                      borderRadius: 6,
+                                    }}
+                                  >
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.network}</div>
+                                      {a.note && (
+                                        <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>{a.note}</div>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: i === 0 ? '#16a34a' : '#111' }}>
+                                      {a.rate}
+                                    </div>
+                                    <a
+                                      href={a.signupUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="admin-btn admin-btn-secondary"
+                                      style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none' }}
+                                    >
+                                      Sign up ↗
+                                    </a>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td>
                     <button
@@ -2027,125 +2138,6 @@ export default function AdminContent() {
                   {ingesting ? 'Ingesting…' : `Ingest ${researchSelected.size || ''}`}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {linkModal && (
-        <div className="admin-modal-overlay" onClick={() => setLinkModal(null)}>
-          <div
-            className="admin-modal"
-            style={{ width: 600, maxWidth: '92vw', padding: 24 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Product links &amp; affiliates</h2>
-            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
-              <strong style={{ color: '#111' }}>{linkModal.name}</strong> · {linkModal.brand}
-            </p>
-
-            <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-                Product URL
-              </div>
-              {linkModal.url ? (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <a
-                    href={linkModal.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: '#3b82f6',
-                      textDecoration: 'none',
-                      padding: '8px 10px',
-                      background: '#f5f7fb',
-                      borderRadius: 6,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {linkModal.url}
-                  </a>
-                  <button
-                    className="admin-btn admin-btn-secondary"
-                    style={{ fontSize: 11, padding: '6px 10px' }}
-                    onClick={() => navigator.clipboard.writeText(linkModal.url)}
-                  >
-                    Copy
-                  </button>
-                  <a
-                    className="admin-btn admin-btn-primary"
-                    href={linkModal.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 11, padding: '6px 10px', textDecoration: 'none' }}
-                  >
-                    Open ↗
-                  </a>
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No URL recorded</div>
-              )}
-            </div>
-
-            <div>
-              <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-                Affiliate providers — {linkModal.brand} <span style={{ textTransform: 'none', color: '#bbb', letterSpacing: 0 }}>(sorted by rate)</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {getAffiliatesFor(linkModal.brand).map((a, i) => (
-                  <div
-                    key={a.network}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      background: i === 0 ? '#f0f9f3' : '#fafafa',
-                      border: `1px solid ${i === 0 ? '#c6efd6' : '#eee'}`,
-                      borderRadius: 8,
-                    }}
-                  >
-                    {i === 0 && (
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#16a34a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                        BEST
-                      </span>
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{a.network}</div>
-                      {a.note && (
-                        <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{a.note}</div>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? '#16a34a' : '#111' }}>
-                      {a.rate}
-                    </div>
-                    <a
-                      href={a.signupUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px', textDecoration: 'none' }}
-                    >
-                      Sign up ↗
-                    </a>
-                  </div>
-                ))}
-              </div>
-              {!BRAND_AFFILIATES[linkModal.brand] && (
-                <div style={{ fontSize: 11, color: '#999', marginTop: 8, fontStyle: 'italic' }}>
-                  No direct brand program on file. Showing default aggregator networks.
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-              <button className="admin-btn admin-btn-secondary" onClick={() => setLinkModal(null)}>
-                Close
-              </button>
             </div>
           </div>
         </div>

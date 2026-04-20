@@ -94,6 +94,31 @@ def _is_v2(fal_model: str) -> bool:
     return fal_model.startswith("bytedance/seedance-2")
 
 
+def _is_veo(fal_model: str) -> bool:
+    """True when the fal slug is one of the Veo-via-fal endpoints.
+
+    Veo uses a different input schema than Seedance: duration is a string
+    literal like '4s' / '6s' / '8s' (not a bare number) and is rejected
+    with a `literal_error` otherwise.
+    """
+    return "veo" in fal_model.lower()
+
+
+# Veo 3.1 via fal.ai only accepts these exact duration strings. Anything
+# else fails schema validation server-side, so we clamp to the nearest
+# supported value instead of letting the API reject the job.
+_VEO_DURATIONS = (4, 6, 8)
+
+
+def _format_duration(fal_model: str, duration: int) -> str:
+    """Return the duration string in the shape the target fal endpoint expects."""
+    if _is_veo(fal_model):
+        # Snap to nearest allowed duration.
+        nearest = min(_VEO_DURATIONS, key=lambda d: abs(d - duration))
+        return f"{nearest}s"
+    return str(duration)
+
+
 def generate_from_fal_model(
     fal_slug: str,
     prompt: str,
@@ -116,10 +141,12 @@ def generate_from_fal_model(
     if _is_v2(fal_slug):
         base["generate_audio"] = False
 
+    duration_arg = _format_duration(fal_slug, duration)
+
     # Try most-specific args first, then degrade.
     arg_attempts: list[dict] = [
-        {**base, "duration": str(duration), "aspect_ratio": aspect_ratio},
-        {**base, "duration": str(duration)},
+        {**base, "duration": duration_arg, "aspect_ratio": aspect_ratio},
+        {**base, "duration": duration_arg},
         base,
     ]
     last_err: Exception | None = None
@@ -153,7 +180,7 @@ def generate_video_from_image_url(
     args: dict = {
         "prompt": prompt,
         "image_url": image_url,
-        "duration": str(duration),
+        "duration": _format_duration(fal_model, duration),
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
     }
@@ -179,7 +206,7 @@ def generate_video_from_text(
 
     args: dict = {
         "prompt": prompt,
-        "duration": str(duration),
+        "duration": _format_duration(fal_model, duration),
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
     }
