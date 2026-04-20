@@ -1433,24 +1433,24 @@ export default function AdminContent() {
                             <span
                               title={`${videoCount} video${videoCount === 1 ? '' : 's'}`}
                               style={{
-                                minWidth: 28, padding: '1px 7px', height: 18,
+                                minWidth: 22, padding: '1px 7px', height: 18,
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                 borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
                                 background: videoCount > 0 ? '#7c3aed' : '#cbd5e1',
                               }}
                             >
-                              ▶ {videoCount}
+                              {videoCount}
                             </span>
                             <span
                               title={`${photoCount} photo${photoCount === 1 ? '' : 's'}`}
                               style={{
-                                minWidth: 28, padding: '1px 7px', height: 18,
+                                minWidth: 22, padding: '1px 7px', height: 18,
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                                 borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
                                 background: photoCount > 0 ? '#059669' : '#cbd5e1',
                               }}
                             >
-                              ◇ {photoCount}
+                              {photoCount}
                             </span>
                           </div>
                         </button>
