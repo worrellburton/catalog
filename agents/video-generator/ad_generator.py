@@ -209,13 +209,14 @@ def _generate_with_retry(
         return (video_bytes, f"seedance_text:{seedance_model}")
 
     # Generic fal.ai path — any non-Seedance fal slug
-    # (Kling, Sora, PixVerse, MiniMax Hailuo, Wan, LTX, Veo via fal, …)
+    # (Kling, Sora, PixVerse, MiniMax Hailuo, Wan, LTX, Veo via fal, Vidu, …)
     if model.startswith("fal-ai/") or model.startswith("bytedance/"):
-        print(f"    → Trying fal.ai model: {model}")
+        print(f"    → Trying fal.ai model: {model} (with {len(image_urls or [])} image(s))")
         video_bytes = generate_from_fal_model(
             fal_slug=model,
             prompt=prompt,
             image_url=image_urls[0] if image_urls else None,
+            image_urls=image_urls,  # Multi-image models (Vidu reference-to-video) read this.
             duration=style_cfg.get("duration", 5),
             aspect_ratio=aspect,
         )
@@ -303,10 +304,18 @@ def generate_ad_video(ad_id: str) -> dict:
         all_images = _get_product_images(product)
         print(f"  Product has {len(all_images)} image(s)")
 
-        # Pick images for this specific ad (cycles through for different ads)
-        ad_index = _get_ad_index_for_product(supabase, ad["product_id"], ad_id)
-        selected_urls = _pick_images_for_ad(all_images, ad_index)
-        print(f"  Selected {len(selected_urls)} images for ad (index {ad_index})")
+        # Multi-reference models (Vidu reference-to-video) want every product
+        # image fed in at once — no per-ad cycling. Capped at 7 to match
+        # Vidu's API limit.
+        ad_model_for_image_pick = ad.get("veo_model") or ""
+        if "reference-to-video" in ad_model_for_image_pick:
+            selected_urls = list(all_images[:7])
+            print(f"  Multi-reference model: passing all {len(selected_urls)} image(s)")
+        else:
+            # Pick images for this specific ad (cycles through for different ads)
+            ad_index = _get_ad_index_for_product(supabase, ad["product_id"], ad_id)
+            selected_urls = _pick_images_for_ad(all_images, ad_index)
+            print(f"  Selected {len(selected_urls)} images for ad (index {ad_index})")
         for i, url in enumerate(selected_urls):
             print(f"    [{i}] {url[:80]}…")
 

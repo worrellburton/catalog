@@ -124,6 +124,7 @@ def generate_from_fal_model(
     prompt: str,
     *,
     image_url: str | None = None,
+    image_urls: list[str] | None = None,
     duration: int = 5,
     aspect_ratio: str = "9:16",
 ) -> bytes:
@@ -133,11 +134,22 @@ def generate_from_fal_model(
     Sends {prompt, image_url?, duration, aspect_ratio} with two retries on
     400 (each omitting one arg) so a model that doesn't accept our optional
     params still runs on its own defaults.
+
+    For multi-image models (e.g. Vidu reference-to-video) pass `image_urls`
+    instead — the function uses `reference_image_urls` (Vidu's input key).
     """
     _ensure_auth()
     base: dict = {"prompt": prompt}
-    if image_url:
+    # Vidu reference-to-video and similar multi-image models want a list of
+    # reference URLs under `reference_image_urls`. Fall back to a single
+    # `image_url` for the more common image-to-video models.
+    if image_urls and "reference" in fal_slug:
+        # Vidu caps at 7 reference images; trim defensively.
+        base["reference_image_urls"] = list(image_urls[:7])
+    elif image_url:
         base["image_url"] = image_url
+    elif image_urls:
+        base["image_url"] = image_urls[0]
     if _is_v2(fal_slug):
         base["generate_audio"] = False
 

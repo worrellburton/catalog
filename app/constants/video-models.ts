@@ -15,6 +15,7 @@ export type VideoModelGroup =
   | 'MiniMax (fal.ai)'
   | 'Wan (fal.ai)'
   | 'LTX (fal.ai)'
+  | 'Vidu (fal.ai)'
   | 'Veo via fal.ai';
 
 export interface VideoModel {
@@ -56,6 +57,12 @@ export const VIDEO_MODELS: VideoModel[] = [
 
   // LTX via fal.ai
   { value: 'fal-ai/ltx-2-19b/image-to-video', label: 'LTX-2 19B', group: 'LTX (fal.ai)' },
+
+  // Vidu via fal.ai — reference-to-video accepts up to 7 images for
+  // multi-angle product consistency.
+  { value: 'fal-ai/vidu/reference-to-video', label: 'Vidu Ref (multi-image)', group: 'Vidu (fal.ai)' },
+  { value: 'fal-ai/vidu/image-to-video', label: 'Vidu', group: 'Vidu (fal.ai)' },
+  { value: 'fal-ai/vidu/start-end-to-video', label: 'Vidu Start→End', group: 'Vidu (fal.ai)' },
 
   // Veo via fal.ai (alternative billing path — uses FAL_KEY, no Google quota)
   { value: 'fal-ai/veo3.1/fast/image-to-video', label: 'Veo 3.1 Fast (via fal)', group: 'Veo via fal.ai' },

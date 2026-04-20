@@ -2053,6 +2053,15 @@ export default function AdminContent() {
                   </optgroup>
                 ))}
               </select>
+              {genModel.includes('reference-to-video') && (
+                <div style={{
+                  marginTop: 6, padding: '6px 10px', borderRadius: 6,
+                  background: '#ecfdf5', border: '1px solid #a7f3d0',
+                  fontSize: 11, color: '#047857',
+                }}>
+                  <strong>Multi-image mode:</strong> Vidu will receive every product photo (up to 7) as references for consistent on-model output.
+                </div>
+              )}
               {genSplit && (
                 <>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', margin: '10px 0 4px' }}>Ad 2 model</label>
@@ -2072,6 +2081,15 @@ export default function AdminContent() {
                       </optgroup>
                     ))}
                   </select>
+                  {genModel2.includes('reference-to-video') && (
+                    <div style={{
+                      marginTop: 6, padding: '6px 10px', borderRadius: 6,
+                      background: '#ecfdf5', border: '1px solid #a7f3d0',
+                      fontSize: 11, color: '#047857',
+                    }}>
+                      <strong>Multi-image mode:</strong> Vidu will receive every product photo (up to 7) as references.
+                    </div>
+                  )}
                   <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
                     One ad generated per model so you can compare side-by-side.
                   </p>
