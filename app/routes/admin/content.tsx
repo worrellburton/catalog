@@ -558,42 +558,6 @@ export default function AdminContent() {
     }
   }, []);
 
-  // Flip products.is_active for a single product. Updates local state
-  // immediately + persists to Supabase.
-  const toggleProductActive = useCallback(async (productId: string, active: boolean) => {
-    setCrawledProducts(prev =>
-      prev.map(r => (r.id === productId ? { ...r, is_active: active } : r))
-    );
-    if (!supabase) return;
-    const { error } = await supabase
-      .from('products')
-      .update({ is_active: active })
-      .eq('id', productId);
-    if (error) {
-      // Rollback on real error.
-      setCrawledProducts(prev =>
-        prev.map(r => (r.id === productId ? { ...r, is_active: !active } : r))
-      );
-      console.error('toggleProductActive failed:', error.message);
-    }
-  }, []);
-
-  // Bulk set is_active for the currently-selected product rows.
-  const bulkSetActive = useCallback(async (active: boolean) => {
-    const ids: string[] = [];
-    for (const key of selectedProductKeys) {
-      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
-      if (match?.id) ids.push(match.id);
-    }
-    if (ids.length === 0) return;
-    setCrawledProducts(prev =>
-      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
-    );
-    if (supabase) {
-      await supabase.from('products').update({ is_active: active }).in('id', ids);
-    }
-  }, [selectedProductKeys, allProducts]);
-
   const moveLook = useCallback((id: number, direction: -1 | 1) => {
     setLookOrder(prev => {
       const base = prev || looks.map(l => l.id);
@@ -851,6 +815,41 @@ export default function AdminContent() {
       };
     });
   }, [crawledProducts, adProductIds, adVideoMap, adImpressionsMap, adClicksMap]);
+
+  // Flip products.is_active for a single product. Defined here (after
+  // allProducts + selectedProductKeys) so its useCallback deps array
+  // doesn't hit a temporal dead zone on the first render.
+  const toggleProductActive = useCallback(async (productId: string, active: boolean) => {
+    setCrawledProducts(prev =>
+      prev.map(r => (r.id === productId ? { ...r, is_active: active } : r))
+    );
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: active })
+      .eq('id', productId);
+    if (error) {
+      setCrawledProducts(prev =>
+        prev.map(r => (r.id === productId ? { ...r, is_active: !active } : r))
+      );
+      console.error('toggleProductActive failed:', error.message);
+    }
+  }, []);
+
+  const bulkSetActive = useCallback(async (active: boolean) => {
+    const ids: string[] = [];
+    for (const key of selectedProductKeys) {
+      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+      if (match?.id) ids.push(match.id);
+    }
+    if (ids.length === 0) return;
+    setCrawledProducts(prev =>
+      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
+    );
+    if (supabase) {
+      await supabase.from('products').update({ is_active: active }).in('id', ids);
+    }
+  }, [selectedProductKeys, allProducts]);
 
   const lookTable = useSortableTable(lookRows);
 
