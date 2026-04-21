@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from '@remix-run/react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import {
@@ -457,7 +458,15 @@ export default function AdminCatalogs() {
               const productCount = catalogProductCounts.get(c.name) || 0;
               return (
               <tr key={c.id}>
-                <td style={{ textAlign: 'left', fontWeight: 600 }}>{c.name}</td>
+                <td style={{ textAlign: 'left', fontWeight: 600 }}>
+                  <Link
+                    to={`/admin/catalogs/${c.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`}
+                    style={{ color: '#111', textDecoration: 'none' }}
+                    title="Open detail page — view attached looks + product palette, run auto-assign"
+                  >
+                    {c.name}
+                  </Link>
+                </td>
                 <td>
                   <span style={{
                     padding: '2px 8px',

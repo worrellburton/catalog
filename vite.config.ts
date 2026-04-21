@@ -42,6 +42,7 @@ export default defineConfig({
             route("finance", "routes/admin/finance.tsx");
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
+            route("catalogs/:slug", "routes/admin/catalogs.$slug.tsx");
             route("incoming-creators", "routes/admin/incoming-creators.tsx");
             route("incoming-looks", "routes/admin/incoming-looks.tsx");
             route("links", "routes/admin/links.tsx");

@@ -9,6 +9,7 @@ import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
+import AmazonLookupModal from '~/components/AmazonLookupModal';
 
 interface CrawledProduct {
   id: string;
@@ -274,6 +275,9 @@ export default function AdminContent() {
     document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('keydown', keyHandler);
   }, [openLinksRow]);
+
+  // Amazon (Rainforest) lookup modal
+  const [showAmazonLookup, setShowAmazonLookup] = useState(false);
 
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
@@ -1068,6 +1072,16 @@ export default function AdminContent() {
                   Refresh stale
                 </>
               )}
+            </button>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={() => setShowAmazonLookup(true)}
+              title="Pull an Amazon product by ASIN or URL via Rainforest API"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                <path d="M3 3h18v4H3zM3 11h18v4H3zM3 19h18v2H3z"/>
+              </svg>
+              Add from Amazon
             </button>
             <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
@@ -2446,6 +2460,17 @@ export default function AdminContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {showAmazonLookup && (
+        <AmazonLookupModal
+          onClose={() => setShowAmazonLookup(false)}
+          onIngested={() => {
+            setShowAmazonLookup(false);
+            showToast('Amazon product added — refreshing…');
+            setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
+          }}
+        />
       )}
 
       {showAddProducts && (
