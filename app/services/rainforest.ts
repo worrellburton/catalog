@@ -48,12 +48,20 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
   if (!product.name || !product.url) {
     throw new Error('Amazon product is missing a name or URL');
   }
+  // Require a usable image — without one, downstream image-to-video generation
+  // fails with "Field required, loc: ['body', 'image_url']" at fal.ai.
+  const imageUrl = product.image_url
+    ?? product.images.find(u => typeof u === 'string' && u.trim().length > 0)
+    ?? null;
+  if (!imageUrl) {
+    throw new Error('Amazon product is missing an image — skipping ingest');
+  }
   const payload = {
     name: product.name,
     brand: product.brand ?? 'Amazon',
     price: product.price ?? null,
     url: product.url,
-    image_url: product.image_url ?? (product.images[0] ?? null),
+    image_url: imageUrl,
     description: product.description ?? null,
     currency: product.currency ?? null,
     images: product.images.length > 0 ? product.images : null,

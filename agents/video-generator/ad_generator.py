@@ -186,11 +186,15 @@ def _generate_with_retry(
     )
     if is_seedance:
         seedance_model = model if "/" in model else f"bytedance/{model}"
-        if image_urls:
+        # Drop falsy entries (None, empty string) — Rainforest/SerpAPI sometimes
+        # return search results without an image, and passing image_url=None to
+        # fal.ai produces a "Field required, loc: ['body', 'image_url']" error.
+        usable = [u for u in (image_urls or []) if isinstance(u, str) and u.strip()]
+        if usable:
             try:
                 print(f"    → Trying Seedance image-to-video ({seedance_model})…")
                 video_bytes = seedance_from_image_url(
-                    image_url=image_urls[0],
+                    image_url=usable[0],
                     prompt=prompt,
                     model=seedance_model,
                     duration=style_cfg.get("duration", 5),
@@ -211,12 +215,13 @@ def _generate_with_retry(
     # Generic fal.ai path — any non-Seedance fal slug
     # (Kling, Sora, PixVerse, MiniMax Hailuo, Wan, LTX, Veo via fal, Vidu, …)
     if model.startswith("fal-ai/") or model.startswith("bytedance/"):
-        print(f"    → Trying fal.ai model: {model} (with {len(image_urls or [])} image(s))")
+        usable = [u for u in (image_urls or []) if isinstance(u, str) and u.strip()]
+        print(f"    → Trying fal.ai model: {model} (with {len(usable)} image(s))")
         video_bytes = generate_from_fal_model(
             fal_slug=model,
             prompt=prompt,
-            image_url=image_urls[0] if image_urls else None,
-            image_urls=image_urls,  # Multi-image models (Vidu reference-to-video) read this.
+            image_url=usable[0] if usable else None,
+            image_urls=usable,  # Multi-image models (Vidu reference-to-video) read this.
             duration=style_cfg.get("duration", 5),
             aspect_ratio=aspect,
         )
