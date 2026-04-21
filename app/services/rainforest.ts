@@ -11,41 +11,34 @@ export interface RainforestProduct {
   image_url: string | null;
   images: string[];
   categories: string[];
+  rating?: number | null;
+  rating_count?: number | null;
 }
 
-function edgeUrl(): string {
-  const baseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  return `${baseUrl}/functions/v1/rainforest-product-lookup`;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  if (!supabase) throw new Error('Supabase not configured');
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Not authenticated');
-  return {
-    'Authorization': `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-  };
-}
+const FN_NAME = 'rainforest-product-lookup';
 
 // Pulls one Amazon product via the rainforest-product-lookup edge function.
 // Pass asin (e.g. "B073JYC4XM") OR url (full Amazon product page).
 export async function lookupAmazonProduct(input: { asin?: string; url?: string; amazonDomain?: string }): Promise<RainforestProduct> {
-  const res = await fetch(edgeUrl(), {
-    method: 'POST',
-    headers: await authHeaders(),
-    body: JSON.stringify({
-      asin: input.asin,
-      url: input.url,
-      amazon_domain: input.amazonDomain,
-    }),
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.functions.invoke(FN_NAME, {
+    body: { asin: input.asin, url: input.url, amazon_domain: input.amazonDomain },
   });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || `Lookup failed: ${res.status}`);
-  }
-  return json.product as RainforestProduct;
+  if (error) throw new Error(error.message || 'Lookup failed');
+  if (!data?.success) throw new Error(data?.error || 'Lookup failed');
+  return data.product as RainforestProduct;
+}
+
+// Searches Amazon by keyword. Returns the top N results (default 20) in the
+// same normalized shape as lookupAmazonProduct.
+export async function searchAmazonProducts(keyword: string, limit = 20): Promise<RainforestProduct[]> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.functions.invoke(FN_NAME, {
+    body: { keyword, limit },
+  });
+  if (error) throw new Error(error.message || 'Search failed');
+  if (!data?.success) throw new Error(data?.error || 'Search failed');
+  return (data.products ?? []) as RainforestProduct[];
 }
 
 // Ingest a looked-up Rainforest product into public.products. Idempotent per
@@ -66,8 +59,6 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
     images: product.images.length > 0 ? product.images : null,
     is_active: true,
   };
-  // Try to find an existing row by URL first — we don't have a unique
-  // constraint we can rely on, so a two-step upsert keeps behaviour stable.
   const { data: existing } = await supabase
     .from('products')
     .select('id')
@@ -91,4 +82,20 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
     return null;
   }
   return { id: inserted.id };
+}
+
+// Batch ingest — used by the search-mode multi-select flow.
+export async function ingestRainforestProducts(products: RainforestProduct[]): Promise<{ inserted: number; failed: number }> {
+  let inserted = 0;
+  let failed = 0;
+  for (const p of products) {
+    try {
+      const row = await ingestRainforestProduct(p);
+      if (row) inserted += 1;
+      else failed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { inserted, failed };
 }

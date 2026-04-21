@@ -2465,9 +2465,9 @@ export default function AdminContent() {
       {showAmazonLookup && (
         <AmazonLookupModal
           onClose={() => setShowAmazonLookup(false)}
-          onIngested={() => {
+          onIngested={(count) => {
             setShowAmazonLookup(false);
-            showToast('Amazon product added — refreshing…');
+            showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} — refreshing…`);
             setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
           }}
         />

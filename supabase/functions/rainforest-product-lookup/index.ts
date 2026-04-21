@@ -1,11 +1,9 @@
 // rainforest-product-lookup
 //
-// Thin proxy over Rainforest API's Product Data endpoint. Keeps
-// RAINFOREST_API_KEY server-side and returns a normalized product shape the
-// admin can ingest directly into public.products.
-//
-// POST body: { asin?: string; url?: string; amazon_domain?: string } — one of
-// asin / url is required.
+// Thin proxy over Rainforest API. Keeps RAINFOREST_API_KEY server-side.
+// Two modes:
+//   POST { asin } / { url }   → type=product, returns one normalized product
+//   POST { keyword }          → type=search, returns a list of normalized products
 //
 // Auth: standard Supabase authenticated user bearer token. Same pattern as
 // manage-looks.
@@ -29,13 +27,7 @@ function errorRes(message: string, status = 400) {
   return jsonRes({ success: false, error: message }, status);
 }
 
-interface RainforestPrice {
-  value?: number;
-  currency?: string;
-  raw?: string;
-  symbol?: string;
-}
-
+interface RainforestPrice { value?: number; currency?: string; raw?: string; symbol?: string }
 interface RainforestImage { link?: string }
 
 interface RainforestProduct {
@@ -50,9 +42,17 @@ interface RainforestProduct {
   categories?: { name: string }[];
 }
 
-interface RainforestResponse {
-  request_info?: { success?: boolean; message?: string };
-  product?: RainforestProduct;
+interface RainforestSearchResult {
+  asin?: string;
+  title?: string;
+  brand?: string;
+  link?: string;
+  image?: string;
+  rating?: number;
+  ratings_total?: number;
+  price?: RainforestPrice;
+  prices?: RainforestPrice[];
+  is_prime?: boolean;
 }
 
 interface NormalizedProduct {
@@ -66,22 +66,49 @@ interface NormalizedProduct {
   image_url: string | null;
   images: string[];
   categories: string[];
+  rating?: number | null;
+  rating_count?: number | null;
 }
 
-function normalize(product: RainforestProduct): NormalizedProduct {
-  const price = product.buybox_winner?.price;
-  const mainImage = product.main_image?.link ?? product.images?.[0]?.link ?? null;
+function priceString(p?: RainforestPrice): string | null {
+  if (!p) return null;
+  if (p.raw) return p.raw;
+  if (typeof p.value === 'number' && p.symbol) return `${p.symbol}${p.value}`;
+  return null;
+}
+
+function normalizeProduct(p: RainforestProduct): NormalizedProduct {
+  const price = p.buybox_winner?.price;
+  const mainImage = p.main_image?.link ?? p.images?.[0]?.link ?? null;
   return {
-    asin: product.asin ?? null,
-    name: product.title ?? '',
-    brand: product.brand ?? null,
-    price: price?.raw ?? (typeof price?.value === 'number' && price.symbol ? `${price.symbol}${price.value}` : null),
+    asin: p.asin ?? null,
+    name: p.title ?? '',
+    brand: p.brand ?? null,
+    price: priceString(price),
     currency: price?.currency ?? null,
-    description: product.description ?? null,
-    url: product.link ?? null,
+    description: p.description ?? null,
+    url: p.link ?? null,
     image_url: mainImage,
-    images: (product.images ?? []).map(i => i.link).filter((s): s is string => typeof s === 'string' && s.length > 0),
-    categories: (product.categories ?? []).map(c => c.name).filter(Boolean),
+    images: (p.images ?? []).map(i => i.link).filter((s): s is string => typeof s === 'string' && s.length > 0),
+    categories: (p.categories ?? []).map(c => c.name).filter(Boolean),
+  };
+}
+
+function normalizeSearchResult(r: RainforestSearchResult): NormalizedProduct {
+  const price = r.price ?? r.prices?.[0];
+  return {
+    asin: r.asin ?? null,
+    name: r.title ?? '',
+    brand: r.brand ?? null,
+    price: priceString(price),
+    currency: price?.currency ?? null,
+    description: null,
+    url: r.link ?? null,
+    image_url: r.image ?? null,
+    images: r.image ? [r.image] : [],
+    categories: [],
+    rating: typeof r.rating === 'number' ? r.rating : null,
+    rating_count: typeof r.ratings_total === 'number' ? r.ratings_total : null,
   };
 }
 
@@ -113,21 +140,56 @@ Deno.serve(async (req: Request) => {
     return errorRes('Unauthorized', 401);
   }
 
-  let body: { asin?: string; url?: string; amazon_domain?: string };
+  let body: { asin?: string; url?: string; keyword?: string; amazon_domain?: string; limit?: number };
   try {
     body = await req.json();
   } catch {
     return errorRes('Invalid JSON body');
   }
 
-  const asin = body.asin?.trim();
-  const url = body.url?.trim();
+  const asin         = body.asin?.trim();
+  const url          = body.url?.trim();
+  const keyword      = body.keyword?.trim();
   const amazonDomain = body.amazon_domain?.trim() || 'amazon.com';
+  const limit        = Math.max(1, Math.min(40, body.limit ?? 20));
 
-  if (!asin && !url) {
-    return errorRes('Provide asin or url');
+  if (!asin && !url && !keyword) {
+    return errorRes('Provide asin, url, or keyword');
   }
 
+  // --- Search mode (keyword) ------------------------------------------------
+  if (keyword) {
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      type: 'search',
+      amazon_domain: amazonDomain,
+      search_term: keyword,
+    });
+    let res: Response;
+    try {
+      res = await fetch(`https://api.rainforestapi.com/request?${params.toString()}`);
+    } catch (err) {
+      return errorRes(`Rainforest request failed: ${err instanceof Error ? err.message : String(err)}`, 502);
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      return errorRes(`Rainforest returned ${res.status}: ${text.slice(0, 500)}`, 502);
+    }
+    const payload = await res.json() as {
+      request_info?: { success?: boolean; message?: string };
+      search_results?: RainforestSearchResult[];
+    };
+    if (payload.request_info?.success === false) {
+      return errorRes(`Rainforest error: ${payload.request_info.message ?? 'unknown'}`, 502);
+    }
+    const results = (payload.search_results ?? [])
+      .slice(0, limit)
+      .map(normalizeSearchResult)
+      .filter(p => p.name && p.url);
+    return jsonRes({ success: true, products: results });
+  }
+
+  // --- Product mode (asin / url) --------------------------------------------
   const params = new URLSearchParams({
     api_key: apiKey,
     type: 'product',
@@ -136,30 +198,25 @@ Deno.serve(async (req: Request) => {
   if (asin) params.set('asin', asin);
   if (url) params.set('url', url);
 
-  let rainforestRes: Response;
+  let res: Response;
   try {
-    rainforestRes = await fetch(`https://api.rainforestapi.com/request?${params.toString()}`, {
-      method: 'GET',
-    });
+    res = await fetch(`https://api.rainforestapi.com/request?${params.toString()}`);
   } catch (err) {
     return errorRes(`Rainforest request failed: ${err instanceof Error ? err.message : String(err)}`, 502);
   }
-
-  if (!rainforestRes.ok) {
-    const text = await rainforestRes.text();
-    return errorRes(
-      `Rainforest returned ${rainforestRes.status}: ${text.slice(0, 500)}`,
-      rainforestRes.status === 401 || rainforestRes.status === 403 ? 502 : 502
-    );
+  if (!res.ok) {
+    const text = await res.text();
+    return errorRes(`Rainforest returned ${res.status}: ${text.slice(0, 500)}`, 502);
   }
-
-  const payload = (await rainforestRes.json()) as RainforestResponse;
+  const payload = await res.json() as {
+    request_info?: { success?: boolean; message?: string };
+    product?: RainforestProduct;
+  };
   if (payload.request_info?.success === false) {
     return errorRes(`Rainforest error: ${payload.request_info.message ?? 'unknown'}`, 502);
   }
   if (!payload.product) {
     return errorRes('Rainforest returned no product');
   }
-
-  return jsonRes({ success: true, product: normalize(payload.product) });
+  return jsonRes({ success: true, product: normalizeProduct(payload.product) });
 });
