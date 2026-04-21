@@ -388,27 +388,21 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                       className="admin-clickable-row"
                       onClick={() => setExpandedId(prev => prev === ad.id ? null : ad.id)}
                     >
-                      {/* Video thumbnail */}
+                      {/* Video thumbnail — autoplays muted; hover pops a larger preview */}
                       <td>
                         {ad.video_url ? (
                           <div
-                            style={{
-                              width: 48, height: 64, borderRadius: 6, overflow: 'hidden',
-                              background: '#111', cursor: 'pointer', position: 'relative',
-                            }}
+                            className="admin-look-thumb"
+                            style={{ width: 48, height: 64, background: '#111' }}
                             onClick={e => { e.stopPropagation(); setPreviewAd(ad); }}
+                            title="Click for full preview"
                           >
                             <video
                               src={ad.video_url}
-                              muted playsInline preload="metadata"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              autoPlay muted loop playsInline preload="metadata"
                             />
-                            <div style={{
-                              position: 'absolute', inset: 0, display: 'flex',
-                              alignItems: 'center', justifyContent: 'center',
-                              background: 'rgba(0,0,0,0.3)',
-                            }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <div className="admin-look-preview">
+                              <video src={ad.video_url} autoPlay muted loop playsInline />
                             </div>
                           </div>
                         ) : (
