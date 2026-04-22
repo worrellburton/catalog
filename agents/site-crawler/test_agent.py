@@ -24,6 +24,10 @@ from agent import (
     MAX_HTML_LENGTH,
     MAX_LINKS_RETURN,
     _call_with_retry,
+    _classify_url,
+    _name_from_url,
+    _parse_sitemap,
+    discover_via_sitemap,
     RETRY_DELAYS,
 )
 
@@ -68,6 +72,7 @@ class TestToolDefinitions:
         assert "visit_page" in names
         assert "get_navigation" in names
         assert "save_collections" in names
+        assert "hover_main_menu" in names
 
     def test_collection_has_expected_tools(self):
         names = {t["name"] for t in COLLECTION_TOOLS}
@@ -75,6 +80,7 @@ class TestToolDefinitions:
         assert "get_product_links" in names
         assert "save_product_urls" in names
         assert "scroll_down" in names
+        assert "auto_load_all" in names
 
     def test_collection_does_not_have_get_page_html(self):
         """get_page_html was removed to save tokens — verify it stays removed."""
@@ -224,6 +230,84 @@ class TestBrowserOutputFormat:
         result = json.loads(agent.visit_page("https://other-site.com/page"))
         assert "error" in result
         assert "Different domain" in result["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 7. Sitemap discovery
+# ═══════════════════════════════════════════════════════════════════════
+
+SAMPLE_URLSET = b"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://shop.example.com/products/cool-tee</loc></url>
+  <url><loc>https://shop.example.com/products/warm-hoodie</loc></url>
+  <url><loc>https://shop.example.com/collections/new-arrivals</loc></url>
+  <url><loc>https://shop.example.com/about</loc></url>
+</urlset>"""
+
+SAMPLE_INDEX = b"""<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://shop.example.com/sitemap_products_1.xml</loc></sitemap>
+  <sitemap><loc>https://shop.example.com/sitemap_collections_1.xml</loc></sitemap>
+</sitemapindex>"""
+
+
+class TestSitemapHelpers:
+    def test_classify_product(self):
+        assert _classify_url("https://x.com/products/cool-tee") == "product"
+        assert _classify_url("https://x.com/p/abc-123") == "product"
+        assert _classify_url("https://x.com/dp/B0XYZ12345") == "product"
+
+    def test_classify_collection(self):
+        assert _classify_url("https://x.com/collections/new-arrivals") == "collection"
+        assert _classify_url("https://x.com/category/shoes") == "collection"
+        assert _classify_url("https://x.com/c/men") == "collection"
+
+    def test_classify_unknown(self):
+        assert _classify_url("https://x.com/about") is None
+        assert _classify_url("https://x.com/") is None
+
+    def test_name_from_url(self):
+        assert _name_from_url("https://x.com/collections/new-arrivals") == "New Arrivals"
+        assert _name_from_url("https://x.com/c/mens-shoes/") == "Mens Shoes"
+
+    def test_parse_urlset(self):
+        sub, pages = _parse_sitemap(SAMPLE_URLSET)
+        assert sub == []
+        assert len(pages) == 4
+        assert "https://shop.example.com/products/cool-tee" in pages
+
+    def test_parse_index(self):
+        sub, pages = _parse_sitemap(SAMPLE_INDEX)
+        assert pages == []
+        assert len(sub) == 2
+        assert any("sitemap_products_1.xml" in s for s in sub)
+
+
+class TestDiscoverViaSitemap:
+    def test_classifies_urls(self):
+        """Mock _http_get to return our sample sitemap and check classification."""
+        with patch("agent._http_get") as mock_get, \
+             patch("agent._sitemap_urls_from_robots", return_value=[]):
+            # First call returns urlset; subsequent return None to stop traversal
+            mock_get.side_effect = [SAMPLE_URLSET] + [None] * 20
+
+            result = discover_via_sitemap("https://shop.example.com")
+
+        product_urls = {p["url"] for p in result["products"]}
+        coll_urls = {c["url"] for c in result["collections"]}
+
+        assert "https://shop.example.com/products/cool-tee" in product_urls
+        assert "https://shop.example.com/products/warm-hoodie" in product_urls
+        assert "https://shop.example.com/collections/new-arrivals" in coll_urls
+        # /about must not be classified
+        assert all("/about" not in u for u in product_urls | coll_urls)
+
+    def test_handles_no_sitemap(self):
+        with patch("agent._http_get", return_value=None), \
+             patch("agent._sitemap_urls_from_robots", return_value=[]):
+            result = discover_via_sitemap("https://nothing.example")
+        assert result["products"] == []
+        assert result["collections"] == []
 
 
 if __name__ == "__main__":
