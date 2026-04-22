@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import PasswordGate from '~/components/PasswordGate';
+import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
 import LandingPage from '~/components/LandingPage';
 import ContinuousFeed from '~/components/ContinuousFeed';
@@ -15,8 +16,9 @@ import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
+import { getWaitlistStatus } from '~/services/waitlist';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app';
+type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
 
 // Map individual search words to catalogNames keys so queries like
 // "first date fit", "gym fits", or "cozy fall vibes" land on themed names.
@@ -165,7 +167,7 @@ export default function Home() {
     return () => document.removeEventListener('mousedown', handler);
   }, [catalogDropdownOpen]);
 
-  // Auto-enter main catalog grid if user is authenticated (e.g. Google OAuth redirect)
+  // Auto-route on sign-in: approved users enter the app, everyone else goes to the waitlist.
   useEffect(() => {
     if (authLoading) return;
     if (!user) return;
@@ -174,7 +176,22 @@ export default function Home() {
     if (window.location.hash.includes('access_token')) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-    setView('app');
+
+    let cancelled = false;
+    (async () => {
+      if (user.role === 'admin') {
+        if (!cancelled) setView('app');
+        return;
+      }
+      const status = await getWaitlistStatus(user.id);
+      if (cancelled) return;
+      if (status?.approved) {
+        setView('app');
+      } else {
+        setView('waitlisted');
+      }
+    })();
+    return () => { cancelled = true; };
   }, [user, authLoading, view]);
 
   // Read hash on mount for deep linking
@@ -204,13 +221,8 @@ export default function Home() {
     }
   }, [view]);
 
-  const handleAuthSuccess = useCallback(() => {
-    setShowSplash(true);
-    setView('splash');
-    setTimeout(() => {
-      setView('app');
-      setShowSplash(false);
-    }, 2200);
+  const handleWaitlistApproved = useCallback(() => {
+    setView('app');
   }, []);
 
   const handleRemix = useCallback(() => {
@@ -278,8 +290,9 @@ export default function Home() {
 
   return (
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
-      {view === 'locked' && (
-        <PasswordGate onAuthSuccess={handleAuthSuccess} />
+      {view === 'locked' && <PasswordGate />}
+      {view === 'waitlisted' && user && (
+        <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
 
       {showSplash && <SplashScreen />}

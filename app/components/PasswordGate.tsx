@@ -3,10 +3,6 @@ import { useState, useRef, useEffect } from 'react';
 import CatalogLogo from './CatalogLogo';
 import { signInWithGoogle, sendPhoneOtp, verifyPhoneOtp } from '~/services/auth';
 
-interface PasswordGateProps {
-  onAuthSuccess?: () => void;
-}
-
 type AuthMode = 'main' | 'phone' | 'otp';
 
 function formatPhone(value: string): string {
@@ -16,14 +12,13 @@ function formatPhone(value: string): string {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
 }
 
-export default function PasswordGate({ onAuthSuccess }: PasswordGateProps) {
+export default function PasswordGate() {
   const [authMode, setAuthMode] = useState<AuthMode>('main');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
   const [shaking, setShaking] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -82,13 +77,9 @@ export default function PasswordGate({ onAuthSuccess }: PasswordGateProps) {
     if (result.error) {
       setError(result.error);
       shake();
-    } else {
-      setDismissed(true);
-      onAuthSuccess?.();
     }
+    // On success: auth state change fires, parent routes us away.
   };
-
-  if (dismissed) return null;
 
   return (
     <div className="password-gate">

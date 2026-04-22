@@ -416,7 +416,11 @@ export default function AdminUsers() {
       </div>
 
       {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
-      {activeTab === 'shoppers-waitlist' && <p className="admin-detail-empty">No waitlist signups yet</p>}
+      {activeTab === 'shoppers-waitlist' && (
+        <p className="admin-detail-empty">
+          <a href="/admin/shoppers-waitlist" style={{ color: '#3b82f6' }}>Open the shoppers waitlist →</a>
+        </p>
+      )}
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
       {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}

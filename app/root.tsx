@@ -10,6 +10,7 @@ import { Analytics } from "@vercel/analytics/remix";
 /* ── Modular styles (split from globals.css) ── */
 import "./styles/base.css";
 import "./styles/password-gate.css";
+import "./styles/waitlist.css";
 import "./styles/deck-selector.css";
 import "./styles/deck-v6.css";
 import "./styles/splash-screen.css";
