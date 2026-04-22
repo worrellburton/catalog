@@ -4,9 +4,6 @@ import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-ads';
 
-// Pattern: emit this many looks, then one creative, then repeat.
-const LOOKS_PER_CREATIVE = 2;
-
 interface FeedSectionProps {
   looks: Look[];
   onOpenLook: (look: Look) => void;
@@ -72,35 +69,35 @@ export default function FeedSection({
     return 'look-card';
   }, [layoutMode]);
 
-  // Build a single interleaved pool. Looks are drawn from re-shuffled decks,
-  // and creatives are drawn from a single shuffled deck — every unique
-  // creative appears once before any creative repeats, so the user sees the
-  // full library of product creative before ads recycle.
+  // Build the pool by treating looks + creatives as one combined deck.
+  // Each cycle emits every unique item once (shuffled); when the deck
+  // runs out we re-shuffle and start another cycle. This guarantees
+  // that nothing — neither a look nor a creative — repeats until every
+  // other unique item in the library has been shown.
   const pool = useMemo(() => {
     if (looks.length === 0) return [];
     const creativeList = isInitial ? (creatives ?? []) : [];
-    const creativeDeck = shuffled(creativeList);
 
-    // Size the pool so it covers a long scroll without exhausting.
     const targetCells = isInitial ? 200 : 50;
     const items: ({ type: 'look'; look: Look & { displayIndex: number } } | { type: 'creative'; creative: ProductAd })[] = [];
 
-    let lookDeck: Look[] = [];
+    type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
+    const buildDeck = (): DeckEntry[] => shuffled<DeckEntry>([
+      ...looks.map(look => ({ type: 'look' as const, look })),
+      ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+    ]);
+
+    let deck = buildDeck();
     let displayIndex = 0;
-    let creativeIdx = 0;
-    let positionInGroup = 0;
 
     while (items.length < targetCells) {
-      if (creativeDeck.length > 0 && positionInGroup >= LOOKS_PER_CREATIVE) {
-        items.push({ type: 'creative', creative: creativeDeck[creativeIdx % creativeDeck.length] });
-        creativeIdx++;
-        positionInGroup = 0;
-        continue;
+      if (deck.length === 0) deck = buildDeck();
+      const next = deck.shift()!;
+      if (next.type === 'look') {
+        items.push({ type: 'look', look: { ...next.look, displayIndex: displayIndex++ } });
+      } else {
+        items.push({ type: 'creative', creative: next.creative });
       }
-      if (lookDeck.length === 0) lookDeck = shuffled(looks);
-      const next = lookDeck.shift()!;
-      items.push({ type: 'look', look: { ...next, displayIndex: displayIndex++ } });
-      positionInGroup++;
     }
 
     return items;
