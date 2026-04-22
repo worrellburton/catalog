@@ -1,7 +1,12 @@
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Product, Look, looks, creators } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
+
+interface ProductPageCreative {
+  videoUrl: string;
+  thumbnailUrl?: string | null;
+}
 
 interface ProductPageProps {
   product: Product;
@@ -11,9 +16,22 @@ interface ProductPageProps {
   onOpenProduct?: (product: Product) => void;
   onOpenCreator?: (name: string) => void;
   onCreateCatalog?: (query: string) => void;
+  creative?: ProductPageCreative;
+  similarProductsOverride?: Product[];
 }
 
-export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowser, onOpenProduct, onOpenCreator, onCreateCatalog }: ProductPageProps) {
+export default function ProductPage({
+  product,
+  onClose,
+  onOpenLook,
+  onOpenBrowser,
+  onOpenProduct,
+  onOpenCreator,
+  onCreateCatalog,
+  creative,
+  similarProductsOverride,
+}: ProductPageProps) {
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
@@ -53,8 +71,13 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
       }));
   }, [relatedLooks]);
 
-  // Find similar/other products (exclude current, dedupe)
+  // Similar products: prefer explicit override (e.g. queried from DB when
+  // the user arrived via a creative), otherwise fall back to the hardcoded
+  // looks catalog.
   const similarProducts = useMemo(() => {
+    if (similarProductsOverride && similarProductsOverride.length > 0) {
+      return similarProductsOverride.slice(0, 12);
+    }
     const allProducts = looks.flatMap(l => l.products);
     const seen = new Set<string>();
     seen.add(`${product.brand}-${product.name}`);
@@ -64,7 +87,7 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
       seen.add(key);
       return true;
     }).slice(0, 6);
-  }, [product]);
+  }, [product, similarProductsOverride]);
 
   return (
     <div className={`product-page-overlay${mounted && !isAnimatingOut ? ' product-page-overlay--in' : ''}${isAnimatingOut ? ' product-page-overlay--out' : ''}`}>
@@ -78,7 +101,18 @@ export default function ProductPage({ product, onClose, onOpenLook, onOpenBrowse
           {/* Product hero */}
           <div className="product-page-hero">
             <div className="product-page-image">
-              {product.image ? (
+              {creative ? (
+                <video
+                  ref={heroVideoRef}
+                  src={creative.videoUrl}
+                  poster={creative.thumbnailUrl ?? undefined}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="product-page-hero-video"
+                />
+              ) : product.image ? (
                 <img src={product.image.replace('w=200&h=200', 'w=600&h=600')} alt={product.name} />
               ) : (
                 <div className="product-page-placeholder" />

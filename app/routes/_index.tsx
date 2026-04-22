@@ -17,6 +17,8 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
+import type { ProductAd } from '~/services/product-ads';
+import { supabase } from '~/utils/supabase';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
 
@@ -127,6 +129,8 @@ export default function Home() {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
+  const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -272,7 +276,45 @@ export default function Home() {
 
   const handleOpenProduct = useCallback((product: Product) => {
     setSelectedLook(null);
+    setSelectedCreative(null);
+    setSelectedSimilar(null);
     setSelectedProduct(product);
+  }, []);
+
+  const handleOpenCreative = useCallback(async (creative: ProductAd) => {
+    if (!creative.product) return;
+    const mapped: Product = {
+      name: creative.product.name || 'Shop Now',
+      brand: creative.product.brand || '',
+      price: creative.product.price || '',
+      url: creative.product.url || '',
+      image: creative.product.image_url || undefined,
+    };
+    setSelectedLook(null);
+    setSelectedProduct(mapped);
+    setSelectedCreative(creative);
+    setSelectedSimilar(null);
+
+    if (supabase && creative.product.brand) {
+      const { data } = await supabase
+        .from('products')
+        .select('name, brand, price, image_url, url')
+        .eq('brand', creative.product.brand)
+        .eq('is_active', true)
+        .neq('id', creative.product.id)
+        .limit(12);
+      if (data) {
+        setSelectedSimilar(
+          data.map(p => ({
+            name: p.name || '',
+            brand: p.brand || '',
+            price: p.price || '',
+            url: p.url || '',
+            image: p.image_url || undefined,
+          })),
+        );
+      }
+    }
   }, []);
 
   const handleCreateCatalog = useCallback((query: string) => {
@@ -334,6 +376,7 @@ export default function Home() {
             onOpenCreator={handleOpenCreator}
             onOpenBrowser={handleOpenBrowser}
             onOpenProduct={handleOpenProduct}
+            onOpenCreative={handleOpenCreative}
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
           />
@@ -397,12 +440,18 @@ export default function Home() {
           {selectedProduct && (
             <ProductPage
               product={selectedProduct}
-              onClose={() => setSelectedProduct(null)}
+              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); }}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
               onOpenProduct={handleOpenProduct}
               onOpenCreator={handleOpenCreator}
               onCreateCatalog={handleCreateCatalog}
+              creative={
+                selectedCreative?.video_url
+                  ? { videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
+                  : undefined
+              }
+              similarProductsOverride={selectedSimilar ?? undefined}
             />
           )}
 
