@@ -495,6 +495,8 @@ export default function AdminCatalogs() {
   const [addSearch, setAddSearch] = useState('');
   const [addSelected, setAddSelected] = useState<Set<string>>(new Set());
   const [addBusy, setAddBusy] = useState(false);
+  const [addAutoPicking, setAddAutoPicking] = useState(false);
+  const [addAutoProgress, setAddAutoProgress] = useState<{ done: number; total: number } | null>(null);
 
   const openAdd = useCallback((catalog: Catalog) => {
     setAddProductsCatalog(catalog);
@@ -516,6 +518,62 @@ export default function AdminCatalogs() {
       return next;
     });
   }, []);
+
+  // Auto-pick: ask Claude (via catalog-auto-tag) which of the remaining
+  // untagged products belong on this catalog, then tick them in the grid
+  // so the admin can review before committing.
+  const autoPickRelevant = useCallback(async () => {
+    if (!supabase || !addProductsCatalog) return;
+    const name = addProductsCatalog.name;
+    const candidates = products.filter(p => !(p.catalog_tags || []).includes(name));
+    if (candidates.length === 0) {
+      showToast('Every product in the library is already in this catalog.');
+      return;
+    }
+    setAddAutoPicking(true);
+    setAddAutoProgress({ done: 0, total: candidates.length });
+    try {
+      const BATCH = 30;
+      const picked = new Set<string>();
+      for (let i = 0; i < candidates.length; i += BATCH) {
+        const batch = candidates.slice(i, i + BATCH);
+        const { data, error } = await supabase.functions.invoke('catalog-auto-tag', {
+          body: {
+            products: batch.map(p => ({
+              id: p.id,
+              name: p.name || '',
+              brand: p.brand || '',
+              image_url: p.image_url,
+            })),
+            catalogs: [name],
+          },
+        });
+        if (error) {
+          console.error('Auto-pick batch failed:', error);
+          showToast(`Auto-pick failed: ${error.message}`);
+          break;
+        }
+        if (data?.success && data.results) {
+          const results = data.results as Record<string, string[]>;
+          for (const [id, tags] of Object.entries(results)) {
+            if (tags.includes(name)) picked.add(id);
+          }
+        }
+        setAddAutoProgress({ done: Math.min(i + BATCH, candidates.length), total: candidates.length });
+      }
+      setAddSelected(prev => {
+        const next = new Set(prev);
+        picked.forEach(id => next.add(id));
+        return next;
+      });
+      showToast(`Picked ${picked.size} relevant product${picked.size === 1 ? '' : 's'}. Review and click Add to commit.`);
+    } catch (err) {
+      showToast(`Auto-pick failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAddAutoPicking(false);
+      setAddAutoProgress(null);
+    }
+  }, [addProductsCatalog, products, showToast]);
 
   const commitAdd = useCallback(async () => {
     if (!supabase || !addProductsCatalog || addSelected.size === 0) return;
@@ -935,6 +993,9 @@ export default function AdminCatalogs() {
           selected={addSelected}
           onToggle={toggleAddSelected}
           busy={addBusy}
+          autoPicking={addAutoPicking}
+          autoProgress={addAutoProgress}
+          onAutoPick={autoPickRelevant}
           onClose={closeAdd}
           onCommit={commitAdd}
         />
@@ -1600,6 +1661,9 @@ interface AddProductsModalProps {
   selected: Set<string>;
   onToggle: (id: string) => void;
   busy: boolean;
+  autoPicking: boolean;
+  autoProgress: { done: number; total: number } | null;
+  onAutoPick: () => void;
   onClose: () => void;
   onCommit: () => void;
 }
@@ -1612,6 +1676,9 @@ function AddProductsModal({
   selected,
   onToggle,
   busy,
+  autoPicking,
+  autoProgress,
+  onAutoPick,
   onClose,
   onCommit,
 }: AddProductsModalProps) {
@@ -1637,14 +1704,28 @@ function AddProductsModal({
               {tagged.size} already in this catalog · {products.length} in library
             </p>
           </div>
-          <input
-            type="text"
-            placeholder="Search by name or brand"
-            value={search}
-            onChange={e => onSearch(e.target.value)}
-            autoFocus
-            style={{ flex: '0 1 280px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              className="admin-btn admin-btn-primary"
+              onClick={onAutoPick}
+              disabled={autoPicking || busy}
+              title="Ask Claude to scan the library and tick products relevant to this catalog"
+              style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+            >
+              {autoPicking && autoProgress
+                ? `✨ Scanning ${autoProgress.done}/${autoProgress.total}…`
+                : '✨ Auto-pick relevant'}
+            </button>
+            <input
+              type="text"
+              placeholder="Search by name or brand"
+              value={search}
+              onChange={e => onSearch(e.target.value)}
+              autoFocus
+              style={{ flex: '0 1 260px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+            />
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
