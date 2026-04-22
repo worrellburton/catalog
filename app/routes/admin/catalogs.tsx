@@ -491,20 +491,20 @@ export default function AdminCatalogs() {
   // Add Products modal — pick existing products from the DB and tag them
   // onto a catalog. Persisted by pushing the catalog name into each
   // product's catalog_tags array (same shape the dropdown filter reads).
-  const [addCatalog, setAddCatalog] = useState<Catalog | null>(null);
+  const [addProductsCatalog, setAddProductsCatalog] = useState<Catalog | null>(null);
   const [addSearch, setAddSearch] = useState('');
   const [addSelected, setAddSelected] = useState<Set<string>>(new Set());
   const [addBusy, setAddBusy] = useState(false);
 
   const openAdd = useCallback((catalog: Catalog) => {
-    setAddCatalog(catalog);
+    setAddProductsCatalog(catalog);
     setAddSearch('');
     setAddSelected(new Set());
   }, []);
 
   const closeAdd = useCallback(() => {
     if (addBusy) return;
-    setAddCatalog(null);
+    setAddProductsCatalog(null);
     setAddSearch('');
     setAddSelected(new Set());
   }, [addBusy]);
@@ -518,10 +518,10 @@ export default function AdminCatalogs() {
   }, []);
 
   const commitAdd = useCallback(async () => {
-    if (!supabase || !addCatalog || addSelected.size === 0) return;
+    if (!supabase || !addProductsCatalog || addSelected.size === 0) return;
     setAddBusy(true);
     try {
-      const name = addCatalog.name;
+      const name = addProductsCatalog.name;
       const updates = Array.from(addSelected).map(id => {
         const p = products.find(x => x.id === id);
         const tags = new Set([...(p?.catalog_tags || []), name]);
@@ -541,16 +541,16 @@ export default function AdminCatalogs() {
       // Invalidate any cached dropdown creative so the next expand refetches.
       setCreativeByCatalog(prev => {
         const next = { ...prev };
-        delete next[addCatalog.id];
+        delete next[addProductsCatalog.id];
         return next;
       });
-      setAddCatalog(null);
+      setAddProductsCatalog(null);
       setAddSelected(new Set());
       setAddSearch('');
     } finally {
       setAddBusy(false);
     }
-  }, [addCatalog, addSelected, products, loadProducts, showToast]);
+  }, [addProductsCatalog, addSelected, products, loadProducts, showToast]);
 
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
@@ -926,9 +926,9 @@ export default function AdminCatalogs() {
       )}
 
       {/* Add Products modal — pick from existing library */}
-      {addCatalog && (
+      {addProductsCatalog && (
         <AddProductsModal
-          catalog={addCatalog}
+          catalog={addProductsCatalog}
           products={products}
           search={addSearch}
           onSearch={setAddSearch}
