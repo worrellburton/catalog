@@ -64,6 +64,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY }}
+          VITE_MODAL_CRAWLER_URL: ${{ secrets.VITE_MODAL_CRAWLER_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

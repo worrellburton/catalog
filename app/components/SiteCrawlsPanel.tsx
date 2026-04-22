@@ -540,6 +540,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [automations, setAutomations] = useState<Record<string, AutomationSettings>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [crawlError, setCrawlError] = useState<string | null>(null);
 
   useEffect(() => {
     setAutomations(loadAutomations());
@@ -563,12 +564,17 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   }, [loadJobs]);
 
   const handleAdd = async (url: string, name: string, maxPages: number) => {
+    setCrawlError(null);
     try {
       const job = await createCrawlJob(url, name || undefined);
-      await triggerCrawl(job.id, url, maxPages);
+      const triggered = await triggerCrawl(job.id, url, maxPages);
+      if (!triggered) {
+        setCrawlError('Crawl job created but the crawler could not be triggered. Check that VITE_MODAL_CRAWLER_URL is configured.');
+      }
       loadJobs();
     } catch (e) {
       console.error('Failed to create crawl:', e);
+      setCrawlError('Failed to create crawl job.');
     }
   };
 
@@ -599,12 +605,17 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
 
   const handleRetry = async (id: string, siteUrl: string) => {
     setActionLoading(id);
+    setCrawlError(null);
     try {
       await retryCrawlJob(id);
-      await triggerCrawl(id, siteUrl);
+      const triggered = await triggerCrawl(id, siteUrl);
+      if (!triggered) {
+        setCrawlError('Crawl reset but the crawler could not be triggered. Check that VITE_MODAL_CRAWLER_URL is configured.');
+      }
       loadJobs();
     } catch (e) {
       console.error('Failed to retry:', e);
+      setCrawlError('Failed to retry crawl job.');
     } finally {
       setActionLoading(null);
     }
@@ -619,6 +630,32 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
 
   return (
     <>
+      {crawlError && (
+        <div
+          style={{
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: 6,
+            padding: '10px 14px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            fontSize: 13,
+            color: '#b91c1c',
+          }}
+        >
+          <span>{crawlError}</span>
+          <button
+            onClick={() => setCrawlError(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', fontSize: 16, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {!embedded && (
         <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>

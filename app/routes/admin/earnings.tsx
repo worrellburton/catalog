@@ -81,6 +81,16 @@ export default function AdminEarnings() {
               </button>
             </div>
           </div>
+          <button
+            className="admin-btn admin-btn-primary"
+            onClick={() => setShowCreatePayout(!showCreatePayout)}
+            style={{ alignSelf: 'flex-end' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            {showCreatePayout ? 'Close' : 'Create Payout'}
+          </button>
         </div>
       </div>
 
@@ -117,16 +127,6 @@ export default function AdminEarnings() {
             )}
           </tbody>
         </table>
-      </div>
-
-      <div style={{ marginTop: 24 }}>
-        <button
-          className="admin-action-btn approve"
-          style={{ padding: '8px 16px', fontSize: 12 }}
-          onClick={() => setShowCreatePayout(!showCreatePayout)}
-        >
-          {showCreatePayout ? 'Close' : 'Create Payout'}
-        </button>
       </div>
 
       {showCreatePayout && (
