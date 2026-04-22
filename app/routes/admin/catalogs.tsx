@@ -52,9 +52,21 @@ interface CatalogLookRow {
   productCount: number;
 }
 
+interface CatalogCreativeVideo {
+  id: string;
+  productId: string;
+  videoUrl: string;
+  thumbnailUrl: string | null;
+  title: string | null;
+  productName: string | null;
+  productBrand: string | null;
+  status: string;
+}
+
 interface CatalogCreativePayload {
   looks: CatalogLookRow[];
   products: ProductRow[];
+  creatives: CatalogCreativeVideo[];
 }
 
 const ALL_CATALOG_NAME = 'all';
@@ -125,7 +137,7 @@ export default function AdminCatalogs() {
         creator_handle: string | null;
         look_products: { product_id: string }[] | null;
       };
-      const looks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
+      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
         id: r.id,
         legacyId: r.legacy_id,
         title: r.title,
@@ -134,15 +146,62 @@ export default function AdminCatalogs() {
         productCount: (r.look_products || []).length,
       }));
 
+      // The `all` catalog is a superset view — if multiple looks share the
+      // same video_path they'd render as visual dupes, so collapse to the
+      // first occurrence per video. Other catalogs keep every row.
+      const looks = isAll
+        ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
+        : mappedLooks;
+
       // Products: `all` catalog uses every product currently loaded; others
       // filter by catalog_tags. Both paths dedupe so nothing repeats.
       const catalogProducts = isAll
         ? products
         : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
 
+      // Creative videos (product_ads). `all` pulls every rendered ad so admins
+      // see the full library of creative in one place; named catalogs filter
+      // to ads whose underlying product is tagged with this catalog.
+      const catalogProductIds = new Set(catalogProducts.map(p => p.id));
+      let adsQuery = supabase
+        .from('product_ads')
+        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand)')
+        .not('video_url', 'is', null)
+        .in('status', ['done', 'live'])
+        .order('created_at', { ascending: false });
+      if (!isAll) {
+        adsQuery = adsQuery.in(
+          'product_id',
+          catalogProducts.length > 0 ? catalogProducts.map(p => p.id) : ['00000000-0000-0000-0000-000000000000'],
+        );
+      }
+      const { data: adRows } = await adsQuery;
+
+      type AdPayload = {
+        id: string;
+        product_id: string;
+        title: string | null;
+        video_url: string;
+        thumbnail_url: string | null;
+        status: string;
+        products: { id: string; name: string | null; brand: string | null } | null;
+      };
+      const creatives: CatalogCreativeVideo[] = ((adRows as unknown as AdPayload[] | null) || [])
+        .filter(r => isAll || catalogProductIds.has(r.product_id))
+        .map(r => ({
+          id: r.id,
+          productId: r.product_id,
+          videoUrl: r.video_url,
+          thumbnailUrl: r.thumbnail_url,
+          title: r.title,
+          productName: r.products?.name ?? null,
+          productBrand: r.products?.brand ?? null,
+          status: r.status,
+        }));
+
       setCreativeByCatalog(prev => ({
         ...prev,
-        [catalog.id]: { looks, products: catalogProducts },
+        [catalog.id]: { looks, products: catalogProducts, creatives },
       }));
     } finally {
       setCreativeLoading(prev => {
@@ -1131,12 +1190,12 @@ function CatalogCreativeDropdown({ isAll, loading, creative }: CatalogCreativeDr
   }
   if (!creative) return null;
 
-  const { looks, products } = creative;
-  const hasAny = looks.length > 0 || products.length > 0;
+  const { looks, products, creatives } = creative;
+  const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0;
   if (!hasAny) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
-        No looks or products {isAll ? 'are currently active.' : 'tagged with this catalog yet.'}
+        No looks, products, or creative {isAll ? 'are currently active.' : 'tagged with this catalog yet.'}
       </div>
     );
   }
@@ -1162,6 +1221,24 @@ function CatalogCreativeDropdown({ isAll, loading, creative }: CatalogCreativeDr
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
             {looks.map(l => (
               <LookThumb key={l.id} look={l} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Creative Videos
+          </h3>
+          <span style={{ fontSize: 11, color: '#888' }}>{creatives.length}</span>
+        </div>
+        {creatives.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#888' }}>No rendered product ads in this catalog yet.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+            {creatives.map(c => (
+              <CreativeThumb key={c.id} creative={c} />
             ))}
           </div>
         )}
@@ -1233,6 +1310,48 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
         </div>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {look.creatorHandle ? `@${look.creatorHandle}` : '—'} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const label = creative.productName || creative.title || 'Creative';
+  return (
+    <div
+      style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
+      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
+      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+    >
+      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000', position: 'relative' }}>
+        <video
+          ref={videoRef}
+          src={creative.videoUrl}
+          poster={creative.thumbnailUrl ?? undefined}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          padding: '2px 6px', borderRadius: 3,
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: creative.status === 'live' ? '#10b981' : 'rgba(17,24,39,0.75)',
+          color: '#fff',
+        }}>
+          {creative.status}
+        </span>
+      </div>
+      <div style={{ padding: 6, background: '#fff' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {creative.productBrand || '—'}
         </div>
       </div>
     </div>
