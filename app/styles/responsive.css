@@ -230,7 +230,8 @@
     font-size: 14px;
   }
 
-  .pw-hero-logo {
+  .pw-logo {
+    height: 44px;
     max-width: 200px;
   }
 

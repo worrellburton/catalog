@@ -280,6 +280,7 @@ export default function AdminLayout() {
     return () => clearTimeout(t);
   }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -440,8 +441,13 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'}`}>
+    <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
       <LiveCursors cursors={liveCursors} />
+      <div
+        className="admin-sidebar-backdrop"
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <CatalogLogo className="admin-logo" />
@@ -471,6 +477,7 @@ export default function AdminLayout() {
                   to={item.to}
                   end={item.to === '/admin'}
                   className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+                  onClick={() => setSidebarOpen(false)}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d={item.icon} />
@@ -491,6 +498,7 @@ export default function AdminLayout() {
             to="/admin/whats-new"
             className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
             style={{ marginBottom: 6 }}
+            onClick={() => setSidebarOpen(false)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z" />
@@ -552,6 +560,27 @@ export default function AdminLayout() {
       </aside>
       <main className="admin-main">
         <div className="admin-topbar" ref={searchRef}>
+          <button
+            className="admin-sidebar-toggle"
+            onClick={() => setSidebarOpen(o => !o)}
+            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={sidebarOpen}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {sidebarOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
           <div className="admin-search-wrap">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input
@@ -610,7 +639,7 @@ export default function AdminLayout() {
             </button>
 
             {notifOpen && (
-              <div style={{
+              <div className="admin-notif-dropdown" style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 8,
                 width: 360, background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
                 border: '1px solid #e5e7eb', zIndex: 100, display: 'flex', flexDirection: 'column',

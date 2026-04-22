@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import SplashScreen from '~/components/SplashScreen';
 import LandingPage from '~/components/LandingPage';
@@ -141,7 +140,6 @@ export default function Home() {
   const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
   const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
-  const navigate = useNavigate();
   const bookmarks = useBookmarks();
   const { user, loading: authLoading, logout } = useAuth();
 
@@ -205,18 +203,6 @@ export default function Home() {
       window.history.replaceState(null, '', window.location.pathname);
     }
   }, [view]);
-
-  const handlePasswordSubmit = useCallback((password: string): boolean => {
-    if (password === 'awds') {
-      navigate('/admin');
-      return true;
-    }
-    if (password === '123') {
-      setView('app');
-      return true;
-    }
-    return false;
-  }, []);
 
   const handleAuthSuccess = useCallback(() => {
     setShowSplash(true);
@@ -293,7 +279,7 @@ export default function Home() {
   return (
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
       {view === 'locked' && (
-        <PasswordGate onSubmit={handlePasswordSubmit} onAuthSuccess={handleAuthSuccess} />
+        <PasswordGate onAuthSuccess={handleAuthSuccess} />
       )}
 
       {showSplash && <SplashScreen />}
