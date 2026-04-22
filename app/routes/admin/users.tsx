@@ -6,6 +6,7 @@ import { getProfiles, updateUserRole, type Profile } from '~/services/profiles';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
+import AdminWaitlistPanel from '~/components/AdminWaitlistPanel';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '-';
@@ -416,11 +417,7 @@ export default function AdminUsers() {
       </div>
 
       {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
-      {activeTab === 'shoppers-waitlist' && (
-        <p className="admin-detail-empty">
-          <a href="/admin/shoppers-waitlist" style={{ color: '#3b82f6' }}>Open the shoppers waitlist →</a>
-        </p>
-      )}
+      {activeTab === 'shoppers-waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
       {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}
