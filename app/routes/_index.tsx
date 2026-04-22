@@ -133,7 +133,7 @@ export default function Home() {
   const [isLightMode, setIsLightMode] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
-  const [catalogName, setCatalogName] = useState(getRandomCatalogName);
+  const [catalogName, setCatalogName] = useState<string>('all');
   const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('recentCatalogs') || '[]');
@@ -236,7 +236,7 @@ export default function Home() {
     setActiveFilter('all');
     setCreatorFilter(null);
     setShuffleKey(k => k + 1);
-    setCatalogName(getRandomCatalogName());
+    setCatalogName('all');
   }, []);
 
   const handleLandingToApp = useCallback(() => {
