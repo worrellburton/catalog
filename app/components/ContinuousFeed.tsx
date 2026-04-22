@@ -138,14 +138,26 @@ export default function ContinuousFeed({
     seenLookIds: new Set<number>(),
   });
 
-  // Fetch live product creative from Supabase.
+  // Fetch live product creative from Supabase. We surface a loading flag so
+  // the feed can render placeholder tiles in creative slots until the fetch
+  // resolves — otherwise the grid renders pure looks for a beat and the
+  // same two faces fill the first screen.
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>([]);
+  const [creativesLoading, setCreativesLoading] = useState(true);
   useEffect(() => {
+    let cancelled = false;
     getLiveAds()
-      .then(setLiveCreatives)
+      .then(data => {
+        if (cancelled) return;
+        setLiveCreatives(data);
+      })
       .catch(err => {
         console.error('[ContinuousFeed] fetching creative failed:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setCreativesLoading(false);
       });
+    return () => { cancelled = true; };
   }, []);
 
   // Log search queries to Supabase (debounced)
@@ -238,6 +250,7 @@ export default function ContinuousFeed({
               onCreateCatalog={onCreateCatalog}
               onOpenCreativeProduct={handleOpenCreativeProduct}
               creatives={segment.isInitial ? liveCreatives : undefined}
+              creativesLoading={segment.isInitial ? creativesLoading : false}
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}

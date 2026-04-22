@@ -2,11 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   listCrawlJobs,
   createCrawlJob,
-  deleteCrawlJob,
   triggerCrawl,
-  listDiscoveredUrls,
+  listCollectionSummariesForJob,
   type CrawlJob,
-  type CrawlDiscoveredUrl,
 } from '~/services/site-crawls';
 
 interface CollectionRow {
@@ -95,19 +93,14 @@ export default function CollectionCrawlsPanel() {
       const allRows: CollectionRow[] = [];
       for (const job of jobs) {
         if (job.status !== 'done' && job.status !== 'crawling') continue;
-        const { data } = await listDiscoveredUrls(job.id, { limit: 500 });
-        const byCollection = data.reduce<Record<string, CrawlDiscoveredUrl[]>>((acc, u) => {
-          const key = u.collection_name || 'Uncategorized';
-          (acc[key] = acc[key] || []).push(u);
-          return acc;
-        }, {});
-        for (const [collection_name, urls] of Object.entries(byCollection)) {
-          if (collection_name === 'Uncategorized') continue;
+        const summaries = await listCollectionSummariesForJob(job.id);
+        for (const s of summaries) {
+          if (s.collection_name === 'Uncategorized') continue;
           allRows.push({
-            collection_name,
+            collection_name: s.collection_name,
             job,
-            url_count: urls.length,
-            sample_url: urls[0]?.url || '',
+            url_count: s.url_count,
+            sample_url: s.sample_url,
           });
         }
       }
@@ -126,7 +119,7 @@ export default function CollectionCrawlsPanel() {
   const handleAdd = async (url: string, name: string) => {
     try {
       const job = await createCrawlJob(url, name || undefined);
-      await triggerCrawl(job.id, url, 1);
+      await triggerCrawl(job.id, url);
       loadData();
     } catch (e) {
       console.error('Failed to create collection crawl:', e);

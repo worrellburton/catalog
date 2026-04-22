@@ -11,11 +11,16 @@ interface FeedSectionProps {
   onCreateCatalog?: (query: string) => void;
   onOpenCreativeProduct?: (creative: ProductAd) => void;
   creatives?: ProductAd[];
+  creativesLoading?: boolean;
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
   layoutMode?: number;
 }
+
+// When we know creatives are still fetching, reserve roughly this share of
+// cells as creative placeholders so looks don't fill the whole first screen.
+const LOADING_CREATIVE_RATIO = 0.6;
 
 const LAYOUT_CONFIGS = [
   { name: 'grid', columns: 5 },
@@ -43,6 +48,7 @@ export default function FeedSection({
   onCreateCatalog,
   onOpenCreativeProduct,
   creatives,
+  creativesLoading = false,
   title,
   batchSize,
   isInitial = false,
@@ -74,12 +80,38 @@ export default function FeedSection({
   // runs out we re-shuffle and start another cycle. This guarantees
   // that nothing — neither a look nor a creative — repeats until every
   // other unique item in the library has been shown.
-  const pool = useMemo(() => {
+  //
+  // While creatives are still being fetched we instead interleave
+  // placeholder tiles so the grid doesn't fill the first screen with
+  // duplicate looks. Once the fetch resolves this memo recomputes and
+  // the placeholders are replaced with real creative cards.
+  type PoolItem =
+    | { type: 'look'; look: Look & { displayIndex: number } }
+    | { type: 'creative'; creative: ProductAd }
+    | { type: 'placeholder'; key: string };
+
+  const pool = useMemo<PoolItem[]>(() => {
     if (looks.length === 0) return [];
     const creativeList = isInitial ? (creatives ?? []) : [];
-
     const targetCells = isInitial ? 200 : 50;
-    const items: ({ type: 'look'; look: Look & { displayIndex: number } } | { type: 'creative'; creative: ProductAd })[] = [];
+
+    if (isInitial && creativesLoading) {
+      const items: PoolItem[] = [];
+      let lookDeck: Look[] = [];
+      let displayIndex = 0;
+      let placeholderIdx = 0;
+      for (let i = 0; i < targetCells; i++) {
+        const placeholderSlot = Math.random() < LOADING_CREATIVE_RATIO;
+        if (placeholderSlot) {
+          items.push({ type: 'placeholder', key: `ph-${placeholderIdx++}` });
+        } else {
+          if (lookDeck.length === 0) lookDeck = shuffled(looks);
+          const next = lookDeck.shift()!;
+          items.push({ type: 'look', look: { ...next, displayIndex: displayIndex++ } });
+        }
+      }
+      return items;
+    }
 
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
     const buildDeck = (): DeckEntry[] => shuffled<DeckEntry>([
@@ -87,6 +119,7 @@ export default function FeedSection({
       ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
     ]);
 
+    const items: PoolItem[] = [];
     let deck = buildDeck();
     let displayIndex = 0;
 
@@ -101,7 +134,7 @@ export default function FeedSection({
     }
 
     return items;
-  }, [looks, creatives, isInitial]);
+  }, [looks, creatives, creativesLoading, isInitial]);
 
   const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
 
@@ -131,6 +164,15 @@ export default function FeedSection({
       {title && <div className="feed-section-header">{title}</div>}
       <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined} style={gridStyle}>
         {displayItems.map((item, idx) => {
+          if (item.type === 'placeholder') {
+            return (
+              <div key={item.key} className="look-card promo-card creative-placeholder" aria-hidden="true">
+                <div className="card-inner">
+                  <div className="card-shimmer" />
+                </div>
+              </div>
+            );
+          }
           if (item.type === 'creative') {
             return (
               <CreativeCard

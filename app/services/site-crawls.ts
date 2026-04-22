@@ -128,6 +128,50 @@ export async function listDiscoveredUrls(
   return { data: data || [], count: count || 0 };
 }
 
+// Aggregated collection summary for a job. Paginates through every discovered
+// URL so groups aren't truncated by a row limit (sites can have thousands).
+export async function listCollectionSummariesForJob(
+  crawlJobId: string,
+  options?: { pageSize?: number; maxRows?: number }
+): Promise<Array<{ collection_name: string; url_count: number; sample_url: string }>> {
+  if (!supabase) return [];
+  const pageSize = options?.pageSize ?? 1000;
+  const maxRows = options?.maxRows ?? 10000;
+
+  const groups: Record<string, { url_count: number; sample_url: string }> = {};
+  let offset = 0;
+
+  while (offset < maxRows) {
+    const { data, error } = await supabase
+      .from('crawl_discovered_urls')
+      .select('collection_name, url')
+      .eq('crawl_job_id', crawlJobId)
+      .order('created_at', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      const key = (row as { collection_name: string | null }).collection_name || 'Uncategorized';
+      const url = (row as { url: string }).url;
+      if (!groups[key]) {
+        groups[key] = { url_count: 0, sample_url: url };
+      }
+      groups[key].url_count += 1;
+    }
+
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return Object.entries(groups).map(([collection_name, g]) => ({
+    collection_name,
+    url_count: g.url_count,
+    sample_url: g.sample_url,
+  }));
+}
+
 // ─── Trigger crawl via Modal webhook ─────────────────────────────────
 
 const MODAL_CRAWLER_URL = import.meta.env.VITE_MODAL_CRAWLER_URL || '';
