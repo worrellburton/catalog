@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'agents/video-generator/**'
+      - 'agents/site-crawler/**'
+      - 'agents/product-scraper/**'
       - '.github/workflows/deploy-modal.yml'
   workflow_dispatch:
 
@@ -28,4 +30,12 @@ jobs:
 
       - name: Deploy video-generator
         working-directory: agents/video-generator
+        run: modal deploy modal_app.py
+
+      - name: Deploy site-crawler
+        working-directory: agents/site-crawler
+        run: modal deploy modal_app.py
+
+      - name: Deploy product-scraper
+        working-directory: agents/product-scraper
         run: modal deploy modal_app.py
