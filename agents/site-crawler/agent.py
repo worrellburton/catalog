@@ -38,7 +38,7 @@ load_dotenv()
 COORDINATOR_MODEL = "claude-sonnet-4-20250514"  # Sonnet for smart navigation discovery
 COLLECTION_MODEL = "claude-haiku-4-5-20251001"   # Haiku for simple URL extraction (~cheaper)
 MAX_COORDINATOR_TURNS = 10
-MAX_COLLECTION_TURNS = 8
+MAX_COLLECTION_TURNS = 15
 MAX_HTML_LENGTH = 15_000      # down from 80K — only need product link patterns
 MAX_LINKS_RETURN = 200        # down from 500
 MAX_TEXT_PREVIEW = 1500       # down from 3000
@@ -520,20 +520,21 @@ COLLECTION_SYSTEM = """You are a COLLECTION sub-agent. Extract ALL product page 
 
 ## Strategy
 
-1. Visit the collection page
-2. Call get_product_links to auto-detect product URLs
-3. Scroll down 2-3 times and call get_product_links again for lazy-loaded content
-4. If there's pagination, visit page 2, 3 etc. and repeat
-5. Call save_product_urls ONCE with all product URLs
+1. Visit the collection page — note the total product count if shown (e.g. "74 Products")
+2. Call get_product_links to get the initial visible products
+3. Scroll down repeatedly (4-6 times, ~2000px each) and call get_product_links after each scroll — most modern sites lazy-load products on scroll
+4. Keep scrolling until get_product_links returns the same count twice in a row OR you reach the displayed total
+5. If there's pagination instead of infinite scroll, visit page 2, 3 etc. and repeat
+6. Call save_product_urls with ALL product URLs you collected. You may call save_product_urls multiple times if needed — duplicates will be ignored.
 
 ## Rules
 
 - Only save PRODUCT page URLs (not collection/category links)
 - Use get_product_links first — only use get_page_links as fallback
-- Do NOT use get_page_html unless the other tools found zero results
+- DO NOT stop at 10-20 products if the page header says there are more
+- Keep page_title strings short (1-5 words) — long titles waste output tokens
 - Stay on the same domain
-- Work fast — focus only on this collection
-- Call save_product_urls ONCE with all products found"""
+- It's fine to call save_product_urls progressively as you discover more products"""
 
 
 def run_collection_subagent(
@@ -562,7 +563,7 @@ def run_collection_subagent(
             response = _call_with_retry(
                 client,
                 model=COLLECTION_MODEL,
-                max_tokens=2048,
+                max_tokens=8192,
                 system=COLLECTION_SYSTEM,
                 tools=COLLECTION_TOOLS,
                 messages=messages,
@@ -583,17 +584,39 @@ def run_collection_subagent(
                 tool_input = block.input
 
                 if tool_name == "save_product_urls":
-                    seen = set()
-                    for p in tool_input.get("products", []):
-                        url = p.get("url", "").strip()
-                        if url and url not in seen and browser.is_same_domain(url):
-                            seen.add(url)
-                            products.append({
-                                "url": url,
-                                "collection_name": collection_name,
-                                "page_title": p.get("page_title", ""),
-                            })
-                    result_text = json.dumps({"saved": len(products)})
+                    raw = tool_input.get("products", [])
+                    if not raw:
+                        result_text = json.dumps({
+                            "error": (
+                                "You called save_product_urls with an empty 'products' array. "
+                                "You MUST pass the products inline as: "
+                                "save_product_urls({\"products\": [{\"url\": \"...\", \"page_title\": \"...\"}, ...]}). "
+                                "Make sure you've called get_product_links and scrolled enough to load all products first."
+                            ),
+                            "saved": 0,
+                        })
+                    else:
+                        seen = {p["url"] for p in products}
+                        added = 0
+                        for p in raw:
+                            url = p.get("url", "").strip()
+                            if url and url not in seen and browser.is_same_domain(url):
+                                seen.add(url)
+                                products.append({
+                                    "url": url,
+                                    "collection_name": collection_name,
+                                    "page_title": p.get("page_title", ""),
+                                })
+                                added += 1
+                        result_text = json.dumps({
+                            "saved_total": len(products),
+                            "newly_added": added,
+                            "message": (
+                                f"Total products saved so far: {len(products)}. "
+                                "If the collection page showed more products than this, "
+                                "scroll down further and call save_product_urls again with additional URLs."
+                            ),
+                        })
                 elif tool_name == "visit_page":
                     if browser.pages_visited >= max_pages:
                         result_text = json.dumps({"error": f"Max pages ({max_pages}) reached"})
