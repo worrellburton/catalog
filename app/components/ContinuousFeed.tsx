@@ -138,17 +138,13 @@ export default function ContinuousFeed({
     seenLookIds: new Set<number>(),
   });
 
-  // Fetch live ads from Supabase
-  const [liveAds, setLiveAds] = useState<ProductAd[]>([]);
+  // Fetch live product creative from Supabase.
+  const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>([]);
   useEffect(() => {
-    console.log('[ContinuousFeed] fetching live ads...');
     getLiveAds()
-      .then(ads => {
-        console.log('[ContinuousFeed] received ads:', ads.length, ads.map(a => ({ id: a.id, video_url: a.video_url?.substring(0, 60), status: a.status, enabled: a.enabled })));
-        setLiveAds(ads);
-      })
+      .then(setLiveCreatives)
       .catch(err => {
-        console.error('[ContinuousFeed] getLiveAds failed:', err);
+        console.error('[ContinuousFeed] fetching creative failed:', err);
       });
   }, []);
 
@@ -214,10 +210,10 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
-  const handleOpenAdProduct = useCallback((ad: ProductAd) => {
-    const url = ad.affiliate_url || ad.product?.url;
+  const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
+    const url = creative.affiliate_url || creative.product?.url;
     if (url) {
-      onOpenBrowser(url, ad.product?.name || 'Shop');
+      onOpenBrowser(url, creative.product?.name || 'Shop');
     }
   }, [onOpenBrowser]);
 
@@ -240,8 +236,8 @@ export default function ContinuousFeed({
               onOpenLook={handleOpenLook}
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
-              onOpenAdProduct={handleOpenAdProduct}
-              ads={segment.isInitial ? liveAds : undefined}
+              onOpenCreativeProduct={handleOpenCreativeProduct}
+              creatives={segment.isInitial ? liveCreatives : undefined}
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}

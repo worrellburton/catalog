@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import LookCard from './LookCard';
-import AdCard from './AdCard';
+import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-ads';
 
-const AD_INTERVAL = 2; // Insert an ad every N looks
+// Pattern: emit this many looks, then one creative, then repeat.
+const LOOKS_PER_CREATIVE = 2;
 
 interface FeedSectionProps {
   looks: Look[];
   onOpenLook: (look: Look) => void;
   onOpenCreator: (name: string) => void;
   onCreateCatalog?: (query: string) => void;
-  onOpenAdProduct?: (ad: ProductAd) => void;
-  ads?: ProductAd[];
+  onOpenCreativeProduct?: (creative: ProductAd) => void;
+  creatives?: ProductAd[];
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
@@ -29,13 +30,22 @@ const LAYOUT_CONFIGS = [
 const DEFAULT_BATCH = 12;
 const SUB_BATCH = 6;
 
+function shuffled<T>(arr: T[]): T[] {
+  const next = arr.slice();
+  for (let i = next.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}
+
 export default function FeedSection({
   looks,
   onOpenLook,
   onOpenCreator,
   onCreateCatalog,
-  onOpenAdProduct,
-  ads,
+  onOpenCreativeProduct,
+  creatives,
   title,
   batchSize,
   isInitial = false,
@@ -46,7 +56,6 @@ export default function FeedSection({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
 
-  // Grid style based on layout mode - full width with fixed columns
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
       return {};
@@ -54,7 +63,6 @@ export default function FeedSection({
     return { gridTemplateColumns: `repeat(${layout.columns}, 1fr)` };
   }, [layout.columns]);
 
-  // Get varied card classes for visual interest
   const getCardClass = useCallback((globalIndex: number) => {
     const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
     if (!isDesktop || layoutMode === 0) return 'look-card';
@@ -64,31 +72,42 @@ export default function FeedSection({
     return 'look-card';
   }, [layoutMode]);
 
-  // Infinite pool = shuffle the full admin look set, lay it down, repeat.
-  // Each cycle is re-shuffled so the pattern doesn't feel deterministic.
-  // Duplicates are only possible once every admin look has been shown.
+  // Build a single interleaved pool. Looks are drawn from re-shuffled decks,
+  // and creatives are drawn from a single shuffled deck — every unique
+  // creative appears once before any creative repeats, so the user sees the
+  // full library of product creative before ads recycle.
   const pool = useMemo(() => {
     if (looks.length === 0) return [];
-    const poolSize = isInitial ? 200 : 50;
-    const result: (Look & { displayIndex: number })[] = [];
+    const creativeList = isInitial ? (creatives ?? []) : [];
+    const creativeDeck = shuffled(creativeList);
+
+    // Size the pool so it covers a long scroll without exhausting.
+    const targetCells = isInitial ? 200 : 50;
+    const items: ({ type: 'look'; look: Look & { displayIndex: number } } | { type: 'creative'; creative: ProductAd })[] = [];
+
+    let lookDeck: Look[] = [];
     let displayIndex = 0;
-    while (result.length < poolSize) {
-      const deck = [...looks];
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
+    let creativeIdx = 0;
+    let positionInGroup = 0;
+
+    while (items.length < targetCells) {
+      if (creativeDeck.length > 0 && positionInGroup >= LOOKS_PER_CREATIVE) {
+        items.push({ type: 'creative', creative: creativeDeck[creativeIdx % creativeDeck.length] });
+        creativeIdx++;
+        positionInGroup = 0;
+        continue;
       }
-      for (const look of deck) {
-        if (result.length >= poolSize) break;
-        result.push({ ...look, displayIndex: displayIndex++ });
-      }
+      if (lookDeck.length === 0) lookDeck = shuffled(looks);
+      const next = lookDeck.shift()!;
+      items.push({ type: 'look', look: { ...next, displayIndex: displayIndex++ } });
+      positionInGroup++;
     }
-    return result;
-  }, [looks, isInitial]);
 
-  const displayLooks = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
+    return items;
+  }, [looks, creatives, isInitial]);
 
-  // IntersectionObserver for infinite scroll within this section
+  const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -104,31 +123,9 @@ export default function FeedSection({
     return () => observer.disconnect();
   }, [batch, pool.length]);
 
-  // Reset visible count when looks change
   useEffect(() => {
     setVisibleCount(batch);
   }, [looks, batch]);
-
-  // Build display items: intersperse ads every AD_INTERVAL looks
-  const displayItems = useMemo(() => {
-    const items: ({ type: 'look'; look: Look & { displayIndex: number } } | { type: 'ad'; ad: ProductAd })[] = [];
-    let adIdx = 0;
-    const adList = ads && ads.length > 0 ? ads : [];
-
-    console.log('[FeedSection] building displayItems — isInitial:', isInitial, 'ads prop length:', ads?.length, 'adList length:', adList.length, 'displayLooks:', displayLooks.length);
-
-    for (let i = 0; i < displayLooks.length; i++) {
-      items.push({ type: 'look', look: displayLooks[i] });
-      // Insert ad after every AD_INTERVAL looks (only for initial feed sections)
-      if (isInitial && adList.length > 0 && (i + 1) % AD_INTERVAL === 0) {
-        console.log('[FeedSection] inserting ad at position', i + 1, '— ad id:', adList[adIdx % adList.length]?.id);
-        items.push({ type: 'ad', ad: adList[adIdx % adList.length] });
-        adIdx++;
-      }
-    }
-    console.log('[FeedSection] total items:', items.length, 'ads inserted:', adIdx);
-    return items;
-  }, [displayLooks, ads, isInitial]);
 
   if (looks.length === 0) return null;
 
@@ -137,13 +134,13 @@ export default function FeedSection({
       {title && <div className="feed-section-header">{title}</div>}
       <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined} style={gridStyle}>
         {displayItems.map((item, idx) => {
-          if (item.type === 'ad') {
+          if (item.type === 'creative') {
             return (
-              <AdCard
-                key={`ad-${item.ad.id}-${idx}`}
-                ad={item.ad}
+              <CreativeCard
+                key={`creative-${item.creative.id}-${idx}`}
+                creative={item.creative}
                 className="look-card"
-                onOpenProduct={onOpenAdProduct}
+                onOpenProduct={onOpenCreativeProduct}
               />
             );
           }
