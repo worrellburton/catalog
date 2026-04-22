@@ -64,11 +64,10 @@ function AddCrawlModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (url: string, name: string, maxPages: number) => void;
+  onSubmit: (url: string, name: string) => void;
 }) {
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
-  const [maxPages, setMaxPages] = useState(100);
   const [error, setError] = useState('');
 
   if (!open) return null;
@@ -81,10 +80,9 @@ function AddCrawlModal({
       setError('Please enter a valid URL');
       return;
     }
-    onSubmit(url, name, maxPages);
+    onSubmit(url, name);
     setUrl('');
     setName('');
-    setMaxPages(100);
     onClose();
   };
 
@@ -115,17 +113,10 @@ function AddCrawlModal({
               placeholder="e.g. Nike US (optional)"
             />
           </div>
-          <div className="admin-form-group">
-            <label>Max Pages</label>
-            <input
-              type="number"
-              value={maxPages}
-              onChange={(e) => setMaxPages(Number(e.target.value))}
-              min={1}
-              max={500}
-            />
-            <span className="admin-form-hint">Maximum collection/category pages to visit</span>
-          </div>
+          <p className="admin-form-hint" style={{ marginTop: 4 }}>
+            The crawler auto-detects collections, categories and products from
+            the site’s sitemap and navigation — no page limit needed.
+          </p>
           {error && <div className="admin-form-error">{error}</div>}
         </div>
         <div className="admin-modal-footer">
@@ -563,11 +554,11 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
     return () => clearInterval(interval);
   }, [loadJobs]);
 
-  const handleAdd = async (url: string, name: string, maxPages: number) => {
+  const handleAdd = async (url: string, name: string) => {
     setCrawlError(null);
     try {
       const job = await createCrawlJob(url, name || undefined);
-      const triggered = await triggerCrawl(job.id, url, maxPages);
+      const triggered = await triggerCrawl(job.id, url);
       if (!triggered) {
         setCrawlError('Crawl job created but the crawler could not be triggered. Check that VITE_MODAL_CRAWLER_URL is configured.');
       }

@@ -132,7 +132,7 @@ export async function listDiscoveredUrls(
 
 const MODAL_CRAWLER_URL = import.meta.env.VITE_MODAL_CRAWLER_URL || '';
 
-export async function triggerCrawl(jobId: string, siteUrl: string, maxPages?: number): Promise<boolean> {
+export async function triggerCrawl(jobId: string, siteUrl: string): Promise<boolean> {
   if (!MODAL_CRAWLER_URL) {
     console.warn('VITE_MODAL_CRAWLER_URL not set — crawl not triggered');
     return false;
@@ -145,7 +145,6 @@ export async function triggerCrawl(jobId: string, siteUrl: string, maxPages?: nu
       body: JSON.stringify({
         job_id: jobId,
         site_url: siteUrl,
-        max_pages: maxPages || 100,
       }),
     });
     return res.ok;

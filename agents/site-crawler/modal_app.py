@@ -55,7 +55,7 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
     timeout=300,        # 5 min per collection
     retries=1,
 )
-def crawl_collection(site_url: str, collection_url: str, collection_name: str, max_pages: int = 10):
+def crawl_collection(site_url: str, collection_url: str, collection_name: str, max_pages: int = 5):
     """Crawl a single collection page and return discovered product URLs."""
     from agent import run_collection_subagent
 
@@ -73,18 +73,28 @@ def crawl_collection(site_url: str, collection_url: str, collection_name: str, m
     timeout=900,        # 15 min total (coordinator + waiting for sub-agents)
     retries=1,
 )
-def crawl_and_save(job_id: str, site_url: str, max_pages: int = 100):
+def crawl_and_save(job_id: str, site_url: str, max_pages: int | None = None):
     """
-    Full site crawl:
-      1. Run coordinator to discover collections
-      2. Fan out collection sub-agents across Modal containers
-      3. Aggregate results and save to DB
+    Full site crawl (sitemap-first):
+      0. Discover collections + products via robots.txt / sitemap.xml.
+      1. If sitemap is empty, run the LLM coordinator to find collections.
+      2. Fan out collection sub-agents across Modal containers.
+      3. Aggregate results and save to DB.
+
+    `max_pages` is accepted for backwards compatibility but ignored — the agent
+    auto-detects how much to load. A hard cap (MAX_PRODUCTS_HARD_LIMIT) prevents
+    runaway cost on huge catalogues.
     """
     import os
-    import json
     from datetime import datetime, timezone
     from supabase import create_client
-    from agent import run_coordinator
+    from agent import (
+        discover_via_sitemap,
+        run_coordinator,
+        _normalize_product_url,
+        MAX_PRODUCTS_HARD_LIMIT,
+        DEFAULT_PAGES_PER_COLLECTION,
+    )
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
@@ -95,47 +105,67 @@ def crawl_and_save(job_id: str, site_url: str, max_pages: int = 100):
     }).eq("id", job_id).execute()
 
     try:
-        # ── Phase 1: Coordinator discovers collections ──
-        print(f"=== Phase 1: Discovering collections on {site_url} ===")
-        collections = run_coordinator(site_url)
+        # ── Phase 0: Sitemap discovery (deterministic, free) ──
+        print(f"=== Phase 0: Sitemap discovery on {site_url} ===")
+        sitemap = discover_via_sitemap(site_url)
+        print(f"  Sitemaps visited: {sitemap['sitemaps_visited']}, "
+              f"collections={len(sitemap['collections'])}, products={len(sitemap['products'])}")
 
-        if not collections:
+        collections = list(sitemap["collections"])
+        direct_products = list(sitemap["products"])
+
+        # ── Phase 1: Coordinator only if sitemap empty ──
+        if not collections and not direct_products:
+            print(f"=== Phase 1: Coordinator discovery (sitemap unusable) ===")
+            collections = run_coordinator(site_url)
+
+        if not collections and not direct_products:
             supabase.table("crawl_jobs").update({
                 "status": "failed",
-                "error": "No collections/categories discovered on site",
+                "error": "No collections, products, or sitemap discovered on site",
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", job_id).execute()
-            print(f"FAIL [{job_id}] No collections found on {site_url}")
+            print(f"FAIL [{job_id}] Nothing discovered on {site_url}")
             return
-
-        print(f"  Found {len(collections)} collections")
-
-        # ── Phase 2: Fan out sub-agents (one Modal container per collection) ──
-        pages_per_collection = max(3, max_pages // len(collections))
-
-        print(f"\n=== Phase 2: Dispatching {len(collections)} sub-agents "
-              f"({pages_per_collection} pages each) ===")
-
-        # starmap launches each collection in its own container in parallel
-        args = [
-            (site_url, c["url"], c["name"], pages_per_collection)
-            for c in collections
-        ]
 
         all_products: list[dict] = []
         seen_slugs: set[str] = set()
-        errors: list[str] = []
 
-        from agent import _normalize_product_url
+        # Seed with direct sitemap products (bucketed as 'All Products')
+        for p in direct_products:
+            canonical = _normalize_product_url(p["url"])
+            if canonical in seen_slugs:
+                continue
+            seen_slugs.add(canonical)
+            all_products.append({
+                "url": canonical,
+                "collection_name": "All Products",
+                "page_title": p.get("page_title", ""),
+            })
+            if len(all_products) >= MAX_PRODUCTS_HARD_LIMIT:
+                break
 
-        for result in crawl_collection.starmap(args):
-            # result is list[dict] from each sub-agent
-            for p in result:
-                canonical = _normalize_product_url(p["url"])
-                if canonical not in seen_slugs:
+        # ── Phase 2: Fan out sub-agents per collection (one Modal container each) ──
+        if collections and len(all_products) < MAX_PRODUCTS_HARD_LIMIT:
+            print(f"\n=== Phase 2: Dispatching {len(collections)} sub-agents "
+                  f"({DEFAULT_PAGES_PER_COLLECTION} pages each) ===")
+            args = [
+                (site_url, c["url"], c["name"], DEFAULT_PAGES_PER_COLLECTION)
+                for c in collections
+            ]
+
+            for result in crawl_collection.starmap(args):
+                for p in result:
+                    canonical = _normalize_product_url(p["url"])
+                    if canonical in seen_slugs:
+                        continue
                     seen_slugs.add(canonical)
                     p["url"] = canonical
                     all_products.append(p)
+                    if len(all_products) >= MAX_PRODUCTS_HARD_LIMIT:
+                        break
+                if len(all_products) >= MAX_PRODUCTS_HARD_LIMIT:
+                    break
 
         print(f"\n=== Aggregated {len(all_products)} unique product URLs ===")
 
@@ -204,19 +234,20 @@ def crawl_webhook(body: dict):
     Expected body:
         {
             "job_id": "uuid",
-            "site_url": "https://...",
-            "max_pages": 100
+            "site_url": "https://..."
         }
+
+    `max_pages` is accepted for backwards compatibility but ignored — the
+    crawler now auto-detects how much to load (sitemap-first + auto load-all).
     """
     job_id = body.get("job_id")
     site_url = body.get("site_url")
-    max_pages = body.get("max_pages", 100)
 
     if not job_id or not site_url:
         return {"error": "Missing job_id or site_url"}, 400
 
     # Dispatch async — webhook returns immediately
-    crawl_and_save.spawn(job_id, site_url, max_pages)
+    crawl_and_save.spawn(job_id, site_url)
 
     return {"status": "queued", "job_id": job_id}
 
