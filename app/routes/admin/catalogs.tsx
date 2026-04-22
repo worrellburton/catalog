@@ -488,6 +488,70 @@ export default function AdminCatalogs() {
     setBrainstormProgress(null);
   }, []);
 
+  // Add Products modal — pick existing products from the DB and tag them
+  // onto a catalog. Persisted by pushing the catalog name into each
+  // product's catalog_tags array (same shape the dropdown filter reads).
+  const [addCatalog, setAddCatalog] = useState<Catalog | null>(null);
+  const [addSearch, setAddSearch] = useState('');
+  const [addSelected, setAddSelected] = useState<Set<string>>(new Set());
+  const [addBusy, setAddBusy] = useState(false);
+
+  const openAdd = useCallback((catalog: Catalog) => {
+    setAddCatalog(catalog);
+    setAddSearch('');
+    setAddSelected(new Set());
+  }, []);
+
+  const closeAdd = useCallback(() => {
+    if (addBusy) return;
+    setAddCatalog(null);
+    setAddSearch('');
+    setAddSelected(new Set());
+  }, [addBusy]);
+
+  const toggleAddSelected = useCallback((id: string) => {
+    setAddSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const commitAdd = useCallback(async () => {
+    if (!supabase || !addCatalog || addSelected.size === 0) return;
+    setAddBusy(true);
+    try {
+      const name = addCatalog.name;
+      const updates = Array.from(addSelected).map(id => {
+        const p = products.find(x => x.id === id);
+        const tags = new Set([...(p?.catalog_tags || []), name]);
+        return supabase!
+          .from('products')
+          .update({ catalog_tags: Array.from(tags) })
+          .eq('id', id);
+      });
+      const results = await Promise.all(updates);
+      const failed = results.filter(r => r.error).length;
+      if (failed > 0) {
+        showToast(`Added ${addSelected.size - failed} of ${addSelected.size} products (${failed} failed).`);
+      } else {
+        showToast(`Added ${addSelected.size} product${addSelected.size === 1 ? '' : 's'} to ${name}.`);
+      }
+      await loadProducts();
+      // Invalidate any cached dropdown creative so the next expand refetches.
+      setCreativeByCatalog(prev => {
+        const next = { ...prev };
+        delete next[addCatalog.id];
+        return next;
+      });
+      setAddCatalog(null);
+      setAddSelected(new Set());
+      setAddSearch('');
+    } finally {
+      setAddBusy(false);
+    }
+  }, [addCatalog, addSelected, products, loadProducts, showToast]);
+
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
     setSuggestCatalog(null);
@@ -763,6 +827,15 @@ export default function AdminCatalogs() {
                 <td>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                     <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => openAdd(c)}
+                      disabled={products.length === 0}
+                      title="Pick existing products from the library and tag them to this catalog"
+                    >
+                      + Add Products
+                    </button>
+                    <button
                       className="admin-btn admin-btn-primary"
                       style={{ fontSize: 11, padding: '4px 10px' }}
                       onClick={() => openSuggest(c)}
@@ -850,6 +923,21 @@ export default function AdminCatalogs() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Products modal — pick from existing library */}
+      {addCatalog && (
+        <AddProductsModal
+          catalog={addCatalog}
+          products={products}
+          search={addSearch}
+          onSearch={setAddSearch}
+          selected={addSelected}
+          onToggle={toggleAddSelected}
+          busy={addBusy}
+          onClose={closeAdd}
+          onCommit={commitAdd}
+        />
       )}
 
       {/* Suggest Products modal */}
@@ -1498,6 +1586,149 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
         </div>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {creative.productBrand || '—'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface AddProductsModalProps {
+  catalog: Catalog;
+  products: ProductRow[];
+  search: string;
+  onSearch: (value: string) => void;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  busy: boolean;
+  onClose: () => void;
+  onCommit: () => void;
+}
+
+function AddProductsModal({
+  catalog,
+  products,
+  search,
+  onSearch,
+  selected,
+  onToggle,
+  busy,
+  onClose,
+  onCommit,
+}: AddProductsModalProps) {
+  const tagged = useMemo(
+    () => new Set(products.filter(p => (p.catalog_tags || []).includes(catalog.name)).map(p => p.id)),
+    [products, catalog.name],
+  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(p =>
+      (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q),
+    );
+  }, [products, search]);
+
+  return (
+    <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(1040px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Add Products to “{catalog.name}”</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
+              {tagged.size} already in this catalog · {products.length} in library
+            </p>
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name or brand"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            autoFocus
+            style={{ flex: '0 1 280px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+          />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
+              No products match “{search}”.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+              {filtered.map(p => {
+                const isTagged = tagged.has(p.id);
+                const isSelected = selected.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => !isTagged && onToggle(p.id)}
+                    disabled={isTagged}
+                    style={{
+                      textAlign: 'left',
+                      padding: 0,
+                      border: `2px solid ${isSelected ? '#2563eb' : isTagged ? '#d1fae5' : '#e5e7eb'}`,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      background: '#fff',
+                      cursor: isTagged ? 'default' : 'pointer',
+                      opacity: isTagged ? 0.55 : 1,
+                      position: 'relative',
+                    }}
+                  >
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+                    ) : (
+                      <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
+                    )}
+                    <div style={{ padding: 8 }}>
+                      <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+                    </div>
+                    {isTagged && (
+                      <span style={{
+                        position: 'absolute', top: 6, right: 6,
+                        padding: '2px 6px', borderRadius: 4,
+                        fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                        background: '#10b981', color: '#fff',
+                      }}>Added</span>
+                    )}
+                    {isSelected && !isTagged && (
+                      <span style={{
+                        position: 'absolute', top: 6, right: 6,
+                        padding: '2px 6px', borderRadius: 4,
+                        fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                        background: '#2563eb', color: '#fff',
+                      }}>Selected</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: '#666' }}>
+            {selected.size} selected
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={onClose}
+              disabled={busy}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              Cancel
+            </button>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={onCommit}
+              disabled={busy || selected.size === 0}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              {busy ? 'Adding…' : `Add ${selected.size} product${selected.size === 1 ? '' : 's'}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
