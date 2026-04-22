@@ -546,3 +546,15 @@
   color: #fff;
   border-color: rgba(255, 255, 255, 0.2);
 }
+
+/* Loading placeholders for creative slots while product_ads are fetching.
+   Inherits .look-card's aspect ratio + shimmer; disables interactivity. */
+.creative-placeholder {
+  cursor: default;
+  pointer-events: none;
+}
+.creative-placeholder .card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
