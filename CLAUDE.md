@@ -29,9 +29,12 @@
    - Once authenticated, you can apply migrations, execute SQL, deploy
      edge functions, and read logs directly from chat — no need to ask
      the user to paste the DB password or run the `supabase` CLI.
-2. If the Supabase MCP isn't listed as a deferred tool at all, skip
-   step 1 — fall back to asking the user to run migrations/deploys
-   from their machine.
+2. If the Supabase MCP isn't listed as a deferred tool at all, the
+   server hasn't been registered with this Claude Code install yet.
+   Point the user at Section 7 → "MCP Server Registration" for the
+   one-time `claude mcp add …` bootstrap, then restart the session.
+   Until that's done, fall back to asking the user to run
+   migrations/deploys from their machine.
 3. Project ref is `vtarjrnqvcqbhoclvcur`. See Section 7 for the full
    operational reference.
 
@@ -1020,10 +1023,47 @@ the Supabase MCP server for all cloud ops so work stays in chat.
 | Dashboard | https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur |
 | Default client URL | `DEFAULT_SUPABASE_URL` in `app/utils/supabase.ts` |
 
+## MCP Server Registration (one-time)
+
+Before the `mcp__supabase__*` tools can show up in a Claude Code
+session, the Supabase MCP server has to be registered with the local
+Claude Code install. This is a one-time bootstrap per machine/project
+— once done, the server config lives in the project's MCP config and
+is picked up automatically on every subsequent session.
+
+From a regular terminal in the repo root (not the IDE extension), run:
+
+```
+claude mcp add --scope project --transport http supabase \
+  "https://mcp.supabase.com/mcp?project_ref=vtarjrnqvcqbhoclvcur"
+```
+
+Then authenticate the server (interactive, user-only — Claude can't do
+this step):
+
+```
+claude /mcp
+```
+
+Pick `supabase` from the list and choose **Authenticate** to kick off
+the OAuth flow. Approve in the browser; the callback URL (the
+`localhost:64489/callback?...` page that looks like a connection error)
+completes the handshake automatically when run locally.
+
+Verify by starting a fresh Claude Code session and confirming the
+`mcp__supabase__*` tools appear in the deferred-tools list. From that
+point on, only the per-session auth flow below is needed — and only
+when the OAuth token has expired.
+
+Optional: `npx skills add supabase/agent-skills` installs the Supabase
+Agent Skills pack, which gives Claude extra ready-made instructions and
+scripts for working with Supabase.
+
 ## MCP Authentication Flow
 
-The Supabase MCP server uses OAuth. Do this at session start whenever
-the `mcp__supabase__*` tools aren't already loaded:
+The Supabase MCP server uses OAuth. Once the server is registered
+(see above), do this at session start whenever the `mcp__supabase__*`
+tools are loaded but return "unauthorized":
 
 1. Call `mcp__supabase__authenticate` — returns an auth URL.
 2. Share the URL with the user; they click through Supabase's consent screen.
