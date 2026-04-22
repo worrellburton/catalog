@@ -586,25 +586,44 @@ export default function AdminCatalogs() {
         return supabase!
           .from('products')
           .update({ catalog_tags: Array.from(tags) })
-          .eq('id', id);
+          .eq('id', id)
+          .select('id');
       });
       const results = await Promise.all(updates);
-      const failed = results.filter(r => r.error).length;
-      if (failed > 0) {
-        showToast(`Added ${addSelected.size - failed} of ${addSelected.size} products (${failed} failed).`);
-      } else {
-        showToast(`Added ${addSelected.size} product${addSelected.size === 1 ? '' : 's'} to ${name}.`);
+      const errored = results.filter(r => r.error);
+      const blocked = results.filter(r => !r.error && (!r.data || r.data.length === 0));
+      const succeeded = results.length - errored.length - blocked.length;
+
+      if (errored.length > 0) {
+        console.error('[add-products] update errors:', errored.map(r => r.error));
       }
-      await loadProducts();
-      // Invalidate any cached dropdown creative so the next expand refetches.
-      setCreativeByCatalog(prev => {
-        const next = { ...prev };
-        delete next[addProductsCatalog.id];
-        return next;
-      });
-      setAddProductsCatalog(null);
-      setAddSelected(new Set());
-      setAddSearch('');
+      if (blocked.length > 0) {
+        console.warn('[add-products] no rows updated for', blocked.length, 'products — RLS may be blocking writes on public.products');
+      }
+
+      if (succeeded === 0) {
+        showToast(
+          errored.length > 0
+            ? `Update failed: ${errored[0].error?.message || 'unknown error'}`
+            : `No products were written — check RLS policies on public.products (admin needs UPDATE).`,
+        );
+      } else if (succeeded < results.length) {
+        showToast(`Added ${succeeded} of ${results.length} products to ${name} (${results.length - succeeded} blocked).`);
+      } else {
+        showToast(`Added ${succeeded} product${succeeded === 1 ? '' : 's'} to ${name}.`);
+      }
+
+      if (succeeded > 0) {
+        await loadProducts();
+        setCreativeByCatalog(prev => {
+          const next = { ...prev };
+          delete next[addProductsCatalog.id];
+          return next;
+        });
+        setAddProductsCatalog(null);
+        setAddSelected(new Set());
+        setAddSearch('');
+      }
     } finally {
       setAddBusy(false);
     }
