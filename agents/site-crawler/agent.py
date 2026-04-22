@@ -342,7 +342,9 @@ discover all collection/category page URLs on an e-commerce site.
 - Work fast — you don't need to visit every page, just identify the collection URLs from navigation
 - Skip non-product pages (about, contact, FAQ, blog, policies, cart, account)
 - Call save_collections ONCE with ALL collections you found
-- If the site has many subcategories, include them all — each will be crawled by a sub-agent"""
+- If the site has many subcategories, include them all — each will be crawled by a sub-agent
+- LIMIT yourself to the top 30-50 most important collection pages (main categories + key subcategories). If a site has hundreds of leaf subcategories, pick the broader parent pages instead — do not exceed ~50 entries.
+- Keep collection names short (1-4 words). The full save_collections JSON must fit in ~6000 tokens."""
 
 
 def run_coordinator(site_url: str) -> list[dict]:
@@ -369,7 +371,7 @@ def run_coordinator(site_url: str) -> list[dict]:
             response = _call_with_retry(
                 client,
                 model=COORDINATOR_MODEL,
-                max_tokens=2048,
+                max_tokens=8192,
                 system=COORDINATOR_SYSTEM,
                 tools=COORDINATOR_TOOLS,
                 messages=messages,
@@ -398,19 +400,31 @@ def run_coordinator(site_url: str) -> list[dict]:
 
                 if tool_name == "save_collections":
                     raw = tool_input.get("collections", [])
-                    seen = set()
-                    for c in raw:
-                        url = c.get("url", "").strip()
-                        if url and url not in seen and browser.is_same_domain(url):
-                            seen.add(url)
-                            collections.append({
-                                "url": url,
-                                "name": c.get("name", ""),
-                            })
-                    result_text = json.dumps({
-                        "saved": len(collections),
-                        "message": f"Saved {len(collections)} collections. They will now be crawled in parallel.",
-                    })
+                    if not raw:
+                        result_text = json.dumps({
+                            "error": (
+                                "You called save_collections with an empty or missing 'collections' array. "
+                                "You MUST pass the collections inline as: "
+                                "save_collections({\"collections\": [{\"url\": \"...\", \"name\": \"...\"}, ...]}). "
+                                "If your list is very long, prioritise the top 30-50 most important "
+                                "category/collection pages and keep names short."
+                            ),
+                            "saved": 0,
+                        })
+                    else:
+                        seen = set()
+                        for c in raw:
+                            url = c.get("url", "").strip()
+                            if url and url not in seen and browser.is_same_domain(url):
+                                seen.add(url)
+                                collections.append({
+                                    "url": url,
+                                    "name": c.get("name", ""),
+                                })
+                        result_text = json.dumps({
+                            "saved": len(collections),
+                            "message": f"Saved {len(collections)} collections. They will now be crawled in parallel.",
+                        })
                 elif tool_name == "visit_page":
                     result_text = browser.visit_page(tool_input["url"])
                 elif tool_name == "get_page_links":
