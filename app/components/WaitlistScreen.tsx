@@ -77,7 +77,7 @@ export default function WaitlistScreen({ user, onApproved }: WaitlistScreenProps
             </div>
 
             <p className="waitlist-user">
-              Signed in as {user.email || user.phone || user.displayName}
+              Signed in as {user.email || user.displayName}
             </p>
           </>
         )}

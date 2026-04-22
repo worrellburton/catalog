@@ -89,8 +89,8 @@ export default function AdminShoppersWaitlist() {
             </thead>
             <tbody>
               {entries.map(e => {
-                const name = e.full_name || e.email?.split('@')[0] || e.phone || 'Unknown';
-                const contact = e.email || e.phone || '-';
+                const name = e.full_name || e.email?.split('@')[0] || 'Unknown';
+                const contact = e.email || '-';
                 const isBusy = busyId === e.id;
                 return (
                   <tr key={e.id}>

@@ -5,7 +5,6 @@ export interface WaitlistEntry {
   id: string;
   position: number;
   email: string | null;
-  phone: string | null;
   full_name: string | null;
   avatar_url: string | null;
   provider: string | null;
@@ -43,15 +42,12 @@ export async function getWaitlistStatus(userId: string): Promise<WaitlistStatus 
 export async function joinWaitlist(user: AuthUser): Promise<WaitlistStatus | null> {
   if (!supabase) return null;
 
-  const provider = user.email ? 'google' : user.phone ? 'phone' : null;
-
   const { error: insertError } = await supabase.from('waitlist').insert({
     id: user.id,
     email: user.email || null,
-    phone: user.phone || null,
     full_name: user.displayName || null,
     avatar_url: user.avatarUrl || null,
-    provider,
+    provider: user.email ? 'google' : null,
   });
 
   // Row may already exist (duplicate sign-in race) — that's fine, just re-fetch.
@@ -67,7 +63,7 @@ export async function getWaitlist(): Promise<WaitlistEntry[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('waitlist')
-    .select('id, position, email, phone, full_name, avatar_url, provider, approved, created_at, approved_at')
+    .select('id, position, email, full_name, avatar_url, provider, approved, created_at, approved_at')
     .order('position', { ascending: true });
   if (error) {
     console.error('Failed to load waitlist', error);

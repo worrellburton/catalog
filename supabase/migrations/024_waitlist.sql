@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS public.waitlist (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   position integer NOT NULL DEFAULT nextval('public.waitlist_position_seq') UNIQUE,
   email text,
-  phone text,
   full_name text,
   avatar_url text,
   provider text,
@@ -76,3 +75,4 @@ INSERT INTO public.waitlist (id, email, full_name, avatar_url, provider, approve
 SELECT id, email, full_name, avatar_url, provider, true, now()
 FROM public.profiles
 ON CONFLICT (id) DO NOTHING;
+
