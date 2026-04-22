@@ -58,6 +58,8 @@ const allSearchItems: SearchItem[] = [
   { label: 'Reports', type: 'Page', to: '/admin/reports' },
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
+  { label: 'Shoppers Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
+  { label: 'Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
