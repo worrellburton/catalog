@@ -25,6 +25,7 @@ interface ContinuousFeedProps {
   onOpenCreator: (name: string) => void;
   onOpenBrowser: (url: string, title: string) => void;
   onOpenProduct?: (product: Product) => void;
+  onOpenCreative?: (creative: ProductAd) => void;
   onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
 }
@@ -82,6 +83,7 @@ export default function ContinuousFeed({
   onOpenCreator,
   onOpenBrowser,
   onOpenProduct,
+  onOpenCreative,
   onCreateCatalog,
   bookmarks,
 }: ContinuousFeedProps) {
@@ -223,11 +225,16 @@ export default function ContinuousFeed({
   }, [onOpenLookProp, allLooks]);
 
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
+    if (onOpenCreative) {
+      onOpenCreative(creative);
+      return;
+    }
+    // Fallback (shouldn't happen in normal consumer use): open the affiliate.
     const url = creative.affiliate_url || creative.product?.url;
     if (url) {
       onOpenBrowser(url, creative.product?.name || 'Shop');
     }
-  }, [onOpenBrowser]);
+  }, [onOpenBrowser, onOpenCreative]);
 
   // Find the last detail segment index for ref assignment
   const lastDetailIdx = useMemo(() => {
