@@ -70,9 +70,60 @@ interface CatalogCreativePayload {
 }
 
 const ALL_CATALOG_NAME = 'all';
+const ALL_ORDER_KEY = 'catalog_admin_all_order';
+
+type CatalogSection = 'looks' | 'creatives' | 'products';
 
 function isAllCatalog(name: string) {
   return name.trim().toLowerCase() === ALL_CATALOG_NAME;
+}
+
+function loadAllOrder(): Record<CatalogSection, string[]> {
+  if (typeof window === 'undefined') return { looks: [], creatives: [], products: [] };
+  try {
+    const raw = localStorage.getItem(ALL_ORDER_KEY);
+    if (!raw) return { looks: [], creatives: [], products: [] };
+    const parsed = JSON.parse(raw) as Partial<Record<CatalogSection, string[]>>;
+    return {
+      looks: parsed.looks || [],
+      creatives: parsed.creatives || [],
+      products: parsed.products || [],
+    };
+  } catch {
+    return { looks: [], creatives: [], products: [] };
+  }
+}
+
+function saveAllOrder(order: Record<CatalogSection, string[]>) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ALL_ORDER_KEY, JSON.stringify(order));
+}
+
+function applyOrder<T>(items: T[], idKey: (item: T) => string, savedIds: string[]): T[] {
+  if (savedIds.length === 0) return items;
+  const byId = new Map(items.map(i => [idKey(i), i]));
+  const ordered: T[] = [];
+  const seen = new Set<string>();
+  for (const id of savedIds) {
+    const match = byId.get(id);
+    if (match && !seen.has(id)) {
+      ordered.push(match);
+      seen.add(id);
+    }
+  }
+  for (const item of items) {
+    const id = idKey(item);
+    if (!seen.has(id)) ordered.push(item);
+  }
+  return ordered;
+}
+
+function reorderArray<T>(items: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return items;
+  const next = items.slice();
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
 }
 
 export default function AdminCatalogs() {
@@ -199,10 +250,21 @@ export default function AdminCatalogs() {
           status: r.status,
         }));
 
-      setCreativeByCatalog(prev => ({
-        ...prev,
-        [catalog.id]: { looks, products: catalogProducts, creatives },
-      }));
+      if (isAll) {
+        const order = loadAllOrder();
+        const orderedLooks = applyOrder(looks, l => l.id, order.looks);
+        const orderedCreatives = applyOrder(creatives, c => c.id, order.creatives);
+        const orderedProducts = applyOrder(catalogProducts, p => p.id, order.products);
+        setCreativeByCatalog(prev => ({
+          ...prev,
+          [catalog.id]: { looks: orderedLooks, products: orderedProducts, creatives: orderedCreatives },
+        }));
+      } else {
+        setCreativeByCatalog(prev => ({
+          ...prev,
+          [catalog.id]: { looks, products: catalogProducts, creatives },
+        }));
+      }
     } finally {
       setCreativeLoading(prev => {
         const next = new Set(prev);
@@ -211,6 +273,24 @@ export default function AdminCatalogs() {
       });
     }
   }, [products]);
+
+  const reorderAllSection = useCallback((catalogId: string, section: CatalogSection, fromIndex: number, toIndex: number) => {
+    setCreativeByCatalog(prev => {
+      const current = prev[catalogId];
+      if (!current) return prev;
+      const next = { ...current };
+      if (section === 'looks') next.looks = reorderArray(current.looks, fromIndex, toIndex);
+      else if (section === 'creatives') next.creatives = reorderArray(current.creatives, fromIndex, toIndex);
+      else next.products = reorderArray(current.products, fromIndex, toIndex);
+
+      saveAllOrder({
+        looks: next.looks.map(l => l.id),
+        creatives: next.creatives.map(c => c.id),
+        products: next.products.map(p => p.id),
+      });
+      return { ...prev, [catalogId]: next };
+    });
+  }, []);
 
   const toggleExpanded = useCallback((catalog: Catalog) => {
     setExpanded(prev => {
@@ -717,6 +797,7 @@ export default function AdminCatalogs() {
                       isAll={isAllCatalog(c.name)}
                       loading={isLoadingCreative}
                       creative={creative}
+                      onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
                     />
                   </td>
                 </tr>
@@ -1180,9 +1261,10 @@ interface CatalogCreativeDropdownProps {
   isAll: boolean;
   loading: boolean;
   creative: CatalogCreativePayload | undefined;
+  onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
 }
 
-function CatalogCreativeDropdown({ isAll, loading, creative }: CatalogCreativeDropdownProps) {
+function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: CatalogCreativeDropdownProps) {
   if (loading && !creative) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
@@ -1204,73 +1286,137 @@ function CatalogCreativeDropdown({ isAll, loading, creative }: CatalogCreativeDr
     <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
-          The <strong>all</strong> catalog pulls every live look and product — no duplicates, every entry shown in its entirety.
+          The <strong>all</strong> catalog pulls every live look, rendered creative, and product — no duplicates, every entry shown in its entirety. Drag any tile to reorder.
         </div>
       )}
 
-      <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Looks
-          </h3>
-          <span style={{ fontSize: 11, color: '#888' }}>{looks.length}</span>
-        </div>
-        {looks.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#888' }}>No looks in this catalog.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-            {looks.map(l => (
-              <LookThumb key={l.id} look={l} />
-            ))}
-          </div>
-        )}
-      </div>
+      <DraggableSection
+        title="Looks"
+        count={looks.length}
+        emptyMessage="No looks in this catalog."
+        minColumnPx={140}
+        draggable={isAll}
+        onReorder={(from, to) => onReorder('looks', from, to)}
+      >
+        {looks.map(l => (
+          <LookThumb key={l.id} look={l} />
+        ))}
+      </DraggableSection>
 
-      <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Creative Videos
-          </h3>
-          <span style={{ fontSize: 11, color: '#888' }}>{creatives.length}</span>
-        </div>
-        {creatives.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#888' }}>No rendered product ads in this catalog yet.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-            {creatives.map(c => (
-              <CreativeThumb key={c.id} creative={c} />
-            ))}
-          </div>
-        )}
-      </div>
+      <DraggableSection
+        title="Creative Videos"
+        count={creatives.length}
+        emptyMessage="No rendered product ads in this catalog yet."
+        minColumnPx={140}
+        draggable={isAll}
+        onReorder={(from, to) => onReorder('creatives', from, to)}
+      >
+        {creatives.map(c => (
+          <CreativeThumb key={c.id} creative={c} />
+        ))}
+      </DraggableSection>
 
-      <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Products
-          </h3>
-          <span style={{ fontSize: 11, color: '#888' }}>{products.length}</span>
-        </div>
-        {products.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#888' }}>No products in this catalog.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
-            {products.map(p => (
-              <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
-                {p.image_url ? (
-                  <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
-                ) : (
-                  <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
-                )}
-                <div style={{ padding: 6 }}>
-                  <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
-                </div>
-              </div>
-            ))}
+      <DraggableSection
+        title="Products"
+        count={products.length}
+        emptyMessage="No products in this catalog."
+        minColumnPx={110}
+        draggable={isAll}
+        onReorder={(from, to) => onReorder('products', from, to)}
+      >
+        {products.map(p => (
+          <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
+            {p.image_url ? (
+              <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+            ) : (
+              <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
+            )}
+            <div style={{ padding: 6 }}>
+              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+            </div>
           </div>
-        )}
+        ))}
+      </DraggableSection>
+    </div>
+  );
+}
+
+interface DraggableSectionProps {
+  title: string;
+  count: number;
+  emptyMessage: string;
+  minColumnPx: number;
+  draggable: boolean;
+  onReorder: (fromIndex: number, toIndex: number) => void;
+  children: React.ReactNode;
+}
+
+function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, onReorder, children }: DraggableSectionProps) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  const items = React.Children.toArray(children);
+
+  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+    if (!draggable) return;
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    // Required for Firefox to initiate a drag.
+    e.dataTransfer.setData('text/plain', String(idx));
+  };
+  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    if (!draggable || dragIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (overIndex !== idx) setOverIndex(idx);
+  };
+  const handleDrop = (idx: number) => (e: React.DragEvent) => {
+    if (!draggable || dragIndex === null) return;
+    e.preventDefault();
+    if (dragIndex !== idx) onReorder(dragIndex, idx);
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {title}
+        </h3>
+        <span style={{ fontSize: 11, color: '#888' }}>{count}</span>
       </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#888' }}>{emptyMessage}</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${minColumnPx}px, 1fr))`, gap: 8 }}>
+          {items.map((child, idx) => (
+            <div
+              key={idx}
+              draggable={draggable}
+              onDragStart={handleDragStart(idx)}
+              onDragOver={handleDragOver(idx)}
+              onDrop={handleDrop(idx)}
+              onDragEnd={handleDragEnd}
+              style={{
+                cursor: draggable ? (dragIndex === idx ? 'grabbing' : 'grab') : 'default',
+                opacity: dragIndex === idx ? 0.4 : 1,
+                outline: draggable && overIndex === idx && dragIndex !== idx ? '2px solid #2563eb' : 'none',
+                outlineOffset: -2,
+                borderRadius: 6,
+                transition: 'opacity 120ms ease',
+              }}
+            >
+              {child}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
