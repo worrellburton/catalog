@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from '@remix-run/react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
@@ -43,6 +43,26 @@ interface ProductRow {
   catalog_tags: string[] | null;
 }
 
+interface CatalogLookRow {
+  id: string;
+  legacyId: number | null;
+  title: string;
+  videoPath: string | null;
+  creatorHandle: string | null;
+  productCount: number;
+}
+
+interface CatalogCreativePayload {
+  looks: CatalogLookRow[];
+  products: ProductRow[];
+}
+
+const ALL_CATALOG_NAME = 'all';
+
+function isAllCatalog(name: string) {
+  return name.trim().toLowerCase() === ALL_CATALOG_NAME;
+}
+
 export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -68,6 +88,85 @@ export default function AdminCatalogs() {
   }, []);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
+
+  // Expandable creative dropdown per catalog row.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [creativeByCatalog, setCreativeByCatalog] = useState<Record<string, CatalogCreativePayload>>({});
+  const [creativeLoading, setCreativeLoading] = useState<Set<string>>(new Set());
+
+  const loadCreative = useCallback(async (catalog: Catalog) => {
+    if (!supabase) return;
+    setCreativeLoading(prev => new Set(prev).add(catalog.id));
+    try {
+      const isAll = isAllCatalog(catalog.name);
+
+      // Looks: `all` catalog pulls every live look so admins can browse the
+      // entire active set; other catalogs filter by catalog_tags.
+      let looksQuery = supabase
+        .from('looks')
+        .select(`
+          id, legacy_id, title, video_path, creator_handle, status, enabled, archived_at,
+          look_products ( product_id )
+        `)
+        .eq('status', 'live')
+        .eq('enabled', true)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false });
+      if (!isAll) {
+        looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
+      }
+      const { data: lookRows } = await looksQuery;
+
+      type LookPayload = {
+        id: string;
+        legacy_id: number | null;
+        title: string;
+        video_path: string | null;
+        creator_handle: string | null;
+        look_products: { product_id: string }[] | null;
+      };
+      const looks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
+        id: r.id,
+        legacyId: r.legacy_id,
+        title: r.title,
+        videoPath: r.video_path,
+        creatorHandle: r.creator_handle,
+        productCount: (r.look_products || []).length,
+      }));
+
+      // Products: `all` catalog uses every product currently loaded; others
+      // filter by catalog_tags. Both paths dedupe so nothing repeats.
+      const catalogProducts = isAll
+        ? products
+        : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
+
+      setCreativeByCatalog(prev => ({
+        ...prev,
+        [catalog.id]: { looks, products: catalogProducts },
+      }));
+    } finally {
+      setCreativeLoading(prev => {
+        const next = new Set(prev);
+        next.delete(catalog.id);
+        return next;
+      });
+    }
+  }, [products]);
+
+  const toggleExpanded = useCallback((catalog: Catalog) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(catalog.id)) {
+        next.delete(catalog.id);
+      } else {
+        next.add(catalog.id);
+        if (!creativeByCatalog[catalog.id]) {
+          loadCreative(catalog);
+        }
+      }
+      return next;
+    });
+  }, [creativeByCatalog, loadCreative]);
 
   const featured: Catalog[] = searchSuggestions.map((name, i) => ({
     id: `featured-${i}`,
@@ -456,16 +555,38 @@ export default function AdminCatalogs() {
           <tbody>
             {all.map(c => {
               const productCount = catalogProductCounts.get(c.name) || 0;
+              const isOpen = expanded.has(c.id);
+              const creative = creativeByCatalog[c.id];
+              const isLoadingCreative = creativeLoading.has(c.id);
               return (
-              <tr key={c.id}>
+              <React.Fragment key={c.id}>
+              <tr>
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>
-                  <Link
-                    to={`/admin/catalogs/${c.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`}
-                    style={{ color: '#111', textDecoration: 'none' }}
-                    title="Open detail page — view attached looks + product palette, run auto-assign"
-                  >
-                    {c.name}
-                  </Link>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      onClick={() => toggleExpanded(c)}
+                      aria-label={isOpen ? 'Collapse creative' : 'Expand creative'}
+                      title={isOpen ? 'Hide looks in this catalog' : 'Show looks in this catalog'}
+                      style={{
+                        width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 4,
+                        color: '#6b7280', cursor: 'pointer', padding: 0,
+                        transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.12s ease',
+                      }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <Link
+                      to={`/admin/catalogs/${c.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`}
+                      style={{ color: '#111', textDecoration: 'none' }}
+                      title="Open detail page — view attached looks + product palette, run auto-assign"
+                    >
+                      {c.name}
+                    </Link>
+                  </div>
                 </td>
                 <td>
                   <span style={{
@@ -530,6 +651,18 @@ export default function AdminCatalogs() {
                   </div>
                 </td>
               </tr>
+              {isOpen && (
+                <tr>
+                  <td colSpan={5} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                    <CatalogCreativeDropdown
+                      isAll={isAllCatalog(c.name)}
+                      loading={isLoadingCreative}
+                      creative={creative}
+                    />
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
               );
             })}
           </tbody>
@@ -980,6 +1113,128 @@ export default function AdminCatalogs() {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+interface CatalogCreativeDropdownProps {
+  isAll: boolean;
+  loading: boolean;
+  creative: CatalogCreativePayload | undefined;
+}
+
+function CatalogCreativeDropdown({ isAll, loading, creative }: CatalogCreativeDropdownProps) {
+  if (loading && !creative) {
+    return (
+      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
+    );
+  }
+  if (!creative) return null;
+
+  const { looks, products } = creative;
+  const hasAny = looks.length > 0 || products.length > 0;
+  if (!hasAny) {
+    return (
+      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
+        No looks or products {isAll ? 'are currently active.' : 'tagged with this catalog yet.'}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {isAll && (
+        <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
+          The <strong>all</strong> catalog pulls every live look and product — no duplicates, every entry shown in its entirety.
+        </div>
+      )}
+
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Looks
+          </h3>
+          <span style={{ fontSize: 11, color: '#888' }}>{looks.length}</span>
+        </div>
+        {looks.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#888' }}>No looks in this catalog.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+            {looks.map(l => (
+              <LookThumb key={l.id} look={l} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Products
+          </h3>
+          <span style={{ fontSize: 11, color: '#888' }}>{products.length}</span>
+        </div>
+        {products.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#888' }}>No products in this catalog.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
+            {products.map(p => (
+              <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
+                {p.image_url ? (
+                  <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+                ) : (
+                  <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
+                )}
+                <div style={{ padding: 6 }}>
+                  <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LookThumb({ look }: { look: CatalogLookRow }) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const src = look.videoPath
+    ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
+    : null;
+
+  return (
+    <div
+      style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
+      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
+      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+    >
+      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000', position: 'relative' }}>
+        {src ? (
+          <video
+            ref={videoRef}
+            src={src}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>
+            No video
+          </div>
+        )}
+      </div>
+      <div style={{ padding: 6, background: '#fff' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.title || `Look #${look.legacyId ?? ''}`}
+        </div>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.creatorHandle ? `@${look.creatorHandle}` : '—'} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
+        </div>
+      </div>
     </div>
   );
 }
