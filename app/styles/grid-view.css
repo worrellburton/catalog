@@ -154,9 +154,22 @@
   transform: scale(1.15);
 }
 
+/* Tall cards — 1x2 on desktop, lets a portrait video show more */
+.look-card-tall {
+  grid-row: span 2;
+  aspect-ratio: 3 / 8;
+}
+
+.look-card-tall video,
+.look-card-tall img {
+  object-fit: cover;
+  object-position: center;
+}
+
 @media (max-width: 768px) {
   .look-card-featured,
-  .look-card-wide {
+  .look-card-wide,
+  .look-card-tall {
     grid-column: span 1;
     grid-row: span 1;
     aspect-ratio: 3 / 4;
