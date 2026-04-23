@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { getLiveAds, type ProductAd } from '~/services/product-ads';
+import { getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-ads';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
@@ -122,15 +122,17 @@ export default function ContinuousFeed({
     const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matched = base.filter(l =>
+      // Strict match. We used to fall back to the full look set when no look
+      // matched the query so the grid wasn't blank — but that leaks unrelated
+      // looks into catalog-scoped searches (e.g. "white shoes" surfacing a
+      // random creator). If no look matches, show none and let the creative
+      // grid carry the search result.
+      return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
         l.description.toLowerCase().includes(q) ||
         l.products.some(p => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q))
       );
-      // Fall back to full set for custom searches so any user-typed catalog
-      // still renders content under that name.
-      return matched.length > 0 ? matched : base;
     }
     return base;
   }, [activeFilter, searchQuery, allLooks]);
@@ -252,6 +254,20 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
+  const canDeleteCreative = user?.role === 'admin';
+
+  const handleDeleteCreative = useCallback(async (id: string) => {
+    // Optimistic remove so the tile disappears immediately; reinstate on error.
+    setLiveCreatives(prev => prev.filter(c => c.id !== id));
+    const { error } = await deleteProductAd(id);
+    if (error) {
+      console.error('[ContinuousFeed] deleteProductAd failed:', error);
+      alert(`Could not delete creative: ${error}`);
+      // Best-effort restore via a fresh fetch.
+      getLiveAds().then(setLiveCreatives).catch(() => {});
+    }
+  }, []);
+
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
     if (onOpenCreative) {
       onOpenCreative(creative);
@@ -286,6 +302,8 @@ export default function ContinuousFeed({
               onOpenCreativeProduct={handleOpenCreativeProduct}
               creatives={segment.isInitial ? filteredCreatives : undefined}
               creativesLoading={segment.isInitial ? creativesLoading : false}
+              canDeleteCreative={canDeleteCreative}
+              onDeleteCreative={handleDeleteCreative}
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}
