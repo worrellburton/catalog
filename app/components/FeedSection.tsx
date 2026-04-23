@@ -12,6 +12,8 @@ interface FeedSectionProps {
   onOpenCreativeProduct?: (creative: ProductAd) => void;
   creatives?: ProductAd[];
   creativesLoading?: boolean;
+  canDeleteCreative?: boolean;
+  onDeleteCreative?: (id: string) => void;
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
@@ -49,6 +51,8 @@ export default function FeedSection({
   onOpenCreativeProduct,
   creatives,
   creativesLoading = false,
+  canDeleteCreative = false,
+  onDeleteCreative,
   title,
   batchSize,
   isInitial = false,
@@ -186,6 +190,8 @@ export default function FeedSection({
                 creative={item.creative}
                 className={getCardClass(idx)}
                 onOpenProduct={onOpenCreativeProduct}
+                canDelete={canDeleteCreative}
+                onDelete={onDeleteCreative}
               />
             );
           }
