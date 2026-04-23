@@ -77,8 +77,8 @@ export default function AdminWaitlistPanel({ showHeader = false }: AdminWaitlist
 
       {loading ? (
         <div className="admin-empty">Loading…</div>
-      ) : entries.length === 0 ? (
-        <p className="admin-detail-empty">No one on the waitlist yet.</p>
+      ) : pending.length === 0 ? (
+        <p className="admin-detail-empty">No one currently on the waitlist.</p>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
@@ -94,7 +94,7 @@ export default function AdminWaitlistPanel({ showHeader = false }: AdminWaitlist
               </tr>
             </thead>
             <tbody>
-              {entries.map(e => {
+              {pending.map(e => {
                 const name = e.full_name || e.email?.split('@')[0] || 'Unknown';
                 const contact = e.email || '-';
                 const isBusy = busyId === e.id;
