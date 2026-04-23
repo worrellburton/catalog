@@ -274,12 +274,76 @@ export default function Home() {
     window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
-  const handleOpenProduct = useCallback((product: Product) => {
+  // Pull a "like-kinded" feed for the product page. Union of two signals:
+  //   1. same brand
+  //   2. shared catalog_tags (if any)
+  // Both queries are capped and then merged + deduped client-side so the
+  // feed still shows something when one bucket is empty.
+  const fetchSimilarProducts = useCallback(async (brand: string | null, catalogTags: string[] | null, excludeId: string | null): Promise<Product[]> => {
+    if (!supabase) return [];
+
+    type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null };
+    const queries: Array<Promise<Row[]>> = [];
+
+    if (brand) {
+      queries.push((async () => {
+        let q = supabase!
+          .from('products')
+          .select('id, name, brand, price, image_url, url')
+          .eq('is_active', true)
+          .eq('brand', brand)
+          .limit(18);
+        if (excludeId) q = q.neq('id', excludeId);
+        const { data } = await q;
+        return (data || []) as Row[];
+      })());
+    }
+
+    if (catalogTags && catalogTags.length > 0) {
+      queries.push((async () => {
+        let q = supabase!
+          .from('products')
+          .select('id, name, brand, price, image_url, url')
+          .eq('is_active', true)
+          .overlaps('catalog_tags', catalogTags)
+          .limit(18);
+        if (excludeId) q = q.neq('id', excludeId);
+        const { data } = await q;
+        return (data || []) as Row[];
+      })());
+    }
+
+    if (queries.length === 0) return [];
+
+    const buckets = await Promise.all(queries);
+    const seen = new Set<string>();
+    const merged: Product[] = [];
+    for (const bucket of buckets) {
+      for (const row of bucket) {
+        if (!row.id || seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push({
+          name: row.name || '',
+          brand: row.brand || '',
+          price: row.price || '',
+          url: row.url || '',
+          image: row.image_url || undefined,
+        });
+      }
+    }
+    return merged.slice(0, 24);
+  }, []);
+
+  const handleOpenProduct = useCallback(async (product: Product) => {
     setSelectedLook(null);
     setSelectedCreative(null);
-    setSelectedSimilar(null);
     setSelectedProduct(product);
-  }, []);
+    setSelectedSimilar(null);
+    if (product.brand) {
+      const sim = await fetchSimilarProducts(product.brand, null, null);
+      setSelectedSimilar(sim);
+    }
+  }, [fetchSimilarProducts]);
 
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
     if (!creative.product) return;
@@ -295,27 +359,13 @@ export default function Home() {
     setSelectedCreative(creative);
     setSelectedSimilar(null);
 
-    if (supabase && creative.product.brand) {
-      const { data } = await supabase
-        .from('products')
-        .select('name, brand, price, image_url, url')
-        .eq('brand', creative.product.brand)
-        .eq('is_active', true)
-        .neq('id', creative.product.id)
-        .limit(12);
-      if (data) {
-        setSelectedSimilar(
-          data.map(p => ({
-            name: p.name || '',
-            brand: p.brand || '',
-            price: p.price || '',
-            url: p.url || '',
-            image: p.image_url || undefined,
-          })),
-        );
-      }
-    }
-  }, []);
+    const sim = await fetchSimilarProducts(
+      creative.product.brand || null,
+      creative.product.catalog_tags || null,
+      creative.product.id || null,
+    );
+    setSelectedSimilar(sim);
+  }, [fetchSimilarProducts]);
 
   const handleCreateCatalog = useCallback((query: string) => {
     setSelectedProduct(null);
