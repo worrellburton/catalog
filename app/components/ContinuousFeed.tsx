@@ -162,6 +162,34 @@ export default function ContinuousFeed({
     return () => { cancelled = true; };
   }, []);
 
+  // Filter creatives by the current search. If any product in the library has
+  // catalog_tags that match the query (case-insensitive), treat the search as
+  // a catalog lookup and keep only creatives whose product is tagged with it.
+  // Otherwise fall back to a text match on product name / brand.
+  const filteredCreatives = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return liveCreatives;
+
+    const isCatalogMatch = liveCreatives.some(c =>
+      (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
+    );
+
+    if (isCatalogMatch) {
+      return liveCreatives.filter(c =>
+        (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
+      );
+    }
+
+    const matches = liveCreatives.filter(c =>
+      (c.product?.name || '').toLowerCase().includes(q) ||
+      (c.product?.brand || '').toLowerCase().includes(q) ||
+      (c.product?.catalog_tags || []).some(t => t.toLowerCase().includes(q)),
+    );
+    // Empty match = user typed a theme we don't have; fall back to everything
+    // rather than showing a blank grid.
+    return matches.length > 0 ? matches : liveCreatives;
+  }, [liveCreatives, searchQuery]);
+
   // Log search queries to Supabase (debounced)
   const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
@@ -256,7 +284,7 @@ export default function ContinuousFeed({
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
               onOpenCreativeProduct={handleOpenCreativeProduct}
-              creatives={segment.isInitial ? liveCreatives : undefined}
+              creatives={segment.isInitial ? filteredCreatives : undefined}
               creativesLoading={segment.isInitial ? creativesLoading : false}
               title={segment.title}
               isInitial={segment.isInitial}

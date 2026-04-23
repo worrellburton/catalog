@@ -27,7 +27,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; catalog_tags?: string[] | null };
 }
 
 export interface CreateAdRequest {
@@ -38,7 +38,7 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, url)
+  product:products(id, name, brand, price, image_url, url, catalog_tags)
 `;
 
 export async function getProductAds(): Promise<ProductAd[]> {
