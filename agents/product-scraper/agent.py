@@ -488,7 +488,7 @@ def run_agent(
     product_url: str,
     look_id: str | None = None,
     save: bool = True,
-    on_save: callable | None = None,  # called immediately when save_product fires
+    on_save=None,  # callable | None — called immediately when save_product fires
 ) -> dict:
     """
     on_save(product: dict) — optional callback fired the instant Claude calls

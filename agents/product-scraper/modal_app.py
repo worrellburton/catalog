@@ -156,6 +156,8 @@ def scrape_pending():
 
     print(f"Found {len(pending)} product(s) to scrape — dispatching…")
 
-    # Fan out — each product scraped in its own Modal container in parallel
-    for _ in scrape_and_update.starmap([(row["id"], row["url"]) for row in pending]):
-        pass
+    # Spawn each product in its own container (fire-and-forget, don't block)
+    for row in pending:
+        scrape_and_update.spawn(row["id"], row["url"])
+
+    print(f"Spawned {len(pending)} scrape job(s).")

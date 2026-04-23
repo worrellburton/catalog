@@ -310,5 +310,61 @@ class TestDiscoverViaSitemap:
         assert result["collections"] == []
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Profile / cross-domain mode
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestProfileMode:
+    """Curator / link-in-bio profile crawls need cross-domain link extraction."""
+
+    def _make_agent_with_links(self, base_url: str, raw_links: list[dict]) -> BrowserAgent:
+        agent = BrowserAgent(base_url)
+        agent.page = MagicMock()
+        agent.page.evaluate.return_value = raw_links
+        return agent
+
+    def test_cross_domain_keeps_outbound_brand_links(self):
+        agent = self._make_agent_with_links("https://shopmy.us/drconnieyang", [
+            {"h": "https://www.valmont.com/en/hydra3-cream", "t": "Valmont Hydra3"},
+            {"h": "https://www.net-a-porter.com/products/some-knit", "t": "Knit top"},
+            {"h": "https://shopmy.us/drconnieyang", "t": "profile root"},
+            {"h": "https://www.instagram.com/drconnieyang", "t": "IG"},
+            {"h": "https://tiktok.com/@drconnieyang", "t": "TT"},
+            {"h": "mailto:hi@example.com", "t": "email"},
+        ])
+        result = json.loads(agent.get_product_links(cross_domain=True))
+        urls = [l["h"] for l in result["product_links"]]
+        assert "https://www.valmont.com/en/hydra3-cream" in urls
+        assert "https://www.net-a-porter.com/products/some-knit" in urls
+        # Profile's own host removed
+        assert "https://shopmy.us/drconnieyang" not in urls
+        # Socials removed
+        assert not any("instagram.com" in u for u in urls)
+        assert not any("tiktok.com" in u for u in urls)
+        # Non-http schemes removed
+        assert not any(u.startswith("mailto:") for u in urls)
+
+    def test_cross_domain_strips_www_when_matching_profile_host(self):
+        # profile URL has no www — outbound with www.shopmy.us should also be dropped.
+        agent = self._make_agent_with_links("https://shopmy.us/drconnieyang", [
+            {"h": "https://www.shopmy.us/something", "t": "internal"},
+            {"h": "https://brand.com/products/x", "t": "brand"},
+        ])
+        result = json.loads(agent.get_product_links(cross_domain=True))
+        urls = [l["h"] for l in result["product_links"]]
+        assert "https://www.shopmy.us/something" not in urls
+        assert "https://brand.com/products/x" in urls
+
+    def test_same_domain_mode_unchanged(self):
+        """Regression: cross_domain=False keeps the original behaviour."""
+        agent = self._make_agent_with_links("https://nike.com", [
+            {"h": "https://nike.com/products/a", "t": "A"},
+            {"h": "https://adidas.com/products/b", "t": "B"},
+        ])
+        result = json.loads(agent.get_product_links(cross_domain=False))
+        urls = [l["h"] for l in result["product_links"]]
+        assert urls == ["https://nike.com/products/a"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

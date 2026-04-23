@@ -6,6 +6,7 @@ export interface CrawlJob {
   id: string;
   site_url: string;
   site_name: string | null;
+  job_type: 'site' | 'collection' | 'profile';
   status: 'pending' | 'crawling' | 'done' | 'failed' | 'cancelled';
   total_urls: number;
   scraped_urls: number;
@@ -30,12 +31,18 @@ export interface CrawlDiscoveredUrl {
 
 // ─── Crawl Jobs ──────────────────────────────────────────────────────
 
-export async function listCrawlJobs(): Promise<CrawlJob[]> {
+export async function listCrawlJobs(
+  options?: { jobType?: 'site' | 'collection' | 'profile' }
+): Promise<CrawlJob[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from('crawl_jobs')
     .select('*')
     .order('created_at', { ascending: false });
+  if (options?.jobType) {
+    query = query.eq('job_type', options.jobType);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
@@ -60,6 +67,35 @@ export async function createCrawlJob(siteUrl: string, siteName?: string): Promis
       site_url: siteUrl,
       site_name: siteName || domain,
       status: 'pending',
+      job_type: 'site',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createProfileCrawlJob(
+  profileUrl: string,
+  profileName?: string,
+): Promise<CrawlJob> {
+  if (!supabase) throw new Error('Supabase not configured');
+  // Default name: last path segment (e.g. 'drconnieyang') or hostname.
+  let defaultName: string;
+  try {
+    const u = new URL(profileUrl);
+    const seg = u.pathname.split('/').filter(Boolean).pop();
+    defaultName = seg ? `${u.hostname}/${seg}` : u.hostname;
+  } catch {
+    defaultName = profileUrl;
+  }
+  const { data, error } = await supabase
+    .from('crawl_jobs')
+    .insert({
+      site_url: profileUrl,
+      site_name: profileName || defaultName,
+      status: 'pending',
+      job_type: 'profile',
     })
     .select()
     .single();
@@ -175,6 +211,7 @@ export async function listCollectionSummariesForJob(
 // ─── Trigger crawl via Modal webhook ─────────────────────────────────
 
 const MODAL_CRAWLER_URL = import.meta.env.VITE_MODAL_CRAWLER_URL || '';
+const MODAL_PROFILE_CRAWLER_URL = import.meta.env.VITE_MODAL_PROFILE_CRAWLER_URL || '';
 
 export async function triggerCrawl(jobId: string, siteUrl: string): Promise<boolean> {
   if (!MODAL_CRAWLER_URL) {
@@ -194,6 +231,33 @@ export async function triggerCrawl(jobId: string, siteUrl: string): Promise<bool
     return res.ok;
   } catch (e) {
     console.error('Failed to trigger crawl:', e);
+    return false;
+  }
+}
+
+export async function triggerProfileCrawl(
+  jobId: string,
+  profileUrl: string,
+  profileName?: string,
+): Promise<boolean> {
+  if (!MODAL_PROFILE_CRAWLER_URL) {
+    console.warn('VITE_MODAL_PROFILE_CRAWLER_URL not set — profile crawl not triggered');
+    return false;
+  }
+
+  try {
+    const res = await fetch(MODAL_PROFILE_CRAWLER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: jobId,
+        profile_url: profileUrl,
+        profile_name: profileName,
+      }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('Failed to trigger profile crawl:', e);
     return false;
   }
 }

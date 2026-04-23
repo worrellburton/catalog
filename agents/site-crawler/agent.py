@@ -511,17 +511,22 @@ class BrowserAgent:
             "at_bottom": scroll_pos >= new_height - 50,
         })
 
-    def get_product_links(self) -> str:
-        """Extract only product-like links from the page — much cheaper than full HTML."""
+    def get_product_links(self, cross_domain: bool = False) -> str:
+        """Extract product-like links from the page — much cheaper than full HTML.
+
+        cross_domain=False (default): only same-domain links (normal site crawl).
+        cross_domain=True: include outbound links too (curator/profile pages
+            like shopmy.us, ltk, linktree where products live on brand sites).
+        """
         links = self.page.evaluate("""() => {
             const seen = new Set();
             const products = [];
             document.querySelectorAll('a[href]').forEach(a => {
                 const href = a.href;
                 if (!href || seen.has(href)) return;
-                const pattern = new RegExp('/(products?|item|p|dp|shop)/');
+                const pattern = new RegExp('/(products?|item|p|dp|shop|go)/');
                 if (pattern.test(href) ||
-                    a.closest('[class*="product"], [class*="card"], [class*="item"], [data-product], [data-item]')) {
+                    a.closest('[class*="product"], [class*="card"], [class*="item"], [class*="pin"], [class*="shelf"], [data-product], [data-item]')) {
                     seen.add(href);
                     const text = (a.innerText || a.getAttribute('aria-label') || '').trim().substring(0, 60);
                     products.push({ h: href, t: text });
@@ -529,8 +534,31 @@ class BrowserAgent:
             });
             return products;
         }""")
-        same_domain = [l for l in links if self.is_same_domain(l["h"])]
-        return json.dumps({"product_links": same_domain[:300]})
+        if cross_domain:
+            def _norm(h: str) -> str:
+                return (h or "").lower().removeprefix("www.")
+            profile_host = _norm(self.base_domain)
+            # Noise we don't want as "products".
+            social_hosts = (
+                "instagram.com", "tiktok.com", "youtube.com", "twitter.com", "x.com",
+                "facebook.com", "pinterest.com", "threads.net", "linkedin.com",
+                "snapchat.com", "reddit.com",
+            )
+            filtered = []
+            for l in links:
+                href = l["h"]
+                if not href.startswith(("http://", "https://")):
+                    continue
+                host = _norm(urlparse(href).hostname or "")
+                # Skip the profile host itself (internal nav) and pure social links.
+                if host == profile_host:
+                    continue
+                if any(host == s or host.endswith("." + s) for s in social_hosts):
+                    continue
+                filtered.append(l)
+        else:
+            filtered = [l for l in links if self.is_same_domain(l["h"])]
+        return json.dumps({"product_links": filtered[:300]})
 
     def get_page_html(self) -> str:
         """Fallback: stripped HTML if product_links doesn't find enough."""
@@ -856,15 +884,42 @@ If auto_load_all reports fewer products than expected, you may scroll_down a few
 - Stay on the same domain.
 - It's fine to call save_product_urls multiple times — duplicates are ignored."""
 
+PROFILE_SYSTEM = """You are a PROFILE sub-agent. Extract ALL product URLs from a curator / creator profile page.
+
+The page (e.g. shopmy.us/<curator>, ltk.app, linktree, Instagram bio link,
+Amazon storefront) shows many products the creator has linked to. Each product
+link typically points OUT to a different brand's website — that is expected.
+
+## Strategy
+
+1. visit_page(profile_url)
+2. auto_load_all — scrolls + clicks "load more" / tab buttons until every pin loads.
+3. get_product_links — grab every product-like link (outbound links are fine here).
+4. save_product_urls with the full list.
+
+If the profile has tabs like "Shelves", "Latest Finds", "Most Popular", it's OK
+to visit each one with visit_page before saving.
+
+## Rules
+
+- Save every link that looks like a product, including links that leave the profile domain.
+- Skip social-media profile links (instagram.com/, tiktok.com/@, youtube.com/@) and the curator's own profile URL.
+- Keep page_title strings short (1-5 words).
+- It's fine to call save_product_urls multiple times — duplicates are ignored."""
+
 
 def run_collection_subagent(
     site_url: str,
     collection_url: str,
     collection_name: str,
     max_pages: int = 10,
+    cross_domain: bool = False,
 ) -> list[dict]:
     """
     Phase 2 sub-agent: Extract product URLs from a single collection.
+
+    cross_domain=True is used for creator/curator profile pages where
+    product links point to many external brand domains.
 
     Returns: [{"url": "...", "collection_name": "...", "page_title": "..."}, ...]
     """
@@ -874,17 +929,27 @@ def run_collection_subagent(
 
     try:
         client = anthropic.Anthropic()
-        messages = [{"role": "user", "content": (
-            f"Extract all product URLs from the '{collection_name}' collection at: {collection_url}\n"
-            f"Visit the page, use get_product_links, scroll down, then call save_product_urls."
-        )}]
+        if cross_domain:
+            system_prompt = PROFILE_SYSTEM
+            user_prompt = (
+                f"Extract every product URL from the curator profile '{collection_name}' at: {collection_url}\n"
+                f"Visit the page, call auto_load_all, then get_product_links, then save_product_urls. "
+                f"Outbound links to brand sites are EXPECTED — save them all."
+            )
+        else:
+            system_prompt = COLLECTION_SYSTEM
+            user_prompt = (
+                f"Extract all product URLs from the '{collection_name}' collection at: {collection_url}\n"
+                f"Visit the page, use get_product_links, scroll down, then call save_product_urls."
+            )
+        messages = [{"role": "user", "content": user_prompt}]
 
         for turn in range(MAX_COLLECTION_TURNS):
             response = _call_with_retry(
                 client,
                 model=COLLECTION_MODEL,
                 max_tokens=8192,
-                system=COLLECTION_SYSTEM,
+                system=system_prompt,
                 tools=COLLECTION_TOOLS,
                 messages=messages,
             )
@@ -920,14 +985,19 @@ def run_collection_subagent(
                         added = 0
                         for p in raw:
                             url = p.get("url", "").strip()
-                            if url and url not in seen and browser.is_same_domain(url):
-                                seen.add(url)
-                                products.append({
-                                    "url": url,
-                                    "collection_name": collection_name,
-                                    "page_title": p.get("page_title", ""),
-                                })
-                                added += 1
+                            if not url or url in seen:
+                                continue
+                            if not cross_domain and not browser.is_same_domain(url):
+                                continue
+                            if cross_domain and not url.startswith(("http://", "https://")):
+                                continue
+                            seen.add(url)
+                            products.append({
+                                "url": url,
+                                "collection_name": collection_name,
+                                "page_title": p.get("page_title", ""),
+                            })
+                            added += 1
                         result_text = json.dumps({
                             "saved_total": len(products),
                             "newly_added": added,
@@ -943,7 +1013,7 @@ def run_collection_subagent(
                     else:
                         result_text = browser.visit_page(tool_input["url"])
                 elif tool_name == "get_product_links":
-                    result_text = browser.get_product_links()
+                    result_text = browser.get_product_links(cross_domain=cross_domain)
                 elif tool_name == "get_page_links":
                     result_text = browser.get_page_links()
                 elif tool_name == "scroll_down":
