@@ -66,13 +66,19 @@ export default function FeedSection({
     return { gridTemplateColumns: `repeat(${layout.columns}, 1fr)` };
   }, [layout.columns]);
 
+  // Pick a tile size variant deterministically from (layoutMode, index).
+  // layoutMode steps the seed so the Remix button visibly rearranges the
+  // mosaic (different cells become featured/wide/tall). Desktop only — mobile
+  // keeps the uniform 3:4 grid.
   const getCardClass = useCallback((globalIndex: number) => {
     const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
-    if (!isDesktop || layoutMode === 0) return 'look-card';
-    const seed = (layoutMode * 7 + globalIndex * 13) % 20;
-    if (seed === 0) return 'look-card look-card-featured';
-    if (seed === 3 || seed === 7) return 'look-card look-card-wide';
-    return 'look-card';
+    if (!isDesktop) return 'look-card';
+    // Hash the seed so distribution doesn't cluster at regular intervals.
+    const seed = ((layoutMode + 1) * 31 + globalIndex * 127) % 100;
+    if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2
+    if (seed < 22) return 'look-card look-card-wide';     // ~14% 2x1
+    if (seed < 36) return 'look-card look-card-tall';     // ~14% 1x2
+    return 'look-card';                                   // ~64% 1x1
   }, [layoutMode]);
 
   // Build the pool by treating looks + creatives as one combined deck.
@@ -178,7 +184,7 @@ export default function FeedSection({
               <CreativeCard
                 key={`creative-${item.creative.id}-${idx}`}
                 creative={item.creative}
-                className="look-card"
+                className={getCardClass(idx)}
                 onOpenProduct={onOpenCreativeProduct}
               />
             );
