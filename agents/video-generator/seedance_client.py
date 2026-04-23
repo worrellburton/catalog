@@ -36,8 +36,16 @@ def _ensure_auth() -> None:
 
 def _fal_model_id(model: str, mode: str) -> str:
     """Map legacy model names to fal.ai model IDs. `mode` = image-to-video | text-to-video."""
-    # Already a full fal slug (has a concrete endpoint path) — pass through
+    # Already a full fal slug (has a concrete endpoint path) — pass through,
+    # but swap the trailing mode segment if the caller asked for a different
+    # one (e.g. "bytedance/seedance-2.0/fast/image-to-video" + mode="text-to-video"
+    # → "bytedance/seedance-2.0/fast/text-to-video"). Without this, the
+    # image-to-video endpoint gets hit for a text-only request and fal.ai
+    # returns "Field required, loc: ['body', 'image_url']".
     if model.startswith("fal-ai/") or model.startswith("bytedance/seedance-2.0/"):
+        for known in ("image-to-video", "text-to-video"):
+            if model.endswith("/" + known) and known != mode:
+                return model[: -len(known)] + mode
         return model
     # v2 shorthand — covers "seedance-2", "bytedance/seedance-2", "seedance-2-foo"
     if "seedance-2" in model:
@@ -217,14 +225,26 @@ def generate_video_from_text(
     _ensure_auth()
     fal_model = _fal_model_id(model, "text-to-video")
 
-    args: dict = {
-        "prompt": prompt,
-        "duration": _format_duration(fal_model, duration),
-        "resolution": resolution,
-        "aspect_ratio": aspect_ratio,
-    }
-    if _is_v2(fal_model):
-        args["generate_audio"] = False
+    def _call(target: str) -> bytes:
+        args: dict = {
+            "prompt": prompt,
+            "duration": _format_duration(target, duration),
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+        }
+        if _is_v2(target):
+            args["generate_audio"] = False
+        result = fal_client.subscribe(target, arguments=args)
+        return _download(_extract_video_url(result))
 
-    result = fal_client.subscribe(fal_model, arguments=args)
-    return _download(_extract_video_url(result))
+    try:
+        return _call(fal_model)
+    except Exception as e:
+        # Some v2 sub-variants (e.g. `bytedance/seedance-2.0/fast/...`) may not
+        # exist as text-to-video endpoints. Fall back to the canonical v2
+        # text-to-video slug so the job still completes.
+        fallback = "bytedance/seedance-2.0/text-to-video"
+        if _is_v2(fal_model) and fal_model != fallback:
+            print(f"    ⚠ {fal_model} text-to-video failed ({e}); retrying {fallback}")
+            return _call(fallback)
+        raise
