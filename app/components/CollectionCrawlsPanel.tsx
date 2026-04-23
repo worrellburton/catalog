@@ -89,7 +89,7 @@ export default function CollectionCrawlsPanel() {
 
   const loadData = useCallback(async () => {
     try {
-      const jobs = await listCrawlJobs();
+      const jobs = await listCrawlJobs({ jobType: 'site' });
       const allRows: CollectionRow[] = [];
       for (const job of jobs) {
         if (job.status !== 'done' && job.status !== 'crawling') continue;

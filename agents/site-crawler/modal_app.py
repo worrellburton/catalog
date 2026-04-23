@@ -210,6 +210,12 @@ def crawl_and_save(job_id: str, site_url: str, max_pages: int | None = None):
 
         print(f"OK [{job_id}] Saved {inserted_count} product URLs from {len(collections)} collections")
 
+        # Immediately push discovered URLs into products (don't wait for daily cron)
+        q = _queue_as_products(supabase, job_id)
+        if q:
+            print(f"  Queued {q} new product(s) for scraping — triggering scraper")
+            modal.Function.from_name("product-scraper", "scrape_pending").spawn()
+
     except Exception as e:
         supabase.table("crawl_jobs").update({
             "status": "failed",
@@ -218,6 +224,134 @@ def crawl_and_save(job_id: str, site_url: str, max_pages: int | None = None):
         }).eq("id", job_id).execute()
         print(f"FAIL [{job_id}] {e}")
         raise
+
+
+# ─── Profile crawl: extract products from a curator/profile page ───────
+# Used for shopmy.us/<curator>, ltk.app, link-in-bio pages, etc. where
+# product links point to many external brand domains. Reuses the existing
+# collection sub-agent in cross-domain mode.
+
+@app.function(
+    image=crawler_image,
+    secrets=secrets,
+    timeout=600,        # 10 min per profile
+    retries=1,
+)
+def crawl_profile_and_save(job_id: str, profile_url: str, profile_name: str | None = None):
+    """Crawl a single creator/curator profile and save the discovered product URLs."""
+    import os
+    from datetime import datetime, timezone
+    from supabase import create_client
+    from agent import run_collection_subagent, _normalize_product_url
+
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+    label = profile_name or profile_url
+
+    supabase.table("crawl_jobs").update({
+        "status": "crawling",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", job_id).execute()
+
+    try:
+        print(f"=== Profile crawl: {label} ({profile_url}) ===")
+        # Pages-per-collection budget bumped a bit since profiles often paginate / infinite-scroll.
+        products = run_collection_subagent(
+            site_url=profile_url,
+            collection_url=profile_url,
+            collection_name=label,
+            max_pages=8,
+            cross_domain=True,
+        )
+
+        seen: set[str] = set()
+        rows = []
+        for p in products:
+            try:
+                canonical = _normalize_product_url(p["url"])
+            except Exception:
+                canonical = p["url"]
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            rows.append({
+                "crawl_job_id": job_id,
+                "url": canonical,
+                "collection_name": label,
+                "page_title": p.get("page_title") or None,
+                "status": "pending",
+            })
+
+        if not rows:
+            supabase.table("crawl_jobs").update({
+                "status": "failed",
+                "error": "No product links discovered on profile page",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", job_id).execute()
+            print(f"FAIL [{job_id}] Nothing found on {profile_url}")
+            return
+
+        inserted_count = 0
+        for i in range(0, len(rows), 100):
+            chunk = rows[i:i + 100]
+            try:
+                res = supabase.table("crawl_discovered_urls").upsert(
+                    chunk, on_conflict="crawl_job_id,url",
+                ).execute()
+                inserted_count += len(res.data) if res.data else len(chunk)
+            except Exception as e:
+                print(f"  Warning: chunk insert error: {e}")
+
+        supabase.table("crawl_jobs").update({
+            "status": "done",
+            "total_urls": inserted_count,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "error": None,
+        }).eq("id", job_id).execute()
+
+        print(f"OK [{job_id}] Saved {inserted_count} product URLs from profile {label}")
+
+        # Immediately push discovered URLs into products (don't wait for daily cron)
+        q = _queue_as_products(supabase, job_id)
+        if q:
+            print(f"  Queued {q} new product(s) for scraping — triggering scraper")
+            modal.Function.from_name("product-scraper", "scrape_pending").spawn()
+
+    except Exception as e:
+        supabase.table("crawl_jobs").update({
+            "status": "failed",
+            "error": str(e)[:500],
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", job_id).execute()
+        print(f"FAIL [{job_id}] {e}")
+        raise
+
+
+@app.function(
+    image=crawler_image,
+    secrets=secrets,
+)
+@modal.fastapi_endpoint(method="POST", label="crawl-profile")
+def crawl_profile_webhook(body: dict):
+    """
+    POST /crawl-profile
+
+    Expected body:
+        {
+            "job_id": "uuid",
+            "profile_url": "https://shopmy.us/drconnieyang",
+            "profile_name": "Dr. Connie Yang"   // optional
+        }
+    """
+    job_id = body.get("job_id")
+    profile_url = body.get("profile_url")
+    profile_name = body.get("profile_name")
+
+    if not job_id or not profile_url:
+        return {"error": "Missing job_id or profile_url"}, 400
+
+    crawl_profile_and_save.spawn(job_id, profile_url, profile_name)
+    return {"status": "queued", "job_id": job_id}
 
 
 # ─── Webhook: triggered from admin panel ───────────────────────────────
@@ -252,12 +386,70 @@ def crawl_webhook(body: dict):
     return {"status": "queued", "job_id": job_id}
 
 
+# ─── Shared helper: immediately queue a job's discovered URLs as products ──
+
+def _queue_as_products(supabase, job_id: str) -> int:
+    """
+    Move all pending crawl_discovered_urls for *job_id* into the products table
+    and mark them queued.  Returns the number of new product rows inserted.
+    Called immediately after a crawl completes so results don't wait for the
+    daily cron.
+    """
+    rows_res = (
+        supabase.table("crawl_discovered_urls")
+        .select("id, url, crawl_job_id")
+        .eq("crawl_job_id", job_id)
+        .eq("status", "pending")
+        .limit(500)
+        .execute()
+    )
+    pending = rows_res.data or []
+    if not pending:
+        return 0
+
+    queued = 0
+    for row in pending:
+        try:
+            existing = (
+                supabase.table("products")
+                .select("id")
+                .eq("url", row["url"])
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                product_id = existing.data[0]["id"]
+                supabase.table("crawl_discovered_urls").update({
+                    "status": "skipped",
+                    "product_id": product_id,
+                }).eq("id", row["id"]).execute()
+                continue
+
+            product_res = supabase.table("products").insert({
+                "url": row["url"],
+                "brand": None,
+                "scrape_status": "pending",
+            }).execute()
+
+            if product_res.data:
+                product_id = product_res.data[0]["id"]
+                supabase.table("crawl_discovered_urls").update({
+                    "status": "queued",
+                    "product_id": product_id,
+                }).eq("id", row["id"]).execute()
+                queued += 1
+        except Exception as e:
+            print(f"  Warning: could not queue {row['url']}: {e}")
+
+    return queued
+
+
 # ─── Queue: move discovered URLs into products table for scraping ──────
 
 @app.function(
     image=crawler_image,
     secrets=secrets,
-    schedule=modal.Cron("*/15 * * * *"),
+    schedule=modal.Cron("0 7 * * *"),   # 7am UTC daily (was: every 15 min)
 )
 def queue_products():
     """
@@ -269,7 +461,7 @@ def queue_products():
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
-    batch_size = 50
+    batch_size = 200   # increased from 50 — process more per daily run
     rows = (
         supabase.table("crawl_discovered_urls")
         .select("id, url, collection_name, page_title, crawl_job_id")
@@ -384,3 +576,78 @@ def crawl_pending_jobs():
         [(row["id"], row["site_url"]) for row in pending]
     ):
         pass
+
+
+# ─── Weekly cron: re-crawl all registered sites every Monday morning ──
+
+@app.function(
+    image=crawler_image,
+    secrets=secrets,
+    schedule=modal.Cron("0 6 * * 1"),  # Monday 6am UTC
+    timeout=60,
+)
+def weekly_recrawl_sites():
+    """
+    Weekly scheduled job — runs every Monday at 6am UTC.
+
+    Re-queues a fresh crawl job for every unique site that has previously
+    been crawled successfully (status = 'done').  Skips sites that already
+    have a pending/crawling job to avoid double-runs.
+    """
+    import os
+    from datetime import datetime, timezone
+    from supabase import create_client
+
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+    # 1. Find all unique site_urls with at least one 'done' job
+    done_rows = (
+        supabase.table("crawl_jobs")
+        .select("site_url, site_name")
+        .eq("status", "done")
+        .execute()
+    )
+    done_sites = {row["site_url"]: row["site_name"] for row in (done_rows.data or [])}
+
+    if not done_sites:
+        print("No completed crawl jobs found — nothing to re-crawl.")
+        return
+
+    # 2. Find sites that already have an in-flight job (don't re-queue them)
+    active_rows = (
+        supabase.table("crawl_jobs")
+        .select("site_url")
+        .in_("status", ["pending", "crawling"])
+        .execute()
+    )
+    active_sites = {row["site_url"] for row in (active_rows.data or [])}
+
+    to_crawl = {url: name for url, name in done_sites.items() if url not in active_sites}
+
+    if not to_crawl:
+        print("All registered sites already have an active crawl job — skipping.")
+        return
+
+    print(f"Weekly re-crawl: queuing {len(to_crawl)} site(s)...")
+
+    dispatched = []
+    for site_url, site_name in to_crawl.items():
+        # Create a fresh crawl_jobs row
+        insert_res = supabase.table("crawl_jobs").insert({
+            "site_url": site_url,
+            "site_name": site_name,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+
+        if insert_res.data:
+            new_job_id = insert_res.data[0]["id"]
+            dispatched.append((new_job_id, site_url))
+            print(f"  Queued: {site_url} → job {new_job_id}")
+
+    if dispatched:
+        # Fan-out: crawl all sites in parallel using Modal's starmap
+        for _ in crawl_and_save.starmap(dispatched):
+            pass
+
+    print(f"Weekly re-crawl complete: dispatched {len(dispatched)} job(s).")

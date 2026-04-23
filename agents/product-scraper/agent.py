@@ -29,7 +29,7 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-haiku-4-5-20251001"   # Haiku: ~20x cheaper than Sonnet for bulk scraping
 MAX_AGENT_TURNS = 10
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
@@ -484,7 +484,17 @@ Rules:
 """
 
 
-def run_agent(product_url: str, look_id: str | None = None, save: bool = True) -> dict:
+def run_agent(
+    product_url: str,
+    look_id: str | None = None,
+    save: bool = True,
+    on_save=None,  # callable | None — called immediately when save_product fires
+) -> dict:
+    """
+    on_save(product: dict) — optional callback fired the instant Claude calls
+    save_product, BEFORE the agent loop finishes.  Use this in Modal to write
+    the DB row immediately so no work is lost if the container is killed later.
+    """
     client = anthropic.Anthropic()
     browser = BrowserSession()
 
@@ -574,6 +584,16 @@ def run_agent(product_url: str, look_id: str | None = None, save: bool = True) -
                         "availability": tool_input.get("availability"),
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
+
+                    # ── Fire callback immediately — don't wait for loop to finish ──
+                    # This ensures the DB is updated the moment data is extracted,
+                    # even if the container is killed or times out afterwards.
+                    if on_save:
+                        try:
+                            on_save(saved_product)
+                        except Exception as cb_err:
+                            print(f"  ⚠️  on_save callback error: {cb_err}")
+
                     tool_results.append(
                         {
                             "type": "tool_result",

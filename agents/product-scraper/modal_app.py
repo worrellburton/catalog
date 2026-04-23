@@ -55,7 +55,6 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
 def scrape_and_update(product_id: str, url: str):
     """Scrape a single product URL and write results back to Supabase."""
     import os
-    import json
     from datetime import datetime, timezone
     from supabase import create_client
     from agent import run_agent
@@ -65,10 +64,8 @@ def scrape_and_update(product_id: str, url: str):
     # Mark as processing
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
 
-    try:
-        result = run_agent(url, save=False)
-        product = result["data"]  # run_agent returns {"success", "data", "storage"}
-
+    def _write_to_db(product: dict):
+        """Called immediately when Claude calls save_product — no waiting for loop end."""
         supabase.table("products").update({
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
@@ -83,8 +80,11 @@ def scrape_and_update(product_id: str, url: str):
             "image_url": (product.get("images") or [None])[0],
             "availability": product.get("availability"),
         }).eq("id", product_id).execute()
+        print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
 
-        print(f"✅ [{product_id}] {product.get('title')}")
+    try:
+        run_agent(url, save=False, on_save=_write_to_db)
+        print(f"✅ [{product_id}] agent loop complete")
 
     except Exception as e:
         supabase.table("products").update({
@@ -126,12 +126,12 @@ def scrape_webhook(body: dict):
     return {"status": "queued", "product_id": product_id}
 
 
-# ─── Cron: retry pending + failed products every 30 min ────────────────
+# ─── Cron: retry pending + failed products every morning at 8am UTC ────
 
 @app.function(
     image=scraper_image,
     secrets=secrets,
-    schedule=modal.Cron("*/30 * * * *"),
+    schedule=modal.Cron("0 8 * * *"),   # 8am UTC daily (was: every 30 min)
 )
 def scrape_pending():
     """Scheduled job — find pending and failed products, scrape them in parallel."""
@@ -145,7 +145,7 @@ def scrape_pending():
         .select("id, url")
         .in_("scrape_status", ["pending", "failed"])
         .not_.is_("url", "null")
-        .limit(10)
+        .limit(100)    # increased from 10 — process more per daily run
         .execute()
     )
 
@@ -156,6 +156,8 @@ def scrape_pending():
 
     print(f"Found {len(pending)} product(s) to scrape — dispatching…")
 
-    # Fan out — each product scraped in its own Modal container in parallel
-    for _ in scrape_and_update.starmap([(row["id"], row["url"]) for row in pending]):
-        pass
+    # Spawn each product in its own container (fire-and-forget, don't block)
+    for row in pending:
+        scrape_and_update.spawn(row["id"], row["url"])
+
+    print(f"Spawned {len(pending)} scrape job(s).")

@@ -539,7 +539,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
 
   const loadJobs = useCallback(async () => {
     try {
-      const data = await listCrawlJobs();
+      const data = await listCrawlJobs({ jobType: 'site' });
       setJobs(data);
     } catch (e) {
       console.error('Failed to load crawl jobs:', e);

@@ -3,6 +3,7 @@ import { useSearchParams } from '@remix-run/react';
 import SiteCrawlsPanel from '~/components/SiteCrawlsPanel';
 import CollectionCrawlsPanel from '~/components/CollectionCrawlsPanel';
 import ProductCrawlsPanel from '~/components/ProductCrawlsPanel';
+import ProfileCrawlsPanel from '~/components/ProfileCrawlsPanel';
 import VideoGenerationPanel from '~/components/VideoGenerationPanel';
 import ProductAdsPanel from '~/components/ProductAdsPanel';
 import { listCrawlJobs, type CrawlJob } from '~/services/site-crawls';
@@ -10,7 +11,7 @@ import { getGeneratedVideos, type GeneratedVideo } from '~/services/video-genera
 import { getProductAds, type ProductAd } from '~/services/product-ads';
 
 type Tab = 'overview' | 'crawls' | 'video-gen';
-type CrawlSubTab = 'full-site' | 'collections' | 'products';
+type CrawlSubTab = 'full-site' | 'collections' | 'profiles' | 'products';
 type VideoSubTab = 'product-ads' | 'look-videos';
 
 export default function AdminAgents() {
@@ -195,6 +196,12 @@ export default function AdminAgents() {
               Collections
             </button>
             <button
+              className={`admin-subtab ${crawlSub === 'profiles' ? 'active' : ''}`}
+              onClick={() => setCrawlSubTab('profiles')}
+            >
+              Profiles
+            </button>
+            <button
               className={`admin-subtab ${crawlSub === 'products' ? 'active' : ''}`}
               onClick={() => setCrawlSubTab('products')}
             >
@@ -204,6 +211,7 @@ export default function AdminAgents() {
 
           {crawlSub === 'full-site' && <SiteCrawlsPanel embedded />}
           {crawlSub === 'collections' && <CollectionCrawlsPanel />}
+          {crawlSub === 'profiles' && <ProfileCrawlsPanel />}
           {crawlSub === 'products' && <ProductCrawlsPanel />}
         </div>
       ) : (
