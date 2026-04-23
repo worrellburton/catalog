@@ -23,10 +23,17 @@ function mapUser(user: { id: string; email?: string; phone?: string; user_metada
 export async function signInWithGoogle(): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
 
+  // redirectTo must include the app's base path. On GitHub Pages the app
+  // lives at <origin>/catalog/, and window.location.origin alone drops
+  // that — Supabase redirects back to the bare origin, which mobile Safari
+  // rejects as an invalid address. Vite injects BASE_URL so this works on
+  // both the Pages and Vercel deployments.
+  const redirectTo = window.location.origin + import.meta.env.BASE_URL;
+
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo,
       queryParams: {
         access_type: 'offline',
         prompt: 'consent',
