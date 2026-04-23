@@ -257,7 +257,7 @@ def crawl_webhook(body: dict):
 @app.function(
     image=crawler_image,
     secrets=secrets,
-    schedule=modal.Cron("*/15 * * * *"),
+    schedule=modal.Cron("0 7 * * *"),   # 7am UTC daily (was: every 15 min)
 )
 def queue_products():
     """
@@ -269,7 +269,7 @@ def queue_products():
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
-    batch_size = 50
+    batch_size = 200   # increased from 50 — process more per daily run
     rows = (
         supabase.table("crawl_discovered_urls")
         .select("id, url, collection_name, page_title, crawl_job_id")
@@ -384,3 +384,78 @@ def crawl_pending_jobs():
         [(row["id"], row["site_url"]) for row in pending]
     ):
         pass
+
+
+# ─── Weekly cron: re-crawl all registered sites every Monday morning ──
+
+@app.function(
+    image=crawler_image,
+    secrets=secrets,
+    schedule=modal.Cron("0 6 * * 1"),  # Monday 6am UTC
+    timeout=60,
+)
+def weekly_recrawl_sites():
+    """
+    Weekly scheduled job — runs every Monday at 6am UTC.
+
+    Re-queues a fresh crawl job for every unique site that has previously
+    been crawled successfully (status = 'done').  Skips sites that already
+    have a pending/crawling job to avoid double-runs.
+    """
+    import os
+    from datetime import datetime, timezone
+    from supabase import create_client
+
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+    # 1. Find all unique site_urls with at least one 'done' job
+    done_rows = (
+        supabase.table("crawl_jobs")
+        .select("site_url, site_name")
+        .eq("status", "done")
+        .execute()
+    )
+    done_sites = {row["site_url"]: row["site_name"] for row in (done_rows.data or [])}
+
+    if not done_sites:
+        print("No completed crawl jobs found — nothing to re-crawl.")
+        return
+
+    # 2. Find sites that already have an in-flight job (don't re-queue them)
+    active_rows = (
+        supabase.table("crawl_jobs")
+        .select("site_url")
+        .in_("status", ["pending", "crawling"])
+        .execute()
+    )
+    active_sites = {row["site_url"] for row in (active_rows.data or [])}
+
+    to_crawl = {url: name for url, name in done_sites.items() if url not in active_sites}
+
+    if not to_crawl:
+        print("All registered sites already have an active crawl job — skipping.")
+        return
+
+    print(f"Weekly re-crawl: queuing {len(to_crawl)} site(s)...")
+
+    dispatched = []
+    for site_url, site_name in to_crawl.items():
+        # Create a fresh crawl_jobs row
+        insert_res = supabase.table("crawl_jobs").insert({
+            "site_url": site_url,
+            "site_name": site_name,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+
+        if insert_res.data:
+            new_job_id = insert_res.data[0]["id"]
+            dispatched.append((new_job_id, site_url))
+            print(f"  Queued: {site_url} → job {new_job_id}")
+
+    if dispatched:
+        # Fan-out: crawl all sites in parallel using Modal's starmap
+        for _ in crawl_and_save.starmap(dispatched):
+            pass
+
+    print(f"Weekly re-crawl complete: dispatched {len(dispatched)} job(s).")

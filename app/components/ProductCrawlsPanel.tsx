@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listScrapedProducts, deleteScrapedProduct } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, type ProductRow } from '~/services/scrape-product';
 
-interface ProductRow {
-  name: string;
-  created_at: string;
-}
+const STATUS_FILTERS = ['all', 'done', 'pending', 'processing', 'failed'] as const;
+type StatusFilter = typeof STATUS_FILTERS[number];
+
+const STATUS_STYLES: Record<string, { color: string; background: string; label: string }> = {
+  done:       { color: '#16a34a', background: 'rgba(22,163,74,0.1)',   label: 'DONE' },
+  pending:    { color: '#b45309', background: 'rgba(180,83,9,0.1)',    label: 'PENDING' },
+  processing: { color: '#1d4ed8', background: 'rgba(29,78,216,0.1)',   label: 'PROCESSING' },
+  failed:     { color: '#dc2626', background: 'rgba(220,38,38,0.1)',   label: 'FAILED' },
+};
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '—';
@@ -17,178 +22,236 @@ function timeAgo(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function AddProductModal({
-  open,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (url: string) => void;
-}) {
-  const [url, setUrl] = useState('');
-  const [error, setError] = useState('');
-
-  if (!open) return null;
-
-  const handleSubmit = () => {
-    setError('');
-    try {
-      new URL(url);
-    } catch {
-      setError('Please enter a valid URL');
-      return;
-    }
-    onSubmit(url);
-    setUrl('');
-    onClose();
-  };
-
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS_STYLES[status] ?? { color: '#6b7280', background: 'rgba(107,114,128,0.1)', label: status.toUpperCase() };
   return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="admin-modal-header">
-          <h3>Scrape Product</h3>
-          <button className="admin-modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="admin-modal-body">
-          <div className="admin-form-group">
-            <label>Product URL *</label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.example.com/products/jacket"
-              autoFocus
-            />
-            <span className="admin-form-hint">Direct URL to a single product page</span>
-          </div>
-          {error && <div className="admin-form-error">{error}</div>}
-        </div>
-        <div className="admin-modal-footer">
-          <button className="admin-btn admin-btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="admin-btn admin-btn-primary" onClick={handleSubmit}>Scrape</button>
-        </div>
-      </div>
-    </div>
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: '0.04em',
+      color: s.color,
+      background: s.background,
+    }}>
+      {s.label}
+    </span>
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function ProductCrawlsPanel() {
   const [rows, setRows] = useState<ProductRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [page, setPage] = useState(0);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      const items = await listScrapedProducts('products');
-      setRows(items as ProductRow[]);
+      const { data, count } = await listProducts({
+        status: statusFilter,
+        search: search || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setRows(data);
+      setTotal(count);
     } catch (e) {
-      console.error('Failed to load scraped products:', e);
+      console.error('Failed to load products:', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, search, page]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const handleAdd = async (url: string) => {
-    setNotice(
-      `Queued: ${url}. Scraping runs via the Python agent at agents/product-scraper. Run it manually or via Modal to complete the scrape.`
-    );
-    setTimeout(() => setNotice(null), 8000);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(0);
+    setSearch(searchInput);
   };
 
-  const handleDelete = async (path: string) => {
-    if (!confirm(`Delete scraped product "${path}"?`)) return;
-    setActionLoading(path);
+  const handleStatusFilter = (s: StatusFilter) => {
+    setPage(0);
+    setStatusFilter(s);
+  };
+
+  const handleRetry = async (id: string) => {
+    setRetrying(id);
     try {
-      await deleteScrapedProduct(`products/${path}`);
-      setRows((prev) => prev.filter((r) => r.name !== path));
+      await retryProductScrape(id);
+      setRows((prev) =>
+        prev.map((r) => r.id === id ? { ...r, scrape_status: 'pending', scrape_error: null, scraped_at: null } : r)
+      );
     } catch (e) {
-      console.error('Failed to delete:', e);
+      console.error('Failed to retry scrape:', e);
     } finally {
-      setActionLoading(null);
+      setRetrying(null);
     }
   };
 
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 }}>
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
-          Scrape individual product pages to extract title, images, price, and variants.
+          All products indexed by the site crawler and product scraper agents.
         </p>
-        <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New Product Scrape
-        </button>
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search products…"
+            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200 }}
+          />
+          <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
+        </form>
       </div>
 
-      {notice && (
-        <div style={{
-          background: 'rgba(59, 130, 246, 0.1)',
-          border: '1px solid rgba(59, 130, 246, 0.25)',
-          color: '#3b82f6',
-          padding: '10px 14px',
-          borderRadius: 6,
-          fontSize: 13,
-          marginBottom: 16,
-        }}>
-          {notice}
-        </div>
-      )}
+      {/* Status filter tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {STATUS_FILTERS.map((s) => (
+          <button
+            key={s}
+            onClick={() => handleStatusFilter(s)}
+            style={{
+              padding: '4px 12px',
+              borderRadius: 6,
+              border: statusFilter === s ? '1px solid #1d4ed8' : '1px solid #e5e7eb',
+              background: statusFilter === s ? '#1d4ed8' : 'transparent',
+              color: statusFilter === s ? '#fff' : '#374151',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+            }}
+          >
+            {s}
+          </button>
+        ))}
+        {total > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280', alignSelf: 'center' }}>
+            {total.toLocaleString()} product{total !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
 
       {loading ? (
-        <div className="admin-empty">Loading scraped products...</div>
+        <div className="admin-empty">Loading products…</div>
       ) : rows.length === 0 ? (
-        <div className="admin-empty">
-          No scraped products yet. Click "New Product Scrape" to add one.
-        </div>
+        <div className="admin-empty">No products found.</div>
       ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Scraped</th>
-                <th style={{ width: 80 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.name}>
-                  <td style={{ fontWeight: 500 }}>{r.name}</td>
-                  <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
-                  <td>
-                    <button
-                      className="admin-icon-btn"
-                      title="Delete"
-                      disabled={actionLoading === r.name}
-                      onClick={() => handleDelete(r.name)}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </td>
+        <>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }}></th>
+                  <th>Product</th>
+                  <th>URL</th>
+                  <th>Brand</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                  <th>Scraped</th>
+                  <th>Added</th>
+                  <th style={{ width: 60 }}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      {r.image_url ? (
+                        <img
+                          src={r.image_url}
+                          alt=""
+                          style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ width: 32, height: 32, borderRadius: 4, background: '#f3f4f6' }} />
+                      )}
+                    </td>
+                    <td style={{ fontWeight: 500, maxWidth: 220 }}>
+                      {r.name || <span style={{ color: '#9ca3af' }}>—</span>}
+                      {r.scrape_error && (
+                        <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                          {r.scrape_error}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ maxWidth: 200 }}>
+                      {r.url ? (
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 12, color: '#6b7280', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}
+                          title={r.url}
+                        >
+                          {r.url.replace(/^https?:\/\//, '')}
+                        </a>
+                      ) : (
+                        <span style={{ color: '#d1d5db' }}>—</span>
+                      )}
+                    </td>
+                    <td className="admin-cell-muted">{r.brand || '—'}</td>
+                    <td className="admin-cell-muted">{r.price || '—'}</td>
+                    <td><StatusBadge status={r.scrape_status} /></td>
+                    <td className="admin-cell-muted">{timeAgo(r.scraped_at)}</td>
+                    <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
+                    <td>
+                      {(r.scrape_status === 'failed' || r.scrape_status === 'pending') && (
+                        <button
+                          className="admin-btn admin-btn-secondary"
+                          disabled={retrying === r.id}
+                          onClick={() => handleRetry(r.id)}
+                          style={{ fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap' }}
+                          title="Reset to pending so the scraper picks it up again"
+                        >
+                          {retrying === r.id ? '…' : '↺ Retry'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      <AddProductModal
-        open={showAdd}
-        onClose={() => setShowAdd(false)}
-        onSubmit={handleAdd}
-      />
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+              <button
+                className="admin-btn admin-btn-secondary"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                ← Prev
+              </button>
+              <span style={{ alignSelf: 'center', fontSize: 13, color: '#6b7280' }}>
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                className="admin-btn admin-btn-secondary"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </>
   );
 }
