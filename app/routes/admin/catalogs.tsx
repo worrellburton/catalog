@@ -17,22 +17,14 @@ interface Catalog {
   createdAt: string;
 }
 
-const CUSTOM_KEY = 'catalog_admin_custom_catalogs';
-
-function loadCustom(): Catalog[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(CUSTOM_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Catalog[];
-  } catch {
-    return [];
-  }
-}
-
-function saveCustom(list: Catalog[]) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(CUSTOM_KEY, JSON.stringify(list));
+// Slugify a human-typed catalog name the same way ensure_catalog() does in
+// migration 021: lowercase, non-alphanum → hyphens, trim hyphens from ends.
+function slugify(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 interface ProductRow {
@@ -140,7 +132,29 @@ export default function AdminCatalogs() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  useEffect(() => { setCustom(loadCustom()); }, []);
+  const loadCatalogs = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('catalogs')
+      .select('id, slug, name, created_at, is_featured, status')
+      .eq('is_featured', false)
+      .eq('status', 'live')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('loadCatalogs failed:', error.message);
+      return;
+    }
+    if (data) {
+      setCustom((data as { id: string; name: string; created_at: string }[]).map(r => ({
+        id: r.id,
+        name: r.name,
+        source: 'custom' as const,
+        createdAt: r.created_at,
+      })));
+    }
+  }, []);
+
+  useEffect(() => { loadCatalogs(); }, [loadCatalogs]);
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -314,28 +328,54 @@ export default function AdminCatalogs() {
     createdAt: '—',
   }));
 
-  const all = [...custom, ...featured];
+  // The 'all' row is a synthesized entry — it represents the aggregate view
+  // of every live look/product/creative. Keep it at the top of the list even
+  // if the user cleared localStorage, and filter it out of `custom` so the
+  // remove (×) button can't drop it.
+  const allRow: Catalog = {
+    id: 'synthetic-all',
+    name: 'all',
+    source: 'custom',
+    createdAt: '—',
+  };
+  const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
-  const addCatalog = () => {
+  const all = [allRow, ...customWithoutAll, ...featured];
+
+  const addCatalog = async () => {
     const name = newName.trim();
-    if (!name) return;
-    const entry: Catalog = {
-      id: `custom-${Date.now()}`,
-      name,
-      source: 'custom',
-      createdAt: new Date().toISOString(),
-    };
-    const next = [entry, ...custom];
-    setCustom(next);
-    saveCustom(next);
+    if (!name || !supabase) return;
+    const slug = slugify(name);
+    if (!slug) {
+      showToast('Catalog name must have at least one letter or number.');
+      return;
+    }
+    const { error } = await supabase.from('catalogs').upsert(
+      {
+        slug,
+        name,
+        is_featured: false,
+        status: 'live',
+      },
+      { onConflict: 'slug' },
+    );
+    if (error) {
+      showToast(`Failed to add catalog: ${error.message}`);
+      return;
+    }
+    await loadCatalogs();
     setNewName('');
     setShowAdd(false);
   };
 
-  const removeCustom = (id: string) => {
-    const next = custom.filter(c => c.id !== id);
-    setCustom(next);
-    saveCustom(next);
+  const removeCustom = async (id: string) => {
+    if (!supabase) return;
+    const { error } = await supabase.from('catalogs').delete().eq('id', id);
+    if (error) {
+      showToast(`Failed to remove catalog: ${error.message}`);
+      return;
+    }
+    await loadCatalogs();
   };
 
   // Assemble Look modal state
@@ -928,7 +968,7 @@ export default function AdminCatalogs() {
                     >
                       ✨ Assemble Look
                     </button>
-                    {c.source === 'custom' && (
+                    {c.source === 'custom' && c.id !== 'synthetic-all' && (
                       <button
                         className="admin-btn admin-btn-secondary"
                         style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }}
