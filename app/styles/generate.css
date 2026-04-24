@@ -3,7 +3,10 @@
 .gen-page {
   max-width: 960px;
   margin: 0 auto;
-  padding: clamp(20px, 4vw, 48px) clamp(16px, 3vw, 32px) 120px;
+  /* Bottom padding clears both the fixed footer (Back/Next) and the
+     liquid-glass step dock stacked beneath it, plus iOS safe-area. */
+  padding: clamp(20px, 4vw, 48px) clamp(16px, 3vw, 32px)
+           calc(180px + env(safe-area-inset-bottom));
   color: #fff;
   min-height: 100vh;
   background: #0a0a0a;
@@ -534,15 +537,20 @@
 
 .gen-foot {
   position: fixed;
-  bottom: 0; left: 0; right: 0;
+  /* Sits above the liquid-glass step dock. The dock is ~52px tall plus
+     16px of breathing room above the home-bar safe area, so the footer
+     starts ~76px above the bottom edge to clear it. */
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  left: 0; right: 0;
   padding: 14px 20px;
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  z-index: 50;
+  z-index: 51;
 }
 .gen-btn-primary, .gen-btn-secondary {
   padding: 10px 18px;

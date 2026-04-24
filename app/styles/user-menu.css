@@ -89,6 +89,10 @@
   align-items: center;
   justify-content: center;
   transition: background 0.2s, color 0.2s, transform 0.2s;
+  /* Sits above the scrim so reopening the menu keeps working during the
+     phantom-click cooldown window. */
+  position: relative;
+  z-index: 10000;
 }
 
 .user-menu-trigger:hover,

@@ -21,20 +21,20 @@ interface UserMenuProps {
 
 export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount, user, onLogout, onOpenDecks }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  // Brief grace period after closing during which the scrim stays
+  // mounted, even though the popout is gone. Catches the phantom click
+  // iOS Safari dispatches after touchend (typically 0-300ms later) on
+  // whatever element ended up beneath the user's finger.
+  const [cooldown, setCooldown] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // iOS Safari sometimes synthesises a phantom `click` after touchend at
-  // the same screen position. If the menu closes between the original
-  // touch and the synthetic click, that phantom click lands on whichever
-  // LookCard happens to sit underneath — opening that look instead of
-  // running the menu item's action. Wrap each item in this helper so we
-  // can (1) close the menu, (2) defer the action by a frame so the
-  // popout has finished unmounting, and (3) eat the residual event.
   const runItem = (action: () => void) => (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setOpen(false);
+    setCooldown(true);
+    window.setTimeout(() => setCooldown(false), 350);
     requestAnimationFrame(() => action());
   };
 
@@ -60,15 +60,14 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
 
   return (
     <div className="user-menu" ref={menuRef}>
+      {(open || cooldown) && (
+        <div
+          className="user-menu-scrim"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen(false); }}
+        />
+      )}
       {open && (
         <>
-          {/* Full-bleed scrim absorbs the residual touchend that iOS
-              would otherwise replay as a synthetic click on the LookCard
-              behind the menu. Tap-to-dismiss is handled here too. */}
-          <div
-            className="user-menu-scrim"
-            onClick={(e) => { e.stopPropagation(); setOpen(false); }}
-          />
           <div className="user-menu-popout">
           {user && (
             <>

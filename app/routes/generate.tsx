@@ -401,7 +401,7 @@ export default function GeneratePage() {
         <div className="gen-empty">
           <h2>Sign in to generate</h2>
           <p>We need your account to save uploads and track your generations.</p>
-          <button className="gen-btn-primary" onClick={() => navigate('/')}>Back to catalog</button>
+          <button className="gen-btn-primary" onClick={() => navigate('/#app')}>Back to catalog</button>
         </div>
       </div>
     );
@@ -410,7 +410,7 @@ export default function GeneratePage() {
   return (
     <div className="gen-page">
       <header className="gen-head">
-        <button className="gen-back" onClick={() => navigate('/')} aria-label="Back to catalog">
+        <button className="gen-back" onClick={() => navigate('/#app')} aria-label="Back to catalog">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to catalog
         </button>
