@@ -515,49 +515,113 @@ class BrowserAgent:
         """Extract product-like links from the page — much cheaper than full HTML.
 
         cross_domain=False (default): only same-domain links (normal site crawl).
-        cross_domain=True: include outbound links too (curator/profile pages
-            like shopmy.us, ltk, linktree where products live on brand sites).
+        cross_domain=True: profile/curator mode (shopmy.us, ltk, linktree, etc.)
+            Includes:
+              - same-domain redirect links shaped like /p/<id>, /go/<id>, /product/...
+                (these are the curator platform's outbound trackers)
+              - outbound links to brand sites
+            Excludes:
+              - generic "card" / "item" containers (too noisy: blog cards, help cards,
+                footer items, follow buttons, etc.)
+              - obvious non-product paths (privacy, terms, help, login, blog, …)
+              - social-media links
         """
+        # Two-pass JS extraction:
+        #   pass A: any <a> whose href looks like a product URL by path
+        #   pass B: any <a> inside an EXPLICIT product container (not generic card/item)
+        # Each entry is tagged so Python can apply different rules per pass.
         links = self.page.evaluate("""() => {
             const seen = new Set();
-            const products = [];
+            const out = [];
+            // Product-shaped path patterns. Note: \\bp\\b only matches when /p/ is
+            // a real path segment (avoids accidental matches inside other words).
+            const productPath = /\\/(products?|item|items|p|dp|gp|go|sku|listing|shop|pin)\\/[^\\/?#]+/i;
+            // Tighter container selector — drops generic [class*="card"]/[class*="item"]
+            // which match too many non-product elements on curator pages.
+            const productContainer = '[class*="product"], [class*="Product"], ' +
+                '[class*="pin"], [class*="Pin"], [class*="shelf"], [class*="Shelf"], ' +
+                '[data-product], [data-product-id], [data-item-id], [data-pin-id]';
             document.querySelectorAll('a[href]').forEach(a => {
                 const href = a.href;
                 if (!href || seen.has(href)) return;
-                const pattern = new RegExp('/(products?|item|p|dp|shop|go)/');
-                if (pattern.test(href) ||
-                    a.closest('[class*="product"], [class*="card"], [class*="item"], [class*="pin"], [class*="shelf"], [data-product], [data-item]')) {
-                    seen.add(href);
-                    const text = (a.innerText || a.getAttribute('aria-label') || '').trim().substring(0, 60);
-                    products.push({ h: href, t: text });
-                }
+                if (href.startsWith('javascript:') || href.startsWith('mailto:') ||
+                    href.startsWith('tel:') || href.startsWith('#')) return;
+                const text = (a.innerText || a.getAttribute('aria-label') || '').trim().substring(0, 60);
+                let source = null;
+                if (productPath.test(href)) source = 'path';
+                else if (a.closest(productContainer)) source = 'container';
+                if (!source) return;
+                seen.add(href);
+                out.push({ h: href, t: text, s: source });
             });
-            return products;
+            return out;
         }""")
+
+        # Path segments that almost never correspond to real products.
+        EXCLUDE_PATH_SEGMENTS = {
+            "privacy", "terms", "tos", "legal", "cookies", "cookie",
+            "faq", "help", "support", "contact", "about", "careers",
+            "press", "blog", "news", "article", "articles", "post", "posts",
+            "login", "signin", "sign-in", "signup", "sign-up", "register",
+            "account", "profile", "settings", "cart", "checkout", "wishlist",
+            "search", "category", "categories", "collection", "collections",
+            "brands", "sitemap", "feed", "rss",
+        }
+
+        def _looks_like_product_path(href: str) -> bool:
+            try:
+                segs = [s for s in urlparse(href).path.split("/") if s]
+            except Exception:
+                return False
+            if not segs:
+                return False
+            if any(s.lower() in EXCLUDE_PATH_SEGMENTS for s in segs):
+                return False
+            return True
+
         if cross_domain:
             def _norm(h: str) -> str:
                 return (h or "").lower().removeprefix("www.")
             profile_host = _norm(self.base_domain)
-            # Noise we don't want as "products".
             social_hosts = (
                 "instagram.com", "tiktok.com", "youtube.com", "twitter.com", "x.com",
                 "facebook.com", "pinterest.com", "threads.net", "linkedin.com",
-                "snapchat.com", "reddit.com",
+                "snapchat.com", "reddit.com", "discord.com", "discord.gg",
+                "spotify.com", "apple.com", "music.apple.com", "podcasts.apple.com",
             )
+            # Curator/affiliate platforms whose own non-product pages we want to skip.
+            # We KEEP same-host links if they look like product redirects (/p/<id>, /go/<id>).
             filtered = []
             for l in links:
                 href = l["h"]
                 if not href.startswith(("http://", "https://")):
                     continue
                 host = _norm(urlparse(href).hostname or "")
-                # Skip the profile host itself (internal nav) and pure social links.
-                if host == profile_host:
+                if not host:
                     continue
                 if any(host == s or host.endswith("." + s) for s in social_hosts):
                     continue
-                filtered.append(l)
+
+                if host == profile_host:
+                    # Same-host link on a curator page: only keep if it's clearly a
+                    # product/redirect URL (e.g. shopmy.us/p/<id>), not internal nav.
+                    if l["s"] != "path":
+                        continue
+                    if not _looks_like_product_path(href):
+                        continue
+                else:
+                    # Outbound link: must look product-shaped. The "container" heuristic
+                    # alone is too noisy on curator pages (footers, help cards, etc.).
+                    if not _looks_like_product_path(href):
+                        continue
+                    # Drop bare-domain outbound links ("/", "/home").
+                    path = urlparse(href).path.strip("/")
+                    if not path or path in {"home", "index"}:
+                        continue
+                filtered.append({"h": href, "t": l["t"]})
         else:
-            filtered = [l for l in links if self.is_same_domain(l["h"])]
+            # Normal same-domain crawl: drop the source tag and keep same-domain only.
+            filtered = [{"h": l["h"], "t": l["t"]} for l in links if self.is_same_domain(l["h"])]
         return json.dumps({"product_links": filtered[:300]})
 
     def get_page_html(self) -> str:

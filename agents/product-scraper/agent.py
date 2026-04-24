@@ -20,6 +20,9 @@ import re
 import os
 import time
 import argparse
+import urllib.request
+import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, Page, Browser
@@ -29,7 +32,7 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-MODEL = "claude-haiku-4-5-20251001"   # Haiku: ~20x cheaper than Sonnet for bulk scraping
+MODEL = "claude-sonnet-4-20250514"
 MAX_AGENT_TURNS = 10
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
@@ -75,8 +78,14 @@ TOOLS = [
     {
         "name": "get_all_images",
         "description": (
-            "Get all image URLs from the current page, filtered to likely product images "
-            "(excludes tiny icons, tracking pixels, SVGs, and data URIs)."
+            "Get image candidates from the current page, returned as a JSON object: "
+            "{\"canonical\": [...], \"page_images\": [...], \"page_url\": \"...\"}. "
+            "`canonical` are the AUTHORITATIVE product images extracted from page metadata "
+            "(og:image, twitter:image, JSON-LD Product.image, link rel=image_src). "
+            "`page_images` are all other DOM <img> URLs (filtered for size/SVG/data-URIs and "
+            "deduped against canonical). On aggregator pages (shopmy.us, ltk.app, linktree, "
+            "beacons, stan.store, bio.link) `page_images` will be FULL of curator-uploaded "
+            "user photos that are NOT the product \u2014 only `canonical` is reliable on those sites."
         ),
         "input_schema": {
             "type": "object",
@@ -159,6 +168,66 @@ TOOLS = [
 
 
 # ─── Image URL helpers ────────────────────────────────────────────────
+
+_IMAGE_CHECK_TIMEOUT = 5  # seconds per HTTP probe
+_IMAGE_CHECK_WORKERS = 8
+_IMAGE_CHECK_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def _is_image_url_accessible(url: str) -> bool:
+    """Return True iff the URL responds publicly with an image content-type.
+
+    Tries HEAD first; falls back to a 1-byte ranged GET for servers that reject
+    HEAD (some CDNs return 405). Used to filter out private/signed URLs (e.g.
+    aggregator S3 buckets that need cookies) before they get saved as the
+    \"product image\".
+    """
+    if not url or not isinstance(url, str):
+        return False
+    if not url.startswith(("http://", "https://")):
+        return False
+
+    headers = {
+        "User-Agent": _IMAGE_CHECK_USER_AGENT,
+        "Accept": "image/*,*/*;q=0.8",
+    }
+
+    def _check(method: str, extra_headers: dict | None = None) -> bool:
+        req_headers = dict(headers)
+        if extra_headers:
+            req_headers.update(extra_headers)
+        req = urllib.request.Request(url, method=method, headers=req_headers)
+        try:
+            with urllib.request.urlopen(req, timeout=_IMAGE_CHECK_TIMEOUT) as resp:
+                if resp.status >= 400:
+                    return False
+                ctype = (resp.headers.get("Content-Type") or "").lower()
+                # Accept image/*; reject html/xml (S3 error responses) and empty.
+                return ctype.startswith("image/")
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
+            return False
+        except Exception:
+            return False
+
+    if _check("HEAD"):
+        return True
+    # Some CDNs / S3-style endpoints reject HEAD — try a tiny ranged GET.
+    return _check("GET", {"Range": "bytes=0-0"})
+
+
+def _filter_accessible_images(urls: list[str]) -> list[str]:
+    """Run accessibility checks in parallel and return only public URLs (order preserved)."""
+    if not urls:
+        return []
+    deduped = list(dict.fromkeys(urls))
+    with ThreadPoolExecutor(max_workers=_IMAGE_CHECK_WORKERS) as pool:
+        results = list(pool.map(_is_image_url_accessible, deduped))
+    return [u for u, ok in zip(deduped, results) if ok]
+
 
 def _upgrade_image_url(url: str) -> str:
     """Upgrade CDN image URLs to high-resolution versions.
@@ -280,7 +349,74 @@ class BrowserSession:
         html = re.sub(r"\s{2,}", " ", html)
         return html[:MAX_HTML_LENGTH]
 
-    def get_images(self) -> list[str]:
+    def get_images(self) -> dict:
+        """Return categorised image candidates.
+
+        Returns:
+            {
+              "canonical": [...],   # og:image + JSON-LD Product.image \u2014 authoritative
+              "page_images": [...], # everything else found in the DOM (carousel, gallery)
+              "page_url": "...",
+            }
+
+        On aggregator/affiliate pages (shopmy.us, ltk.app, linktree, beacons, etc.) the
+        DOM is full of curator-uploaded photos that look like product images but aren't.
+        Splitting them keeps the canonical product image obvious to the agent.
+        """
+        canonical = self.page.evaluate(
+            """() => {
+            const out = [];
+            const seen = new Set();
+            const push = (u) => {
+                if (!u || typeof u !== 'string') return;
+                if (u.startsWith('data:')) return;
+                if (seen.has(u)) return;
+                seen.add(u);
+                out.push(u);
+            };
+
+            // OpenGraph / Twitter card images
+            const get = (n) => {
+                const el = document.querySelector(
+                    `meta[property="${n}"], meta[name="${n}"]`
+                );
+                return el ? el.getAttribute('content') : null;
+            };
+            push(get('og:image'));
+            push(get('og:image:secure_url'));
+            push(get('twitter:image'));
+            push(get('twitter:image:src'));
+
+            // <link rel="image_src">
+            const linkImg = document.querySelector('link[rel="image_src"]');
+            if (linkImg) push(linkImg.getAttribute('href'));
+
+            // JSON-LD Product.image (string OR array OR ImageObject), incl. @graph
+            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+            scripts.forEach(s => {
+                try {
+                    const data = JSON.parse(s.textContent);
+                    const roots = Array.isArray(data) ? data : [data];
+                    roots.forEach(root => {
+                        const items = root && root['@graph'] ? root['@graph'] : [root];
+                        items.forEach(item => {
+                            if (!item || !item.image) return;
+                            const imgs = Array.isArray(item.image) ? item.image : [item.image];
+                            imgs.forEach(im => {
+                                if (typeof im === 'string') push(im);
+                                else if (im && im.url) push(im.url);
+                                else if (im && im['@id']) push(im['@id']);
+                            });
+                        });
+                    });
+                } catch (_) {}
+            });
+
+            const base = window.location.origin;
+            return out.map(u => { try { return new URL(u, base).href; } catch { return u; } });
+        }"""
+        )
+
         images = self.page.evaluate(
             """() => {
             const imgs = document.querySelectorAll('img');
@@ -315,7 +451,6 @@ class BrowserSession:
                         url: p[0],
                         w: parseInt((p[1] || '0').replace('w', '')) || 0,
                     }));
-                // Pick the largest srcset candidate per element
                 if (pairs.length > 0) {
                     pairs.sort((a, b) => b.w - a.w);
                     try { results.push(new URL(pairs[0].url, base).href); }
@@ -326,8 +461,31 @@ class BrowserSession:
         }"""
         )
 
-        all_urls = list(dict.fromkeys(srcset + images))  # prefer srcset (higher-res) first
-        return [_upgrade_image_url(u) for u in all_urls][:MAX_IMAGES_RETURN]
+        canonical_upgraded = [_upgrade_image_url(u) for u in canonical]
+        canonical_set = set(canonical_upgraded)
+
+        all_dom = list(dict.fromkeys(srcset + images))  # srcset first (higher-res)
+        page_images = [
+            _upgrade_image_url(u) for u in all_dom
+            if _upgrade_image_url(u) not in canonical_set
+        ][:MAX_IMAGES_RETURN]
+
+        # Filter to only publicly-accessible URLs. Aggregator pages (shopmy.us,
+        # ltk.app, etc.) often serve images from PRIVATE S3 buckets via signed
+        # cookies — those URLs render in the browser but return 403 to anyone
+        # without the session, making them useless for downstream consumers.
+        canonical_public = _filter_accessible_images(canonical_upgraded)
+        page_images_public = _filter_accessible_images(page_images)
+
+        return {
+            "canonical": canonical_public,
+            "page_images": page_images_public,
+            "page_url": self.page.url,
+            "note": (
+                "All URLs above have been verified public (HTTP 200, content-type image/*). "
+                "Private/inaccessible URLs from the page metadata have been filtered out."
+            ),
+        }
 
     def screenshot(self) -> bytes:
         return self.page.screenshot(type="png", full_page=False)
@@ -478,9 +636,46 @@ Rules:
 - Extract ACTUAL data from the page. Never guess or fabricate.
 - Include currency symbols in price strings (e.g. "$129.99").
 - If there is both an original price and a sale/discounted price, capture both.
-- Only include main product images, not unrelated thumbnails or icons.
+- IMAGE SELECTION (strict):
+  * `get_all_images` returns `{ canonical: [...], page_images: [...] }`.
+    Every URL it returns has ALREADY been verified as publicly accessible
+    (HTTP 200 with image content-type). URLs that would return 403/private
+    have been pre-filtered out — do NOT use any image URL that you saw
+    elsewhere (visit_page metadata, get_page_html) but that is missing from
+    `get_all_images`, because that means it isn't public.
+  * `canonical` images come from the page's OWN metadata (og:image, JSON-LD
+    Product.image). They are the authoritative product photos \u2014 ALWAYS prefer
+    them. If `canonical` is non-empty, use ONLY `canonical` images unless the
+    screenshot clearly shows additional product angles you can match in
+    `page_images`.
+  * On aggregator / affiliate / link-in-bio pages \u2014 shopmy.us, ltk.app,
+    liketoknow.it, linktree, beacons.ai, stan.store, bio.link, koji.to,
+    snipfeed, withkoji \u2014 `page_images` is full of CURATOR-UPLOADED user
+    photos showing people using the product. These are NOT the product image.
+    On these domains, save ONLY the `canonical` images. Never include
+    page_images entries from these sites.
+  * If BOTH `canonical` and `page_images` are empty, save_product with an
+    empty images array \u2014 do not invent URLs from the page HTML, because
+    they are likely private.
+  * Other things to NEVER include: site-wide hero/banners, logos, category
+    thumbnails, "you might also like" carousels, reviewer photos, payment-method
+    icons, social badges, blog/article images, generic lifestyle photos.
+  * Aim for 1\u20136 high-quality product images.
 - Keep description concise (1-3 sentences).
 - Use null for any field that cannot be determined.
+
+IMPORTANT — non-product pages:
+If the URL redirected to a homepage, category page, search results, blog post,
+help/FAQ article, 404, or any page that is NOT a single product detail page,
+DO NOT call save_product. Instead reply with plain text starting with
+"NOT_A_PRODUCT_PAGE:" followed by a short reason (e.g. the actual page type
+and the final URL). The orchestrator will mark the URL as failed.
+
+How to recognise a real product detail page:
+- It shows ONE specific product as the focus (not a grid/list of many).
+- It has at least one of: a price, an "Add to cart"/"Buy" button, a SKU/variant
+  selector, or product:* / og:product / Product JSON-LD metadata.
+- The og:type is typically "product" (not "website" / "article").
 """
 
 
@@ -540,6 +735,15 @@ def run_agent(
                     print(f"\n✅ Agent finished in {turn + 1} turn(s)")
                     break
 
+                # Did the agent explicitly say "this isn't a product page"?
+                reply_text = "".join(
+                    getattr(b, "text", "") for b in response.content
+                    if hasattr(b, "text")
+                ).strip()
+                if "NOT_A_PRODUCT_PAGE" in reply_text.upper():
+                    snippet = reply_text[:300].replace("\n", " ")
+                    raise RuntimeError(f"Not a product page — {snippet}")
+
                 if nudge_count >= MAX_NUDGES:
                     print(f"\n⚠️  Agent could not extract product after {MAX_NUDGES} nudges")
                     break
@@ -572,6 +776,65 @@ def run_agent(
                 print(f"  🔧 {tool_name}({json.dumps(tool_input)[:100]})")
 
                 if tool_name == "save_product":
+                    # Sanity check: a real product page virtually always has at
+                    # least a price OR a brand OR availability info. If none of
+                    # those are present, the agent likely landed on a non-product
+                    # page (homepage / category / blog) and is about to save
+                    # whatever images it found. Reject and ask it to verify.
+                    has_commerce_signal = bool(
+                        tool_input.get("price")
+                        or tool_input.get("discounted_price")
+                        or tool_input.get("brand")
+                        or tool_input.get("availability")
+                    )
+                    image_count = len(tool_input.get("images") or [])
+                    if not has_commerce_signal and image_count > 0:
+                        nudge_count += 1
+                        if nudge_count >= MAX_NUDGES:
+                            raise RuntimeError(
+                                "Page does not look like a product detail page "
+                                "(no price, brand, or availability detected). "
+                                f"URL: {product_url}"
+                            )
+                        print(
+                            "  ⚠️  save_product called with no price/brand/availability — "
+                            f"asking agent to verify ({nudge_count}/{MAX_NUDGES})"
+                        )
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": [{"type": "text", "text": (
+                                "Rejected: this looks like a non-product page (no price, "
+                                "brand, or availability found). Please verify you are on a "
+                                "single product detail page. If the URL redirected to a "
+                                "homepage, category, blog, or 404, reply with "
+                                "'NOT_A_PRODUCT_PAGE: <reason>' instead of calling save_product."
+                            )}],
+                            "is_error": True,
+                        })
+                        continue
+
+                    saved_images = tool_input.get("images", []) or []
+                    public_images = _filter_accessible_images(saved_images)
+                    image_missing_reason: str | None = None
+                    if saved_images and not public_images:
+                        print(
+                            f"  ⚠️  All {len(saved_images)} image(s) returned by Claude are "
+                            "private/inaccessible — saving with empty images list."
+                        )
+                        image_missing_reason = (
+                            f"Private images — all {len(saved_images)} URL(s) were "
+                            "inaccessible (403 / non-image response)"
+                        )
+                    elif not saved_images:
+                        image_missing_reason = "No images found on page"
+                    elif len(public_images) < len(saved_images):
+                        dropped = len(saved_images) - len(public_images)
+                        print(
+                            f"  🧹 Dropped {dropped} private/inaccessible image URL(s); "
+                            f"keeping {len(public_images)}."
+                        )
+
                     saved_product = {
                         "url": product_url,
                         "title": tool_input.get("title"),
@@ -580,7 +843,8 @@ def run_agent(
                         "price": tool_input.get("price"),
                         "discounted_price": tool_input.get("discounted_price"),
                         "currency": tool_input.get("currency"),
-                        "images": tool_input.get("images", []),
+                        "images": public_images,
+                        "image_missing_reason": image_missing_reason,
                         "availability": tool_input.get("availability"),
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }

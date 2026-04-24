@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, addProductUrl, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, deleteProduct, type ProductRow } from '~/services/scrape-product';
 
 const STATUS_FILTERS = ['all', 'done', 'pending', 'processing', 'failed'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
@@ -96,6 +96,7 @@ export default function ProductCrawlsPanel() {
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -118,9 +119,36 @@ export default function ProductCrawlsPanel() {
     }
   }, [statusFilter, search, page]);
 
+  // Silent background refresh — no loading spinner, only updates existing rows.
+  // Used by the auto-poll loop so status changes appear without a full reload.
+  const refreshSilent = useCallback(async () => {
+    try {
+      const { data, count } = await listProducts({
+        status: statusFilter,
+        search: search || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setRows(data);
+      setTotal(count);
+    } catch {
+      // ignore — next tick will retry
+    }
+  }, [statusFilter, search, page]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Auto-poll every 5 s while any row is pending or processing.
+  useEffect(() => {
+    const hasActive = rows.some(
+      (r) => r.scrape_status === 'pending' || r.scrape_status === 'processing',
+    );
+    if (!hasActive) return;
+    const timer = setInterval(refreshSilent, 5_000);
+    return () => clearInterval(timer);
+  }, [rows, refreshSilent]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +193,20 @@ export default function ProductCrawlsPanel() {
       console.error('Failed to retry scrape:', e);
     } finally {
       setRetrying(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this product and all associated ads? This cannot be undone.')) return;
+    setDeleting(id);
+    try {
+      await deleteProduct(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      setTotal((t) => t - 1);
+    } catch (e) {
+      console.error('Failed to delete product:', e);
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -257,26 +299,58 @@ export default function ProductCrawlsPanel() {
                   <th>Status</th>
                   <th>Scraped</th>
                   <th>Added</th>
-                  <th style={{ width: 60 }}></th>
+                  <th style={{ width: 120 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      {r.image_url ? (
-                        <img
-                          src={r.image_url}
-                          alt=""
-                          style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, display: 'block' }}
-                        />
-                      ) : (
-                        <div style={{ width: 32, height: 32, borderRadius: 4, background: '#f3f4f6' }} />
-                      )}
+                      {(() => {
+                        const thumb = r.image_url || (Array.isArray(r.images) && r.images.length > 0 ? r.images[0] : null);
+                        if (thumb) {
+                          return (
+                            <img
+                              src={thumb}
+                              alt=""
+                              style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, display: 'block' }}
+                            />
+                          );
+                        }
+                        const reason = r.image_missing_reason;
+                        return (
+                          <div
+                            title={reason || 'No image available'}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 4,
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: reason ? 'help' : 'default',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                              <circle cx="8.5" cy="8.5" r="1.5"/>
+                              <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ fontWeight: 500, maxWidth: 220 }}>
                       {r.name || <span style={{ color: '#9ca3af' }}>—</span>}
                       {r.scrape_error && <ErrorTooltip error={r.scrape_error} />}
+                      {!r.image_url && !(Array.isArray(r.images) && r.images.length > 0) && r.image_missing_reason && (
+                        <div style={{ fontSize: 11, color: '#f87171', marginTop: 2, fontWeight: 400, lineHeight: 1.3 }}>
+                          {r.image_missing_reason}
+                        </div>
+                      )}
                     </td>
                     <td style={{ maxWidth: 200 }}>
                       {r.url ? (
@@ -299,17 +373,46 @@ export default function ProductCrawlsPanel() {
                     <td className="admin-cell-muted">{timeAgo(r.scraped_at)}</td>
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
                     <td>
-                      {(r.scrape_status === 'failed' || r.scrape_status === 'pending') && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {(r.scrape_status === 'failed' || r.scrape_status === 'pending') && (
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            disabled={retrying === r.id}
+                            onClick={() => handleRetry(r.id)}
+                            style={{ fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap' }}
+                            title="Reset to pending so the scraper picks it up again"
+                          >
+                            {retrying === r.id ? '…' : '↺ Retry'}
+                          </button>
+                        )}
+                        {r.scrape_status === 'done' && (
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            disabled={retrying === r.id}
+                            onClick={() => handleRetry(r.id)}
+                            style={{ fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', color: '#6b7280' }}
+                            title="Re-scrape this product in case the data is incorrect"
+                          >
+                            {retrying === r.id ? '…' : '↺ Regenerate'}
+                          </button>
+                        )}
                         <button
-                          className="admin-btn admin-btn-secondary"
-                          disabled={retrying === r.id}
-                          onClick={() => handleRetry(r.id)}
-                          style={{ fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap' }}
-                          title="Reset to pending so the scraper picks it up again"
+                          className="admin-btn"
+                          disabled={deleting === r.id}
+                          onClick={() => handleDelete(r.id)}
+                          style={{
+                            fontSize: 11,
+                            padding: '3px 8px',
+                            whiteSpace: 'nowrap',
+                            color: '#dc2626',
+                            border: '1px solid #fecaca',
+                            background: 'transparent',
+                          }}
+                          title="Delete product and all associated ads"
                         >
-                          {retrying === r.id ? '…' : '↺ Retry'}
+                          {deleting === r.id ? '…' : '🗑'}
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}

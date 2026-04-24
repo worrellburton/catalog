@@ -461,7 +461,7 @@ def queue_products():
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
-    batch_size = 200   # increased from 50 — process more per daily run
+    batch_size = 200
     rows = (
         supabase.table("crawl_discovered_urls")
         .select("id, url, collection_name, page_title, crawl_job_id")

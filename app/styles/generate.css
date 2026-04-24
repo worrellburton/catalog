@@ -384,6 +384,36 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: 14px;
 }
+
+.gen-vision {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 40%, #22d3ee 70%, #a78bfa 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.55))
+          drop-shadow(0 0 18px rgba(167, 139, 250, 0.35));
+  animation: gen-vision-shimmer 3.2s linear infinite,
+             gen-vision-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes gen-vision-shimmer {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes gen-vision-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.45))
+            drop-shadow(0 0 14px rgba(167, 139, 250, 0.25));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.75))
+            drop-shadow(0 0 24px rgba(167, 139, 250, 0.55));
+  }
+}
 .gen-error {
   padding: 12px 14px;
   border-radius: 8px;

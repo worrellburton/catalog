@@ -78,6 +78,7 @@ def scrape_and_update(product_id: str, url: str):
             "currency": product.get("currency"),
             "images": product.get("images", []),
             "image_url": (product.get("images") or [None])[0],
+            "image_missing_reason": product.get("image_missing_reason"),
             "availability": product.get("availability"),
         }).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
@@ -126,6 +127,42 @@ def scrape_webhook(body: dict):
     return {"status": "queued", "product_id": product_id}
 
 
+# ─── HTTP endpoint: trigger a single product scrape on demand ─────────
+
+@app.function(
+    image=scraper_image,
+    secrets=secrets,
+)
+@modal.fastapi_endpoint(method="POST", label="trigger-scrape")
+def trigger_scrape(body: dict):
+    """
+    POST /trigger-scrape
+
+    Trigger a scrape for a specific product or flush all pending rows.
+
+    Body (specific product):
+        { "product_id": "uuid", "url": "https://..." }
+
+    Body (flush all pending — same as running the cron manually):
+        { "flush_pending": true }
+
+    Called by the admin panel after retry / add-URL so products don't
+    have to wait for the 8am UTC daily cron.
+    """
+    if body.get("flush_pending"):
+        scrape_pending.spawn()
+        return {"status": "flushing_pending"}
+
+    product_id = body.get("product_id")
+    url = body.get("url")
+
+    if not product_id or not url:
+        return {"error": "Provide product_id + url, or flush_pending: true"}, 400
+
+    scrape_and_update.spawn(product_id, url)
+    return {"status": "queued", "product_id": product_id}
+
+
 # ─── Cron: retry pending + failed products every morning at 8am UTC ────
 
 @app.function(
@@ -145,7 +182,7 @@ def scrape_pending():
         .select("id, url")
         .in_("scrape_status", ["pending", "failed"])
         .not_.is_("url", "null")
-        .limit(100)    # increased from 10 — process more per daily run
+        .limit(10)
         .execute()
     )
 
