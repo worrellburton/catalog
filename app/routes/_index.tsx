@@ -134,9 +134,6 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [isWebView] = useState(() =>
-    typeof window !== 'undefined' && navigator.userAgent.includes('CatalogApp')
-  );
   const [isLightMode, setIsLightMode] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
@@ -392,7 +389,7 @@ export default function Home() {
   const isAppVisible = view === 'app';
 
   return (
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''} ${isWebView ? 'is-webview' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
       {view === 'locked' && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
