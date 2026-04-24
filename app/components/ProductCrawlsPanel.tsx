@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, type ProductRow } from '~/services/scrape-product';
 
 const STATUS_FILTERS = ['all', 'done', 'pending', 'processing', 'failed'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
@@ -20,6 +20,51 @@ function timeAgo(iso: string | null): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function ErrorTooltip({ error }: { error: string }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-block', marginTop: 2 }}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      <span style={{
+        color: '#dc2626',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'default',
+        borderBottom: '1px dashed #dc2626',
+      }}>
+        Error
+      </span>
+      {pos && (
+        <div style={{
+          position: 'fixed',
+          top: pos.y - 8,
+          left: pos.x + 12,
+          zIndex: 9999,
+          background: '#1f2937',
+          color: '#f9fafb',
+          padding: '10px 14px',
+          borderRadius: 6,
+          fontSize: 12,
+          minWidth: 250,
+          maxWidth: 360,
+          wordBreak: 'break-word',
+          whiteSpace: 'pre-wrap',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          pointerEvents: 'none',
+          lineHeight: 1.6,
+          transform: 'translateY(-100%)',
+        }}>
+          {error}
+        </div>
+      )}
+    </span>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -51,6 +96,9 @@ export default function ProductCrawlsPanel() {
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [urlInput, setUrlInput] = useState('');
+  const [addingUrl, setAddingUrl] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -85,6 +133,27 @@ export default function ProductCrawlsPanel() {
     setStatusFilter(s);
   };
 
+  const handleAddUrl = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setAddingUrl(true);
+    setAddError(null);
+    try {
+      const newRow = await addProductUrl(trimmed);
+      setUrlInput('');
+      setRows((prev) => [newRow, ...prev]);
+      setTotal((t) => t + 1);
+    } catch (e: unknown) {
+      setAddError(e instanceof Error ? e.message : 'Failed to add URL');
+    } finally {
+      setAddingUrl(false);
+    }
+  };
+
+  const handleAddUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleAddUrl();
+  };
+
   const handleRetry = async (id: string) => {
     setRetrying(id);
     try {
@@ -103,7 +172,7 @@ export default function ProductCrawlsPanel() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
           All products indexed by the site crawler and product scraper agents.
         </p>
@@ -117,6 +186,29 @@ export default function ProductCrawlsPanel() {
           />
           <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
         </form>
+      </div>
+
+      {/* Add product URL */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          type="url"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={handleAddUrlKeyDown}
+          placeholder="Paste a product URL to scrape…"
+          style={{ flex: 1, minWidth: 260, padding: '6px 10px', borderRadius: 6, border: `1px solid ${addError ? '#dc2626' : '#e5e7eb'}`, fontSize: 13 }}
+        />
+        <button
+          className="admin-btn admin-btn-primary"
+          disabled={addingUrl || !urlInput.trim()}
+          onClick={handleAddUrl}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {addingUrl ? 'Adding…' : '+ Add URL'}
+        </button>
+        {addError && (
+          <span style={{ fontSize: 12, color: '#dc2626', width: '100%' }}>{addError}</span>
+        )}
       </div>
 
       {/* Status filter tabs */}
@@ -184,11 +276,7 @@ export default function ProductCrawlsPanel() {
                     </td>
                     <td style={{ fontWeight: 500, maxWidth: 220 }}>
                       {r.name || <span style={{ color: '#9ca3af' }}>—</span>}
-                      {r.scrape_error && (
-                        <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-                          {r.scrape_error}
-                        </div>
-                      )}
+                      {r.scrape_error && <ErrorTooltip error={r.scrape_error} />}
                     </td>
                     <td style={{ maxWidth: 200 }}>
                       {r.url ? (

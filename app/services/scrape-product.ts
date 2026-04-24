@@ -143,3 +143,17 @@ export async function retryProductScrape(productId: string): Promise<void> {
     .eq('id', productId);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Insert a new product URL row with scrape_status='pending' so the scraper picks it up.
+ */
+export async function addProductUrl(url: string): Promise<ProductRow> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('products')
+    .insert({ url, scrape_status: 'pending' })
+    .select('id, name, brand, price, url, image_url, scrape_status, scraped_at, scrape_error, is_active, created_at')
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ProductRow;
+}
