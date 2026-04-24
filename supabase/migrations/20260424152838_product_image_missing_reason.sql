@@ -1,2 +1,0 @@
--- Remote placeholder: applied directly via MCP on 2026-04-24.
--- Content is in 029_product_image_missing_reason.sql

@@ -317,10 +317,9 @@ export default function ProductCrawlsPanel() {
                             />
                           );
                         }
-                        const reason = r.image_missing_reason;
                         return (
                           <div
-                            title={reason || 'No image available'}
+                            title='No image available'
                             style={{
                               width: 36,
                               height: 36,
@@ -330,7 +329,6 @@ export default function ProductCrawlsPanel() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              cursor: reason ? 'help' : 'default',
                               flexShrink: 0,
                             }}
                           >
@@ -346,11 +344,7 @@ export default function ProductCrawlsPanel() {
                     <td style={{ fontWeight: 500, maxWidth: 220 }}>
                       {r.name || <span style={{ color: '#9ca3af' }}>—</span>}
                       {r.scrape_error && <ErrorTooltip error={r.scrape_error} />}
-                      {!r.image_url && !(Array.isArray(r.images) && r.images.length > 0) && r.image_missing_reason && (
-                        <div style={{ fontSize: 11, color: '#f87171', marginTop: 2, fontWeight: 400, lineHeight: 1.3 }}>
-                          {r.image_missing_reason}
-                        </div>
-                      )}
+
                     </td>
                     <td style={{ maxWidth: 200 }}>
                       {r.url ? (
