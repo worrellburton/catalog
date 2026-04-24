@@ -80,7 +80,7 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 - **Never create** `claude/**`, `feature/**`, or any session branch — commit directly to `dev`. If the harness drops you on `claude/*`, switch to `dev` before your first commit.
 - **Never force-push** any of `dev`, `staging`, `main`. Not `--force`, not `--force-with-lease`, not `+refs/...`. If a push is rejected as non-fast-forward, do `git fetch origin <branch> && git rebase origin/<branch>` and resolve locally — never rewrite history on a shared branch.
 - **Before every push** to a shared branch: `git fetch origin <branch> && git rebase origin/<branch>` so you're always building on the latest tip.
-- **`main` is PR-only.** Claude never pushes to `main` directly. The promote flow is `dev` → `staging` (for QA) → `staging` → `main` (via PR), and both merges are *human* actions.
+- **Promote to `main` when the user asks.** When explicitly instructed (e.g. "push to main", "merge to main"), Claude may fast-forward `main` to the current `dev` tip and push. Never rewrite `main`'s history — fast-forward only. If the push would not be a fast-forward, stop and surface the divergence. Keep `staging` fast-forwarded alongside so all three branches stay in sync. Without an explicit instruction, commit only to `dev`.
 - If history has already diverged beyond a rebase (happens when two sessions ran in parallel), **stop and surface the divergence** — do not "fix" it with a force-push. A merge-commit or a manual reconcile is almost always the right call.
 - Small, focused commits with clear prefixes (`feat:`, `fix:`, `refactor:`, `perf:`, `chore:`).
 - `staging` is a real branch on origin. If it doesn't exist, create it from `dev` and push once — don't skip it.
