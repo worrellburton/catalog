@@ -24,6 +24,20 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  // iOS Safari sometimes synthesises a phantom `click` after touchend at
+  // the same screen position. If the menu closes between the original
+  // touch and the synthetic click, that phantom click lands on whichever
+  // LookCard happens to sit underneath — opening that look instead of
+  // running the menu item's action. Wrap each item in this helper so we
+  // can (1) close the menu, (2) defer the action by a frame so the
+  // popout has finished unmounting, and (3) eat the residual event.
+  const runItem = (action: () => void) => (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(false);
+    requestAnimationFrame(() => action());
+  };
+
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
@@ -47,7 +61,15 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
   return (
     <div className="user-menu" ref={menuRef}>
       {open && (
-        <div className="user-menu-popout">
+        <>
+          {/* Full-bleed scrim absorbs the residual touchend that iOS
+              would otherwise replay as a synthetic click on the LookCard
+              behind the menu. Tap-to-dismiss is handled here too. */}
+          <div
+            className="user-menu-scrim"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+          />
+          <div className="user-menu-popout">
           {user && (
             <>
               <div className="user-menu-header">
@@ -63,27 +85,27 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
               <div className="user-menu-divider" />
             </>
           )}
-          <button className="user-menu-item" onClick={() => { onOpenBookmarks(); setOpen(false); }}>
+          <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             <span>Bookmarks</span>
             {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
           </button>
           {onOpenMyLooks && (
-            <button className="user-menu-item" onClick={() => { onOpenMyLooks(); setOpen(false); }}>
+            <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               <span>My Looks</span>
             </button>
           )}
-          <button className="user-menu-item" onClick={() => { navigate('/generate'); setOpen(false); }}>
+          <button className="user-menu-item" onClick={runItem(() => navigate('/generate'))}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             <span>Generate</span>
           </button>
-          <button className="user-menu-item" onClick={() => { navigate('/admin'); setOpen(false); }}>
+          <button className="user-menu-item" onClick={runItem(() => navigate('/admin'))}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
             <span>Admin</span>
           </button>
           {onOpenDecks && (
-            <button className="user-menu-item" onClick={() => { onOpenDecks(); setOpen(false); }}>
+            <button className="user-menu-item" onClick={runItem(onOpenDecks)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
               <span>Decks</span>
             </button>
@@ -91,13 +113,14 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
           {onLogout && (
             <>
               <div className="user-menu-divider" />
-              <button className="user-menu-item" onClick={() => { onLogout(); setOpen(false); }}>
+              <button className="user-menu-item" onClick={runItem(onLogout)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 <span>Log out</span>
               </button>
             </>
           )}
-        </div>
+          </div>
+        </>
       )}
       <button
         className={`user-menu-trigger ${open ? 'active' : ''}`}

@@ -1,4 +1,4 @@
-import { supabase } from '~/utils/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
 
 export interface UserUpload {
   id: string;
@@ -51,23 +51,61 @@ export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = 
  * Upload one reference photo for the current user. Objects land under
  * `<uid>/<timestamp>-<random>.<ext>` so the bucket RLS (which keys off the
  * first folder) keeps each shopper siloed.
+ *
+ * When `onProgress` is provided, we POST directly to the Storage REST API
+ * via XHR — `fetch()` (which supabase-js uses internally) doesn't expose
+ * request-upload progress in any browser today. The XHR path uses the
+ * exact same Authorization + apikey headers supabase-js attaches, so RLS
+ * still applies. Without `onProgress` we fall back to supabase-js so we
+ * inherit any future retry/transport tweaks they ship.
  */
 export async function uploadUserPhoto(
   file: File,
   userId: string,
+  onProgress?: (pct: number) => void,
 ): Promise<{ data: UserUpload | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase not configured' };
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const bucket = 'user-uploads';
 
-  const { error: uploadErr } = await supabase.storage
-    .from('user-uploads')
-    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+  if (onProgress) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { data: null, error: 'Not signed in' };
 
-  if (uploadErr) return { data: null, error: uploadErr.message };
+    const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
+    const xhrErr = await new Promise<string | null>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      // Storage REST requires both Authorization and the apikey header
+      // (the anon key) regardless of whether the user is authed.
+      xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+      xhr.setRequestHeader('x-upsert', 'false');
+      xhr.setRequestHeader('cache-control', '3600');
+      if (file.type) xhr.setRequestHeader('content-type', file.type);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.min(0.99, e.loaded / e.total));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) { onProgress(1); resolve(null); }
+        else resolve(`Upload failed (HTTP ${xhr.status})`);
+      };
+      xhr.onerror = () => resolve('Network error during upload');
+      xhr.onabort = () => resolve('Upload aborted');
+      xhr.send(file);
+    });
+    if (xhrErr) return { data: null, error: xhrErr };
+  } else {
+    const { error: uploadErr } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+    if (uploadErr) return { data: null, error: uploadErr.message };
+  }
 
-  const { data: { publicUrl } } = supabase.storage.from('user-uploads').getPublicUrl(path);
+  const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);
 
   const { data, error } = await supabase
     .from('user_uploads')

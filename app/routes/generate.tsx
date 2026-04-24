@@ -13,6 +13,7 @@ import {
   uploadUserPhoto,
   type UserUpload,
   type UserGeneration,
+  type GenerationProductDetail,
 } from '~/services/user-generations';
 
 /* -----------------------------------------------------------
@@ -84,6 +85,11 @@ export default function GeneratePage() {
   const [existingUploads, setExistingUploads] = useState<UserUpload[]>([]);
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null]);
   const [uploading, setUploading] = useState(false);
+  // Per-slot upload state. `slot` survives the whole upload (a separate
+  // ref was being cleared synchronously, so the old "Uploading…" label
+  // never showed); `pct` is the byte-level progress reported by the XHR
+  // upload.onprogress event.
+  const [uploadProgress, setUploadProgress] = useState<{ slot: number; pct: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,6 +119,23 @@ export default function GeneratePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [generation, setGeneration] = useState<UserGeneration | null>(null);
+  // Products + reference uploads tied to the currently-viewed generation.
+  // Hydrated whenever we land on the result step so the look surfaces the
+  // outfit it was built from (not just the video).
+  const [resultProducts, setResultProducts] = useState<GenerationProductDetail[]>([]);
+  const [resultRefs, setResultRefs] = useState<UserUpload[]>([]);
+  useEffect(() => {
+    if (step !== 'result' || !generation?.id) {
+      setResultProducts([]); setResultRefs([]); return;
+    }
+    let cancelled = false;
+    getGenerationDetail(generation.id).then(d => {
+      if (cancelled) return;
+      setResultProducts(d.products);
+      setResultRefs(d.uploads);
+    });
+    return () => { cancelled = true; };
+  }, [generation?.id, step]);
 
   // Load the user's existing uploads once we know who they are, so the
   // dropzone can offer "use a face you already uploaded" instead of
@@ -236,9 +259,18 @@ export default function GeneratePage() {
 
     setUploading(true);
     setUploadError(null);
+    const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
+      ? targetSlot
+      : slots.indexOf(null);
+    if (slotForProgress >= 0) setUploadProgress({ slot: slotForProgress, pct: 0 });
     const file = files[0];
-    const { data, error } = await uploadUserPhoto(file, user.id);
+    const { data, error } = await uploadUserPhoto(file, user.id, (pct) => {
+      setUploadProgress(prev => prev?.slot === slotForProgress
+        ? { slot: slotForProgress, pct }
+        : prev);
+    });
     setUploading(false);
+    setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (error) { setUploadError(error); return; }
     if (!data) return;
@@ -403,8 +435,10 @@ export default function GeneratePage() {
             <div className="gen-slots">
               {slots.map((uploadId, i) => {
                 const upload = uploadId ? existingUploads.find(u => u.id === uploadId) : null;
+                const isUploadingHere = uploadProgress?.slot === i;
+                const pctHere = isUploadingHere ? Math.round(uploadProgress!.pct * 100) : 0;
                 return (
-                  <div key={i} className={`gen-slot${upload ? ' is-filled' : ''}`}>
+                  <div key={i} className={`gen-slot${upload ? ' is-filled' : ''}${isUploadingHere ? ' is-uploading' : ''}`}>
                     {upload ? (
                       <>
                         <img src={upload.public_url} alt={`Reference ${i + 1}`} />
@@ -420,6 +454,16 @@ export default function GeneratePage() {
                           onClick={() => openPickerForSlot(i)}
                         >Replace</button>
                       </>
+                    ) : isUploadingHere ? (
+                      <div className="gen-slot-uploading">
+                        <div className="gen-slot-uploading-pct">{pctHere}%</div>
+                        <div className="gen-slot-uploading-track">
+                          <div className="gen-slot-uploading-fill" style={{ width: `${pctHere}%` }} />
+                        </div>
+                        <div className="gen-slot-uploading-label">
+                          {pctHere >= 100 ? 'Saving…' : 'Uploading'}
+                        </div>
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -428,9 +472,7 @@ export default function GeneratePage() {
                         disabled={uploading}
                       >
                         <span className="gen-slot-plus">+</span>
-                        <span className="gen-slot-label">
-                          {uploading && pendingSlotRef.current === i ? 'Uploading…' : `Photo ${i + 1}`}
-                        </span>
+                        <span className="gen-slot-label">Photo {i + 1}</span>
                       </button>
                     )}
                   </div>
@@ -624,6 +666,29 @@ export default function GeneratePage() {
             )}
             {generation?.status === 'done' && generation.video_url && (
               <video src={generation.video_url} autoPlay loop muted playsInline className="gen-result-video" />
+            )}
+            {generation?.status === 'done' && resultProducts.length > 0 && (
+              <div className="gen-result-products">
+                <div className="gen-result-products-label">Products in this look</div>
+                <ul className="gen-result-products-list">
+                  {resultProducts.map(p => (
+                    <li key={p.product_id} className="gen-result-product">
+                      {p.product?.image_url ? (
+                        <img src={p.product.image_url} alt="" className="gen-result-product-img" />
+                      ) : (
+                        <div className="gen-result-product-img gen-result-product-img-empty" />
+                      )}
+                      <div className="gen-result-product-text">
+                        {p.role_tag && <span className="gen-result-product-role">{p.role_tag}</span>}
+                        <span className="gen-result-product-name">
+                          {[p.product?.brand, p.product?.name].filter(Boolean).join(' — ') || 'Product'}
+                        </span>
+                        {p.product?.price && <span className="gen-result-product-price">{p.product.price}</span>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {generation && (
               <div className="gen-result-actions">

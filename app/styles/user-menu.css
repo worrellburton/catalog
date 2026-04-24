@@ -112,6 +112,16 @@
   color: rgba(0, 0, 0, 0.8);
 }
 
+/* Full-bleed transparent scrim. Catches the synthetic click that iOS
+   replays after touchend so it can't fall through to a LookCard
+   underneath. Sits below the popout but above everything else. */
+.user-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: transparent;
+}
+
 .user-menu-popout {
   position: absolute;
   bottom: 54px;
@@ -126,6 +136,7 @@
   display: flex;
   flex-direction: column;
   animation: userMenuSlideUp 0.2s ease;
+  z-index: 9999;
 }
 
 @keyframes userMenuSlideUp {

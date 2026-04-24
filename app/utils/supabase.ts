@@ -20,3 +20,10 @@ const supabaseKey =
 console.log('[Supabase] init url:', supabaseUrl?.substring(0, 30) + '...', 'key present:', !!supabaseKey, 'key length:', supabaseKey?.length);
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Re-exported for the few call sites (e.g. XHR-based storage upload with
+// progress events) that need to talk to the Storage REST API directly.
+// supabase-js's StorageClient.url and .supabaseKey are technically
+// private and not safe to read off the client object.
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseKey;
