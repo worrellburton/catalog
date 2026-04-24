@@ -8,6 +8,7 @@ import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
+import { createLook, addProductToLook } from '~/services/manage-looks';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
 
@@ -503,6 +504,8 @@ export default function AdminContent() {
     });
   }, []);
 
+  const [creatingLook, setCreatingLook] = useState(false);
+
   const creatorOptions = useMemo(() =>
     Object.entries(creators).map(([key, c]) => ({ key, displayName: c.displayName, avatar: c.avatar })),
   []);
@@ -693,6 +696,35 @@ export default function AdminContent() {
       (p.brand?.toLowerCase().includes(q))
     );
   }, [crawledProducts, createLookProductSearch]);
+
+  // Generate Look commits the in-memory selection to a new `looks` row and
+  // attaches each picked product via look_products. Selections accumulate in
+  // createLookSelectedProducts — the "query" the admin is building — and
+  // nothing hits the DB until this fires.
+  const handleGenerateLook = useCallback(async () => {
+    if (createLookSelectedProducts.size === 0 || creatingLook) return;
+    const selectedIds = Array.from(createLookSelectedProducts);
+    const firstPicked = crawledProducts.find(cp => selectedIds.includes(cp.id));
+    const title = [createLookStyle, firstPicked?.name].filter(Boolean).join(' · ') || 'Untitled look';
+    setCreatingLook(true);
+    try {
+      const { data: look } = await createLook({ title });
+      for (const productId of selectedIds) {
+        await addProductToLook(look.id, { product_id: productId });
+      }
+      setShowCreateLook(false);
+      setCreateLookSelectedProducts(new Set());
+      setCreateLookProductSearch('');
+      setCreateLookCreator('');
+      setCreateLookLocation('');
+      setCreateLookStyle('Street Style');
+    } catch (err) {
+      console.error('[createLook] failed:', err);
+      alert(`Could not create look: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setCreatingLook(false);
+    }
+  }, [createLookSelectedProducts, creatingLook, crawledProducts, createLookStyle]);
 
   const loadAdProductIds = useCallback(async () => {
     if (!supabase) return;
@@ -2239,9 +2271,12 @@ export default function AdminContent() {
               </button>
               <button
                 className="admin-btn admin-btn-primary"
-                disabled={createLookSelectedProducts.size === 0}
+                disabled={createLookSelectedProducts.size === 0 || creatingLook}
+                onClick={handleGenerateLook}
               >
-                Generate Look ({createLookSelectedProducts.size} product{createLookSelectedProducts.size !== 1 ? 's' : ''})
+                {creatingLook
+                  ? 'Generating…'
+                  : `Generate Look (${createLookSelectedProducts.size} product${createLookSelectedProducts.size !== 1 ? 's' : ''})`}
               </button>
             </div>
           </div>
