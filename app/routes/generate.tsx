@@ -412,7 +412,11 @@ export default function GeneratePage() {
           <section className="gen-step">
             <h2>Your look</h2>
             {!generation && <div className="gen-empty">Loading…</div>}
-            {generation?.status === 'pending' && <div className="gen-spinner">Queued — starting Seedance…</div>}
+            {generation?.status === 'pending' && (
+              <div className="gen-spinner">
+                Queued — starting Catalog <span className="gen-vision">Vision</span>…
+              </div>
+            )}
             {generation?.status === 'generating' && <div className="gen-spinner">Generating — this takes ~60s…</div>}
             {generation?.status === 'failed' && (
               <div className="gen-error">
