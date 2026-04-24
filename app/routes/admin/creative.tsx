@@ -450,11 +450,14 @@ export default function AdminCreative() {
           onMouseLeave={onMouseLeave}
           style={{
             position: 'relative',
-            // CSS columns → masonry layout. Each tile keeps its natural
-            // aspect and stacks vertically within a column; the zoom slider
-            // changes column count so tiles get bigger / smaller.
-            columnCount: cols,
-            columnGap: 8,
+            // CSS Grid (row-first) so tiles flow newest-first in reading
+            // order: top-left is the most recent creative, each row moves
+            // left→right, then down. Previously CSS multi-column flowed
+            // top→bottom per column, which scrambled chronology across
+            // the viewport.
+            display: 'grid',
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+            gap: 8,
             userSelect: 'none',
             flex: fullscreen ? 1 : undefined,
             overflow: fullscreen ? 'auto' : undefined,
@@ -472,8 +475,6 @@ export default function AdminCreative() {
                 data-tile-key={k}
                 style={{
                   position: 'relative',
-                  breakInside: 'avoid',
-                  marginBottom: 8,
                   borderRadius: 6,
                   overflow: 'hidden',
                   background: '#000',
