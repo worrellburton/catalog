@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from '@remix-run/react';
 import { looks, creators, type Look } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import { supabase } from '~/utils/supabase';
+import type { UserUpload, UserGeneration } from '~/services/user-generations';
 
 function findCreatorHandle(displayName: string): string | null {
   for (const [handle, c] of Object.entries(creators)) {
@@ -97,6 +99,34 @@ export default function AdminUserDetail() {
   const lookTable = useSortableTable(tableRows);
   const [expandedLook, setExpandedLook] = useState<number | null>(null);
 
+  // Uploaded reference photos + Generate-page submissions for this user.
+  // The admin page route keys off displayName, so we resolve to auth.users
+  // via the profiles table (username match). When we can't resolve (legacy
+  // static creator names with no auth user), both sections render empty.
+  const [uploads, setUploads] = useState<UserUpload[]>([]);
+  const [generations, setGenerations] = useState<UserGeneration[]>([]);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', decoded)
+        .maybeSingle();
+      const userId = profile?.id as string | undefined;
+      if (!userId || cancelled) return;
+      const [{ data: u }, { data: g }] = await Promise.all([
+        supabase.from('user_uploads').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('user_generations').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+      ]);
+      if (cancelled) return;
+      setUploads((u || []) as UserUpload[]);
+      setGenerations((g || []) as UserGeneration[]);
+    })();
+    return () => { cancelled = true; };
+  }, [decoded]);
+
   const totalProducts = creatorLooks.reduce((sum, l) => sum + l.products.length, 0);
   const uniqueBrands = new Set(creatorLooks.flatMap(l => l.products.map(p => p.brand)));
 
@@ -179,6 +209,41 @@ export default function AdminUserDetail() {
           <div className="admin-detail-card">
             <h3>Recent Clicks</h3>
             <p className="admin-detail-empty">No clicks yet</p>
+          </div>
+        </div>
+      )}
+
+      {uploads.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h2 className="admin-section-title">Uploaded photos ({uploads.length})</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+            {uploads.map(u => (
+              <a key={u.id} href={u.public_url} target="_blank" rel="noopener noreferrer"
+                 style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', background: '#111' }}>
+                <img src={u.public_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {generations.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h2 className="admin-section-title">Generations ({generations.length})</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+            {generations.map(g => (
+              <div key={g.id} style={{
+                borderRadius: 8, overflow: 'hidden', background: '#111',
+                border: '1px solid #eee', padding: 10, fontSize: 12,
+              }}>
+                {g.video_url && (
+                  <video src={g.video_url} muted loop playsInline autoPlay
+                    style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
+                )}
+                <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || '—'}</div>
+                <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
+              </div>
+            ))}
           </div>
         </div>
       )}

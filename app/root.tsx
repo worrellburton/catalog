@@ -31,6 +31,7 @@ import "./styles/admin.css";
 import "./styles/partners.css";
 import "./styles/feed.css";
 import "./styles/my-looks.css";
+import "./styles/generate.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

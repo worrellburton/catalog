@@ -1,0 +1,221 @@
+import { supabase } from '~/utils/supabase';
+
+export interface UserUpload {
+  id: string;
+  user_id: string;
+  storage_path: string;
+  public_url: string;
+  mime_type: string | null;
+  byte_size: number | null;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+}
+
+export interface UserGeneration {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'generating' | 'done' | 'failed';
+  height_cm: number | null;
+  height_label: string | null;
+  style: string;
+  prompt: string | null;
+  veo_model: string | null;
+  video_url: string | null;
+  storage_path: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface GenerationProduct {
+  product_id: string;
+  role_tag: string | null;
+  sort_order: number;
+}
+
+// Eight preset styles — the Generate page dropdown picks one of these; the
+// prompt builder concatenates the label into the Seedance instruction.
+export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = [
+  { value: 'street',      label: 'Street',      blurb: 'Urban candid, natural light, walking shot' },
+  { value: 'editorial',   label: 'Editorial',   blurb: 'High-fashion studio, dramatic lighting' },
+  { value: 'lifestyle',   label: 'Lifestyle',   blurb: 'Casual home / cafe setting, warm tones' },
+  { value: 'studio',      label: 'Studio',      blurb: 'Clean seamless backdrop, product-focused' },
+  { value: 'athletic',    label: 'Athletic',    blurb: 'Gym or outdoor training, dynamic motion' },
+  { value: 'evening',     label: 'Evening',     blurb: 'Night out, bokeh city lights' },
+  { value: 'beach',       label: 'Beach',       blurb: 'Coastal, golden hour, breeze' },
+  { value: 'cinematic',   label: 'Cinematic',   blurb: 'Film look, shallow depth of field' },
+];
+
+/**
+ * Upload one reference photo for the current user. Objects land under
+ * `<uid>/<timestamp>-<random>.<ext>` so the bucket RLS (which keys off the
+ * first folder) keeps each shopper siloed.
+ */
+export async function uploadUserPhoto(
+  file: File,
+  userId: string,
+): Promise<{ data: UserUpload | null; error: string | null }> {
+  if (!supabase) return { data: null, error: 'Supabase not configured' };
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from('user-uploads')
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+
+  if (uploadErr) return { data: null, error: uploadErr.message };
+
+  const { data: { publicUrl } } = supabase.storage.from('user-uploads').getPublicUrl(path);
+
+  const { data, error } = await supabase
+    .from('user_uploads')
+    .insert({
+      user_id: userId,
+      storage_path: path,
+      public_url: publicUrl,
+      mime_type: file.type || null,
+      byte_size: file.size || null,
+    })
+    .select('*')
+    .single();
+
+  if (error) return { data: null, error: error.message };
+  return { data: data as UserUpload, error: null };
+}
+
+export async function listUserUploads(userId: string): Promise<UserUpload[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('user_uploads')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[listUserUploads]', error.message);
+    return [];
+  }
+  return (data || []) as UserUpload[];
+}
+
+export interface CreateGenerationInput {
+  userId: string;
+  uploadIds: string[];
+  products: GenerationProduct[];
+  heightCm: number;
+  heightLabel: string;
+  style: string;
+  prompt: string;
+}
+
+/**
+ * Persist a single Generate submission. Writes the parent row + both pivot
+ * tables in sequence — wrapped in try/rollback so the edge function never
+ * sees a half-built job. Status starts at 'pending'; the generate-look
+ * edge function promotes it through generating → done|failed.
+ */
+export async function createGeneration(
+  input: CreateGenerationInput,
+): Promise<{ data: UserGeneration | null; error: string | null }> {
+  if (!supabase) return { data: null, error: 'Supabase not configured' };
+
+  const { data: gen, error: genErr } = await supabase
+    .from('user_generations')
+    .insert({
+      user_id: input.userId,
+      status: 'pending',
+      height_cm: input.heightCm,
+      height_label: input.heightLabel,
+      style: input.style,
+      prompt: input.prompt,
+    })
+    .select('*')
+    .single();
+
+  if (genErr || !gen) return { data: null, error: genErr?.message || 'Failed to create generation' };
+
+  const uploadRows = input.uploadIds.map((upload_id, i) => ({
+    generation_id: gen.id, upload_id, sort_order: i,
+  }));
+  if (uploadRows.length > 0) {
+    const { error } = await supabase.from('user_generation_uploads').insert(uploadRows);
+    if (error) {
+      await supabase.from('user_generations').delete().eq('id', gen.id);
+      return { data: null, error: error.message };
+    }
+  }
+
+  const productRows = input.products.map((p, i) => ({
+    generation_id: gen.id,
+    product_id: p.product_id,
+    role_tag: p.role_tag,
+    sort_order: p.sort_order ?? i,
+  }));
+  if (productRows.length > 0) {
+    const { error } = await supabase.from('user_generation_products').insert(productRows);
+    if (error) {
+      await supabase.from('user_generations').delete().eq('id', gen.id);
+      return { data: null, error: error.message };
+    }
+  }
+
+  // Fire-and-forget: kick the generate-look edge function so the poller
+  // doesn't have to wait for a cron to pick the pending row up. We ignore
+  // the promise — the row is already persisted and polling handles the
+  // terminal state regardless of whether invoke resolves cleanly.
+  supabase.functions.invoke('generate-look', {
+    body: { generation_id: gen.id },
+  }).catch(err => console.error('[createGeneration] invoke failed:', err));
+
+  return { data: gen as UserGeneration, error: null };
+}
+
+export async function getGeneration(id: string): Promise<UserGeneration | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('user_generations').select('*').eq('id', id).single();
+  if (error) return null;
+  return data as UserGeneration;
+}
+
+export async function listUserGenerations(userId: string): Promise<UserGeneration[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('user_generations')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  return (data || []) as UserGeneration[];
+}
+
+/**
+ * Build the Seedance prompt from the user's picks. Each product gets a
+ * role-tagged line so the model plants it on the right body slot; the
+ * height is emphasised verbatim; the style preset wraps the whole thing.
+ */
+export function buildGenerationPrompt(opts: {
+  heightLabel: string;
+  style: string;
+  productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
+}): string {
+  const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
+  const styleLabel = stylePreset ? `${stylePreset.label} — ${stylePreset.blurb}` : opts.style;
+
+  const productText = opts.productLines
+    .map((p, i) => {
+      const role = p.role_tag ? `${p.role_tag}` : `item ${i + 1}`;
+      const name = [p.brand, p.name].filter(Boolean).join(' ').trim() || 'product';
+      return `This is the ${role}: ${name}.`;
+    })
+    .join(' ');
+
+  return [
+    `Generate a ${styleLabel} fashion video.`,
+    `Subject is ${opts.heightLabel} tall; keep proportions realistic.`,
+    `Use the uploaded reference photo for the face and skin tone. Do not alter the subject's facial features.`,
+    `Dress the subject in exactly these items, each placed on the correct body slot:`,
+    productText,
+    `Render a 5-second portrait video. Natural motion, editorial grade, no text overlays.`,
+  ].join(' ');
+}

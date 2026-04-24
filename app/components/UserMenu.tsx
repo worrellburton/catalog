@@ -74,6 +74,10 @@ export default function UserMenu({ onOpenBookmarks, onOpenMyLooks, bookmarkCount
               <span>My Looks</span>
             </button>
           )}
+          <button className="user-menu-item" onClick={() => { navigate('/generate'); setOpen(false); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span>Generate</span>
+          </button>
           <button className="user-menu-item" onClick={() => { navigate('/admin'); setOpen(false); }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
             <span>Admin</span>
