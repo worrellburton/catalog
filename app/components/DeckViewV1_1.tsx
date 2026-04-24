@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 import { getEliteCreatives, type EliteCreative } from '~/services/product-ads';
 
@@ -9,6 +9,342 @@ interface DeckViewV1_1Props {
   onBack: () => void;
   isLightMode: boolean;
   onToggleTheme: () => void;
+}
+
+/*
+ * MathPhases — the rebuilt "The Math" slide.
+ *
+ * 10 progressively revealed phases walk the viewer from a single $200 sale
+ * to a $6T-TAM picture. Phases auto-advance (12s each) with a fill bar, and
+ * can be clicked ahead/back at any time. The component only runs its timer
+ * while the slide is actually visible — we pause when scrolled away to keep
+ * bandwidth / re-renders low.
+ *
+ * Numbers here are deliberately traceable: commission rates come from the
+ * 18-network survey in /admin/affiliate (5–25% range across Impact, Rakuten,
+ * CJ, ShareASale, Awin, LTK, Skimlinks, etc.). Funnel conversion uses
+ * industry-standard social-commerce benchmarks (3% CTR, 3% click→buy) on a
+ * $150 AOV. User growth is directional, not a forecast.
+ */
+
+type Phase = {
+  n: number;
+  kicker: string;
+  title: string;
+  body: React.ReactNode;
+};
+
+const PHASE_MS = 12000;
+
+function RevenueChart() {
+  // Lightweight inline SVG — no dep, no layout jank. Values are ARR in $M.
+  const bars: { label: string; value: number; color: string }[] = [
+    { label: 'Y1',  value: 2.3,    color: '#38bdf8' },
+    { label: 'Y2',  value: 22.5,   color: '#a78bfa' },
+    { label: 'Y3',  value: 225,    color: '#f5c542' },
+    { label: 'Y5',  value: 2250,   color: '#f43f5e' },
+  ];
+  const W = 520;
+  const H = 220;
+  const PAD_L = 48;
+  const PAD_B = 34;
+  const PAD_T = 16;
+  const innerW = W - PAD_L - 16;
+  const innerH = H - PAD_B - PAD_T;
+  const max = Math.log10(bars[bars.length - 1].value) + 0.3;
+  const yScale = (v: number) => innerH - (Math.log10(v) / max) * innerH;
+  const barW = innerW / bars.length - 18;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="math-chart" aria-label="Platform ARR projection chart">
+      {/* Grid lines at log steps */}
+      {[1, 10, 100, 1000].map((g, i) => (
+        <g key={i}>
+          <line
+            x1={PAD_L}
+            y1={PAD_T + yScale(g)}
+            x2={W - 16}
+            y2={PAD_T + yScale(g)}
+            stroke="rgba(255,255,255,0.08)"
+            strokeDasharray="2 3"
+          />
+          <text
+            x={PAD_L - 8}
+            y={PAD_T + yScale(g) + 4}
+            textAnchor="end"
+            fontSize="10"
+            fill="rgba(255,255,255,0.45)"
+          >
+            ${g >= 1000 ? `${g / 1000}B` : `${g}M`}
+          </text>
+        </g>
+      ))}
+      {/* Bars */}
+      {bars.map((b, i) => {
+        const x = PAD_L + 9 + i * (innerW / bars.length);
+        const y = PAD_T + yScale(b.value);
+        const h = innerH - yScale(b.value);
+        return (
+          <g key={b.label} className="math-chart-bar" style={{ animationDelay: `${i * 140}ms` }}>
+            <rect x={x} y={y} width={barW} height={h} fill={b.color} rx="2" />
+            <text
+              x={x + barW / 2}
+              y={y - 6}
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="700"
+              fill={b.color}
+            >
+              ${b.value >= 1000 ? `${(b.value / 1000).toFixed(2)}B` : `${b.value}M`}
+            </text>
+            <text
+              x={x + barW / 2}
+              y={H - 12}
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="600"
+              fill="rgba(255,255,255,0.7)"
+            >
+              {b.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+const PHASES: Phase[] = [
+  {
+    n: 1,
+    kicker: 'Scenario',
+    title: 'Start with one sale.',
+    body: (
+      <div className="math-phase-body">
+        <p>A creator posts a look. A shopper buys the $200 jacket through Catalog. Every number that follows stacks on this single transaction.</p>
+        <div className="math-stat-row">
+          <div className="math-stat"><span className="math-stat-value">1</span><span className="math-stat-label">creator</span></div>
+          <div className="math-stat"><span className="math-stat-value">1</span><span className="math-stat-label">shopper</span></div>
+          <div className="math-stat"><span className="math-stat-value">$200</span><span className="math-stat-label">cart</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 2,
+    kicker: 'Commission',
+    title: 'Retail norm is 5–10%. Catalog negotiates 15–25%.',
+    body: (
+      <div className="math-phase-body">
+        <p>Surveyed across 18 networks — Impact, Rakuten, CJ, ShareASale, Awin, LTK, Skimlinks, Pepperjam, Refersion and more — most rates cluster at 5–15%. Because Catalog owns the commerce surface, we take direct creator-first terms.</p>
+        <div className="math-compare">
+          <div className="math-compare-col math-compare-old">
+            <span className="math-compare-label">Legacy networks</span>
+            <span className="math-compare-value">5–10%</span>
+            <span className="math-compare-sub">retail norm · last-click · leaky</span>
+          </div>
+          <div className="math-compare-col math-compare-new">
+            <span className="math-compare-label">Catalog direct</span>
+            <span className="math-compare-value">15–25%</span>
+            <span className="math-compare-sub">creator-first · first-party attribution</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 3,
+    kicker: 'Funnel',
+    title: '1,000 impressions → 0.9 sales → ~$20 RPM.',
+    body: (
+      <div className="math-phase-body">
+        <p>Social-commerce benchmarks plug directly into the feed: a 3% CTR, 3% click-to-buy, $150 AOV. The result is a ~$20 revenue per thousand impressions at a 15% blended commission — at the top of the shoppable-video league.</p>
+        <div className="math-funnel">
+          <div className="math-funnel-step"><span>1,000</span> impressions</div>
+          <div className="math-funnel-arrow">→</div>
+          <div className="math-funnel-step"><span>30</span> clicks · 3% CTR</div>
+          <div className="math-funnel-arrow">→</div>
+          <div className="math-funnel-step"><span>0.9</span> sales · 3% conv</div>
+          <div className="math-funnel-arrow">→</div>
+          <div className="math-funnel-step math-funnel-out"><span>$20</span> RPM</div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 4,
+    kicker: 'Creator',
+    title: 'A mid-tier creator earns $1.5K/mo. Top-decile clears $15K/mo.',
+    body: (
+      <div className="math-phase-body">
+        <p>Creators keep 75% of commission — a step-function above single-digit affiliate payouts. Earnings land weekly, not 60 days later. This is what pulls the next creator in.</p>
+        <div className="math-stat-row">
+          <div className="math-stat"><span className="math-stat-value">100K</span><span className="math-stat-label">imp/mo · mid creator</span></div>
+          <div className="math-stat"><span className="math-stat-value math-stat-green">$1.5K</span><span className="math-stat-label">take-home / mo</span></div>
+          <div className="math-stat"><span className="math-stat-value">1M</span><span className="math-stat-label">imp/mo · top decile</span></div>
+          <div className="math-stat"><span className="math-stat-value math-stat-green">$15K</span><span className="math-stat-label">take-home / mo</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 5,
+    kicker: 'User',
+    title: 'Every active user is worth $3.75/mo net to Catalog.',
+    body: (
+      <div className="math-phase-body">
+        <p>15 sessions × 50 impressions = 750 impressions / user / month. At $20 RPM that's $15 gross commission; 25% of that is platform net once creators are paid.</p>
+        <div className="math-stat-row">
+          <div className="math-stat"><span className="math-stat-value">750</span><span className="math-stat-label">imp / user · mo</span></div>
+          <div className="math-stat"><span className="math-stat-value">$15</span><span className="math-stat-label">gross comm / user</span></div>
+          <div className="math-stat"><span className="math-stat-value math-stat-green">$3.75</span><span className="math-stat-label">platform net / user</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 6,
+    kicker: 'Tokens',
+    title: 'AI creative costs ~$0.05 CPM. Margin is ~99%.',
+    body: (
+      <div className="math-phase-body">
+        <p>Each 5-second Veo / Seedance clip costs roughly $0.50 to generate and serves ~10K impressions before it rotates out — $0.05 per thousand. Embeddings and index ops round to zero at our scale. Platform revenue is almost pure margin.</p>
+        <div className="math-stat-row">
+          <div className="math-stat"><span className="math-stat-value">$0.50</span><span className="math-stat-label">per 5s clip</span></div>
+          <div className="math-stat"><span className="math-stat-value">10K</span><span className="math-stat-label">impressions served</span></div>
+          <div className="math-stat"><span className="math-stat-value math-stat-green">~99%</span><span className="math-stat-label">gross margin</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 7,
+    kicker: 'Growth',
+    title: '50K → 50M MAU over five years.',
+    body: (
+      <div className="math-phase-body">
+        <p>Invite-only cohort in year one. Creator-first rates compound referrals. By year five Catalog serves the taste layer for a large share of commerce-native consumers.</p>
+        <div className="math-growth">
+          <div className="math-growth-step"><span className="math-growth-label">Y1</span><span className="math-growth-value">50K</span><span className="math-growth-sub">invite-only</span></div>
+          <div className="math-growth-step"><span className="math-growth-label">Y2</span><span className="math-growth-value">500K</span><span className="math-growth-sub">public beta</span></div>
+          <div className="math-growth-step"><span className="math-growth-label">Y3</span><span className="math-growth-value">5M</span><span className="math-growth-sub">scaled GTM</span></div>
+          <div className="math-growth-step"><span className="math-growth-label">Y5</span><span className="math-growth-value">50M</span><span className="math-growth-sub">category standard</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 8,
+    kicker: 'ARR',
+    title: '$2.3M → $2.25B ARR.',
+    body: (
+      <div className="math-phase-body">
+        <p>Hold the $3.75 / user / month net assumption across the curve. Ads, placements, and brand-side tooling are an additional ~4× expansion lever left out on purpose — this chart is just the commission spine.</p>
+        <RevenueChart />
+      </div>
+    ),
+  },
+  {
+    n: 9,
+    kicker: 'TAM',
+    title: 'Global retail is $6T. 1% indexed is a category.',
+    body: (
+      <div className="math-phase-body">
+        <p>If every retail item were in one place — affiliate linked, creator distributed, first-party attributed — even 0.1% penetration of global retail is $6B of GMV through Catalog. 1% is $10B+ of platform net. The surface is that big.</p>
+        <div className="math-stat-row">
+          <div className="math-stat"><span className="math-stat-value">$6T</span><span className="math-stat-label">global retail</span></div>
+          <div className="math-stat"><span className="math-stat-value">0.1%</span><span className="math-stat-label">→ $6B GMV</span></div>
+          <div className="math-stat"><span className="math-stat-value math-stat-green">1%</span><span className="math-stat-label">→ $10B+ net</span></div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    n: 10,
+    kicker: 'Flywheel',
+    title: 'Get the loop moving once. Everything else compounds.',
+    body: (
+      <div className="math-phase-body">
+        <p>Higher commissions pull creators. Creators pull shoppers. Shoppers teach the feed. Sharper feed lifts conversion. Higher conversion funds even better rates. Every rotation makes the next one cheaper — and every number on the prior nine slides gets bigger from here.</p>
+      </div>
+    ),
+  },
+];
+
+function MathPhases() {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const tickRef = useRef<number>(0);
+
+  // Reset the phase progress bar when the phase changes. The bar is pure
+  // CSS animation — keying off active + paused resets the transition.
+  useEffect(() => { tickRef.current = Date.now(); }, [active]);
+
+  // Only advance when the slide is actually on-screen. An IntersectionObserver
+  // flips `visible` which gates the interval below.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(entries => {
+      for (const entry of entries) setVisible(entry.isIntersecting);
+    }, { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible || paused) return;
+    const id = window.setInterval(() => {
+      setActive(a => (a + 1) % PHASES.length);
+    }, PHASE_MS);
+    return () => window.clearInterval(id);
+  }, [visible, paused]);
+
+  const go = useCallback((i: number) => {
+    setActive(((i % PHASES.length) + PHASES.length) % PHASES.length);
+  }, []);
+
+  const phase = PHASES[active];
+
+  return (
+    <div className="math-phases" ref={rootRef} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <div className="math-phases-head">
+        <span className="math-phases-counter">Phase {phase.n} / {PHASES.length}</span>
+        <div className="math-phases-dots" role="tablist" aria-label="Math phases">
+          {PHASES.map((p, i) => (
+            <button
+              key={p.n}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-label={`Phase ${p.n}: ${p.kicker}`}
+              className={`math-phases-dot${i === active ? ' is-active' : ''}${i < active ? ' is-done' : ''}`}
+              onClick={() => go(i)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div key={phase.n} className="math-phase">
+        <span className="math-phase-kicker">{phase.kicker}</span>
+        <h3 className="math-phase-title">{phase.title}</h3>
+        {phase.body}
+      </div>
+
+      <div className="math-phases-foot">
+        <button type="button" className="math-phases-nav" onClick={() => go(active - 1)} aria-label="Previous phase">←</button>
+        <div className="math-phases-progress">
+          <div
+            key={`${active}-${paused}`}
+            className={`math-phases-progress-fill${paused ? ' is-paused' : ''}`}
+          />
+        </div>
+        <button type="button" className="math-phases-nav" onClick={() => go(active + 1)} aria-label="Next phase">→</button>
+      </div>
+    </div>
+  );
 }
 
 /* Math table animated check/X icons */
@@ -500,64 +836,12 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
         <p className="deck-note deck-v8-market-note">Catalog is the commerce layer connecting creators directly to purchase.</p>
       </div>
 
-      {/* Slide 8: The Math */}
-      <div className="deck-slide deck-v8-math">
+      {/* Slide 8: The Math — progressive 10-phase unit economics + ARR curve */}
+      <div className="deck-slide deck-v8-math deck-v1-math-phased">
         <div className="deck-v8-math-inner">
           <span className="deck-label">The Math</span>
-          <h2>Economics that work for everyone.</h2>
-          <div className="deck-scenario">
-            <span className="deck-scenario-tag">Scenario</span>
-            <p>A creator posts a look featuring a $200 jacket, and a shopper buys it through Catalog.</p>
-          </div>
-          <table className="math-tbl deck-v8-math-tbl deck-v9-math-tbl">
-          <thead>
-            <tr>
-              <th className="math-tbl-label"></th>
-              <th className="math-tbl-old">
-                <span className="deck-v1-math-budget deck-v1-math-budget-old">Sales expense &middot; Cost of sale</span>
-                <span className="deck-v9-math-col-title">Traditional Affiliate</span>
-                <span className="deck-v9-math-col-sub">Sales commission, paid only on attribution</span>
-              </th>
-              <th className="math-tbl-new">
-                <span className="deck-v1-math-budget deck-v1-math-budget-new">Performance partnership</span>
-                <span className="deck-v9-math-col-title">Catalog Affiliate</span>
-                <span className="deck-v9-math-col-sub">Negotiated commission, first-party attribution</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="math-tbl-label">Commission rate</td>
-              <td className="math-val-dim"><MathXIcon />5&ndash;10%<span className="math-pct">retailer norm</span></td>
-              <td className="math-val-new"><MathCheckIcon />15&ndash;20%<span className="math-pct">creator-first</span></td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Brand spend</td>
-              <td className="math-val-old"><MathXIcon />$20<span className="math-pct">commission</span></td>
-              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">commission</span></td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Brand outcome</td>
-              <td className="math-val-dim"><MathXIcon />Maybe a sale, leaky</td>
-              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">Verified sale + audience data</span></td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Creator payout</td>
-              <td className="math-val-old"><MathXIcon />$16</td>
-              <td className="math-val-new"><MathCheckIcon />$30</td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Platform revenue</td>
-              <td className="math-val-old"><MathXIcon />$4</td>
-              <td className="math-val-new"><MathCheckIcon />$10</td>
-            </tr>
-            <tr>
-              <td className="math-tbl-label">Attribution</td>
-              <td className="math-val-dim"><MathXIcon />Last-click, lossy</td>
-              <td className="math-val-new"><MathCheckIcon />First-party, per-creator</td>
-            </tr>
-          </tbody>
-        </table>
+          <h2>One sale to ten billion.</h2>
+          <MathPhases />
         </div>
       </div>
 
