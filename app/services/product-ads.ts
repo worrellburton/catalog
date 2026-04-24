@@ -77,10 +77,13 @@ export async function getLiveAds(): Promise<ProductAd[]> {
   // Also respect the product.is_active toggle — deactivating a product
   // should immediately pull its ads off the feed without requiring the
   // admin to individually pause each ad.
+  // is_elite gate: the consumer feed is now curated — only hand-picked
+  // creatives from the admin Creative view appear in the grid.
   const { data, error } = await supabase
     .from('product_ads')
     .select(AD_SELECT)
     .eq('status', 'live')
+    .eq('is_elite', true)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });

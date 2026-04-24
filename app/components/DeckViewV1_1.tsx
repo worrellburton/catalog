@@ -519,42 +519,42 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
                 <span className="deck-v9-math-col-sub">Sales commission, paid only on attribution</span>
               </th>
               <th className="math-tbl-new">
-                <span className="deck-v1-math-budget deck-v1-math-budget-new">Advertising &middot; Marketing budget</span>
-                <span className="deck-v9-math-col-title">Catalog (Fixed ROAS)</span>
-                <span className="deck-v9-math-col-sub">Ad spend, locks in a guaranteed sale</span>
+                <span className="deck-v1-math-budget deck-v1-math-budget-new">Performance partnership</span>
+                <span className="deck-v9-math-col-title">Catalog Affiliate</span>
+                <span className="deck-v9-math-col-sub">Negotiated commission, first-party attribution</span>
               </th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="math-tbl-label">Cost type</td>
-              <td className="math-val-dim"><MathXIcon />Variable, post-sale</td>
-              <td className="math-val-new"><MathCheckIcon />Fixed, pre-paid media</td>
+              <td className="math-tbl-label">Commission rate</td>
+              <td className="math-val-dim"><MathXIcon />5&ndash;10%<span className="math-pct">retailer norm</span></td>
+              <td className="math-val-new"><MathCheckIcon />15&ndash;20%<span className="math-pct">creator-first</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Brand spend</td>
               <td className="math-val-old"><MathXIcon />$20<span className="math-pct">commission</span></td>
-              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">ad placement</span></td>
+              <td className="math-val-new"><MathCheckIcon />$40<span className="math-pct">commission</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Brand outcome</td>
-              <td className="math-val-dim"><MathXIcon />Maybe a sale</td>
-              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">$200 sale, 5x guaranteed</span></td>
+              <td className="math-val-dim"><MathXIcon />Maybe a sale, leaky</td>
+              <td className="math-val-new"><MathCheckIcon /><span className="fire-text">Verified sale + audience data</span></td>
             </tr>
             <tr>
               <td className="math-tbl-label">Creator payout</td>
               <td className="math-val-old"><MathXIcon />$16</td>
-              <td className="math-val-new"><MathCheckIcon />$20</td>
+              <td className="math-val-new"><MathCheckIcon />$30</td>
             </tr>
             <tr>
               <td className="math-tbl-label">Platform revenue</td>
               <td className="math-val-old"><MathXIcon />$4</td>
-              <td className="math-val-new"><MathCheckIcon />$20</td>
+              <td className="math-val-new"><MathCheckIcon />$10</td>
             </tr>
             <tr>
               <td className="math-tbl-label">Attribution</td>
               <td className="math-val-dim"><MathXIcon />Last-click, lossy</td>
-              <td className="math-val-new"><MathCheckIcon />Full-funnel, per-creator</td>
+              <td className="math-val-new"><MathCheckIcon />First-party, per-creator</td>
             </tr>
           </tbody>
         </table>
