@@ -233,7 +233,10 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
 
   const generation = (genRes.data ?? null) as UserGeneration | null;
 
-  const uploadRows = (uploadsRes.data || []) as Array<{
+  // Supabase types joined FK targets as arrays even for single-FK joins; at
+  // runtime they come through as a single object (or null). Cast through
+  // `unknown` so TS trusts the shape we actually receive.
+  const uploadRows = (uploadsRes.data || []) as unknown as Array<{
     upload_id: string;
     sort_order: number;
     user_uploads: UserUpload | null;
@@ -241,7 +244,7 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
   const uploadIds = uploadRows.map(r => r.upload_id);
   const uploads = uploadRows.map(r => r.user_uploads).filter((u): u is UserUpload => !!u);
 
-  const products = ((productsRes.data || []) as Array<{
+  const products = ((productsRes.data || []) as unknown as Array<{
     product_id: string;
     role_tag: string | null;
     sort_order: number;

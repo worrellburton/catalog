@@ -84,38 +84,109 @@
   line-height: 1.55;
 }
 
-.gen-dropzone {
-  padding: 32px 16px;
+.gen-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.gen-slot {
+  position: relative;
+  aspect-ratio: 3 / 4;
   border-radius: 14px;
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.03);
-  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+}
+.gen-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gen-slot-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  text-align: center;
-  transition: background 0.15s, border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.gen-dropzone:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.4);
+.gen-slot-empty:hover:not(:disabled) {
+  border-color: rgba(245, 197, 66, 0.6);
+  background: rgba(245, 197, 66, 0.06);
+  color: #f5c542;
 }
-.gen-dropzone-icon {
-  width: 42px;
-  height: 42px;
+.gen-slot-empty:disabled { opacity: 0.5; cursor: wait; }
+.gen-slot-plus {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.18);
+  background: rgba(245, 197, 66, 0.16);
   color: #f5c542;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 500;
 }
-.gen-dropzone-text {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+.gen-slot-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gen-slot.is-filled { border: 2px solid rgba(245, 197, 66, 0.85); }
+.gen-slot-clear {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.gen-slot-clear:hover { background: rgba(0, 0, 0, 0.85); }
+.gen-slot-replace {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.gen-slot:hover .gen-slot-replace { opacity: 1; }
+
+.gen-create-btn {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 .gen-sectionlabel {
   margin: 20px 0 10px;
@@ -432,6 +503,108 @@
   background: #111;
   display: block;
   margin: 0 auto;
+}
+
+.gen-result-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+/* "Your looks" grid — past generations, rendered at the bottom of the
+   Photos step. Cards are portrait 3:4 so the muted first frame reads
+   like a poster and doesn't eat the page. */
+.gen-lookgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.gen-lookcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gen-lookcard-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 12px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: #111;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.gen-lookcard-media:hover { transform: translateY(-1px); }
+.gen-lookcard-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gen-lookcard-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 45%, rgba(96, 165, 250, 0.12), rgba(0, 0, 0, 0));
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+}
+.gen-lookcard-placeholder.is-failed {
+  color: #fca5a5;
+  background: rgba(244, 63, 94, 0.08);
+}
+.gen-lookcard-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+}
+.gen-lookcard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gen-lookcard-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gen-lookcard-regen {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(245, 197, 66, 0.14);
+  color: #f5c542;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.gen-lookcard-regen:hover {
+  background: rgba(245, 197, 66, 0.28);
 }
 
 @media (max-width: 640px) {
