@@ -1,0 +1,2 @@
+-- Remote placeholder: applied directly via MCP on 2026-04-24.
+-- Adds is_active boolean column to products table.

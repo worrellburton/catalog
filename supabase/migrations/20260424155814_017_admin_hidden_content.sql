@@ -1,0 +1,2 @@
+-- Remote placeholder: applied directly via MCP on 2026-04-24.
+-- Content is in 017_admin_hidden_content.sql
