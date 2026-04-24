@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 import { getEliteCreatives, type EliteCreative } from '~/services/product-ads';
 
@@ -26,15 +26,6 @@ interface DeckViewV1_1Props {
  * industry-standard social-commerce benchmarks (3% CTR, 3% click→buy) on a
  * $150 AOV. User growth is directional, not a forecast.
  */
-
-type Phase = {
-  n: number;
-  kicker: string;
-  title: string;
-  body: React.ReactNode;
-};
-
-const PHASE_MS = 12000;
 
 function RevenueChart() {
   // Lightweight inline SVG — no dep, no layout jank. Values are ARR in $M.
@@ -114,29 +105,30 @@ function RevenueChart() {
   );
 }
 
-const PHASES: Phase[] = [
-  {
-    n: 1,
-    kicker: 'Scenario',
-    title: 'Start with one sale.',
-    body: (
-      <div className="math-phase-body">
-        <p>A creator posts a look. A shopper buys the $200 jacket through Catalog. Every number that follows stacks on this single transaction.</p>
+
+// All 10 beats rendered on a single slide: top headline, commission
+// compare, funnel, creator/user/token stat strip, ARR chart, growth row,
+// TAM + flywheel close. No timers, no carousel — everything visible at once.
+function MathPhases() {
+  return (
+    <div className="math-phases math-phases-static">
+      <div className="math-band math-band-scenario">
+        <div>
+          <span className="math-phase-kicker">Scenario</span>
+          <h3 className="math-phase-title">Start with one $200 sale.</h3>
+          <p className="math-phase-lede">Every number below stacks on one shopper, one creator, one cart.</p>
+        </div>
         <div className="math-stat-row">
           <div className="math-stat"><span className="math-stat-value">1</span><span className="math-stat-label">creator</span></div>
           <div className="math-stat"><span className="math-stat-value">1</span><span className="math-stat-label">shopper</span></div>
           <div className="math-stat"><span className="math-stat-value">$200</span><span className="math-stat-label">cart</span></div>
         </div>
       </div>
-    ),
-  },
-  {
-    n: 2,
-    kicker: 'Commission',
-    title: 'Retail norm is 5–10%. Catalog negotiates 15–25%.',
-    body: (
-      <div className="math-phase-body">
-        <p>Surveyed across 18 networks — Impact, Rakuten, CJ, ShareASale, Awin, LTK, Skimlinks, Pepperjam, Refersion and more — most rates cluster at 5–15%. Because Catalog owns the commerce surface, we take direct creator-first terms.</p>
+
+      <div className="math-band">
+        <span className="math-phase-kicker">Commission</span>
+        <h3 className="math-phase-title">Retail norm 5–10%. Catalog negotiates 15–25%.</h3>
+        <p className="math-phase-lede">Surveyed across 18 networks — Impact, Rakuten, CJ, ShareASale, Awin, LTK, Skimlinks, Pepperjam, Refersion, Howl, MagicLinks and more. Because Catalog owns the commerce surface, we take direct creator-first terms.</p>
         <div className="math-compare">
           <div className="math-compare-col math-compare-old">
             <span className="math-compare-label">Legacy networks</span>
@@ -150,15 +142,11 @@ const PHASES: Phase[] = [
           </div>
         </div>
       </div>
-    ),
-  },
-  {
-    n: 3,
-    kicker: 'Funnel',
-    title: '1,000 impressions → 0.9 sales → ~$20 RPM.',
-    body: (
-      <div className="math-phase-body">
-        <p>Social-commerce benchmarks plug directly into the feed: a 3% CTR, 3% click-to-buy, $150 AOV. The result is a ~$20 revenue per thousand impressions at a 15% blended commission — at the top of the shoppable-video league.</p>
+
+      <div className="math-band">
+        <span className="math-phase-kicker">Funnel</span>
+        <h3 className="math-phase-title">1,000 impressions → 0.9 sales → ~$20 RPM.</h3>
+        <p className="math-phase-lede">Social-commerce benchmarks plug into the feed: 3% CTR, 3% click-to-buy, $150 AOV, 15% blended commission. At the top of the shoppable-video league.</p>
         <div className="math-funnel">
           <div className="math-funnel-step"><span>1,000</span> impressions</div>
           <div className="math-funnel-arrow">→</div>
@@ -169,179 +157,65 @@ const PHASES: Phase[] = [
           <div className="math-funnel-step math-funnel-out"><span>$20</span> RPM</div>
         </div>
       </div>
-    ),
-  },
-  {
-    n: 4,
-    kicker: 'Creator',
-    title: 'A mid-tier creator earns $1.5K/mo. Top-decile clears $15K/mo.',
-    body: (
-      <div className="math-phase-body">
-        <p>Creators keep 75% of commission — a step-function above single-digit affiliate payouts. Earnings land weekly, not 60 days later. This is what pulls the next creator in.</p>
-        <div className="math-stat-row">
-          <div className="math-stat"><span className="math-stat-value">100K</span><span className="math-stat-label">imp/mo · mid creator</span></div>
-          <div className="math-stat"><span className="math-stat-value math-stat-green">$1.5K</span><span className="math-stat-label">take-home / mo</span></div>
-          <div className="math-stat"><span className="math-stat-value">1M</span><span className="math-stat-label">imp/mo · top decile</span></div>
-          <div className="math-stat"><span className="math-stat-value math-stat-green">$15K</span><span className="math-stat-label">take-home / mo</span></div>
+
+      <div className="math-band math-band-three">
+        <div className="math-subband">
+          <span className="math-phase-kicker">Creator</span>
+          <h3 className="math-phase-subtitle">$1.5K/mo mid. $15K/mo top-decile.</h3>
+          <p className="math-phase-lede">75% take-rate, weekly payouts.</p>
+          <div className="math-stat-row">
+            <div className="math-stat"><span className="math-stat-value">100K</span><span className="math-stat-label">imp / mo · mid</span></div>
+            <div className="math-stat"><span className="math-stat-value math-stat-green">$1.5K</span><span className="math-stat-label">take-home</span></div>
+          </div>
         </div>
-      </div>
-    ),
-  },
-  {
-    n: 5,
-    kicker: 'User',
-    title: 'Every active user is worth $3.75/mo net to Catalog.',
-    body: (
-      <div className="math-phase-body">
-        <p>15 sessions × 50 impressions = 750 impressions / user / month. At $20 RPM that's $15 gross commission; 25% of that is platform net once creators are paid.</p>
-        <div className="math-stat-row">
-          <div className="math-stat"><span className="math-stat-value">750</span><span className="math-stat-label">imp / user · mo</span></div>
-          <div className="math-stat"><span className="math-stat-value">$15</span><span className="math-stat-label">gross comm / user</span></div>
-          <div className="math-stat"><span className="math-stat-value math-stat-green">$3.75</span><span className="math-stat-label">platform net / user</span></div>
+        <div className="math-subband">
+          <span className="math-phase-kicker">User</span>
+          <h3 className="math-phase-subtitle">$3.75 net / user / month.</h3>
+          <p className="math-phase-lede">15 sessions × 50 imp = 750 imp / user / month.</p>
+          <div className="math-stat-row">
+            <div className="math-stat"><span className="math-stat-value">$15</span><span className="math-stat-label">gross / user</span></div>
+            <div className="math-stat"><span className="math-stat-value math-stat-green">$3.75</span><span className="math-stat-label">net / user</span></div>
+          </div>
         </div>
-      </div>
-    ),
-  },
-  {
-    n: 6,
-    kicker: 'Tokens',
-    title: 'AI creative costs ~$0.05 CPM. Margin is ~99%.',
-    body: (
-      <div className="math-phase-body">
-        <p>Each 5-second Veo / Seedance clip costs roughly $0.50 to generate and serves ~10K impressions before it rotates out — $0.05 per thousand. Embeddings and index ops round to zero at our scale. Platform revenue is almost pure margin.</p>
-        <div className="math-stat-row">
-          <div className="math-stat"><span className="math-stat-value">$0.50</span><span className="math-stat-label">per 5s clip</span></div>
-          <div className="math-stat"><span className="math-stat-value">10K</span><span className="math-stat-label">impressions served</span></div>
-          <div className="math-stat"><span className="math-stat-value math-stat-green">~99%</span><span className="math-stat-label">gross margin</span></div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    n: 7,
-    kicker: 'Growth',
-    title: '50K → 50M MAU over five years.',
-    body: (
-      <div className="math-phase-body">
-        <p>Invite-only cohort in year one. Creator-first rates compound referrals. By year five Catalog serves the taste layer for a large share of commerce-native consumers.</p>
-        <div className="math-growth">
-          <div className="math-growth-step"><span className="math-growth-label">Y1</span><span className="math-growth-value">50K</span><span className="math-growth-sub">invite-only</span></div>
-          <div className="math-growth-step"><span className="math-growth-label">Y2</span><span className="math-growth-value">500K</span><span className="math-growth-sub">public beta</span></div>
-          <div className="math-growth-step"><span className="math-growth-label">Y3</span><span className="math-growth-value">5M</span><span className="math-growth-sub">scaled GTM</span></div>
-          <div className="math-growth-step"><span className="math-growth-label">Y5</span><span className="math-growth-value">50M</span><span className="math-growth-sub">category standard</span></div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    n: 8,
-    kicker: 'ARR',
-    title: '$2.3M → $2.25B ARR.',
-    body: (
-      <div className="math-phase-body">
-        <p>Hold the $3.75 / user / month net assumption across the curve. Ads, placements, and brand-side tooling are an additional ~4× expansion lever left out on purpose — this chart is just the commission spine.</p>
-        <RevenueChart />
-      </div>
-    ),
-  },
-  {
-    n: 9,
-    kicker: 'TAM',
-    title: 'Global retail is $6T. 1% indexed is a category.',
-    body: (
-      <div className="math-phase-body">
-        <p>If every retail item were in one place — affiliate linked, creator distributed, first-party attributed — even 0.1% penetration of global retail is $6B of GMV through Catalog. 1% is $10B+ of platform net. The surface is that big.</p>
-        <div className="math-stat-row">
-          <div className="math-stat"><span className="math-stat-value">$6T</span><span className="math-stat-label">global retail</span></div>
-          <div className="math-stat"><span className="math-stat-value">0.1%</span><span className="math-stat-label">→ $6B GMV</span></div>
-          <div className="math-stat"><span className="math-stat-value math-stat-green">1%</span><span className="math-stat-label">→ $10B+ net</span></div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    n: 10,
-    kicker: 'Flywheel',
-    title: 'Get the loop moving once. Everything else compounds.',
-    body: (
-      <div className="math-phase-body">
-        <p>Higher commissions pull creators. Creators pull shoppers. Shoppers teach the feed. Sharper feed lifts conversion. Higher conversion funds even better rates. Every rotation makes the next one cheaper — and every number on the prior nine slides gets bigger from here.</p>
-      </div>
-    ),
-  },
-];
-
-function MathPhases() {
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [visible, setVisible] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const tickRef = useRef<number>(0);
-
-  // Reset the phase progress bar when the phase changes. The bar is pure
-  // CSS animation — keying off active + paused resets the transition.
-  useEffect(() => { tickRef.current = Date.now(); }, [active]);
-
-  // Only advance when the slide is actually on-screen. An IntersectionObserver
-  // flips `visible` which gates the interval below.
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(entries => {
-      for (const entry of entries) setVisible(entry.isIntersecting);
-    }, { threshold: 0.4 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!visible || paused) return;
-    const id = window.setInterval(() => {
-      setActive(a => (a + 1) % PHASES.length);
-    }, PHASE_MS);
-    return () => window.clearInterval(id);
-  }, [visible, paused]);
-
-  const go = useCallback((i: number) => {
-    setActive(((i % PHASES.length) + PHASES.length) % PHASES.length);
-  }, []);
-
-  const phase = PHASES[active];
-
-  return (
-    <div className="math-phases" ref={rootRef} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div className="math-phases-head">
-        <span className="math-phases-counter">Phase {phase.n} / {PHASES.length}</span>
-        <div className="math-phases-dots" role="tablist" aria-label="Math phases">
-          {PHASES.map((p, i) => (
-            <button
-              key={p.n}
-              type="button"
-              role="tab"
-              aria-selected={i === active}
-              aria-label={`Phase ${p.n}: ${p.kicker}`}
-              className={`math-phases-dot${i === active ? ' is-active' : ''}${i < active ? ' is-done' : ''}`}
-              onClick={() => go(i)}
-            />
-          ))}
+        <div className="math-subband">
+          <span className="math-phase-kicker">Tokens</span>
+          <h3 className="math-phase-subtitle">$0.05 CPM. ~99% margin.</h3>
+          <p className="math-phase-lede">$0.50 per 5s clip ÷ 10K impressions.</p>
+          <div className="math-stat-row">
+            <div className="math-stat"><span className="math-stat-value">$0.50</span><span className="math-stat-label">per clip</span></div>
+            <div className="math-stat"><span className="math-stat-value math-stat-green">~99%</span><span className="math-stat-label">gross margin</span></div>
+          </div>
         </div>
       </div>
 
-      <div key={phase.n} className="math-phase">
-        <span className="math-phase-kicker">{phase.kicker}</span>
-        <h3 className="math-phase-title">{phase.title}</h3>
-        {phase.body}
+      <div className="math-band math-band-chart">
+        <div className="math-chart-left">
+          <span className="math-phase-kicker">ARR · Growth</span>
+          <h3 className="math-phase-title">$2.3M → $2.25B.</h3>
+          <p className="math-phase-lede">Holds the $3.75 / user / month net assumption across the curve. Ads, placements, and brand-side tooling add another ~4× on top — deliberately off-chart so this is just the commission spine.</p>
+          <div className="math-growth">
+            <div className="math-growth-step"><span className="math-growth-label">Y1</span><span className="math-growth-value">50K</span><span className="math-growth-sub">invite-only</span></div>
+            <div className="math-growth-step"><span className="math-growth-label">Y2</span><span className="math-growth-value">500K</span><span className="math-growth-sub">public beta</span></div>
+            <div className="math-growth-step"><span className="math-growth-label">Y3</span><span className="math-growth-value">5M</span><span className="math-growth-sub">scaled GTM</span></div>
+            <div className="math-growth-step"><span className="math-growth-label">Y5</span><span className="math-growth-value">50M</span><span className="math-growth-sub">category standard</span></div>
+          </div>
+        </div>
+        <div className="math-chart-right">
+          <RevenueChart />
+        </div>
       </div>
 
-      <div className="math-phases-foot">
-        <button type="button" className="math-phases-nav" onClick={() => go(active - 1)} aria-label="Previous phase">←</button>
-        <div className="math-phases-progress">
-          <div
-            key={`${active}-${paused}`}
-            className={`math-phases-progress-fill${paused ? ' is-paused' : ''}`}
-          />
+      <div className="math-band math-band-close">
+        <div>
+          <span className="math-phase-kicker">TAM</span>
+          <h3 className="math-phase-subtitle">Global retail is $6T. 1% indexed is a category.</h3>
+          <p className="math-phase-lede">If every retail item were in one place — affiliate linked, creator distributed, first-party attributed — even 0.1% penetration is $6B GMV. 1% is $10B+ platform net. The surface is that big.</p>
         </div>
-        <button type="button" className="math-phases-nav" onClick={() => go(active + 1)} aria-label="Next phase">→</button>
+        <div>
+          <span className="math-phase-kicker">Flywheel</span>
+          <h3 className="math-phase-subtitle">Move the loop once. Everything compounds.</h3>
+          <p className="math-phase-lede">Higher commissions pull creators. Creators pull shoppers. Shoppers teach the feed. Sharper feed lifts conversion. Higher conversion funds better rates. Each rotation makes the next one cheaper.</p>
+        </div>
       </div>
     </div>
   );
