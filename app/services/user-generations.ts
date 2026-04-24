@@ -189,10 +189,78 @@ export async function listUserGenerations(userId: string): Promise<UserGeneratio
   return (data || []) as UserGeneration[];
 }
 
+export interface GenerationProductDetail {
+  product_id: string;
+  role_tag: string | null;
+  sort_order: number;
+  product: {
+    id: string;
+    name: string | null;
+    brand: string | null;
+    price: string | null;
+    image_url: string | null;
+  } | null;
+}
+
+export interface GenerationDetail {
+  generation: UserGeneration | null;
+  uploadIds: string[];
+  uploads: UserUpload[];
+  products: GenerationProductDetail[];
+}
+
 /**
- * Build the Seedance prompt from the user's picks. Each product gets a
- * role-tagged line so the model plants it on the right body slot; the
- * height is emphasised verbatim; the style preset wraps the whole thing.
+ * Hydrate a single generation with its linked uploads and picked products,
+ * so the Generate page can pre-fill the wizard for "edit & regenerate".
+ */
+export async function getGenerationDetail(id: string): Promise<GenerationDetail> {
+  const empty: GenerationDetail = { generation: null, uploadIds: [], uploads: [], products: [] };
+  if (!supabase) return empty;
+
+  const [genRes, uploadsRes, productsRes] = await Promise.all([
+    supabase.from('user_generations').select('*').eq('id', id).single(),
+    supabase
+      .from('user_generation_uploads')
+      .select('upload_id, sort_order, user_uploads(*)')
+      .eq('generation_id', id)
+      .order('sort_order'),
+    supabase
+      .from('user_generation_products')
+      .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+      .eq('generation_id', id)
+      .order('sort_order'),
+  ]);
+
+  const generation = (genRes.data ?? null) as UserGeneration | null;
+
+  const uploadRows = (uploadsRes.data || []) as Array<{
+    upload_id: string;
+    sort_order: number;
+    user_uploads: UserUpload | null;
+  }>;
+  const uploadIds = uploadRows.map(r => r.upload_id);
+  const uploads = uploadRows.map(r => r.user_uploads).filter((u): u is UserUpload => !!u);
+
+  const products = ((productsRes.data || []) as Array<{
+    product_id: string;
+    role_tag: string | null;
+    sort_order: number;
+    products: GenerationProductDetail['product'];
+  }>).map(r => ({
+    product_id: r.product_id,
+    role_tag: r.role_tag,
+    sort_order: r.sort_order,
+    product: r.products,
+  }));
+
+  return { generation, uploadIds, uploads, products };
+}
+
+/**
+ * Build the Seedance reference-to-video prompt. Kept deliberately short —
+ * Seedance 2 Fast's reference endpoint is fed the face + product photos as
+ * visual references, so the text only needs to tell it *what to do*:
+ * preserve the face, set the height, place the products on the subject.
  */
 export function buildGenerationPrompt(opts: {
   heightLabel: string;
@@ -200,22 +268,20 @@ export function buildGenerationPrompt(opts: {
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
-  const styleLabel = stylePreset ? `${stylePreset.label} — ${stylePreset.blurb}` : opts.style;
-
-  const productText = opts.productLines
-    .map((p, i) => {
-      const role = p.role_tag ? `${p.role_tag}` : `item ${i + 1}`;
-      const name = [p.brand, p.name].filter(Boolean).join(' ').trim() || 'product';
-      return `This is the ${role}: ${name}.`;
+  const productList = opts.productLines
+    .map(p => {
+      const name = [p.brand, p.name].filter(Boolean).join(' ').trim();
+      if (p.role_tag && name) return `${p.role_tag.toLowerCase()} (${name})`;
+      return p.role_tag?.toLowerCase() || name || 'product';
     })
-    .join(' ');
+    .filter(Boolean)
+    .join(', ');
+
+  const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
 
   return [
-    `Generate a ${styleLabel} fashion video.`,
-    `Subject is ${opts.heightLabel} tall; keep proportions realistic.`,
-    `Use the uploaded reference photo for the face and skin tone. Do not alter the subject's facial features.`,
-    `Dress the subject in exactly these items, each placed on the correct body slot:`,
-    productText,
-    `Render a 5-second portrait video. Natural motion, editorial grade, no text overlays.`,
+    `Use this person's face. Make them ${opts.heightLabel} tall.`,
+    productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
+    `Natural motion, 5-second portrait clip${styleTag}.`,
   ].join(' ');
 }

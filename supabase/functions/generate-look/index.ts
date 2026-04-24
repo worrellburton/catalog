@@ -28,21 +28,30 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Bytedance Seedance image-to-video endpoint on Fal. We feed it the user's
-// face photo as the reference image and the assembled prompt as the motion
-// direction. Product images are concatenated into the prompt as URLs so
-// the model uses them as styling references.
-const MODEL_SLUG = 'fal-ai/bytedance/seedance/v1/pro/image-to-video';
+// Seedance 2 Fast via fal.ai — reference-to-video endpoint. We send the
+// shopper's face photos + the product images as *references* (not first
+// frames) so the model composes a fresh clip where the subject wears the
+// picked products; first-frame image-to-video was locking the output into
+// the static reference pose, which we specifically don't want here.
+const MODEL_SLUG = 'bytedance/seedance-2.0/fast/reference-to-video';
 
-async function callFal(prompt: string, imageUrl: string, falKey: string): Promise<{ video_url: string | null; error: string | null }> {
+async function callFal(
+  prompt: string,
+  referenceImageUrls: string[],
+  falKey: string,
+): Promise<{ video_url: string | null; error: string | null }> {
   const submit = await fetch(`${FAL_BASE}/${MODEL_SLUG}`, {
     method: 'POST',
     headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
-      image_url: imageUrl,
-      num_frames: 125,      // ~5s @ 24fps
+      // reference_image_urls: Seedance 2 treats these as style/subject
+      // references rather than as the literal first frame.
+      reference_image_urls: referenceImageUrls.slice(0, 7),
+      duration: '5',
       aspect_ratio: '9:16',
+      resolution: '720p',
+      generate_audio: false,
     }),
   });
   if (!submit.ok) {
@@ -67,8 +76,9 @@ async function callFal(prompt: string, imageUrl: string, falKey: string): Promis
     if (statusData.status === 'COMPLETED') {
       const outRes = await fetch(responseUrl, { headers: { Authorization: `Key ${falKey}` } });
       if (!outRes.ok) return { video_url: null, error: 'Fal completion fetch failed' };
-      const out = await outRes.json() as { video?: { url?: string } };
-      return { video_url: out.video?.url || null, error: out.video?.url ? null : 'No video in Fal response' };
+      const out = await outRes.json() as { video?: { url?: string }; videos?: Array<{ url?: string }> };
+      const url = out.video?.url || out.videos?.[0]?.url || null;
+      return { video_url: url, error: url ? null : 'No video in Fal response' };
     }
     if (statusData.status === 'FAILED') return { video_url: null, error: 'Fal reported FAILED' };
   }
@@ -137,14 +147,12 @@ Deno.serve(async (req: Request) => {
     .map(r => (r.products as unknown as { image_url: string | null } | null)?.image_url)
     .filter(Boolean) as string[];
 
-  // Append the product image URLs to the prompt so Fal can use them as
-  // styling references in the absence of a dedicated multi-image endpoint.
-  const prompt = [
-    gen.prompt || '',
-    productImageUrls.length ? `Product references: ${productImageUrls.join(' ')}` : '',
-  ].filter(Boolean).join(' ');
+  // Seedance 2 Fast reference-to-video accepts up to 7 reference images; we
+  // stack the face photo(s) first so the model treats that as the subject
+  // identity, followed by the product images as styling references.
+  const referenceUrls = [...faceUrls, ...productImageUrls];
 
-  const { video_url, error } = await callFal(prompt, faceUrls[0], falKey);
+  const { video_url, error } = await callFal(gen.prompt || '', referenceUrls, falKey);
 
   await admin.from('user_generations').update({
     status: error ? 'failed' : 'done',
