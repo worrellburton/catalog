@@ -548,7 +548,7 @@ export default function AdminCreative() {
                   style={{
                     position: 'absolute',
                     bottom: 6,
-                    right: 6,
+                    right: 36,
                     padding: '4px 8px',
                     borderRadius: 4,
                     fontSize: 10,
@@ -564,6 +564,45 @@ export default function AdminCreative() {
                   }}
                 >
                   {v.is_elite ? '★ Elite' : 'Elite'}
+                </button>
+                {/* Per-tile delete — stages just this one into the existing
+                    delete-confirm modal so we reuse the same guardrail as
+                    bulk delete and don't hard-delete on first click. */}
+                <button
+                  type="button"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setSelected(new Set([selectionKey(v)]));
+                    setShowDeleteConfirm(true);
+                  }}
+                  title="Delete creative (confirm required)"
+                  aria-label="Delete creative"
+                  style={{
+                    position: 'absolute',
+                    bottom: 6,
+                    right: 6,
+                    width: 24,
+                    height: 24,
+                    padding: 0,
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid rgba(255,255,255,0.6)',
+                    background: 'rgba(0,0,0,0.55)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    zIndex: 2,
+                    backdropFilter: 'blur(4px)',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1.5 14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
                 </button>
                 <div
                   style={{
