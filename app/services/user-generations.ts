@@ -18,6 +18,7 @@ export interface UserGeneration {
   status: 'pending' | 'generating' | 'done' | 'failed';
   height_cm: number | null;
   height_label: string | null;
+  age_label: string | null;
   style: string;
   prompt: string | null;
   veo_model: string | null;
@@ -143,6 +144,7 @@ export interface CreateGenerationInput {
   products: GenerationProduct[];
   heightCm: number;
   heightLabel: string;
+  ageLabel: string;
   style: string;
   prompt: string;
 }
@@ -165,6 +167,7 @@ export async function createGeneration(
       status: 'pending',
       height_cm: input.heightCm,
       height_label: input.heightLabel,
+      age_label: input.ageLabel,
       style: input.style,
       prompt: input.prompt,
     })
@@ -305,6 +308,7 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
  */
 export function buildGenerationPrompt(opts: {
   heightLabel: string;
+  ageLabel?: string;
   style: string;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
 }): string {
@@ -319,9 +323,10 @@ export function buildGenerationPrompt(opts: {
     .join(', ');
 
   const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
+  const ageClause = opts.ageLabel ? ` They look ${opts.ageLabel}.` : '';
 
   return [
-    `Use this person's face. Make them ${opts.heightLabel} tall.`,
+    `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
     `Natural motion, 5-second portrait clip${styleTag}.`,
   ].join(' ');

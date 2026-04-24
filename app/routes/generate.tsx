@@ -26,14 +26,28 @@ import {
 const MAX_PHOTOS = 3;
 const MAX_PRODUCTS = 5;
 
-// Empirical: 3 successful generations on 2026-04 sat at p50=98s, p90=105s
-// (range 97-107s) end-to-end — submission → row.completed_at. We budget
-// 100s for the visible progress bar so the bar reaches ~100% right around
-// when Fal usually returns. The bar eases past 95% when we're past budget
-// so it still feels alive on slow runs.
-const TYPICAL_GENERATION_SECONDS = 100;
+// Seedance 2 reference-to-video with multiple references runs longer
+// than v1: latest data shows ~166s on the only success and ~180s+ on
+// runs that timed out client-side. We now use Fal webhooks (no
+// internal poller cap), so budget 180s for the user-facing progress
+// bar; it eases past 95% so it never sits flat on slow jobs.
+const TYPICAL_GENERATION_SECONDS = 180;
 
-type Step = 'photos' | 'products' | 'height' | 'style' | 'review' | 'result';
+type Step = 'photos' | 'products' | 'height' | 'age' | 'style' | 'review' | 'result';
+
+// Age presets keep the picker compact — Seedance just needs a phrase
+// to seed how old the subject reads. Defaults to "mid 20s".
+const AGE_PRESETS: { label: string }[] = [
+  { label: 'late teens' },
+  { label: 'early 20s' },
+  { label: 'mid 20s' },
+  { label: 'late 20s' },
+  { label: 'early 30s' },
+  { label: 'mid 30s' },
+  { label: 'early 40s' },
+  { label: '50s' },
+  { label: '60s+' },
+];
 
 interface PickedProduct {
   id: string;
@@ -113,6 +127,7 @@ export default function GeneratePage() {
   // Phase 9/10 — height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
+  const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
   const [style, setStyle] = useState<string>('street');
 
   // Phase 12 — submit + poll
@@ -338,6 +353,7 @@ export default function GeneratePage() {
 
     if (detail.generation.height_cm) setHeightCm(detail.generation.height_cm);
     if (detail.generation.height_label) setHeightLabel(detail.generation.height_label);
+    if (detail.generation.age_label) setAgeLabel(detail.generation.age_label);
     if (detail.generation.style) setStyle(detail.generation.style);
 
     setGeneration(null);
@@ -356,9 +372,10 @@ export default function GeneratePage() {
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading;
     if (step === 'products') return picked.length > 0;
     if (step === 'height') return !!heightLabel;
+    if (step === 'age') return !!ageLabel;
     if (step === 'style') return !!style;
     return true;
-  }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, style]);
+  }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
 
   const handleSubmit = async () => {
     if (!user?.id) {
@@ -369,6 +386,7 @@ export default function GeneratePage() {
     setSubmitError(null);
     const prompt = buildGenerationPrompt({
       heightLabel,
+      ageLabel,
       style,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
@@ -382,6 +400,7 @@ export default function GeneratePage() {
       products: picked.map((p, i) => ({ product_id: p.id, role_tag: p.role_tag, sort_order: i })),
       heightCm,
       heightLabel,
+      ageLabel,
       style,
       prompt,
     });
@@ -609,9 +628,28 @@ export default function GeneratePage() {
           </section>
         )}
 
+        {step === 'age' && (
+          <section className="gen-step">
+            <h2>4. Your age</h2>
+            <p>Helps Seedance lock in the right age range — your face photo alone often reads younger or older than you'd like.</p>
+            <div className="gen-heightgrid">
+              {AGE_PRESETS.map(opt => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  className={`gen-heightchip${ageLabel === opt.label ? ' is-picked' : ''}`}
+                  onClick={() => setAgeLabel(opt.label)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {step === 'style' && (
           <section className="gen-step">
-            <h2>4. Style</h2>
+            <h2>5. Style</h2>
             <div className="gen-stylegrid">
               {STYLE_PRESETS.map(s => (
                 <button
@@ -630,11 +668,12 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step">
-            <h2>5. Review</h2>
+            <h2>6. Review</h2>
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
+              <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
             </div>
             <div className="gen-review-products">
@@ -725,13 +764,13 @@ export default function GeneratePage() {
       )}
 
       {step !== 'result' && (
-        <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} style={style} />
+        <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} ageLabel={ageLabel} style={style} />
       )}
     </div>
   );
 }
 
-const STEP_ORDER: Step[] = ['photos', 'products', 'height', 'style', 'review'];
+const STEP_ORDER: Step[] = ['photos', 'products', 'height', 'age', 'style', 'review'];
 
 function goNext(current: Step, set: (s: Step) => void) {
   const i = STEP_ORDER.indexOf(current);
@@ -829,29 +868,29 @@ function LookCard({
 }
 
 function StepRail({
-  step, photosCount, productsCount, heightLabel, style,
+  step, photosCount, productsCount, heightLabel, ageLabel, style,
 }: {
   step: Step;
   photosCount: number;
   productsCount: number;
   heightLabel: string;
+  ageLabel: string;
   style: string;
 }) {
-  // Filled steps get a check mark; the active step gets the gold pill;
-  // upcoming steps stay muted. Picked-value sublines are dropped here —
-  // the body of the page already shows what was chosen, and a horizontal
-  // dock needs the height to stay tight.
   const filled = {
     photos: photosCount > 0,
     products: productsCount > 0,
     height: !!heightLabel,
+    age: !!ageLabel,
     style: !!style,
     review: false,
+    result: false,
   } as Record<Step, boolean>;
   const items: { k: Step; label: string }[] = [
     { k: 'photos',   label: 'Photos' },
     { k: 'products', label: 'Products' },
     { k: 'height',   label: 'Height' },
+    { k: 'age',      label: 'Age' },
     { k: 'style',    label: 'Style' },
     { k: 'review',   label: 'Review' },
   ];
