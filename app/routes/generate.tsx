@@ -25,6 +25,13 @@ import {
 const MAX_PHOTOS = 3;
 const MAX_PRODUCTS = 5;
 
+// Empirical: 3 successful generations on 2026-04 sat at p50=98s, p90=105s
+// (range 97-107s) end-to-end — submission → row.completed_at. We budget
+// 100s for the visible progress bar so the bar reaches ~100% right around
+// when Fal usually returns. The bar eases past 95% when we're past budget
+// so it still feels alive on slow runs.
+const TYPICAL_GENERATION_SECONDS = 100;
+
 type Step = 'photos' | 'products' | 'height' | 'style' | 'review' | 'result';
 
 interface PickedProduct {
@@ -379,8 +386,6 @@ export default function GeneratePage() {
         <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
       </header>
 
-      <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} style={style} />
-
       <main className="gen-main">
         {step === 'photos' && (
           <section className="gen-step">
@@ -609,12 +614,9 @@ export default function GeneratePage() {
           <section className="gen-step">
             <h2>Your look</h2>
             {!generation && <div className="gen-empty">Loading…</div>}
-            {generation?.status === 'pending' && (
-              <div className="gen-spinner">
-                Queued — starting Catalog <span className="gen-vision">Vision</span>…
-              </div>
+            {(generation?.status === 'pending' || generation?.status === 'generating') && (
+              <GenerationProgress generation={generation} />
             )}
-            {generation?.status === 'generating' && <div className="gen-spinner">Generating — this takes ~60s…</div>}
             {generation?.status === 'failed' && (
               <div className="gen-error">
                 Generation failed: {generation.error || 'Unknown error'}
@@ -656,6 +658,10 @@ export default function GeneratePage() {
           )}
         </footer>
       )}
+
+      {step !== 'result' && (
+        <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} style={style} />
+      )}
     </div>
   );
 }
@@ -669,6 +675,41 @@ function goNext(current: Step, set: (s: Step) => void) {
 function goPrev(current: Step, set: (s: Step) => void) {
   const i = STEP_ORDER.indexOf(current);
   if (i > 0) set(STEP_ORDER[i - 1]);
+}
+
+function GenerationProgress({ generation }: { generation: UserGeneration }) {
+  // Tick once a second so the bar advances even between polls.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
+  const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
+  // Linear up to 95% across the typical budget; soft asymptote past that
+  // so users never see a static 100% bar while we're still polling Fal.
+  const linearPct = (elapsedSec / TYPICAL_GENERATION_SECONDS) * 95;
+  const overflowPct = elapsedSec > TYPICAL_GENERATION_SECONDS
+    ? 95 + (1 - Math.exp(-(elapsedSec - TYPICAL_GENERATION_SECONDS) / 60)) * 4.5
+    : linearPct;
+  const pct = Math.min(99.5, Math.max(2, overflowPct));
+
+  const remaining = Math.max(0, Math.round(TYPICAL_GENERATION_SECONDS - elapsedSec));
+  const label = generation.status === 'pending'
+    ? <>Queued — starting Catalog <span className="gen-vision">Vision</span>…</>
+    : remaining > 0
+      ? <>Composing your look — about {remaining}s left…</>
+      : <>Almost there — finishing up…</>;
+
+  return (
+    <div className="gen-progress">
+      <div className="gen-progress-label">{label}</div>
+      <div className="gen-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+        <div className="gen-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
 }
 
 function LookCard({
@@ -724,23 +765,42 @@ function StepRail({
   heightLabel: string;
   style: string;
 }) {
-  const items: { k: Step; label: string; value: string }[] = [
-    { k: 'photos',   label: 'Photos',   value: photosCount ? `${photosCount} picked` : '—' },
-    { k: 'products', label: 'Products', value: productsCount ? `${productsCount} picked` : '—' },
-    { k: 'height',   label: 'Height',   value: heightLabel || '—' },
-    { k: 'style',    label: 'Style',    value: STYLE_PRESETS.find(s => s.value === style)?.label || style || '—' },
-    { k: 'review',   label: 'Review',   value: '—' },
+  // Filled steps get a check mark; the active step gets the gold pill;
+  // upcoming steps stay muted. Picked-value sublines are dropped here —
+  // the body of the page already shows what was chosen, and a horizontal
+  // dock needs the height to stay tight.
+  const filled = {
+    photos: photosCount > 0,
+    products: productsCount > 0,
+    height: !!heightLabel,
+    style: !!style,
+    review: false,
+  } as Record<Step, boolean>;
+  const items: { k: Step; label: string }[] = [
+    { k: 'photos',   label: 'Photos' },
+    { k: 'products', label: 'Products' },
+    { k: 'height',   label: 'Height' },
+    { k: 'style',    label: 'Style' },
+    { k: 'review',   label: 'Review' },
   ];
   const activeIdx = STEP_ORDER.indexOf(step);
   return (
     <nav className="gen-rail" aria-label="Generate steps">
-      {items.map((item, i) => (
-        <div key={item.k} className={`gen-rail-item${i === activeIdx ? ' is-active' : ''}${i < activeIdx ? ' is-done' : ''}`}>
-          <span className="gen-rail-num">{i + 1}</span>
-          <span className="gen-rail-label">{item.label}</span>
-          <span className="gen-rail-value">{item.value}</span>
-        </div>
-      ))}
+      <ol className="gen-rail-glass">
+        {items.map((item, i) => {
+          const cls =
+            i === activeIdx ? 'is-active' :
+            filled[item.k] ? 'is-done' : '';
+          return (
+            <li key={item.k} className={`gen-rail-item ${cls}`}>
+              <span className="gen-rail-num">
+                {filled[item.k] && i !== activeIdx ? '✓' : i + 1}
+              </span>
+              <span className="gen-rail-label">{item.label}</span>
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

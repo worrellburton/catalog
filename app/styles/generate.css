@@ -35,40 +35,114 @@
   font-size: 14px;
 }
 
+/* Step dock — pinned to the bottom of the viewport with a liquid-glass
+   material (translucent, blurred, faint inner highlight). Sits above the
+   bottom safe-area inset so it doesn't collide with the iOS home bar. */
 .gen-rail {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin: 24px 0;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 50;
+  width: min(720px, calc(100vw - 24px));
+  pointer-events: none;
+}
+.gen-rail-glass {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 40px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
 }
 .gen-rail-item {
+  flex: 1 1 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
-  border-radius: 8px;
-  opacity: 0.45;
+  border-radius: 999px;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+  min-width: 0;
 }
-.gen-rail-item.is-active { opacity: 1; background: rgba(245, 197, 66, 0.1); }
-.gen-rail-item.is-done { opacity: 0.75; }
+.gen-rail-item.is-active {
+  opacity: 1;
+  background: rgba(245, 197, 66, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(245, 197, 66, 0.35);
+}
+.gen-rail-item.is-done { opacity: 0.85; }
 .gen-rail-num {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
 }
-.gen-rail-item.is-active .gen-rail-num { color: #f5c542; }
+.gen-rail-item.is-active .gen-rail-num {
+  background: #f5c542;
+  color: #1a1a1a;
+}
+.gen-rail-item.is-done .gen-rail-num {
+  background: rgba(245, 197, 66, 0.25);
+  color: #f5c542;
+}
 .gen-rail-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.gen-rail-value {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+@media (max-width: 480px) {
+  .gen-rail-label { display: none; }
+  .gen-rail-item.is-active .gen-rail-label { display: inline; }
+}
+
+/* Progress bar shown while a generation is queued/generating. ~100s
+   typical (p50=98s, p90=105s on the 3 successful runs to date), so the
+   fill linearly approaches 95% over that window then eases toward 99%. */
+.gen-progress {
+  margin: 18px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gen-progress-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.gen-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.gen-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f5c542 0%, #ffd76a 100%);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 12px rgba(245, 197, 66, 0.45);
 }
 
 .gen-step h2 {

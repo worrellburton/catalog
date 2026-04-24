@@ -45,9 +45,12 @@ async function callFal(
     headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
-      // reference_image_urls: Seedance 2 treats these as style/subject
-      // references rather than as the literal first frame.
-      reference_image_urls: referenceImageUrls.slice(0, 7),
+      // Seedance 2's reference-to-video field is `image_urls` (the previous
+      // `reference_image_urls` from v1 is silently ignored, which is why
+      // the face wasn't preserved — the model was running text-only). Each
+      // image is addressed by @Image1, @Image2, … inside the prompt; up to
+      // 9 are supported.
+      image_urls: referenceImageUrls.slice(0, 9),
       duration: '5',
       aspect_ratio: '9:16',
       resolution: '720p',
@@ -124,9 +127,11 @@ Deno.serve(async (req: Request) => {
     return jsonRes({ error: 'FAL_KEY not configured' }, 500);
   }
 
-  // Gather inputs. First face photo is the reference image Fal uses; the
-  // prompt already has product roles + height + style baked in from the
-  // frontend (buildGenerationPrompt).
+  // Gather inputs. Face photos go first so they're addressed as @Image1
+  // (and @Image2 if the user uploaded multiple) — Seedance 2's fidelity to
+  // a person depends almost entirely on the prompt naming the right
+  // @ImageN as the subject. Products follow as @Image2/3/… and are tagged
+  // by role so the model knows what slot each piece fills.
   const { data: uploadLinks } = await admin
     .from('user_generation_uploads')
     .select('upload_id, sort_order, user_uploads(public_url)')
@@ -143,16 +148,42 @@ Deno.serve(async (req: Request) => {
     .select('role_tag, sort_order, products(name, brand, image_url)')
     .eq('generation_id', generationId)
     .order('sort_order');
-  const productImageUrls = (productLinks || [])
-    .map(r => (r.products as unknown as { image_url: string | null } | null)?.image_url)
-    .filter(Boolean) as string[];
+  const productEntries = (productLinks || [])
+    .map(r => {
+      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null } | null;
+      if (!p?.image_url) return null;
+      const label = [p.brand, p.name].filter(Boolean).join(' ').trim() || 'product';
+      return { role: r.role_tag || 'item', label, image_url: p.image_url };
+    })
+    .filter((x): x is { role: string; label: string; image_url: string } => !!x);
 
-  // Seedance 2 Fast reference-to-video accepts up to 7 reference images; we
-  // stack the face photo(s) first so the model treats that as the subject
-  // identity, followed by the product images as styling references.
-  const referenceUrls = [...faceUrls, ...productImageUrls];
+  // Cap at 9 (Seedance 2 limit). Face photos are non-negotiable, so they
+  // win the slot fight when there are more than 9 inputs total.
+  const faceSlots = Math.min(faceUrls.length, 9);
+  const productSlots = Math.max(0, Math.min(9 - faceSlots, productEntries.length));
+  const facesUsed = faceUrls.slice(0, faceSlots);
+  const productsUsed = productEntries.slice(0, productSlots);
+  const referenceUrls = [...facesUsed, ...productsUsed.map(p => p.image_url)];
 
-  const { video_url, error } = await callFal(gen.prompt || '', referenceUrls, falKey);
+  // Build the tagged prompt. @Image1 is always the subject's face; product
+  // tags reference the role + brand/name so Seedance knows which photo
+  // fills which slot ("top", "bottom", etc.).
+  const faceTags = facesUsed.map((_, i) => `@Image${i + 1}`).join(' and ');
+  const productClauses = productsUsed.map((p, i) =>
+    `${p.role.toLowerCase()} (@Image${faceSlots + i + 1}, ${p.label})`,
+  );
+  const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
+  const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
+  const taggedPrompt = [
+    `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.`,
+    heightClause,
+    productClauses.length > 0
+      ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
+      : 'Dress them in the provided products.',
+    `Natural full-body motion, 5-second portrait clip${styleSuffix}.`,
+  ].filter(Boolean).join(' ');
+
+  const { video_url, error } = await callFal(taggedPrompt, referenceUrls, falKey);
 
   await admin.from('user_generations').update({
     status: error ? 'failed' : 'done',
