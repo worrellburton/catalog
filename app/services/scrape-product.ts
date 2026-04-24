@@ -1,5 +1,22 @@
 import { supabase } from '~/utils/supabase';
 
+// Modal scraper endpoint — called on retry/add so products don't wait for
+// the 8am UTC daily cron. Gracefully no-ops if the env var isn't set.
+const MODAL_SCRAPER_URL = import.meta.env.VITE_MODAL_SCRAPER_URL || '';
+
+async function _triggerScrape(productId: string, url: string): Promise<void> {
+  if (!MODAL_SCRAPER_URL) return;
+  try {
+    await fetch(MODAL_SCRAPER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId, url }),
+    });
+  } catch {
+    // Non-fatal — the daily cron will pick it up
+  }
+}
+
 // ============================================
 // Types
 // ============================================
@@ -93,6 +110,8 @@ export interface ProductRow {
   price: string | null;
   url: string | null;
   image_url: string | null;
+  images: string[];
+  image_missing_reason: string | null;
   scrape_status: 'pending' | 'processing' | 'done' | 'failed';
   scraped_at: string | null;
   scrape_error: string | null;
@@ -113,7 +132,7 @@ export async function listProducts(options?: {
 
   let query = supabase
     .from('products')
-    .select('id, name, brand, price, url, image_url, scrape_status, scraped_at, scrape_error, is_active, created_at', { count: 'exact' })
+    .select('id, name, brand, price, url, image_url, images, image_missing_reason, scrape_status, scraped_at, scrape_error, is_active, created_at', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (options?.status && options.status !== 'all') {
@@ -133,27 +152,48 @@ export async function listProducts(options?: {
 }
 
 /**
- * Reset a product's scrape_status back to 'pending' so the agent picks it up again.
+ * Reset a product's scrape_status back to 'pending' and immediately trigger
+ * the scraper so it doesn't wait for the daily cron.
  */
 export async function retryProductScrape(productId: string): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured');
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .update({ scrape_status: 'pending', scrape_error: null, scraped_at: null })
+    .eq('id', productId)
+    .select('url')
+    .single();
+  if (error) throw new Error(error.message);
+  if (data?.url) {
+    await _triggerScrape(productId, data.url);
+  }
+}
+
+/**
+ * Hard-delete a product row (and any associated product_ads via cascade).
+ */
+export async function deleteProduct(productId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('products')
+    .delete()
     .eq('id', productId);
   if (error) throw new Error(error.message);
 }
 
 /**
- * Insert a new product URL row with scrape_status='pending' so the scraper picks it up.
+ * Insert a new product URL row with scrape_status='pending' and immediately
+ * trigger the scraper (don't rely solely on the Supabase INSERT webhook).
  */
 export async function addProductUrl(url: string): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase
     .from('products')
     .insert({ url, scrape_status: 'pending' })
-    .select('id, name, brand, price, url, image_url, scrape_status, scraped_at, scrape_error, is_active, created_at')
+    .select('id, name, brand, price, url, image_url, images, image_missing_reason, scrape_status, scraped_at, scrape_error, is_active, created_at')
     .single();
   if (error) throw new Error(error.message);
-  return data as ProductRow;
+  const row = data as ProductRow;
+  await _triggerScrape(row.id, url);
+  return row;
 }
