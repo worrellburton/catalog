@@ -1,6 +1,43 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { getGeneratedVideos, deleteGeneratedVideo, setGeneratedVideoElite, type GeneratedVideo } from '~/services/video-generation';
 import { getProductAds, deleteProductAd, setAdElite, type ProductAd } from '~/services/product-ads';
+
+// One tile's video. Plays only while the tile is on-screen so we aren't
+// running 170 decoders simultaneously. We keep the src bound so metadata
+// stays loaded and tile heights don't jump on scroll — just pause / resume.
+const VideoTile = memo(function VideoTile({ src, muted }: { src: string; muted: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            el.play().catch(() => { /* autoplay can reject until the user interacts */ });
+          } else {
+            el.pause();
+          }
+        }
+      },
+      { rootMargin: '200px 0px', threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      loop
+      muted={muted}
+      playsInline
+      preload="metadata"
+      draggable={false}
+      style={{ width: '100%', height: 'auto', display: 'block', pointerEvents: 'none' }}
+    />
+  );
+});
 
 interface GalleryVideo {
   id: string;
@@ -357,6 +394,10 @@ export default function AdminCreative() {
             <span style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{videos.filter(v => v.source === 'look').length}</span>
             <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Look Videos</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#b88600' }}>{videos.filter(v => v.is_elite).length}</span>
+            <span style={{ fontSize: 11, color: '#b88600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>★ Elite</span>
+          </div>
         </div>
       )}
 
@@ -445,21 +486,7 @@ export default function AdminCreative() {
                   transition: 'box-shadow 0.15s',
                 }}
               >
-                <video
-                  src={v.video_url}
-                  autoPlay
-                  loop
-                  muted={muted}
-                  playsInline
-                  preload="metadata"
-                  draggable={false}
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    display: 'block',
-                    pointerEvents: 'none',
-                  }}
-                />
+                <VideoTile src={v.video_url} muted={muted} />
                 <div style={{ position: 'absolute', top: 4, left: 4, display: 'flex', gap: 4, pointerEvents: 'none' }}>
                   <div
                     style={{
