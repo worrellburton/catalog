@@ -23,6 +23,7 @@ interface CrawledProduct {
   scrape_status: string;
   is_crawled: boolean;
   is_active?: boolean;
+  is_elite?: boolean;
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -401,7 +402,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -447,7 +448,7 @@ export default function AdminContent() {
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -729,7 +730,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -788,13 +789,13 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad' }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
         const key = `${p.brand}-${p.name}`;
         if (!productMap.has(key)) {
-          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: 0, clicks: 0, impressions: 0, connection: 'Look' });
+          productMap.set(key, { brand: p.brand, name: p.name, price: p.price, url: p.url, image_url: (p as any).image, video_urls: [], looks: new Set(), creators: new Set(), saves: 0, clicks: 0, impressions: 0, connection: 'Look', is_elite: false });
         }
         const entry = productMap.get(key)!;
         entry.looks.add(look.title);
@@ -817,6 +818,7 @@ export default function AdminContent() {
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
         entry.is_active = active;
+        entry.is_elite = !!cp.is_elite;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -841,6 +843,7 @@ export default function AdminContent() {
           impressions: adImpressionsMap.get(cp.id) || 0,
           connection,
           is_active: active,
+          is_elite: !!cp.is_elite,
         });
       }
     });
@@ -1463,6 +1466,7 @@ export default function AdminContent() {
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the consumer feed">Show</th>
+                <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative — curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -1677,6 +1681,29 @@ export default function AdminContent() {
                         on={(p as any).is_active !== false}
                         onChange={v => toggleProductActive(p.id!, v)}
                       />
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {(p as any).is_elite ? (
+                      <span
+                        title="Elite — flag the creative in /admin/creative to toggle"
+                        style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: '0.5px',
+                          textTransform: 'uppercase',
+                          background: 'rgba(234,179,8,0.15)',
+                          color: '#b88600',
+                          border: '1px solid rgba(234,179,8,0.4)',
+                        }}
+                      >
+                        ★ Elite
+                      </span>
                     ) : (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
                     )}

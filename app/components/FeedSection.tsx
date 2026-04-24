@@ -106,32 +106,36 @@ export default function FeedSection({
     const targetCells = isInitial ? 200 : 50;
 
     if (isInitial && creativesLoading) {
+      // First paint while elite creatives are still loading — render *only*
+      // shimmer placeholders. The static look pool used to leak in here; now
+      // it stays off-screen until the real feed resolves.
       const items: PoolItem[] = [];
-      let lookDeck: Look[] = [];
-      let displayIndex = 0;
-      let placeholderIdx = 0;
       for (let i = 0; i < targetCells; i++) {
-        const placeholderSlot = Math.random() < LOADING_CREATIVE_RATIO;
-        if (placeholderSlot) {
-          items.push({ type: 'placeholder', key: `ph-${placeholderIdx++}` });
-        } else {
-          if (lookDeck.length === 0) lookDeck = shuffled(looks);
-          const next = lookDeck.shift()!;
-          items.push({ type: 'look', look: { ...next, displayIndex: displayIndex++ } });
-        }
+        items.push({ type: 'placeholder', key: `ph-${i}` });
       }
       return items;
     }
 
+    // Initial segment is elite-creative-only — no static looks mixed in.
+    // Secondary "More like this" segments (isInitial=false) still pull from
+    // their look set since that's where look-driven discovery lives.
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
-    const buildDeck = (): DeckEntry[] => shuffled<DeckEntry>([
-      ...looks.map(look => ({ type: 'look' as const, look })),
-      ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
-    ]);
+    const buildDeck = (): DeckEntry[] => shuffled<DeckEntry>(
+      isInitial
+        ? creativeList.map(creative => ({ type: 'creative' as const, creative }))
+        : [
+            ...looks.map(look => ({ type: 'look' as const, look })),
+            ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+          ],
+    );
 
     const items: PoolItem[] = [];
     let deck = buildDeck();
     let displayIndex = 0;
+
+    // Empty deck (e.g. no elite creatives flagged yet on the initial segment)
+    // — leave the grid empty rather than falling back to looks.
+    if (deck.length === 0) return items;
 
     while (items.length < targetCells) {
       if (deck.length === 0) deck = buildDeck();
