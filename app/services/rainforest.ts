@@ -56,6 +56,10 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
   if (!imageUrl) {
     throw new Error('Amazon product is missing an image — skipping ingest');
   }
+  // Mark as already scraped so the Supabase DB-webhook-driven product
+  // scraper (agents/product-scraper) doesn't re-visit the Amazon page —
+  // Amazon blocks Playwright aggressively, and a half-failed scrape would
+  // overwrite these Rainforest-sourced fields with nulls.
   const payload = {
     name: product.name,
     brand: product.brand ?? 'Amazon',
@@ -66,6 +70,8 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
     currency: product.currency ?? null,
     images: product.images.length > 0 ? product.images : null,
     is_active: true,
+    scrape_status: 'done',
+    scraped_at: new Date().toISOString(),
   };
   const { data: existing } = await supabase
     .from('products')

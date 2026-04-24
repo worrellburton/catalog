@@ -66,20 +66,30 @@ def scrape_and_update(product_id: str, url: str):
 
     def _write_to_db(product: dict):
         """Called immediately when Claude calls save_product — no waiting for loop end."""
-        supabase.table("products").update({
-            "scrape_status": "done",
-            "scraped_at": datetime.now(timezone.utc).isoformat(),
-            "scrape_error": None,
+        # Only write fields the agent actually extracted. Blindly writing
+        # every key would clobber good data (e.g. from Rainforest ingest)
+        # with nulls whenever the Playwright scrape comes back empty.
+        scraped = {
             "name": product.get("title"),
             "brand": product.get("brand"),
             "description": product.get("description"),
             "price": product.get("price"),
             "discounted_price": product.get("discounted_price"),
             "currency": product.get("currency"),
-            "images": product.get("images", []),
-            "image_url": (product.get("images") or [None])[0],
             "availability": product.get("availability"),
-        }).eq("id", product_id).execute()
+        }
+        update = {k: v for k, v in scraped.items() if v not in (None, "")}
+
+        images = product.get("images") or []
+        if images:
+            update["images"] = images
+            update["image_url"] = images[0]
+
+        update["scrape_status"] = "done"
+        update["scraped_at"] = datetime.now(timezone.utc).isoformat()
+        update["scrape_error"] = None
+
+        supabase.table("products").update(update).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
 
     try:
