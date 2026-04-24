@@ -111,11 +111,9 @@ export interface ProductRow {
   url: string | null;
   image_url: string | null;
   images: string[];
-  image_missing_reason: string | null;
   scrape_status: 'pending' | 'processing' | 'done' | 'failed';
   scraped_at: string | null;
   scrape_error: string | null;
-  is_active: boolean;
   created_at: string;
 }
 
@@ -132,7 +130,7 @@ export async function listProducts(options?: {
 
   let query = supabase
     .from('products')
-    .select('id, name, brand, price, url, image_url, images, image_missing_reason, scrape_status, scraped_at, scrape_error, is_active, created_at', { count: 'exact' })
+    .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (options?.status && options.status !== 'all') {
@@ -190,7 +188,7 @@ export async function addProductUrl(url: string): Promise<ProductRow> {
   const { data, error } = await supabase
     .from('products')
     .insert({ url, scrape_status: 'pending' })
-    .select('id, name, brand, price, url, image_url, images, image_missing_reason, scrape_status, scraped_at, scrape_error, is_active, created_at')
+    .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at')
     .single();
   if (error) throw new Error(error.message);
   const row = data as ProductRow;
