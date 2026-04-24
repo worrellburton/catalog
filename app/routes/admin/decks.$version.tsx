@@ -2,6 +2,7 @@ import { useNavigate, useParams } from '@remix-run/react';
 import { useState } from 'react';
 import DeckView from '~/components/DeckView';
 import DeckViewV1 from '~/components/DeckViewV1';
+import DeckViewV1_1 from '~/components/DeckViewV1_1';
 import DeckViewV6 from '~/components/DeckViewV6';
 import DeckViewV7 from '~/components/DeckViewV7';
 import DeckViewV8 from '~/components/DeckViewV8';
@@ -30,6 +31,7 @@ export default function AdminDeckViewer() {
   if (version === 'v8') return <DeckViewV8 {...commonProps} />;
   if (version === 'v9') return <DeckViewV9 {...commonProps} />;
   if (version === 'v1') return <DeckViewV1 {...commonProps} />;
+  if (version === 'v1-1') return <DeckViewV1_1 {...commonProps} />;
 
   return (
     <div className="admin-page">
