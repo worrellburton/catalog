@@ -100,22 +100,35 @@ export default function AdminUserDetail() {
   const [expandedLook, setExpandedLook] = useState<number | null>(null);
 
   // Uploaded reference photos + Generate-page submissions for this user.
-  // The admin page route keys off displayName, so we resolve to auth.users
-  // via the profiles table (username match). When we can't resolve (legacy
-  // static creator names with no auth user), both sections render empty.
+  // The admin page route keys off displayName (full_name or email prefix),
+  // so we resolve to auth.users via profiles. We try full_name first, then
+  // fall back to email-local-part so users without a full_name still match.
+  // resolved=true once the lookup completes so the UI can distinguish
+  // "still loading" from "no data".
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
+  const [resolved, setResolved] = useState(false);
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) { setResolved(true); return; }
     let cancelled = false;
+    setResolved(false);
     (async () => {
-      const { data: profile } = await supabase
+      const byName = await supabase
         .from('profiles')
         .select('id')
-        .ilike('username', decoded)
+        .ilike('full_name', decoded)
         .maybeSingle();
-      const userId = profile?.id as string | undefined;
-      if (!userId || cancelled) return;
+      let userId = byName.data?.id as string | undefined;
+      if (!userId) {
+        const byEmail = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('email', `${decoded}@%`)
+          .maybeSingle();
+        userId = byEmail.data?.id as string | undefined;
+      }
+      if (cancelled) return;
+      if (!userId) { setResolved(true); return; }
       const [{ data: u }, { data: g }] = await Promise.all([
         supabase.from('user_uploads').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
         supabase.from('user_generations').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
@@ -123,6 +136,7 @@ export default function AdminUserDetail() {
       if (cancelled) return;
       setUploads((u || []) as UserUpload[]);
       setGenerations((g || []) as UserGeneration[]);
+      setResolved(true);
     })();
     return () => { cancelled = true; };
   }, [decoded]);
@@ -159,9 +173,10 @@ export default function AdminUserDetail() {
         <div className="admin-detail-card">
           <h3>Activity</h3>
           <div className="admin-detail-rows">
-            <div className="admin-detail-row"><span>Looks</span><span>{creatorLooks.length}</span></div>
+            <div className="admin-detail-row"><span>Looks</span><span>{creatorLooks.length + generations.length}</span></div>
             <div className="admin-detail-row"><span>Products</span><span>{totalProducts}</span></div>
             <div className="admin-detail-row"><span>Brands</span><span>{uniqueBrands.size}</span></div>
+            <div className="admin-detail-row"><span>Reference photos</span><span>{uploads.length}</span></div>
             <div className="admin-detail-row"><span>Saved</span><span>0</span></div>
           </div>
         </div>
@@ -213,9 +228,13 @@ export default function AdminUserDetail() {
         </div>
       )}
 
-      {uploads.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h2 className="admin-section-title">Uploaded photos ({uploads.length})</h2>
+      <div style={{ marginTop: 24 }}>
+        <h2 className="admin-section-title">Reference photos ({uploads.length})</h2>
+        {!resolved ? (
+          <p className="admin-detail-empty">Loading…</p>
+        ) : uploads.length === 0 ? (
+          <p className="admin-detail-empty">No reference photos uploaded yet</p>
+        ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
             {uploads.map(u => (
               <a key={u.id} href={u.public_url} target="_blank" rel="noopener noreferrer"
@@ -224,29 +243,41 @@ export default function AdminUserDetail() {
               </a>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {generations.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h2 className="admin-section-title">Generations ({generations.length})</h2>
+      <div style={{ marginTop: 24 }}>
+        <h2 className="admin-section-title">Generated looks ({generations.length})</h2>
+        {!resolved ? (
+          <p className="admin-detail-empty">Loading…</p>
+        ) : generations.length === 0 ? (
+          <p className="admin-detail-empty">No looks generated yet</p>
+        ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {generations.map(g => (
               <div key={g.id} style={{
-                borderRadius: 8, overflow: 'hidden', background: '#111',
+                borderRadius: 8, overflow: 'hidden', background: '#fff',
                 border: '1px solid #eee', padding: 10, fontSize: 12,
               }}>
-                {g.video_url && (
+                {g.video_url ? (
                   <video src={g.video_url} muted loop playsInline autoPlay
                     style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
+                ) : (
+                  <div style={{
+                    width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
+                    color: '#888', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11,
+                  }}>
+                    {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                  </div>
                 )}
                 <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || '—'}</div>
                 <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
