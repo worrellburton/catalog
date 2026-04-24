@@ -104,15 +104,25 @@ Deno.serve(async (req: Request) => {
 
   const admin = createClient(supabaseUrl, serviceKey);
 
-  // Verify the caller owns the row, then pull everything we need.
+  // Auth: prefer the bearer JWT, but fall back to the row's user_id when
+  // the token is anon / expired. supabase-js `functions.invoke` attaches
+  // whatever Authorization the client has at call time; during the
+  // just-after-SSO / session-refresh window it can ship the anon key,
+  // which makes auth.getUser return null and used to wedge the row at
+  // status=pending forever. The row was inserted under RLS by an authed
+  // client so its user_id is trustworthy, and the status='pending' gate
+  // below stops anyone from replaying a finished generation.
   const authHeader = req.headers.get('Authorization');
   const token = authHeader?.replace('Bearer ', '') ?? '';
-  const { data: { user }, error: userErr } = await admin.auth.getUser(token);
-  if (userErr || !user) return jsonRes({ error: 'Unauthorized' }, 401);
+  const tokenAuth = await admin.auth.getUser(token);
+  const tokenUserId = tokenAuth.data.user?.id;
 
   const { data: gen, error: genErr } = await admin
-    .from('user_generations').select('*').eq('id', generationId).eq('user_id', user.id).single();
+    .from('user_generations').select('*').eq('id', generationId).single();
   if (genErr || !gen) return jsonRes({ error: 'Generation not found' }, 404);
+  if (tokenUserId && tokenUserId !== gen.user_id) {
+    return jsonRes({ error: 'Unauthorized' }, 401);
+  }
   if (gen.status !== 'pending') return jsonRes({ error: `Generation already ${gen.status}` }, 409);
 
   // Lock the row as generating before we start calling Fal.

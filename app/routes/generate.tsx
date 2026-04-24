@@ -730,7 +730,14 @@ function LookCard({
     <div className="gen-lookcard">
       <button type="button" className="gen-lookcard-media" onClick={onOpen}>
         {isDone && generation.video_url ? (
-          <video src={generation.video_url} muted playsInline preload="metadata" />
+          <video
+            src={generation.video_url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+          />
         ) : (
           <div className={`gen-lookcard-placeholder${isFailed ? ' is-failed' : ''}`}>
             {isBusy ? (
