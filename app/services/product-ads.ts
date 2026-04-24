@@ -23,11 +23,12 @@ export interface ProductAd {
   clicks: number;
   error: string | null;
   enabled: boolean;
+  is_elite?: boolean;
   created_at: string;
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; catalog_tags?: string[] | null };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -296,6 +297,74 @@ export async function deleteProductAd(id: string): Promise<{ error: string | nul
     .eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
+}
+
+// Flip the elite flag on an ad AND its parent product together. Marking a
+// product elite requires that at least one of its creatives is elite, so we
+// keep the two in sync from this one entry point. Used by the admin Creative
+// view and surfaces in investor deck v1.1's background feed.
+export async function setAdElite(
+  id: string,
+  productId: string,
+  isElite: boolean,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error: adError } = await supabase
+    .from('product_ads')
+    .update({ is_elite: isElite })
+    .eq('id', id);
+  if (adError) return { error: adError.message };
+
+  if (isElite) {
+    const { error: productError } = await supabase
+      .from('products')
+      .update({ is_elite: true })
+      .eq('id', productId);
+    if (productError) return { error: productError.message };
+  } else {
+    // If no other elite creatives remain for this product, unmark it.
+    const { data: remaining } = await supabase
+      .from('product_ads')
+      .select('id')
+      .eq('product_id', productId)
+      .eq('is_elite', true)
+      .limit(1);
+    if (!remaining || remaining.length === 0) {
+      await supabase
+        .from('products')
+        .update({ is_elite: false })
+        .eq('id', productId);
+    }
+  }
+  return { error: null };
+}
+
+// Fetch every elite creative (product ads + generated look videos) with a
+// playable video_url. Used by the deck v1.1 background feed so the investor
+// view only ever shows hand-picked work.
+export interface EliteCreative {
+  id: string;
+  source: 'product' | 'look';
+  video_url: string;
+}
+
+export async function getEliteCreatives(): Promise<EliteCreative[]> {
+  if (!supabase) return [];
+  const [adsRes, vidsRes] = await Promise.all([
+    supabase
+      .from('product_ads')
+      .select('id, video_url')
+      .eq('is_elite', true)
+      .not('video_url', 'is', null),
+    supabase
+      .from('generated_videos')
+      .select('id, video_url')
+      .eq('is_elite', true)
+      .not('video_url', 'is', null),
+  ]);
+  const ads = (adsRes.data || []).map(r => ({ id: r.id as string, source: 'product' as const, video_url: r.video_url as string }));
+  const vids = (vidsRes.data || []).map(r => ({ id: r.id as string, source: 'look' as const, video_url: r.video_url as string }));
+  return [...ads, ...vids];
 }
 
 export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ error: string | null }> {

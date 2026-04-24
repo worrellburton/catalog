@@ -18,10 +18,11 @@ export interface GeneratedVideo {
   resolution: string | null;
   cost_usd: number | null;
   error: string | null;
+  is_elite?: boolean;
   created_at: string;
   completed_at: string | null;
   // joined data
-  product?: { id: string; name: string | null; brand: string | null; image_url: string | null };
+  product?: { id: string; name: string | null; brand: string | null; image_url: string | null; is_elite?: boolean };
   ai_model?: { id: string; name: string; slug: string; primary_image: string | null } | null;
 }
 
@@ -79,6 +80,41 @@ export async function deleteGeneratedVideo(id: string): Promise<{ error: string 
     .delete()
     .eq('id', id);
   if (error) return { error: error.message };
+  return { error: null };
+}
+
+// See setAdElite — same idea, but for generated_videos (look creatives).
+export async function setGeneratedVideoElite(
+  id: string,
+  productId: string | null,
+  isElite: boolean,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error: videoError } = await supabase
+    .from('generated_videos')
+    .update({ is_elite: isElite })
+    .eq('id', id);
+  if (videoError) return { error: videoError.message };
+
+  if (!productId) return { error: null };
+
+  if (isElite) {
+    const { error: productError } = await supabase
+      .from('products')
+      .update({ is_elite: true })
+      .eq('id', productId);
+    if (productError) return { error: productError.message };
+  } else {
+    const [adsRes, vidsRes] = await Promise.all([
+      supabase.from('product_ads').select('id').eq('product_id', productId).eq('is_elite', true).limit(1),
+      supabase.from('generated_videos').select('id').eq('product_id', productId).eq('is_elite', true).limit(1),
+    ]);
+    const adsLeft = (adsRes.data || []).length;
+    const vidsLeft = (vidsRes.data || []).length;
+    if (adsLeft === 0 && vidsLeft === 0) {
+      await supabase.from('products').update({ is_elite: false }).eq('id', productId);
+    }
+  }
   return { error: null };
 }
 

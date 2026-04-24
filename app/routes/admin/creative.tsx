@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getGeneratedVideos, deleteGeneratedVideo, type GeneratedVideo } from '~/services/video-generation';
-import { getProductAds, deleteProductAd, type ProductAd } from '~/services/product-ads';
+import { getGeneratedVideos, deleteGeneratedVideo, setGeneratedVideoElite, type GeneratedVideo } from '~/services/video-generation';
+import { getProductAds, deleteProductAd, setAdElite, type ProductAd } from '~/services/product-ads';
 
 interface GalleryVideo {
   id: string;
@@ -16,6 +16,7 @@ interface GalleryVideo {
   impressions?: number;
   clicks?: number;
   ctr?: number;
+  is_elite: boolean;
 }
 
 const VARIANT_MIN_IMPRESSIONS = 500;
@@ -32,6 +33,8 @@ function toGallery(videos: GeneratedVideo[], ads: ProductAd[]): GalleryVideo[] {
       style: x.style,
       status: x.status,
       created_at: x.created_at,
+      product_id: x.product_id,
+      is_elite: !!x.is_elite,
     }));
   const a: GalleryVideo[] = ads
     .filter(x => x.video_url)
@@ -51,6 +54,7 @@ function toGallery(videos: GeneratedVideo[], ads: ProductAd[]): GalleryVideo[] {
         impressions,
         clicks,
         ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+        is_elite: !!x.is_elite,
       };
     });
   return [...v, ...a].sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime());
@@ -142,6 +146,24 @@ export default function AdminCreative() {
   const requestDelete = () => {
     if (selected.size === 0) return;
     setShowDeleteConfirm(true);
+  };
+
+  const toggleElite = async (v: GalleryVideo) => {
+    const next = !v.is_elite;
+    // Optimistic update — the marquee redraws every frame, so waiting on the
+    // round-trip makes the button feel laggy when clicking through a batch.
+    setVideos(prev => prev.map(x =>
+      x.id === v.id && x.source === v.source ? { ...x, is_elite: next } : x
+    ));
+    const { error } = v.source === 'product'
+      ? await setAdElite(v.id, v.product_id || '', next)
+      : await setGeneratedVideoElite(v.id, v.product_id || null, next);
+    if (error) {
+      console.error('[creative] toggle elite failed:', error);
+      setVideos(prev => prev.map(x =>
+        x.id === v.id && x.source === v.source ? { ...x, is_elite: !next } : x
+      ));
+    }
   };
 
   const confirmDelete = async () => {
@@ -470,7 +492,52 @@ export default function AdminCreative() {
                       🏆 Winner
                     </div>
                   )}
+                  {v.is_elite && (
+                    <div
+                      style={{
+                        padding: '2px 5px',
+                        borderRadius: 3,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        background: 'rgba(234,179,8,0.95)',
+                        color: '#111',
+                      }}
+                      title="Shown in deck v1.1 background feed"
+                    >
+                      ★ Elite
+                    </div>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => {
+                    e.stopPropagation();
+                    toggleElite(v);
+                  }}
+                  title={v.is_elite ? 'Remove from deck v1.1 elite feed' : 'Mark creative + product as elite (shown in deck v1.1)'}
+                  style={{
+                    position: 'absolute',
+                    bottom: 6,
+                    right: 6,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase',
+                    border: v.is_elite ? '1px solid rgba(234,179,8,1)' : '1px solid rgba(255,255,255,0.6)',
+                    background: v.is_elite ? 'rgba(234,179,8,0.95)' : 'rgba(0,0,0,0.55)',
+                    color: v.is_elite ? '#111' : '#fff',
+                    cursor: 'pointer',
+                    zIndex: 2,
+                    backdropFilter: 'blur(4px)',
+                  }}
+                >
+                  {v.is_elite ? '★ Elite' : 'Elite'}
+                </button>
                 <div
                   style={{
                     position: 'absolute',

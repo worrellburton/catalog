@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
+import { getEliteCreatives, type EliteCreative } from '~/services/product-ads';
 
 interface DeckViewV1_1Props {
   onSeeApp: () => void;
@@ -113,6 +114,10 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed] = useState<number | null>(0);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
+  // Deck v1.1 differentiator: the background feed only shows hand-picked
+  // elite creatives, flagged by admins in /admin/creative. Empty array until
+  // the fetch lands — the old bundled clips stay off so the feed is 100% real.
+  const [eliteVideos, setEliteVideos] = useState<EliteCreative[]>([]);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
   const roadmapTrackRef = useRef<HTMLDivElement>(null);
@@ -181,7 +186,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
     const slides = container.querySelectorAll('.deck-slide');
 
     const hash = window.location.hash.replace('#', '');
-    const slideMatch = hash.match(/^deck\/v1\/(\d+)$/);
+    const slideMatch = hash.match(/^deck\/v1-1\/(\d+)$/);
     if (slideMatch) {
       const idx = parseInt(slideMatch[1], 10) - 1;
       if (idx >= 0 && idx < slides.length) {
@@ -198,7 +203,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
             entry.target.classList.add('visible');
             const idx = Array.from(slides).indexOf(entry.target);
             if (idx >= 0) {
-              window.history.replaceState(null, '', `#deck/v1/${idx + 1}`);
+              window.history.replaceState(null, '', `#deck/v1-1/${idx + 1}`);
               setActiveSlideIdx(idx);
               if (idx > 0) setBgRevealed(true);
             }
@@ -220,21 +225,40 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
     };
   }, []);
 
+  // Pull the elite creative set once on mount. The admin Creative view flips
+  // is_elite on both the creative and its product, so these are the videos we
+  // want behind every slide.
+  useEffect(() => {
+    let cancelled = false;
+    getEliteCreatives().then(list => {
+      if (!cancelled) setEliteVideos(list);
+    }).catch(err => {
+      console.error('[DeckViewV1_1] getEliteCreatives failed:', err);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className={`deck-view deck-view-v8 deck-view-v9 deck-view-v1 active${bgRevealed ? ' deck-v8-bg-revealed' : ''}`} ref={containerRef}>
       <div className="deck-v8-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {Array.from({ length: 24 }).map((_, i) => (
-            <video
-              key={i}
-              src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
-              muted
-              loop
-              playsInline
-              autoPlay
-              className="deck-insight-video"
-            />
-          ))}
+          {/* v1.1: only elite creatives, hand-picked in /admin/creative. If
+              no elites are flagged yet the grid is empty — the overlay still
+              provides the dark wash, so the cover slide stays legible. */}
+          {Array.from({ length: Math.min(24, eliteVideos.length) }).map((_, i) => {
+            const clip = eliteVideos[i % eliteVideos.length];
+            return (
+              <video
+                key={`${clip.source}:${clip.id}`}
+                src={clip.video_url}
+                muted
+                loop
+                playsInline
+                autoPlay
+                className="deck-insight-video"
+              />
+            );
+          })}
         </div>
         <div className="deck-insight-overlay" />
       </div>
