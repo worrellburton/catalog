@@ -119,9 +119,36 @@ export default function ProductCrawlsPanel() {
     }
   }, [statusFilter, search, page]);
 
+  // Silent background refresh — no loading spinner, only updates existing rows.
+  // Used by the auto-poll loop so status changes appear without a full reload.
+  const refreshSilent = useCallback(async () => {
+    try {
+      const { data, count } = await listProducts({
+        status: statusFilter,
+        search: search || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setRows(data);
+      setTotal(count);
+    } catch {
+      // ignore — next tick will retry
+    }
+  }, [statusFilter, search, page]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Auto-poll every 5 s while any row is pending or processing.
+  useEffect(() => {
+    const hasActive = rows.some(
+      (r) => r.scrape_status === 'pending' || r.scrape_status === 'processing',
+    );
+    if (!hasActive) return;
+    const timer = setInterval(refreshSilent, 5_000);
+    return () => clearInterval(timer);
+  }, [rows, refreshSilent]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
