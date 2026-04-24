@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { trackAdImpression, trackAdClick, type ProductAd } from '~/services/product-ads';
+import { getBrandDomain, brandLogoUrl } from '~/utils/brandLogo';
 
 interface CreativeCardProps {
   creative: ProductAd;
@@ -14,7 +15,9 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   const cardRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const [logoFailed, setLogoFailed] = useState(false);
   const impressionTracked = useRef(false);
+  const brandDomain = getBrandDomain(creative.product);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -118,7 +121,18 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
         <div className="promo-product-info">
           <div className="promo-product-text">
             {creative.product?.brand && (
-              <span className="promo-product-brand">{creative.product.brand}</span>
+              <span className="promo-product-brand">
+                {brandDomain && !logoFailed && (
+                  <img
+                    className="promo-brand-logo"
+                    src={brandLogoUrl(brandDomain)}
+                    alt=""
+                    loading="lazy"
+                    onError={() => setLogoFailed(true)}
+                  />
+                )}
+                {creative.product.brand}
+              </span>
             )}
             <span className="promo-product-name">
               {creative.product?.name || 'Shop Now'}
