@@ -69,6 +69,53 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
   return (data || []) as ProductAd[];
 }
 
+// Fetch every creative for products tagged with the given catalog name —
+// mirrors the admin Catalogs view (status IN ('done','live'), video_url NOT
+// NULL). Used by the consumer feed so searching for a catalog name lands on
+// the full curated set, not just the elite/live subset `getLiveAds()` returns.
+export async function getCatalogCreatives(catalogName: string): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  const trimmed = catalogName.trim();
+  if (!trimmed) return [];
+
+  // Tags are stored as whatever casing the admin typed (usually lowercase).
+  // Try the raw, lowercase, and title-case variants so a user searching
+  // "White Shoes" still hits a catalog stored as "white shoes".
+  const variants = Array.from(new Set([
+    trimmed,
+    trimmed.toLowerCase(),
+    trimmed.replace(/\b\w/g, c => c.toUpperCase()),
+  ]));
+  const ors = variants
+    .map(v => `catalog_tags.cs.{"${v.replace(/"/g, '\\"')}"}`)
+    .join(',');
+
+  const { data: prodRows, error: prodErr } = await supabase
+    .from('products')
+    .select('id')
+    .or(ors);
+  if (prodErr) {
+    console.error('[getCatalogCreatives] product lookup error:', prodErr.message);
+    return [];
+  }
+  const productIds = (prodRows || []).map(p => p.id as string);
+  if (productIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('product_ads')
+    .select(AD_SELECT)
+    .in('product_id', productIds)
+    .in('status', ['done', 'live'])
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[getCatalogCreatives] ad query error:', error.message);
+    return [];
+  }
+  const rows = (data || []) as ProductAd[];
+  return rows.filter(ad => (ad.product as { is_active?: boolean } | undefined)?.is_active !== false);
+}
+
 export async function getLiveAds(): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Only surface explicitly approved (status='live') ads in the consumer feed.

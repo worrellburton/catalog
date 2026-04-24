@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-ads';
+import { getLiveAds, getCatalogCreatives, deleteProductAd, type ProductAd } from '~/services/product-ads';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
@@ -164,22 +164,39 @@ export default function ContinuousFeed({
     return () => { cancelled = true; };
   }, []);
 
-  // Filter creatives by the current search. If any product in the library has
-  // catalog_tags that match the query (case-insensitive), treat the search as
-  // a catalog lookup and keep only creatives whose product is tagged with it.
-  // Otherwise fall back to a text match on product name / brand.
+  // When the user searches, look up the full catalog (status IN
+  // ('done','live')) so the feed lands on every creative the admin has
+  // curated for that catalog — not just the elite/live subset `getLiveAds()`
+  // returns. Null = no query; [] = queried but no match; ProductAd[] = hit.
+  const [catalogCreatives, setCatalogCreatives] = useState<ProductAd[] | null>(null);
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setCatalogCreatives(null);
+      return;
+    }
+    let cancelled = false;
+    getCatalogCreatives(q)
+      .then(data => { if (!cancelled) setCatalogCreatives(data); })
+      .catch(err => {
+        console.error('[ContinuousFeed] catalog creative fetch failed:', err);
+        if (!cancelled) setCatalogCreatives([]);
+      });
+    return () => { cancelled = true; };
+  }, [searchQuery]);
+
+  // Filter creatives by the current search. If the query matches a catalog
+  // (products tagged with the search term), use the full catalog set fetched
+  // above. Otherwise fall back to a text match on product name / brand /
+  // catalog_tags against the elite live ads.
   const filteredCreatives = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return liveCreatives;
 
-    const isCatalogMatch = liveCreatives.some(c =>
-      (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
-    );
-
-    if (isCatalogMatch) {
-      return liveCreatives.filter(c =>
-        (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
-      );
+    if (catalogCreatives && catalogCreatives.length > 0) {
+      return catalogCreatives.filter(ad => !hiddenProductKeys.has(
+        `${ad.product?.brand || ''}-${ad.product?.name || ''}`,
+      ));
     }
 
     const matches = liveCreatives.filter(c =>
@@ -190,7 +207,7 @@ export default function ContinuousFeed({
     // Empty match = user typed a theme we don't have; fall back to everything
     // rather than showing a blank grid.
     return matches.length > 0 ? matches : liveCreatives;
-  }, [liveCreatives, searchQuery]);
+  }, [liveCreatives, catalogCreatives, searchQuery, hiddenProductKeys]);
 
   // Log search queries to Supabase (debounced)
   const { user } = useAuth();

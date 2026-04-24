@@ -101,8 +101,13 @@ export default function FeedSection({
     | { type: 'placeholder'; key: string };
 
   const pool = useMemo<PoolItem[]>(() => {
-    if (looks.length === 0) return [];
     const creativeList = isInitial ? (creatives ?? []) : [];
+    // Catalog-scoped searches can produce zero matching looks but a rich set
+    // of creatives. Only bail when there's truly nothing to show and nothing
+    // in flight.
+    if (looks.length === 0 && creativeList.length === 0 && !(isInitial && creativesLoading)) {
+      return [];
+    }
     const targetCells = isInitial ? 200 : 50;
 
     if (isInitial && creativesLoading) {
@@ -171,7 +176,7 @@ export default function FeedSection({
     setVisibleCount(batch);
   }, [looks, batch]);
 
-  if (looks.length === 0) return null;
+  if (pool.length === 0) return null;
 
   return (
     <div className={`feed-section layout-${layout.name}`}>
