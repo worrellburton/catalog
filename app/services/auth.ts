@@ -72,15 +72,21 @@ export async function verifyPhoneOtp(phone: string, token: string): Promise<{ us
 export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!supabase) return null;
 
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
-  const authUser = mapUser(data.user);
+  // Use getSession (local-storage read) instead of getUser (network call to
+  // /user). The /user endpoint occasionally 500s when Supabase Auth can't
+  // reach Postgres, which made the SPA think the user wasn't signed in and
+  // re-render the locked view — so users would click "Sign in with Google"
+  // 2-3 times. The PKCE code exchange already populated the session at this
+  // point, so reading from storage is enough.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+  const authUser = mapUser(session.user);
 
   try {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', data.user.id)
+      .eq('id', session.user.id)
       .single();
     if (profile?.role) {
       authUser.role = profile.role as UserRole;
