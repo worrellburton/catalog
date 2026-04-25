@@ -25,6 +25,7 @@ export interface UserGeneration {
   video_url: string | null;
   storage_path: string | null;
   error: string | null;
+  duration_seconds: number;
   created_at: string;
   completed_at: string | null;
 }
@@ -58,45 +59,120 @@ export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = 
  * The tone string is dropped verbatim into the prompt, so phrase it
  * as a stack of visual cues Seedance can take literally.
  */
-const BRAND_COMMERCIAL_TONES: { match: RegExp; key: string; tone: string }[] = [
-  { match: /\bnike\b/i,                key: 'Nike',           tone: 'kinetic athletic spot, cinematic slow-mo + sprint, sweat + chalk, bold black-on-white captions, hero stadium or city street' },
-  { match: /\badidas\b/i,              key: 'Adidas',         tone: 'street-athletic spot, three-stripe geometry, urban grit, concrete + neon, energetic crossfade' },
-  { match: /\blululemon\b/i,           key: 'Lululemon',      tone: 'serene studio mat spot, soft daylight, calm breath-led pacing, neutral palette' },
-  { match: /\bunder\s*armour\b/i,      key: 'Under Armour',   tone: 'gritty training spot, low-key lighting, intense close-ups, locker-room blacks' },
-  { match: /\bpuma\b/i,                key: 'Puma',           tone: 'high-energy track spot, motion blur, vibrant primaries' },
-  { match: /\breebok\b/i,              key: 'Reebok',         tone: 'retro athletic spot, warm grain, chalk and steel' },
-  { match: /\bgap\b/i,                 key: 'Gap',            tone: 'warm Americana family spot, sunlit denim + tees, optimistic pop, casual choreography, light folk soundtrack feel' },
-  { match: /\blevi'?s?\b/i,            key: "Levi's",         tone: 'Americana denim spot, sunset gold, dust, classic blue, warehouse + open road' },
-  { match: /\bralph\s*lauren\b/i,      key: 'Ralph Lauren',   tone: 'East-Coast estate spot, polo greens + cream, golden hour Hamptons, prep choreography' },
-  { match: /\bbrooks\s*brothers\b/i,   key: 'Brooks Brothers',tone: 'classic American tailoring spot, oak-paneled rooms, navy and oxford' },
-  { match: /\btommy\s*hilfiger\b/i,    key: 'Tommy Hilfiger', tone: 'red-white-blue Americana spot, varsity prep, optimistic and bright' },
-  { match: /\blacoste\b/i,             key: 'Lacoste',        tone: "Côte d'Azur tennis spot, white linen, clay courts, Mediterranean sun" },
-  { match: /\buniqlo\b/i,              key: 'Uniqlo',         tone: 'clean Tokyo-grid spot, primary blocks, simple geometry, calm minimal pacing' },
-  { match: /\bzara\b/i,                key: 'Zara',           tone: 'minimal editorial spot, concrete sets, monochrome wardrobe, slow turns' },
-  { match: /\bh&m\b|\bhennes\b/i,      key: 'H&M',            tone: 'high-street pop spot, candy lighting, fast cuts, youthful' },
-  { match: /\bpatagonia\b/i,           key: 'Patagonia',      tone: 'wild-outdoors spot, mountain weather, alpine grit, documentary feel' },
-  { match: /\bnorth\s*face\b/i,        key: 'The North Face', tone: 'expedition spot, snow + rock, technical layers, breath in cold air' },
-  { match: /\bcolumbia\b/i,            key: 'Columbia',       tone: 'rugged trail spot, river crossings, gear-forward composition' },
-  { match: /\bvans\b/i,                key: 'Vans',           tone: 'skate-park spot, daylight warehouse, handheld energy, halfpipe arcs' },
-  { match: /\bconverse\b/i,            key: 'Converse',       tone: 'analog music-video spot, brick walls, low warm tungsten' },
-  { match: /\bnew\s*balance\b/i,       key: 'New Balance',    tone: 'understated dad-core spot, tarmac, warm grade, restrained pacing' },
-  { match: /\bchanel\b/i,              key: 'Chanel',         tone: 'Parisian luxury spot, sculptural monochrome, marble + gold, hushed elegance' },
-  { match: /\bdior\b/i,                key: 'Dior',           tone: 'haute couture spot, painterly light, draped fabric in motion' },
-  { match: /\bgucci\b/i,               key: 'Gucci',          tone: 'maximalist editorial spot, jewel tones, theatrical sets, surreal pacing' },
-  { match: /\bprada\b/i,               key: 'Prada',          tone: 'austere conceptual spot, hard angles, cool palette, deliberate pacing' },
-  { match: /\bbalenciaga\b/i,          key: 'Balenciaga',     tone: 'subversive luxury spot, dystopian sets, hyper-saturated color' },
-  { match: /\bversace\b/i,             key: 'Versace',        tone: 'gold-medusa Miami spot, marble columns, baroque richness' },
-  { match: /\bcalvin\s*klein\b/i,      key: 'Calvin Klein',   tone: 'minimal monochrome spot, intimate close-ups, stark loft' },
-  { match: /\barit\s*zia\b/i,          key: 'Aritzia',        tone: 'elevated everyday spot, soft neutrals, slow-mo turn, gauzy daylight' },
-  { match: /\babercrombie\b/i,         key: 'Abercrombie',    tone: 'sun-drenched coastal spot, pier and dunes, denim and white tees' },
-  { match: /\bj\.?crew\b/i,            key: 'J.Crew',         tone: 'preppy New England spot, sailboat blues, knit and oxford layers' },
-  { match: /\bmadewell\b/i,            key: 'Madewell',       tone: 'lived-in denim spot, warm warehouse, hand-held intimacy' },
-  { match: /\bbanana\s*republic\b/i,   key: 'Banana Republic',tone: 'modern safari spot, neutral camel and stone, golden hour' },
-  { match: /\bapple\b/i,               key: 'Apple',          tone: 'minimalist white-room spot, clean motion, hero shot, kinetic typography' },
-  { match: /\btesla\b/i,               key: 'Tesla',          tone: 'minimalist tech spot, polished concrete, monochrome hero, kinetic reveal' },
+// Per-brand commercial fingerprint. The `tone` carries the visual
+// world (palette, set, wardrobe energy); `camera` carries the
+// cinematography spine (camera moves, lens choice, beat structure)
+// so Seedance produces something that reads like a commercial -- not
+// a static fit-cam. Both strings drop verbatim into the prompt.
+const BRAND_COMMERCIAL_TONES: { match: RegExp; key: string; tone: string; camera: string }[] = [
+  { match: /\bnike\b/i,                key: 'Nike',
+    tone:   'kinetic athletic spot, cinematic slow-mo + sprint, sweat + chalk, bold black-on-white captions, hero stadium or city street',
+    camera: 'kinetic handheld + dolly, low-angle hero stride, whip pan into a tight close-up, snap zoom on the logo, motion-blur match cuts; sprint cadence' },
+  { match: /\badidas\b/i,              key: 'Adidas',
+    tone:   'street-athletic spot, three-stripe geometry, urban grit, concrete + neon, energetic crossfade',
+    camera: 'low-angle Steadicam, sliding dolly past the subject, whip-pan transitions, neon rim-light flares' },
+  { match: /\blululemon\b/i,           key: 'Lululemon',
+    tone:   'serene studio mat spot, soft daylight, calm breath-led pacing, neutral palette',
+    camera: 'slow gimbal arc, breath-paced dolly-in, rack-focus from hands to face; sustained holds, no whip cuts' },
+  { match: /\bunder\s*armour\b/i,      key: 'Under Armour',
+    tone:   'gritty training spot, low-key lighting, intense close-ups, locker-room blacks',
+    camera: 'tight handheld, hard side-light, push-in on clenched detail, snap-cut to wide hero pose' },
+  { match: /\bpuma\b/i,                key: 'Puma',
+    tone:   'high-energy track spot, motion blur, vibrant primaries',
+    camera: 'tracking dolly alongside motion, whip pans, color-saturated rim light, snap zoom' },
+  { match: /\breebok\b/i,              key: 'Reebok',
+    tone:   'retro athletic spot, warm grain, chalk and steel',
+    camera: '35mm warm grain, ground-level dolly, slow-mo step beat at frame 2, freeze-frame hero pose' },
+  { match: /\bgap\b/i,                 key: 'Gap',
+    tone:   'warm Americana family spot, sunlit denim + tees, optimistic pop, casual choreography',
+    camera: 'sun-flare push-in, mid-stride hero pose at frame 2, catching-the-light close-up at frame 3, slow turn-and-smile to camera' },
+  { match: /\blevi'?s?\b/i,            key: "Levi's",
+    tone:   'Americana denim spot, sunset gold, dust, classic blue, warehouse + open road',
+    camera: 'low-angle hero stride, dust kick-up, golden-hour rim light, dolly + slow-mo step' },
+  { match: /\bralph\s*lauren\b/i,      key: 'Ralph Lauren',
+    tone:   'East-Coast estate spot, polo greens + cream, golden hour Hamptons, prep choreography',
+    camera: 'wide composed frame, slow gimbal arc, soft golden flare; classical pacing with one push-in' },
+  { match: /\bbrooks\s*brothers\b/i,   key: 'Brooks Brothers',
+    tone:   'classic American tailoring spot, oak-paneled rooms, navy and oxford',
+    camera: 'static composed wide, deliberate dolly-in to mid-shot, single rack focus to a tailoring detail' },
+  { match: /\btommy\s*hilfiger\b/i,    key: 'Tommy Hilfiger',
+    tone:   'red-white-blue Americana spot, varsity prep, optimistic and bright',
+    camera: 'bright bounce-light, dolly-in past flag elements, snap cut to a smile-to-camera' },
+  { match: /\blacoste\b/i,             key: 'Lacoste',
+    tone:   "Côte d'Azur tennis spot, white linen, clay courts, Mediterranean sun",
+    camera: 'low sun haze, slow dolly past clay, slow-mo serve beat, soft rack focus' },
+  { match: /\buniqlo\b/i,              key: 'Uniqlo',
+    tone:   'clean Tokyo-grid spot, primary blocks, simple geometry, calm minimal pacing',
+    camera: 'static wide composed, single push-in, deliberate quarter-turn, no whip cuts' },
+  { match: /\bzara\b/i,                key: 'Zara',
+    tone:   'minimal editorial spot, concrete sets, monochrome wardrobe, slow turns',
+    camera: 'studio dolly arc, hard side-light, slow turn-and-stare, single rack focus' },
+  { match: /\bh&m\b|\bhennes\b/i,      key: 'H&M',
+    tone:   'high-street pop spot, candy lighting, fast cuts, youthful',
+    camera: 'fast push-ins, snap zooms, jump-cut feel via aggressive composition shifts, neon backlight' },
+  { match: /\bpatagonia\b/i,           key: 'Patagonia',
+    tone:   'wild-outdoors spot, mountain weather, alpine grit, documentary feel',
+    camera: 'handheld documentary, wind-buffeted lens, wide-to-tight pull, breath in cold air close-up' },
+  { match: /\bnorth\s*face\b/i,        key: 'The North Face',
+    tone:   'expedition spot, snow + rock, technical layers',
+    camera: 'wide alpine drone-feel, descend to handheld follow, breath-condensation close-up' },
+  { match: /\bcolumbia\b/i,            key: 'Columbia',
+    tone:   'rugged trail spot, river crossings, gear-forward composition',
+    camera: 'low-angle hero stride through terrain, splash close-up, push-in on gear detail' },
+  { match: /\bvans\b/i,                key: 'Vans',
+    tone:   'skate-park spot, daylight warehouse, handheld energy',
+    camera: 'fisheye energy, low-angle handheld follow, snap pan on board flick, freeze on landing' },
+  { match: /\bconverse\b/i,            key: 'Converse',
+    tone:   'analog music-video spot, brick walls, low warm tungsten',
+    camera: 'handheld 16mm feel, swing-pan transitions, neon-tinged rim light, jump cut on beat' },
+  { match: /\bnew\s*balance\b/i,       key: 'New Balance',
+    tone:   'understated dad-core spot, tarmac, warm grade',
+    camera: 'patient dolly alongside, warm grain, slow-mo footstrike close-up, single push-in to mid-shot' },
+  { match: /\bchanel\b/i,              key: 'Chanel',
+    tone:   'Parisian luxury spot, sculptural monochrome, marble + gold, hushed elegance',
+    camera: 'slow gimbal arc around the subject, hard key + soft fill, deliberate rack focus, hushed pacing' },
+  { match: /\bdior\b/i,                key: 'Dior',
+    tone:   'haute couture spot, painterly light, draped fabric in motion',
+    camera: 'slow dolly-in, fabric-flow slow-mo, rack focus from hands to eyes, painterly chiaroscuro' },
+  { match: /\bgucci\b/i,               key: 'Gucci',
+    tone:   'maximalist editorial spot, jewel tones, theatrical sets, surreal pacing',
+    camera: 'symmetrical wide, slow zoom-in with theatrical pause, surreal dutch tilt, lush rack focus' },
+  { match: /\bprada\b/i,               key: 'Prada',
+    tone:   'austere conceptual spot, hard angles, cool palette, deliberate pacing',
+    camera: 'hard fluorescent key, slow lateral dolly, deliberate quarter-turn, no whip cuts' },
+  { match: /\bbalenciaga\b/i,          key: 'Balenciaga',
+    tone:   'subversive luxury spot, dystopian sets, hyper-saturated color',
+    camera: 'wide-anamorphic feel, slow zoom with menacing pause, hard composed frame, single drop-cut' },
+  { match: /\bversace\b/i,             key: 'Versace',
+    tone:   'gold-medusa Miami spot, marble columns, baroque richness',
+    camera: 'slow orbit around the subject, gold-bounce key, rack focus on jewelry, slow tilt up to face' },
+  { match: /\bcalvin\s*klein\b/i,      key: 'Calvin Klein',
+    tone:   'minimal monochrome spot, intimate close-ups, stark loft',
+    camera: 'tight handheld close-ups, hard side-light, slow dolly to mid-shot, sparse cuts via composition shift' },
+  { match: /\barit\s*zia\b/i,          key: 'Aritzia',
+    tone:   'elevated everyday spot, soft neutrals, gauzy daylight',
+    camera: 'soft window light, slow gimbal turn, rack focus from fabric to eyes, slow-mo fabric move' },
+  { match: /\babercrombie\b/i,         key: 'Abercrombie',
+    tone:   'sun-drenched coastal spot, pier and dunes, denim and white tees',
+    camera: 'sun-flare lens, low-angle hero, ocean wind-blown hair, slow turn-to-camera' },
+  { match: /\bj\.?crew\b/i,            key: 'J.Crew',
+    tone:   'preppy New England spot, sailboat blues, knit and oxford layers',
+    camera: 'wide composed dock or porch, dolly-in to mid-shot, soft golden hour, single rack focus' },
+  { match: /\bmadewell\b/i,            key: 'Madewell',
+    tone:   'lived-in denim spot, warm warehouse, hand-held intimacy',
+    camera: 'warm hand-held, intimate close-up of hands on denim, slow turn to mid-shot, soft window key' },
+  { match: /\bbanana\s*republic\b/i,   key: 'Banana Republic',
+    tone:   'modern safari spot, neutral camel and stone, golden hour',
+    camera: 'wide-to-tight push-in, golden hour flare, slow gimbal walk, classical pacing' },
+  { match: /\bapple\b/i,               key: 'Apple',
+    tone:   'minimalist white-room spot, clean motion, hero shot, kinetic typography',
+    camera: 'static white seamless, slow turntable rotation of subject, push-in to macro detail at frame 3, clean rack-focus cut to product hero' },
+  { match: /\btesla\b/i,               key: 'Tesla',
+    tone:   'minimalist tech spot, polished concrete, monochrome hero, kinetic reveal',
+    camera: 'slow lateral dolly, single hard rim, push-in to detail, clean rack-focus reveal' },
 ];
 
-interface BrandTone { key: string; tone: string }
+interface BrandTone { key: string; tone: string; camera: string }
 
 function detectBrandTones(
   productLines: { brand: string | null }[],
@@ -107,12 +183,13 @@ function detectBrandTones(
     if (!brand) continue;
     const hit = BRAND_COMMERCIAL_TONES.find(b => b.match.test(brand));
     if (hit) {
-      if (!seen.has(hit.key)) seen.set(hit.key, { key: hit.key, tone: hit.tone });
+      if (!seen.has(hit.key)) seen.set(hit.key, { key: hit.key, tone: hit.tone, camera: hit.camera });
     } else {
       if (!seen.has(brand)) {
         seen.set(brand, {
           key: brand,
           tone: `${brand} house-style spot, hero pacing, on-brand palette, polished grade`,
+          camera: 'cinematic dolly-in, hero low-angle, single rack focus to product detail, motion-blur transition that reads as a cut',
         });
       }
     }
@@ -428,6 +505,7 @@ export interface CreateGenerationInput {
   ageLabel: string;
   style: string;
   prompt: string;
+  durationSeconds: number;
 }
 
 /**
@@ -451,6 +529,7 @@ export async function createGeneration(
       age_label: input.ageLabel,
       style: input.style,
       prompt: input.prompt,
+      duration_seconds: input.durationSeconds,
     })
     .select('*')
     .single();
@@ -598,6 +677,7 @@ export function buildGenerationPrompt(opts: {
   ageLabel?: string;
   style: string;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
+  durationSeconds?: number;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
   const productList = opts.productLines
@@ -614,25 +694,40 @@ export function buildGenerationPrompt(opts: {
   // actually picked an item. Stops Seedance from inventing pants /
   // shoes / accessories that were never selected.
   const framing = computeFraming(opts.productLines);
+  const seconds = opts.durationSeconds ?? 5;
 
   if (opts.style === 'commercial') {
     const tones = detectBrandTones(opts.productLines);
     let castLine: string;
+    let cameraLine: string;
     if (tones.length === 0) {
       castLine = 'Cast them as the lead in a polished branded commercial — hero pacing, clean grade, on-brand palette.';
+      cameraLine = 'Cinematography: bold dolly-in, low-angle hero framing, single rack focus to a product detail, motion-blur transition that reads as a cut.';
     } else if (tones.length === 1) {
       castLine = `Cast them as the lead in a ${tones[0].key} commercial — ${tones[0].tone}.`;
+      cameraLine = `Cinematography (${tones[0].key} house style): ${tones[0].camera}.`;
     } else {
       const names = tones.map(t => t.key).join(' × ');
       const blendedTone = tones.map(t => t.tone).join('; meshing ');
+      const blendedCamera = tones.map(t => `${t.key}: ${t.camera}`).join(' / ');
       castLine = `Cast them as the lead in a ${names} crossover commercial — meshing ${blendedTone}. Frame it as an unmistakable collab spot, blending each brand's house style into one cohesive look.`;
+      cameraLine = `Cinematography blends both brands' camera languages — ${blendedCamera}.`;
     }
+    // Three-beat structure inside the single Seedance clip so it
+    // reads as a commercial, not a static fit-cam. Seedance can't do
+    // real edit cuts in one render, but aggressive composition shifts
+    // + motion-blur transitions fake the look of cuts well.
+    const beatLine = seconds >= 10
+      ? 'Structure across the clip in 4 beats: (1) hero entrance — wide composed frame, subject walks/turns into shot; (2) push-in close-up at ~25% — face / detail moment; (3) action beat at ~55% — wardrobe interaction (zip pull, hand-in-pocket, head turn) with a motion-blur transition that reads as a cut; (4) hero stance + product reveal in the final third with a clean rack focus.'
+      : 'Structure across the clip in 3 beats: (1) hero entrance in the first ~30%; (2) action / wardrobe interaction with a motion-blur transition that reads as a cut around the midpoint; (3) close-up product or expression hero in the final third.';
     return [
       `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
       productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
       castLine,
+      cameraLine,
+      beatLine,
       framing,
-      '5-second portrait clip, hero pacing, polished commercial grade.',
+      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.`,
     ].join(' ');
   }
 
@@ -642,6 +737,6 @@ export function buildGenerationPrompt(opts: {
     `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
     framing,
-    `Natural motion, 5-second portrait clip${styleTag}.`,
+    `Natural motion, ${seconds}-second portrait clip${styleTag}.`,
   ].join(' ');
 }

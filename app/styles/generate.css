@@ -553,6 +553,23 @@
 }
 .gen-heightgrid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
 
+/* Two-button length picker on the Review step. Reuses the
+   .gen-heightchip pill so the affordance reads the same as height
+   and age. */
+.gen-lengthgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 120px));
+  gap: 8px;
+  margin: 0 0 18px;
+}
+@media (min-width: 900px) {
+  .gen-lengthgrid {
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+  }
+}
+
 /* Combined "About you" step groups Height + Age in a single screen. */
 .gen-aboutgroup { margin-bottom: 28px; }
 .gen-aboutgroup:last-child { margin-bottom: 0; }

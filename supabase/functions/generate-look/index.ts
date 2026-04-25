@@ -40,6 +40,7 @@ const MODEL_SLUG = 'bytedance/seedance-2.0/fast/reference-to-video';
 async function submitFal(
   prompt: string,
   referenceImageUrls: string[],
+  durationSeconds: number,
   falKey: string,
   webhookUrl: string,
 ): Promise<{ request_id: string | null; error: string | null }> {
@@ -56,7 +57,10 @@ async function submitFal(
         // running text-only). Each image is addressed by @Image1,
         // @Image2, … inside the prompt; up to 9 are supported.
         image_urls: referenceImageUrls.slice(0, 9),
-        duration: '5',
+        // Seedance 2 Fast supports 5 or 10s clips. The wizard's
+        // Review step exposes the picker; we coerce anything else
+        // back to 5 here as a safety net.
+        duration: durationSeconds === 10 ? '10' : '5',
         aspect_ratio: '9:16',
         resolution: '720p',
         generate_audio: false,
@@ -215,22 +219,37 @@ Deno.serve(async (req: Request) => {
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';
-  const taggedPrompt = [
+  const durationSeconds = gen.duration_seconds === 10 ? 10 : 5;
+  // Prefer the rich prompt the client built (carries framing,
+  // commercial cinematography, brand camera language) — the original
+  // tagged-prompt fallback below is only used if the client didn't
+  // ship one. Either way we replace any "5-second" string with the
+  // actual duration so the model is told the right clip length.
+  const clientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
+    ? gen.prompt
+    : null;
+  const fallbackPrompt = [
     `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.`,
     heightClause,
     ageClause,
     productClauses.length > 0
       ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
       : 'Dress them in the provided products.',
-    `Natural full-body motion, 5-second portrait clip${styleSuffix}.`,
+    `Natural full-body motion, ${durationSeconds}-second portrait clip${styleSuffix}.`,
   ].filter(Boolean).join(' ');
+  // Always re-prepend the @ImageN binding lines so Seedance binds
+  // each reference photo to its tag even when the client supplied
+  // a fully-formed prompt without them.
+  const taggedPrompt = clientPrompt
+    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${clientPrompt}`
+    : fallbackPrompt;
 
   // Webhook: Fal POSTs the result to /functions/v1/fal-webhook when
   // done. We don't poll. The fal-webhook function flips the row's
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
-  const { request_id, error } = await submitFal(taggedPrompt, referenceUrls, falKey, webhookUrl);
+  const { request_id, error } = await submitFal(taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
 
   if (error || !request_id) {
     await admin.from('user_generations').update({

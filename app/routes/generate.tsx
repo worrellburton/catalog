@@ -35,7 +35,18 @@ const MAX_PRODUCTS = 5;
 // runs that timed out client-side. We now use Fal webhooks (no
 // internal poller cap), so budget 180s for the user-facing progress
 // bar; it eases past 95% so it never sits flat on slow jobs.
-const TYPICAL_GENERATION_SECONDS = 180;
+// Typical wall-clock generation time on Fal Seedance 2 Fast keyed by
+// the requested clip length. 5s clips average ~180s; 10s clips run
+// closer to ~300s. The progress bar eases past 95% of whichever
+// estimate applies so it never sits at 100% while we're still polling.
+const TYPICAL_GENERATION_SECONDS_BY_DURATION: Record<number, number> = {
+  5: 180,
+  10: 300,
+};
+const TYPICAL_GENERATION_SECONDS_DEFAULT = 180;
+const typicalSecondsFor = (durationSeconds?: number | null) =>
+  TYPICAL_GENERATION_SECONDS_BY_DURATION[durationSeconds ?? 0]
+  ?? TYPICAL_GENERATION_SECONDS_DEFAULT;
 
 type Step = 'photos' | 'products' | 'about' | 'style' | 'review' | 'result';
 
@@ -133,6 +144,8 @@ export default function GeneratePage() {
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
   const [style, setStyle] = useState<string>('street');
+  // Output clip length. Seedance 2 Fast supports 5 or 10 only.
+  const [clipSeconds, setClipSeconds] = useState<5 | 10>(5);
 
   // Phase 12 — submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -456,6 +469,9 @@ export default function GeneratePage() {
     if (detail.generation.height_label) setHeightLabel(detail.generation.height_label);
     if (detail.generation.age_label) setAgeLabel(detail.generation.age_label);
     if (detail.generation.style) setStyle(detail.generation.style);
+    if (detail.generation.duration_seconds === 5 || detail.generation.duration_seconds === 10) {
+      setClipSeconds(detail.generation.duration_seconds);
+    }
 
     setGeneration(null);
     setSubmitError(null);
@@ -488,6 +504,7 @@ export default function GeneratePage() {
       heightLabel,
       ageLabel,
       style,
+      durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
         brand: p.brand,
@@ -503,6 +520,7 @@ export default function GeneratePage() {
       ageLabel,
       style,
       prompt,
+      durationSeconds: clipSeconds,
     });
     setSubmitting(false);
     if (error || !data) {
@@ -808,7 +826,23 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
               <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
+              <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
             </div>
+
+            <div className="gen-sectionlabel">Clip length</div>
+            <div className="gen-lengthgrid">
+              {[5, 10].map(sec => (
+                <button
+                  key={sec}
+                  type="button"
+                  className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
+                  onClick={() => setClipSeconds(sec as 5 | 10)}
+                >
+                  {sec}s
+                </button>
+              ))}
+            </div>
+
             <div className="gen-review-products">
               {picked.map(p => (
                 <div key={p.id} className="gen-review-product">
@@ -949,11 +983,12 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
 
   const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
+  const typicalSec = typicalSecondsFor(generation.duration_seconds);
   // Linear up to 95% across the typical budget; soft asymptote past that
   // so users never see a static 100% bar while we're still polling Fal.
-  const linearPct = (elapsedSec / TYPICAL_GENERATION_SECONDS) * 95;
-  const overflowPct = elapsedSec > TYPICAL_GENERATION_SECONDS
-    ? 95 + (1 - Math.exp(-(elapsedSec - TYPICAL_GENERATION_SECONDS) / 60)) * 4.5
+  const linearPct = (elapsedSec / typicalSec) * 95;
+  const overflowPct = elapsedSec > typicalSec
+    ? 95 + (1 - Math.exp(-(elapsedSec - typicalSec) / 60)) * 4.5
     : linearPct;
   const pct = Math.min(99.5, Math.max(2, overflowPct));
 
@@ -966,7 +1001,7 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
   );
   const activePhase = BUILD_PHASES[phaseIdx];
 
-  const remaining = Math.max(0, Math.round(TYPICAL_GENERATION_SECONDS - elapsedSec));
+  const remaining = Math.max(0, Math.round(typicalSec - elapsedSec));
   const subLabel = remaining > 0
     ? `About ${remaining}s left`
     : 'Almost there…';
@@ -1038,9 +1073,10 @@ function LookCard({
 
   const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
-  const linearPct = (elapsedSec / TYPICAL_GENERATION_SECONDS) * 95;
-  const overflowPct = elapsedSec > TYPICAL_GENERATION_SECONDS
-    ? 95 + (1 - Math.exp(-(elapsedSec - TYPICAL_GENERATION_SECONDS) / 60)) * 4.5
+  const typicalSec = typicalSecondsFor(generation.duration_seconds);
+  const linearPct = (elapsedSec / typicalSec) * 95;
+  const overflowPct = elapsedSec > typicalSec
+    ? 95 + (1 - Math.exp(-(elapsedSec - typicalSec) / 60)) * 4.5
     : linearPct;
   const pct = Math.min(99.5, Math.max(2, overflowPct));
   const phaseIdx = Math.min(

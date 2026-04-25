@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { getProfiles, updateUserRole, updateUserIsAdmin, type Profile } from '~/services/profiles';
+import { supabase } from '~/utils/supabase';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -265,7 +266,32 @@ export default function AdminUsers() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    getProfiles().then(profiles => setAllUsers(profiles.map(profileToRow)));
+    let cancelled = false;
+    (async () => {
+      // Fetch profiles + per-user generated-look counts in parallel.
+      // Looks count for DB users is the number of user_generations
+      // rows they own (any status). Seed-data creators not present
+      // in profiles still count from looksPerCreator below.
+      const [profiles, genRowsRes] = await Promise.all([
+        getProfiles(),
+        supabase ? supabase.from('user_generations').select('user_id') : Promise.resolve({ data: null }),
+      ]);
+      if (cancelled) return;
+      const counts = new Map<string, number>();
+      const rows = ((genRowsRes as { data: { user_id: string }[] | null }).data) || [];
+      for (const r of rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
+      setAllUsers(profiles.map(p => {
+        const row = profileToRow(p);
+        // Two sources contribute: (a) generated looks owned by the
+        // auth user, (b) seed-data look authorship matched by name.
+        const seedHandle = Object.values(lookCreators).find(
+          c => c.displayName.toLowerCase() === row.name.toLowerCase(),
+        )?.name;
+        const seedCount = seedHandle ? (looksPerCreator[seedHandle] || 0) : 0;
+        return { ...row, looksCount: (counts.get(p.id) || 0) + seedCount };
+      }));
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const dismissToast = useCallback((id: number) => {
