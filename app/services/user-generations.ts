@@ -40,6 +40,7 @@ export interface GenerationProduct {
 export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = [
   { value: 'street',      label: 'Street',      blurb: 'Urban candid, natural light, walking shot' },
   { value: 'editorial',   label: 'Editorial',   blurb: 'High-fashion studio, dramatic lighting' },
+  { value: 'commercial',  label: 'Commercial',  blurb: 'Branded ad starring you — house-style spot per the picked brand' },
   { value: 'lifestyle',   label: 'Lifestyle',   blurb: 'Casual home / cafe setting, warm tones' },
   { value: 'studio',      label: 'Studio',      blurb: 'Clean seamless backdrop, product-focused' },
   { value: 'athletic',    label: 'Athletic',    blurb: 'Gym or outdoor training, dynamic motion' },
@@ -47,6 +48,77 @@ export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = 
   { value: 'beach',       label: 'Beach',       blurb: 'Coastal, golden hour, breeze' },
   { value: 'cinematic',   label: 'Cinematic',   blurb: 'Film look, shallow depth of field' },
 ];
+
+/**
+ * House-style hint per brand. Used by the Commercial style preset so a
+ * picked Nike product produces a kinetic Nike-style spot, a Gap pick
+ * lands a sunlit family Gap spot, etc. Order matters — earlier
+ * patterns win, so put more specific brands first if any overlap.
+ *
+ * The tone string is dropped verbatim into the prompt, so phrase it
+ * as a stack of visual cues Seedance can take literally.
+ */
+const BRAND_COMMERCIAL_TONES: { match: RegExp; key: string; tone: string }[] = [
+  { match: /\bnike\b/i,                key: 'Nike',           tone: 'kinetic athletic spot, cinematic slow-mo + sprint, sweat + chalk, bold black-on-white captions, hero stadium or city street' },
+  { match: /\badidas\b/i,              key: 'Adidas',         tone: 'street-athletic spot, three-stripe geometry, urban grit, concrete + neon, energetic crossfade' },
+  { match: /\blululemon\b/i,           key: 'Lululemon',      tone: 'serene studio mat spot, soft daylight, calm breath-led pacing, neutral palette' },
+  { match: /\bunder\s*armour\b/i,      key: 'Under Armour',   tone: 'gritty training spot, low-key lighting, intense close-ups, locker-room blacks' },
+  { match: /\bpuma\b/i,                key: 'Puma',           tone: 'high-energy track spot, motion blur, vibrant primaries' },
+  { match: /\breebok\b/i,              key: 'Reebok',         tone: 'retro athletic spot, warm grain, chalk and steel' },
+  { match: /\bgap\b/i,                 key: 'Gap',            tone: 'warm Americana family spot, sunlit denim + tees, optimistic pop, casual choreography, light folk soundtrack feel' },
+  { match: /\blevi'?s?\b/i,            key: "Levi's",         tone: 'Americana denim spot, sunset gold, dust, classic blue, warehouse + open road' },
+  { match: /\bralph\s*lauren\b/i,      key: 'Ralph Lauren',   tone: 'East-Coast estate spot, polo greens + cream, golden hour Hamptons, prep choreography' },
+  { match: /\bbrooks\s*brothers\b/i,   key: 'Brooks Brothers',tone: 'classic American tailoring spot, oak-paneled rooms, navy and oxford' },
+  { match: /\btommy\s*hilfiger\b/i,    key: 'Tommy Hilfiger', tone: 'red-white-blue Americana spot, varsity prep, optimistic and bright' },
+  { match: /\blacoste\b/i,             key: 'Lacoste',        tone: "Côte d'Azur tennis spot, white linen, clay courts, Mediterranean sun" },
+  { match: /\buniqlo\b/i,              key: 'Uniqlo',         tone: 'clean Tokyo-grid spot, primary blocks, simple geometry, calm minimal pacing' },
+  { match: /\bzara\b/i,                key: 'Zara',           tone: 'minimal editorial spot, concrete sets, monochrome wardrobe, slow turns' },
+  { match: /\bh&m\b|\bhennes\b/i,      key: 'H&M',            tone: 'high-street pop spot, candy lighting, fast cuts, youthful' },
+  { match: /\bpatagonia\b/i,           key: 'Patagonia',      tone: 'wild-outdoors spot, mountain weather, alpine grit, documentary feel' },
+  { match: /\bnorth\s*face\b/i,        key: 'The North Face', tone: 'expedition spot, snow + rock, technical layers, breath in cold air' },
+  { match: /\bcolumbia\b/i,            key: 'Columbia',       tone: 'rugged trail spot, river crossings, gear-forward composition' },
+  { match: /\bvans\b/i,                key: 'Vans',           tone: 'skate-park spot, daylight warehouse, handheld energy, halfpipe arcs' },
+  { match: /\bconverse\b/i,            key: 'Converse',       tone: 'analog music-video spot, brick walls, low warm tungsten' },
+  { match: /\bnew\s*balance\b/i,       key: 'New Balance',    tone: 'understated dad-core spot, tarmac, warm grade, restrained pacing' },
+  { match: /\bchanel\b/i,              key: 'Chanel',         tone: 'Parisian luxury spot, sculptural monochrome, marble + gold, hushed elegance' },
+  { match: /\bdior\b/i,                key: 'Dior',           tone: 'haute couture spot, painterly light, draped fabric in motion' },
+  { match: /\bgucci\b/i,               key: 'Gucci',          tone: 'maximalist editorial spot, jewel tones, theatrical sets, surreal pacing' },
+  { match: /\bprada\b/i,               key: 'Prada',          tone: 'austere conceptual spot, hard angles, cool palette, deliberate pacing' },
+  { match: /\bbalenciaga\b/i,          key: 'Balenciaga',     tone: 'subversive luxury spot, dystopian sets, hyper-saturated color' },
+  { match: /\bversace\b/i,             key: 'Versace',        tone: 'gold-medusa Miami spot, marble columns, baroque richness' },
+  { match: /\bcalvin\s*klein\b/i,      key: 'Calvin Klein',   tone: 'minimal monochrome spot, intimate close-ups, stark loft' },
+  { match: /\barit\s*zia\b/i,          key: 'Aritzia',        tone: 'elevated everyday spot, soft neutrals, slow-mo turn, gauzy daylight' },
+  { match: /\babercrombie\b/i,         key: 'Abercrombie',    tone: 'sun-drenched coastal spot, pier and dunes, denim and white tees' },
+  { match: /\bj\.?crew\b/i,            key: 'J.Crew',         tone: 'preppy New England spot, sailboat blues, knit and oxford layers' },
+  { match: /\bmadewell\b/i,            key: 'Madewell',       tone: 'lived-in denim spot, warm warehouse, hand-held intimacy' },
+  { match: /\bbanana\s*republic\b/i,   key: 'Banana Republic',tone: 'modern safari spot, neutral camel and stone, golden hour' },
+  { match: /\bapple\b/i,               key: 'Apple',          tone: 'minimalist white-room spot, clean motion, hero shot, kinetic typography' },
+  { match: /\btesla\b/i,               key: 'Tesla',          tone: 'minimalist tech spot, polished concrete, monochrome hero, kinetic reveal' },
+];
+
+interface BrandTone { key: string; tone: string }
+
+function detectBrandTones(
+  productLines: { brand: string | null }[],
+): BrandTone[] {
+  const seen = new Map<string, BrandTone>();
+  for (const p of productLines) {
+    const brand = (p.brand ?? '').trim();
+    if (!brand) continue;
+    const hit = BRAND_COMMERCIAL_TONES.find(b => b.match.test(brand));
+    if (hit) {
+      if (!seen.has(hit.key)) seen.set(hit.key, { key: hit.key, tone: hit.tone });
+    } else {
+      if (!seen.has(brand)) {
+        seen.set(brand, {
+          key: brand,
+          tone: `${brand} house-style spot, hero pacing, on-brand palette, polished grade`,
+        });
+      }
+    }
+  }
+  return Array.from(seen.values());
+}
 
 /**
  * Upload one reference photo for the current user. Objects land under
@@ -384,6 +456,12 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
  * Seedance 2 Fast's reference endpoint is fed the face + product photos as
  * visual references, so the text only needs to tell it *what to do*:
  * preserve the face, set the height, place the products on the subject.
+ *
+ * The `commercial` style takes a different shape: it casts the shopper as
+ * the lead in a brand-house-style spot. When products span multiple
+ * brands the prompt asks for a crossover/mesh of those tones (e.g. a
+ * Nike × Gap collab spot meshes kinetic athletic energy with sunlit
+ * Americana family warmth).
  */
 export function buildGenerationPrompt(opts: {
   heightLabel: string;
@@ -401,8 +479,29 @@ export function buildGenerationPrompt(opts: {
     .filter(Boolean)
     .join(', ');
 
-  const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
   const ageClause = opts.ageLabel ? ` They look ${opts.ageLabel}.` : '';
+
+  if (opts.style === 'commercial') {
+    const tones = detectBrandTones(opts.productLines);
+    let castLine: string;
+    if (tones.length === 0) {
+      castLine = 'Cast them as the lead in a polished branded commercial — hero pacing, clean grade, on-brand palette.';
+    } else if (tones.length === 1) {
+      castLine = `Cast them as the lead in a ${tones[0].key} commercial — ${tones[0].tone}.`;
+    } else {
+      const names = tones.map(t => t.key).join(' × ');
+      const blendedTone = tones.map(t => t.tone).join('; meshing ');
+      castLine = `Cast them as the lead in a ${names} crossover commercial — meshing ${blendedTone}. Frame it as an unmistakable collab spot, blending each brand's house style into one cohesive look.`;
+    }
+    return [
+      `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
+      productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
+      castLine,
+      '5-second portrait clip, hero pacing, polished commercial grade.',
+    ].join(' ');
+  }
+
+  const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
 
   return [
     `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
