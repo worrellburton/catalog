@@ -850,18 +850,24 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
             </div>
 
+            {/*
+              Clip-length picker temporarily collapsed to 5s only. The
+              pro/long-form Seedance 2 reference-to-video endpoint
+              hasn't been identified (Fal returned 404 on
+              `/pro/reference-to-video`), so the wizard offers a
+              single 5s option until we find the right slug. The
+              picker grid is intentionally left mounted (single
+              button) so the user understands the length they'll get.
+            */}
             <div className="gen-sectionlabel">Clip length</div>
             <div className="gen-lengthgrid">
-              {[5, 10].map(sec => (
-                <button
-                  key={sec}
-                  type="button"
-                  className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
-                  onClick={() => setClipSeconds(sec as 5 | 10)}
-                >
-                  {sec}s
-                </button>
-              ))}
+              <button
+                type="button"
+                className="gen-heightchip is-picked"
+                disabled
+              >
+                5s
+              </button>
             </div>
 
             <div className="gen-review-products">

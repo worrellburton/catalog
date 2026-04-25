@@ -35,14 +35,15 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 has two reference-to-video endpoints. The /fast variant
-// is cheap and quick but capped at 5-second outputs — Fal silently
-// 500s during processing if you ship duration=10 to it. The /pro
-// (full) variant supports 5 or 10 second outputs. We pick per-job
-// based on the requested duration so 10s requests don't dead-end.
+// Seedance 2 reference-to-video. The /fast variant is the only
+// confirmed-working slug right now and it's capped at 5-second
+// outputs. We tried `/pro/reference-to-video` for 10s clips but Fal
+// returned 404 — that path doesn't exist. Until we identify the
+// correct pro/long-form slug, every job runs on /fast at 5s
+// regardless of what the row asks for, and the wizard hides the
+// 10s pill so users don't get a confusing failure.
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-const MODEL_SLUG_PRO  = 'bytedance/seedance-2.0/pro/reference-to-video';
-const slugForDuration = (s: number) => (s === 10 ? MODEL_SLUG_PRO : MODEL_SLUG_FAST);
+const slugForDuration = (_s: number) => MODEL_SLUG_FAST;
 
 async function submitFal(
   prompt: string,
@@ -65,10 +66,10 @@ async function submitFal(
         // running text-only). Each image is addressed by @Image1,
         // @Image2, … inside the prompt; up to 9 are supported.
         image_urls: referenceImageUrls.slice(0, 9),
-        // Seedance 2: /fast is 5s only, /pro supports 5 or 10. We
-        // already pick the matching slug above, so this just echoes
-        // the requested length to the right model.
-        duration: durationSeconds === 10 ? '10' : '5',
+        // Always 5s on /fast — the only confirmed-working slug for
+        // Seedance 2 reference-to-video. 10s support waits until we
+        // identify the correct pro/long-form endpoint.
+        duration: '5',
         aspect_ratio: '9:16',
         resolution: '720p',
         generate_audio: false,
