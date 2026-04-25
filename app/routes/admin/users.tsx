@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { getProfiles, updateUserRole, type Profile } from '~/services/profiles';
+import { getProfiles, updateUserRole, updateUserIsAdmin, type Profile } from '~/services/profiles';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -27,6 +27,7 @@ interface UserRow {
   avatar: string;
   sso: string;
   role: UserRole;
+  isAdmin: boolean;
   createdAt: string;
   lastSignIn: string;
   looksCount: number;
@@ -52,6 +53,7 @@ function profileToRow(p: Profile): UserRow {
     avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
+    isAdmin: p.is_admin === true,
     createdAt: formatDate(p.created_at),
     lastSignIn: formatDateTime(p.last_sign_in_at),
     looksCount: 0,
@@ -313,6 +315,7 @@ export default function AdminUsers() {
         avatar: c.avatar,
         sso: '-',
         role: 'creator' as UserRole,
+        isAdmin: false,
         createdAt: '-',
         lastSignIn: '-',
         looksCount: looksPerCreator[c.name] || 0,
@@ -325,7 +328,26 @@ export default function AdminUsers() {
   }, [dbCreators]);
 
   const creators = [...dbCreators, ...contentCreators];
-  const admins = allUsers.filter(u => u.role === 'admin');
+  // Admins tab is now driven by the explicit is_admin flag on the
+  // profile, not the role text column. Keeps role for display while
+  // letting an admin be elevated without altering their primary role.
+  const admins = allUsers.filter(u => u.isAdmin);
+
+  const handleAdminToggle = useCallback(async (userId: string, next: boolean) => {
+    const target = allUsers.find(u => u.id === userId);
+    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: next } : u));
+    const { error } = await updateUserIsAdmin(userId, next);
+    if (error) {
+      // Roll back on failure so the UI doesn't lie about the DB.
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: !next } : u));
+      showToast(error, 'warning');
+    } else if (target) {
+      showToast(
+        next ? `${target.name} is now an admin` : `${target.name} is no longer an admin`,
+        'success',
+      );
+    }
+  }, [allUsers, showToast]);
 
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creators);
@@ -346,6 +368,7 @@ export default function AdminUsers() {
             <tr>
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
@@ -370,6 +393,16 @@ export default function AdminUsers() {
                 </td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
+                </td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <label className="admin-toggle" title={u.isAdmin ? 'Revoke admin' : 'Make admin'}>
+                    <input
+                      type="checkbox"
+                      checked={u.isAdmin}
+                      onChange={(e) => handleAdminToggle(u.id, e.target.checked)}
+                    />
+                    <span className="admin-toggle-track" />
+                  </label>
                 </td>
                 <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
                 <td><span className="admin-sso-badge">{u.sso}</span></td>

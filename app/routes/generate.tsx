@@ -230,13 +230,17 @@ export default function GeneratePage() {
     setProductsLoading(true);
     const q = productQuery.trim();
     const run = async () => {
+      // Show every product the catalog has, not just the ones live on
+      // the consumer feed -- the shopper picking products for their
+      // own generation should see the same set the admin sees in
+      // /admin/content -> Products. Image is still required since the
+      // generation pipeline needs a visual reference per product.
       let query = supabase!
         .from('products')
         .select('id, name, brand, price, image_url')
-        .eq('is_active', true)
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(60);
+        .limit(1000);
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
       if (cancelled) return;
