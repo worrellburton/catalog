@@ -5,6 +5,7 @@ import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators } from '~/services/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
+import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
@@ -27,6 +28,7 @@ interface CrawledProduct {
   is_active?: boolean;
   is_elite?: boolean;
   type?: string | null;
+  gender?: 'male' | 'female' | 'unisex' | null;
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -298,6 +300,7 @@ export default function AdminContent() {
   // Stale product refresh
   const [refreshing, setRefreshing] = useState(false);
   const [auditingTypes, setAuditingTypes] = useState(false);
+  const [auditingGenders, setAuditingGenders] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
 
   // AI copywriter
@@ -406,7 +409,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -447,15 +450,17 @@ export default function AdminContent() {
         images: p.image_urls || [p.image_url].filter(Boolean),
         scrape_status: 'done',
         scraped_at: nowIso,
-        // Auto-infer type at insert so we don't have to audit later.
-        // Returns null when nothing matches; the column accepts null.
+        // Auto-infer type + gender at insert so we don't have to
+        // audit later. Either may be null when nothing matches; both
+        // columns accept null.
         type: inferProductType(p.name, p.brand),
+        gender: inferProductGenderFromName(p.name),
       };
     });
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -768,7 +773,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -827,7 +832,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -858,6 +863,7 @@ export default function AdminContent() {
         entry.is_active = active;
         entry.is_elite = !!cp.is_elite;
         entry.type = cp.type ?? null;
+        entry.gender = cp.gender ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -884,6 +890,7 @@ export default function AdminContent() {
           is_active: active,
           is_elite: !!cp.is_elite,
           type: cp.type ?? null,
+          gender: cp.gender ?? null,
         });
       }
     });
@@ -1131,7 +1138,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1148,6 +1155,37 @@ export default function AdminContent() {
                 <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
               {auditingTypes ? 'Auditing…' : 'Type audit'}
+            </button>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={async () => {
+                if (auditingGenders) return;
+                setAuditingGenders(true);
+                const result = await auditAllProductGenders();
+                setAuditingGenders(false);
+                showToast(
+                  `Gender audit — scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
+                );
+                if (result.updated > 0) {
+                  const { data } = await supabase!
+                    .from('products')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+                    .order('created_at', { ascending: false });
+                  if (data) {
+                    setCrawledProducts(data.map((p) => ({
+                      ...p,
+                      is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+                    })) as CrawledProduct[]);
+                  }
+                }
+              }}
+              disabled={auditingGenders}
+              title="Walk every product and infer gender from its name (women's, men's, unisex)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {auditingGenders ? 'Auditing…' : 'Gender audit'}
             </button>
             <button
               className="admin-btn admin-btn-secondary"
@@ -1538,6 +1576,7 @@ export default function AdminContent() {
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the consumer feed">Show</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative — curated onto the feed and the deck v1.1 background">Elite</th>
@@ -1734,6 +1773,17 @@ export default function AdminContent() {
                       <span style={{ color: '#cbd5e1' }}>—</span>
                     )}
                   </td>
+                  <td style={{ textAlign: 'left', fontSize: 12 }}>
+                    {p.gender === 'male' ? (
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#dbeafe', color: '#1d4ed8', fontWeight: 500, fontSize: 11 }}>Male</span>
+                    ) : p.gender === 'female' ? (
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#fce7f3', color: '#be185d', fontWeight: 500, fontSize: 11 }}>Female</span>
+                    ) : p.gender === 'unisex' ? (
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 500, fontSize: 11 }}>Unisex</span>
+                    ) : (
+                      <span style={{ color: '#cbd5e1' }}>—</span>
+                    )}
+                  </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     {p.url ? (
                       <a
@@ -1904,7 +1954,7 @@ export default function AdminContent() {
                 </tr>
                 {creativeOpen && (
                   <tr className="admin-product-creative-row">
-                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -1991,7 +2041,7 @@ export default function AdminContent() {
                 )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -2016,7 +2066,7 @@ export default function AdminContent() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={14} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>

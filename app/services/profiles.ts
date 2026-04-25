@@ -9,11 +9,12 @@ export interface Profile {
   provider: string | null;
   role: UserRole;
   is_admin: boolean;
+  gender: 'male' | 'female' | 'unknown';
   created_at: string;
   last_sign_in_at: string | null;
 }
 
-const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, created_at, last_sign_in_at';
+const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, gender, created_at, last_sign_in_at';
 
 export async function getProfiles(): Promise<Profile[]> {
   if (!supabase) return [];
@@ -43,6 +44,9 @@ export async function getProfiles(): Promise<Profile[]> {
     provider: (p.provider as string) || null,
     role: (p.role as UserRole) || 'shopper',
     is_admin: (p.is_admin as boolean) ?? (p.role === 'admin' || p.role === 'super_admin'),
+    gender: ((p.gender as string) === 'male' || (p.gender as string) === 'female')
+      ? (p.gender as 'male' | 'female')
+      : 'unknown',
     created_at: p.created_at as string,
     last_sign_in_at: (p.last_sign_in_at as string) || null,
   }));
@@ -59,11 +63,15 @@ export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
     console.error(`Failed to load ${role} profiles`, error);
     return [];
   }
-  return (data || []).map(p => ({
-    ...p,
-    role: p.role || 'shopper',
-    is_admin: (p as { is_admin?: boolean }).is_admin ?? (p.role === 'admin' || p.role === 'super_admin'),
-  }));
+  return (data || []).map(p => {
+    const g = (p as { gender?: string }).gender;
+    return {
+      ...p,
+      role: p.role || 'shopper',
+      is_admin: (p as { is_admin?: boolean }).is_admin ?? (p.role === 'admin' || p.role === 'super_admin'),
+      gender: (g === 'male' || g === 'female') ? g : 'unknown',
+    };
+  });
 }
 
 export async function updateUserRole(userId: string, role: UserRole): Promise<{ error?: string }> {

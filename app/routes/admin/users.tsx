@@ -4,6 +4,7 @@ import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { getProfiles, updateUserRole, updateUserIsAdmin, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
+import { auditAllUserGenders, type UserGender } from '~/services/genders';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -29,6 +30,7 @@ interface UserRow {
   sso: string;
   role: UserRole;
   isAdmin: boolean;
+  gender: UserGender;
   createdAt: string;
   lastSignIn: string;
   looksCount: number;
@@ -55,6 +57,7 @@ function profileToRow(p: Profile): UserRow {
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
     isAdmin: p.is_admin === true,
+    gender: ((p as { gender?: string }).gender as UserGender) || 'unknown',
     createdAt: formatDate(p.created_at),
     lastSignIn: formatDateTime(p.last_sign_in_at),
     looksCount: 0,
@@ -262,6 +265,7 @@ export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
   const [allUsers, setAllUsers] = useState<UserRow[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [auditingGender, setAuditingGender] = useState(false);
   const toastIdRef = useRef(0);
   const navigate = useNavigate();
 
@@ -342,6 +346,7 @@ export default function AdminUsers() {
         sso: '-',
         role: 'creator' as UserRole,
         isAdmin: false,
+        gender: 'unknown' as UserGender,
         createdAt: '-',
         lastSignIn: '-',
         looksCount: looksPerCreator[c.name] || 0,
@@ -395,6 +400,7 @@ export default function AdminUsers() {
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Gender" sortKey="gender" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
@@ -430,6 +436,15 @@ export default function AdminUsers() {
                     <span className="admin-toggle-track" />
                   </label>
                 </td>
+                <td>
+                  {u.gender === 'male' ? (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: 999 }}>Male</span>
+                  ) : u.gender === 'female' ? (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#be185d', background: '#fce7f3', padding: '2px 8px', borderRadius: 999 }}>Female</span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                  )}
+                </td>
                 <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
                 <td><span className="admin-sso-badge">{u.sso}</span></td>
                 <td className="admin-cell-muted">{u.createdAt}</td>
@@ -449,9 +464,36 @@ export default function AdminUsers() {
 
   return (
     <div className="admin-page">
-      <div className="admin-page-header">
-        <h1>Users</h1>
-        <p className="admin-page-subtitle">Manage shoppers and creators</p>
+      <div className="admin-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h1>Users</h1>
+          <p className="admin-page-subtitle">Manage shoppers and creators</p>
+        </div>
+        <button
+          className="admin-btn admin-btn-secondary"
+          onClick={async () => {
+            if (auditingGender) return;
+            setAuditingGender(true);
+            const result = await auditAllUserGenders();
+            setAuditingGender(false);
+            showToast(`Gender audit — scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`, result.errors ? 'warning' : 'success');
+            if (result.updated > 0) {
+              const profiles = await getProfiles();
+              setAllUsers(prev => profiles.map(p => {
+                const existing = prev.find(u => u.id === p.id);
+                const row = profileToRow(p);
+                return existing ? { ...row, looksCount: existing.looksCount } : row;
+              }));
+            }
+          }}
+          disabled={auditingGender}
+          title="Walk every profile and infer gender from full_name where missing or different"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+            <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+          {auditingGender ? 'Auditing…' : 'Gender audit'}
+        </button>
       </div>
       <div className="admin-tabs">
         <div className="admin-tab-group">

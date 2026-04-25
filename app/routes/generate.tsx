@@ -19,6 +19,7 @@ import {
   type UserGeneration,
   type GenerationProductDetail,
 } from '~/services/user-generations';
+import { getUserGender, type UserGender } from '~/services/genders';
 
 /* -----------------------------------------------------------
    Generate flow — shopper-facing, multi-step wizard.
@@ -147,6 +148,15 @@ export default function GeneratePage() {
   const [style, setStyle] = useState<string>('street');
   // Output clip length. Seedance 2 Fast supports 5 or 10 only.
   const [clipSeconds, setClipSeconds] = useState<5 | 10>(5);
+  // Shopper's gender, used to filter the product picker so a male
+  // shopper only sees male + unisex (+ untagged) products. 'unknown'
+  // disables the filter so we don't hide the catalog from anyone we
+  // can't tag.
+  const [userGender, setUserGender] = useState<UserGender>('unknown');
+  useEffect(() => {
+    if (!user?.id) { setUserGender('unknown'); return; }
+    getUserGender(user.id).then(setUserGender);
+  }, [user?.id]);
 
   // Phase 12 — submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -255,6 +265,16 @@ export default function GeneratePage() {
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);
+      // Gender filter: a male shopper only sees male + unisex +
+      // untagged products. Female mirrors. 'unknown' disables the
+      // filter so we never hide the catalog from someone we can't
+      // tag. Untagged (gender is null) products stay visible to all
+      // genders -- the audit button on /admin/content backfills.
+      if (userGender === 'male') {
+        query = query.or('gender.eq.male,gender.eq.unisex,gender.is.null');
+      } else if (userGender === 'female') {
+        query = query.or('gender.eq.female,gender.eq.unisex,gender.is.null');
+      }
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
       if (cancelled) return;
@@ -266,7 +286,7 @@ export default function GeneratePage() {
     };
     const handle = window.setTimeout(run, 180);
     return () => { cancelled = true; window.clearTimeout(handle); };
-  }, [step, productQuery]);
+  }, [step, productQuery, userGender]);
 
   // Phase 17 — poll the generation row every 2.5s until it lands on a
   // terminal status, so the Result view replaces the spinner as soon as
