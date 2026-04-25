@@ -37,7 +37,7 @@ const MAX_PRODUCTS = 5;
 // bar; it eases past 95% so it never sits flat on slow jobs.
 const TYPICAL_GENERATION_SECONDS = 180;
 
-type Step = 'photos' | 'products' | 'height' | 'age' | 'style' | 'review' | 'result';
+type Step = 'photos' | 'products' | 'about' | 'style' | 'review' | 'result';
 
 // Age presets keep the picker compact — Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
@@ -468,8 +468,7 @@ export default function GeneratePage() {
   const canAdvance = useMemo(() => {
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading;
     if (step === 'products') return picked.length > 0;
-    if (step === 'height') return !!heightLabel;
-    if (step === 'age') return !!ageLabel;
+    if (step === 'about') return !!heightLabel && !!ageLabel;
     if (step === 'style') return !!style;
     return true;
   }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
@@ -733,47 +732,48 @@ export default function GeneratePage() {
           </section>
         )}
 
-        {step === 'height' && (
+        {step === 'about' && (
           <section className="gen-step">
-            <h2>3. Your height</h2>
-            <p>Seedance will render proportions from this — we pass the value verbatim into the prompt.</p>
-            <div className="gen-heightgrid">
-              {HEIGHT_OPTIONS.map(opt => (
-                <button
-                  key={opt.cm}
-                  type="button"
-                  className={`gen-heightchip${heightLabel === opt.label ? ' is-picked' : ''}`}
-                  onClick={() => { setHeightCm(opt.cm); setHeightLabel(opt.label); }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+            <h2>3. About you</h2>
+            <p>Pick a height and an age range. We pass both into the prompt so the proportions and look land where you want them.</p>
 
-        {step === 'age' && (
-          <section className="gen-step">
-            <h2>4. Your age</h2>
-            <p>Helps Seedance lock in the right age range — your face photo alone often reads younger or older than you'd like.</p>
-            <div className="gen-heightgrid">
-              {AGE_PRESETS.map(opt => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  className={`gen-heightchip${ageLabel === opt.label ? ' is-picked' : ''}`}
-                  onClick={() => setAgeLabel(opt.label)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="gen-aboutgroup">
+              <div className="gen-sectionlabel">Height</div>
+              <div className="gen-heightgrid">
+                {HEIGHT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.cm}
+                    type="button"
+                    className={`gen-heightchip${heightLabel === opt.label ? ' is-picked' : ''}`}
+                    onClick={() => { setHeightCm(opt.cm); setHeightLabel(opt.label); }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="gen-aboutgroup">
+              <div className="gen-sectionlabel">Age</div>
+              <div className="gen-heightgrid">
+                {AGE_PRESETS.map(opt => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    className={`gen-heightchip${ageLabel === opt.label ? ' is-picked' : ''}`}
+                    onClick={() => setAgeLabel(opt.label)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
         )}
 
         {step === 'style' && (
           <section className="gen-step">
-            <h2>5. Style</h2>
+            <h2>4. Style</h2>
             <div className="gen-stylegrid">
               {STYLE_PRESETS.map(s => (
                 <button
@@ -792,7 +792,7 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step">
-            <h2>6. Review</h2>
+            <h2>5. Review</h2>
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
@@ -900,7 +900,7 @@ export default function GeneratePage() {
   );
 }
 
-const STEP_ORDER: Step[] = ['photos', 'products', 'height', 'age', 'style', 'review'];
+const STEP_ORDER: Step[] = ['photos', 'products', 'about', 'style', 'review'];
 
 function goNext(current: Step, set: (s: Step) => void) {
   const i = STEP_ORDER.indexOf(current);
@@ -997,17 +997,6 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
         </div>
       </div>
 
-      <ol className="gen-build-phases" aria-label="Build phases">
-        {BUILD_PHASES.map((p, i) => {
-          const cls = i < phaseIdx ? 'is-done' : i === phaseIdx ? 'is-active' : '';
-          return (
-            <li key={p} className={`gen-build-phase-item ${cls}`}>
-              <span className="gen-build-phase-dot" aria-hidden="true">{i < phaseIdx ? '✓' : i + 1}</span>
-              <span className="gen-build-phase-label">{p}</span>
-            </li>
-          );
-        })}
-      </ol>
     </div>
   );
 }
@@ -1214,8 +1203,7 @@ function StepRail({
   const filled = {
     photos: photosCount > 0,
     products: productsCount > 0,
-    height: !!heightLabel,
-    age: !!ageLabel,
+    about: !!heightLabel && !!ageLabel,
     style: !!style,
     review: false,
     result: false,
@@ -1223,8 +1211,7 @@ function StepRail({
   const items: { k: Step; label: string }[] = [
     { k: 'photos',   label: 'Photos' },
     { k: 'products', label: 'Products' },
-    { k: 'height',   label: 'Height' },
-    { k: 'age',      label: 'Age' },
+    { k: 'about',    label: 'About' },
     { k: 'style',    label: 'Style' },
     { k: 'review',   label: 'Review' },
   ];
