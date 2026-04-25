@@ -121,6 +121,136 @@ function detectBrandTones(
 }
 
 /**
+ * Body-zone framing — derived from the picked role tags so the
+ * generated clip only shows the regions where the user actually
+ * picked an item. A shopper who picked just a hat + sweatshirt
+ * gets a portrait crop instead of Seedance inventing pants and
+ * shoes that weren't part of the look.
+ *
+ * Zones map roughly:
+ *   head : Hat, Sunglasses
+ *   neck : Scarf, (Jewelry)
+ *   torso: Top, Jacket
+ *   waist: Belt, (Pants/Skirt/Shorts/Dress also fall here)
+ *   legs : Pants, Skirt, Shorts, Dress
+ *   feet : Shoes
+ *   hand : Bag, Watch
+ */
+type BodyZone = 'head' | 'neck' | 'torso' | 'waist' | 'legs' | 'feet' | 'hand';
+
+const ROLE_ZONES: Record<string, BodyZone[]> = {
+  hat: ['head'],
+  sunglasses: ['head'],
+  glasses: ['head'],
+  scarf: ['neck'],
+  top: ['torso'],
+  jacket: ['torso'],
+  coat: ['torso'],
+  dress: ['torso', 'waist', 'legs'],
+  pants: ['waist', 'legs'],
+  shorts: ['waist', 'legs'],
+  skirt: ['waist', 'legs'],
+  belt: ['waist'],
+  shoes: ['feet'],
+  bag: ['hand'],
+  watch: ['hand'],
+  jewelry: ['head', 'neck', 'hand'],
+  accessory: [],
+};
+
+/** Light name-based fallback when role_tag is null on a picked product. */
+function inferRoleFromName(name: string | null): string | null {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  if (/\b(hat|cap|beanie|fedora|visor|bucket\s*hat)\b/.test(lower)) return 'hat';
+  if (/\b(sunglass|shades|aviator)\b/.test(lower)) return 'sunglasses';
+  if (/\b(scarf|stole|wrap|shawl)\b/.test(lower)) return 'scarf';
+  if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench)\b/.test(lower)) return 'jacket';
+  if (/\b(dress|gown)\b/.test(lower)) return 'dress';
+  if (/\b(skirt)\b/.test(lower)) return 'skirt';
+  if (/\b(short|bermuda)\b/.test(lower)) return 'shorts';
+  if (/\b(pant|trouser|chino|jean|denim|legging|jogger)\b/.test(lower)) return 'pants';
+  if (/\b(belt)\b/.test(lower)) return 'belt';
+  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'shoes';
+  if (/\b(bag|tote|clutch|purse|backpack|handbag)\b/.test(lower)) return 'bag';
+  if (/\b(watch|wristwatch)\b/.test(lower)) return 'watch';
+  if (/\b(necklace|ring|earring|bracelet|chain|pendant)\b/.test(lower)) return 'jewelry';
+  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan)\b/.test(lower)) return 'top';
+  return null;
+}
+
+/**
+ * Pick a framing instruction based on which body zones the picked
+ * products cover. The string lands verbatim in the prompt and tells
+ * Seedance both what to show and what to omit.
+ */
+function computeFraming(
+  productLines: { role_tag: string | null; name: string | null }[],
+): string {
+  const zones = new Set<BodyZone>();
+  for (const p of productLines) {
+    const role = ((p.role_tag || inferRoleFromName(p.name)) || '').toLowerCase().trim();
+    if (!role) continue;
+    const z = ROLE_ZONES[role];
+    if (z) z.forEach(zone => zones.add(zone));
+  }
+  // No tags at all -> default to full body so Seedance has something
+  // to compose around.
+  if (zones.size === 0) {
+    return 'Frame as a centered full-body shot, head to toe.';
+  }
+
+  const head  = zones.has('head');
+  const neck  = zones.has('neck');
+  const torso = zones.has('torso');
+  const waist = zones.has('waist');
+  const legs  = zones.has('legs');
+  const feet  = zones.has('feet');
+  const hand  = zones.has('hand');
+
+  // Head-only — tight portrait. Crop tightly so Seedance can't invent
+  // a torso or outfit underneath.
+  if (head && !neck && !torso && !waist && !legs && !feet && !hand) {
+    return 'Tight head-and-shoulders crop. Frame from above the head down to just below the collarbone. Do not render torso, waist, legs, or feet.';
+  }
+
+  // Head + neck (no torso) — slightly looser portrait so a necklace
+  // or scarf reads.
+  if ((head || neck) && !torso && !waist && !legs && !feet) {
+    return 'Tight portrait crop from above the head to mid-chest. Do not render torso below the chest, waist, legs, or feet.';
+  }
+
+  // Torso (with or without head) and nothing below — half-body crop.
+  if (torso && !waist && !legs && !feet) {
+    return 'Half-body portrait crop, top of head to just below the chest. Do not render waist, legs, or feet.';
+  }
+
+  // Includes the waist zone but no legs/feet — mid-shot.
+  if ((torso || head) && waist && !legs && !feet) {
+    return 'Mid-shot crop, top of head to just below the waist. Do not render legs or feet.';
+  }
+
+  // Has legs but no shoes — knees crop, omit feet so Seedance does
+  // not invent footwear that was not picked.
+  if (legs && !feet) {
+    return 'Three-quarter crop from top of head to just above the ankles. Do not render feet or footwear.';
+  }
+
+  // Has shoes but no legs/torso — feet/ankle crop.
+  if (feet && !legs && !torso && !head) {
+    return 'Feet-and-ankles crop. Hero the shoes; face is optional and should not dominate.';
+  }
+
+  // Hand-carry items only (e.g. just a bag) — hand/forearm crop.
+  if (hand && !head && !torso && !legs && !feet) {
+    return 'Hand-and-forearm crop showing how the item is carried. Face is optional.';
+  }
+
+  // Anything spanning torso through feet — full body.
+  return 'Frame as a centered full-body shot, head to toe.';
+}
+
+/**
  * Upload one reference photo for the current user. Objects land under
  * `<uid>/<timestamp>-<random>.<ext>` so the bucket RLS (which keys off the
  * first folder) keeps each shopper siloed.
@@ -480,6 +610,10 @@ export function buildGenerationPrompt(opts: {
     .join(', ');
 
   const ageClause = opts.ageLabel ? ` They look ${opts.ageLabel}.` : '';
+  // Picked-zone framing: only show body regions where the shopper
+  // actually picked an item. Stops Seedance from inventing pants /
+  // shoes / accessories that were never selected.
+  const framing = computeFraming(opts.productLines);
 
   if (opts.style === 'commercial') {
     const tones = detectBrandTones(opts.productLines);
@@ -497,6 +631,7 @@ export function buildGenerationPrompt(opts: {
       `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
       productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
       castLine,
+      framing,
       '5-second portrait clip, hero pacing, polished commercial grade.',
     ].join(' ');
   }
@@ -506,6 +641,7 @@ export function buildGenerationPrompt(opts: {
   return [
     `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
+    framing,
     `Natural motion, 5-second portrait clip${styleTag}.`,
   ].join(' ');
 }
