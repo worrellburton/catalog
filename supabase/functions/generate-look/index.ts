@@ -35,7 +35,14 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-const MODEL_SLUG = 'bytedance/seedance-2.0/fast/reference-to-video';
+// Seedance 2 has two reference-to-video endpoints. The /fast variant
+// is cheap and quick but capped at 5-second outputs — Fal silently
+// 500s during processing if you ship duration=10 to it. The /pro
+// (full) variant supports 5 or 10 second outputs. We pick per-job
+// based on the requested duration so 10s requests don't dead-end.
+const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
+const MODEL_SLUG_PRO  = 'bytedance/seedance-2.0/pro/reference-to-video';
+const slugForDuration = (s: number) => (s === 10 ? MODEL_SLUG_PRO : MODEL_SLUG_FAST);
 
 async function submitFal(
   prompt: string,
@@ -43,9 +50,10 @@ async function submitFal(
   durationSeconds: number,
   falKey: string,
   webhookUrl: string,
-): Promise<{ request_id: string | null; error: string | null }> {
+): Promise<{ request_id: string | null; model_slug: string; error: string | null }> {
+  const modelSlug = slugForDuration(durationSeconds);
   const submit = await fetch(
-    `${FAL_BASE}/${MODEL_SLUG}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
+    `${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
     {
       method: 'POST',
       headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
@@ -57,9 +65,9 @@ async function submitFal(
         // running text-only). Each image is addressed by @Image1,
         // @Image2, … inside the prompt; up to 9 are supported.
         image_urls: referenceImageUrls.slice(0, 9),
-        // Seedance 2 Fast supports 5 or 10s clips. The wizard's
-        // Review step exposes the picker; we coerce anything else
-        // back to 5 here as a safety net.
+        // Seedance 2: /fast is 5s only, /pro supports 5 or 10. We
+        // already pick the matching slug above, so this just echoes
+        // the requested length to the right model.
         duration: durationSeconds === 10 ? '10' : '5',
         aspect_ratio: '9:16',
         resolution: '720p',
@@ -69,13 +77,13 @@ async function submitFal(
   );
   if (!submit.ok) {
     const text = await submit.text();
-    return { request_id: null, error: `Fal submit failed: ${submit.status} ${text.slice(0, 200)}` };
+    return { request_id: null, model_slug: modelSlug, error: `Fal submit failed: ${submit.status} ${text.slice(0, 400)}` };
   }
   const submitData = await submit.json() as { request_id?: string };
   if (!submitData.request_id) {
-    return { request_id: null, error: 'Fal did not return a request_id' };
+    return { request_id: null, model_slug: modelSlug, error: 'Fal did not return a request_id' };
   }
-  return { request_id: submitData.request_id, error: null };
+  return { request_id: submitData.request_id, model_slug: modelSlug, error: null };
 }
 
 Deno.serve(async (req: Request) => {
@@ -249,7 +257,7 @@ Deno.serve(async (req: Request) => {
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
-  const { request_id, error } = await submitFal(taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
+  const { request_id, model_slug, error } = await submitFal(taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
 
   if (error || !request_id) {
     await admin.from('user_generations').update({
@@ -263,7 +271,9 @@ Deno.serve(async (req: Request) => {
   await admin.from('user_generations').update({
     status: 'generating',
     fal_request_id: request_id,
-    veo_model: MODEL_SLUG,
+    // Record which Seedance variant ran the job — useful when
+    // diagnosing fast-vs-pro behavior differences.
+    veo_model: model_slug,
   }).eq('id', generationId);
 
   return jsonRes({ success: true, request_id });

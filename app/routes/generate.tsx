@@ -35,13 +35,14 @@ const MAX_PRODUCTS = 5;
 // runs that timed out client-side. We now use Fal webhooks (no
 // internal poller cap), so budget 180s for the user-facing progress
 // bar; it eases past 95% so it never sits flat on slow jobs.
-// Typical wall-clock generation time on Fal Seedance 2 Fast keyed by
-// the requested clip length. 5s clips average ~180s; 10s clips run
-// closer to ~300s. The progress bar eases past 95% of whichever
-// estimate applies so it never sits at 100% while we're still polling.
+// Typical wall-clock generation time keyed by the requested clip
+// length. 5s jobs route to Seedance 2 /fast (~180s); 10s jobs route
+// to /pro which is materially slower (~360s). The progress bar eases
+// past 95% of whichever estimate applies so it never sits at 100%
+// while we're still polling.
 const TYPICAL_GENERATION_SECONDS_BY_DURATION: Record<number, number> = {
   5: 180,
-  10: 300,
+  10: 360,
 };
 const TYPICAL_GENERATION_SECONDS_DEFAULT = 180;
 const typicalSecondsFor = (durationSeconds?: number | null) =>
