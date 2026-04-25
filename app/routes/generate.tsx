@@ -156,11 +156,39 @@ export default function GeneratePage() {
 
   // Load the user's existing uploads once we know who they are, so the
   // dropzone can offer "use a face you already uploaded" instead of
-  // forcing a re-upload on every session.
+  // forcing a re-upload on every session. Once the list comes back we
+  // also rehydrate the slot picks from localStorage so the shopper's
+  // previously-chosen reference photos are still there next session
+  // (filtered against what actually exists, in case any were deleted).
   useEffect(() => {
     if (!user?.id) return;
-    listUserUploads(user.id).then(setExistingUploads);
+    listUserUploads(user.id).then(uploads => {
+      setExistingUploads(uploads);
+      if (typeof window === 'undefined') return;
+      try {
+        const raw = window.localStorage.getItem(`gen-slots-${user.id}`);
+        if (!raw) return;
+        const saved = JSON.parse(raw) as (string | null)[];
+        if (!Array.isArray(saved)) return;
+        const known = new Set(uploads.map(u => u.id));
+        const restored: (string | null)[] = [null, null, null];
+        saved.slice(0, MAX_PHOTOS).forEach((id, i) => {
+          if (typeof id === 'string' && known.has(id)) restored[i] = id;
+        });
+        setSlots(restored);
+      } catch { /* corrupt JSON — ignore */ }
+    });
   }, [user?.id]);
+
+  // Persist the current slot picks so they survive a refresh / new
+  // session. Keyed per user so two accounts on the same browser don't
+  // clobber each other.
+  useEffect(() => {
+    if (!user?.id || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(`gen-slots-${user.id}`, JSON.stringify(slots));
+    } catch { /* quota exceeded — ignore */ }
+  }, [user?.id, slots]);
 
   // Initial load of past generations — Phase 7 renders them as cards.
   useEffect(() => {
@@ -475,7 +503,7 @@ export default function GeneratePage() {
 
   return (
     <div className="gen-page">
-      <header className="gen-head">
+      <div className="gen-head">
         <button
           className="gen-back"
           onClick={() => {
@@ -495,7 +523,7 @@ export default function GeneratePage() {
         </button>
         <h1>Generate</h1>
         <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
-      </header>
+      </div>
 
       <main className="gen-main">
         {step === 'photos' && (
@@ -569,39 +597,6 @@ export default function GeneratePage() {
             >
               Create look
             </button>
-
-            {existingUploads.length > 0 && (
-              <>
-                <div className="gen-sectionlabel">Your uploads</div>
-                <div className="gen-thumbgrid">
-                  {existingUploads.map(u => (
-                    <div
-                      key={u.id}
-                      className={`gen-thumb${pickedUploadIds.includes(u.id) ? ' is-picked' : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className="gen-thumb-pick"
-                        onClick={() => onPickExistingUpload(u.id)}
-                        aria-label={pickedUploadIds.includes(u.id) ? 'Unpick photo' : 'Pick photo'}
-                      >
-                        <img src={u.public_url} alt="" />
-                        {pickedUploadIds.includes(u.id) && <span className="gen-thumb-check">✓</span>}
-                      </button>
-                      <button
-                        type="button"
-                        className="gen-thumb-del"
-                        onClick={() => {
-                          if (window.confirm('Delete this upload?')) removeUpload(u);
-                        }}
-                        aria-label="Delete photo"
-                        title="Delete photo"
-                      >×</button>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
 
             {(generations.length > 0 || loadingList) && (
               <>
@@ -780,7 +775,7 @@ export default function GeneratePage() {
         )}
 
         {step === 'result' && (
-          <section className="gen-step">
+          <section className="gen-step gen-step-result">
             <h2>Your look</h2>
             {!generation && <div className="gen-empty">Loading…</div>}
             {(generation?.status === 'pending' || generation?.status === 'generating') && (
@@ -792,7 +787,13 @@ export default function GeneratePage() {
               </div>
             )}
             {generation?.status === 'done' && generation.video_url && (
-              <video src={generation.video_url} autoPlay loop muted playsInline className="gen-result-video" />
+              <div className="gen-build gen-build-done">
+                <div className="gen-build-burst" aria-hidden="true" />
+                <div className="gen-build-burst gen-build-burst-2" aria-hidden="true" />
+                <div className="gen-build-frame is-done">
+                  <video src={generation.video_url} autoPlay loop muted playsInline className="gen-result-video" />
+                </div>
+              </div>
             )}
             {generation?.status === 'done' && resultProducts.length > 0 && (
               <div className="gen-result-products">
@@ -851,7 +852,7 @@ export default function GeneratePage() {
         </footer>
       )}
 
-      {step !== 'result' && (
+      {step !== 'result' && step !== 'photos' && (
         <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} ageLabel={ageLabel} style={style} />
       )}
     </div>
@@ -869,11 +870,30 @@ function goPrev(current: Step, set: (s: Step) => void) {
   if (i > 0) set(STEP_ORDER[i - 1]);
 }
 
+// Ten labelled phases the build pass flows through. They're cosmetic —
+// Fal doesn't expose stage progress — but the gradual reveal builds
+// anticipation and gives the wait a sense of motion. Each phase owns
+// 10% of the typical budget; we mark prior phases as done as we cross
+// the boundary into the next one.
+const BUILD_PHASES = [
+  'Queueing your look',
+  'Reading reference photos',
+  'Mapping facial features',
+  'Locking in proportions',
+  'Pulling product details',
+  'Composing the outfit',
+  'Lighting the scene',
+  'Rendering motion frames',
+  'Color grading',
+  'Final pass',
+];
+
 function GenerationProgress({ generation }: { generation: UserGeneration }) {
-  // Tick once a second so the bar advances even between polls.
+  // Tick four times a second so the border-progress + phase rotation
+  // feel alive between polls.
   const [, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000);
+    const id = setInterval(() => setTick(t => t + 1), 250);
     return () => clearInterval(id);
   }, []);
 
@@ -887,19 +907,66 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
     : linearPct;
   const pct = Math.min(99.5, Math.max(2, overflowPct));
 
+  // Phase index — 0..9. We pace it slightly behind raw % so the
+  // current label feels like it's still working when the bar is at
+  // its boundary, instead of jumping ahead instantly.
+  const phaseIdx = Math.min(
+    BUILD_PHASES.length - 1,
+    Math.floor((pct / 100) * BUILD_PHASES.length),
+  );
+  const activePhase = BUILD_PHASES[phaseIdx];
+
   const remaining = Math.max(0, Math.round(TYPICAL_GENERATION_SECONDS - elapsedSec));
-  const label = generation.status === 'pending'
-    ? <>Queued — starting Catalog <span className="gen-vision">Vision</span>…</>
-    : remaining > 0
-      ? <>Composing your look — about {remaining}s left…</>
-      : <>Almost there — finishing up…</>;
+  const subLabel = remaining > 0
+    ? `About ${remaining}s left`
+    : 'Almost there…';
 
   return (
-    <div className="gen-progress">
-      <div className="gen-progress-label">{label}</div>
-      <div className="gen-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-        <div className="gen-progress-fill" style={{ width: `${pct}%` }} />
+    <div className="gen-build">
+      <div
+        className="gen-build-frame is-building"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        aria-label={`Generating — ${activePhase}`}
+      >
+        {/* Border progress: stroke a single rect along its perimeter
+            using `pathLength="100"` so the dasharray maps cleanly to
+            percent. preserveAspectRatio="none" lets the stroke trace
+            the 9:16 frame regardless of its rendered size. */}
+        <svg className="gen-build-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
+          <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
+          <rect
+            className="gen-build-fill"
+            x="1" y="1" width="88" height="158" rx="6" ry="6"
+            pathLength={100}
+            strokeDasharray={`${pct} 100`}
+          />
+        </svg>
+
+        <div className="gen-build-shimmer" aria-hidden="true" />
+        <div className="gen-build-pulse" aria-hidden="true" />
+
+        <div className="gen-build-content">
+          <span className="gen-vision gen-build-vision">Vision</span>
+          <div className="gen-build-phase">{activePhase}</div>
+          <div className="gen-build-sub">{subLabel}</div>
+          <div className="gen-build-pct">{Math.round(pct)}%</div>
+        </div>
       </div>
+
+      <ol className="gen-build-phases" aria-label="Build phases">
+        {BUILD_PHASES.map((p, i) => {
+          const cls = i < phaseIdx ? 'is-done' : i === phaseIdx ? 'is-active' : '';
+          return (
+            <li key={p} className={`gen-build-phase-item ${cls}`}>
+              <span className="gen-build-phase-dot" aria-hidden="true">{i < phaseIdx ? '✓' : i + 1}</span>
+              <span className="gen-build-phase-label">{p}</span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
