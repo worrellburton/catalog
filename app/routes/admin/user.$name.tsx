@@ -71,14 +71,29 @@ interface LookTableRow {
   description: string;
 }
 
+interface ProfileRow {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  provider: string | null;
+  role: string | null;
+  created_at: string | null;
+  last_sign_in_at: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function AdminUserDetail() {
   const { name } = useParams();
   const navigate = useNavigate();
   const decoded = decodeURIComponent(name || '');
 
+  // Try the URL slug as a user-id first (the new routing scheme), then
+  // fall back to creator-handle resolution from seed data so legacy
+  // creator links keep working.
   const creatorHandle = findCreatorHandle(decoded);
   const creator = creatorHandle ? creators[creatorHandle] : null;
-  const isCreator = !!creator;
 
   const creatorLooks = useMemo(() => {
     if (!creatorHandle) return [];
@@ -99,12 +114,12 @@ export default function AdminUserDetail() {
   const lookTable = useSortableTable(tableRows);
   const [expandedLook, setExpandedLook] = useState<number | null>(null);
 
-  // Uploaded reference photos + Generate-page submissions for this user.
-  // The admin page route keys off displayName (full_name or email prefix),
-  // so we resolve to auth.users via profiles. We try full_name first, then
-  // fall back to email-local-part so users without a full_name still match.
-  // resolved=true once the lookup completes so the UI can distinguish
-  // "still loading" from "no data".
+  // Resolve the URL slug to a profile row + their uploads + their
+  // generations. Routing now keys off the auth-user UUID directly, so
+  // collisions on display name (we have multiple "Robert Burton"s)
+  // don't silently drop user data. We still accept legacy
+  // name/email links via the fallback path.
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
   const [resolved, setResolved] = useState(false);
@@ -112,26 +127,63 @@ export default function AdminUserDetail() {
     if (!supabase) { setResolved(true); return; }
     let cancelled = false;
     setResolved(false);
+    setProfile(null);
     (async () => {
-      const byName = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('full_name', decoded)
-        .maybeSingle();
-      let userId = byName.data?.id as string | undefined;
-      if (!userId) {
-        const byEmail = await supabase
+      let prof: ProfileRow | null = null;
+
+      // 1) UUID slug — direct id lookup, no ambiguity.
+      if (UUID_RE.test(decoded)) {
+        const { data } = await supabase
           .from('profiles')
-          .select('id')
-          .ilike('email', `${decoded}@%`)
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .eq('id', decoded)
           .maybeSingle();
-        userId = byEmail.data?.id as string | undefined;
+        prof = (data ?? null) as ProfileRow | null;
       }
+
+      // 2) Legacy: full_name lookup. We pull all matches and pick the
+      //    one with the most data so a name collision doesn't show a
+      //    blank profile (the old behavior).
+      if (!prof) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .ilike('full_name', decoded);
+        const candidates = (data ?? []) as ProfileRow[];
+        if (candidates.length === 1) {
+          prof = candidates[0];
+        } else if (candidates.length > 1) {
+          const counts = await Promise.all(candidates.map(async (c) => {
+            const [{ count: u }, { count: g }] = await Promise.all([
+              supabase!.from('user_uploads').select('*', { count: 'exact', head: true }).eq('user_id', c.id),
+              supabase!.from('user_generations').select('*', { count: 'exact', head: true }).eq('user_id', c.id),
+            ]);
+            return { row: c, score: (u ?? 0) + (g ?? 0) };
+          }));
+          counts.sort((a, b) => b.score - a.score);
+          prof = counts[0].row;
+        }
+      }
+
+      // 3) Legacy: email-local-part fallback for shoppers without a
+      //    full_name set on their profile.
+      if (!prof) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .ilike('email', `${decoded}@%`)
+          .limit(1)
+          .maybeSingle();
+        prof = (data ?? null) as ProfileRow | null;
+      }
+
       if (cancelled) return;
-      if (!userId) { setResolved(true); return; }
+      setProfile(prof);
+
+      if (!prof) { setResolved(true); return; }
       const [{ data: u }, { data: g }] = await Promise.all([
-        supabase.from('user_uploads').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('user_generations').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase!.from('user_uploads').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
+        supabase!.from('user_generations').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
       setUploads((u || []) as UserUpload[]);
@@ -140,6 +192,12 @@ export default function AdminUserDetail() {
     })();
     return () => { cancelled = true; };
   }, [decoded]);
+
+  // Header info — prefer real profile data over the URL slug. Fall
+  // back to the slug + creator data for legacy creator links.
+  const displayName = profile?.full_name || creator?.displayName || decoded;
+  const avatarUrl = profile?.avatar_url || creator?.avatar || null;
+  const isCreator = !!creator && !profile;  // creator-only when we couldn't resolve a profile
 
   const totalProducts = creatorLooks.reduce((sum, l) => sum + l.products.length, 0);
   const uniqueBrands = new Set(creatorLooks.flatMap(l => l.products.map(p => p.brand)));
@@ -152,9 +210,9 @@ export default function AdminUserDetail() {
           Back to Users
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {creator && <img src={creator.avatar} alt="" className="admin-user-avatar-img" style={{ width: 40, height: 40 }} />}
+          {avatarUrl && <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 40, height: 40 }} />}
           <div>
-            <h1>{decoded}</h1>
+            <h1>{displayName}</h1>
             <p className="admin-page-subtitle">{isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}</p>
           </div>
         </div>
@@ -164,10 +222,13 @@ export default function AdminUserDetail() {
         <div className="admin-detail-card">
           <h3>Profile</h3>
           <div className="admin-detail-rows">
-            <div className="admin-detail-row"><span>Username</span><span>{decoded}</span></div>
+            <div className="admin-detail-row"><span>Name</span><span>{displayName}</span></div>
+            {profile?.email && <div className="admin-detail-row"><span>Email</span><span>{profile.email}</span></div>}
+            {profile?.provider && <div className="admin-detail-row"><span>SSO</span><span style={{ textTransform: 'capitalize' }}>{profile.provider}</span></div>}
             {creatorHandle && <div className="admin-detail-row"><span>Handle</span><span>{creatorHandle}</span></div>}
             <div className="admin-detail-row"><span>Status</span><span className="admin-status-active">Active</span></div>
-            <div className="admin-detail-row"><span>Type</span><span>{isCreator ? 'Creator' : 'Shopper'}</span></div>
+            <div className="admin-detail-row"><span>Type</span><span style={{ textTransform: 'capitalize' }}>{profile?.role || (isCreator ? 'Creator' : 'Shopper')}</span></div>
+            {profile?.id && <div className="admin-detail-row"><span>User ID</span><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{profile.id.slice(0, 8)}…</span></div>}
           </div>
         </div>
         <div className="admin-detail-card">

@@ -362,7 +362,7 @@ export default function AdminUsers() {
               <tr
                 key={u.id}
                 className="admin-clickable-row"
-                onClick={() => navigate(`/admin/user/${encodeURIComponent(u.name)}`)}
+                onClick={() => navigate(`/admin/user/${u.id}`)}
               >
                 <td className="admin-cell-name">
                   <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />

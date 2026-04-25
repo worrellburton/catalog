@@ -506,6 +506,11 @@ export default function GeneratePage() {
       return;
     }
     setGeneration(data);
+    // Prepend the new row to the in-memory list so it shows up in
+    // "Your looks" the moment the shopper hits Back from the result
+    // screen — no page refresh needed. The list-polling effect will
+    // promote it through generating -> done|failed in place.
+    setGenerations(prev => [data, ...prev.filter(g => g.id !== data.id)]);
     setStep('result');
   };
 
