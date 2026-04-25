@@ -24,18 +24,29 @@ export default function WaitlistScreen({ user, onApproved }: WaitlistScreenProps
       if (s?.approved) onApproved();
     }
 
-    load();
-    const interval = setInterval(async () => {
+    async function recheck() {
       const s = await getWaitlistStatus(user.id);
       if (cancelled) return;
       if (s) {
         setStatus(s);
         if (s.approved) onApproved();
       }
-    }, 30000);
+    }
+
+    load();
+    const interval = setInterval(recheck, 30000);
+    // Re-check the moment the page comes back to the foreground or
+    // gains focus — so a freshly-approved user who refreshes or
+    // switches back to the tab is let in immediately, without waiting
+    // up to 30s for the next poll.
+    const onVisibility = () => { if (!document.hidden) recheck(); };
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [user.id, onApproved]);
 

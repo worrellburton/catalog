@@ -35,16 +35,21 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 reference-to-video. /fast is confirmed working at 5s.
-// /pro 404'd on the canonical slug at first try, so when the user
-// picks Pro we walk a small list of plausible Pro slugs and stop
-// at the first one Fal accepts. If every Pro candidate 404s we
-// fall back to /fast at 5s and surface the fallback in veo_model.
+// Seedance 2 reference-to-video. /fast is the only variant fal.ai
+// exposes — submits to /pro and /lite return queue request_ids but
+// the workers themselves 404 ("Path /pro/reference-to-video not
+// found"), which only surfaces when the webhook fires later. So we
+// always submit to /fast regardless of model='pro' on the user_generation
+// row, and surface the actual slug used in veo_model.
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-const PRO_CANDIDATES = [
-  'bytedance/seedance-2.0/pro/reference-to-video',
-  'bytedance/seedance-2.0/reference-to-video',
-];
+// Other Pro slugs we used to walk through. Kept here only as a
+// reminder — every one of them 404s on the worker side as of
+// Apr 2026. Re-add to the rotation if fal.ai ever ships a Pro
+// reference-to-video endpoint.
+// const PRO_CANDIDATES = [
+//   'bytedance/seedance-2.0/pro/reference-to-video',
+//   'bytedance/seedance-2.0/reference-to-video',
+// ];
 
 async function tryFal(
   modelSlug: string,
@@ -87,26 +92,12 @@ async function submitFal(
   prompt: string,
   referenceImageUrls: string[],
   wantsPro: boolean,
-  durationSeconds: number,
+  _durationSeconds: number,
   falKey: string,
   webhookUrl: string,
 ): Promise<{ request_id: string | null; model_slug: string; error: string | null; fellBack: boolean }> {
-  if (wantsPro) {
-    for (const slug of PRO_CANDIDATES) {
-      const r = await tryFal(slug, prompt, referenceImageUrls, durationSeconds, falKey, webhookUrl);
-      if (r.request_id) {
-        return { request_id: r.request_id, model_slug: slug, error: null, fellBack: false };
-      }
-      // Only walk past 404 (slug doesn't exist). Other errors are
-      // real failures we shouldn't paper over by retrying a sibling.
-      if (r.status !== 404) {
-        return { request_id: null, model_slug: slug, error: `Fal submit failed: ${r.error}`, fellBack: false };
-      }
-      console.log('[generate-look] pro slug 404, trying next candidate:', slug);
-    }
-    console.log('[generate-look] all pro slugs 404, falling back to /fast at 5s');
-  }
-
+  // /fast caps at 5s regardless of what the row asked for. It's the
+  // only slug fal.ai accepts for reference-to-video right now.
   const r = await tryFal(MODEL_SLUG_FAST, prompt, referenceImageUrls, 5, falKey, webhookUrl);
   if (r.request_id) {
     return { request_id: r.request_id, model_slug: MODEL_SLUG_FAST, error: null, fellBack: wantsPro };
@@ -274,9 +265,10 @@ Deno.serve(async (req: Request) => {
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';
   const wantsPro = gen.model === 'pro';
-  // /fast is 5s only; Pro can do 5 or 10. Honor the row's request
-  // when Pro is selected, clamp to 5 otherwise.
-  const durationSeconds = wantsPro && gen.duration_seconds === 10 ? 10 : 5;
+  // /fast caps at 5s regardless of what was requested. We always
+  // route reference-to-video through /fast (Pro doesn't ship for
+  // this variant), so clamp to 5.
+  const durationSeconds = 5;
   // Prefer the rich prompt the client built (carries framing,
   // commercial cinematography, brand camera language) — the original
   // tagged-prompt fallback below is only used if the client didn't

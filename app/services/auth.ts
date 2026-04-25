@@ -1,5 +1,6 @@
 import { supabase } from '~/utils/supabase';
 import type { UserRole } from '~/types/roles';
+import { inferUserGenderFromName } from './genders';
 
 export interface AuthUser {
   id: string;
@@ -85,11 +86,23 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, gender, full_name')
       .eq('id', session.user.id)
       .single();
     if (profile?.role) {
       authUser.role = profile.role as UserRole;
+    }
+    // First-load gender backfill: if the profile has a name but no
+    // gender signal, infer once from the first name and persist.
+    // Idempotent — short-circuits as soon as the column has 'male' or
+    // 'female', so steady-state this is one extra column on the read
+    // above and nothing else.
+    if (profile && profile.gender !== 'male' && profile.gender !== 'female') {
+      const fullName = (profile.full_name as string | null) ?? authUser.displayName ?? null;
+      const inferred = inferUserGenderFromName(fullName);
+      if (inferred !== 'unknown') {
+        void supabase.from('profiles').update({ gender: inferred }).eq('id', session.user.id);
+      }
     }
   } catch {
     // role column may not exist yet

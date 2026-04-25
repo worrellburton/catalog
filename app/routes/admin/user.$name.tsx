@@ -326,14 +326,43 @@ export default function AdminUserDetail() {
                 ) : (
                   <div style={{
                     width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
-                    color: '#888', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11,
+                    color: '#aaa', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    padding: '12px 10px', textAlign: 'center', fontSize: 11, gap: 8,
                   }}>
-                    {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                    <div style={{ fontWeight: 600, color: g.status === 'failed' ? '#fca5a5' : '#aaa' }}>
+                      {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                    </div>
+                    {g.status === 'failed' && g.error && (
+                      <div
+                        title={g.error}
+                        style={{
+                          color: '#fca5a5', fontSize: 10, lineHeight: 1.35,
+                          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden', wordBreak: 'break-word',
+                        }}
+                      >
+                        {g.error}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || '—'}</div>
                 <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
+                {g.status === 'failed' && g.error && (
+                  <div
+                    title={g.error}
+                    style={{
+                      marginTop: 6, color: '#b91c1c', fontSize: 11, lineHeight: 1.35,
+                      background: '#fef2f2', border: '1px solid #fecaca',
+                      borderRadius: 4, padding: '6px 8px',
+                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden', wordBreak: 'break-word',
+                    }}
+                  >
+                    {g.error}
+                  </div>
+                )}
               </div>
             ))}
           </div>
