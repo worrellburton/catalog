@@ -56,7 +56,7 @@ const FEMALE_NAMES = new Set([
   'octavia','odelia','odell','olga','olive','olivia','opal','ophelia','ora','oralia',
   'page','paige','pamela','patrice','patricia','patsy','patti','patty','paula','paulette','pauline','peggy','penelope','penny','phoebe','phyllis','polly','priscilla',
   'queen','queenie',
-  'rachael','rachel','raquel','rebecca','regina','renee','reta','rhea','rhoda','rhonda','rita','roberta','rochelle','rosa','rosalie','rosalind','rosanne','rose','rosella','rosemary','roxanne','ruby','ruth',
+  'rachael','racheal','rachel','raquel','rebecca','regina','renee','reta','rhea','rhoda','rhonda','rita','roberta','rochelle','rosa','rosalie','rosalind','rosanne','rose','rosella','rosemary','roxanne','ruby','ruth',
   'sabrina','sadie','sally','samantha','sandra','sara','sarah','sasha','savannah','scarlett','selena','selma','serena','shannon','shari','sharon','shawna','sheila','shelby','shelia','shelly','sheri','sherri','sherry','sheryl','shirley','sienna','sierra','silvia','simone','sky','skylar','sloane','sofia','sondra','sonia','sonja','sonya','sophia','sophie','stacey','stacie','stacy','stella','stephanie','sue','susan','susie','suzanne','suzette','sybil','sydney','sylvia',
   'tabatha','tabitha','tamara','tamela','tameka','tamela','tami','tammy','tania','tanya','tara','tasha','tatiana','teresa','terri','tessa','thelma','theresa','tiffany','tina','tisha','toni','tonia','tonya','tracee','tracey','tracie','trinity','trisha','trista','tyra',
   'ursula',
