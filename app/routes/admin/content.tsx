@@ -181,6 +181,24 @@ interface LookRow {
 }
 
 type Tab = 'looks' | 'products' | 'musics' | 'places';
+type LooksFilter = 'published' | 'unpublished';
+
+interface UnpublishedLook {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'generating' | 'done' | 'failed';
+  style: string;
+  height_label: string | null;
+  age_label: string | null;
+  model: 'fast' | 'pro' | null;
+  video_url: string | null;
+  error: string | null;
+  created_at: string;
+  product_count: number;
+  creator_name: string | null;
+  creator_avatar: string | null;
+  creator_email: string | null;
+}
 
 export default function AdminContent() {
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
@@ -193,6 +211,19 @@ export default function AdminContent() {
       const p = new URLSearchParams(prev);
       if (next === 'looks') p.delete('tab');
       else p.set('tab', next);
+      return p;
+    }, { replace: false });
+  }, [setSearchParams]);
+
+  // Looks sub-filter: Published = curated catalog, Unpublished = looks that
+  // shoppers / creators generated themselves via the /generate flow.
+  const urlLooks = (searchParams.get('looks') as LooksFilter | null) || 'published';
+  const looksFilter: LooksFilter = (['published', 'unpublished'].includes(urlLooks) ? urlLooks : 'published') as LooksFilter;
+  const setLooksFilter = useCallback((next: LooksFilter) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (next === 'published') p.delete('looks');
+      else p.set('looks', next);
       return p;
     }, { replace: false });
   }, [setSearchParams]);
@@ -224,6 +255,69 @@ export default function AdminContent() {
       } catch (err) {
         console.warn('[AdminContent] live looks fetch failed, keeping static seed:', err);
       }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // User-generated looks (the Unpublished sub-tab). Loaded once on mount so
+  // the badge count is accurate even on the Published view. Admin RLS on
+  // user_generations was added in migration 044 — without that this query
+  // returns zero rows for non-owner sessions.
+  const [unpublished, setUnpublished] = useState<UnpublishedLook[]>([]);
+  const [unpublishedLoading, setUnpublishedLoading] = useState(true);
+  useEffect(() => {
+    if (!supabase) { setUnpublishedLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: gens, error } = await supabase
+        .from('user_generations')
+        .select('id, user_id, status, style, height_label, age_label, model, video_url, error, created_at, user_generation_products(count)')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('[AdminContent] unpublished looks fetch failed:', error);
+        if (!cancelled) setUnpublishedLoading(false);
+        return;
+      }
+      const userIds = Array.from(new Set((gens || []).map((g: { user_id: string }) => g.user_id)));
+      const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, email')
+          .in('id', userIds);
+        (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null }) => {
+          profilesById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email });
+        });
+      }
+      if (cancelled) return;
+      const rows: UnpublishedLook[] = (gens || []).map((g: {
+        id: string; user_id: string;
+        status: 'pending' | 'generating' | 'done' | 'failed';
+        style: string; height_label: string | null; age_label: string | null;
+        model: 'fast' | 'pro' | null;
+        video_url: string | null; error: string | null; created_at: string;
+        user_generation_products: { count: number }[] | null;
+      }) => {
+        const prof = profilesById.get(g.user_id);
+        return {
+          id: g.id,
+          user_id: g.user_id,
+          status: g.status,
+          style: g.style,
+          height_label: g.height_label,
+          age_label: g.age_label,
+          model: g.model,
+          video_url: g.video_url,
+          error: g.error,
+          created_at: g.created_at,
+          product_count: g.user_generation_products?.[0]?.count ?? 0,
+          creator_name: prof?.full_name ?? null,
+          creator_avatar: prof?.avatar_url ?? null,
+          creator_email: prof?.email ?? null,
+        };
+      });
+      setUnpublished(rows);
+      setUnpublishedLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -1214,6 +1308,27 @@ export default function AdminContent() {
       </div>
 
       {activeTab === 'looks' && (
+        <div className="admin-tabs" style={{ marginBottom: 12 }}>
+          <button
+            className={`admin-tab ${looksFilter === 'published' ? 'active' : ''}`}
+            onClick={() => setLooksFilter('published')}
+            title="Curated looks shown on the public feed"
+          >
+            Published
+            <span className="admin-tab-badge">{looks.length}</span>
+          </button>
+          <button
+            className={`admin-tab ${looksFilter === 'unpublished' ? 'active' : ''}`}
+            onClick={() => setLooksFilter('unpublished')}
+            title="Looks generated by users via the Generate flow"
+          >
+            Unpublished
+            <span className="admin-tab-badge">{unpublished.length}</span>
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'looks' && looksFilter === 'published' && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -1403,6 +1518,102 @@ export default function AdminContent() {
                       </td>
                     </tr>
                   </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'looks' && looksFilter === 'unpublished' && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Creative</th>
+                <th>Creator</th>
+                <th>Created At</th>
+                <th>Style</th>
+                <th>Status</th>
+                <th>Products</th>
+                <th>Model</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unpublishedLoading && unpublished.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
+                </tr>
+              ) : unpublished.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
+                </tr>
+              ) : unpublished.map(g => {
+                const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
+                const created = new Date(g.created_at).toLocaleString(undefined, {
+                  month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+                });
+                return (
+                  <tr
+                    key={g.id}
+                    className="admin-look-main-row"
+                    onClick={() => navigate(`/admin/user/${g.user_id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td>
+                      <div className="admin-look-thumb">
+                        {g.video_url ? (
+                          <>
+                            <video src={g.video_url} muted loop playsInline preload="metadata" />
+                            <div className="admin-look-preview">
+                              <video src={g.video_url} autoPlay muted loop playsInline />
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{
+                            width: '100%', height: '100%', background: '#111', color: '#aaa',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, textAlign: 'center', padding: 4,
+                          }}>
+                            {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="admin-look-creator">
+                        {g.creator_avatar ? (
+                          <img className="admin-look-creator-avatar" src={g.creator_avatar} alt={creatorLabel} />
+                        ) : (
+                          <div className="admin-look-creator-avatar" style={{ background: '#e5e7eb' }} />
+                        )}
+                        <span>{creatorLabel}</span>
+                      </div>
+                    </td>
+                    <td className="admin-cell-muted">{created}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{g.style}</td>
+                    <td>
+                      <span
+                        title={g.status === 'failed' && g.error ? g.error : undefined}
+                        style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 12,
+                          fontSize: 11, fontWeight: 600, textTransform: 'capitalize',
+                          background:
+                            g.status === 'done' ? '#dcfce7'
+                            : g.status === 'failed' ? '#fee2e2'
+                            : '#fef9c3',
+                          color:
+                            g.status === 'done' ? '#166534'
+                            : g.status === 'failed' ? '#991b1b'
+                            : '#854d0e',
+                        }}
+                      >
+                        {g.status}
+                      </span>
+                    </td>
+                    <td>{g.product_count}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{g.model || '—'}</td>
+                  </tr>
                 );
               })}
             </tbody>
