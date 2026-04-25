@@ -26,6 +26,7 @@ export interface UserGeneration {
   storage_path: string | null;
   error: string | null;
   duration_seconds: number;
+  model: 'fast' | 'pro';
   created_at: string;
   completed_at: string | null;
 }
@@ -506,6 +507,7 @@ export interface CreateGenerationInput {
   style: string;
   prompt: string;
   durationSeconds: number;
+  model: 'fast' | 'pro';
 }
 
 /**
@@ -530,6 +532,7 @@ export async function createGeneration(
       style: input.style,
       prompt: input.prompt,
       duration_seconds: input.durationSeconds,
+      model: input.model,
     })
     .select('*')
     .single();

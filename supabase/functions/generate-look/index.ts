@@ -35,24 +35,25 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 reference-to-video. The /fast variant is the only
-// confirmed-working slug right now and it's capped at 5-second
-// outputs. We tried `/pro/reference-to-video` for 10s clips but Fal
-// returned 404 — that path doesn't exist. Until we identify the
-// correct pro/long-form slug, every job runs on /fast at 5s
-// regardless of what the row asks for, and the wizard hides the
-// 10s pill so users don't get a confusing failure.
+// Seedance 2 reference-to-video. /fast is confirmed working at 5s.
+// /pro 404'd on the canonical slug at first try, so when the user
+// picks Pro we walk a small list of plausible Pro slugs and stop
+// at the first one Fal accepts. If every Pro candidate 404s we
+// fall back to /fast at 5s and surface the fallback in veo_model.
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-const slugForDuration = (_s: number) => MODEL_SLUG_FAST;
+const PRO_CANDIDATES = [
+  'bytedance/seedance-2.0/pro/reference-to-video',
+  'bytedance/seedance-2.0/reference-to-video',
+];
 
-async function submitFal(
+async function tryFal(
+  modelSlug: string,
   prompt: string,
   referenceImageUrls: string[],
   durationSeconds: number,
   falKey: string,
   webhookUrl: string,
-): Promise<{ request_id: string | null; model_slug: string; error: string | null }> {
-  const modelSlug = slugForDuration(durationSeconds);
+): Promise<{ status: number; request_id: string | null; error: string | null }> {
   const submit = await fetch(
     `${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
     {
@@ -60,16 +61,11 @@ async function submitFal(
       headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt,
-        // Seedance 2's reference-to-video field is `image_urls` (the
-        // previous `reference_image_urls` from v1 is silently ignored,
-        // which is why the face wasn't preserved — the model was
-        // running text-only). Each image is addressed by @Image1,
-        // @Image2, … inside the prompt; up to 9 are supported.
+        // Each reference image is addressed by @Image1, @Image2 …
+        // inside the prompt; up to 9 are supported.
         image_urls: referenceImageUrls.slice(0, 9),
-        // Always 5s on /fast — the only confirmed-working slug for
-        // Seedance 2 reference-to-video. 10s support waits until we
-        // identify the correct pro/long-form endpoint.
-        duration: '5',
+        // /fast caps at 5; Pro can do 5 or 10 when it works.
+        duration: durationSeconds === 10 ? '10' : '5',
         aspect_ratio: '9:16',
         resolution: '720p',
         generate_audio: false,
@@ -78,13 +74,44 @@ async function submitFal(
   );
   if (!submit.ok) {
     const text = await submit.text();
-    return { request_id: null, model_slug: modelSlug, error: `Fal submit failed: ${submit.status} ${text.slice(0, 400)}` };
+    return { status: submit.status, request_id: null, error: `${submit.status} ${text.slice(0, 400)}` };
   }
   const submitData = await submit.json() as { request_id?: string };
   if (!submitData.request_id) {
-    return { request_id: null, model_slug: modelSlug, error: 'Fal did not return a request_id' };
+    return { status: submit.status, request_id: null, error: 'Fal did not return a request_id' };
   }
-  return { request_id: submitData.request_id, model_slug: modelSlug, error: null };
+  return { status: submit.status, request_id: submitData.request_id, error: null };
+}
+
+async function submitFal(
+  prompt: string,
+  referenceImageUrls: string[],
+  wantsPro: boolean,
+  durationSeconds: number,
+  falKey: string,
+  webhookUrl: string,
+): Promise<{ request_id: string | null; model_slug: string; error: string | null; fellBack: boolean }> {
+  if (wantsPro) {
+    for (const slug of PRO_CANDIDATES) {
+      const r = await tryFal(slug, prompt, referenceImageUrls, durationSeconds, falKey, webhookUrl);
+      if (r.request_id) {
+        return { request_id: r.request_id, model_slug: slug, error: null, fellBack: false };
+      }
+      // Only walk past 404 (slug doesn't exist). Other errors are
+      // real failures we shouldn't paper over by retrying a sibling.
+      if (r.status !== 404) {
+        return { request_id: null, model_slug: slug, error: `Fal submit failed: ${r.error}`, fellBack: false };
+      }
+      console.log('[generate-look] pro slug 404, trying next candidate:', slug);
+    }
+    console.log('[generate-look] all pro slugs 404, falling back to /fast at 5s');
+  }
+
+  const r = await tryFal(MODEL_SLUG_FAST, prompt, referenceImageUrls, 5, falKey, webhookUrl);
+  if (r.request_id) {
+    return { request_id: r.request_id, model_slug: MODEL_SLUG_FAST, error: null, fellBack: wantsPro };
+  }
+  return { request_id: null, model_slug: MODEL_SLUG_FAST, error: `Fal submit failed: ${r.error}`, fellBack: wantsPro };
 }
 
 Deno.serve(async (req: Request) => {
@@ -228,7 +255,10 @@ Deno.serve(async (req: Request) => {
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';
-  const durationSeconds = gen.duration_seconds === 10 ? 10 : 5;
+  const wantsPro = gen.model === 'pro';
+  // /fast is 5s only; Pro can do 5 or 10. Honor the row's request
+  // when Pro is selected, clamp to 5 otherwise.
+  const durationSeconds = wantsPro && gen.duration_seconds === 10 ? 10 : 5;
   // Prefer the rich prompt the client built (carries framing,
   // commercial cinematography, brand camera language) — the original
   // tagged-prompt fallback below is only used if the client didn't
@@ -258,7 +288,12 @@ Deno.serve(async (req: Request) => {
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
-  const { request_id, model_slug, error } = await submitFal(taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
+  const { request_id, model_slug, error, fellBack } = await submitFal(
+    taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl,
+  );
+  if (fellBack) {
+    console.log('[generate-look] gen=', generationId, 'requested pro, fell back to fast');
+  }
 
   if (error || !request_id) {
     await admin.from('user_generations').update({

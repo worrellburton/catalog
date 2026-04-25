@@ -146,8 +146,15 @@ export default function GeneratePage() {
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
   const [style, setStyle] = useState<string>('street');
-  // Output clip length. Seedance 2 Fast supports 5 or 10 only.
+  // Output clip length. Seedance 2 /fast is 5s only; Pro can do 5
+  // or 10. Default 5 for Fast; the model picker bumps it to 10 when
+  // Pro is selected (and the user can knock it back to 5 if they
+  // want).
   const [clipSeconds, setClipSeconds] = useState<5 | 10>(5);
+  // Seedance 2 variant. 'fast' is fast + cheap + 5s only. 'pro' is
+  // longer + higher quality when Fal exposes it; the edge function
+  // falls back to /fast if the Pro slug 404s.
+  const [model, setModel] = useState<'fast' | 'pro'>('fast');
   // Shopper's gender, used to filter the product picker so a male
   // shopper only sees male + unisex (+ untagged) products. 'unknown'
   // disables the filter so we don't hide the catalog from anyone we
@@ -493,6 +500,9 @@ export default function GeneratePage() {
     if (detail.generation.duration_seconds === 5 || detail.generation.duration_seconds === 10) {
       setClipSeconds(detail.generation.duration_seconds);
     }
+    if (detail.generation.model === 'fast' || detail.generation.model === 'pro') {
+      setModel(detail.generation.model);
+    }
 
     setGeneration(null);
     setSubmitError(null);
@@ -542,6 +552,7 @@ export default function GeneratePage() {
       style,
       prompt,
       durationSeconds: clipSeconds,
+      model,
     });
     setSubmitting(false);
     if (error || !data) {
@@ -847,28 +858,47 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
               <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
+              <div className="gen-review-row"><span>Model</span><span style={{ textTransform: 'capitalize' }}>{model}</span></div>
               <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
             </div>
 
-            {/*
-              Clip-length picker temporarily collapsed to 5s only. The
-              pro/long-form Seedance 2 reference-to-video endpoint
-              hasn't been identified (Fal returned 404 on
-              `/pro/reference-to-video`), so the wizard offers a
-              single 5s option until we find the right slug. The
-              picker grid is intentionally left mounted (single
-              button) so the user understands the length they'll get.
-            */}
-            <div className="gen-sectionlabel">Clip length</div>
+            <div className="gen-sectionlabel">Model</div>
             <div className="gen-lengthgrid">
               <button
                 type="button"
-                className="gen-heightchip is-picked"
-                disabled
+                className={`gen-heightchip${model === 'fast' ? ' is-picked' : ''}`}
+                onClick={() => { setModel('fast'); setClipSeconds(5); }}
+                title="Fast: cheaper, ~3 min, 5-second output"
               >
-                5s
+                Fast
+              </button>
+              <button
+                type="button"
+                className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
+                onClick={() => setModel('pro')}
+                title="Pro: higher quality, longer wait, can run 10-second outputs (falls back to Fast if Fal can't route Pro)"
+              >
+                Pro
               </button>
             </div>
+
+            {model === 'pro' && (
+              <>
+                <div className="gen-sectionlabel">Clip length</div>
+                <div className="gen-lengthgrid">
+                  {[5, 10].map(sec => (
+                    <button
+                      key={sec}
+                      type="button"
+                      className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
+                      onClick={() => setClipSeconds(sec as 5 | 10)}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             <div className="gen-review-products">
               {picked.map(p => (
