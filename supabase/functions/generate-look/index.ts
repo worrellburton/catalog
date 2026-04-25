@@ -196,13 +196,31 @@ Deno.serve(async (req: Request) => {
   const facesUsed = faceUrls.slice(0, faceSlots);
   const productsUsedRaw = productEntries.slice(0, productSlots);
 
-  // Pre-flight every reference URL with a HEAD request. Seedance returns
-  // 422 if any single reference is unfetchable / not actually an image
-  // (e.g. retailer sites that hotlink-block, redirect to HTML, or serve
-  // the wrong content-type). Drop products that fail rather than killing
-  // the whole job — face photos are required so we surface a hard error
-  // if any of those bounce.
+  // Hosts that reliably make Fal's image fetcher 500. Google Shopping
+  // thumbnail URLs (`encrypted-tbnN.gstatic.com/shopping?q=tbn:…`) pass
+  // a HEAD pre-check but fail when Fal does the real GET, killing the
+  // whole job. Drop them up front so the same product gets ingested
+  // through the scrape path and re-uploaded to Supabase storage.
+  const BLOCKED_IMAGE_HOSTS: RegExp[] = [
+    /(^|\.)encrypted-tbn\d+\.gstatic\.com$/i,
+    /(^|\.)tbn\d+\.gstatic\.com$/i,
+    /(^|\.)googleusercontent\.com$/i, // Google Shopping mirror
+  ];
+
+  function isHostBlocked(url: string): boolean {
+    try {
+      const h = new URL(url).hostname;
+      return BLOCKED_IMAGE_HOSTS.some(rx => rx.test(h));
+    } catch { return true; }
+  }
+
+  // Pre-flight every reference URL. Reject blocked hosts up front;
+  // for everything else, HEAD-check that the response is an actual
+  // image of reasonable size. Drop products that fail rather than
+  // killing the whole job — face photos are required so we surface a
+  // hard error if any of those bounce.
   async function isImageUrlOk(url: string): Promise<boolean> {
+    if (isHostBlocked(url)) return false;
     try {
       const r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
       if (!r.ok) return false;

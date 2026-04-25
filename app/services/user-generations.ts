@@ -27,6 +27,9 @@ export interface UserGeneration {
   error: string | null;
   duration_seconds: number;
   model: 'fast' | 'pro';
+  crop_scale: number;
+  crop_x: number;
+  crop_y: number;
   created_at: string;
   completed_at: string | null;
 }
@@ -442,6 +445,26 @@ export async function deleteUserUpload(
 export async function deleteUserGeneration(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase.from('user_generations').delete().eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Persist the display-time crop transform for a generation. Clamps
+ * to the column check constraints so a slipped slider can't poison
+ * the row.
+ */
+export async function updateGenerationCrop(
+  id: string,
+  crop: { scale: number; x: number; y: number },
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const scale = Math.max(1, Math.min(4, crop.scale));
+  const x = Math.max(-1, Math.min(1, crop.x));
+  const y = Math.max(-1, Math.min(1, crop.y));
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ crop_scale: scale, crop_x: x, crop_y: y })
+    .eq('id', id);
   return { error: error?.message ?? null };
 }
 

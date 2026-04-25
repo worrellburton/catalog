@@ -14,6 +14,7 @@ import {
   listUserGenerations,
   listUserUploads,
   saveUserSlots,
+  updateGenerationCrop,
   uploadUserPhoto,
   type UserUpload,
   type UserGeneration,
@@ -27,6 +28,52 @@ import { getUserGender, type UserGender } from '~/services/genders';
    submit kicks off a generate_look edge function and polls the
    user_generations row until status hits done|failed.
    ----------------------------------------------------------- */
+
+// Head-to-toe ordering for "Products in this look". Lower index =
+// higher up the body. Untagged items fall to the bottom in their
+// original sort_order. Garments come first, accessories trail.
+const ROLE_DISPLAY_ORDER: Record<string, number> = {
+  hat: 1,
+  sunglasses: 2,
+  scarf: 3,
+  top: 4,
+  jacket: 5,
+  coat: 6,
+  dress: 7,
+  suit: 8,
+  belt: 9,
+  pants: 10,
+  skirt: 11,
+  shorts: 12,
+  shoes: 13,
+  sneakers: 13,
+  boots: 13,
+  sandals: 13,
+  heels: 13,
+  socks: 14,
+  bag: 15,
+  wallet: 16,
+  watch: 17,
+  jewelry: 18,
+  necklace: 18,
+  ring: 18,
+  earrings: 18,
+  bracelet: 18,
+  accessory: 19,
+};
+
+function sortProductsHeadToToe<T extends { role_tag: string | null; sort_order?: number }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    const ar = (a.role_tag || '').toLowerCase().trim();
+    const br = (b.role_tag || '').toLowerCase().trim();
+    const arank = ROLE_DISPLAY_ORDER[ar] ?? 99;
+    const brank = ROLE_DISPLAY_ORDER[br] ?? 99;
+    if (arank !== brank) return arank - brank;
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  });
+}
 
 const MAX_PHOTOS = 3;
 const MAX_PRODUCTS = 5;
@@ -181,7 +228,7 @@ export default function GeneratePage() {
     let cancelled = false;
     getGenerationDetail(generation.id).then(d => {
       if (cancelled) return;
-      setResultProducts(d.products);
+      setResultProducts(sortProductsHeadToToe(d.products));
       setResultRefs(d.uploads);
     });
     return () => { cancelled = true; };
@@ -361,6 +408,13 @@ export default function GeneratePage() {
   // closed. When non-null, clicking a thumbnail in the modal places it
   // into this slot (instead of the first empty slot).
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
+
+  // Crop tool — modal state. Lives on the result step; opens when the
+  // user taps the Crop button. Saving writes back through
+  // updateGenerationCrop() and the in-memory generation gets updated
+  // optimistically so the result video re-renders with the new crop
+  // immediately.
+  const [cropOpen, setCropOpen] = useState(false);
 
   const openPickerForSlot = (slotIndex: number) => {
     // If the user has any existing uploads, prefer the modal so they can
@@ -932,7 +986,15 @@ export default function GeneratePage() {
                 <div className="gen-build-burst" aria-hidden="true" />
                 <div className="gen-build-burst gen-build-burst-2" aria-hidden="true" />
                 <div className="gen-build-frame is-done">
-                  <video src={generation.video_url} autoPlay loop muted playsInline className="gen-result-video" />
+                  <video
+                    src={generation.video_url}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="gen-result-video"
+                    style={cropTransformStyle(generation)}
+                  />
                 </div>
               </div>
             )}
@@ -964,6 +1026,14 @@ export default function GeneratePage() {
                 <button className="gen-btn-secondary" onClick={startNewLook}>
                   New look
                 </button>
+                {generation.status === 'done' && generation.video_url && (
+                  <button
+                    className="gen-btn-secondary"
+                    onClick={() => setCropOpen(true)}
+                  >
+                    Crop
+                  </button>
+                )}
                 <button
                   className="gen-btn-primary"
                   onClick={() => editGeneration(generation.id)}
@@ -971,6 +1041,27 @@ export default function GeneratePage() {
                   Edit &amp; regenerate
                 </button>
               </div>
+            )}
+
+            {cropOpen && generation?.video_url && (
+              <CropModal
+                videoUrl={generation.video_url}
+                initial={{
+                  scale: generation.crop_scale ?? 1,
+                  x: generation.crop_x ?? 0,
+                  y: generation.crop_y ?? 0,
+                }}
+                onClose={() => setCropOpen(false)}
+                onSave={async (crop) => {
+                  setGeneration(prev => prev ? { ...prev, crop_scale: crop.scale, crop_x: crop.x, crop_y: crop.y } : prev);
+                  setGenerations(prev => prev.map(g =>
+                    g.id === generation.id
+                      ? { ...g, crop_scale: crop.scale, crop_x: crop.x, crop_y: crop.y }
+                      : g));
+                  setCropOpen(false);
+                  await updateGenerationCrop(generation.id, crop);
+                }}
+              />
             )}
           </section>
         )}
@@ -1102,6 +1193,165 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
   );
 }
 
+/**
+ * Build the CSS transform that applies a saved crop to a 9:16 video.
+ * The video sits inside a fixed-aspect frame with overflow hidden;
+ * we scale up by `crop_scale` and translate by the saved x/y. Pan is
+ * normalized -1..1 → percentage of the post-scale extra width/height
+ * the video can offer (e.g. scale=2 lets you pan up to ±50%).
+ */
+function cropTransformStyle(
+  gen: { crop_scale?: number | null; crop_x?: number | null; crop_y?: number | null } | null | undefined,
+): React.CSSProperties {
+  const scale = Math.max(1, Math.min(4, gen?.crop_scale ?? 1));
+  const x = Math.max(-1, Math.min(1, gen?.crop_x ?? 0));
+  const y = Math.max(-1, Math.min(1, gen?.crop_y ?? 0));
+  if (scale === 1 && x === 0 && y === 0) return {};
+  // ((scale - 1) / 2) is the slack on each side after scaling, in
+  // post-scale pixels. We translate the video before the scale so
+  // the math reads as a fraction of the original viewport.
+  const slack = (scale - 1) / 2;
+  const tx = x * slack * 100; // %
+  const ty = y * slack * 100; // %
+  return {
+    transform: `scale(${scale}) translate(${tx}%, ${ty}%)`,
+    transformOrigin: 'center center',
+  };
+}
+
+interface Crop { scale: number; x: number; y: number }
+
+/**
+ * CropModal — drag to pan + slider to zoom. Output stays 9:16 (the
+ * source video aspect). Save writes scale/x/y on the row; we don't
+ * re-encode the video so the change is instant.
+ */
+function CropModal({
+  videoUrl,
+  initial,
+  onClose,
+  onSave,
+}: {
+  videoUrl: string;
+  initial: Crop;
+  onClose: () => void;
+  onSave: (crop: Crop) => void;
+}) {
+  const [scale, setScale] = useState<number>(initial.scale ?? 1);
+  const [x, setX] = useState<number>(initial.x ?? 0);
+  const [y, setY] = useState<number>(initial.y ?? 0);
+  const dragRef = useRef<{ startX: number; startY: number; startCx: number; startCy: number; rect: DOMRect } | null>(null);
+
+  // Close on Escape so the modal feels like a normal dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Clamp pan whenever scale changes — at scale=1 there's no slack
+  // to pan into, so we snap x/y back to 0.
+  useEffect(() => {
+    if (scale <= 1) {
+      if (x !== 0) setX(0);
+      if (y !== 0) setY(0);
+    }
+  }, [scale, x, y]);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (scale <= 1) return;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startCx: x,
+      startCy: y,
+      rect,
+    };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const { startX, startY, startCx, startCy, rect } = dragRef.current;
+    // Pixels of pan / pixels of slack -> normalized -1..1.
+    const slackPxX = (rect.width  * (scale - 1)) / 2;
+    const slackPxY = (rect.height * (scale - 1)) / 2;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const nx = slackPxX > 0 ? Math.max(-1, Math.min(1, startCx + dx / slackPxX)) : 0;
+    const ny = slackPxY > 0 ? Math.max(-1, Math.min(1, startCy + dy / slackPxY)) : 0;
+    setX(nx);
+    setY(ny);
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
+  const reset = () => { setScale(1); setX(0); setY(0); };
+
+  const transform = cropTransformStyle({ crop_scale: scale, crop_x: x, crop_y: y });
+
+  return (
+    <div className="gen-modal-backdrop" onClick={onClose}>
+      <div
+        className="gen-modal gen-crop-modal"
+        role="dialog"
+        aria-label="Crop your look"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="gen-modal-head">
+          <div>
+            <h3 className="gen-modal-title">Crop your look</h3>
+            <p className="gen-modal-sub">Drag to pan. Use the slider to zoom in.</p>
+          </div>
+          <button type="button" className="gen-modal-close" onClick={onClose} aria-label="Close">×</button>
+        </header>
+
+        <div className="gen-crop-stage">
+          <div
+            className="gen-crop-frame"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            style={{ cursor: scale > 1 ? 'grab' : 'default' }}
+          >
+            <video
+              src={videoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="gen-crop-video"
+              style={transform}
+            />
+          </div>
+        </div>
+
+        <div className="gen-crop-controls">
+          <label className="gen-crop-zoom">
+            <span>Zoom</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.05}
+              value={scale}
+              onChange={(e) => setScale(parseFloat(e.target.value))}
+            />
+            <span className="gen-crop-zoom-val">{scale.toFixed(2)}×</span>
+          </label>
+          <div className="gen-crop-actions">
+            <button type="button" className="gen-btn-secondary" onClick={reset}>Reset</button>
+            <button type="button" className="gen-btn-primary" onClick={() => onSave({ scale, x, y })}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LookCard({
   generation,
   onOpen,
@@ -1152,6 +1402,7 @@ function LookCard({
             muted
             playsInline
             preload="auto"
+            style={cropTransformStyle(generation)}
           />
         ) : (
           <div className={`gen-lookcard-placeholder${isFailed ? ' is-failed' : ''}`}>
