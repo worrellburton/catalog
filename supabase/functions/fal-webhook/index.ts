@@ -36,8 +36,32 @@ interface FalCallback {
   payload?: {
     video?: { url?: string };
     videos?: Array<{ url?: string }>;
+    error?: string;
+    detail?: unknown;
   };
   error?: string;
+  detail?: unknown;
+}
+
+// Pull the most informative human-readable error out of Fal's
+// callback. Fal sometimes nests the upstream model's error under
+// `payload.error` or `payload.detail`, sometimes flat at top-level.
+// Without digging into both we'd surface useless strings like
+// "Unexpected status code: 422" with zero context.
+function extractError(body: FalCallback): string {
+  const parts: string[] = [];
+  if (body.error) parts.push(body.error);
+  if (body.payload?.error && body.payload.error !== body.error) parts.push(body.payload.error);
+  if (body.payload?.detail) {
+    try { parts.push(typeof body.payload.detail === 'string' ? body.payload.detail : JSON.stringify(body.payload.detail)); }
+    catch { /* ignore */ }
+  }
+  if (body.detail) {
+    try { parts.push(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)); }
+    catch { /* ignore */ }
+  }
+  if (parts.length === 0) parts.push(`Fal status: ${body.status || 'unknown'}`);
+  return parts.join(' — ').slice(0, 800);
 }
 
 Deno.serve(async (req: Request) => {
@@ -81,7 +105,15 @@ Deno.serve(async (req: Request) => {
 
   const update = ok && videoUrl
     ? { status: 'done', video_url: videoUrl, error: null, completed_at: new Date().toISOString() }
-    : { status: 'failed', error: body.error || `Fal status: ${body.status || 'unknown'}`, completed_at: new Date().toISOString() };
+    : { status: 'failed', error: extractError(body), completed_at: new Date().toISOString() };
+  if (!(ok && videoUrl)) {
+    // Print the entire Fal payload to logs once so we have something
+    // to grep when a 422 / model-side error comes through. Truncated
+    // to keep the log reasonable.
+    try {
+      console.error('[fal-webhook] non-OK callback for request_id=', requestId, JSON.stringify(body).slice(0, 1500));
+    } catch { /* noop */ }
+  }
 
   const { error: updateErr } = await admin
     .from('user_generations')

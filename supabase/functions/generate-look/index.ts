@@ -154,16 +154,63 @@ Deno.serve(async (req: Request) => {
   const faceSlots = Math.min(faceUrls.length, 9);
   const productSlots = Math.max(0, Math.min(9 - faceSlots, productEntries.length));
   const facesUsed = faceUrls.slice(0, faceSlots);
-  const productsUsed = productEntries.slice(0, productSlots);
-  const referenceUrls = [...facesUsed, ...productsUsed.map(p => p.image_url)];
+  const productsUsedRaw = productEntries.slice(0, productSlots);
+
+  // Pre-flight every reference URL with a HEAD request. Seedance returns
+  // 422 if any single reference is unfetchable / not actually an image
+  // (e.g. retailer sites that hotlink-block, redirect to HTML, or serve
+  // the wrong content-type). Drop products that fail rather than killing
+  // the whole job — face photos are required so we surface a hard error
+  // if any of those bounce.
+  async function isImageUrlOk(url: string): Promise<boolean> {
+    try {
+      const r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+      if (!r.ok) return false;
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct && !ct.startsWith('image/')) return false;
+      const len = Number(r.headers.get('content-length') || '0');
+      if (len > 30 * 1024 * 1024) return false; // Fal cap is 30 MB per image
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const faceChecks = await Promise.all(facesUsed.map(isImageUrlOk));
+  const badFaceCount = faceChecks.filter(ok => !ok).length;
+  if (badFaceCount === facesUsed.length) {
+    await admin.from('user_generations').update({
+      status: 'failed',
+      error: 'All reference photos failed to load — please re-upload.',
+      completed_at: new Date().toISOString(),
+    }).eq('id', generationId);
+    return jsonRes({ error: 'All face photos unreachable' }, 400);
+  }
+  const goodFaces = facesUsed.filter((_, i) => faceChecks[i]);
+
+  const productChecks = await Promise.all(productsUsedRaw.map(p => isImageUrlOk(p.image_url)));
+  const productsUsed = productsUsedRaw.filter((_, i) => productChecks[i]);
+  const droppedProducts = productsUsedRaw.length - productsUsed.length;
+
+  const referenceUrls = [...goodFaces, ...productsUsed.map(p => p.image_url)];
+  // Recompute slot counts after dropping bad URLs so the @ImageN tags
+  // in the prompt line up with the actual reference order Fal sees.
+  const goodFaceSlots = goodFaces.length;
+  if (badFaceCount > 0 || droppedProducts > 0) {
+    console.log('[generate-look] dropped references for gen=', generationId, {
+      bad_faces: badFaceCount,
+      dropped_products: droppedProducts,
+      remaining: referenceUrls.length,
+    });
+  }
 
   // Build the tagged prompt. @Image1 is always the subject's face.
   // Height + age clauses dial in the body proportions and apparent age
   // so Seedance composes the subject in the right range rather than
   // guessing from the face photo alone.
-  const faceTags = facesUsed.map((_, i) => `@Image${i + 1}`).join(' and ');
+  const faceTags = goodFaces.map((_, i) => `@Image${i + 1}`).join(' and ');
   const productClauses = productsUsed.map((p, i) =>
-    `${p.role.toLowerCase()} (@Image${faceSlots + i + 1}, ${p.label})`,
+    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`,
   );
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
