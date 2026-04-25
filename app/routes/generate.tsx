@@ -10,8 +10,10 @@ import {
   deleteUserUpload,
   getGeneration,
   getGenerationDetail,
+  getUserSlots,
   listUserGenerations,
   listUserUploads,
+  saveUserSlots,
   uploadUserPhoto,
   type UserUpload,
   type UserGeneration,
@@ -156,38 +158,38 @@ export default function GeneratePage() {
 
   // Load the user's existing uploads once we know who they are, so the
   // dropzone can offer "use a face you already uploaded" instead of
-  // forcing a re-upload on every session. Once the list comes back we
-  // also rehydrate the slot picks from localStorage so the shopper's
-  // previously-chosen reference photos are still there next session
-  // (filtered against what actually exists, in case any were deleted).
+  // forcing a re-upload on every session. We also fetch the saved
+  // slot picks from Supabase in parallel so the shopper's previously-
+  // chosen reference photos roam across devices (filtered against
+  // what still exists, in case any were deleted).
+  const slotsHydrated = useRef(false);
   useEffect(() => {
     if (!user?.id) return;
-    listUserUploads(user.id).then(uploads => {
+    let cancelled = false;
+    Promise.all([
+      listUserUploads(user.id),
+      getUserSlots(user.id, MAX_PHOTOS),
+    ]).then(([uploads, savedSlots]) => {
+      if (cancelled) return;
       setExistingUploads(uploads);
-      if (typeof window === 'undefined') return;
-      try {
-        const raw = window.localStorage.getItem(`gen-slots-${user.id}`);
-        if (!raw) return;
-        const saved = JSON.parse(raw) as (string | null)[];
-        if (!Array.isArray(saved)) return;
-        const known = new Set(uploads.map(u => u.id));
-        const restored: (string | null)[] = [null, null, null];
-        saved.slice(0, MAX_PHOTOS).forEach((id, i) => {
-          if (typeof id === 'string' && known.has(id)) restored[i] = id;
-        });
-        setSlots(restored);
-      } catch { /* corrupt JSON — ignore */ }
+      const known = new Set(uploads.map(u => u.id));
+      const restored: (string | null)[] = [null, null, null];
+      savedSlots.slice(0, MAX_PHOTOS).forEach((id, i) => {
+        if (typeof id === 'string' && known.has(id)) restored[i] = id;
+      });
+      setSlots(restored);
+      slotsHydrated.current = true;
     });
+    return () => { cancelled = true; };
   }, [user?.id]);
 
-  // Persist the current slot picks so they survive a refresh / new
-  // session. Keyed per user so two accounts on the same browser don't
-  // clobber each other.
+  // Persist slot changes back to Supabase so they survive across
+  // sessions and devices. Skipped until after the initial hydrate so
+  // we don't overwrite the saved row with the empty `[null,null,null]`
+  // default before we've had a chance to read it.
   useEffect(() => {
-    if (!user?.id || typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(`gen-slots-${user.id}`, JSON.stringify(slots));
-    } catch { /* quota exceeded — ignore */ }
+    if (!user?.id || !slotsHydrated.current) return;
+    saveUserSlots(user.id, slots);
   }, [user?.id, slots]);
 
   // Initial load of past generations — Phase 7 renders them as cards.
@@ -341,19 +343,23 @@ export default function GeneratePage() {
     });
   };
 
-  const onFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length || !user?.id) return;
-    const targetSlot = pendingSlotRef.current;
-    pendingSlotRef.current = null;
+  // Slots currently rendering a "drag is hovering me" outline. We
+  // track them as a Set since multiple drag events fire across nested
+  // children, and using counter math gets ugly.
+  const [dragSlots, setDragSlots] = useState<Set<number>>(new Set());
 
+  // Shared core upload pipeline — used by both the file picker
+  // (`onFileInput`) and the slot drop handler. `targetSlot` is the
+  // slot the upload should land in; pass `null` to fall back to the
+  // first empty slot.
+  const uploadFileIntoSlot = async (file: File, targetSlot: number | null) => {
+    if (!user?.id) return;
     setUploading(true);
     setUploadError(null);
     const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
       ? targetSlot
       : slots.indexOf(null);
     if (slotForProgress >= 0) setUploadProgress({ slot: slotForProgress, pct: 0 });
-    const file = files[0];
     const { data, error } = await uploadUserPhoto(file, user.id, (pct) => {
       setUploadProgress(prev => prev?.slot === slotForProgress
         ? { slot: slotForProgress, pct }
@@ -361,7 +367,6 @@ export default function GeneratePage() {
     });
     setUploading(false);
     setUploadProgress(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
     if (error) { setUploadError(error); return; }
     if (!data) return;
 
@@ -374,6 +379,23 @@ export default function GeneratePage() {
       if (idx >= 0) next[idx] = data.id;
       return next;
     });
+  };
+
+  const onSlotDrop = (slotIndex: number, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragSlots(prev => { const next = new Set(prev); next.delete(slotIndex); return next; });
+    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+    if (!file) return;
+    uploadFileIntoSlot(file, slotIndex);
+  };
+
+  const onFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const targetSlot = pendingSlotRef.current;
+    pendingSlotRef.current = null;
+    await uploadFileIntoSlot(files[0], targetSlot);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const togglePick = (p: PickedProduct) => {
@@ -544,8 +566,27 @@ export default function GeneratePage() {
                 const upload = uploadId ? existingUploads.find(u => u.id === uploadId) : null;
                 const isUploadingHere = uploadProgress?.slot === i;
                 const pctHere = isUploadingHere ? Math.round(uploadProgress!.pct * 100) : 0;
+                const isDragging = dragSlots.has(i);
                 return (
-                  <div key={i} className={`gen-slot${upload ? ' is-filled' : ''}${isUploadingHere ? ' is-uploading' : ''}`}>
+                  <div
+                    key={i}
+                    className={`gen-slot${upload ? ' is-filled' : ''}${isUploadingHere ? ' is-uploading' : ''}${isDragging ? ' is-dragover' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      setDragSlots(prev => new Set(prev).add(i));
+                    }}
+                    onDragLeave={(e) => {
+                      // Ignore enter/leave bubbling between children — only
+                      // clear the highlight when we actually leave the slot.
+                      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                      setDragSlots(prev => { const next = new Set(prev); next.delete(i); return next; });
+                    }}
+                    onDrop={(e) => onSlotDrop(i, e)}
+                  >
                     {upload ? (
                       <>
                         <img src={upload.public_url} alt={`Reference ${i + 1}`} />
@@ -987,6 +1028,28 @@ function LookCard({
   const isFailed = generation.status === 'failed';
   const isBusy = generation.status === 'pending' || generation.status === 'generating';
 
+  // Tick once a second while the row is in flight so the mini border
+  // progress + phase label stay live on the grid card. We only run
+  // the timer for busy items so done/failed cards stay still.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isBusy) return;
+    const id = window.setInterval(() => setTick(t => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [isBusy]);
+
+  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
+  const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
+  const linearPct = (elapsedSec / TYPICAL_GENERATION_SECONDS) * 95;
+  const overflowPct = elapsedSec > TYPICAL_GENERATION_SECONDS
+    ? 95 + (1 - Math.exp(-(elapsedSec - TYPICAL_GENERATION_SECONDS) / 60)) * 4.5
+    : linearPct;
+  const pct = Math.min(99.5, Math.max(2, overflowPct));
+  const phaseIdx = Math.min(
+    BUILD_PHASES.length - 1,
+    Math.floor((pct / 100) * BUILD_PHASES.length),
+  );
+
   return (
     <div className="gen-lookcard">
       <button type="button" className="gen-lookcard-media" onClick={onOpen}>
@@ -1001,11 +1064,20 @@ function LookCard({
           />
         ) : (
           <div className={`gen-lookcard-placeholder${isFailed ? ' is-failed' : ''}`}>
-            {isBusy ? (
-              <span className="gen-vision">Vision</span>
-            ) : isFailed ? (
-              <span>Failed</span>
-            ) : null}
+            {isBusy && (
+              <>
+                <div className="gen-lookcard-busy is-busy" aria-hidden="true" />
+                <div className="gen-lookcard-pulse" aria-hidden="true" />
+                <svg className="gen-lookcard-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
+                  <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
+                  <rect className="gen-build-fill" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} strokeDasharray={`${pct} 100`} />
+                </svg>
+                <span className="gen-vision">Vision</span>
+                <span className="gen-lookcard-phase">{BUILD_PHASES[phaseIdx]}</span>
+                <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
+              </>
+            )}
+            {isFailed && <span>Failed</span>}
           </div>
         )}
         {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}

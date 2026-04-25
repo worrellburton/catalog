@@ -12,7 +12,7 @@
   color: #fff;
   min-height: 100vh;
   background:
-    radial-gradient(ellipse at 50% -10%, rgba(245, 197, 66, 0.06), transparent 55%),
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.06), transparent 55%),
     radial-gradient(ellipse at 100% 100%, rgba(120, 80, 220, 0.04), transparent 50%),
     #050505;
   font-feature-settings: 'ss01', 'cv11';
@@ -191,8 +191,8 @@
 }
 .gen-rail-item.is-active {
   opacity: 1;
-  background: rgba(245, 197, 66, 0.15);
-  box-shadow: inset 0 0 0 1px rgba(245, 197, 66, 0.35);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 .gen-rail-item.is-done { opacity: 0.85; }
 .gen-rail-num {
@@ -209,12 +209,12 @@
   color: rgba(255, 255, 255, 0.7);
 }
 .gen-rail-item.is-active .gen-rail-num {
-  background: #f5c542;
+  background: #ffffff;
   color: #1a1a1a;
 }
 .gen-rail-item.is-done .gen-rail-num {
-  background: rgba(245, 197, 66, 0.25);
-  color: #f5c542;
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }
 .gen-rail-label {
   font-size: 12px;
@@ -263,17 +263,17 @@
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 .gen-slot-empty:hover:not(:disabled) {
-  border-color: rgba(245, 197, 66, 0.6);
-  background: rgba(245, 197, 66, 0.06);
-  color: #f5c542;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 .gen-slot-empty:disabled { opacity: 0.5; cursor: wait; }
 .gen-slot-plus {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.16);
-  color: #f5c542;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -286,10 +286,20 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.gen-slot.is-filled { border: 2px solid rgba(245, 197, 66, 0.85); }
+.gen-slot.is-filled { border: 2px solid rgba(255, 255, 255, 0.85); }
+.gen-slot.is-dragover {
+  outline: 2px dashed rgba(255, 255, 255, 0.55);
+  outline-offset: -6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.gen-slot.is-dragover .gen-slot-empty {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
 .gen-slot.is-uploading {
-  border: 2px solid rgba(245, 197, 66, 0.6);
-  background: rgba(245, 197, 66, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.04);
 }
 .gen-slot-uploading {
   width: 100%;
@@ -306,7 +316,7 @@
   font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #f5c542;
+  color: #ffffff;
 }
 .gen-slot-uploading-track {
   width: 100%;
@@ -318,7 +328,7 @@
 }
 .gen-slot-uploading-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f5c542 0%, #ffd76a 100%);
+  background: linear-gradient(90deg, #ffffff 0%, #e8e8e8 100%);
   border-radius: 999px;
   transition: width 0.15s linear;
 }
@@ -407,12 +417,12 @@
   cursor: pointer;
 }
 .gen-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gen-thumb.is-picked { border-color: #f5c542; }
+.gen-thumb.is-picked { border-color: #ffffff; }
 .gen-thumb-check {
   position: absolute; top: 6px; right: 6px;
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: #f5c542; color: #111;
+  background: #ffffff; color: #111;
   font-size: 12px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
@@ -448,7 +458,7 @@
   outline: none;
   margin-bottom: 16px;
 }
-.gen-search:focus { border-color: #f5c542; }
+.gen-search:focus { border-color: #ffffff; }
 
 .gen-picked {
   display: flex;
@@ -462,8 +472,8 @@
   gap: 8px;
   padding: 6px 8px 6px 6px;
   border-radius: 999px;
-  background: rgba(245, 197, 66, 0.12);
-  border: 1px solid rgba(245, 197, 66, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 .gen-picked-chip img {
   width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
@@ -478,7 +488,7 @@
 .gen-picked-chip-info select {
   font-size: 10px;
   background: transparent;
-  color: #f5c542;
+  color: #ffffff;
   border: none;
   cursor: pointer;
   padding: 0;
@@ -518,8 +528,8 @@
   background: #111;
 }
 .gen-productcard.is-picked {
-  border-color: #f5c542;
-  background: rgba(245, 197, 66, 0.08);
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 .gen-productcard:disabled { opacity: 0.4; cursor: not-allowed; }
 .gen-productcard-name {
@@ -555,9 +565,9 @@
   font-variant-numeric: tabular-nums;
 }
 .gen-heightchip.is-picked {
-  border-color: #f5c542;
-  background: rgba(245, 197, 66, 0.12);
-  color: #f5c542;
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 .gen-stylecard {
@@ -573,8 +583,8 @@
   text-align: left;
 }
 .gen-stylecard.is-picked {
-  border-color: #f5c542;
-  background: rgba(245, 197, 66, 0.08);
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 .gen-stylecard-label {
   font-size: 15px;
@@ -627,7 +637,7 @@
   max-width: 160px;
 }
 .gen-review-product-role {
-  font-size: 11px; color: rgba(245, 197, 66, 0.85);
+  font-size: 11px; color: rgba(255, 255, 255, 0.85);
 }
 
 .gen-foot {
@@ -657,10 +667,10 @@
   transition: background 0.15s, opacity 0.15s;
 }
 .gen-btn-primary {
-  background: #f5c542;
+  background: #ffffff;
   color: #111;
 }
-.gen-btn-primary:hover { background: #fdd76a; }
+.gen-btn-primary:hover { background: #e8e8e8; }
 .gen-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
 .gen-btn-secondary {
   background: rgba(255, 255, 255, 0.1);
@@ -786,7 +796,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #f5c542;
+  color: #ffffff;
 }
 .gen-result-product-name {
   font-size: 13px;
@@ -834,15 +844,67 @@
   display: block;
 }
 .gen-lookcard-placeholder {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   background: radial-gradient(circle at 50% 45%, rgba(96, 165, 250, 0.12), rgba(0, 0, 0, 0));
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   font-weight: 600;
+  text-align: center;
+  padding: 14px;
+  overflow: hidden;
+}
+/* Card-sized border progress for in-flight looks. Reuses the build
+   stroke styles from the result-step build card so the look on the
+   grid feels like a smaller mirror of the same generation. */
+.gen-lookcard-border {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+.gen-lookcard-busy.is-busy {
+  animation: gen-build-breathe 3.4s ease-in-out infinite;
+}
+.gen-lookcard-busy {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.gen-lookcard-pulse {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 60%,
+    rgba(96, 165, 250, 0.16),
+    rgba(167, 139, 250, 0.1) 35%, transparent 70%);
+  animation: gen-build-pulse 2.6s ease-in-out infinite;
+  z-index: 1;
+}
+.gen-lookcard-phase {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.6);
+  z-index: 3;
+  position: relative;
+}
+.gen-lookcard-pct {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  z-index: 3;
+  position: relative;
 }
 .gen-lookcard-placeholder.is-failed {
   color: #fca5a5;
@@ -881,8 +943,8 @@
   height: 28px;
   border-radius: 50%;
   border: none;
-  background: rgba(245, 197, 66, 0.14);
-  color: #f5c542;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
   font-size: 14px;
   cursor: pointer;
   display: flex;
@@ -891,7 +953,7 @@
   transition: background 0.15s;
 }
 .gen-lookcard-regen:hover {
-  background: rgba(245, 197, 66, 0.28);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .gen-lookcard-delete {
@@ -982,17 +1044,17 @@
   margin: 14px 16px 0;
   padding: 14px;
   border-radius: 12px;
-  border: 1.5px dashed rgba(245, 197, 66, 0.45);
-  background: rgba(245, 197, 66, 0.05);
-  color: #f5c542;
+  border: 1.5px dashed rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 .gen-modal-upload:hover {
-  background: rgba(245, 197, 66, 0.1);
-  border-color: rgba(245, 197, 66, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 .gen-modal-grid {
   display: grid;
@@ -1009,7 +1071,7 @@
   border: 2px solid transparent;
   background: #111;
 }
-.gen-modal-thumb.is-picked { border-color: #f5c542; }
+.gen-modal-thumb.is-picked { border-color: #ffffff; }
 .gen-modal-thumb-pick {
   display: block;
   width: 100%;
@@ -1100,14 +1162,14 @@
 @keyframes gen-build-breathe {
   0%, 100% {
     box-shadow:
-      inset 0 0 0 1px rgba(245, 197, 66, 0.18),
-      0 0 0 0 rgba(245, 197, 66, 0.0),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+      0 0 0 0 rgba(255, 255, 255, 0.0),
       0 30px 80px rgba(0, 0, 0, 0.6);
   }
   50% {
     box-shadow:
-      inset 0 0 0 1px rgba(245, 197, 66, 0.4),
-      0 0 60px 4px rgba(245, 197, 66, 0.18),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+      0 0 60px 4px rgba(255, 255, 255, 0.18),
       0 30px 80px rgba(0, 0, 0, 0.6);
   }
 }
@@ -1132,13 +1194,13 @@
 }
 .gen-build-fill {
   fill: none;
-  stroke: #f5c542;
+  stroke: #ffffff;
   stroke-width: 2.5;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   filter:
-    drop-shadow(0 0 4px rgba(245, 197, 66, 0.7))
-    drop-shadow(0 0 10px rgba(245, 197, 66, 0.4));
+    drop-shadow(0 0 4px rgba(255, 255, 255, 0.7))
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.4));
   transition: stroke-dasharray 0.6s ease;
 }
 
@@ -1150,9 +1212,9 @@
   background: linear-gradient(
     115deg,
     transparent 30%,
-    rgba(245, 197, 66, 0.07) 48%,
+    rgba(255, 255, 255, 0.07) 48%,
     rgba(255, 255, 255, 0.05) 50%,
-    rgba(245, 197, 66, 0.07) 52%,
+    rgba(255, 255, 255, 0.07) 52%,
     transparent 70%
   );
   background-size: 220% 100%;
@@ -1221,7 +1283,7 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #f5c542;
+  color: #ffffff;
   font-variant-numeric: tabular-nums;
   margin-top: 4px;
 }
@@ -1255,10 +1317,10 @@
   transition: background 0.3s, color 0.3s, border-color 0.3s;
 }
 .gen-build-phase-item.is-active {
-  background: rgba(245, 197, 66, 0.08);
-  border-color: rgba(245, 197, 66, 0.32);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.32);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(245, 197, 66, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 .gen-build-phase-item.is-done {
   color: rgba(255, 255, 255, 0.65);
@@ -1278,17 +1340,17 @@
   font-variant-numeric: tabular-nums;
 }
 .gen-build-phase-item.is-active .gen-build-phase-dot {
-  background: #f5c542;
+  background: #ffffff;
   color: #1a1a1a;
   animation: gen-build-dotpulse 1.3s ease-in-out infinite;
 }
 .gen-build-phase-item.is-done .gen-build-phase-dot {
-  background: rgba(245, 197, 66, 0.22);
-  color: #f5c542;
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
 }
 @keyframes gen-build-dotpulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 197, 66, 0.55); }
-  60%      { box-shadow: 0 0 0 6px rgba(245, 197, 66, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55); }
+  60%      { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
 }
 .gen-build-phase-label { letter-spacing: -0.005em; }
 
@@ -1297,9 +1359,9 @@
 .gen-build-done .gen-build-frame {
   animation: gen-build-pop 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both;
   box-shadow:
-    inset 0 0 0 1px rgba(245, 197, 66, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
     0 30px 80px rgba(0, 0, 0, 0.6),
-    0 0 60px rgba(245, 197, 66, 0.18);
+    0 0 60px rgba(255, 255, 255, 0.18);
 }
 .gen-build-done .gen-result-video {
   width: 100%;
@@ -1325,7 +1387,7 @@
   width: min(360px, 80vw);
   aspect-ratio: 1 / 1;
   border-radius: 50%;
-  border: 2px solid rgba(245, 197, 66, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.55);
   transform: translate(-50%, -50%) scale(0.4);
   animation: gen-build-burst 1.3s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
   pointer-events: none;
@@ -1333,7 +1395,7 @@
 }
 .gen-build-burst-2 {
   animation-delay: 0.2s;
-  border-color: rgba(245, 197, 66, 0.3);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 @keyframes gen-build-burst {
   0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; border-width: 3px; }

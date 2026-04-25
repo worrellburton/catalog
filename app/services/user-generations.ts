@@ -165,6 +165,58 @@ export async function deleteUserGeneration(id: string): Promise<{ error: string 
   return { error: error?.message ?? null };
 }
 
+/**
+ * Fetch the shopper's saved reference-photo slot picks. Returns an
+ * ordered array of upload ids (always length 3, with `null` for any
+ * empty slot). When the row hasn't been created yet, returns three
+ * nulls.
+ */
+export async function getUserSlots(
+  userId: string,
+  size = 3,
+): Promise<(string | null)[]> {
+  const empty = Array<string | null>(size).fill(null);
+  if (!supabase) return empty;
+  const { data, error } = await supabase
+    .from('user_generation_slots')
+    .select('upload_ids')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !data) return empty;
+  const ids = (data.upload_ids ?? []) as (string | null)[];
+  const padded = empty.slice();
+  ids.slice(0, size).forEach((id, i) => { padded[i] = id ?? null; });
+  return padded;
+}
+
+/**
+ * Persist the shopper's picked slots. Upserts so the first save
+ * creates the row and subsequent saves overwrite it.
+ */
+export async function saveUserSlots(
+  userId: string,
+  slots: (string | null)[],
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  // Trim trailing empty slots so the array matches what the user
+  // actually picked. Mid-array nulls are preserved (uuid[] allows
+  // null elements) so a pick in slot 2 with slot 1 empty rehydrates
+  // back to the same position next session.
+  const trimmed = [...slots];
+  while (trimmed.length > 0 && trimmed[trimmed.length - 1] == null) trimmed.pop();
+  const { error } = await supabase
+    .from('user_generation_slots')
+    .upsert(
+      {
+        user_id: userId,
+        upload_ids: trimmed,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+  return { error: error?.message ?? null };
+}
+
 export interface CreateGenerationInput {
   userId: string;
   uploadIds: string[];
