@@ -6,6 +6,8 @@ import {
   STYLE_PRESETS,
   buildGenerationPrompt,
   createGeneration,
+  deleteUserGeneration,
+  deleteUserUpload,
   getGeneration,
   getGenerationDetail,
   listUserGenerations,
@@ -248,13 +250,58 @@ export default function GeneratePage() {
     });
   };
 
+  // Place a specific upload into a specific slot — used by the picker
+  // modal so the choice always lands in the slot the user tapped, even
+  // if it was already filled.
+  const placeUploadInSlot = (slotIndex: number, uploadId: string) => {
+    setSlots(prev => {
+      const next = [...prev];
+      // If this upload is already in another slot, vacate it so we
+      // never end up with the same id in two slots at once.
+      const existing = next.indexOf(uploadId);
+      if (existing >= 0 && existing !== slotIndex) next[existing] = null;
+      next[slotIndex] = uploadId;
+      return next;
+    });
+  };
+
+  const removeUpload = async (upload: UserUpload) => {
+    setExistingUploads(prev => prev.filter(u => u.id !== upload.id));
+    setSlots(prev => prev.map(id => id === upload.id ? null : id));
+    const { error } = await deleteUserUpload(upload);
+    if (error) setUploadError(error);
+  };
+
+  const removeGeneration = async (id: string) => {
+    setGenerations(prev => prev.filter(g => g.id !== id));
+    await deleteUserGeneration(id);
+  };
+
   // Which slot the next file-picker upload should land in. Tracked via a
   // ref so onFileInput can target a specific slot when the user taps an
   // empty frame, rather than always filling the first empty one.
   const pendingSlotRef = useRef<number | null>(null);
 
+  // Slot the upload-picker modal is currently choosing for. `null` =
+  // closed. When non-null, clicking a thumbnail in the modal places it
+  // into this slot (instead of the first empty slot).
+  const [pickerSlot, setPickerSlot] = useState<number | null>(null);
+
   const openPickerForSlot = (slotIndex: number) => {
+    // If the user has any existing uploads, prefer the modal so they can
+    // pick from history (and delete) rather than re-uploading. Empty
+    // history → straight to the file picker.
+    if (existingUploads.length > 0) {
+      setPickerSlot(slotIndex);
+      return;
+    }
     pendingSlotRef.current = slotIndex;
+    fileInputRef.current?.click();
+  };
+
+  const openFileChooserFromModal = () => {
+    pendingSlotRef.current = pickerSlot;
+    setPickerSlot(null);
     fileInputRef.current?.click();
   };
 
@@ -429,9 +476,22 @@ export default function GeneratePage() {
   return (
     <div className="gen-page">
       <header className="gen-head">
-        <button className="gen-back" onClick={() => navigate('/#app')} aria-label="Back to catalog">
+        <button
+          className="gen-back"
+          onClick={() => {
+            // From the result view, "back" should land the shopper on
+            // the Photos step (with their looks grid) rather than
+            // bouncing them all the way out to the catalog.
+            if (step === 'result') {
+              setStep('photos');
+              return;
+            }
+            navigate('/#app');
+          }}
+          aria-label={step === 'result' ? 'Back to your looks' : 'Back to catalog'}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          Back to catalog
+          {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
         <h1>Generate</h1>
         <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
@@ -515,15 +575,29 @@ export default function GeneratePage() {
                 <div className="gen-sectionlabel">Your uploads</div>
                 <div className="gen-thumbgrid">
                   {existingUploads.map(u => (
-                    <button
+                    <div
                       key={u.id}
                       className={`gen-thumb${pickedUploadIds.includes(u.id) ? ' is-picked' : ''}`}
-                      onClick={() => onPickExistingUpload(u.id)}
-                      type="button"
                     >
-                      <img src={u.public_url} alt="" />
-                      {pickedUploadIds.includes(u.id) && <span className="gen-thumb-check">✓</span>}
-                    </button>
+                      <button
+                        type="button"
+                        className="gen-thumb-pick"
+                        onClick={() => onPickExistingUpload(u.id)}
+                        aria-label={pickedUploadIds.includes(u.id) ? 'Unpick photo' : 'Pick photo'}
+                      >
+                        <img src={u.public_url} alt="" />
+                        {pickedUploadIds.includes(u.id) && <span className="gen-thumb-check">✓</span>}
+                      </button>
+                      <button
+                        type="button"
+                        className="gen-thumb-del"
+                        onClick={() => {
+                          if (window.confirm('Delete this upload?')) removeUpload(u);
+                        }}
+                        aria-label="Delete photo"
+                        title="Delete photo"
+                      >×</button>
+                    </div>
                   ))}
                 </div>
               </>
@@ -542,6 +616,7 @@ export default function GeneratePage() {
                         generation={g}
                         onOpen={() => openGeneration(g)}
                         onRegenerate={() => editGeneration(g.id)}
+                        onDelete={() => removeGeneration(g.id)}
                       />
                     ))}
                   </div>
@@ -549,6 +624,19 @@ export default function GeneratePage() {
               </>
             )}
           </section>
+        )}
+
+        {pickerSlot !== null && (
+          <UploadPickerModal
+            slot={pickerSlot}
+            uploads={existingUploads}
+            pickedIds={pickedUploadIds}
+            currentSlotId={slots[pickerSlot]}
+            onClose={() => setPickerSlot(null)}
+            onPick={(id) => { placeUploadInSlot(pickerSlot, id); setPickerSlot(null); }}
+            onDelete={removeUpload}
+            onUploadNew={openFileChooserFromModal}
+          />
         )}
 
         {step === 'products' && (
@@ -820,10 +908,12 @@ function LookCard({
   generation,
   onOpen,
   onRegenerate,
+  onDelete,
 }: {
   generation: UserGeneration;
   onOpen: () => void;
   onRegenerate: () => void;
+  onDelete: () => void;
 }) {
   const style = STYLE_PRESETS.find(s => s.value === generation.style);
   const isDone = generation.status === 'done' && generation.video_url;
@@ -852,6 +942,16 @@ function LookCard({
           </div>
         )}
         {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
+        <button
+          type="button"
+          className="gen-lookcard-delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm('Delete this look?')) onDelete();
+          }}
+          aria-label="Delete look"
+          title="Delete look"
+        >×</button>
       </button>
       <div className="gen-lookcard-foot">
         <span className="gen-lookcard-label">{style?.label || generation.style}</span>
@@ -862,6 +962,101 @@ function LookCard({
           aria-label="Edit and regenerate"
           title="Edit & regenerate"
         >↻</button>
+      </div>
+    </div>
+  );
+}
+
+function UploadPickerModal({
+  slot,
+  uploads,
+  pickedIds,
+  currentSlotId,
+  onClose,
+  onPick,
+  onDelete,
+  onUploadNew,
+}: {
+  slot: number;
+  uploads: UserUpload[];
+  pickedIds: string[];
+  currentSlotId: string | null;
+  onClose: () => void;
+  onPick: (id: string) => void;
+  onDelete: (upload: UserUpload) => void;
+  onUploadNew: () => void;
+}) {
+  // Close on Escape so the modal feels like a normal dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="gen-modal-backdrop" onClick={onClose}>
+      <div
+        className="gen-modal"
+        role="dialog"
+        aria-label={`Choose photo for slot ${slot + 1}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="gen-modal-head">
+          <div>
+            <h3 className="gen-modal-title">Choose a photo</h3>
+            <p className="gen-modal-sub">Tap a photo to drop it into Photo {slot + 1}, or upload a new one.</p>
+          </div>
+          <button
+            type="button"
+            className="gen-modal-close"
+            onClick={onClose}
+            aria-label="Close"
+          >×</button>
+        </header>
+
+        <button
+          type="button"
+          className="gen-modal-upload"
+          onClick={onUploadNew}
+        >
+          <span className="gen-slot-plus">+</span>
+          Upload new photo
+        </button>
+
+        {uploads.length === 0 ? (
+          <div className="gen-empty">No uploads yet — tap above to add one.</div>
+        ) : (
+          <div className="gen-modal-grid">
+            {uploads.map(u => {
+              const isCurrent = u.id === currentSlotId;
+              const inOther = pickedIds.includes(u.id) && !isCurrent;
+              return (
+                <div key={u.id} className={`gen-modal-thumb${isCurrent ? ' is-picked' : ''}${inOther ? ' is-inuse' : ''}`}>
+                  <button
+                    type="button"
+                    className="gen-modal-thumb-pick"
+                    onClick={() => onPick(u.id)}
+                    aria-label={isCurrent ? 'Currently picked' : 'Pick this photo'}
+                  >
+                    <img src={u.public_url} alt="" />
+                    {isCurrent && <span className="gen-thumb-check">✓</span>}
+                    {inOther && <span className="gen-modal-thumb-badge">In use</span>}
+                  </button>
+                  <button
+                    type="button"
+                    className="gen-modal-thumb-del"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Delete this upload?')) onDelete(u);
+                    }}
+                    aria-label="Delete photo"
+                    title="Delete photo"
+                  >×</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

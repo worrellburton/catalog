@@ -138,6 +138,33 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
   return (data || []) as UserUpload[];
 }
 
+/**
+ * Delete one of the user's reference photos. Removes the storage object
+ * (best-effort — bucket cleanup is non-blocking) and the row, which
+ * cascades into any user_generation_uploads entries that referenced it.
+ */
+export async function deleteUserUpload(
+  upload: Pick<UserUpload, 'id' | 'storage_path'>,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  if (upload.storage_path) {
+    await supabase.storage.from('user-uploads').remove([upload.storage_path]);
+  }
+  const { error } = await supabase.from('user_uploads').delete().eq('id', upload.id);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Delete a single generation. Cascades into the pivots; the rendered
+ * Seedance video stays in storage (we only own user-uploaded refs, the
+ * output URL points at Fal's CDN), so we just drop the row.
+ */
+export async function deleteUserGeneration(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase.from('user_generations').delete().eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export interface CreateGenerationInput {
   userId: string;
   uploadIds: string[];
