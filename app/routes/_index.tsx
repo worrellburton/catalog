@@ -17,7 +17,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import type { ProductAd } from '~/services/product-creative';
+import { getSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { supabase } from '~/utils/supabase';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
@@ -131,6 +131,7 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
+  const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -347,6 +348,7 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedProduct(product);
     setSelectedSimilar(null);
+    setSimilarCreatives(null);
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
@@ -366,13 +368,20 @@ export default function Home() {
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
     setSelectedSimilar(null);
+    setSimilarCreatives(null);
 
-    const sim = await fetchSimilarProducts(
-      creative.product.brand || null,
-      creative.product.catalog_tags || null,
-      creative.product.id || null,
-    );
+    // Fire both lookups in parallel: TwelveLabs vector similarity for the
+    // video rail, and the brand/category fallback for the static image grid.
+    const [sim, similar] = await Promise.all([
+      fetchSimilarProducts(
+        creative.product.brand || null,
+        creative.product.catalog_tags || null,
+        creative.product.id || null,
+      ),
+      getSimilarCreatives(creative.id, 18),
+    ]);
     setSelectedSimilar(sim);
+    setSimilarCreatives(similar);
   }, [fetchSimilarProducts]);
 
   const handleCreateCatalog = useCallback((query: string) => {
@@ -498,18 +507,20 @@ export default function Home() {
           {selectedProduct && (
             <ProductPage
               product={selectedProduct}
-              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); }}
+              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); }}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
               onOpenProduct={handleOpenProduct}
               onOpenCreator={handleOpenCreator}
               onCreateCatalog={handleCreateCatalog}
+              onOpenCreative={handleOpenCreative}
               creative={
                 selectedCreative?.video_url
                   ? { videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
                   : undefined
               }
               similarProductsOverride={selectedSimilar ?? undefined}
+              similarCreatives={similarCreatives ?? undefined}
             />
           )}
 

@@ -202,6 +202,34 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* "More like this" — vector-similarity creative video rail. Renders below the
+   info card when the seed has a TwelveLabs Marengo embedding. Reuses the main
+   feed's two-column card grid so it visually blends with the home page. */
+.pd-similar-feed {
+  padding: 32px 24px 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.pd-similar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 /* Similar-products feed below the info card. Natural page scroll. */
 .pd-feed {
   padding: 32px 24px 56px;

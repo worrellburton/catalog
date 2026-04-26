@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Product, Look, looks as hardcodedLooks } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
+import CreativeCard from '~/components/CreativeCard';
+import type { ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
   videoUrl: string;
@@ -15,8 +17,12 @@ interface ProductPageProps {
   onOpenProduct?: (product: Product) => void;
   onOpenCreator?: (name: string) => void;
   onCreateCatalog?: (query: string) => void;
+  onOpenCreative?: (creative: ProductAd) => void;
   creative?: ProductPageCreative;
   similarProductsOverride?: Product[];
+  /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
+   *  "More like this" video rail below the hero. */
+  similarCreatives?: ProductAd[];
 }
 
 export default function ProductPage({
@@ -24,9 +30,11 @@ export default function ProductPage({
   onClose,
   onOpenBrowser,
   onOpenProduct,
+  onOpenCreative,
   onCreateCatalog,
   creative,
   similarProductsOverride,
+  similarCreatives,
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
@@ -150,6 +158,22 @@ export default function ProductPage({
             </div>
           </div>
         </section>
+
+        {similarCreatives && similarCreatives.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">More like this</h2>
+            <div className="pd-similar-grid">
+              {similarCreatives.map(c => (
+                <CreativeCard
+                  key={c.id}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {similarProducts.length > 0 && (
           <section className="pd-feed">

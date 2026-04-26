@@ -380,6 +380,61 @@ export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ e
   return { error: null };
 }
 
+// Returns the K visually-nearest creatives to the seed, deduped by product.
+// Backed by find_similar_creatives() — uses Marengo 3.0 cosine distance when
+// the seed has an embedding, otherwise falls back to same-brand → newest.
+export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k });
+  if (error || !data) {
+    if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
+    return [];
+  }
+  return (data as Array<{
+    id: string;
+    product_id: string;
+    video_url: string | null;
+    thumbnail_url: string | null;
+    product_name: string | null;
+    product_brand: string | null;
+    distance: number;
+  }>).map(row => ({
+    id: row.id,
+    product_id: row.product_id,
+    look_id: null,
+    title: null,
+    description: null,
+    video_url: row.video_url,
+    storage_path: null,
+    thumbnail_url: row.thumbnail_url,
+    affiliate_url: null,
+    prompt: null,
+    prompt_extra: null,
+    style: '',
+    model: null,
+    status: 'live',
+    duration_seconds: null,
+    aspect_ratio: null,
+    resolution: null,
+    cost_usd: null,
+    impressions: 0,
+    clicks: 0,
+    error: null,
+    enabled: true,
+    created_at: '',
+    completed_at: null,
+    updated_at: null,
+    product: {
+      id: row.product_id,
+      name: row.product_name,
+      brand: row.product_brand,
+      price: null,
+      image_url: null,
+      url: null,
+    },
+  } as ProductAd));
+}
+
 export async function trackAdImpression(id: string): Promise<void> {
   if (!supabase) return;
   try {
