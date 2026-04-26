@@ -3,6 +3,9 @@ import { describe, it, expect } from 'vitest';
 /**
  * Tests for the SupabaseLook → Look mapping logic.
  * Extracted here as pure functions so we don't need to mock Supabase.
+ *
+ * Mirrors the join in app/services/looks.ts where each look pulls its
+ * primary creative (looks_creative.is_primary = true) for the video.
  */
 
 // ============================================
@@ -13,12 +16,16 @@ interface SupabaseLook {
   id: string;
   legacy_id: number | null;
   title: string;
-  video_path: string | null;
   gender: 'men' | 'women' | 'unisex' | null;
   creator_handle: string | null;
   description: string | null;
   color: string | null;
   status: string | null;
+  looks_creative: {
+    video_url: string | null;
+    thumbnail_url: string | null;
+    is_primary: boolean;
+  }[];
   look_products: {
     sort_order: number;
     products: {
@@ -49,31 +56,35 @@ interface Look {
 }
 
 function filterLiveLooks(data: SupabaseLook[]): SupabaseLook[] {
-  return data.filter(
-    (row) => row.video_path && (!row.status || row.status === 'live')
-  );
+  return data.filter((row) => {
+    const primary = row.looks_creative?.[0];
+    return primary?.video_url && (!row.status || row.status === 'live');
+  });
 }
 
 function mapSupabaseLooks(data: SupabaseLook[]): Look[] {
   const liveLooks = filterLiveLooks(data);
-  return liveLooks.map((row, index) => ({
-    id: row.legacy_id ?? -(index + 1),
-    title: row.title,
-    video: row.video_path || '',
-    gender: (row.gender as 'men' | 'women') || 'women',
-    creator: row.creator_handle || '',
-    description: row.description || '',
-    color: row.color || '#888',
-    products: (row.look_products || [])
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((lp) => ({
-        name: lp.products?.name || '',
-        brand: lp.products?.brand || '',
-        price: lp.products?.price || '',
-        url: lp.products?.url || '',
-        image: lp.products?.image_url,
-      })),
-  }));
+  return liveLooks.map((row, index) => {
+    const primary = row.looks_creative[0];
+    return {
+      id: row.legacy_id ?? -(index + 1),
+      title: row.title,
+      video: primary.video_url || '',
+      gender: (row.gender as 'men' | 'women') || 'women',
+      creator: row.creator_handle || '',
+      description: row.description || '',
+      color: row.color || '#888',
+      products: (row.look_products || [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((lp) => ({
+          name: lp.products?.name || '',
+          brand: lp.products?.brand || '',
+          price: lp.products?.price || '',
+          url: lp.products?.url || '',
+          image: lp.products?.image_url,
+        })),
+    };
+  });
 }
 
 // ============================================
@@ -85,12 +96,14 @@ function makeLegacyLook(overrides: Partial<SupabaseLook> = {}): SupabaseLook {
     id: 'aaa-111',
     legacy_id: 1,
     title: 'Look 01',
-    video_path: 'girl2.mp4',
     gender: 'women',
     creator_handle: '@lilywittman',
     description: 'A curated selection',
     color: '#c4a882',
     status: null,
+    looks_creative: [
+      { video_url: 'girl2.mp4', thumbnail_url: null, is_primary: true },
+    ],
     look_products: [
       {
         sort_order: 0,
@@ -112,12 +125,12 @@ function makeUserCreatedLook(overrides: Partial<SupabaseLook> = {}): SupabaseLoo
     id: 'bbb-222',
     legacy_id: null,
     title: 'My New Look',
-    video_path: null,
     gender: 'unisex',
     creator_handle: null,
     description: null,
     color: null,
     status: 'draft',
+    looks_creative: [],
     look_products: [],
     ...overrides,
   };
@@ -128,23 +141,28 @@ function makeUserCreatedLook(overrides: Partial<SupabaseLook> = {}): SupabaseLoo
 // ============================================
 
 describe('filterLiveLooks', () => {
-  it('includes legacy looks with video_path and no status', () => {
+  it('includes legacy looks with a primary creative video and no status', () => {
     const looks = [makeLegacyLook()];
     expect(filterLiveLooks(looks)).toHaveLength(1);
   });
 
-  it('includes looks with status=live and video_path', () => {
+  it('includes looks with status=live and a primary creative video', () => {
     const looks = [makeLegacyLook({ status: 'live' })];
     expect(filterLiveLooks(looks)).toHaveLength(1);
   });
 
-  it('excludes draft looks (no video_path)', () => {
+  it('excludes draft looks (no primary creative)', () => {
     const looks = [makeUserCreatedLook()];
     expect(filterLiveLooks(looks)).toHaveLength(0);
   });
 
-  it('excludes looks with video_path but status=draft', () => {
-    const looks = [makeUserCreatedLook({ video_path: 'video.mp4', status: 'draft' })];
+  it('excludes looks with a primary creative but status=draft', () => {
+    const looks = [
+      makeUserCreatedLook({
+        looks_creative: [{ video_url: 'video.mp4', thumbnail_url: null, is_primary: true }],
+        status: 'draft',
+      }),
+    ];
     expect(filterLiveLooks(looks)).toHaveLength(0);
   });
 
@@ -197,7 +215,7 @@ describe('mapSupabaseLooks', () => {
 
   it('assigns negative IDs for looks without legacy_id', () => {
     const liveUserLook = makeUserCreatedLook({
-      video_path: 'user-video.mp4',
+      looks_creative: [{ video_url: 'user-video.mp4', thumbnail_url: null, is_primary: true }],
       status: 'live',
     });
     const result = mapSupabaseLooks([liveUserLook]);

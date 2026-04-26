@@ -7,7 +7,9 @@ import { describe, it, expect } from 'vitest';
 
 describe('manage-looks edge function schema compatibility', () => {
   // Simulates what the edge function INSERT does (using sql() helper with object)
-  // After migration 004, video_path and creator_handle are nullable
+  // creator_handle and the legacy looks.video_path/thumbnail_url columns are
+  // intentionally not present in the create payload (the latter were dropped
+  // in migration 048; video lives on looks_creative now).
 
   interface CreateLookRow {
     user_id: string;
@@ -34,7 +36,6 @@ describe('manage-looks edge function schema compatibility', () => {
     expect(payload.user_id).toBe('user-123');
     expect(payload.title).toBe('My Look');
     expect(payload.status).toBe('draft');
-    expect(payload).not.toHaveProperty('video_path');
     expect(payload).not.toHaveProperty('creator_handle');
   });
 
@@ -95,12 +96,11 @@ describe('manage-looks edge function schema compatibility', () => {
     description?: string;
     gender?: string;
     color?: string;
-    thumbnail_url?: string;
     enabled?: boolean;
   }
 
   function filterUpdateFields(body: Record<string, unknown>): UpdateFields {
-    const allowed = ['title', 'description', 'gender', 'color', 'thumbnail_url', 'enabled'];
+    const allowed = ['title', 'description', 'gender', 'color', 'enabled'];
     return Object.fromEntries(
       Object.entries(body).filter(([k]) => allowed.includes(k))
     ) as UpdateFields;
@@ -118,15 +118,22 @@ describe('manage-looks edge function schema compatibility', () => {
     expect(result).not.toHaveProperty('user_id');
   });
 
-  it('allows thumbnail_url and enabled in updates', () => {
+  it('allows enabled in updates', () => {
     const result = filterUpdateFields({
-      thumbnail_url: 'https://example.com/thumb.jpg',
       enabled: false,
     });
     expect(result).toEqual({
-      thumbnail_url: 'https://example.com/thumb.jpg',
       enabled: false,
     });
+  });
+
+  it('drops legacy thumbnail_url from updates (now lives on looks_creative)', () => {
+    const result = filterUpdateFields({
+      title: 'New',
+      thumbnail_url: 'https://example.com/thumb.jpg',
+    });
+    expect(result).toEqual({ title: 'New' });
+    expect(result).not.toHaveProperty('thumbnail_url');
   });
 
   it('returns empty object when no valid fields provided', () => {
@@ -260,9 +267,9 @@ describe('manage-looks direct query response mapping', () => {
 
   it('maps row with populated relations', () => {
     const row = {
-      id: 'look-1', title: 'Test', description: null, video_path: null,
+      id: 'look-1', title: 'Test', description: null,
       gender: 'unisex', color: '#333', status: 'draft', enabled: true,
-      thumbnail_url: null, created_at: '2024-01-01', updated_at: '2024-01-01',
+      created_at: '2024-01-01', updated_at: '2024-01-01',
       user_id: 'user-1',
       look_photos: [{ id: 'p1', order_index: 0, url: 'http://x.com/a.jpg' }],
       look_videos: [] as unknown[],

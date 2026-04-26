@@ -226,16 +226,28 @@ async function fetchCatalogLooks(catalogId: string): Promise<CatalogLookRow[]> {
     .from('catalog_looks')
     .select(`
       sort_order,
-      looks!inner ( id, legacy_id, title, video_path, status, enabled, archived_at )
+      looks!inner (
+        id, legacy_id, title, status, enabled, archived_at,
+        looks_creative!inner ( video_url, is_primary )
+      )
     `)
     .eq('catalog_id', catalogId)
     .eq('looks.status', 'live')
     .eq('looks.enabled', true)
     .is('looks.archived_at', null)
+    .eq('looks.looks_creative.is_primary', true)
     .order('sort_order', { ascending: true });
   if (error || !data) return [];
 
-  type Row = { sort_order: number; looks: { id: string; legacy_id: number | null; title: string; video_path: string | null } };
+  type Row = {
+    sort_order: number;
+    looks: {
+      id: string;
+      legacy_id: number | null;
+      title: string;
+      looks_creative: { video_url: string | null; is_primary: boolean }[];
+    };
+  };
   const rows = data as unknown as Row[];
 
   let counts: Record<string, number> = {};
@@ -256,7 +268,7 @@ async function fetchCatalogLooks(catalogId: string): Promise<CatalogLookRow[]> {
   return rows.map(r => ({
     legacyId: r.looks.legacy_id,
     title: r.looks.title,
-    videoPath: r.looks.video_path,
+    videoPath: r.looks.looks_creative?.[0]?.video_url ?? null,
     productCount: counts[r.looks.id] ?? 0,
   }));
 }

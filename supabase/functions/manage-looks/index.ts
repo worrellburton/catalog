@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
     // PUT /:id — update look
     if (method === 'PUT' && segments.length === 1) {
       const body = await req.json();
-      const allowed = ['title', 'description', 'gender', 'color', 'thumbnail_url', 'enabled'];
+      const allowed = ['title', 'description', 'gender', 'color', 'enabled'];
       const updates = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
       if (Object.keys(updates).length === 0) { await sql.end(); return errorRes('No valid fields to update'); }
 

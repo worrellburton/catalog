@@ -182,12 +182,14 @@ export default function AdminCatalogs() {
       let looksQuery = supabase
         .from('looks')
         .select(`
-          id, legacy_id, title, video_path, creator_handle, status, enabled, archived_at,
+          id, legacy_id, title, creator_handle, status, enabled, archived_at,
+          looks_creative!inner ( video_url, is_primary ),
           look_products ( product_id )
         `)
         .eq('status', 'live')
         .eq('enabled', true)
         .is('archived_at', null)
+        .eq('looks_creative.is_primary', true)
         .order('created_at', { ascending: false });
       if (!isAll) {
         looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
@@ -198,22 +200,22 @@ export default function AdminCatalogs() {
         id: string;
         legacy_id: number | null;
         title: string;
-        video_path: string | null;
         creator_handle: string | null;
+        looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
         look_products: { product_id: string }[] | null;
       };
       const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
         id: r.id,
         legacyId: r.legacy_id,
         title: r.title,
-        videoPath: r.video_path,
+        videoPath: r.looks_creative?.[0]?.video_url ?? null,
         creatorHandle: r.creator_handle,
         productCount: (r.look_products || []).length,
       }));
 
       // The `all` catalog is a superset view — if multiple looks share the
-      // same video_path they'd render as visual dupes, so collapse to the
-      // first occurrence per video. Other catalogs keep every row.
+      // same primary creative video they'd render as visual dupes, so collapse
+      // to the first occurrence per video. Other catalogs keep every row.
       const looks = isAll
         ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
         : mappedLooks;
@@ -450,8 +452,6 @@ export default function AdminCatalogs() {
           title: assembleResult.title,
           description: assembleResult.description,
           catalog_tags: [assembleCatalog.name],
-          ai_assembled: true,
-          assembly_prompt: assembleResult.prompt,
           status: 'pending',
           enabled: false,
         })

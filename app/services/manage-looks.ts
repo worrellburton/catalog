@@ -40,12 +40,10 @@ export interface ManagedLook {
   id: string;
   title: string;
   description: string | null;
-  video_path: string | null;
   gender: 'men' | 'women' | 'unisex' | null;
   color: string | null;
   status: LookStatus;
   enabled: boolean;
-  thumbnail_url: string | null;
   created_at: string;
   updated_at: string;
   look_photos: LookPhoto[];
@@ -66,7 +64,6 @@ export interface UpdateLookInput {
   gender?: 'men' | 'women' | 'unisex';
   color?: string;
   status?: LookStatus;
-  thumbnail_url?: string;
 }
 
 export interface AddProductInput {
