@@ -27,7 +27,7 @@ export default function AdminBrands() {
       if (!supabase) return;
       const [{ data: p }, { data: a }] = await Promise.all([
         supabase.from('products').select('id, brand, catalog_tags'),
-        supabase.from('product_ads').select('id, status, impressions, clicks, cost_usd, product:products(brand)'),
+        supabase.from('product_creative').select('id, status, impressions, clicks, cost_usd, product:products(brand)'),
       ]);
       setProducts((p || []) as ProductRow[]);
       setAds((a || []) as unknown as AdRow[]);

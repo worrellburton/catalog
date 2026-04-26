@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { getGeneratedVideos, deleteGeneratedVideo, setGeneratedVideoElite, type GeneratedVideo } from '~/services/video-generation';
-import { getProductAds, deleteProductAd, setAdElite, type ProductAd } from '~/services/product-ads';
+import { getProductAds, deleteProductAd, setAdElite, type ProductAd } from '~/services/product-creative';
 
 // One tile's video. Plays only while the tile is on-screen so we aren't
 // running 170 decoders simultaneously. We keep the src bound so metadata

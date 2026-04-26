@@ -3,7 +3,7 @@
 // didn't return a billed amount.
 //
 // Numbers are ballpark for a single ~5s 720p portrait clip at list price.
-// Actual spend per ad is stored on product_ads.cost_usd when the provider
+// Actual spend per ad is stored on product_creative.cost_usd when the provider
 // returns it; this table is the fallback + rate sheet.
 
 export interface ModelPricing {

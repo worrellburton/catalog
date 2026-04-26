@@ -14,12 +14,16 @@ interface SupabaseLook {
   id: string;
   legacy_id: number | null;
   title: string;
-  video_path: string | null;
   gender: 'men' | 'women' | 'unisex' | null;
   creator_handle: string | null;
   description: string | null;
   color: string | null;
   status: string | null;
+  looks_creative: {
+    video_url: string | null;
+    thumbnail_url: string | null;
+    is_primary: boolean;
+  }[];
   look_products: {
     sort_order: number;
     products: {
@@ -34,18 +38,25 @@ interface SupabaseLook {
 
 async function fetchLooksFromSupabase(): Promise<Look[]> {
   if (!supabase) return staticLooks;
+  // Join the primary creative for each look — looks_creative supersedes the
+  // old looks.video_path column. !inner drops looks that have no creative
+  // row (matches the previous "must have video_path" guard).
   const { data, error } = await supabase
     .from('looks')
     .select(`
       id,
       legacy_id,
       title,
-      video_path,
       gender,
       creator_handle,
       description,
       color,
       status,
+      looks_creative!inner (
+        video_url,
+        thumbnail_url,
+        is_primary
+      ),
       look_products (
         sort_order,
         products (
@@ -57,6 +68,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         )
       )
     `)
+    .eq('looks_creative.is_primary', true)
     .order('created_at', { ascending: false });
 
   if (error || !data) {
@@ -64,30 +76,34 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     return staticLooks;
   }
 
-  // Filter to only looks that have a displayable video (legacy or via look_videos)
-  // and are either live or have no status (legacy seed data)
-  const liveLooks = (data as unknown as SupabaseLook[]).filter(
-    (row) => row.video_path && (!row.status || row.status === 'live')
-  );
+  // Surface only live looks (or legacy seed rows with no status) whose primary
+  // creative actually has a playable video_url.
+  const liveLooks = (data as unknown as SupabaseLook[]).filter((row) => {
+    const primary = row.looks_creative?.[0];
+    return primary?.video_url && (!row.status || row.status === 'live');
+  });
 
-  return liveLooks.map((row, index) => ({
-    id: row.legacy_id ?? -(index + 1),
-    title: row.title,
-    video: row.video_path || '',
-    gender: (row.gender as 'men' | 'women') || 'women',
-    creator: row.creator_handle || '',
-    description: row.description || '',
-    color: row.color || '#888',
-    products: (row.look_products || [])
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((lp) => ({
-        name: lp.products?.name || '',
-        brand: lp.products?.brand || '',
-        price: lp.products?.price || '',
-        url: lp.products?.url || '',
-        image: lp.products?.image_url,
-      })),
-  }));
+  return liveLooks.map((row, index) => {
+    const primary = row.looks_creative[0];
+    return {
+      id: row.legacy_id ?? -(index + 1),
+      title: row.title,
+      video: primary.video_url || '',
+      gender: (row.gender as 'men' | 'women') || 'women',
+      creator: row.creator_handle || '',
+      description: row.description || '',
+      color: row.color || '#888',
+      products: (row.look_products || [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((lp) => ({
+          name: lp.products?.name || '',
+          brand: lp.products?.brand || '',
+          price: lp.products?.price || '',
+          url: lp.products?.url || '',
+          image: lp.products?.image_url,
+        })),
+    };
+  });
 }
 
 async function fetchCreatorsFromSupabase(): Promise<Record<string, Creator>> {

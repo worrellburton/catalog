@@ -9,7 +9,7 @@ import { inferProductGenderFromName, auditAllProductGenders } from '~/services/g
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
-import { createBatchAds, promoteQueuedAds } from '~/services/product-ads';
+import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
@@ -834,8 +834,8 @@ export default function AdminContent() {
   const loadAdProductIds = useCallback(async () => {
     if (!supabase) return;
     const { data } = await supabase
-      .from('product_ads')
-      .select('product_id, video_url, status, impressions, clicks, veo_model, prompt');
+      .from('product_creative')
+      .select('product_id, video_url, status, impressions, clicks, model, prompt');
     if (data) {
       setAdProductIds(new Set(data.map(r => r.product_id)));
       const videoMap = new Map<string, string[]>();
@@ -848,7 +848,7 @@ export default function AdminContent() {
           existing.push(r.video_url);
           videoMap.set(r.product_id, existing);
           metaMap.set(r.video_url, {
-            model: (r as any).veo_model ?? null,
+            model: (r as any).model ?? null,
             prompt: (r as any).prompt ?? null,
           });
         }
@@ -893,7 +893,7 @@ export default function AdminContent() {
       const allIds = Array.from(genJobs.values()).flatMap(j => j.adIds);
       if (allIds.length === 0) return;
       const { data } = await supabase
-        .from('product_ads')
+        .from('product_creative')
         .select('id, status')
         .in('id', allIds);
       if (cancelled || !data) return;
@@ -1026,7 +1026,7 @@ export default function AdminContent() {
       // to live. If every ad is already live or still generating, this is a
       // no-op — no harm done.
       const { data: candidate } = await supabase
-        .from('product_ads')
+        .from('product_creative')
         .select('id')
         .eq('product_id', productId)
         .in('status', ['done', 'paused'])
@@ -1035,14 +1035,14 @@ export default function AdminContent() {
         .limit(1);
       if (candidate && candidate.length > 0) {
         await supabase
-          .from('product_ads')
+          .from('product_creative')
           .update({ status: 'live', enabled: true })
           .eq('id', (candidate[0] as { id: string }).id);
       }
     } else {
       // Pause anything currently live for this product so it falls off feed.
       await supabase
-        .from('product_ads')
+        .from('product_creative')
         .update({ status: 'paused', enabled: false })
         .eq('product_id', productId)
         .eq('status', 'live');
@@ -1065,7 +1065,7 @@ export default function AdminContent() {
       // Promote newest finished ad per product, in parallel.
       await Promise.all(ids.map(async (pid) => {
         const { data: candidate } = await supabase!
-          .from('product_ads')
+          .from('product_creative')
           .select('id')
           .eq('product_id', pid)
           .in('status', ['done', 'paused'])
@@ -1074,14 +1074,14 @@ export default function AdminContent() {
           .limit(1);
         if (candidate && candidate.length > 0) {
           await supabase!
-            .from('product_ads')
+            .from('product_creative')
             .update({ status: 'live', enabled: true })
             .eq('id', (candidate[0] as { id: string }).id);
         }
       }));
     } else {
       await supabase
-        .from('product_ads')
+        .from('product_creative')
         .update({ status: 'paused', enabled: false })
         .in('product_id', ids)
         .eq('status', 'live');
@@ -1715,7 +1715,7 @@ export default function AdminContent() {
                 });
                 if (supabase) {
                   if (idsToDelete.length > 0) {
-                    await supabase.from('product_ads').delete().in('product_id', idsToDelete);
+                    await supabase.from('product_creative').delete().in('product_id', idsToDelete);
                     const { error } = await supabase.from('products').delete().in('id', idsToDelete);
                     if (error) {
                       showToast(`Delete failed: ${error.message}`);
@@ -2114,7 +2114,7 @@ export default function AdminContent() {
                         const key = `${p.brand}-${p.name}`;
                         if (p.id) {
                           if (!supabase) return;
-                          await supabase.from('product_ads').delete().eq('product_id', p.id);
+                          await supabase.from('product_creative').delete().eq('product_id', p.id);
                           const { error } = await supabase.from('products').delete().eq('id', p.id);
                           if (error) {
                             showToast(`Delete failed: ${error.message}`);

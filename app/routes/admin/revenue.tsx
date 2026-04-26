@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '~/utils/supabase';
-import { pauseAd } from '~/services/product-ads';
+import { pauseAd } from '~/services/product-creative';
 
 interface AdRow {
   id: string;
@@ -31,7 +31,7 @@ export default function AdminRevenue() {
     (async () => {
       if (!supabase) return;
       const { data } = await supabase
-        .from('product_ads')
+        .from('product_creative')
         .select('id, product_id, status, style, impressions, clicks, cost_usd, product:products(id, name, brand, catalog_tags)');
       if (data) setAds(data as unknown as AdRow[]);
       setLoading(false);

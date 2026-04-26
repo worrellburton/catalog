@@ -2,9 +2,9 @@
 Modal deployment for the Video Generator Agent.
 
 Exposes entry points:
-  1. POST /generate-ad      — Supabase webhook when product_ads row inserted
+  1. POST /generate-ad      — Supabase webhook when product_creative row inserted
   2. POST /generate-video   — Supabase webhook when products.scrape_status → done
-  3. Cron job               — every 30 min: retry pending/failed ads & looks
+  3. Cron job               — every 30 min: retry pending/failed creatives & looks
   4. Manual                 — generate_ad_job / generate_and_update
 
 Deploy:
@@ -21,7 +21,7 @@ Secrets — create once in Modal dashboard or via CLI:
         SUPABASE_SERVICE_ROLE_KEY=...
 
 Supabase webhooks to configure in Dashboard → Database → Webhooks:
-  • Table: product_ads, event: INSERT
+  • Table: product_creative, event: INSERT
     → POST {modal_webhook_url}/generate-ad
   • Table: products, event: UPDATE (filter: scrape_status = done)
     → POST {modal_webhook_url}/generate-video
@@ -85,7 +85,7 @@ def generate_and_update(
     return result
 
 
-# ─── Ad generation: run one product_ads job ───────────────────────────
+# ─── Ad generation: run one product_creative job ──────────────────────
 
 @app.function(
     image=generator_image,
@@ -95,7 +95,7 @@ def generate_and_update(
     max_containers=5,    # ads can run in parallel
 )
 def generate_ad_job(ad_id: str):
-    """Generate a video for a single product_ads row and update Supabase."""
+    """Generate a video for a single product_creative row and update Supabase."""
     import sys
     sys.path.insert(0, "/root")
     from ad_generator import generate_ad_video
@@ -105,7 +105,7 @@ def generate_ad_job(ad_id: str):
     return result
 
 
-# ─── Webhook: triggered when product_ads row is inserted ──────────────
+# ─── Webhook: triggered when product_creative row is inserted ────────
 
 @app.function(image=generator_image, secrets=secrets)
 @modal.fastapi_endpoint(method="POST", label="generate-ad")
@@ -113,7 +113,7 @@ def generate_ad_webhook(body: dict):
     """
     POST /generate-ad
 
-    Called by Supabase Database Webhook on INSERT to product_ads.
+    Called by Supabase Database Webhook on INSERT to product_creative.
     Supabase sends the full new row as body["record"].
     """
     record = body.get("record", {})
@@ -175,7 +175,7 @@ def generate_webhook(body: dict):
     schedule=modal.Cron("*/30 * * * *"),
 )
 def generate_pending():
-    """Scheduled job — retry pending/failed product_ads and generated_videos."""
+    """Scheduled job — retry pending/failed product_creative and generated_videos."""
     import os
     import sys
     sys.path.insert(0, "/root")
@@ -188,7 +188,7 @@ def generate_pending():
 
     # ── 0. Promote queued → pending (max 2 slots) ──────────────────
     active = (
-        supabase.table("product_ads")
+        supabase.table("product_creative")
         .select("id", count="exact")
         .in_("status", ["pending", "generating"])
         .execute()
@@ -198,7 +198,7 @@ def generate_pending():
     slots = max(0, 1 - in_flight)
     if slots > 0:
         queued = (
-            supabase.table("product_ads")
+            supabase.table("product_creative")
             .select("id")
             .eq("status", "queued")
             .order("created_at")
@@ -208,12 +208,12 @@ def generate_pending():
         promote_ids = [r["id"] for r in (queued.data or [])]
         if promote_ids:
             for pid in promote_ids:
-                supabase.table("product_ads").update({"status": "pending"}).eq("id", pid).execute()
+                supabase.table("product_creative").update({"status": "pending"}).eq("id", pid).execute()
             print(f"Promoted {len(promote_ids)} queued → pending")
 
-    # ── 1. Retry pending/failed product_ads ───────────────────────────
+    # ── 1. Retry pending/failed product_creative ──────────────────────
     ads = (
-        supabase.table("product_ads")
+        supabase.table("product_creative")
         .select("id")
         .in_("status", ["pending", "failed"])
         .limit(10)

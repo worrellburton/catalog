@@ -5,7 +5,7 @@ import LiveCursors from '~/components/LiveCursors';
 import { useAuth } from '~/hooks/useAuth';
 import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
-import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-ads';
+import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
 
 interface NavItem {
   to: string;
@@ -302,7 +302,7 @@ export default function AdminLayout() {
     // Self-heal: flip any 'generating' row that has an error + completed_at to 'failed'.
     // Worker sometimes populates the error but forgets the status flip, leaving items stuck.
     await supabase
-      .from('product_ads')
+      .from('product_creative')
       .update({ status: 'failed' })
       .eq('status', 'generating')
       .not('error', 'is', null)
@@ -312,8 +312,8 @@ export default function AdminLayout() {
     await promoteQueuedAds();
 
     const { data } = await supabase
-      .from('product_ads')
-      .select('id, status, style, veo_model, created_at, updated_at, completed_at, cost_usd, error, product:products(name, brand)')
+      .from('product_creative')
+      .select('id, status, style, model, created_at, updated_at, completed_at, cost_usd, error, product:products(name, brand)')
       .in('status', ['queued', 'pending', 'generating', 'failed'])
       .order('created_at', { ascending: true });
 
@@ -330,7 +330,7 @@ export default function AdminLayout() {
       costUsd: r.cost_usd,
       error: r.error,
       style: r.style || 'unknown',
-      veoModel: r.veo_model,
+      veoModel: r.model,
     }));
 
     const currentIds = new Set(active.map(n => n.id));

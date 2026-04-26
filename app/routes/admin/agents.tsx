@@ -8,7 +8,7 @@ import VideoGenerationPanel from '~/components/VideoGenerationPanel';
 import ProductAdsPanel from '~/components/ProductAdsPanel';
 import { listCrawlJobs, type CrawlJob } from '~/services/site-crawls';
 import { getGeneratedVideos, type GeneratedVideo } from '~/services/video-generation';
-import { getProductAds, type ProductAd } from '~/services/product-ads';
+import { getProductAds, type ProductAd } from '~/services/product-creative';
 
 type Tab = 'overview' | 'crawls' | 'video-gen';
 type CrawlSubTab = 'full-site' | 'collections' | 'profiles' | 'products';

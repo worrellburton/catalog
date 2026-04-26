@@ -2,13 +2,13 @@
 Ad Video Generator — generates product ad videos via Veo + Gemini.
 
 Flow:
-  1. Fetch pending product_ads from Supabase
-  2. For each ad: fetch product + ALL images, build prompt with Gemini
+  1. Fetch pending product_creative rows from Supabase
+  2. For each row: fetch product + ALL images, build prompt with Gemini
   3. Download up to 3 images and send as Veo reference images
   4. Generate video via Veo 3.1 Fast (reference_images mode)
   5. Retry with fewer images / text-only if safety filter blocks
   6. Upload to Supabase Storage
-  7. Update product_ads row with video URL and status
+  7. Update product_creative row with video URL and status
 
 Multi-image strategy:
   - Sends up to 3 product images as reference_images to Veo
@@ -151,7 +151,7 @@ def _download_images(urls: list[str]) -> list[tuple[bytes, str]]:
 def _get_ad_index_for_product(supabase, product_id: str, ad_id: str) -> int:
     """Determine this ad's index among all ads for the same product."""
     rows = (
-        supabase.table("product_ads")
+        supabase.table("product_creative")
         .select("id")
         .eq("product_id", product_id)
         .order("created_at")
@@ -284,7 +284,7 @@ def generate_ad_video(ad_id: str) -> dict:
 
     # Fetch ad with product
     ad = (
-        supabase.table("product_ads")
+        supabase.table("product_creative")
         .select("*, product:products(*)")
         .eq("id", ad_id)
         .single()
@@ -303,7 +303,7 @@ def generate_ad_video(ad_id: str) -> dict:
 
     try:
         # Mark as generating
-        supabase.table("product_ads").update({"status": "generating"}).eq("id", ad_id).execute()
+        supabase.table("product_creative").update({"status": "generating"}).eq("id", ad_id).execute()
 
         # Collect all product images
         all_images = _get_product_images(product)
@@ -313,7 +313,7 @@ def generate_ad_video(ad_id: str) -> dict:
         # image fed in at once — no per-ad cycling. fal.ai's Vidu caps at 3
         # reference images, so trim aggressively even though direct Vidu
         # would accept up to 7.
-        ad_model_for_image_pick = ad.get("veo_model") or ""
+        ad_model_for_image_pick = ad.get("model") or ""
         if "reference-to-video" in ad_model_for_image_pick:
             selected_urls = list(all_images[:3])
             print(f"  Multi-reference model: passing {len(selected_urls)} image(s)")
@@ -340,14 +340,14 @@ def generate_ad_video(ad_id: str) -> dict:
 
         # Enhance with Gemini
         enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
-        supabase.table("product_ads").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
+        supabase.table("product_creative").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
 
         # Respect per-ad model override (e.g. user chose Seedance instead of Veo)
-        ad_model = ad.get("veo_model")
+        ad_model = ad.get("model")
 
         # Record the model that will actually be used so UI can show it
         if ad_model:
-            supabase.table("product_ads").update({"veo_model": ad_model}).eq("id", ad_id).execute()
+            supabase.table("product_creative").update({"model": ad_model}).eq("id", ad_id).execute()
 
         # Generate video with retry cascade
         print(f"  Generating ad video [{style}] for: {product.get('name', 'unknown')} (model={ad_model or 'default'})")
@@ -381,7 +381,7 @@ def generate_ad_video(ad_id: str) -> dict:
         cost = _estimate_cost(GENERATION_DEFAULTS["model"], GENERATION_DEFAULTS["resolution"])
 
         # Update ad as done
-        supabase.table("product_ads").update({
+        supabase.table("product_creative").update({
             "status": "done",
             "video_url": video_url,
             "storage_path": storage_path,
@@ -402,7 +402,7 @@ def generate_ad_video(ad_id: str) -> dict:
         }
 
     except Exception as e:
-        supabase.table("product_ads").update({
+        supabase.table("product_creative").update({
             "status": "failed",
             "error": str(e)[:500],
             "completed_at": datetime.now(timezone.utc).isoformat(),
@@ -418,7 +418,7 @@ def process_pending_ads() -> list[dict]:
         os.environ["SUPABASE_SERVICE_ROLE_KEY"],
     )
 
-    pending = supabase.table("product_ads").select("id").eq("status", "pending").order("created_at").execute().data
+    pending = supabase.table("product_creative").select("id").eq("status", "pending").order("created_at").execute().data
     if not pending:
         print("No pending ad jobs.")
         return []

@@ -224,12 +224,12 @@ export default function AdminCatalogs() {
         ? products
         : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
 
-      // Creative videos (product_ads). `all` pulls every rendered ad so admins
+      // Creative videos (product_creative). `all` pulls every rendered ad so admins
       // see the full library of creative in one place; named catalogs filter
       // to ads whose underlying product is tagged with this catalog.
       const catalogProductIds = new Set(catalogProducts.map(p => p.id));
       let adsQuery = supabase
-        .from('product_ads')
+        .from('product_creative')
         .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand)')
         .not('video_url', 'is', null)
         .in('status', ['done', 'live'])

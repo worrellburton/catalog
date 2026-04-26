@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
-import { getEliteCreatives, type EliteCreative } from '~/services/product-ads';
+import { getEliteCreatives, type EliteCreative } from '~/services/product-creative';
 
 interface DeckViewV1_1Props {
   onSeeApp: () => void;

@@ -13,7 +13,7 @@ export interface ProductAd {
   prompt: string | null;
   prompt_extra: string | null;
   style: string;
-  veo_model: string | null;
+  model: string | null;
   status: 'queued' | 'pending' | 'generating' | 'done' | 'failed' | 'live' | 'paused';
   duration_seconds: number | null;
   aspect_ratio: string | null;
@@ -45,11 +45,11 @@ const AD_SELECT = `
 export async function getProductAds(): Promise<ProductAd[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select(AD_SELECT)
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('Failed to load product ads:', error.message);
+    console.error('Failed to load product creatives:', error.message);
     return [];
   }
   return (data || []) as ProductAd[];
@@ -58,12 +58,12 @@ export async function getProductAds(): Promise<ProductAd[]> {
 export async function getProductAdsByStatus(status: string): Promise<ProductAd[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select(AD_SELECT)
     .eq('status', status)
     .order('created_at', { ascending: false });
   if (error) {
-    console.error('Failed to load product ads:', error.message);
+    console.error('Failed to load product creatives:', error.message);
     return [];
   }
   return (data || []) as ProductAd[];
@@ -71,16 +71,16 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 export async function getLiveAds(): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Only surface explicitly approved (status='live') ads in the consumer feed.
-  // New ads land at 'done' and must pass through the moderation queue first.
+  // Only surface explicitly approved (status='live') creatives in the consumer feed.
+  // New creatives land at 'done' and must pass through the moderation queue first.
   // Boosted ads (boosted_until > now) sort to the top.
   // Also respect the product.is_active toggle — deactivating a product
-  // should immediately pull its ads off the feed without requiring the
-  // admin to individually pause each ad.
+  // should immediately pull its creatives off the feed without requiring the
+  // admin to individually pause each one.
   // is_elite gate: the consumer feed is now curated — only hand-picked
   // creatives from the admin Creative view appear in the grid.
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select(AD_SELECT)
     .eq('status', 'live')
     .eq('is_elite', true)
@@ -105,7 +105,7 @@ export async function boostAd(id: string, hours = 24): Promise<{ error: string |
   if (!supabase) return { error: 'Supabase not configured' };
   const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ boosted_until: until })
     .eq('id', id);
   return { error: error?.message || null };
@@ -114,7 +114,7 @@ export async function boostAd(id: string, hours = 24): Promise<{ error: string |
 export async function getModerationQueue(): Promise<ProductAd[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select(AD_SELECT)
     .eq('status', 'done')
     .not('video_url', 'is', null)
@@ -126,7 +126,7 @@ export async function getModerationQueue(): Promise<ProductAd[]> {
 export async function rejectAd(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ status: 'paused', enabled: false })
     .eq('id', id);
   return { error: error?.message || null };
@@ -135,7 +135,7 @@ export async function rejectAd(id: string): Promise<{ error: string | null }> {
 export async function createProductAd(req: CreateAdRequest): Promise<{ data: ProductAd | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase not configured' };
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .insert({
       product_id: req.product_id,
       style: req.style,
@@ -172,7 +172,7 @@ export async function createBatchAds(
   // and queue the rest. Backend worker promotes 'queued' → 'pending' as slots
   // free up (see promoteQueuedAds below — called from the client poll loop).
   const { count: activeCount } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select('id', { count: 'exact', head: true })
     .in('status', ['pending', 'generating']);
 
@@ -196,7 +196,7 @@ export async function createBatchAds(
         // Force portrait aspect so the generated video fills the vertical
         // feed cards end-to-end (no letterboxing).
         aspect_ratio: '9:16',
-        ...(m ? { veo_model: m } : {}),
+        ...(m ? { model: m } : {}),
         ...(options.durationSeconds != null ? { duration_seconds: options.durationSeconds } : {}),
         ...(options.withAudio != null ? { with_audio: options.withAudio } : {}),
       };
@@ -209,7 +209,7 @@ export async function createBatchAds(
   }));
 
   const { data, error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .insert(rows)
     .select(AD_SELECT);
 
@@ -224,7 +224,7 @@ export async function promoteQueuedAds(): Promise<{ promoted: number; error: str
   if (!supabase) return { promoted: 0, error: 'Supabase not configured' };
 
   const { count: activeCount } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select('id', { count: 'exact', head: true })
     .in('status', ['pending', 'generating']);
 
@@ -233,7 +233,7 @@ export async function promoteQueuedAds(): Promise<{ promoted: number; error: str
   if (slotsAvailable === 0) return { promoted: 0, error: null };
 
   const { data: queuedRows, error: queryErr } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .select('id')
     .eq('status', 'queued')
     .order('created_at', { ascending: true })
@@ -244,7 +244,7 @@ export async function promoteQueuedAds(): Promise<{ promoted: number; error: str
   if (ids.length === 0) return { promoted: 0, error: null };
 
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ status: 'pending' })
     .in('id', ids);
 
@@ -267,7 +267,7 @@ export async function regenerateAd(id: string, promptExtra?: string): Promise<{ 
   if (promptExtra !== undefined) {
     patch.prompt_extra = promptExtra.trim() ? promptExtra.trim() : null;
   }
-  const { error } = await supabase.from('product_ads').update(patch).eq('id', id);
+  const { error } = await supabase.from('product_creative').update(patch).eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
 }
@@ -275,7 +275,7 @@ export async function regenerateAd(id: string, promptExtra?: string): Promise<{ 
 export async function setAdLive(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ status: 'live', enabled: true })
     .eq('id', id);
   if (error) return { error: error.message };
@@ -285,7 +285,7 @@ export async function setAdLive(id: string): Promise<{ error: string | null }> {
 export async function pauseAd(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ status: 'paused', enabled: false })
     .eq('id', id);
   if (error) return { error: error.message };
@@ -295,15 +295,15 @@ export async function pauseAd(id: string): Promise<{ error: string | null }> {
 export async function deleteProductAd(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .delete()
     .eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
 }
 
-// Flip the elite flag on an ad AND its parent product together. Marking a
-// product elite requires that at least one of its creatives is elite, so we
+// Flip the elite flag on a creative AND its parent product together. Marking
+// a product elite requires that at least one of its creatives is elite, so we
 // keep the two in sync from this one entry point. Used by the admin Creative
 // view and surfaces in investor deck v1.1's background feed.
 export async function setAdElite(
@@ -313,7 +313,7 @@ export async function setAdElite(
 ): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error: adError } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ is_elite: isElite })
     .eq('id', id);
   if (adError) return { error: adError.message };
@@ -327,7 +327,7 @@ export async function setAdElite(
   } else {
     // If no other elite creatives remain for this product, unmark it.
     const { data: remaining } = await supabase
-      .from('product_ads')
+      .from('product_creative')
       .select('id')
       .eq('product_id', productId)
       .eq('is_elite', true)
@@ -342,8 +342,8 @@ export async function setAdElite(
   return { error: null };
 }
 
-// Fetch every elite creative (product ads + generated look videos) with a
-// playable video_url. Used by the deck v1.1 background feed so the investor
+// Fetch every elite creative (product creatives + generated look videos) with
+// a playable video_url. Used by the deck v1.1 background feed so the investor
 // view only ever shows hand-picked work.
 export interface EliteCreative {
   id: string;
@@ -355,7 +355,7 @@ export async function getEliteCreatives(): Promise<EliteCreative[]> {
   if (!supabase) return [];
   const [adsRes, vidsRes] = await Promise.all([
     supabase
-      .from('product_ads')
+      .from('product_creative')
       .select('id, video_url')
       .eq('is_elite', true)
       .not('video_url', 'is', null),
@@ -373,7 +373,7 @@ export async function getEliteCreatives(): Promise<EliteCreative[]> {
 export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { error } = await supabase
-    .from('product_ads')
+    .from('product_creative')
     .update({ affiliate_url: url })
     .eq('id', id);
   if (error) return { error: error.message };
@@ -383,13 +383,13 @@ export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ e
 export async function trackAdImpression(id: string): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.rpc('increment_ad_impressions', { ad_id: id });
+    await supabase.rpc('increment_product_creative_impressions', { creative_id: id });
   } catch { /* fire-and-forget */ }
 }
 
 export async function trackAdClick(id: string): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.rpc('increment_ad_clicks', { ad_id: id });
+    await supabase.rpc('increment_product_creative_clicks', { creative_id: id });
   } catch { /* fire-and-forget */ }
 }

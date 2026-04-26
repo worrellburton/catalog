@@ -43,9 +43,9 @@ def find_test_product(supabase) -> dict | None:
 
 
 def create_test_ad(supabase, product_id: str, style: str = "studio_clean") -> str:
-    """Insert a pending product_ad row and return its ID."""
+    """Insert a pending product_creative row and return its ID."""
     row = (
-        supabase.table("product_ads")
+        supabase.table("product_creative")
         .insert({
             "product_id": product_id,
             "style": style,
@@ -58,13 +58,13 @@ def create_test_ad(supabase, product_id: str, style: str = "studio_clean") -> st
 
 def cleanup_ad(supabase, ad_id: str):
     """Delete the test ad and its storage file."""
-    ad = supabase.table("product_ads").select("storage_path").eq("id", ad_id).single().execute().data
+    ad = supabase.table("product_creative").select("storage_path").eq("id", ad_id).single().execute().data
     if ad and ad.get("storage_path"):
         try:
             supabase.storage.from_("look-media").remove([ad["storage_path"]])
         except Exception:
             pass
-    supabase.table("product_ads").delete().eq("id", ad_id).execute()
+    supabase.table("product_creative").delete().eq("id", ad_id).execute()
 
 
 def test_prompt_building():
@@ -238,7 +238,7 @@ def test_live_generation():
     print(f"Result: {json.dumps(result, indent=2)}")
 
     # Verify DB record
-    ad = supabase.table("product_ads").select("*").eq("id", ad_id).single().execute().data
+    ad = supabase.table("product_creative").select("*").eq("id", ad_id).single().execute().data
     print(f"\nAd record:")
     print(f"  status: {ad['status']}")
     print(f"  video_url: {ad.get('video_url', 'N/A')}")

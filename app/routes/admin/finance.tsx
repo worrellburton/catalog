@@ -15,7 +15,7 @@ const stats = [
 
 interface AdSpendRow {
   id: string;
-  veo_model: string | null;
+  model: string | null;
   cost_usd: number | null;
   status: string;
   created_at: string;
@@ -31,8 +31,8 @@ export default function AdminFinance() {
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
-        .from('product_ads')
-        .select('id, veo_model, cost_usd, status, created_at')
+        .from('product_creative')
+        .select('id, model, cost_usd, status, created_at')
         .order('created_at', { ascending: false });
       if (!cancelled) {
         if (!error && data) setAdRows(data as AdSpendRow[]);
@@ -52,8 +52,8 @@ export default function AdminFinance() {
     let completedCount = 0;
     const byModel = new Map<string, { count: number; spend: number; status: Record<string, number> }>();
     for (const ad of adRows) {
-      const model = ad.veo_model || 'unknown';
-      const est = ad.cost_usd != null ? ad.cost_usd : estimateAdCost(ad.veo_model);
+      const model = ad.model || 'unknown';
+      const est = ad.cost_usd != null ? ad.cost_usd : estimateAdCost(ad.model);
       total += est;
       const created = new Date(ad.created_at);
       const isMonth = created >= monthStart;

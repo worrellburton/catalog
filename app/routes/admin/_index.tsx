@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
-import { boostAd } from '~/services/product-ads';
+import { boostAd } from '~/services/product-creative';
 
 interface SearchLog {
   id: string;
@@ -68,7 +68,7 @@ export default function AdminHome() {
     if (!supabase) return;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase
-      .from('product_ads')
+      .from('product_creative')
       .select('id, impressions, clicks, created_at, boosted_until, product:products(name, brand, image_url)')
       .eq('status', 'live')
       .gte('created_at', sevenDaysAgo)

@@ -6,7 +6,7 @@ import {
   regenerateAd,
   deleteProductAd,
   type ProductAd,
-} from '~/services/product-ads';
+} from '~/services/product-creative';
 
 type Action = 'approved' | 'rejected' | 'regenerated' | 'deleted';
 

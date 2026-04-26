@@ -1,5 +1,5 @@
 // Shared video model catalog for admin generation flows.
-// `value` is the string written to product_ads.veo_model; the Python
+// `value` is the string written to product_creative.model; the Python
 // worker in agents/video-generator/ad_generator.py honours it as a
 // per-ad override and dispatches on the slug prefix:
 //   - "veo-*-generate-preview"  → Google Gen AI (direct)

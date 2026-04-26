@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import LookCard from './LookCard';
 import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
-import type { ProductAd } from '~/services/product-ads';
+import type { ProductAd } from '~/services/product-creative';
 
 interface FeedSectionProps {
   looks: Look[];

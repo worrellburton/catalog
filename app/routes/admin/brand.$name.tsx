@@ -26,7 +26,7 @@ export default function BrandDashboard() {
     (async () => {
       if (!supabase || !name) return;
       const { data } = await supabase
-        .from('product_ads')
+        .from('product_creative')
         .select('id, status, style, video_url, impressions, clicks, cost_usd, created_at, product:products!inner(id, name, brand, image_url, price, catalog_tags)')
         .eq('product.brand', name)
         .order('created_at', { ascending: false });

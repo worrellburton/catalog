@@ -168,7 +168,7 @@ export async function retryProductScrape(productId: string): Promise<void> {
 }
 
 /**
- * Hard-delete a product row (and any associated product_ads via cascade).
+ * Hard-delete a product row (and any associated product_creative rows via cascade).
  */
 export async function deleteProduct(productId: string): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured');

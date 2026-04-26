@@ -9,7 +9,7 @@ import {
   deleteProductAd,
   updateAdAffiliateUrl,
   type ProductAd,
-} from '~/services/product-ads';
+} from '~/services/product-creative';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 
@@ -512,7 +512,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                                   <span style={{ color: '#888' }}>Style</span>
                                   <span style={{ textTransform: 'capitalize' }}>{ad.style.replace(/_/g, ' ')}</span>
                                   <span style={{ color: '#888' }}>Model</span>
-                                  <span>{ad.veo_model || '—'}</span>
+                                  <span>{ad.model || '—'}</span>
                                   <span style={{ color: '#888' }}>Duration</span>
                                   <span>{ad.duration_seconds}s</span>
                                   <span style={{ color: '#888' }}>Aspect Ratio</span>

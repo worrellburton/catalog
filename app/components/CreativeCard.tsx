@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
-import { trackAdImpression, trackAdClick, type ProductAd } from '~/services/product-ads';
+import { trackAdImpression, trackAdClick, type ProductAd } from '~/services/product-creative';
 
 interface CreativeCardProps {
   creative: ProductAd;

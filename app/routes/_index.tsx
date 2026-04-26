@@ -17,7 +17,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import type { ProductAd } from '~/services/product-ads';
+import type { ProductAd } from '~/services/product-creative';
 import { supabase } from '~/utils/supabase';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';

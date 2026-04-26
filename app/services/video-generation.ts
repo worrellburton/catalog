@@ -106,7 +106,7 @@ export async function setGeneratedVideoElite(
     if (productError) return { error: productError.message };
   } else {
     const [adsRes, vidsRes] = await Promise.all([
-      supabase.from('product_ads').select('id').eq('product_id', productId).eq('is_elite', true).limit(1),
+      supabase.from('product_creative').select('id').eq('product_id', productId).eq('is_elite', true).limit(1),
       supabase.from('generated_videos').select('id').eq('product_id', productId).eq('is_elite', true).limit(1),
     ]);
     const adsLeft = (adsRes.data || []).length;

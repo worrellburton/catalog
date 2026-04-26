@@ -547,7 +547,7 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Loading placeholders for creative slots while product_ads are fetching.
+/* Loading placeholders for creative slots while product_creative rows are fetching.
    Inherits .look-card's aspect ratio + shimmer; disables interactivity. */
 .creative-placeholder {
   cursor: default;

@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-ads';
+import { getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
