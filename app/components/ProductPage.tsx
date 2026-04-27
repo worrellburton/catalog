@@ -1,9 +1,8 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Product, Look, creators as staticCreators } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
-import { TrailMorph } from '~/components/TrailMotion';
 import { lookTrailId } from '~/utils/trailIds';
 import { brandLogoUrlFor } from '~/utils/brandLogos';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
@@ -217,9 +216,7 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
       onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
     >
-      <TrailMorph id={creative.id} className="pd-brand-tile-morph">
-        <div ref={setRef} className="pd-brand-tile-slot" data-trail-id={creative.id} />
-      </TrailMorph>
+      <div ref={setRef} className="pd-brand-tile-slot" data-trail-id={creative.id} />
     </button>
   );
 }
@@ -254,9 +251,8 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
 
   return (
     <button type="button" className="pd-look-tile" onClick={() => onOpen(look)}>
-      <TrailMorph id={trailId} className="pd-look-tile-video">
-        <div ref={setSlot} style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
-      </TrailMorph>
+      <div ref={setSlot} className="pd-look-tile-video" data-trail-id={trailId} />
+
       <div className="pd-look-tile-meta">
         <span className="pd-look-tile-title">{look.title}</span>
         {look.creator && <span className="pd-look-tile-creator">{look.creator}</span>}
@@ -295,15 +291,13 @@ export default function ProductPage({
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // Reset scroll to top when the product changes. Defer one rAF so the
-  // scrollTo happens after Framer Motion has captured the source rect for
-  // the layoutId morph — otherwise the snap re-positions the card mid-
-  // morph and the animation reads as glitchy.
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    });
-    return () => cancelAnimationFrame(raf);
+  // Reset scroll to top when the product changes. useLayoutEffect runs
+  // synchronously after DOM updates but BEFORE paint — combined with
+  // `behavior: 'instant'`, the snap-to-top happens between renders so
+  // the user never sees the new content briefly scrolled to the old
+  // tap position. That's what makes the swap feel seamless.
+  useLayoutEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [product.brand, product.name]);
 
   const handleClose = useCallback(() => {
@@ -358,13 +352,11 @@ export default function ProductPage({
 
         <section className={heroClassName}>
           {creative ? (
-            creative.id ? (
-              <TrailMorph id={creative.id} className="pd-hero-media pd-hero-video-slot">
-                <div ref={setHeroSlot} style={{ width: '100%', height: '100%' }} data-trail-id={creative.id} />
-              </TrailMorph>
-            ) : (
-              <div ref={setHeroSlot} className="pd-hero-media pd-hero-video-slot" />
-            )
+            <div
+              ref={setHeroSlot}
+              className="pd-hero-media pd-hero-video-slot"
+              data-trail-id={creative.id}
+            />
           ) : product.image ? (
             <img
               src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}

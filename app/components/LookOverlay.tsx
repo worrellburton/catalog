@@ -4,7 +4,6 @@ import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 import { useTrailVideo } from './TrailVideoHost';
-import { TrailMorph } from './TrailMotion';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
 type TabId = 'products' | 'creator';
@@ -148,12 +147,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Centered video with overlays */}
             <div className="look-media-centered">
               <div className="look-media">
-                {/* TrailMorph + shared video slot — same trailId as the
-                    originating LookCard so Framer Motion morphs the box
-                    and the DOM video keeps playing untouched. */}
-                <TrailMorph id={trailId} className="look-media-video">
-                  <div ref={setHeroSlot} style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
-                </TrailMorph>
+                {/* Shared video slot — TrailVideoHost moves the running
+                    <video> from the originating LookCard into this
+                    element on tap, so playback continues unbroken across
+                    the navigation. */}
+                <div
+                  ref={setHeroSlot}
+                  className="look-media-video"
+                  data-trail-id={trailId}
+                />
                 {/* Bottom-left: product count badge */}
                 <div className="hotspot-indicator">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
