@@ -47,6 +47,41 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
   return { error: error?.message };
 }
 
+// sessionStorage cache for the resolved AuthUser. The Supabase session
+// itself is already persisted in localStorage by supabase-js, so the
+// only actual round trip in getCurrentUser is the profiles row lookup
+// for role/gender. Caching the resolved AuthUser for an hour means
+// returning visitors (and any client navigation that re-mounts the
+// auth singleton) skip that query entirely. Invalidated on every
+// onAuthStateChange tick — see below.
+const AUTH_CACHE_KEY = 'auth_cache:user:v1';
+const AUTH_CACHE_TTL_MS = 60 * 60 * 1000;
+
+interface CachedAuth { user: AuthUser; userId: string; t: number; }
+
+function readAuthCache(userId: string): AuthUser | null {
+  try {
+    const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(AUTH_CACHE_KEY) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedAuth;
+    if (parsed.userId !== userId) return null;
+    if (Date.now() - parsed.t > AUTH_CACHE_TTL_MS) return null;
+    return parsed.user;
+  } catch { return null; }
+}
+
+function writeAuthCache(user: AuthUser): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    const entry: CachedAuth = { user, userId: user.id, t: Date.now() };
+    sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(entry));
+  } catch { /* quota or private mode */ }
+}
+
+function clearAuthCache(): void {
+  try { sessionStorage?.removeItem(AUTH_CACHE_KEY); } catch { /* */ }
+}
+
 export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!supabase) return null;
 
@@ -57,7 +92,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   // 2-3 times. The PKCE code exchange already populated the session at this
   // point, so reading from storage is enough.
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return null;
+  if (!session?.user) {
+    clearAuthCache();
+    return null;
+  }
+
+  // Fast path: same user as last visit, cache fresh — return without the
+  // profiles round trip.
+  const cached = readAuthCache(session.user.id);
+  if (cached) return cached;
+
   const authUser = mapUser(session.user);
 
   try {
@@ -85,11 +129,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // role column may not exist yet
   }
 
+  writeAuthCache(authUser);
   return authUser;
 }
 
 export async function signOut(): Promise<void> {
   if (!supabase) return;
+  clearAuthCache();
   await supabase.auth.signOut();
 }
 
@@ -97,7 +143,17 @@ export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
   if (!supabase) return { unsubscribe: () => {} };
 
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session?.user ? mapUser(session.user) : null);
+    if (!session?.user) {
+      clearAuthCache();
+      callback(null);
+      return;
+    }
+    // Auth state ticked — purge the resolved-user cache so the next
+    // getCurrentUser() refetches role/gender. Most ticks (token refresh)
+    // don't actually change anything user-visible, so the consumer's
+    // useAuth singleton de-dupes via its own snapshot equality check.
+    clearAuthCache();
+    callback(mapUser(session.user));
   });
 
   return { unsubscribe: () => data.subscription.unsubscribe() };
