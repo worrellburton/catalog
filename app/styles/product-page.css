@@ -193,9 +193,11 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
-/* Brand-logo variant — only renders in light mode (gated upstream by the
-   isLightMode + brandLogosOn props). Logo height matches the eyebrow text
-   row visually so the rest of the info layout doesn't shift between modes. */
+/* Brand-logo variant — gated upstream by the brandLogosOn toggle. The
+   logo replaces the eyebrow text and renders monochrome white so it
+   reads on the dark info surface; in light mode we let the natural
+   colors through. Height matches the eyebrow row so info layout doesn't
+   shift between text and logo. */
 .pd-brand--logo {
   padding: 4px 0 6px;
   letter-spacing: 0;
@@ -206,8 +208,12 @@
   width: auto;
   max-width: min(220px, 60vw);
   object-fit: contain;
-  /* Logos come as transparent PNG/SVG with dark glyphs; let them render
-     natural color on the light surface. */
+  /* Default (dark mode): force the image to pure white so dark-glyph
+     wordmarks remain visible against the dark info card. brightness(0)
+     flattens the image to black, then invert(1) flips it to white. */
+  filter: brightness(0) invert(1);
+}
+.light-mode .pd-brand--logo img {
   filter: none;
 }
 .light-mode .pd-brand {

@@ -383,7 +383,7 @@ export default function ProductPage({
               <BrandLine
                 brand={product.brand}
                 brandUrl={product.url}
-                showLogo={isLightMode && brandLogosOn}
+                showLogo={brandLogosOn}
               />
             )}
             <h1 className="pd-name">{product.name}</h1>
