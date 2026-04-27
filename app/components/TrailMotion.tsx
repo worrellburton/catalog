@@ -10,7 +10,7 @@
 //   • 360 ms — short enough to feel decisive, long enough to read.
 //   • Disabled entirely under prefers-reduced-motion.
 
-import { LazyMotion, MotionConfig, domAnimation, m } from 'framer-motion';
+import { LazyMotion, MotionConfig, domMax, m } from 'framer-motion';
 import type { CSSProperties, ReactNode, MouseEvent as ReactMouseEvent } from 'react';
 import { forwardRef, useEffect, useState } from 'react';
 
@@ -52,7 +52,7 @@ export function TrailRoot({ children }: TrailRootProps) {
   }, []);
 
   return (
-    <LazyMotion features={domAnimation} strict>
+    <LazyMotion features={domMax} strict>
       <MotionConfig
         reducedMotion={reduced ? 'always' : 'never'}
         transition={TRAIL_TRANSITION}
