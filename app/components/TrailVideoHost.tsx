@@ -33,7 +33,14 @@ import {
   type ReactNode,
 } from 'react';
 
-const POOL_MAX = 16;
+// Mobile devices have far less GPU/decoder budget — Safari iOS in particular
+// stutters when more than ~6 <video> elements are decoding at once. Halve
+// the pool on small screens so eviction kicks in earlier and the active
+// cards keep their decoder slots.
+const POOL_MAX = (() => {
+  if (typeof window === 'undefined') return 16;
+  return window.innerWidth <= 768 ? 8 : 16;
+})();
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.

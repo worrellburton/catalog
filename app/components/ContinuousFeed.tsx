@@ -199,15 +199,24 @@ export default function ContinuousFeed({
     return matches.length > 0 ? matches : liveCreatives;
   }, [liveCreatives, searchQuery]);
 
-  // Log search queries to Supabase (debounced)
+  // Log search queries to Supabase. Debounced + prefix-dedupe so a user
+  // typing "white shoes" doesn't fire a row for "w", "wh", "whi", … — we
+  // only land the final query they paused on, and skip re-logging
+  // queries that are prefixes of the most recent one (covers backspace
+  // micro-edits too). Bumped from 800 ms → 1500 ms because typical users
+  // pause briefly mid-word, and we'd rather log nothing than log noise.
   const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (!q || q.length < 2 || q === lastLoggedQueryRef.current) return;
-    lastLoggedQueryRef.current = q;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || q.length < 2) return;
+    // Skip if the query is the same as, or a prefix of, the last logged
+    // query — that's almost always mid-typing, not a new search.
+    const last = lastLoggedQueryRef.current;
+    if (q === last || last.startsWith(q)) return;
     const timer = setTimeout(() => {
       if (!supabase) return;
+      lastLoggedQueryRef.current = q;
       const handle = user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
         const h = `user_${Math.random().toString(36).slice(2, 8)}`;
         localStorage.setItem('catalog_user_handle', h);
@@ -222,7 +231,7 @@ export default function ContinuousFeed({
       }).then(({ error }) => {
         if (error) console.error('[search_logs] insert failed:', error.message);
       });
-    }, 800);
+    }, 1500);
     return () => clearTimeout(timer);
   }, [searchQuery, filteredLooks.length, activeFilter, user]);
 

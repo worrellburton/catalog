@@ -1,40 +1,68 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut, type AuthUser } from '~/services/auth';
 
+// Singleton auth store. The previous implementation had each component spin
+// up its own getCurrentUser() promise and its own onAuthStateChange
+// subscription — fine with a handful of consumers, but the consumer feed
+// renders 50–200 LookCard/CreativeCard tiles that each call useAuth(),
+// which meant 50–200 redundant auth checks on every mount. This module
+// runs the bootstrap once and lets every caller subscribe to the same
+// state via useSyncExternalStore.
+
+interface AuthState {
+  user: AuthUser | null;
+  loading: boolean;
+}
+
+let state: AuthState = { user: null, loading: true };
+const listeners = new Set<() => void>();
+let bootstrapped = false;
+
+function setState(next: AuthState) {
+  // Bail if nothing changed — prevents re-renders when auth ticks but the
+  // user identity is stable (common during token refresh).
+  if (state.user === next.user && state.loading === next.loading) return;
+  state = next;
+  for (const l of listeners) l();
+}
+
+function bootstrap() {
+  if (bootstrapped) return;
+  bootstrapped = true;
+
+  // Same OAuth-return guard as before: if we landed from a Supabase OAuth
+  // redirect, the SIGNED_IN event will arrive shortly — don't flip
+  // loading=false off the initial getSession() call or the locked screen
+  // flashes for a tick.
+  const url = typeof window !== 'undefined' ? window.location.href : '';
+  const isOAuthReturn =
+    url.includes('code=') ||
+    url.includes('access_token=') ||
+    url.includes('error_description=');
+
+  getCurrentUser().then((u) => {
+    setState({ user: u, loading: isOAuthReturn ? state.loading : false });
+  });
+
+  onAuthStateChange((u) => {
+    setState({ user: u, loading: false });
+  });
+}
+
+function subscribe(listener: () => void) {
+  bootstrap();
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function getSnapshot(): AuthState { return state; }
+function getServerSnapshot(): AuthState { return { user: null, loading: true }; }
+
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // If we just landed from an OAuth redirect (PKCE adds `?code=` and an
-    // implicit/Apple flow drops `#access_token=`), supabase-js is mid-way
-    // through exchanging the code for a session. Don't resolve `loading`
-    // from the initial getSession call — that race is what made the locked
-    // view flash and prompted users to click sign-in 2-3 times. The
-    // SIGNED_IN event from onAuthStateChange will arrive within a second.
-    const url = window.location.href;
-    const isOAuthReturn =
-      url.includes('code=') ||
-      url.includes('access_token=') ||
-      url.includes('error_description=');
-
-    getCurrentUser().then((u) => {
-      setUser(u);
-      if (!isOAuthReturn) setLoading(false);
-    });
-
-    const { unsubscribe } = onAuthStateChange((u) => {
-      setUser(u);
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const logout = useCallback(async () => {
     await signOut();
-    setUser(null);
+    setState({ user: null, loading: false });
   }, []);
-
-  return { user, loading, logout };
+  return { user: snap.user, loading: snap.loading, logout };
 }

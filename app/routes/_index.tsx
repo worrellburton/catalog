@@ -1,20 +1,25 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
-import LandingPage from '~/components/LandingPage';
 import ContinuousFeed from '~/components/ContinuousFeed';
-import CreatorPage from '~/components/CreatorPage';
 import BottomBar from '~/components/BottomBar';
-import BookmarksPage from '~/components/BookmarksPage';
-import ProductPage from '~/components/ProductPage';
-import LookOverlay from '~/components/LookOverlay';
-import InAppBrowser from '~/components/InAppBrowser';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
-import MyLooks from '~/components/MyLooks';
+
+// Modal/overlay surfaces split into their own chunks. None of these are part
+// of first paint — the user has to tap into them. Splitting trims the
+// consumer's initial bundle without delaying anything they actually see on
+// load. Each lazy chunk is wrapped in <Suspense> below.
+const LandingPage = lazy(() => import('~/components/LandingPage'));
+const CreatorPage = lazy(() => import('~/components/CreatorPage'));
+const BookmarksPage = lazy(() => import('~/components/BookmarksPage'));
+const ProductPage = lazy(() => import('~/components/ProductPage'));
+const LookOverlay = lazy(() => import('~/components/LookOverlay'));
+const InAppBrowser = lazy(() => import('~/components/InAppBrowser'));
+const MyLooks = lazy(() => import('~/components/MyLooks'));
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
@@ -512,7 +517,9 @@ export default function Home() {
       {firstVisit && <SplashScreen />}
 
       {view === 'landing' && (
-        <LandingPage onStartBrowsing={handleLandingToApp} />
+        <Suspense fallback={null}>
+          <LandingPage onStartBrowsing={handleLandingToApp} />
+        </Suspense>
       )}
 
       {isAppVisible && (
@@ -576,77 +583,89 @@ export default function Home() {
 
           {/* LookOverlay for grid look taps */}
           {selectedLook && (
-            <LookOverlay
-              look={selectedLook}
-              onClose={handleCloseLook}
-              onOpenCreator={handleOpenCreator}
-              onOpenBrowser={handleOpenBrowser}
-              onOpenProduct={handleOpenProduct}
-              onCreateCatalog={handleCreateCatalog}
-              onOpenLook={handleOpenLook}
-              bookmarks={bookmarks}
-            />
+            <Suspense fallback={null}>
+              <LookOverlay
+                look={selectedLook}
+                onClose={handleCloseLook}
+                onOpenCreator={handleOpenCreator}
+                onOpenBrowser={handleOpenBrowser}
+                onOpenProduct={handleOpenProduct}
+                onCreateCatalog={handleCreateCatalog}
+                onOpenLook={handleOpenLook}
+                bookmarks={bookmarks}
+              />
+            </Suspense>
           )}
 
           {creatorFilter && (
-            <CreatorPage
-              creatorName={creatorFilter}
-              onClose={handleCloseCreator}
-              onOpenLook={handleOpenLook}
-              onOpenProduct={handleOpenProduct}
-              onOpenBrowser={handleOpenBrowser}
-              onCreateCatalog={handleCreateCatalog}
-            />
+            <Suspense fallback={null}>
+              <CreatorPage
+                creatorName={creatorFilter}
+                onClose={handleCloseCreator}
+                onOpenLook={handleOpenLook}
+                onOpenProduct={handleOpenProduct}
+                onOpenBrowser={handleOpenBrowser}
+                onCreateCatalog={handleCreateCatalog}
+              />
+            </Suspense>
           )}
 
           {showBookmarks && (
-            <BookmarksPage
-              bookmarks={bookmarks}
-              onClose={() => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); }}
-              onOpenLook={handleOpenLook}
-              onOpenBrowser={handleOpenBrowser}
-              onOpenCreator={(handle) => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); handleOpenCreator(handle); }}
-            />
+            <Suspense fallback={null}>
+              <BookmarksPage
+                bookmarks={bookmarks}
+                onClose={() => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); }}
+                onOpenLook={handleOpenLook}
+                onOpenBrowser={handleOpenBrowser}
+                onOpenCreator={(handle) => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); handleOpenCreator(handle); }}
+              />
+            </Suspense>
           )}
 
           {showMyLooks && (
-            <MyLooks onClose={() => { history.replaceState({}, '', '/#app'); setShowMyLooks(false); }} />
+            <Suspense fallback={null}>
+              <MyLooks onClose={() => { history.replaceState({}, '', '/#app'); setShowMyLooks(false); }} />
+            </Suspense>
           )}
 
           {selectedProduct && (
-            <ProductPage
-              product={selectedProduct}
-              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); setBrandCreatives(null); }}
-              onOpenLook={handleOpenLook}
-              onOpenBrowser={handleOpenBrowser}
-              onOpenProduct={handleOpenProduct}
-              onOpenCreator={handleOpenCreator}
-              onOpenCreative={handleOpenCreative}
-              creative={
-                selectedCreative?.video_url
-                  ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
-                  : undefined
-              }
-              similarCreatives={similarCreatives ?? undefined}
-              brandCreatives={brandCreatives ?? undefined}
-              lookCreatives={liveLooks.slice(0, 12)}
-              bookmarks={bookmarks}
-              navKey={productNavCount}
-            />
+            <Suspense fallback={null}>
+              <ProductPage
+                product={selectedProduct}
+                onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); setBrandCreatives(null); }}
+                onOpenLook={handleOpenLook}
+                onOpenBrowser={handleOpenBrowser}
+                onOpenProduct={handleOpenProduct}
+                onOpenCreator={handleOpenCreator}
+                onOpenCreative={handleOpenCreative}
+                creative={
+                  selectedCreative?.video_url
+                    ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
+                    : undefined
+                }
+                similarCreatives={similarCreatives ?? undefined}
+                brandCreatives={brandCreatives ?? undefined}
+                lookCreatives={liveLooks.slice(0, 12)}
+                bookmarks={bookmarks}
+                navKey={productNavCount}
+              />
+            </Suspense>
           )}
 
         </>
       )}
 
       {browserState && (
-        <InAppBrowser
-          url={browserState.url}
-          title={browserState.title}
-          product={browserState.product}
-          isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
-          onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
-          onClose={() => setBrowserState(null)}
-        />
+        <Suspense fallback={null}>
+          <InAppBrowser
+            url={browserState.url}
+            title={browserState.title}
+            product={browserState.product}
+            isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
+            onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
+            onClose={() => setBrowserState(null)}
+          />
+        </Suspense>
       )}
     </div>
     </TrailVideoHost>

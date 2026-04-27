@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
+import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 
 interface CreativeCardProps {
@@ -15,7 +16,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [inViewport, setInViewport] = useState(false);
+  const inViewport = useInViewport(cardRef);
   const impressionTracked = useRef(false);
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
@@ -37,27 +38,15 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     setVideoSlot(node);
   }, [setVideoSlot]);
 
+  // Fire the impression ping once, the first time the card crosses into the
+  // shared observer's pre-mount band. Visibility itself is tracked by
+  // useInViewport — we just need a one-shot side effect here.
   useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        setInViewport(entry.isIntersecting);
-        if (entry.isIntersecting && !impressionTracked.current) {
-          impressionTracked.current = true;
-          trackAdImpression(creative.id);
-        }
-      });
-    // 800px rootMargin = mount video ~5 card-heights before the card
-    // enters the viewport. By the time the user actually scrolls there,
-    // the <video> element has already loaded its metadata + first frame
-    // (the bytes are usually in cache from primeTrailAssets too).
-    }, { rootMargin: '800px' });
-
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, [creative.id]);
+    if (inViewport && !impressionTracked.current) {
+      impressionTracked.current = true;
+      trackAdImpression(creative.id);
+    }
+  }, [inViewport, creative.id]);
 
   // Mark "loaded" when the shared <video> element actually has frames. We
   // reach into the slot for it because we don't own the element — the host

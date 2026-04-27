@@ -3,6 +3,7 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { Look, creators } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import { hideLookId } from '~/hooks/useHiddenLooks';
+import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
@@ -18,7 +19,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [inViewport, setInViewport] = useState(false);
+  const inViewport = useInViewport(cardRef);
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -76,17 +77,6 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     slotRef.current = node;
     setVideoSlot(node);
   }, [setVideoSlot]);
-
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const observer = new IntersectionObserver(
-      es => es.forEach(e => setInViewport(e.isIntersecting)),
-      { rootMargin: '800px' },
-    );
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, []);
 
   // Mark loaded once the host video has frames.
   useEffect(() => {
@@ -172,7 +162,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           </span>
         </div>
       </div>
-      {menu && isAdmin && (
+      {menu && isSuperAdmin && (
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
