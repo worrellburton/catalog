@@ -19,6 +19,11 @@
   letter-spacing: -0.005em;
 }
 
+/* When running inside the native app shell, push content below the status bar */
+html[data-shell="catalog-app"] .gen-page {
+  padding-top: calc(env(safe-area-inset-top, 0px) + clamp(20px, 4vw, 48px));
+}
+
 /* Header bar — three-column on desktop (back / wordmark / sub),
    stacked on mobile so the title sits above the back link cleanly. */
 .gen-head {
