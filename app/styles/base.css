@@ -15,11 +15,14 @@
 }
 
 :root {
-  --bg: #000000;
+  /* Slightly lifted black so the body, feed grid, and product-page overlay
+     all share the same surface (#0a0a0a). Pure #000 next to a #0a0a0a hero
+     reads as a 1-pixel seam during the trail morph. */
+  --bg: #0a0a0a;
   --text: #ffffff;
   --card-bg: #1a1a1a;
   --header-height: 64px;
-  --overlay-bg: rgba(0, 0, 0, 0.95);
+  --overlay-bg: rgba(10, 10, 10, 0.95);
 }
 
 body {

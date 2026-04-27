@@ -28,7 +28,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -39,7 +39,7 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, url, catalog_tags)
+  product:products(id, name, brand, price, image_url, images, url, catalog_tags)
 `;
 
 export async function getProductAds(): Promise<ProductAd[]> {
@@ -99,6 +99,38 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     const active = (ad.product as any)?.is_active;
     return active !== false;
   });
+}
+
+// ── Trail prefetch ────────────────────────────────────────────────────────
+// The landing screen primes this so the consumer feed is already in memory
+// (and its assets are warming) by the time the user signs in.
+//
+// We cache the in-flight Promise itself, not the resolved value, so multiple
+// concurrent callers (LandingPage + ContinuousFeed mount races) coalesce onto
+// a single network request. After it resolves, every caller awaits the same
+// already-resolved Promise — effectively instant.
+//
+// Stale-while-revalidate: invalidate() clears the cache so the next caller
+// kicks off a fresh fetch (used after admin actions).
+let liveAdsPromise: Promise<ProductAd[]> | null = null;
+let liveAdsFetchedAt = 0;
+const LIVE_ADS_TTL_MS = 60_000;
+
+export function prefetchLiveAds(): Promise<ProductAd[]> {
+  const now = Date.now();
+  if (liveAdsPromise && (now - liveAdsFetchedAt) < LIVE_ADS_TTL_MS) {
+    return liveAdsPromise;
+  }
+  liveAdsFetchedAt = now;
+  liveAdsPromise = getLiveAds();
+  // If the fetch errors out, drop the cache so the next call retries.
+  liveAdsPromise.catch(() => { liveAdsPromise = null; });
+  return liveAdsPromise;
+}
+
+export function invalidateLiveAds(): void {
+  liveAdsPromise = null;
+  liveAdsFetchedAt = 0;
 }
 
 export async function boostAd(id: string, hours = 24): Promise<{ error: string | null }> {
@@ -378,6 +410,24 @@ export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ e
     .eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
+}
+
+// Per-seed promise cache — coalesces hover + tap into one network round-trip.
+// Keyed by `${seedId}|${k}` so different rail sizes don't collide.
+const similarCache = new Map<string, Promise<ProductAd[]>>();
+
+/** Idempotent prefetch — call from hover, tap, anywhere. Returns the same
+ *  cached promise on subsequent calls so consumers can `await` and get an
+ *  instant resolve once the first call has finished. */
+export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
+  const key = `${seedId}|${k}`;
+  const cached = similarCache.get(key);
+  if (cached) return cached;
+  const p = getSimilarCreatives(seedId, k);
+  similarCache.set(key, p);
+  // If it errors, drop the cache so the next call retries.
+  p.catch(() => similarCache.delete(key));
+  return p;
 }
 
 // Returns the K visually-nearest creatives to the seed, deduped by product.

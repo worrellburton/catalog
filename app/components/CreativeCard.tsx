@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
-import { trackAdImpression, trackAdClick, type ProductAd } from '~/services/product-creative';
+import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { useTrailVideo } from './TrailVideoHost';
+import { TrailMorph } from './TrailMotion';
 
 interface CreativeCardProps {
   creative: ProductAd;
@@ -10,59 +12,68 @@ interface CreativeCardProps {
 }
 
 const CreativeCard = memo(function CreativeCard({ creative, className = 'look-card', onOpenProduct, canDelete, onDelete }: CreativeCardProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const [inViewport, setInViewport] = useState(false);
   const impressionTracked = useRef(false);
 
+  // Defer slot population to when the card scrolls in. The TrailVideoHost
+  // pool keeps elements alive across remounts, so the same id picked up by
+  // the overlay hero shares the running element — no reload, no black gap.
+  const setVideoSlot = useTrailVideo(
+    inViewport ? creative.id : undefined,
+    inViewport ? creative.video_url ?? undefined : undefined,
+  );
+
+  // Compose the slot ref + the trail-video ref-callback. The callback runs
+  // each time the underlying node changes (mount, in/out of viewport).
+  const setSlot = useCallback((node: HTMLDivElement | null) => {
+    slotRef.current = node;
+    setVideoSlot(node);
+  }, [setVideoSlot]);
+
   useEffect(() => {
-    const video = videoRef.current;
     const card = cardRef.current;
-    if (!video || !card) return;
+    if (!card) return;
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          if (!videoSrc && creative.video_url) {
-            setVideoSrc(creative.video_url);
-          }
-          video.play().catch(() => {});
-          if (!impressionTracked.current) {
-            impressionTracked.current = true;
-            trackAdImpression(creative.id);
-          }
-        } else {
-          video.pause();
+        setInViewport(entry.isIntersecting);
+        if (entry.isIntersecting && !impressionTracked.current) {
+          impressionTracked.current = true;
+          trackAdImpression(creative.id);
         }
       });
     }, { rootMargin: '200px' });
 
-    observer.observe(video);
+    observer.observe(card);
     return () => observer.disconnect();
-  }, [creative.video_url, creative.id, videoSrc]);
+  }, [creative.id]);
 
-  const markLoaded = useCallback(() => {
-    setLoaded(true);
-  }, []);
-
+  // Mark "loaded" when the shared <video> element actually has frames. We
+  // reach into the slot for it because we don't own the element — the host
+  // does. This is for the shimmer overlay only.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handler = () => markLoaded();
+    if (!inViewport) return;
+    const node = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
+    if (!node) return;
+    if (node.readyState >= 2) {
+      setLoaded(true);
+      return;
+    }
+    const handler = () => setLoaded(true);
     ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-      video.addEventListener(evt, handler, { once: true });
+      node.addEventListener(evt, handler, { once: true });
     });
-
-    const timeout = setTimeout(() => markLoaded(), 8000);
+    const timeout = setTimeout(() => setLoaded(true), 8000);
     return () => {
       clearTimeout(timeout);
       ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-        video.removeEventListener(evt, handler);
+        node.removeEventListener(evt, handler);
       });
     };
-  }, [markLoaded]);
+  }, [inViewport, creative.id]);
 
   const handleClick = useCallback(() => {
     trackAdClick(creative.id);
@@ -75,22 +86,36 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     }
   }, [creative, onOpenProduct]);
 
+  // Hover/touch-start = "user is signaling intent" → kick off the similarity
+  // query for this creative now, so by the time they actually tap it (or
+  // hover for >100ms), the rail is already loading. Idempotent — multiple
+  // hovers coalesce onto one cached promise.
+  const handlePrefetch = useCallback(() => {
+    if (creative.id) prefetchSimilarCreatives(creative.id, 18);
+  }, [creative.id]);
+
   return (
     <div
       ref={cardRef}
       className={`${className} promo-card ${loaded ? 'loaded' : ''}`}
       onClick={handleClick}
+      onMouseEnter={handlePrefetch}
+      onTouchStart={handlePrefetch}
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          muted
-          loop
-          playsInline
-          preload="none"
-        />
+        {/* TrailMorph: layoutId="trail-${id}" matches the same id on the
+            ProductPage hero, so Framer Motion morphs the box position+size
+            between mounts. The shared <video> element living inside is moved
+            via appendChild by TrailVideoHost — neither React nor Framer touch
+            it, so playback survives the morph. */}
+        <TrailMorph
+          id={creative.id}
+          className="card-video-slot"
+          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
+        >
+          <div ref={setSlot} className="card-video-slot-inner" style={{ width: '100%', height: '100%' }} data-trail-id={creative.id} />
+        </TrailMorph>
         <div className="card-gradient" />
 
         {canDelete && onDelete && (

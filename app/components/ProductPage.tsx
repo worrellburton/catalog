@@ -2,9 +2,14 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Product, Look, looks as hardcodedLooks } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
+import { useTrailVideo } from '~/components/TrailVideoHost';
+import { TrailMorph } from '~/components/TrailMotion';
 import type { ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
+  /** The product_creative.id — used to resolve the shared <video> element
+   *  from TrailVideoHost so the morph reuses the card's playing instance. */
+  id?: string;
   videoUrl: string;
   thumbnailUrl?: string | null;
 }
@@ -23,6 +28,11 @@ interface ProductPageProps {
   /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
    *  "More like this" video rail below the hero. */
   similarCreatives?: ProductAd[];
+  /** Original product photos scraped from the brand's site. Rendered as a
+   *  horizontally-scrolling gallery between the info card and the trail
+   *  rail — the user gets a feel for the *real* product alongside the AI
+   *  creative they tapped. */
+  sourcePhotos?: string[];
 }
 
 export default function ProductPage({
@@ -35,6 +45,7 @@ export default function ProductPage({
   creative,
   similarProductsOverride,
   similarCreatives,
+  sourcePhotos,
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
@@ -83,6 +94,12 @@ export default function ProductPage({
 
   const heroClassName = `pd-hero${creative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
+  // Take ownership of the shared <video> element keyed by creative.id. The
+  // TrailVideoHost moves the running DOM node from the card slot into this
+  // hero slot — appendChild preserves currentTime + decoded frames, so there
+  // is no reload, no black flash, no audio gap.
+  const setHeroSlot = useTrailVideo(creative?.id, creative?.videoUrl);
+
   return (
     <div
       className={`product-page-overlay${mounted && !isAnimatingOut ? ' product-page-overlay--in' : ''}${isAnimatingOut ? ' product-page-overlay--out' : ''}`}
@@ -102,15 +119,16 @@ export default function ProductPage({
 
         <section className={heroClassName}>
           {creative ? (
-            <video
-              src={creative.videoUrl}
-              poster={creative.thumbnailUrl ?? undefined}
-              autoPlay
-              muted
-              loop
-              playsInline
-              className="pd-hero-media"
-            />
+            creative.id ? (
+              // Same layoutId as the originating card → Framer morphs the
+              // box position + size. The DOM-shared <video> inside rides the
+              // animation untouched (no reload, no first-frame black gap).
+              <TrailMorph id={creative.id} className="pd-hero-media pd-hero-video-slot">
+                <div ref={setHeroSlot} style={{ width: '100%', height: '100%' }} data-trail-id={creative.id} />
+              </TrailMorph>
+            ) : (
+              <div ref={setHeroSlot} className="pd-hero-media pd-hero-video-slot" />
+            )
           ) : product.image ? (
             <img
               src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
@@ -158,6 +176,24 @@ export default function ProductPage({
             </div>
           </div>
         </section>
+
+        {sourcePhotos && sourcePhotos.length > 0 && (
+          <section className="pd-source-gallery" aria-label="Original product photos">
+            <h2 className="pd-feed-title">From the brand</h2>
+            <div className="pd-source-strip">
+              {sourcePhotos.slice(0, 12).map((src, i) => (
+                <div className="pd-source-item" key={`${src}-${i}`}>
+                  <img
+                    src={src}
+                    alt={`${product.name} — view ${i + 1}`}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {similarCreatives && similarCreatives.length > 0 && (
           <section className="pd-similar-feed">

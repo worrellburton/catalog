@@ -9,6 +9,8 @@ import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
 import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
+import { TrailVideoHost } from '~/components/TrailVideoHost';
+import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
 import MyLooks from '~/components/MyLooks';
@@ -17,7 +19,8 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { getSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
@@ -355,8 +358,17 @@ export default function Home() {
     }
   }, [fetchSimilarProducts]);
 
+  const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
     if (!creative.product) return;
+    // Debounce: while the morph is still in flight (~360ms), ignore extra
+    // taps. Without this, a user double-tapping a card double-fires
+    // setSelectedCreative which races the layoutId animation and produces a
+    // jitter. 240ms gives a 100ms head-start grace beyond morph end.
+    const now = performance.now();
+    if (now - lastOpenAtRef.current < 240) return;
+    lastOpenAtRef.current = now;
+
     const mapped: Product = {
       name: creative.product.name || 'Shop Now',
       brand: creative.product.brand || '',
@@ -370,18 +382,26 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
 
-    // Fire both lookups in parallel: TwelveLabs vector similarity for the
-    // video rail, and the brand/category fallback for the static image grid.
-    const [sim, similar] = await Promise.all([
-      fetchSimilarProducts(
-        creative.product.brand || null,
-        creative.product.catalog_tags || null,
-        creative.product.id || null,
-      ),
-      getSimilarCreatives(creative.id, 18),
-    ]);
-    setSelectedSimilar(sim);
-    setSimilarCreatives(similar);
+    // Fire both lookups immediately. The similar-creatives query is routed
+    // through `prefetchSimilarCreatives`, which is also called on hover (in
+    // CreativeCard) — so by the time the user actually taps, this is often
+    // already a cached promise resolving instantly.
+    const simP = fetchSimilarProducts(
+      creative.product.brand || null,
+      creative.product.catalog_tags || null,
+      creative.product.id || null,
+    );
+    const similarP = prefetchSimilarCreatives(creative.id, 18);
+
+    // As soon as the trail rail resolves, prime the asset cache for the top
+    // few results so when the user keeps trailing, the next morph also has
+    // its frames ready.
+    similarP.then(rows => {
+      primeTrailAssets(rows);
+      setSimilarCreatives(rows);
+    }).catch(() => { /* keep rail empty rather than throw */ });
+
+    simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
   }, [fetchSimilarProducts]);
 
   const handleCreateCatalog = useCallback((query: string) => {
@@ -397,8 +417,15 @@ export default function Home() {
 
   const isAppVisible = view === 'app';
 
+  // Trail depth: while the product/look overlay is open, the under-layer
+  // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
+  // that signals "what you tapped is now the focus" without feeling theatrical.
+  const overlayOpen = !!selectedProduct || !!selectedLook;
+
   return (
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}`}>
+    <TrailRoot>
+    <TrailVideoHost>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
       {view === 'locked' && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
@@ -516,16 +543,28 @@ export default function Home() {
               onOpenCreative={handleOpenCreative}
               creative={
                 selectedCreative?.video_url
-                  ? { videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
+                  ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
                   : undefined
               }
               similarProductsOverride={selectedSimilar ?? undefined}
               similarCreatives={similarCreatives ?? undefined}
+              sourcePhotos={(() => {
+                // Original brand-site product photos — already joined with the
+                // creative via AD_SELECT. De-dup against the hero image so we
+                // don't show the same shot twice in a row.
+                const raw = (selectedCreative?.product as any)?.images as string[] | null | undefined;
+                const main = selectedCreative?.product?.image_url ?? null;
+                const out = Array.isArray(raw) ? raw.filter(Boolean) : [];
+                if (main && !out.includes(main)) out.unshift(main);
+                return out.length > 0 ? out : undefined;
+              })()}
             />
           )}
 
         </>
       )}
     </div>
+    </TrailVideoHost>
+    </TrailRoot>
   );
 }

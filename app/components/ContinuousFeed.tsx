@@ -4,7 +4,8 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
+import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
@@ -150,10 +151,15 @@ export default function ContinuousFeed({
   const [creativesLoading, setCreativesLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
-    getLiveAds()
+    // prefetchLiveAds returns the cached Promise primed by LandingPage if the
+    // user came in through the marketing flow; otherwise it kicks off a fresh
+    // fetch. Either way we also prime asset caches (idempotent) so direct
+    // deep-links don't pay the shimmer-to-pop cost.
+    prefetchLiveAds()
       .then(data => {
         if (cancelled) return;
         setLiveCreatives(data);
+        primeTrailAssets(data);
       })
       .catch(err => {
         console.error('[ContinuousFeed] fetching creative failed:', err);
