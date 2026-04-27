@@ -19,9 +19,14 @@
   letter-spacing: -0.005em;
 }
 
-/* When running inside the native app shell, push content below the status bar */
+/* When running inside the native app shell, push content below the status bar.
+   --shell-sb is injected at AT_DOCUMENT_START by the Flutter shell so it's
+   available before first paint. The +44px accounts for the native back bar. */
 html[data-shell="catalog-app"] .gen-page {
-  padding-top: calc(env(safe-area-inset-top, 0px) + clamp(20px, 4vw, 48px));
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 44px)) + 44px);
+}
+html[data-shell="catalog-app"] .gen-back {
+  display: none !important;
 }
 
 /* Header bar — three-column on desktop (back / wordmark / sub),

@@ -1,3 +1,12 @@
+/* Native app shell: push content below status bar + native back bar.
+   --shell-sb is injected by the Flutter shell at AT_DOCUMENT_START. */
+html[data-shell="catalog-app"] .bookmarks-page {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 44px)) + 44px);
+}
+html[data-shell="catalog-app"] .bookmarks-header {
+  display: none !important;
+}
+
 /* Bookmark toggle in header */
 .bookmark-toggle {
   background: rgba(128, 128, 128, 0.15);

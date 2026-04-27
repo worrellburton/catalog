@@ -256,8 +256,8 @@ export default function Home() {
       setShuffleKey(k => k + 1);
       setView('app');
     };
-    const onOpenBookmarks = () => setShowBookmarks(true);
-    const onOpenMyLooks = () => setShowMyLooks(true);
+    const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
+    const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
 
     window.addEventListener('catalog:set-category', onSetCategory as EventListener);
     window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
@@ -602,15 +602,15 @@ export default function Home() {
           {showBookmarks && (
             <BookmarksPage
               bookmarks={bookmarks}
-              onClose={() => setShowBookmarks(false)}
+              onClose={() => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); }}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
-              onOpenCreator={(handle) => { setShowBookmarks(false); handleOpenCreator(handle); }}
+              onOpenCreator={(handle) => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); handleOpenCreator(handle); }}
             />
           )}
 
           {showMyLooks && (
-            <MyLooks onClose={() => setShowMyLooks(false)} />
+            <MyLooks onClose={() => { history.replaceState({}, '', '/#app'); setShowMyLooks(false); }} />
           )}
 
           {selectedProduct && (

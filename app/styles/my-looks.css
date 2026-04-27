@@ -2,6 +2,15 @@
    MY LOOKS - Management Page
    ============================================ */
 
+/* Native app shell: push content below status bar + native back bar.
+   --shell-sb is injected by the Flutter shell at AT_DOCUMENT_START. */
+html[data-shell="catalog-app"] .my-looks-overlay {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 44px)) + 44px);
+}
+html[data-shell="catalog-app"] .my-looks-header {
+  display: none !important;
+}
+
 .my-looks-overlay {
   position: fixed;
   inset: 0;
