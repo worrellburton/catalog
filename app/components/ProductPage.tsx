@@ -45,6 +45,10 @@ interface ProductPageProps {
    *  backgrounds — they read well on white surfaces, get lost on black. */
   isLightMode?: boolean;
   brandLogosOn?: boolean;
+  /** Increments on every navigation. ProductPage's scroll-to-top
+   *  effect depends on this so it fires reliably even when the new
+   *  product happens to share brand+name with the prior one. */
+  navKey?: number;
 }
 
 // Stable hash of any string → unsigned integer. Used to derive a consistent
@@ -296,6 +300,7 @@ export default function ProductPage({
   bookmarks,
   isLightMode = false,
   brandLogosOn = true,
+  navKey = 0,
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
@@ -313,14 +318,16 @@ export default function ProductPage({
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // Reset scroll to top when the product changes. useLayoutEffect runs
+  // Reset scroll to top on every product navigation. useLayoutEffect runs
   // synchronously after DOM updates but BEFORE paint — combined with
   // `behavior: 'instant'`, the snap-to-top happens between renders so
   // the user never sees the new content briefly scrolled to the old
-  // tap position. That's what makes the swap feel seamless.
+  // tap position. The dep is the parent's nav counter (not brand+name)
+  // so the effect fires on every trail step regardless of whether the
+  // products happen to share fields.
   useLayoutEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, [product.brand, product.name]);
+  }, [navKey]);
 
   const handleClose = useCallback(() => {
     setIsAnimatingOut(true);

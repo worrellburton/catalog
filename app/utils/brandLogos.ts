@@ -61,5 +61,5 @@ export function brandLogoUrlFor(opts: { brand?: string | null; url?: string | nu
   // fallback=lettermark — if Brandfetch has no logo for the domain, it
   // returns a clean stylized text mark instead of a 404 / Google G.
   params.set('fallback', 'lettermark');
-  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?${params.toString()}`;
+  return `https://cdn.brandfetch.io/domain/${encodeURIComponent(domain)}?${params.toString()}`;
 }

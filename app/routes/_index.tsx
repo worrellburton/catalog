@@ -143,6 +143,12 @@ export default function Home() {
   // Editorial looks pulled from looks_creative; fed into the "You might also
   // like" grid on ProductPage. Loaded once at mount and reused.
   const [liveLooks, setLiveLooks] = useState<Look[]>([]);
+  // Nav counter — incremented on every product/creative open. ProductPage
+  // useLayoutEffect's on it (not on brand+name) so the scroll-to-top is
+  // guaranteed to fire on every trail step, even if two consecutive
+  // products share a brand+name or React batches the re-render in a way
+  // that makes the field-comparison deps appear unchanged.
+  const [productNavCount, setProductNavCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -373,6 +379,7 @@ export default function Home() {
 
   const handleOpenProduct = useCallback(async (product: Product) => {
     pushRecent(product);
+    setProductNavCount(c => c + 1);
     setSelectedLook(null);
     setSelectedCreative(null);
     setSelectedProduct(product);
@@ -403,6 +410,7 @@ export default function Home() {
       image: creative.product.image_url || undefined,
     };
     pushRecent(mapped);
+    setProductNavCount(c => c + 1);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
@@ -603,6 +611,7 @@ export default function Home() {
               bookmarks={bookmarks}
               isLightMode={isLightMode}
               brandLogosOn={brandLogosOn}
+              navKey={productNavCount}
             />
           )}
 
