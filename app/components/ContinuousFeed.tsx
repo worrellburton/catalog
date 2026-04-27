@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
-import { looks as staticLooksRaw, type Look, type Product } from '~/data/looks';
+import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
 import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
@@ -94,10 +94,13 @@ export default function ContinuousFeed({
   const hiddenLookIds = useHiddenLooks();
   const hiddenProductKeys = useHiddenProductKeys();
 
-  // Load looks live from Supabase so the feed mirrors whatever the admin's
-  // Content tab shows. Static seed is only used as a fallback while the
-  // fetch is in flight or if Supabase is unreachable.
-  const [dbLooks, setDbLooks] = useState<Look[]>(staticLooksRaw);
+  // Load looks live from Supabase. Initial state is empty so we don't burn
+  // a render pass filtering the seed dataset (and don't briefly leak its
+  // 2-creator content into the "More like this" rails on slow networks).
+  // The first segment is creative-only anyway, so an empty looks array
+  // costs nothing on first paint — sub-segments only matter after the
+  // user taps a look, by which point Supabase has resolved.
+  const [dbLooks, setDbLooks] = useState<Look[]>([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -105,7 +108,9 @@ export default function ContinuousFeed({
         const fetched = await getLooks();
         if (!cancelled && fetched.length > 0) setDbLooks(fetched);
       } catch {
-        // keep static fallback
+        // Supabase unreachable — fall back to the static seed so sub-segments
+        // have *something* to draw similars from instead of an empty rail.
+        if (!cancelled) setDbLooks(staticLooksFallback);
       }
     })();
     return () => { cancelled = true; };

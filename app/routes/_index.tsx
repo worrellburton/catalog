@@ -13,13 +13,56 @@ import UserMenu from '~/components/UserMenu';
 // of first paint — the user has to tap into them. Splitting trims the
 // consumer's initial bundle without delaying anything they actually see on
 // load. Each lazy chunk is wrapped in <Suspense> below.
-const LandingPage = lazy(() => import('~/components/LandingPage'));
-const CreatorPage = lazy(() => import('~/components/CreatorPage'));
-const BookmarksPage = lazy(() => import('~/components/BookmarksPage'));
-const ProductPage = lazy(() => import('~/components/ProductPage'));
-const LookOverlay = lazy(() => import('~/components/LookOverlay'));
-const InAppBrowser = lazy(() => import('~/components/InAppBrowser'));
-const MyLooks = lazy(() => import('~/components/MyLooks'));
+//
+// Importer fns are kept around so we can fire them again from an idle
+// callback after first paint — that way the bytes are already in the
+// browser cache by the time the user actually opens an overlay.
+const importLandingPage = () => import('~/components/LandingPage');
+const importCreatorPage = () => import('~/components/CreatorPage');
+const importBookmarksPage = () => import('~/components/BookmarksPage');
+const importProductPage = () => import('~/components/ProductPage');
+const importLookOverlay = () => import('~/components/LookOverlay');
+const importInAppBrowser = () => import('~/components/InAppBrowser');
+const importMyLooks = () => import('~/components/MyLooks');
+
+const LandingPage = lazy(importLandingPage);
+const CreatorPage = lazy(importCreatorPage);
+const BookmarksPage = lazy(importBookmarksPage);
+const ProductPage = lazy(importProductPage);
+const LookOverlay = lazy(importLookOverlay);
+const InAppBrowser = lazy(importInAppBrowser);
+const MyLooks = lazy(importMyLooks);
+
+// Order chosen by likelihood the user will open the surface in the next
+// minute: looks/products dominate, browser is the most-visited tail action,
+// MyLooks is admin-ish so it's last.
+const IDLE_PREFETCH_ORDER: Array<() => Promise<unknown>> = [
+  importLookOverlay,
+  importProductPage,
+  importInAppBrowser,
+  importBookmarksPage,
+  importCreatorPage,
+  importLandingPage,
+  importMyLooks,
+];
+
+function prefetchOverlayChunks() {
+  if (typeof window === 'undefined') return;
+  const ric = (window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  // Fire imports one at a time inside successive idle windows so we don't
+  // saturate the network during the user's first interaction with the feed.
+  let i = 0;
+  const tick = () => {
+    if (i >= IDLE_PREFETCH_ORDER.length) return;
+    IDLE_PREFETCH_ORDER[i++]().catch(() => { /* network errors retry on real open */ });
+    if (ric) ric(tick, { timeout: 2000 });
+    else window.setTimeout(tick, 250);
+  };
+  if (ric) ric(tick, { timeout: 2000 });
+  else window.setTimeout(tick, 800);
+}
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
@@ -498,6 +541,14 @@ export default function Home() {
   }, []);
 
   const isAppVisible = view === 'app';
+
+  // Once the user is in the main app, kick off background imports of every
+  // overlay chunk on idle. By the time they tap a card or open bookmarks,
+  // the chunk is already cached and the surface opens with no delay.
+  useEffect(() => {
+    if (!isAppVisible) return;
+    prefetchOverlayChunks();
+  }, [isAppVisible]);
 
   // Trail depth: while the product/look overlay is open, the under-layer
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax

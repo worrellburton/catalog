@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import LookCard from './LookCard';
 import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
@@ -43,7 +43,7 @@ function shuffled<T>(arr: T[]): T[] {
   return next;
 }
 
-export default function FeedSection({
+function FeedSection({
   looks,
   onOpenLook,
   onOpenCreator,
@@ -215,3 +215,8 @@ export default function FeedSection({
     </div>
   );
 }
+
+// Memoized — ContinuousFeed re-renders on every search keystroke, but each
+// FeedSection only depends on its own props. With memo + stable callbacks
+// from the parent, sections skip re-render entirely when the user types.
+export default memo(FeedSection);

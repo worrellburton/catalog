@@ -65,72 +65,97 @@ export function useLiveCursors({
     const name = selfName || 'Anonymous';
     idRef.current = id;
     nameRef.current = name;
-
     const color = colorFor(id);
-    const channel = supabase.channel(channelName, {
-      config: { broadcast: { self: false } },
-    });
-    channelRef.current = channel;
 
-    channel.on('broadcast', { event: 'cursor' }, ({ payload }) => {
-      const p = payload as { id: string; name: string; color: string; x: number; y: number };
-      if (p.id === id) return;
-      setCursors(prev => ({
-        ...prev,
-        [p.id]: { ...p, lastSeen: Date.now() },
-      }));
-    });
+    // Defer Realtime channel setup past first paint. Opening a WebSocket on
+    // mount used to block the admin route's first interactive frame — and
+    // most admin sessions don't have a second user collaborating anyway.
+    // Wait until the browser is idle (or 600 ms tops) before subscribing.
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
 
-    channel.on('broadcast', { event: 'leave' }, ({ payload }) => {
-      const p = payload as { id: string };
-      setCursors(prev => {
-        if (!prev[p.id]) return prev;
-        const { [p.id]: _, ...rest } = prev;
-        return rest;
+    const start = () => {
+      if (cancelled || !supabase) return;
+      const channel = supabase.channel(channelName, {
+        config: { broadcast: { self: false } },
       });
-    });
+      channelRef.current = channel;
 
-    channel.subscribe();
-
-    const handleMove = (e: MouseEvent) => {
-      const now = Date.now();
-      if (now - lastSentAt.current < 30) return;
-      lastSentAt.current = now;
-      channel.send({
-        type: 'broadcast',
-        event: 'cursor',
-        payload: { id, name, color, x: e.clientX, y: e.clientY },
+      channel.on('broadcast', { event: 'cursor' }, ({ payload }) => {
+        const p = payload as { id: string; name: string; color: string; x: number; y: number };
+        if (p.id === id) return;
+        setCursors(prev => ({ ...prev, [p.id]: { ...p, lastSeen: Date.now() } }));
       });
-    };
 
-    const handleLeave = () => {
-      channel.send({ type: 'broadcast', event: 'leave', payload: { id } });
-    };
+      channel.on('broadcast', { event: 'leave' }, ({ payload }) => {
+        const p = payload as { id: string };
+        setCursors(prev => {
+          if (!prev[p.id]) return prev;
+          const { [p.id]: _, ...rest } = prev;
+          return rest;
+        });
+      });
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('beforeunload', handleLeave);
+      channel.subscribe();
 
-    // Prune stale cursors (user left without firing leave).
-    const prune = window.setInterval(() => {
-      setCursors(prev => {
+      const handleMove = (e: MouseEvent) => {
         const now = Date.now();
-        let changed = false;
-        const next: Record<string, RemoteCursor> = {};
-        for (const [k, v] of Object.entries(prev)) {
-          if (now - v.lastSeen < 6000) next[k] = v;
-          else changed = true;
-        }
-        return changed ? next : prev;
-      });
-    }, 2000);
+        if (now - lastSentAt.current < 30) return;
+        lastSentAt.current = now;
+        channel.send({
+          type: 'broadcast',
+          event: 'cursor',
+          payload: { id, name, color, x: e.clientX, y: e.clientY },
+        });
+      };
+      const handleLeave = () => {
+        channel.send({ type: 'broadcast', event: 'leave', payload: { id } });
+      };
+
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('beforeunload', handleLeave);
+
+      const prune = window.setInterval(() => {
+        setCursors(prev => {
+          const now = Date.now();
+          let changed = false;
+          const next: Record<string, RemoteCursor> = {};
+          for (const [k, v] of Object.entries(prev)) {
+            if (now - v.lastSeen < 6000) next[k] = v;
+            else changed = true;
+          }
+          return changed ? next : prev;
+        });
+      }, 2000);
+
+      cleanup = () => {
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('beforeunload', handleLeave);
+        window.clearInterval(prune);
+        handleLeave();
+        supabase!.removeChannel(channel);
+        channelRef.current = null;
+      };
+    };
+
+    type IdleWin = Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const w = window as IdleWin;
+    const usingRic = typeof w.requestIdleCallback === 'function';
+    const idleHandle = usingRic
+      ? w.requestIdleCallback!(start, { timeout: 600 })
+      : window.setTimeout(start, 200);
 
     return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('beforeunload', handleLeave);
-      window.clearInterval(prune);
-      handleLeave();
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      cancelled = true;
+      if (usingRic) {
+        w.cancelIdleCallback?.(idleHandle);
+      } else {
+        window.clearTimeout(idleHandle);
+      }
+      cleanup?.();
     };
   }, [channelName, selfId, selfName, enabled]);
 

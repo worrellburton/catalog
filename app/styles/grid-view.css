@@ -133,6 +133,15 @@
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Native windowing-lite. Cards far off-screen skip layout, paint, and
+     style cost entirely until they approach the viewport — equivalent to
+     virtualization without the JS overhead of a windowed list. The
+     intrinsic-size hint keeps the scrollbar accurate (otherwise the page
+     height would drift as cards reveal). 100vh is a generous upper bound
+     covering the 2x2 featured tile; the browser uses it only for cards
+     that haven't been measured yet. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
 }
 
 /* Featured cards — 2x2 on desktop */

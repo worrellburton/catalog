@@ -9,6 +9,64 @@ const lookListeners = new Set<Listener>();
 const productListeners = new Set<Listener>();
 const notify = (set: Set<Listener>) => set.forEach(l => l());
 
+// Singleton in-flight caches. Both hooks fire from ContinuousFeed and
+// GridView at minimum — without sharing, a fresh consumer mount issues
+// 3 Supabase round-trips (admin_hidden_looks, admin_hidden_products,
+// products?is_active=eq.false) for each component. Pooling collapses
+// those into one fetch each, regardless of how many components ask.
+let hiddenLookIdsPromise: Promise<Set<number>> | null = null;
+let hiddenProductKeysPromise: Promise<Set<string>> | null = null;
+
+async function fetchHiddenLookIds(): Promise<Set<number>> {
+  if (!supabase) return new Set();
+  const { data, error } = await supabase.from('admin_hidden_looks').select('look_id');
+  if (error || !data) return new Set();
+  return new Set<number>(
+    (data as { look_id: number }[]).map(r => r.look_id).filter(n => Number.isFinite(n)),
+  );
+}
+
+async function fetchHiddenProductKeys(): Promise<Set<string>> {
+  if (!supabase) return new Set();
+  // Run both queries in parallel — they're independent.
+  const [hiddenRes, inactiveRes] = await Promise.all([
+    supabase.from('admin_hidden_products').select('brand, name'),
+    supabase.from('products').select('brand, name').eq('is_active', false),
+  ]);
+  const keys = new Set<string>();
+  if (hiddenRes.data) {
+    for (const r of hiddenRes.data as { brand: string; name: string }[]) {
+      keys.add(`${r.brand}-${r.name}`);
+    }
+  }
+  if (inactiveRes.data) {
+    for (const r of inactiveRes.data as { brand: string; name: string }[]) {
+      keys.add(`${r.brand}-${r.name}`);
+    }
+  }
+  return keys;
+}
+
+function getHiddenLookIds(): Promise<Set<number>> {
+  if (!hiddenLookIdsPromise) {
+    hiddenLookIdsPromise = fetchHiddenLookIds().catch(err => {
+      hiddenLookIdsPromise = null;
+      throw err;
+    });
+  }
+  return hiddenLookIdsPromise;
+}
+
+function getHiddenProductKeys(): Promise<Set<string>> {
+  if (!hiddenProductKeysPromise) {
+    hiddenProductKeysPromise = fetchHiddenProductKeys().catch(err => {
+      hiddenProductKeysPromise = null;
+      throw err;
+    });
+  }
+  return hiddenProductKeysPromise;
+}
+
 function readLocalLookIds(): Set<number> {
   try {
     const raw = typeof window !== 'undefined'
@@ -66,16 +124,9 @@ export function useHiddenLooks(): Set<number> {
   }, []);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from('admin_hidden_looks')
-        .select('look_id');
-      if (cancelled || error || !data) return;
-      const ids = new Set<number>(
-        (data as { look_id: number }[]).map(r => r.look_id).filter(n => Number.isFinite(n)),
-      );
+    getHiddenLookIds().then(ids => {
+      if (cancelled) return;
       setHidden(prev => {
         // Merge with any localStorage entries so admin deletes made while
         // offline still take effect after the Supabase fetch completes.
@@ -83,7 +134,7 @@ export function useHiddenLooks(): Set<number> {
         ids.forEach(id => merged.add(id));
         return merged;
       });
-    })();
+    }).catch(() => { /* offline / RLS — keep localStorage view */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -105,36 +156,15 @@ export function useHiddenProductKeys(): Set<string> {
   });
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
-    (async () => {
-      // Admin-hidden products (soft delete)
-      const { data: hiddenData } = await supabase
-        .from('admin_hidden_products')
-        .select('brand, name');
-      // Deactivated products (admin toggle off) — treat as hidden from feed
-      const { data: inactiveData } = await supabase
-        .from('products')
-        .select('brand, name')
-        .eq('is_active', false);
+    getHiddenProductKeys().then(keys => {
       if (cancelled) return;
-      const keys = new Set<string>();
-      if (hiddenData) {
-        for (const r of hiddenData as { brand: string; name: string }[]) {
-          keys.add(`${r.brand}-${r.name}`);
-        }
-      }
-      if (inactiveData) {
-        for (const r of inactiveData as { brand: string; name: string }[]) {
-          keys.add(`${r.brand}-${r.name}`);
-        }
-      }
       setHidden(prev => {
         const merged = new Set(prev);
         keys.forEach(k => merged.add(k));
         return merged;
       });
-    })();
+    }).catch(() => { /* offline — keep localStorage view */ });
     return () => { cancelled = true; };
   }, []);
 

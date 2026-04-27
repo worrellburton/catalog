@@ -1,6 +1,6 @@
 
 import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
-import { looks as staticRawLooks, creators, Look } from '~/data/looks';
+import { looks as staticLooksFallback, creators, Look } from '~/data/looks';
 import { getLooks } from '~/services/looks';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import LookCard from './LookCard';
@@ -135,8 +135,10 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   const hiddenProductKeys = useHiddenProductKeys();
 
   // Pull the live look set from Supabase so the grid mirrors the admin's
-  // Content → Looks tab exactly. Static seed is only the fallback.
-  const [dbLooks, setDbLooks] = useState<Look[]>(staticRawLooks);
+  // Content → Looks tab exactly. Initial state is empty so we don't burn
+  // a render filtering the static seed before Supabase resolves; if the
+  // network call fails outright we fall back to the seed.
+  const [dbLooks, setDbLooks] = useState<Look[]>([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -144,7 +146,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
         const fetched = await getLooks();
         if (!cancelled && fetched.length > 0) setDbLooks(fetched);
       } catch {
-        // keep static fallback
+        if (!cancelled) setDbLooks(staticLooksFallback);
       }
     })();
     return () => { cancelled = true; };
