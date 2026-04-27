@@ -53,7 +53,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             for storage assets (videos/images) to count as primed. */}
         <link rel="preconnect" href="https://vtarjrnqvcqbhoclvcur.supabase.co" crossOrigin="" />
         <link rel="dns-prefetch" href="https://vtarjrnqvcqbhoclvcur.supabase.co" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Nunito+Sans:wght@400;500;600;700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        {/* Inter (admin/partners chrome) and DM Sans (MyLooks) are the only
+            two families actually referenced in the stylesheets. The other
+            eight families this request used to pull (Plus Jakarta, Outfit,
+            Space Grotesk, Sora, Manrope, Poppins, Nunito Sans, Figtree)
+            were never selected by any selector — they were dead bytes on
+            every page load. Brand-logo fonts are loaded on demand by
+            ensureBrandFont() in app/utils/brandFonts.ts when an admin picks
+            one, so they don't belong in the global preload either. */}
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <Meta />
         <Links />
       </head>
