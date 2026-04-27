@@ -146,17 +146,49 @@ async function fetchSearchSuggestionsFromSupabase(): Promise<string[]> {
 // Public API — returns static or Supabase data
 // ============================================
 
+// Session-level promise cache. The consumer feed mounts ContinuousFeed,
+// _index.tsx (for ProductPage's editorial grid), and CreatorPage in parallel
+// — each used to fire its own Supabase round-trip for the same dataset.
+// Sharing the in-flight promise collapses those into one network call and
+// keeps re-mounts (bookmarks → main, overlay open → close) free.
+let looksPromise: Promise<Look[]> | null = null;
+let creatorsPromise: Promise<Record<string, Creator>> | null = null;
+let suggestionsPromise: Promise<string[]> | null = null;
+
+function cache<T>(slot: () => Promise<T>, clear: () => void): Promise<T> {
+  // Drop the cached promise on rejection so the next caller can retry
+  // instead of being stuck with a permanently failed result.
+  return slot().catch(err => { clear(); throw err; });
+}
+
 export async function getLooks(): Promise<Look[]> {
   if (!USE_SUPABASE) return staticLooks;
-  return fetchLooksFromSupabase();
+  if (!looksPromise) {
+    looksPromise = cache(fetchLooksFromSupabase, () => { looksPromise = null; });
+  }
+  return looksPromise;
 }
 
 export async function getCreators(): Promise<Record<string, Creator>> {
   if (!USE_SUPABASE) return staticCreators;
-  return fetchCreatorsFromSupabase();
+  if (!creatorsPromise) {
+    creatorsPromise = cache(fetchCreatorsFromSupabase, () => { creatorsPromise = null; });
+  }
+  return creatorsPromise;
 }
 
 export async function getSearchSuggestions(): Promise<string[]> {
   if (!USE_SUPABASE) return staticSuggestions;
-  return fetchSearchSuggestionsFromSupabase();
+  if (!suggestionsPromise) {
+    suggestionsPromise = cache(fetchSearchSuggestionsFromSupabase, () => { suggestionsPromise = null; });
+  }
+  return suggestionsPromise;
+}
+
+// Admin surfaces (Content page, etc.) call this after a mutation so the next
+// consumer fetch returns fresh data instead of a stale cached promise.
+export function invalidateLooksCache() {
+  looksPromise = null;
+  creatorsPromise = null;
+  suggestionsPromise = null;
 }
