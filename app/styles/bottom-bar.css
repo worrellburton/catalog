@@ -664,14 +664,9 @@
   flex-shrink: 0;
 }
 
-.bottom-bar.search-open .bottom-bar-search {
-  display: flex;
-}
-
-.bottom-bar.search-open .bottom-bar-inner {
-  display: none;
-}
-
+/* The input now lives inside .bottom-bar-inner.search-inline at all times,
+   so we no longer hide/swap blocks when search opens. The bar just lifts +
+   widens slightly to read as "actively in use" while suggestions are up. */
 .bottom-bar.search-open {
   bottom: 40px;
   width: 90%;

@@ -4,6 +4,7 @@ import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { TrailMorph } from '~/components/TrailMotion';
+import { lookTrailId } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
