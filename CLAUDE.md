@@ -13,6 +13,7 @@
 5. [Brands Backend](#section-5--brands-backend)
 6. [Development Guidelines](#section-6--development-guidelines)
 7. [Supabase Operations (Claude)](#section-7--supabase-operations-claude)
+8. [Flutter Shell / Native Webview Integration](#section-8--flutter-shell--native-webview-integration)
 
 ---
 
@@ -1135,5 +1136,73 @@ deletes stick even when the migration hasn't been applied yet.
 - `generated_videos`, `look_products`, `ai_models` — see earlier migrations.
 
 Full model/controller reference lives in Section 4 (Admin Backend).
+
+---
+
+# SECTION 8 — Flutter Shell / Native Webview Integration
+
+The catalog webapp runs inside a **Flutter iOS/Android app** (`/Users/samirmaikap/Apps/catalog-flutter`) as a fullscreen `InAppWebView`. The Flutter shell injects JS at document-start and on every page load to bridge the native app and the webapp.
+
+## How It Works
+
+- The Flutter app loads `http://localhost:5173/#app` (dev) or the production URL in a `WKWebView` / `WebView`.
+- Flutter sets `document.documentElement.dataset.shell = 'catalog-app'` and a CSS custom property `--shell-sb` (status-bar height in px) before the first paint.
+- The native Flutter header (logo, save button, profile avatar) is drawn **on top of the webview** — the webapp's own `<header>` is hidden via injected CSS (`display: none !important`).
+- Bridge events are dispatched as `CustomEvent` on `window` and the webapp listens for them in `_index.tsx`.
+
+## Shell-Specific Code — DO NOT MODIFY
+
+The following patterns exist specifically for the Flutter shell integration. **Do not remove, override, or change them** unless you are intentionally updating the Flutter bridge:
+
+### CSS / Styling
+
+| Selector / Property | Purpose | Where |
+|---|---|---|
+| `html[data-shell="catalog-app"] header` | Hides webapp header when running inside Flutter shell | `globals.css` / injected `<style>` |
+| `--shell-sb` CSS custom property | Status-bar height set by Flutter; used to offset back buttons | `html` element style |
+| `.pd-back`, `.look-back-btn` `top` offset | Back buttons pushed below the native status bar | Injected shell style |
+| `html[data-shell] .remix-btn-fixed` | Hides the floating remix button when in shell | Injected shell style |
+
+### JavaScript / Bridge Events
+
+| Event / Mechanism | Direction | Purpose |
+|---|---|---|
+| `window.CustomEvent('catalog:open-bookmarks')` | Flutter → Webapp | Opens the bookmarks page |
+| `window.CustomEvent('catalog:open-my-looks')` | Flutter → Webapp | Opens the my-looks page |
+| `window.flutter_inappwebview.callHandler('catalogOverlayChanged', bool)` | Webapp → Flutter | Notifies Flutter when a look/product overlay opens or closes |
+| `document.documentElement.dataset.shell === 'catalog-app'` | Webapp reads | Guards logic that should only run inside the native shell |
+| `localStorage.getItem('catalog-access')` | Webapp reads | Shell pre-sets this to `'123'` to bypass the password gate |
+| `localStorage.getItem('catalog:visited')` | Webapp reads | Shell pre-sets this to skip the splash screen |
+| `localStorage.getItem('sb-vtarjrnqvcqbhoclvcur-auth-token')` | Webapp reads | Shell injects the Supabase session so the webapp boots authenticated |
+
+### Class / State
+
+| Class | Where | Purpose |
+|---|---|---|
+| `.app-root.has-overlay` | `_index.tsx` root element | Flutter observes this via `MutationObserver` to hide/show the native header when overlays open |
+
+## Rules for AI Tools Working in This Repo
+
+1. **Never remove `data-shell` checks.** Any code that reads `document.documentElement.dataset.shell` is gating shell-specific behaviour. Do not delete it.
+2. **Never remove or rename the bridge events** (`catalog:open-bookmarks`, `catalog:open-my-looks`, `catalogOverlayChanged`). The Flutter app depends on these exact event names.
+3. **Never remove `has-overlay` class toggling** from `.app-root`. The Flutter native header visibility depends on it.
+4. **Never restore the webapp `<header>` to `display: block`** when inside the shell. The Flutter layer draws its own header.
+5. **Never change the Supabase localStorage key** (`sb-vtarjrnqvcqbhoclvcur-auth-token`). Flutter writes to this exact key.
+6. **Do not add `pointer-events: auto`** or any CSS that re-enables clicks in the top ~60 px zone while inside the shell — that zone is owned by the native Flutter header.
+7. **Do not add `touchstart` / `click` handlers that call `stopPropagation` or `preventDefault` globally** without first checking `data-shell` — it will break Flutter's touch-passthrough guards.
+
+## Safe to Change
+
+- All webapp UI outside the header zone.
+- Look/product overlay content and layout.
+- Grid, filters, bookmarks, creator pages.
+- Any logic that already gates on `data-shell !== 'catalog-app'`.
+
+## Flutter App Reference
+
+- **Codebase**: `/Users/samirmaikap/Apps/catalog-flutter`
+- **Main integration file**: `lib/screens/feed_screen.dart`
+- **Key methods**: `_buildEarlyJs()`, `_buildTuningJs()`, `_dispatch()`, `_openProfile()`, `_openSaved()`
+- Changes to the bridge protocol (events, CSS hooks, localStorage keys) must be coordinated with the Flutter app.
 
 ---
