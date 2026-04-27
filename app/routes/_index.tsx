@@ -73,6 +73,7 @@ import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } fr
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
+import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
 
@@ -549,6 +550,13 @@ export default function Home() {
     if (!isAppVisible) return;
     prefetchOverlayChunks();
   }, [isAppVisible]);
+
+  // One-shot service-worker registration. Skipped on localhost (dev), and
+  // honors a ?sw-off escape hatch in case the cache ever needs purging.
+  useEffect(() => {
+    maybeUnregisterSW();
+    registerAssetCache();
+  }, []);
 
   // Trail depth: while the product/look overlay is open, the under-layer
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
