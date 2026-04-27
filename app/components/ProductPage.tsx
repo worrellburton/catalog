@@ -56,6 +56,93 @@ const AVATAR_POOL = Object.values(staticCreators)
   .filter(c => !!c.avatar)
   .slice(0, 12);
 
+interface RetailerOffer {
+  retailer: string;
+  url: string;
+  price: string;        // "$48.00"
+  priceCents: number;   // for "lowest" computation
+  badge?: 'lowest' | 'discount' | 'official';
+  discountPct?: number; // shown on the chip when badge==='discount'
+}
+
+// Synthetic retailer set with realistic, search-shaped fallback URLs so the
+// in-app browser actually lands somewhere useful per chip. The brand site
+// (product.url) is always retailer #1, marked "official". Stable per
+// product so prices don't reshuffle on re-render.
+const ALT_RETAILERS = [
+  { name: 'Amazon',    url: (q: string) => `https://www.amazon.com/s?k=${q}`,                bias: -0.07 },
+  { name: 'Nordstrom', url: (q: string) => `https://www.nordstrom.com/sr?keyword=${q}`,      bias: +0.03 },
+  { name: 'Revolve',   url: (q: string) => `https://www.revolve.com/r/Search.jsp?search=${q}`, bias: +0.05 },
+  { name: 'Shopbop',   url: (q: string) => `https://www.shopbop.com/s/${q}`,                  bias: -0.02 },
+  { name: 'Bloomingdale\'s', url: (q: string) => `https://www.bloomingdales.com/shop/search?keyword=${q}`, bias: +0.06 },
+] as const;
+
+function parsePriceCents(raw?: string | null): number | null {
+  if (!raw) return null;
+  const m = raw.replace(/,/g, '').match(/(\d+(?:\.\d{1,2})?)/);
+  if (!m) return null;
+  return Math.round(parseFloat(m[1]) * 100);
+}
+
+function formatCents(cents: number): string {
+  const dollars = cents / 100;
+  return `$${dollars.toFixed(dollars >= 100 ? 0 : 2)}`;
+}
+
+function buildRetailerOffers(product: Product): RetailerOffer[] {
+  const baseCents = parsePriceCents(product.price);
+  if (!baseCents) {
+    // No price = single chip pointing at the brand site.
+    return product.url
+      ? [{ retailer: product.brand || 'Brand site', url: product.url, price: '—', priceCents: 0, badge: 'official' }]
+      : [];
+  }
+  const seed = hashString(`${product.brand}|${product.name}`);
+  // Three deterministic alts pulled from the rotating pool.
+  const altCount = 3;
+  const offset = seed % ALT_RETAILERS.length;
+  const q = encodeURIComponent(`${product.brand || ''} ${product.name || ''}`.trim());
+
+  const offers: RetailerOffer[] = [];
+
+  if (product.url) {
+    offers.push({
+      retailer: product.brand || 'Brand site',
+      url: product.url,
+      price: formatCents(baseCents),
+      priceCents: baseCents,
+      badge: 'official',
+    });
+  }
+
+  for (let i = 0; i < altCount; i++) {
+    const r = ALT_RETAILERS[(offset + i) % ALT_RETAILERS.length];
+    // Per-retailer jitter so prices are believably varied — clamp to ±15%.
+    const jitterSeed = hashString(`${product.brand}|${product.name}|${r.name}`);
+    const jitter = ((jitterSeed % 200) / 1000) - 0.10; // -0.10 .. +0.10
+    const factor = 1 + r.bias + jitter;
+    const altCents = Math.max(100, Math.round(baseCents * factor));
+    offers.push({
+      retailer: r.name,
+      url: r.url(q),
+      price: formatCents(altCents),
+      priceCents: altCents,
+    });
+  }
+
+  // Mark the cheapest as "lowest"; if it also undercuts the brand price by
+  // >=10%, mark a "discount" badge with the percent off.
+  const cheapest = offers.reduce((acc, o) => (o.priceCents < acc.priceCents ? o : acc), offers[0]);
+  if (cheapest && cheapest.badge !== 'official') {
+    cheapest.badge = 'lowest';
+    if (baseCents - cheapest.priceCents >= baseCents * 0.10) {
+      cheapest.badge = 'discount';
+      cheapest.discountPct = Math.round(((baseCents - cheapest.priceCents) / baseCents) * 100);
+    }
+  }
+  return offers;
+}
+
 interface SavedByDummy { count: number; avatars: { name: string; avatar: string }[] }
 function dummySavedBy(productKey: string): SavedByDummy {
   if (AVATAR_POOL.length === 0) return { count: 0, avatars: [] };
@@ -194,6 +281,11 @@ export default function ProductPage({
     [product.brand, product.name],
   );
 
+  // Retailer chips — brand site + 3 synthetic alts (same pool every time so
+  // prices are consistent across re-renders). Cheapest gets a lowest /
+  // discount badge.
+  const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
+
   const heroClassName = `pd-hero${creative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
   // Take ownership of the shared <video> element keyed by creative.id. The
@@ -268,19 +360,38 @@ export default function ProductPage({
               </div>
             )}
 
+            {/* Retailer comparison strip. Each chip says the retailer name
+                + the price at that retailer. Tap goes straight to that
+                retailer's page (in-app browser). The cheapest is badged
+                "Lowest" or "Discount −X%" based on % off MSRP. The brand's
+                own site sits first, marked "Official". */}
+            {retailerOffers.length > 0 && (
+              <div className="pd-retailers" role="list" aria-label="Where to buy">
+                {retailerOffers.map(offer => (
+                  <button
+                    key={offer.retailer}
+                    type="button"
+                    className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
+                    onClick={() => onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`)}
+                    role="listitem"
+                  >
+                    <span className="pd-retailer-name">{offer.retailer}</span>
+                    <span className="pd-retailer-price">{offer.price}</span>
+                    {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
+                    {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
+                    {offer.badge === 'discount' && (
+                      <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
+                    )}
+                    <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="7" y1="17" x2="17" y2="7" />
+                      <polyline points="7 7 17 7 17 17" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="pd-actions">
-              <button
-                type="button"
-                className="pd-shop-btn"
-                onClick={() => product.url && onOpenBrowser(product.url, product.name)}
-                disabled={!product.url}
-              >
-                Shop on {product.brand || 'site'}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="7" y1="17" x2="17" y2="7" />
-                  <polyline points="7 7 17 7 17 17" />
-                </svg>
-              </button>
               <button
                 type="button"
                 className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}
@@ -288,7 +399,6 @@ export default function ProductPage({
                 aria-label={isSaved ? 'Remove from bookmarks' : 'Save product'}
                 aria-pressed={isSaved}
               >
-                {/* Filled vs outline bookmark — toggles on tap */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                 </svg>
