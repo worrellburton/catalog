@@ -19,7 +19,8 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
+import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 
@@ -135,6 +136,10 @@ export default function Home() {
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
+  const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
+  // Editorial looks pulled from looks_creative; fed into the "You might also
+  // like" grid on ProductPage. Loaded once at mount and reused.
+  const [liveLooks, setLiveLooks] = useState<Look[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -381,28 +386,42 @@ export default function Home() {
     setSelectedCreative(creative);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
+    setBrandCreatives(null);
 
-    // Fire both lookups immediately. The similar-creatives query is routed
-    // through `prefetchSimilarCreatives`, which is also called on hover (in
-    // CreativeCard) — so by the time the user actually taps, this is often
-    // already a cached promise resolving instantly.
+    // Three lookups, all eager. Each is independently primed so the user's
+    // hover often resolves them before they actually tap.
     const simP = fetchSimilarProducts(
       creative.product.brand || null,
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
     const similarP = prefetchSimilarCreatives(creative.id, 18);
+    const brandP = creative.product.brand
+      ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
+      : Promise.resolve([] as ProductAd[]);
 
-    // As soon as the trail rail resolves, prime the asset cache for the top
-    // few results so when the user keeps trailing, the next morph also has
-    // its frames ready.
+    // As soon as the trail rail resolves, prime asset cache for the top few
+    // results so the next morph in the trail also has its frames ready.
     similarP.then(rows => {
       primeTrailAssets(rows);
       setSimilarCreatives(rows);
     }).catch(() => { /* keep rail empty rather than throw */ });
 
+    brandP.then(rows => {
+      primeTrailAssets(rows);
+      setBrandCreatives(rows);
+    }).catch(() => { /* keep brand strip empty rather than throw */ });
+
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
   }, [fetchSimilarProducts]);
+
+  // Editorial looks for the "You might also like" grid on ProductPage. One
+  // fetch per session; reused across every overlay open.
+  useEffect(() => {
+    let cancelled = false;
+    getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const handleCreateCatalog = useCallback((query: string) => {
     setSelectedProduct(null);
@@ -534,30 +553,21 @@ export default function Home() {
           {selectedProduct && (
             <ProductPage
               product={selectedProduct}
-              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); }}
+              onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); setBrandCreatives(null); }}
               onOpenLook={handleOpenLook}
               onOpenBrowser={handleOpenBrowser}
               onOpenProduct={handleOpenProduct}
               onOpenCreator={handleOpenCreator}
-              onCreateCatalog={handleCreateCatalog}
               onOpenCreative={handleOpenCreative}
               creative={
                 selectedCreative?.video_url
                   ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
                   : undefined
               }
-              similarProductsOverride={selectedSimilar ?? undefined}
               similarCreatives={similarCreatives ?? undefined}
-              sourcePhotos={(() => {
-                // Original brand-site product photos — already joined with the
-                // creative via AD_SELECT. De-dup against the hero image so we
-                // don't show the same shot twice in a row.
-                const raw = (selectedCreative?.product as any)?.images as string[] | null | undefined;
-                const main = selectedCreative?.product?.image_url ?? null;
-                const out = Array.isArray(raw) ? raw.filter(Boolean) : [];
-                if (main && !out.includes(main)) out.unshift(main);
-                return out.length > 0 ? out : undefined;
-              })()}
+              brandCreatives={brandCreatives ?? undefined}
+              lookCreatives={liveLooks.slice(0, 12)}
+              bookmarks={bookmarks}
             />
           )}
 

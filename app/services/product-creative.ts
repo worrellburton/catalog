@@ -412,6 +412,53 @@ export async function updateAdAffiliateUrl(id: string, url: string): Promise<{ e
   return { error: null };
 }
 
+// Other live creatives from the same brand. Used by ProductPage's
+// "More from this brand" rail. Excludes the seed product so we don't echo
+// the hero. Uses an inner-join filter on products.brand.
+export async function getCreativesByBrand(
+  brand: string,
+  excludeProductId: string | null,
+  limit = 12,
+): Promise<ProductAd[]> {
+  if (!supabase || !brand) return [];
+  let query = supabase
+    .from('product_creative')
+    .select(`
+      *,
+      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags)
+    `)
+    .eq('status', 'live')
+    .eq('product.brand', brand)
+    .not('video_url', 'is', null)
+    .order('boosted_until', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (excludeProductId) query = query.neq('product_id', excludeProductId);
+  const { data, error } = await query;
+  if (error) {
+    console.warn('[getCreativesByBrand] query error:', error.message);
+    return [];
+  }
+  return (data || []) as ProductAd[];
+}
+
+// Per-brand promise cache so hover and tap coalesce.
+const brandCache = new Map<string, Promise<ProductAd[]>>();
+
+export function prefetchCreativesByBrand(
+  brand: string,
+  excludeProductId: string | null,
+  limit = 12,
+): Promise<ProductAd[]> {
+  const key = `${brand}|${excludeProductId ?? ''}|${limit}`;
+  const cached = brandCache.get(key);
+  if (cached) return cached;
+  const p = getCreativesByBrand(brand, excludeProductId, limit);
+  brandCache.set(key, p);
+  p.catch(() => brandCache.delete(key));
+  return p;
+}
+
 // Per-seed promise cache — coalesces hover + tap into one network round-trip.
 // Keyed by `${seedId}|${k}` so different rail sizes don't collide.
 const similarCache = new Map<string, Promise<ProductAd[]>>();
