@@ -53,6 +53,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
             for storage assets (videos/images) to count as primed. */}
         <link rel="preconnect" href="https://vtarjrnqvcqbhoclvcur.supabase.co" crossOrigin="" />
         <link rel="dns-prefetch" href="https://vtarjrnqvcqbhoclvcur.supabase.co" />
+        {/* Critical above-the-fold CSS, inlined. The full stylesheet
+            (root-*.css, ~336 kB) is render-blocking; while it's in flight
+            the user used to see a flash of unstyled text. These ~40 lines
+            paint the dark backdrop + password gate immediately so first
+            visual matches what the user expects. The full sheet loads
+            normally and overrides anything here once it arrives. */}
+        <style dangerouslySetInnerHTML={{ __html: `
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{display:none}
+:root{--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.app-root{min-height:100vh}
+.password-gate{position:fixed;inset:0;z-index:500;background:radial-gradient(circle at 30% 20%,rgba(80,70,90,.18),transparent 55%),radial-gradient(circle at 75% 80%,rgba(60,80,110,.15),transparent 55%),#000;display:flex;align-items:center;justify-content:center;padding:32px 20px}
+.splash-screen{position:fixed;inset:0;z-index:1000;background:#0a0a0a;display:flex;align-items:center;justify-content:center}
+        ` }} />
         {/* Inter (admin/partners chrome) and DM Sans (MyLooks) are the only
             two families actually referenced in the stylesheets. The other
             eight families this request used to pull (Plus Jakarta, Outfit,
