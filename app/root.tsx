@@ -7,14 +7,17 @@ import {
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
 
-/* ── Modular styles (split from globals.css) ── */
+/* ── Modular styles ──
+ * Only stylesheets needed by the consumer feed (and the locked/landing
+ * surfaces every visitor sees) live here. Per-route stylesheets
+ * (admin.css, partners.css, generate.css, deck-view.css, deck-v6.css,
+ * deck-selector.css) are imported from inside their respective route
+ * files so they only ship to users who actually visit those routes.
+ */
 import "./styles/base.css";
 import "./styles/password-gate.css";
 import "./styles/waitlist.css";
-import "./styles/deck-selector.css";
-import "./styles/deck-v6.css";
 import "./styles/splash-screen.css";
-import "./styles/deck-view.css";
 import "./styles/header.css";
 import "./styles/bottom-bar.css";
 import "./styles/bookmarks.css";
@@ -27,12 +30,9 @@ import "./styles/in-app-browser.css";
 import "./styles/light-mode.css";
 import "./styles/responsive.css";
 import "./styles/landing-page.css";
-import "./styles/admin.css";
-import "./styles/partners.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
-import "./styles/generate.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

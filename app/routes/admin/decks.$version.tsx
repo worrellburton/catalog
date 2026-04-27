@@ -1,6 +1,12 @@
 import { useNavigate, useParams } from '@remix-run/react';
 import { useState, lazy, Suspense } from 'react';
 
+// Deck-specific CSS only ships when a deck route is rendered. The
+// deck-view stylesheet alone is ~6k lines.
+import '~/styles/deck-view.css';
+import '~/styles/deck-v6.css';
+import '~/styles/deck-selector.css';
+
 // Each deck variant is 400–1100 lines and only one is rendered at a time.
 // Lazy-loading splits them into per-version chunks so the admin viewer
 // only pulls down the bytes for the version the user actually opened.

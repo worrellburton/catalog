@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+
+// /generate-only styles. Used to be in root.tsx where the consumer paid
+// the bundle cost on every page.
+import '~/styles/generate.css';
 import {
   STYLE_PRESETS,
   buildGenerationPrompt,

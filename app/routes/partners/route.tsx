@@ -2,6 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 
+// Partners styles only ship when a partners route is rendered.
+import '~/styles/partners.css';
+
 interface NavItem {
   to: string;
   label: string;

@@ -7,6 +7,11 @@ import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
 
+// Admin styles only ship when an admin route is rendered. Previously
+// imported from the global root.tsx where every consumer page paid the
+// 2.8k-line CSS cost.
+import '~/styles/admin.css';
+
 interface NavItem {
   to: string;
   label: string;
