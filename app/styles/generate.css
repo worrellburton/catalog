@@ -19,6 +19,13 @@
   letter-spacing: -0.005em;
 }
 
+/* When running inside the native app shell, push content below the status bar.
+   --shell-sb is injected at AT_DOCUMENT_START by Flutter with the real
+   status-bar height in px (e.g. 59px on iPhone 16 Pro). */
+html[data-shell="catalog-app"] .gen-page {
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 44px));
+}
+
 /* Header bar — three-column on desktop (back / wordmark / sub),
    stacked on mobile so the title sits above the back link cleanly. */
 .gen-head {

@@ -1,3 +1,10 @@
+/* Native app shell: push content below status bar.
+   --shell-sb is injected by the Flutter shell at AT_DOCUMENT_START.
+   No Flutter back-bar exists so only the status bar height is needed. */
+html[data-shell="catalog-app"] .bookmarks-page {
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 44px));
+}
+
 /* Bookmark toggle in header */
 .bookmark-toggle {
   background: rgba(128, 128, 128, 0.15);
