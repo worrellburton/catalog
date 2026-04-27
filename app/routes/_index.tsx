@@ -17,6 +17,7 @@ import UserMenu from '~/components/UserMenu';
 import MyLooks from '~/components/MyLooks';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
+import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
@@ -157,6 +158,7 @@ export default function Home() {
   const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
   const bookmarks = useBookmarks();
+  const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
 
   // Track recent catalogs
@@ -358,6 +360,7 @@ export default function Home() {
   }, []);
 
   const handleOpenProduct = useCallback(async (product: Product) => {
+    pushRecent(product);
     setSelectedLook(null);
     setSelectedCreative(null);
     setSelectedProduct(product);
@@ -367,7 +370,7 @@ export default function Home() {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
     }
-  }, [fetchSimilarProducts]);
+  }, [fetchSimilarProducts, pushRecent]);
 
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
@@ -387,6 +390,7 @@ export default function Home() {
       url: creative.product.url || '',
       image: creative.product.image_url || undefined,
     };
+    pushRecent(mapped);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
@@ -419,7 +423,7 @@ export default function Home() {
     }).catch(() => { /* keep brand strip empty rather than throw */ });
 
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
-  }, [fetchSimilarProducts]);
+  }, [fetchSimilarProducts, pushRecent]);
 
   // Editorial looks for the "You might also like" grid on ProductPage. One
   // fetch per session; reused across every overlay open.
@@ -482,6 +486,11 @@ export default function Home() {
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={async () => { await logout(); setView('locked'); }}
+                recentProducts={recentProducts}
+                savedProducts={bookmarks.bookmarkedProducts}
+                savedLooks={liveLooks.filter(l => bookmarks.bookmarkedLooks.includes(l.id))}
+                onOpenLook={handleOpenLook}
+                onOpenProduct={handleOpenProduct}
               />
             </div>
           </header>

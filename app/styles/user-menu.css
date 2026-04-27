@@ -143,6 +143,122 @@
   z-index: 9999;
 }
 
+/* Graphical variant — wider so the thumbnail strips fit. The trigger sits
+   in the header-right; this anchor shifts the popout so its right edge
+   aligns with the trigger instead of pinning to its left edge. */
+.user-menu-popout--graphical {
+  left: auto;
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 8px;
+}
+
+/* Try-it-on CTA — primary action, sits at top of the menu. */
+.user-menu-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 0;
+  background: linear-gradient(135deg, rgba(255, 215, 92, 0.18), rgba(255, 215, 92, 0.06));
+  color: #ffd75c;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: background 0.18s ease;
+}
+.user-menu-cta:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 92, 0.28), rgba(255, 215, 92, 0.10));
+}
+.user-menu-cta-arrow {
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+/* Sectioned thumbnail strips. */
+.user-menu-section {
+  padding: 10px 4px 6px;
+}
+
+.user-menu-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0 6px 8px;
+}
+
+.user-menu-section-link {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.user-menu-section-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.user-menu-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 6px 4px;
+  scrollbar-width: none;
+}
+.user-menu-strip::-webkit-scrollbar { display: none; }
+
+.user-menu-tile {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), border-color 0.18s ease;
+}
+.user-menu-tile:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.user-menu-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.user-menu-tile-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 18px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 @keyframes userMenuSlideUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
