@@ -194,10 +194,10 @@
 }
 
 /* Brand-logo variant — gated upstream by the brandLogosOn toggle. The
-   logo replaces the eyebrow text and renders monochrome white so it
-   reads on the dark info surface; in light mode we let the natural
-   colors through. Height matches the eyebrow row so info layout doesn't
-   shift between text and logo. */
+   logo replaces the eyebrow text. Brandfetch CDN is asked for the right
+   theme variant (?theme=dark = light glyphs, ?theme=light = dark glyphs)
+   so we don't have to filter the image client-side. Height matches the
+   eyebrow row so info layout doesn't shift between text and logo. */
 .pd-brand--logo {
   padding: 4px 0 6px;
   letter-spacing: 0;
@@ -208,13 +208,6 @@
   width: auto;
   max-width: min(220px, 60vw);
   object-fit: contain;
-  /* Default (dark mode): force the image to pure white so dark-glyph
-     wordmarks remain visible against the dark info card. brightness(0)
-     flattens the image to black, then invert(1) flips it to white. */
-  filter: brightness(0) invert(1);
-}
-.light-mode .pd-brand--logo img {
-  filter: none;
 }
 .light-mode .pd-brand {
   color: rgba(0, 0, 0, 0.55);

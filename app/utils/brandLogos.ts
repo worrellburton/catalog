@@ -39,11 +39,16 @@ function guessDomainFromBrand(brand: string | null | undefined): string | null {
 }
 
 /** Returns a Brandfetch logo URL for a product, or null if we can't infer
- *  a domain. */
-export function brandLogoUrlFor(opts: { brand?: string | null; url?: string | null }): string | null {
+ *  a domain. The optional `theme` param asks the CDN for a logo variant
+ *  designed for that surface — 'dark' returns a light-glyph version that
+ *  reads on dark backgrounds, 'light' returns the canonical dark glyphs. */
+export function brandLogoUrlFor(opts: { brand?: string | null; url?: string | null; theme?: 'light' | 'dark' }): string | null {
   const fromUrl = hostnameFromUrl(opts.url);
   const fromBrand = guessDomainFromBrand(opts.brand);
   const domain = fromUrl ?? fromBrand;
   if (!domain) return null;
-  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?c=${BRANDFETCH_CLIENT_ID}`;
+  const params = new URLSearchParams();
+  params.set('c', BRANDFETCH_CLIENT_ID);
+  if (opts.theme) params.set('theme', opts.theme);
+  return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?${params.toString()}`;
 }

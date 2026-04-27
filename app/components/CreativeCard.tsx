@@ -49,7 +49,11 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
           trackAdImpression(creative.id);
         }
       });
-    }, { rootMargin: '200px' });
+    // 800px rootMargin = mount video ~5 card-heights before the card
+    // enters the viewport. By the time the user actually scrolls there,
+    // the <video> element has already loaded its metadata + first frame
+    // (the bytes are usually in cache from primeTrailAssets too).
+    }, { rootMargin: '800px' });
 
     observer.observe(card);
     return () => observer.disconnect();

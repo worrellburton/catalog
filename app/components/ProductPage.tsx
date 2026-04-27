@@ -151,11 +151,18 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
 }
 
 /** Brand row — renders Brandfetch logo when allowed; otherwise falls
- *  back to the brand text. The `<img>` onError swap keeps us from showing
- *  a broken-image icon when Brandfetch doesn't have the domain. */
-function BrandLine({ brand, brandUrl, showLogo }: { brand: string; brandUrl: string | null | undefined; showLogo: boolean }) {
+ *  back to the brand text. We ask Brandfetch directly for a theme-
+ *  appropriate variant (?theme=dark = light-glyph, ?theme=light = dark-
+ *  glyph) so we don't have to invert the bitmap with a CSS filter — the
+ *  filter approach forced solid-fill any non-transparent pixel into a
+ *  white square. The <img> onError swap keeps us from showing a broken-
+ *  image icon when Brandfetch doesn't have the domain. */
+function BrandLine({ brand, brandUrl, showLogo, isLightMode }: { brand: string; brandUrl: string | null | undefined; showLogo: boolean; isLightMode: boolean }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  const logoUrl = useMemo(() => brandLogoUrlFor({ brand, url: brandUrl }), [brand, brandUrl]);
+  const logoUrl = useMemo(
+    () => brandLogoUrlFor({ brand, url: brandUrl, theme: isLightMode ? 'light' : 'dark' }),
+    [brand, brandUrl, isLightMode],
+  );
 
   if (showLogo && logoUrl && !logoFailed) {
     return (
@@ -376,6 +383,7 @@ export default function ProductPage({
                 brand={product.brand}
                 brandUrl={product.url}
                 showLogo={brandLogosOn}
+                isLightMode={isLightMode}
               />
             )}
             <h1 className="pd-name">{product.name}</h1>

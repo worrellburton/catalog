@@ -82,7 +82,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     if (!card) return;
     const observer = new IntersectionObserver(
       es => es.forEach(e => setInViewport(e.isIntersecting)),
-      { rootMargin: '200px' },
+      { rootMargin: '800px' },
     );
     observer.observe(card);
     return () => observer.disconnect();

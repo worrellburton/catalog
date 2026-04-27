@@ -12,8 +12,12 @@
 
 import type { ProductAd } from '~/services/product-creative';
 
-const POSTERS_TO_WARM = 12;
-const VIDEOS_TO_WARM = 3;
+const POSTERS_TO_WARM = 16;
+// Bumped from 3 to 9 — covers the first ~5 rows of the 2-col mobile grid
+// so by the time the user starts scrolling, the next ~9 cards' bytes are
+// already in the browser cache and CreativeCard's <video> renders without
+// a buffer pause.
+const VIDEOS_TO_WARM = 9;
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();

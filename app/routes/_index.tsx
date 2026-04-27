@@ -275,6 +275,16 @@ export default function Home() {
   }, []);
 
   const handleOpenLook = useCallback((look: Look) => {
+    // Trail navigation — when the user opens a look from inside a
+    // ProductPage (or any other product overlay), close the product
+    // surface so LookOverlay takes its place cleanly. Without this,
+    // the two overlays stack and "back" walks through both layers
+    // instead of returning to the feed grid where the trail started.
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedSimilar(null);
+    setSimilarCreatives(null);
+    setBrandCreatives(null);
     setSelectedLook(look);
   }, []);
 
