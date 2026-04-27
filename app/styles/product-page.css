@@ -193,21 +193,34 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
-/* Brand-logo variant — gated upstream by the brandLogosOn toggle. The
-   logo replaces the eyebrow text. Brandfetch CDN is asked for the right
-   theme variant (?theme=dark = light glyphs, ?theme=light = dark glyphs)
-   so we don't have to filter the image client-side. Height matches the
-   eyebrow row so info layout doesn't shift between text and logo. */
+/* Brand-logo variant — gated upstream by the brandLogosOn toggle.
+   We CSS-mask a solid-color box with the logo's alpha channel so we get
+   a clean white glyph on dark mode (and black on light mode), regardless
+   of whether the source image has a transparent or opaque background.
+   That sidesteps the "white square" failure mode where filter-based
+   inversion blew up logos that shipped with an opaque white bg. */
 .pd-brand--logo {
-  padding: 4px 0 6px;
-  letter-spacing: 0;
-}
-.pd-brand--logo img {
+  position: relative;
   display: block;
   height: 28px;
-  width: auto;
-  max-width: min(220px, 60vw);
-  object-fit: contain;
+  width: 100%;
+  max-width: min(240px, 70vw);
+  padding: 0;
+  letter-spacing: 0;
+  /* The mask is set inline (so the URL is dynamic per-product); the rest
+     of the mask config is here. */
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: left center;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: left center;
+  mask-size: contain;
+  /* Solid fill = the rendered glyph color. White in dark mode (default),
+     near-black in light mode (override below). */
+  background-color: rgba(255, 255, 255, 0.95);
+}
+.light-mode .pd-brand--logo {
+  background-color: rgba(0, 0, 0, 0.85);
 }
 .light-mode .pd-brand {
   color: rgba(0, 0, 0, 0.55);

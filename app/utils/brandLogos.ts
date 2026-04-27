@@ -41,14 +41,25 @@ function guessDomainFromBrand(brand: string | null | undefined): string | null {
 /** Returns a Brandfetch logo URL for a product, or null if we can't infer
  *  a domain. The optional `theme` param asks the CDN for a logo variant
  *  designed for that surface — 'dark' returns a light-glyph version that
- *  reads on dark backgrounds, 'light' returns the canonical dark glyphs. */
+ *  reads on dark backgrounds, 'light' returns the canonical dark glyphs.
+ *
+ *  Brand-name-derived domain is preferred over the product URL because
+ *  the URL is often a Google Shopping search redirect (the scraper
+ *  source), which would resolve to google.com and return Google's logo
+ *  instead of the actual brand. The brand name → "<slug>.com" guess hits
+ *  cleanly for most fashion + beauty brands (PHLUR, Aerie, Old Navy …). */
 export function brandLogoUrlFor(opts: { brand?: string | null; url?: string | null; theme?: 'light' | 'dark' }): string | null {
-  const fromUrl = hostnameFromUrl(opts.url);
   const fromBrand = guessDomainFromBrand(opts.brand);
-  const domain = fromUrl ?? fromBrand;
+  const fromUrl = hostnameFromUrl(opts.url);
+  // Skip URL-derived domain if it looks like an aggregator / search engine.
+  const aggregator = fromUrl ? /(^|\.)(google|amazon|bing|duckduckgo|shopping|ebay|walmart)\./i.test(fromUrl) : false;
+  const domain = fromBrand ?? (aggregator ? null : fromUrl);
   if (!domain) return null;
   const params = new URLSearchParams();
   params.set('c', BRANDFETCH_CLIENT_ID);
   if (opts.theme) params.set('theme', opts.theme);
+  // fallback=lettermark — if Brandfetch has no logo for the domain, it
+  // returns a clean stylized text mark instead of a 404 / Google G.
+  params.set('fallback', 'lettermark');
   return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}?${params.toString()}`;
 }

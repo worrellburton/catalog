@@ -165,12 +165,27 @@ function BrandLine({ brand, brandUrl, showLogo, isLightMode }: { brand: string; 
   );
 
   if (showLogo && logoUrl && !logoFailed) {
+    // Render the logo as a CSS mask on a coloured (white in dark mode,
+    // black in light mode) box. The mask uses the image's alpha channel
+    // so we get a clean glyph silhouette regardless of whether the
+    // source has a transparent or opaque background — fixes the
+    // white-square issue for logos that came back with a solid bg.
+    // A hidden <img> off-screen drives an onError fallback to text.
     return (
-      <div className="pd-brand pd-brand--logo">
+      <div
+        className="pd-brand pd-brand--logo"
+        aria-label={brand}
+        role="img"
+        style={{
+          WebkitMaskImage: `url("${logoUrl}")`,
+          maskImage: `url("${logoUrl}")`,
+        } as React.CSSProperties}
+      >
         <img
           src={logoUrl}
-          alt={brand}
-          loading="lazy"
+          alt=""
+          aria-hidden="true"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
           onError={() => setLogoFailed(true)}
         />
       </div>
