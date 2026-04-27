@@ -4,7 +4,6 @@ import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId } from '~/utils/trailIds';
-import { brandLogoUrlFor } from '~/utils/brandLogos';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
@@ -39,12 +38,6 @@ interface ProductPageProps {
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
   bookmarks: BookmarksInterface;
-  /** When true AND `brandLogosOn` is true, the brand row renders a
-   *  Brandfetch logo image instead of the brand text. We gate on light
-   *  mode because the logos are typically dark glyphs on transparent
-   *  backgrounds — they read well on white surfaces, get lost on black. */
-  isLightMode?: boolean;
-  brandLogosOn?: boolean;
   /** Increments on every navigation. ProductPage's scroll-to-top
    *  effect depends on this so it fires reliably even when the new
    *  product happens to share brand+name with the prior one. */
@@ -103,10 +96,13 @@ function formatCents(cents: number): string {
 function buildRetailerOffers(product: Product): RetailerOffer[] {
   const baseCents = parsePriceCents(product.price);
   if (!baseCents) {
-    // No price = single chip pointing at the brand site.
-    return product.url
-      ? [{ retailer: product.brand || 'Brand site', url: product.url, price: '—', priceCents: 0, badge: 'official' }]
-      : [];
+    // No parseable price: still surface SOMETHING shoppable so the Shop
+    // button is never an empty button. If there's a brand URL, that's
+    // the official site; otherwise route to a web search for the
+    // product so the chip still works.
+    const fallbackUrl = product.url
+      || `https://www.google.com/search?q=${encodeURIComponent(`${product.brand || ''} ${product.name || ''}`.trim() + ' buy')}`;
+    return [{ retailer: product.brand || 'Brand site', url: fallbackUrl, price: '—', priceCents: 0, badge: 'official' }];
   }
   const seed = hashString(`${product.brand}|${product.name}`);
   // Three deterministic alts pulled from the rotating pool.
@@ -154,49 +150,9 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
   return offers;
 }
 
-/** Brand row — renders Brandfetch logo when allowed; otherwise falls
- *  back to the brand text. We ask Brandfetch directly for a theme-
- *  appropriate variant (?theme=dark = light-glyph, ?theme=light = dark-
- *  glyph) so we don't have to invert the bitmap with a CSS filter — the
- *  filter approach forced solid-fill any non-transparent pixel into a
- *  white square. The <img> onError swap keeps us from showing a broken-
- *  image icon when Brandfetch doesn't have the domain. */
-function BrandLine({ brand, brandUrl, showLogo, isLightMode }: { brand: string; brandUrl: string | null | undefined; showLogo: boolean; isLightMode: boolean }) {
-  const [logoFailed, setLogoFailed] = useState(false);
-  const logoUrl = useMemo(
-    () => brandLogoUrlFor({ brand, url: brandUrl, theme: isLightMode ? 'light' : 'dark' }),
-    [brand, brandUrl, isLightMode],
-  );
-
-  if (showLogo && logoUrl && !logoFailed) {
-    // Render the logo as a CSS mask on a coloured (white in dark mode,
-    // black in light mode) box. The mask uses the image's alpha channel
-    // so we get a clean glyph silhouette regardless of whether the
-    // source has a transparent or opaque background — fixes the
-    // white-square issue for logos that came back with a solid bg.
-    // A hidden <img> off-screen drives an onError fallback to text.
-    return (
-      <div
-        className="pd-brand pd-brand--logo"
-        aria-label={brand}
-        role="img"
-        style={{
-          WebkitMaskImage: `url("${logoUrl}")`,
-          maskImage: `url("${logoUrl}")`,
-        } as React.CSSProperties}
-      >
-        <img
-          src={logoUrl}
-          alt=""
-          aria-hidden="true"
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-          onError={() => setLogoFailed(true)}
-        />
-      </div>
-    );
-  }
-  return <div className="pd-brand">{brand}</div>;
-}
+// Brand-logo experiment removed — Brandfetch's results were inconsistent
+// (white squares for opaque-bg logos, wrong-brand fallbacks for products
+// scraped from Google Shopping). Brand text is the reliable indicator.
 
 interface SavedByDummy { count: number; avatars: { name: string; avatar: string }[] }
 function dummySavedBy(productKey: string): SavedByDummy {
@@ -298,8 +254,6 @@ export default function ProductPage({
   brandCreatives,
   lookCreatives,
   bookmarks,
-  isLightMode = false,
-  brandLogosOn = true,
   navKey = 0,
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
@@ -400,14 +354,7 @@ export default function ProductPage({
 
         <section className="pd-info">
           <div className="pd-info-inner">
-            {product.brand && (
-              <BrandLine
-                brand={product.brand}
-                brandUrl={product.url}
-                showLogo={brandLogosOn}
-                isLightMode={isLightMode}
-              />
-            )}
+            {product.brand && <div className="pd-brand">{product.brand}</div>}
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
 

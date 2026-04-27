@@ -25,10 +25,6 @@ interface UserMenuProps {
   savedProducts?: Product[];
   onOpenLook?: (look: Look) => void;
   onOpenProduct?: (product: Product) => void;
-  /** Brand-logos toggle (light mode only). When on, ProductPage renders
-   *  the Brandfetch wordmark in place of the brand text. */
-  brandLogosOn?: boolean;
-  onToggleBrandLogos?: () => void;
 }
 
 const STRIP_LIMIT = 8;
@@ -58,8 +54,6 @@ export default function UserMenu({
   savedProducts = [],
   onOpenLook,
   onOpenProduct,
-  brandLogosOn,
-  onToggleBrandLogos,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   // Brief grace period after closing during which the scrim stays
@@ -227,33 +221,6 @@ export default function UserMenu({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
                 <span>Decks</span>
               </button>
-            )}
-            {/* Brand-logos toggle. Only meaningful in light mode (the
-                logos are dark glyphs on transparent backgrounds — they
-                vanish on the dark feed) but the switch is always
-                available so the user can pre-configure it before
-                flipping themes. */}
-            {onToggleBrandLogos && (
-              <>
-                <div className="user-menu-divider" />
-                <button
-                  type="button"
-                  className="user-menu-item user-menu-item--toggle"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleBrandLogos(); }}
-                  role="switch"
-                  aria-checked={!!brandLogosOn}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
-                    <circle cx="9" cy="9" r="2"/>
-                    <path d="M21 15l-5-5L5 21"/>
-                  </svg>
-                  <span>Brand logos</span>
-                  <span className={`user-menu-switch${brandLogosOn ? ' is-on' : ''}`} aria-hidden="true">
-                    <span className="user-menu-switch-thumb" />
-                  </span>
-                </button>
-              </>
             )}
             {onLogout && (
               <>
