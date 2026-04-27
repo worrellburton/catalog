@@ -29,6 +29,46 @@
   padding: 8px 12px;
 }
 
+/* Always-visible inline search variant — replaces the old "all" pill. The
+   filter button + input + clear-X stack horizontally inside the bar. */
+.bottom-bar-inner.search-inline {
+  width: min(560px, calc(100vw - 48px));
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+.bottom-bar-inner.search-inline .bottom-search-input {
+  /* Knock the standalone glow off — the bar already provides the surface. */
+  animation: none;
+  background: transparent;
+  border-color: transparent;
+  padding: 12px 6px;
+}
+.bottom-bar-inner.search-inline .bottom-search-input:focus {
+  border-color: transparent;
+  animation: none;
+}
+
+.bottom-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+  flex-shrink: 0;
+}
+.bottom-search-clear:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
 .bottom-divider {
   width: 1px;
   height: 20px;

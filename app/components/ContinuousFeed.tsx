@@ -261,7 +261,10 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
-  const canDeleteCreative = user?.role === 'admin';
+  // Delete-on-feed is destructive on a public surface — gate strictly to
+  // super-admins. Regular admins keep edit access on /admin pages but won't
+  // see the trash affordance directly on the consumer grid.
+  const canDeleteCreative = user?.role === 'super_admin';
 
   const handleDeleteCreative = useCallback(async (id: string) => {
     // Optimistic remove so the tile disappears immediately; reinstate on error.
