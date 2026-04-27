@@ -1,45 +1,42 @@
-// TrailMotion — the single source of truth for trail morph motion.
+// TrailMotion — shared CSS vars + reduced-motion gate.
 //
-// Wrapping `motion.div` + `layoutId` here (instead of sprinkling layoutId
-// strings across components) keeps the spring config + reduced-motion gate
-// + LazyMotion bundle-trim choice in one file. If we ever swap motion libs,
-// this is the one file to touch.
+// History: this file used to wrap framer-motion's LazyMotion +
+// MotionConfig + motion.div(layoutId) so that taps on a card could
+// morph the bounding box into the overlay hero. We pivoted to the
+// TrailVideoHost pattern (the same <video> DOM node is appendChild'd
+// between slots, which is visually superior anyway because the pixels
+// literally don't move), and the layoutId machinery became unused.
 //
-// Subtle by design:
-//   • type: 'tween' with the iOS cubic-bezier — no spring overshoot.
-//   • 360 ms — short enough to feel decisive, long enough to read.
-//   • Disabled entirely under prefers-reduced-motion.
+// framer-motion was still ~50 kB gzipped of dead infrastructure on
+// every consumer page. Replacing it with a plain CSS-vars provider
+// gets that back. Any caller that ever wants real layout morphing
+// should opt in by importing framer-motion locally.
 
-import { LazyMotion, MotionConfig, domMax, m } from 'framer-motion';
 import type { CSSProperties, ReactNode, MouseEvent as ReactMouseEvent } from 'react';
 import { forwardRef, useEffect, useState } from 'react';
 
-// iOS spring curve (Apple's stock animation easing). Reads as "settle into
-// place" — no overshoot, no bounce. The Stripe / Linear / Vercel design
-// teams converge on this same curve for layout transitions.
-const TRAIL_EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
-const TRAIL_DURATION = 0.36; // seconds
+const TRAIL_DURATION = 0.36;
+const TRAIL_EASE_CSS = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
-const TRAIL_TRANSITION = {
+/** Shared transition descriptor — kept for backwards compat. */
+export const trailTransition = {
   type: 'tween' as const,
-  ease: TRAIL_EASE,
+  ease: [0.32, 0.72, 0, 1] as [number, number, number, number],
   duration: TRAIL_DURATION,
 };
 
-/** Shared transition object — exported for callers that want to compose. */
-export const trailTransition = TRAIL_TRANSITION;
-
-/** CSS variable surface so non-motion elements (rail entry, depth blur)
- *  can match the same easing/duration in plain CSS. */
+/** CSS-var surface other styles read for trail-paced transitions. */
 export const TRAIL_CSS_VARS: CSSProperties = {
   // @ts-expect-error CSS custom property
-  '--trail-ease': 'cubic-bezier(0.32, 0.72, 0, 1)',
+  '--trail-ease': TRAIL_EASE_CSS,
   '--trail-duration': '360ms',
 };
 
 interface TrailRootProps { children: ReactNode }
 
-/** Top-level provider. Mount once near the app root. */
+/** Top-level provider. Sets a `data-reduced-motion` attribute on its root
+ *  div so descendant CSS can shorten/disable transitions when the user
+ *  has reduced-motion turned on. */
 export function TrailRoot({ children }: TrailRootProps) {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -52,20 +49,16 @@ export function TrailRoot({ children }: TrailRootProps) {
   }, []);
 
   return (
-    <LazyMotion features={domMax} strict>
-      <MotionConfig
-        reducedMotion={reduced ? 'always' : 'never'}
-        transition={TRAIL_TRANSITION}
-      >
-        {children}
-      </MotionConfig>
-    </LazyMotion>
+    <div
+      style={TRAIL_CSS_VARS}
+      data-reduced-motion={reduced ? 'true' : 'false'}
+    >
+      {children}
+    </div>
   );
 }
 
 interface TrailMorphProps {
-  /** Stable id shared by every surface that should hand the box to the
-   *  next. Same id on the grid card + the overlay hero = morph. */
   id: string;
   className?: string;
   style?: CSSProperties;
@@ -73,25 +66,16 @@ interface TrailMorphProps {
   children?: ReactNode;
 }
 
-/** A motion.div with layoutId wired up. Drop-in replacement for a plain div
- *  when you want the box to morph between mount points. */
+/** Drop-in <div> kept for backwards compat. The layoutId-based morph is
+ *  no longer wired (TrailVideoHost handles the no-flicker handoff via
+ *  DOM appendChild instead). Callers can still wrap content in this and
+ *  apply CSS transitions keyed off `--trail-duration` / `--trail-ease`. */
 export const TrailMorph = forwardRef<HTMLDivElement, TrailMorphProps>(
-  function TrailMorph({ id, className, style, onClick, children }, ref) {
+  function TrailMorph({ className, style, onClick, children }, ref) {
     return (
-      <m.div
-        ref={ref}
-        layoutId={`trail-${id}`}
-        layout="position"
-        className={className}
-        style={style}
-        onClick={onClick}
-        // Cap layout-driven scale so wide aspect changes (4:5 card → 9:16
-        // hero) don't smear the inner video. The DOM-shared <video>'s own
-        // object-fit:cover does the right visual work.
-        transition={TRAIL_TRANSITION}
-      >
+      <div ref={ref} className={className} style={style} onClick={onClick}>
         {children}
-      </m.div>
+      </div>
     );
   }
 );
