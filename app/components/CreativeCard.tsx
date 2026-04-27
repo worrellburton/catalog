@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { useAuth } from '~/hooks/useAuth';
 import { useTrailVideo } from './TrailVideoHost';
-import { TrailMorph } from './TrailMotion';
 
 interface CreativeCardProps {
   creative: ProductAd;
@@ -17,17 +17,21 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   const [loaded, setLoaded] = useState(false);
   const [inViewport, setInViewport] = useState(false);
   const impressionTracked = useRef(false);
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
 
-  // Defer slot population to when the card scrolls in. The TrailVideoHost
-  // pool keeps elements alive across remounts, so the same id picked up by
-  // the overlay hero shares the running element — no reload, no black gap.
+  // The TrailVideoHost pool keeps the shared <video> element alive across
+  // remounts, so clicking a card hands the same DOM node — and its
+  // currentTime / decoded frames — to the ProductPage hero. Result: no
+  // reload, no first-frame black gap, even without an explicit morph.
   const setVideoSlot = useTrailVideo(
     inViewport ? creative.id : undefined,
     inViewport ? creative.video_url ?? undefined : undefined,
   );
 
-  // Compose the slot ref + the trail-video ref-callback. The callback runs
-  // each time the underlying node changes (mount, in/out of viewport).
   const setSlot = useCallback((node: HTMLDivElement | null) => {
     slotRef.current = node;
     setVideoSlot(node);
@@ -94,28 +98,86 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     if (creative.id) prefetchSimilarCreatives(creative.id, 18);
   }, [creative.id]);
 
+  // Long-press handler — super-admin-only. On touch devices a 500ms hold
+  // pops a small confirm-delete menu. Mouse equivalent is right-click
+  // (handled separately via onContextMenu). Either path requires the user
+  // to confirm before destruction lands.
+  const beginLongPress = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isSuperAdmin) return;
+    longPressFired.current = false;
+    // Only react to single-touch on touch events.
+    const isTouch = 'touches' in e;
+    if (isTouch && e.touches.length !== 1) return;
+    const x = isTouch ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const y = isTouch ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      setMenu({ x, y });
+      // Haptic if the device supports it.
+      try { (navigator as Navigator & { vibrate?: (n: number) => void }).vibrate?.(10); } catch {}
+    }, 500);
+  }, [isSuperAdmin]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current != null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  // Close the admin menu on outside-click / Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
+
   return (
     <div
       ref={cardRef}
       className={`${className} promo-card ${loaded ? 'loaded' : ''}`}
-      onClick={handleClick}
+      onClick={(e) => {
+        // Suppress the click that follows a long-press release so we don't
+        // open the product page right after surfacing the delete menu.
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        handleClick();
+      }}
       onMouseEnter={handlePrefetch}
-      onTouchStart={handlePrefetch}
+      onTouchStart={(e) => { handlePrefetch(); beginLongPress(e); }}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      onTouchCancel={cancelLongPress}
+      onMouseDown={beginLongPress}
+      onMouseUp={cancelLongPress}
+      onMouseLeave={cancelLongPress}
+      onContextMenu={isSuperAdmin ? (e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      } : undefined}
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* TrailMorph: layoutId="trail-${id}" matches the same id on the
-            ProductPage hero, so Framer Motion morphs the box position+size
-            between mounts. The shared <video> element living inside is moved
-            via appendChild by TrailVideoHost — neither React nor Framer touch
-            it, so playback survives the morph. */}
-        <TrailMorph
-          id={creative.id}
+        {/* TrailVideoHost slot — the host appendChild's the shared <video>
+            element here, then moves it to the ProductPage hero on tap. The
+            DOM node survives the move so playback continues unbroken; the
+            overlay's opacity fade IS the entire transition. */}
+        <div
+          ref={setSlot}
           className="card-video-slot"
+          data-trail-id={creative.id}
           style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
-        >
-          <div ref={setSlot} className="card-video-slot-inner" style={{ width: '100%', height: '100%' }} data-trail-id={creative.id} />
-        </TrailMorph>
+        />
         <div className="card-gradient" />
 
         {canDelete && onDelete && (
@@ -154,6 +216,33 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
           )}
         </div>
       </div>
+      {menu && isSuperAdmin && (
+        <div
+          className="trail-admin-menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{ left: menu.x, top: menu.y }}
+        >
+          <button
+            type="button"
+            className="trail-admin-menu-btn trail-admin-menu-btn--danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenu(null);
+              if (onDelete && confirm(`Delete creative for ${creative.product?.name || 'this product'}?`)) {
+                onDelete(creative.id);
+              }
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+            </svg>
+            Delete creative
+          </button>
+        </div>
+      )}
     </div>
   );
 });

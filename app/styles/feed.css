@@ -598,3 +598,55 @@
     transform: scale(1);
   }
 }
+
+/* Long-press / right-click admin menu — appears at the cursor or
+   touch point when a super-admin holds a card. Uses fixed positioning
+   so it lands precisely where the user pressed; styled to match the
+   in-app browser / overlay chrome. */
+.trail-admin-menu {
+  position: fixed;
+  z-index: 10000;
+  background: rgba(20, 20, 20, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  animation: trailAdminMenuIn 0.16s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes trailAdminMenuIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.trail-admin-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: background 0.12s ease;
+}
+.trail-admin-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.trail-admin-menu-btn--danger {
+  color: #fca5a5;
+}
+.trail-admin-menu-btn--danger:hover {
+  background: rgba(252, 165, 165, 0.10);
+}

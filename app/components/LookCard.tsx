@@ -4,7 +4,6 @@ import { Look, creators } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useTrailVideo } from './TrailVideoHost';
-import { TrailMorph } from './TrailMotion';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
 interface LookCardProps {
@@ -21,8 +20,31 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const [loaded, setLoaded] = useState(false);
   const [inViewport, setInViewport] = useState(false);
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+
+  const beginLongPress = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isSuperAdmin) return;
+    longPressFired.current = false;
+    const isTouch = 'touches' in e;
+    if (isTouch && e.touches.length !== 1) return;
+    const x = isTouch ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const y = isTouch ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      setMenu({ x, y });
+      try { (navigator as Navigator & { vibrate?: (n: number) => void }).vibrate?.(10); } catch {}
+    }, 500);
+  }, [isSuperAdmin]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current != null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
 
   // Close the admin right-click menu on any outside click or Escape.
   useEffect(() => {
@@ -86,26 +108,39 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       ref={cardRef}
       className={`${className} ${loaded ? 'loaded' : ''}`}
       onClick={(e) => {
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         if (!(e.target as HTMLElement).closest('.card-creator-row')) {
           onOpenLook(look);
         }
       }}
-      onContextMenu={isAdmin ? (e) => {
+      onTouchStart={beginLongPress}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      onTouchCancel={cancelLongPress}
+      onMouseDown={beginLongPress}
+      onMouseUp={cancelLongPress}
+      onMouseLeave={cancelLongPress}
+      onContextMenu={isSuperAdmin ? (e) => {
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
       } : undefined}
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* TrailMorph: layoutId matches LookOverlay's hero — Framer Motion
-            morphs the box position on tap. The shared <video> rides along. */}
-        <TrailMorph
-          id={trailId}
+        {/* TrailVideoHost slot — shared <video> hands off to LookOverlay's
+            hero on tap via DOM appendChild. No layout morph; the card's
+            own video frames stay alive while the overlay opacity-fades in. */}
+        <div
+          ref={setSlot}
           className="card-video-slot"
+          data-trail-id={trailId}
           style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
-        >
-          <div ref={setSlot} className="card-video-slot-inner" style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
-        </TrailMorph>
+        />
         <div className="card-gradient" />
         {onCreateCatalog && (
           <button

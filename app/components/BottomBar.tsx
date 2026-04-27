@@ -26,6 +26,30 @@ export default function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
+
+  // Lift the bar above iOS Safari's bottom URL toolbar. The toolbar is
+  // part of the layout viewport (not the visual viewport) and isn't
+  // covered by safe-area-inset-bottom, so a fixed `bottom: 24px` puts the
+  // bar BEHIND it. Watching window.visualViewport lets us compute the
+  // toolbar's actual height at any scroll position and feed it to CSS as
+  // --ios-bottom-chrome. The bar's bottom rule reads max(safe-area, that)
+  // so it always clears the toolbar.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    const update = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop;
+      root.style.setProperty('--ios-bottom-chrome', `${Math.max(offset, 0)}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
   const scrollY = useRef(0);
 
   const shuffledSuggestions = useMemo(() => {
