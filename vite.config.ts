@@ -43,6 +43,7 @@ export default defineConfig({
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
             route("catalogs/:slug", "routes/admin/catalogs.$slug.tsx");
+            route("branding", "routes/admin/branding.tsx");
             route("decks", "routes/admin/decks.tsx", () => {
               route("", "routes/admin/decks._index.tsx", { index: true });
               route(":version", "routes/admin/decks.$version.tsx");
