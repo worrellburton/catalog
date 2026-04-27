@@ -20,13 +20,10 @@
 }
 
 /* When running inside the native app shell, push content below the status bar.
-   --shell-sb is injected at AT_DOCUMENT_START by the Flutter shell so it's
-   available before first paint. The +44px accounts for the native back bar. */
+   --shell-sb is injected at AT_DOCUMENT_START by Flutter with the real
+   status-bar height in px (e.g. 59px on iPhone 16 Pro). */
 html[data-shell="catalog-app"] .gen-page {
-  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 44px)) + 44px);
-}
-html[data-shell="catalog-app"] .gen-back {
-  display: none !important;
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 44px));
 }
 
 /* Header bar — three-column on desktop (back / wordmark / sub),
