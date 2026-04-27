@@ -47,29 +47,6 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
   return { error: error?.message };
 }
 
-export async function sendPhoneOtp(phone: string): Promise<{ error?: string }> {
-  if (!supabase) return { error: 'Supabase not configured' };
-
-  const { error } = await supabase.auth.signInWithOtp({
-    phone,
-  });
-
-  return { error: error?.message };
-}
-
-export async function verifyPhoneOtp(phone: string, token: string): Promise<{ user?: AuthUser; error?: string }> {
-  if (!supabase) return { error: 'Supabase not configured' };
-
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone,
-    token,
-    type: 'sms',
-  });
-
-  if (error || !data.user) return { error: error?.message || 'Verification failed' };
-  return { user: mapUser(data.user) };
-}
-
 export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!supabase) return null;
 
