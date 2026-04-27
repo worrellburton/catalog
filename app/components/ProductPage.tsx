@@ -250,16 +250,29 @@ export default function ProductPage({
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  // Shop dropdown — retailer chips stay collapsed by default so the action
+  // row reads clean. Tapping the Shop button expands them; tapping again
+  // (or selecting a retailer) closes.
+  const [showRetailers, setShowRetailers] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-collapse the Shop drawer when the user navigates to a different
+  // product so the next page also starts with it closed.
+  useEffect(() => { setShowRetailers(false); }, [product.brand, product.name]);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // Reset scroll to top when the product changes (user tapped a similar
-  // product and we swapped state in-place).
+  // Reset scroll to top when the product changes. Defer one rAF so the
+  // scrollTo happens after Framer Motion has captured the source rect for
+  // the layoutId morph — otherwise the snap re-positions the card mid-
+  // morph and the animation reads as glitchy.
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    const raf = requestAnimationFrame(() => {
+      scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [product.brand, product.name]);
 
   const handleClose = useCallback(() => {
@@ -361,38 +374,21 @@ export default function ProductPage({
               </div>
             )}
 
-            {/* Retailer comparison strip. Each chip says the retailer name
-                + the price at that retailer. Tap goes straight to that
-                retailer's page (in-app browser). The cheapest is badged
-                "Lowest" or "Discount −X%" based on % off MSRP. The brand's
-                own site sits first, marked "Official". */}
-            {retailerOffers.length > 0 && (
-              <div className="pd-retailers" role="list" aria-label="Where to buy">
-                {retailerOffers.map(offer => (
-                  <button
-                    key={offer.retailer}
-                    type="button"
-                    className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
-                    onClick={() => onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`, product)}
-                    role="listitem"
-                  >
-                    <span className="pd-retailer-name">{offer.retailer}</span>
-                    <span className="pd-retailer-price">{offer.price}</span>
-                    {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
-                    {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
-                    {offer.badge === 'discount' && (
-                      <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
-                    )}
-                    <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="7" y1="17" x2="17" y2="7" />
-                      <polyline points="7 7 17 7 17 17" />
-                    </svg>
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="pd-actions">
+              {retailerOffers.length > 0 && (
+                <button
+                  type="button"
+                  className={`pd-shop-btn${showRetailers ? ' is-open' : ''}`}
+                  onClick={() => setShowRetailers(s => !s)}
+                  aria-expanded={showRetailers}
+                  aria-controls="pd-retailers-drawer"
+                >
+                  <span>Shop</span>
+                  <svg className="pd-shop-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
               <button
                 type="button"
                 className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}
@@ -406,6 +402,49 @@ export default function ProductPage({
                 <span>{isSaved ? 'Saved' : 'Save'}</span>
               </button>
             </div>
+
+            {/* Retailer comparison drawer. Hidden until the user taps Shop.
+                Each chip says the retailer name + the price at that
+                retailer. Tap goes straight to that retailer's page (in-app
+                browser). The cheapest is badged "Lowest" or "Discount −X%"
+                based on % off MSRP. The brand's own site sits first,
+                marked "Official". */}
+            {retailerOffers.length > 0 && (
+              <div
+                id="pd-retailers-drawer"
+                className={`pd-retailers-drawer${showRetailers ? ' is-open' : ''}`}
+                role="region"
+                aria-label="Where to buy"
+                hidden={!showRetailers}
+              >
+                <div className="pd-retailers" role="list">
+                  {retailerOffers.map(offer => (
+                    <button
+                      key={offer.retailer}
+                      type="button"
+                      className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
+                      onClick={() => {
+                        setShowRetailers(false);
+                        onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`, product);
+                      }}
+                      role="listitem"
+                    >
+                      <span className="pd-retailer-name">{offer.retailer}</span>
+                      <span className="pd-retailer-price">{offer.price}</span>
+                      {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
+                      {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
+                      {offer.badge === 'discount' && (
+                        <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
+                      )}
+                      <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="7" y1="17" x2="17" y2="7" />
+                        <polyline points="7 7 17 7 17 17" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

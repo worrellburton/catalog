@@ -394,9 +394,13 @@ export default function Home() {
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
-    setSelectedSimilar(null);
-    setSimilarCreatives(null);
-    setBrandCreatives(null);
+    // Don't blank the rail state here — that would unmount the tapped rail
+    // card the very moment Framer Motion is reading its layoutId for the
+    // morph, which produces a glitched/jumping transition. Keep the old
+    // rails visible; the .then() handlers below overwrite once new data
+    // arrives. If the prefetch was already done (likely, because tapping
+    // the card means the user hovered/touched it which fired prefetch),
+    // the swap is effectively instant.
 
     // Three lookups, all eager. Each is independently primed so the user's
     // hover often resolves them before they actually tap.
@@ -410,8 +414,8 @@ export default function Home() {
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
 
-    // As soon as the trail rail resolves, prime asset cache for the top few
-    // results so the next morph in the trail also has its frames ready.
+    // Overwrite when data arrives. No intermediate null state — old rail
+    // content stays put through the morph and gets replaced atomically.
     similarP.then(rows => {
       primeTrailAssets(rows);
       setSimilarCreatives(rows);

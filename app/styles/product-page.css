@@ -474,16 +474,59 @@
 .pd-saved-count { letter-spacing: 0.01em; }
 .pd-saved-count strong { color: #fff; font-weight: 600; }
 
+/* Shop button — sits next to Save. Tap toggles the retailer drawer. */
+.pd-shop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease;
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.04);
+}
+.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(255, 255, 255, 0.08); }
+.pd-shop-btn:active { transform: scale(0.97); }
+.pd-shop-chevron {
+  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pd-shop-btn.is-open .pd-shop-chevron {
+  transform: rotate(180deg);
+}
+
+/* Retailer drawer — collapsed by default, expands beneath the action row.
+   Uses grid-template-rows 0fr → 1fr for a smooth height animation that
+   doesn't require knowing the content height in advance. */
+.pd-retailers-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  margin: 0;
+}
+.pd-retailers-drawer.is-open {
+  grid-template-rows: 1fr;
+  margin-top: 14px;
+}
+.pd-retailers-drawer > .pd-retailers {
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Retailer comparison strip — list of pill-shaped buttons, one per
    retailer. Each one shows the retailer name + that retailer's price + a
    badge (Official / Lowest / Discount %). Tap opens the in-app browser at
-   that retailer's product page. Stacked vertically on mobile so prices
-   line up; flexes inline on wider viewports. */
+   that retailer's product page. Stacked vertically so prices line up. */
 .pd-retailers {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 6px 0 18px;
+  margin: 0;
 }
 
 .pd-retailer-chip {
