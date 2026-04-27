@@ -5,6 +5,7 @@ import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { TrailMorph } from '~/components/TrailMotion';
 import { lookTrailId } from '~/utils/trailIds';
+import { brandLogoUrlFor } from '~/utils/brandLogos';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
@@ -39,6 +40,12 @@ interface ProductPageProps {
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
   bookmarks: BookmarksInterface;
+  /** When true AND `brandLogosOn` is true, the brand row renders a
+   *  Brandfetch logo image instead of the brand text. We gate on light
+   *  mode because the logos are typically dark glyphs on transparent
+   *  backgrounds — they read well on white surfaces, get lost on black. */
+  isLightMode?: boolean;
+  brandLogosOn?: boolean;
 }
 
 // Stable hash of any string → unsigned integer. Used to derive a consistent
@@ -144,6 +151,28 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
   return offers;
 }
 
+/** Brand row — renders Brandfetch logo when allowed; otherwise falls
+ *  back to the brand text. The `<img>` onError swap keeps us from showing
+ *  a broken-image icon when Brandfetch doesn't have the domain. */
+function BrandLine({ brand, brandUrl, showLogo }: { brand: string; brandUrl: string | null | undefined; showLogo: boolean }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoUrl = useMemo(() => brandLogoUrlFor({ brand, url: brandUrl }), [brand, brandUrl]);
+
+  if (showLogo && logoUrl && !logoFailed) {
+    return (
+      <div className="pd-brand pd-brand--logo">
+        <img
+          src={logoUrl}
+          alt={brand}
+          loading="lazy"
+          onError={() => setLogoFailed(true)}
+        />
+      </div>
+    );
+  }
+  return <div className="pd-brand">{brand}</div>;
+}
+
 interface SavedByDummy { count: number; avatars: { name: string; avatar: string }[] }
 function dummySavedBy(productKey: string): SavedByDummy {
   if (AVATAR_POOL.length === 0) return { count: 0, avatars: [] };
@@ -247,6 +276,8 @@ export default function ProductPage({
   brandCreatives,
   lookCreatives,
   bookmarks,
+  isLightMode = false,
+  brandLogosOn = true,
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
@@ -348,7 +379,13 @@ export default function ProductPage({
 
         <section className="pd-info">
           <div className="pd-info-inner">
-            {product.brand && <div className="pd-brand">{product.brand}</div>}
+            {product.brand && (
+              <BrandLine
+                brand={product.brand}
+                brandUrl={product.url}
+                showLogo={isLightMode && brandLogosOn}
+              />
+            )}
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
 

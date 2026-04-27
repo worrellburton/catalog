@@ -193,6 +193,27 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* Brand-logo variant — only renders in light mode (gated upstream by the
+   isLightMode + brandLogosOn props). Logo height matches the eyebrow text
+   row visually so the rest of the info layout doesn't shift between modes. */
+.pd-brand--logo {
+  padding: 4px 0 6px;
+  letter-spacing: 0;
+}
+.pd-brand--logo img {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: min(220px, 60vw);
+  object-fit: contain;
+  /* Logos come as transparent PNG/SVG with dark glyphs; let them render
+     natural color on the light surface. */
+  filter: none;
+}
+.light-mode .pd-brand {
+  color: rgba(0, 0, 0, 0.55);
+}
+
 .pd-name {
   font-size: 28px;
   font-weight: 600;

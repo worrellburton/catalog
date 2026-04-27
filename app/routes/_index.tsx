@@ -18,6 +18,7 @@ import MyLooks from '~/components/MyLooks';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
+import { useBrandLogosToggle } from '~/hooks/useBrandLogosToggle';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
@@ -159,6 +160,7 @@ export default function Home() {
 
   const bookmarks = useBookmarks();
   const { recentProducts, pushRecent } = useRecentProducts();
+  const { brandLogosOn, toggle: toggleBrandLogos } = useBrandLogosToggle();
   const { user, loading: authLoading, logout } = useAuth();
 
   // Track recent catalogs
@@ -495,6 +497,8 @@ export default function Home() {
                 savedLooks={liveLooks.filter(l => bookmarks.bookmarkedLooks.includes(l.id))}
                 onOpenLook={handleOpenLook}
                 onOpenProduct={handleOpenProduct}
+                brandLogosOn={brandLogosOn}
+                onToggleBrandLogos={toggleBrandLogos}
               />
             </div>
           </header>
@@ -587,6 +591,8 @@ export default function Home() {
               brandCreatives={brandCreatives ?? undefined}
               lookCreatives={liveLooks.slice(0, 12)}
               bookmarks={bookmarks}
+              isLightMode={isLightMode}
+              brandLogosOn={brandLogosOn}
             />
           )}
 

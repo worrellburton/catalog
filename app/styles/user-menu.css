@@ -326,3 +326,44 @@
   color: #555;
 }
 
+
+/* Brand-logos toggle row */
+.user-menu-item--toggle {
+  cursor: pointer;
+}
+.user-menu-switch {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  width: 32px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 2px;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+.user-menu-switch.is-on {
+  background: #ffd75c;
+}
+.user-menu-switch-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateX(0);
+  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.user-menu-switch.is-on .user-menu-switch-thumb {
+  transform: translateX(14px);
+}
+.light-mode .user-menu-switch {
+  background: rgba(0, 0, 0, 0.12);
+}
+.light-mode .user-menu-switch.is-on {
+  background: #1a1a1a;
+}
+.light-mode .user-menu-switch-thumb {
+  background: #fff;
+}
