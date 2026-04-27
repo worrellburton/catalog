@@ -3,6 +3,7 @@ import LookCard from './LookCard';
 import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
+import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
 
 interface FeedSectionProps {
   looks: Look[];
@@ -34,14 +35,9 @@ const LAYOUT_CONFIGS = [
 const DEFAULT_BATCH = 12;
 const SUB_BATCH = 6;
 
-function shuffled<T>(arr: T[]): T[] {
-  const next = arr.slice();
-  for (let i = next.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
-  }
-  return next;
-}
+// (Math.random shuffle removed — seeded shuffle below means the same
+// inputs always produce the same output, which is what useMemo needs to
+// avoid identity churn on unrelated re-renders.)
 
 function FeedSection({
   looks,
@@ -120,14 +116,23 @@ function FeedSection({
     // Secondary "More like this" segments (isInitial=false) still pull from
     // their look set since that's where look-driven discovery lives.
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
-    const buildDeck = (): DeckEntry[] => shuffled<DeckEntry>(
-      isInitial
-        ? creativeList.map(creative => ({ type: 'creative' as const, creative }))
-        : [
-            ...looks.map(look => ({ type: 'look' as const, look })),
-            ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
-          ],
-    );
+    // Seed combines layoutMode + sizes of the input arrays so the shuffle
+    // is stable for a given (layoutMode, looks, creatives) but visibly
+    // different across deck cycles (cycleSeed below salts each pass).
+    const baseSeed = hashSeed(layoutMode, looks.length, creativeList.length, isInitial ? 1 : 0);
+    let cycleSeed = baseSeed;
+    const buildDeck = (): DeckEntry[] => {
+      cycleSeed = (cycleSeed * 31 + 7) | 0;
+      return seededShuffle<DeckEntry>(
+        isInitial
+          ? creativeList.map(creative => ({ type: 'creative' as const, creative }))
+          : [
+              ...looks.map(look => ({ type: 'look' as const, look })),
+              ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+            ],
+        cycleSeed,
+      );
+    };
 
     const items: PoolItem[] = [];
     let deck = buildDeck();
@@ -148,7 +153,7 @@ function FeedSection({
     }
 
     return items;
-  }, [looks, creatives, creativesLoading, isInitial]);
+  }, [looks, creatives, creativesLoading, isInitial, layoutMode]);
 
   const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
 

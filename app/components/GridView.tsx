@@ -2,6 +2,7 @@
 import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import { looks as staticLooksFallback, creators, Look } from '~/data/looks';
 import { getLooks } from '~/services/looks';
+import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import LookCard from './LookCard';
 
@@ -176,18 +177,18 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   }, [activeFilter, searchQuery, looks]);
 
   // Infinite pool = shuffle the full admin look set, lay it down, repeat.
+  // Seeded so the same (filteredLooks, shuffleKey) pair always produces
+  // the same arrangement — useMemo's referential identity stays stable
+  // across re-renders that don't actually change the inputs.
   const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];
     const poolSize = 200;
     const result: (Look & { displayIndex: number })[] = [];
     let displayIndex = 0;
-    void shuffleKey;
+    let cycleSeed = hashSeed(shuffleKey, filteredLooks.length);
     while (result.length < poolSize) {
-      const deck = [...filteredLooks];
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
+      cycleSeed = (cycleSeed * 31 + 7) | 0;
+      const deck = seededShuffle(filteredLooks, cycleSeed);
       for (const look of deck) {
         if (result.length >= poolSize) break;
         result.push({ ...look, displayIndex: displayIndex++ });
