@@ -38,6 +38,10 @@ header {
   height: 36px;
   width: auto;
   color: var(--text);
+  /* For the font-rendered brand variant (a span), font-size drives the visual
+     scale; for the SVG variant, height does. Setting both keeps the logo at
+     a consistent visual height across both render paths. */
+  font-size: 36px;
 }
 
 .logo-btn {
