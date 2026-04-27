@@ -5,6 +5,7 @@ import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import { supabaseImage } from '~/utils/supabaseImage';
 
 type TabId = 'products' | 'creator';
 
@@ -253,7 +254,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
                         {p.image
-                          ? <img src={p.image} alt={p.name} className="product-thumb-img" />
+                          ? <img src={supabaseImage(p.image, { width: 240, quality: 70 })} alt={p.name} className="product-thumb-img" loading="lazy" decoding="async" />
                           : <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
                         }
                       </div>

@@ -11,6 +11,7 @@
 // Idempotent — calling twice with the same rows is a no-op.
 
 import type { ProductAd } from '~/services/product-creative';
+import { supabaseImage } from './supabaseImage';
 
 const POSTERS_TO_WARM = 16;
 // Bumped from 3 to 9 — covers the first ~5 rows of the 2-col mobile grid
@@ -76,9 +77,14 @@ export function primeTrailAssets(rows: ProductAd[]): void {
   if (!rows?.length) return;
 
   // Poster warm: only need a thumbnail for the first ~12 cards above-the-fold.
+  // Run Supabase Storage URLs through the render endpoint with width=480 so
+  // we pull a ~30 KB resized JPEG instead of a 1–2 MB original. External
+  // URLs (Unsplash, brand sites) pass through unchanged.
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
-    const poster = row.thumbnail_url || row.product?.image_url;
-    if (!poster || warmedPosters.has(poster)) continue;
+    const rawPoster = row.thumbnail_url || row.product?.image_url;
+    if (!rawPoster) continue;
+    const poster = supabaseImage(rawPoster, { width: 480, quality: 70 });
+    if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
     void decodeImage(poster);
