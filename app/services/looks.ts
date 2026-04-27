@@ -192,3 +192,18 @@ export function invalidateLooksCache() {
   creatorsPromise = null;
   suggestionsPromise = null;
 }
+
+// Prime the looks + creators caches at module load time, before any React
+// component mounts. The fetch starts as soon as the JS bundle parses,
+// running in parallel with rendering instead of waiting for useEffect.
+// Effectively gives us a Remix clientLoader benefit without needing to
+// thread useLoaderData through every component that wants the data.
+//
+// Guarded to browser context only — tests and SSR paths skip it.
+if (typeof window !== 'undefined' && USE_SUPABASE) {
+  // Fire-and-forget; populates the singleton promises. Component callers
+  // .then() on the same promises and get the result whenever the network
+  // comes back, regardless of whether they mount before or after.
+  void getLooks().catch(() => { /* surfaced again on the real caller */ });
+  void getCreators().catch(() => { /* surfaced again on the real caller */ });
+}
