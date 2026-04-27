@@ -839,21 +839,28 @@
   color: rgba(255, 255, 255, 0.3);
 }
 
-/* Mobile: lower the bottom bar to sit just above the browser URL bar */
+/* Mobile: iOS Safari's bottom URL toolbar overlays the viewport when
+   visible (about 80px tall), so a `bottom: 8px` puts the bar BEHIND the
+   toolbar. We lift the bar above the toolbar's typical position with a
+   safe-area-aware offset. The 88px constant covers Safari's URL bar +
+   home-indicator buffer; safe-area-inset-bottom ensures notched devices
+   in landscape stay clear of the home indicator too. */
 @media (max-width: 768px) {
   .bottom-bar {
-    bottom: 8px;
+    bottom: calc(88px + env(safe-area-inset-bottom));
     border-radius: 22px;
   }
   .bottom-bar.search-open {
-    bottom: 12px;
+    bottom: calc(96px + env(safe-area-inset-bottom));
   }
   .bottom-bar.filters-open {
     top: 0;
     bottom: 0;
   }
+  /* Suggestions float above the bar — keep them well clear of the URL
+     toolbar so the rolling list doesn't clip into Safari's chrome. */
   .search-suggestions {
-    bottom: 100px;
+    bottom: calc(180px + env(safe-area-inset-bottom));
   }
 }
 
