@@ -110,28 +110,36 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
 /** Look-creative tile for the "You might also like" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video. */
 function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [inViewport, setInViewport] = useState(false);
+  // Same trailId LookCard / LookOverlay use, so a tap from this grid morphs
+  // straight into the look hero with the shared <video> element.
+  const trailId = lookTrailId(look.id);
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? (look.video || undefined) : undefined,
+  );
+  const setSlot = useCallback((node: HTMLDivElement | null) => {
+    wrapRef.current = node;
+    setVideoSlot(node);
+  }, [setVideoSlot]);
+
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
+    const node = wrapRef.current;
+    if (!node) return;
     const obs = new IntersectionObserver(
-      es => es.forEach(e => { if (e.isIntersecting) v.play().catch(() => {}); else v.pause(); }),
+      es => es.forEach(e => setInViewport(e.isIntersecting)),
       { rootMargin: '200px' },
     );
-    obs.observe(v);
+    obs.observe(node);
     return () => obs.disconnect();
   }, []);
+
   return (
     <button type="button" className="pd-look-tile" onClick={() => onOpen(look)}>
-      <video
-        ref={videoRef}
-        src={look.video}
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        className="pd-look-tile-video"
-      />
+      <TrailMorph id={trailId} className="pd-look-tile-video">
+        <div ref={setSlot} style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
+      </TrailMorph>
       <div className="pd-look-tile-meta">
         <span className="pd-look-tile-title">{look.title}</span>
         {look.creator && <span className="pd-look-tile-creator">{look.creator}</span>}

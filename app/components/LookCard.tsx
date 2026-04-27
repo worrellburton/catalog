@@ -3,6 +3,9 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { Look, creators } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import { hideLookId } from '~/hooks/useHiddenLooks';
+import { useTrailVideo } from './TrailVideoHost';
+import { TrailMorph } from './TrailMotion';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
 interface LookCardProps {
   look: Look;
@@ -13,10 +16,10 @@ interface LookCardProps {
 }
 
 const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog }: LookCardProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const [inViewport, setInViewport] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -36,50 +39,47 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
 
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const trailId = lookTrailId(look.id);
+  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+
+  // Defer slot population to viewport. The TrailVideoHost pool keeps the
+  // element alive so the LookOverlay hero (same trailId) reuses the same
+  // running <video> on tap — no remount, no first-frame black.
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
+  );
+
+  const setSlot = useCallback((node: HTMLDivElement | null) => {
+    slotRef.current = node;
+    setVideoSlot(node);
+  }, [setVideoSlot]);
 
   useEffect(() => {
-    const video = videoRef.current;
     const card = cardRef.current;
-    if (!video || !card) return;
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          if (!videoSrc) {
-            setVideoSrc(`${basePath}/${look.video}`);
-          }
-          video.play().catch(() => {});
-        } else {
-          video.pause();
-        }
-      });
-    }, { rootMargin: '200px' });
-
-    observer.observe(video);
+    if (!card) return;
+    const observer = new IntersectionObserver(
+      es => es.forEach(e => setInViewport(e.isIntersecting)),
+      { rootMargin: '200px' },
+    );
+    observer.observe(card);
     return () => observer.disconnect();
-  }, [look.video, videoSrc, basePath]);
-
-  const markLoaded = useCallback(() => {
-    setLoaded(true);
   }, []);
 
+  // Mark loaded once the host video has frames.
   useEffect(() => {
-    const video = videoRef.current;
+    if (!inViewport) return;
+    const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
-
-    const handler = () => markLoaded();
-    ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-      video.addEventListener(evt, handler, { once: true });
-    });
-
-    const timeout = setTimeout(() => markLoaded(), 8000);
+    if (video.readyState >= 2) { setLoaded(true); return; }
+    const handler = () => setLoaded(true);
+    ['playing', 'canplay', 'loadeddata'].forEach(evt => video.addEventListener(evt, handler, { once: true }));
+    const timeout = setTimeout(() => setLoaded(true), 8000);
     return () => {
       clearTimeout(timeout);
-      ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-        video.removeEventListener(evt, handler);
-      });
+      ['playing', 'canplay', 'loadeddata'].forEach(evt => video.removeEventListener(evt, handler));
     };
-  }, [markLoaded]);
+  }, [inViewport, trailId]);
 
   return (
     <div
@@ -97,14 +97,15 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          muted
-          loop
-          playsInline
-          preload="none"
-        />
+        {/* TrailMorph: layoutId matches LookOverlay's hero — Framer Motion
+            morphs the box position on tap. The shared <video> rides along. */}
+        <TrailMorph
+          id={trailId}
+          className="card-video-slot"
+          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
+        >
+          <div ref={setSlot} className="card-video-slot-inner" style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
+        </TrailMorph>
         <div className="card-gradient" />
         {onCreateCatalog && (
           <button

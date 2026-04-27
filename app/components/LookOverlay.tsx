@@ -3,6 +3,9 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
+import { useTrailVideo } from './TrailVideoHost';
+import { TrailMorph } from './TrailMotion';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
 type TabId = 'products' | 'creator';
 
@@ -28,7 +31,6 @@ interface LookOverlayProps {
 export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -41,17 +43,22 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const trailId = lookTrailId(look.id);
+  const heroVideoUrl = normalizeLookVideoUrl(look.video, basePath);
 
-  // Build a pool of 30 looks (excluding current look), cycling through available looks
+  // Take ownership of the same shared <video> element the originating
+  // LookCard was playing. appendChild moves the DOM node — currentTime,
+  // decoded frames, and audio context all survive, so the morph from card
+  // → hero never reloads or shows a black gap.
+  const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
+
+  // Each look gets exactly one card in the feed (no cycling/duplication).
+  // Two cards sharing a look.id would also share the layoutId for the
+  // trail morph — Framer Motion picks the latest-mounted as canonical and
+  // the other goes blank. Dedup by id and cap at 30.
   const feedLooks = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
-    if (source.length === 0) return [];
-    const POOL_SIZE = 30;
-    const result: (Look & { displayIndex: number })[] = [];
-    for (let i = 0; i < POOL_SIZE; i++) {
-      result.push({ ...source[i % source.length], id: source[i % source.length].id * 1000 + i, displayIndex: i });
-    }
-    return result;
+    return source.slice(0, 30).map((l, i) => ({ ...l, displayIndex: i }));
   }, [look.id, allLooks]);
 
   // Trigger enter animation after first paint
@@ -141,15 +148,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Centered video with overlays */}
             <div className="look-media-centered">
               <div className="look-media">
-                <video
-                  ref={videoRef}
-                  src={`${basePath}/${look.video}`}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="look-media-video"
-                />
+                {/* TrailMorph + shared video slot — same trailId as the
+                    originating LookCard so Framer Motion morphs the box
+                    and the DOM video keeps playing untouched. */}
+                <TrailMorph id={trailId} className="look-media-video">
+                  <div ref={setHeroSlot} style={{ width: '100%', height: '100%' }} data-trail-id={trailId} />
+                </TrailMorph>
                 {/* Bottom-left: product count badge */}
                 <div className="hotspot-indicator">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
