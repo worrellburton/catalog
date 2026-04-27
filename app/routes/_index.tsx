@@ -9,6 +9,7 @@ import BottomBar from '~/components/BottomBar';
 import BookmarksPage from '~/components/BookmarksPage';
 import ProductPage from '~/components/ProductPage';
 import LookOverlay from '~/components/LookOverlay';
+import InAppBrowser from '~/components/InAppBrowser';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -286,9 +287,14 @@ export default function Home() {
     setCreatorFilter(null);
   }, []);
 
-  const handleOpenBrowser = useCallback((url: string, _title: string) => {
+  // In-app browser state. Carries the optional product context so the
+  // browser header can show a Save chip wired to bookmarks while the
+  // shopper is on the retailer page.
+  const [browserState, setBrowserState] = useState<{ url: string; title: string; product?: Product } | null>(null);
+
+  const handleOpenBrowser = useCallback((url: string, title: string, product?: Product) => {
     if (!url) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    setBrowserState({ url, title, product });
   }, []);
 
   // Pull a "like-kinded" feed for the product page. Union of two signals:
@@ -572,6 +578,17 @@ export default function Home() {
           )}
 
         </>
+      )}
+
+      {browserState && (
+        <InAppBrowser
+          url={browserState.url}
+          title={browserState.title}
+          product={browserState.product}
+          isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
+          onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
+          onClose={() => setBrowserState(null)}
+        />
       )}
     </div>
     </TrailVideoHost>

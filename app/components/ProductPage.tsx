@@ -23,7 +23,7 @@ interface ProductPageProps {
   product: Product;
   onClose: () => void;
   onOpenLook: (look: Look) => void;
-  onOpenBrowser: (url: string, title: string) => void;
+  onOpenBrowser: (url: string, title: string, product?: Product) => void;
   onOpenProduct?: (product: Product) => void;
   onOpenCreator?: (name: string) => void;
   onOpenCreative?: (creative: ProductAd) => void;
@@ -372,7 +372,7 @@ export default function ProductPage({
                     key={offer.retailer}
                     type="button"
                     className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
-                    onClick={() => onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`)}
+                    onClick={() => onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`, product)}
                     role="listitem"
                   >
                     <span className="pd-retailer-name">{offer.retailer}</span>
