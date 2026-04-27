@@ -30,6 +30,7 @@ import "./styles/landing-page.css";
 import "./styles/admin.css";
 import "./styles/partners.css";
 import "./styles/feed.css";
+import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
 import "./styles/generate.css";
 

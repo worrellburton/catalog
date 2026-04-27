@@ -4,6 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
+import EmptyCatalogState from './EmptyCatalogState';
 import { prefetchLiveAds, getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
@@ -293,6 +294,22 @@ export default function ContinuousFeed({
     }
     return -1;
   }, [state.segments]);
+
+  // Empty-catalog state: shopper searched something we have nothing for.
+  // We only show this once the initial fetch has resolved (don't flash an
+  // empty state during the brief mount-to-data window) and only when the
+  // search bar has actual user intent in it (so unfiltered "all" never lands
+  // here, even on a brand-new install with zero data).
+  const trimmedQuery = searchQuery.trim();
+  const showEmptyState =
+    !creativesLoading &&
+    trimmedQuery.length > 0 &&
+    filteredCreatives.length === 0 &&
+    filteredLooks.length === 0;
+
+  if (showEmptyState) {
+    return <EmptyCatalogState catalogName={trimmedQuery} />;
+  }
 
   return (
     <div className="continuous-feed" id="grid-viewport">

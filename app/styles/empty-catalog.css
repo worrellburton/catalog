@@ -1,0 +1,130 @@
+/* Empty-catalog state — shown by ContinuousFeed when a search yields zero
+   creatives. Full-bleed dark surface with the WebGL particle drift behind
+   centered text and a single CTA. Matches the sign-in screen aesthetic so
+   "no results" reads as deliberate, not broken. */
+
+.empty-catalog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(80, 70, 90, 0.18), transparent 55%),
+    radial-gradient(circle at 75% 80%, rgba(60, 80, 110, 0.15), transparent 55%),
+    #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  overflow-y: auto;
+  isolation: isolate;
+  /* The continuous-feed grid sits below the header, so leave room. */
+  padding-top: calc(var(--header-height, 64px) + 16px);
+}
+
+/* The ParticleBackground canvas inside this container needs the same
+   absolute positioning as on the password gate. It already uses
+   .pw-particles which has fixed/inset:0 → covers full screen, including
+   our padded area. Good. */
+
+.empty-catalog-content {
+  position: relative;
+  z-index: 1;
+  max-width: 460px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: emptyCatalogIn 0.5s ease-out both;
+}
+
+@keyframes emptyCatalogIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.empty-catalog-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.empty-catalog-headline {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: #fff;
+  margin: 0;
+}
+.empty-catalog-headline em {
+  font-style: italic;
+  font-weight: 400;
+  color: rgba(255, 215, 92, 0.92);
+}
+
+.empty-catalog-subhead {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0 0 8px;
+  max-width: 360px;
+}
+
+.empty-catalog-cta {
+  background: #fff;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    background 0.2s ease,
+    box-shadow 0.25s ease;
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.06);
+}
+.empty-catalog-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(255, 255, 255, 0.10);
+}
+.empty-catalog-cta:active { transform: scale(0.98); }
+.empty-catalog-cta:disabled,
+.empty-catalog-cta.is-pressed {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+.empty-catalog-counter {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 4px;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+.empty-catalog-counter strong { color: #fff; font-weight: 600; }
+.empty-catalog-counter-loading { opacity: 0.4; }
+
+/* Pulse the counter when the realtime broadcast or optimistic bump fires.
+   Subtle scale + brief brighten so the user reads "tick", not "explosion". */
+.empty-catalog-counter.pulse {
+  animation: counterPulse 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes counterPulse {
+  0%   { transform: scale(1);    color: rgba(255, 255, 255, 0.55); }
+  20%  { transform: scale(1.06); color: rgba(255, 215, 92, 0.95); }
+  100% { transform: scale(1);    color: rgba(255, 255, 255, 0.55); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-catalog-content,
+  .empty-catalog-counter.pulse { animation: none; }
+}
