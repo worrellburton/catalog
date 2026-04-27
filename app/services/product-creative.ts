@@ -532,11 +532,54 @@ export async function getSimilarCreatives(seedId: string, k = 12): Promise<Produ
   } as ProductAd));
 }
 
-export async function trackAdImpression(id: string): Promise<void> {
+// Impression batching. The consumer feed mounts ~50 CreativeCards at once
+// and each fires its own impression RPC the moment the card enters the
+// pre-viewport band — that's 50 individual Supabase requests inside the
+// first 1–2 s of page load, fighting for the same connection pool as the
+// looks fetch and the videos. Coalescing into one flush per ~1 s window
+// dedupes scroll-spam (a card flickering across the IO threshold during
+// fast scroll) and gives the browser breathing room.
+//
+// We still fire N RPCs per flush — Supabase doesn't currently expose a
+// bulk-increment endpoint — but they're issued in parallel from a single
+// idle tick instead of staggered across the first second of the session.
+
+const impressionQueue = new Map<string, number>();
+let flushTimer: number | null = null;
+
+function flushImpressions() {
+  flushTimer = null;
+  if (!supabase || impressionQueue.size === 0) return;
+  const ids = [...impressionQueue.keys()];
+  impressionQueue.clear();
+  // Parallel issue. .catch swallows so a single network failure doesn't
+  // kill the rest of the flush.
+  for (const id of ids) {
+    supabase.rpc('increment_product_creative_impressions', { creative_id: id })
+      .then(() => undefined, () => undefined);
+  }
+}
+
+export function trackAdImpression(id: string): void {
   if (!supabase) return;
-  try {
-    await supabase.rpc('increment_product_creative_impressions', { creative_id: id });
-  } catch { /* fire-and-forget */ }
+  // First time we see this id in the current window — queue it. Repeat
+  // sightings within the same window are no-ops.
+  if (impressionQueue.has(id)) return;
+  impressionQueue.set(id, Date.now());
+  if (flushTimer == null && typeof window !== 'undefined') {
+    flushTimer = window.setTimeout(flushImpressions, 1000);
+  }
+}
+
+// Best-effort flush on tab close so impressions queued in the last <1 s
+// don't get lost. sendBeacon is the only API that survives unload, but
+// it requires a fixed URL — fall back to a synchronous fetch if not
+// available. We just trigger the same flush; the rpc calls fire-and-
+// forget anyway.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (impressionQueue.size > 0) flushImpressions();
+  });
 }
 
 export async function trackAdClick(id: string): Promise<void> {
