@@ -67,6 +67,7 @@ import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
+import { hasStoredSupabaseSession } from '~/services/auth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
@@ -216,14 +217,25 @@ export default function Home() {
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
 
-  // Computed once at mount. If the URL shows we just landed from a
-  // Supabase OAuth redirect (#access_token=…, ?code=…, or an error
-  // message), we want to suppress the password gate during the brief
-  // window where supabase-js is still exchanging the token for a
-  // session. Without this, users see "Sign in to continue" *while*
-  // they're being signed in — which makes them click sign-in again,
-  // which is the "SSO takes 4 times" symptom.
+  // Computed once at mount. Two signals tell us "don't show the
+  // password gate, the user is (probably) about to be signed in":
+  //
+  //   1. oauthInFlight — the URL shows we just landed from a Supabase
+  //      OAuth redirect (#access_token=…, ?code=…). We need to wait for
+  //      supabase-js to exchange the token before we know who they are.
+  //
+  //   2. resumeFromStoredSession — localStorage already has a Supabase
+  //      session token. getCurrentUser() will resolve them in <100ms;
+  //      flashing the password gate during that race made cold loads
+  //      feel jenky.
+  //
+  // While either is true we render a branded splash (the same one
+  // first-time visitors see on entry), not a spinner — the user
+  // perceives "the app is loading," not "I'm being authenticated
+  // again." Once auth resolves, the auto-route effect flips the view
+  // to 'app' and the splash unmounts.
   const oauthInFlight = useRef(isOAuthReturn()).current;
+  const resumeFromStoredSession = useRef(hasStoredSupabaseSession()).current;
 
   // Track recent catalogs
   useEffect(() => {
@@ -624,16 +636,17 @@ export default function Home() {
     <TrailRoot>
     <TrailVideoHost>
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
-      {/* During the OAuth callback race, show "Signing you in…" instead
-          of the password gate. PasswordGate only renders once we've
-          confirmed there's genuinely no session in flight. */}
-      {view === 'locked' && oauthInFlight && authLoading && (
-        <div className="signing-in-overlay" role="status" aria-live="polite">
-          <div className="signing-in-spinner" />
-          <div className="signing-in-text">Signing you in…</div>
+      {/* While auth is in flight AND we have any signal that a session
+          is coming, render the branded splash. Same UI a first-time
+          visitor sees on entry — no spinner, no "Signing you in" copy,
+          no flash of the password gate. The splash unmounts the moment
+          the auto-route effect transitions view away from 'locked'. */}
+      {view === 'locked' && authLoading && (oauthInFlight || resumeFromStoredSession) && (
+        <div className="auth-splash" aria-hidden="true">
+          <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !(oauthInFlight && authLoading) && <PasswordGate />}
+      {view === 'locked' && !(authLoading && (oauthInFlight || resumeFromStoredSession)) && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
