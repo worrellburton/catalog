@@ -1036,3 +1036,36 @@
   position: relative;
   z-index: 1;
 }
+
+/* Apple — single white hot spot orbits the pill once every 6s. The
+   conic-gradient has one bright wedge fading symmetrically into
+   transparent on both sides, with the rest of the ring barely
+   visible (subtle base white at 0.05). */
+.bottom-bar.is-beam-apple::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(255, 255, 255, 0.04) 320deg,
+    rgba(255, 255, 255, 0.95) 350deg,
+    rgba(255, 255, 255, 1) 360deg,
+    rgba(255, 255, 255, 0.95) 370deg,
+    rgba(255, 255, 255, 0.04) 400deg
+  );
+  animation: bb-beam-spin 6s linear infinite;
+}
+
+/* Fallback for browsers without @property: rotate the whole pseudo
+   instead. The conic-gradient becomes a static spotlight that gets
+   transformed. */
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-apple::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(255, 255, 255, 0.04) 320deg,
+      rgba(255, 255, 255, 1) 360deg,
+      rgba(255, 255, 255, 0.04) 400deg
+    );
+    animation: bb-beam-rotate-fallback 6s linear infinite;
+  }
+}
