@@ -2756,6 +2756,20 @@
   margin-top: 4px;
 }
 
+/* Group section — wraps a category's grid with its label */
+.admin-branding-group {
+  margin-top: 28px;
+}
+
+.admin-branding-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 12px;
+}
+
 /* Variant grid */
 .admin-branding-grid {
   display: grid;
