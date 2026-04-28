@@ -73,34 +73,41 @@ export function useSemanticSearch(
 
     setState(prev => ({ ...prev, loading: true, error: null }));
 
-    const resp = await nlSearch(q, {
-      k,
-      gender,
-      user_id:    userId,
-      session_id: sessionId.current,
-      signal:     controller.signal,
-    });
+    try {
+      const resp = await nlSearch(q, {
+        k,
+        gender,
+        user_id:    userId,
+        session_id: sessionId.current,
+        signal:     controller.signal,
+      });
 
-    if (controller.signal.aborted) return;
+      // Silently bail if this request was superseded
+      if (controller.signal.aborted) return;
 
-    if (!resp.ok) {
-      setState(prev => ({ ...prev, loading: false, error: resp.error ?? 'Search failed' }));
-      return;
+      if (!resp.ok) {
+        setState(prev => ({ ...prev, loading: false, error: resp.error ?? 'Search failed' }));
+        return;
+      }
+
+      const looks    = resp.results.filter((r): r is SemanticLook    => r.entity_type === 'look');
+      const products = resp.results.filter((r): r is SemanticProduct => r.entity_type === 'product');
+
+      setState({
+        lookIds:    looks.map(l => l.id),
+        products,
+        looks,
+        loading:    false,
+        coldMiss:   resp.cold_miss,
+        queryPlan:  resp.query_plan,
+        queryId:    resp.query_id,
+        error:      null,
+      });
+    } catch (err) {
+      // Ignore aborts — they are intentional (new query superseded this one)
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setState(prev => ({ ...prev, loading: false, error: 'Search unavailable' }));
     }
-
-    const looks    = resp.results.filter((r): r is SemanticLook    => r.entity_type === 'look');
-    const products = resp.results.filter((r): r is SemanticProduct => r.entity_type === 'product');
-
-    setState({
-      lookIds:    looks.map(l => l.id),
-      products,
-      looks,
-      loading:    false,
-      coldMiss:   resp.cold_miss,
-      queryPlan:  resp.query_plan,
-      queryId:    resp.query_id,
-      error:      null,
-    });
   }, [k, gender, userId]);
 
   useEffect(() => {

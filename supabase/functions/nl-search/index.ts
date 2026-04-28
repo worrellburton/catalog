@@ -291,7 +291,7 @@ Deno.serve(async (req: Request) => {
   } else {
     // No embeddings → BM25-only fallback: call with a zero vector stub that
     // the RPC degrades gracefully from (dense path finds nothing, BM25 works).
-    const zeroVec = toPgVector(new Array(1024).fill(0));
+    const zeroVec = toPgVector(new Array(512).fill(0));
     const [prodRes, looksRes] = await Promise.all([
       admin.rpc('search_products_hybrid', { query_embedding: zeroVec, query_text: query, k, filter_gender: gender, filter_type: null }),
       admin.rpc('search_looks_hybrid',    { query_embedding: zeroVec, query_text: query, k: Math.ceil(k * 0.6) }),
