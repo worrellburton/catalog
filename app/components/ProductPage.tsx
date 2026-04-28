@@ -460,6 +460,23 @@ export default function ProductPage({
                 </div>
               </div>
             )}
+
+            {/* Desktop-only rail strip — fills the negative space below
+                the Shop drawer with up to 6 brand-mate creatives in a
+                2-up grid. The full-width strip below is hidden on
+                desktop (see CSS) so we don't duplicate. */}
+            {brandCreatives && brandCreatives.length > 0 && onOpenCreative && (
+              <section className="pd-info-brand-rail" aria-label="More from this brand">
+                <h2 className="pd-info-brand-rail-title">
+                  More from {product.brand || 'this brand'}
+                </h2>
+                <div className="pd-info-brand-rail-grid">
+                  {brandCreatives.slice(0, 6).map(c => (
+                    <BrandStripTile key={c.id} creative={c} onOpen={onOpenCreative} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
         </div>
