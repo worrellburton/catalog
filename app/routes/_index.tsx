@@ -237,6 +237,29 @@ export default function Home() {
   const oauthInFlight = useRef(isOAuthReturn()).current;
   const resumeFromStoredSession = useRef(hasStoredSupabaseSession()).current;
 
+  // Two-stage splash unmount: while auth is resolving we render the
+  // splash; once resolved (authLoading flips false) we keep rendering
+  // it for one extra animation tick with .leaving = true so it fades
+  // out instead of hard-cutting to the gate / app underneath.
+  const showAuthSplash = view === 'locked' && authLoading && (oauthInFlight || resumeFromStoredSession);
+  const [splashLeaving, setSplashLeaving] = useState(false);
+  const [splashMounted, setSplashMounted] = useState(showAuthSplash);
+  useEffect(() => {
+    if (showAuthSplash) {
+      setSplashMounted(true);
+      setSplashLeaving(false);
+      return;
+    }
+    if (splashMounted) {
+      // Auth resolved — start the fade-out, then unmount after the
+      // CSS transition completes (240 ms; matching .auth-splash
+      // transition duration).
+      setSplashLeaving(true);
+      const t = window.setTimeout(() => setSplashMounted(false), 280);
+      return () => window.clearTimeout(t);
+    }
+  }, [showAuthSplash, splashMounted]);
+
   // Track recent catalogs
   useEffect(() => {
     if (catalogName) {
@@ -636,17 +659,15 @@ export default function Home() {
     <TrailRoot>
     <TrailVideoHost>
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
-      {/* While auth is in flight AND we have any signal that a session
-          is coming, render the branded splash. Same UI a first-time
-          visitor sees on entry — no spinner, no "Signing you in" copy,
-          no flash of the password gate. The splash unmounts the moment
-          the auto-route effect transitions view away from 'locked'. */}
-      {view === 'locked' && authLoading && (oauthInFlight || resumeFromStoredSession) && (
-        <div className="auth-splash" aria-hidden="true">
+      {/* Branded splash while auth is resolving. Stays mounted for one
+          extra fade-out tick after auth resolves, so the gate or app
+          underneath cross-fades in instead of snapping. */}
+      {splashMounted && (
+        <div className={`auth-splash${splashLeaving ? ' leaving' : ''}`} aria-hidden="true">
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !(authLoading && (oauthInFlight || resumeFromStoredSession)) && <PasswordGate />}
+      {view === 'locked' && !showAuthSplash && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
