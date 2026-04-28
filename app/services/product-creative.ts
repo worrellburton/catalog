@@ -334,6 +334,24 @@ export async function deleteProductAd(id: string): Promise<{ error: string | nul
   return { error: null };
 }
 
+/** Delete an entire product from the catalog. Cascades through every
+ *  creative that references it (the FK has ON DELETE CASCADE in the
+ *  product_creative schema), so this is the heavy hammer the consumer
+ *  feed's super-admin long-press uses to nuke a product end-to-end. */
+export async function deleteProduct(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  // Defensive cleanup first — explicitly drop every creative referencing
+  // this product so we never end up with orphan rows even if the FK
+  // cascade isn't set up on a given env.
+  await supabase.from('product_creative').delete().eq('product_id', id);
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 // Flip the elite flag on a creative AND its parent product together. Marking
 // a product elite requires that at least one of its creatives is elite, so we
 // keep the two in sync from this one entry point. Used by the admin Creative

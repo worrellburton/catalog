@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchLiveAds, getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -275,16 +275,39 @@ export default function ContinuousFeed({
   const canDeleteCreative = user?.role === 'super_admin';
 
   const handleDeleteCreative = useCallback(async (id: string) => {
-    // Optimistic remove so the tile disappears immediately; reinstate on error.
-    setLiveCreatives(prev => prev.filter(c => c.id !== id));
-    const { error } = await deleteProductAd(id);
+    // Super-admin long-press on the consumer feed deletes the underlying
+    // PRODUCT, not just the one creative — by the time someone gets to
+    // the consumer surface to nuke a tile, they want it gone everywhere
+    // (every creative that referenced this product disappears too).
+    setLiveCreatives(prev => {
+      const target = prev.find(c => c.id === id);
+      const productId = target?.product?.id;
+      if (!productId) {
+        // Creative has no product link — fall back to single-creative
+        // delete so the tile still goes away.
+        return prev.filter(c => c.id !== id);
+      }
+      return prev.filter(c => c.product?.id !== productId);
+    });
+    const target = liveCreatives.find(c => c.id === id);
+    const productId = target?.product?.id;
+    if (!productId) {
+      // Single-creative path (no product attached).
+      const { error } = await deleteProductAd(id);
+      if (error) {
+        console.error('[ContinuousFeed] deleteProductAd failed:', error);
+        alert(`Could not delete creative: ${error}`);
+        getLiveAds().then(setLiveCreatives).catch(() => {});
+      }
+      return;
+    }
+    const { error } = await deleteProduct(productId);
     if (error) {
-      console.error('[ContinuousFeed] deleteProductAd failed:', error);
-      alert(`Could not delete creative: ${error}`);
-      // Best-effort restore via a fresh fetch.
+      console.error('[ContinuousFeed] deleteProduct failed:', error);
+      alert(`Could not delete product: ${error}`);
       getLiveAds().then(setLiveCreatives).catch(() => {});
     }
-  }, []);
+  }, [liveCreatives]);
 
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
     if (onOpenCreative) {
