@@ -17,8 +17,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Detect whether this push actually touched any migration / function files.
+  # If not, the migrate job is a no-op and deploy can proceed without it —
+  # otherwise a transient migrate failure (missing secret, network blip)
+  # blocks every UI-only deploy too, which is what was happening up until
+  # this commit.
+  changes:
+    name: Detect Supabase changes
+    runs-on: ubuntu-latest
+    outputs:
+      supabase: ${{ steps.filter.outputs.supabase }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            supabase:
+              - 'supabase/migrations/**'
+              - 'supabase/functions/**'
+
   migrate:
     name: Run Supabase Migrations
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,7 +65,10 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    needs: migrate
+    # Run after migrate, but proceed whether migrate ran or was skipped —
+    # the only thing that should block deploy is migrate actually failing.
+    needs: [changes, migrate]
+    if: always() && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
