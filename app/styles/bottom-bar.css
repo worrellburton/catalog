@@ -681,21 +681,39 @@
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — over backdrop when search is open */
+/* Search suggestions — sit immediately above the bottom-bar input
+   when search is open. Single horizontal-scroll pill row on mobile
+   (and tight single-line on desktop) so the user's eye never has to
+   leave the input to scan. Replaces the previous full-screen
+   auto-scrolling vertical list which sat far above the input and
+   read as ambient text rather than a tap target. */
 .search-suggestions {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Sit ~12 px above the bar — bar is at safe-area + 20px on mobile,
+     bar is roughly 48 px tall, so 80 px clearance keeps the pills
+     riding right above the input. */
+  bottom: calc(env(safe-area-inset-bottom) + 80px);
+  width: min(720px, calc(100vw - 24px));
   z-index: 101;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+  transform-origin: bottom center;
+  transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+}
+
+@media (max-width: 768px) {
+  .search-suggestions {
+    /* Anchor relative to the iOS chrome so pinned URL bar / iOS
+       keyboard don't cover them. --ios-bottom-chrome is the live
+       value BottomBar's useEffect writes onto :root. */
+    bottom: max(
+      calc(env(safe-area-inset-bottom) + 88px),
+      calc(var(--ios-bottom-chrome, 0px) + 88px)
+    );
+  }
 }
 
 .search-suggestions.visible {
@@ -705,31 +723,44 @@
 
 .search-suggestions-track {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 40px 20px;
-  will-change: transform;
+  gap: 8px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* Faint glass strip behind the pills so they read as a unit. */
+  background: rgba(20, 20, 20, 0.62);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
+.search-suggestions-track::-webkit-scrollbar { display: none; }
 
 .search-suggestion {
-  padding: 10px 24px;
-  border-radius: 20px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 28px;
-  font-weight: 600;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   cursor: pointer;
   white-space: nowrap;
   pointer-events: auto;
   font-family: inherit;
-  transition: color 0.2s ease, transform 0.2s ease;
-  line-height: 1.8;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.18s ease;
 }
 
 .search-suggestion:hover {
-  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 /* Tap animation */

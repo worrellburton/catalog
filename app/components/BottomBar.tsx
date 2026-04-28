@@ -58,40 +58,17 @@ function BottomBar({
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    return [...shuffled, ...shuffled];
+    // Single pass — the previous duplication was for the auto-scroll
+    // loop, which is gone now that the suggestions live as a static
+    // horizontal pill row above the bar.
+    return shuffled;
   }, []);
 
-  // Auto-scroll suggestions
-  useEffect(() => {
-    if (!searchOpen || !trackRef.current) {
-      if (scrollRAF.current) {
-        cancelAnimationFrame(scrollRAF.current);
-        scrollRAF.current = null;
-      }
-      return;
-    }
-
-    const track = trackRef.current;
-    const scrollSpeed = 0.5;
-
-    function autoScroll() {
-      scrollY.current += scrollSpeed;
-      const halfHeight = track.scrollHeight / 2;
-      if (halfHeight > 0 && scrollY.current >= halfHeight) {
-        scrollY.current -= halfHeight;
-      }
-      track.style.transform = `translateY(-${scrollY.current}px)`;
-      scrollRAF.current = requestAnimationFrame(autoScroll);
-    }
-
-    scrollRAF.current = requestAnimationFrame(autoScroll);
-    return () => {
-      if (scrollRAF.current) {
-        cancelAnimationFrame(scrollRAF.current);
-        scrollRAF.current = null;
-      }
-    };
-  }, [searchOpen]);
+  // (Auto-scroll effect removed — the suggestions render as a static
+  // horizontal pill row above the search input now, so there's
+  // nothing to animate. trackRef is preserved for future scroll-into-
+  // view-on-open if we want to re-add a "scroll the just-typed query
+  // into view" behavior.)
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
@@ -200,7 +177,12 @@ function BottomBar({
           </button>
           <input
             ref={searchInputRef}
-            type="text"
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"
@@ -209,11 +191,21 @@ function BottomBar({
             onFocus={openSearch}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                // iOS Safari fires Enter on the keyboard's "search"
+                // / "go" key. Push the trimmed query through the
+                // suggestion handler so the catalog name updates,
+                // then close + blur to dismiss the keyboard.
+                e.preventDefault();
                 const q = localSearch.trim();
-                if (q && onSelectSuggestion) onSelectSuggestion(q);
+                if (q) {
+                  if (onSelectSuggestion) onSelectSuggestion(q);
+                  else onSearchChange(q.toLowerCase());
+                }
                 closeSearch();
+                searchInputRef.current?.blur();
               } else if (e.key === 'Escape') {
                 closeSearch();
+                searchInputRef.current?.blur();
               }
             }}
           />

@@ -32,6 +32,11 @@ export interface UserGeneration {
   crop_y: number;
   created_at: string;
   completed_at: string | null;
+  /** Claude-generated 2-4 word name for the look (e.g. "Linen Sunset").
+   *  Populated by the name-look edge function fire-and-forget after a
+   *  generation is created. Null until that round trip completes; the
+   *  LookCard falls back to the style preset label in the meantime. */
+  display_name: string | null;
 }
 
 export interface GenerationProduct {
@@ -435,6 +440,27 @@ export async function deleteUserUpload(
   }
   const { error } = await supabase.from('user_uploads').delete().eq('id', upload.id);
   return { error: error?.message ?? null };
+}
+
+/**
+ * Fire the name-look edge function for a generation. Best-effort —
+ * returns silently on any failure (network, missing key, Claude rate
+ * limit). The generation's display_name stays null and the LookCard
+ * falls back to the style preset label.
+ *
+ * Called fire-and-forget right after createGeneration so the name lands
+ * on the row by the time the user pops back to the Photos step.
+ */
+export async function nameLookForGeneration(generationId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.functions.invoke('name-look', {
+      body: { generation_id: generationId },
+    });
+  } catch (err) {
+    // Naming is decorative — never block the user on it.
+    console.warn('[name-look] invoke failed:', err);
+  }
 }
 
 /**

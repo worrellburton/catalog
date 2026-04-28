@@ -10,6 +10,7 @@ import {
   STYLE_PRESETS,
   buildGenerationPrompt,
   createGeneration,
+  nameLookForGeneration,
   deleteUserGeneration,
   deleteUserUpload,
   getGeneration,
@@ -679,6 +680,10 @@ export default function GeneratePage() {
       return;
     }
     setGeneration(data);
+    // Fire-and-forget Claude name generation. Doesn't block the user
+    // from advancing to the result screen — the name lands on the row
+    // asynchronously and shows up in "Your looks" once it does.
+    void nameLookForGeneration(data.id);
     // Prepend the new row to the in-memory list so it shows up in
     // "Your looks" the moment the shopper hits Back from the result
     // screen — no page refresh needed. The list-polling effect will
@@ -1603,7 +1608,7 @@ function LookCard({
         >×</button>
       </button>
       <div className="gen-lookcard-foot">
-        <span className="gen-lookcard-label">{style?.label || generation.style}</span>
+        <span className="gen-lookcard-label">{generation.display_name || style?.label || generation.style}</span>
         <button
           type="button"
           className="gen-lookcard-regen"
