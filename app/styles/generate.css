@@ -1596,10 +1596,9 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 /* ===== Unified bottom dock =====
-   Single liquid-glass surface at the bottom of /generate that combines
-   what used to be three separate fixed elements (picked-products tray,
-   Back/Next footer, step-progress rail). Three internal rows top-to-
-   bottom: picks → actions → step pills. */
+   Single horizontal row: picked-products thumbnails on the left,
+   Back/Next pill on the right. One liquid-glass surface, no internal
+   stack, no separate step rail. */
 
 .gen-dock {
   position: fixed;
@@ -1609,10 +1608,11 @@ html[data-shell="catalog-app"] .gen-page {
   z-index: 50;
   width: min(720px, calc(100vw - 24px));
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 26px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
   background: rgba(20, 20, 20, 0.62);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -1628,39 +1628,38 @@ html[data-shell="catalog-app"] .gen-page {
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* Row 1 — picks summary (only on products step when picks > 0). */
-.gen-dock-picks {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.gen-dock-picks-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.55);
-}
-
+/* Picked-products strip — left side of the dock. Horizontal scroll
+   if more thumbnails than fit in the available width. */
 .gen-dock-picks-strip {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 4px 6px 4px 4px;
+  scrollbar-width: none;
+}
+.gen-dock-picks-strip::-webkit-scrollbar { display: none; }
+
+.gen-dock-picks-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.55);
+  padding-left: 4px;
 }
 
 .gen-dock-pick {
   position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  overflow: hidden;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  overflow: visible;
   background: #0a0a0a;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
 .gen-dock-pick img {
@@ -1668,20 +1667,22 @@ html[data-shell="catalog-app"] .gen-page {
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: 9px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
 .gen-dock-pick-x {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 0;
   padding: 0;
   background: rgba(0, 0, 0, 0.92);
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -1695,18 +1696,10 @@ html[data-shell="catalog-app"] .gen-page {
   transform: scale(1.08);
 }
 
-/* Row 2 — Back / Next action buttons. */
+/* Action buttons — right side of the dock. */
 .gen-dock-actions {
+  flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding: 0 4px;
-}
-
-/* Row 3 — step progress rail rendered inside the dock. The rail
-   component handles its own layout via .is-embedded; this just adds a
-   thin separator above it. */
-.gen-dock > .gen-rail.is-embedded {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 8px;
 }

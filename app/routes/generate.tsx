@@ -1144,33 +1144,28 @@ export default function GeneratePage() {
         )}
       </main>
 
-      {/* Unified bottom dock — combines the three previously separate
-          fixed elements (picked-tray + Back/Next + step rail) into one
-          liquid-glass surface. Three internal rows, top to bottom:
-            1. picked-products strip (only on products step with picks)
-            2. Back / Next action row
-            3. Step progress rail
-          The dock is the single source of bottom-anchored chrome on
-          this page. */}
+      {/* Unified bottom dock — single horizontal row that combines the
+          picked-products strip (when applicable) with the Back/Next
+          action buttons. Step progress rail removed at the user's
+          request; the section heading on the page already tells you
+          which step you're on. */}
       {step !== 'result' && step !== 'photos' && (
         <aside className="gen-dock" aria-label="Step controls">
           {step === 'products' && picked.length > 0 && (
-            <div className="gen-dock-picks" role="region" aria-label="Selected products">
-              <div className="gen-dock-picks-label">
-                {picked.length} of {MAX_PRODUCTS} picked
-              </div>
-              <div className="gen-dock-picks-strip">
-                {picked.map(p => (
-                  <div key={p.id} className="gen-dock-pick">
-                    {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
-                    <button
-                      type="button"
-                      className="gen-dock-pick-x"
-                      onClick={() => togglePick(p)}
-                      aria-label={`Remove ${p.name || 'product'}`}
-                    >×</button>
-                  </div>
-                ))}
+            <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
+              {picked.map(p => (
+                <div key={p.id} className="gen-dock-pick">
+                  {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
+                  <button
+                    type="button"
+                    className="gen-dock-pick-x"
+                    onClick={() => togglePick(p)}
+                    aria-label={`Remove ${p.name || 'product'}`}
+                  >×</button>
+                </div>
+              ))}
+              <div className="gen-dock-picks-count" aria-hidden="true">
+                {picked.length}/{MAX_PRODUCTS}
               </div>
             </div>
           )}
@@ -1189,16 +1184,6 @@ export default function GeneratePage() {
               </button>
             )}
           </div>
-
-          <StepRail
-            step={step}
-            photosCount={pickedUploadIds.length}
-            productsCount={picked.length}
-            heightLabel={heightLabel}
-            ageLabel={ageLabel}
-            style={style}
-            embedded
-          />
         </aside>
       )}
     </div>
