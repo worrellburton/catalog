@@ -128,6 +128,28 @@ interface PickedProduct {
 
 const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
 
+// User-facing category buckets for the products picker. Each row in the
+// product picker maps to one of these. `tags: null` is the Objects
+// bucket — anything roleTagFromName() couldn't classify falls in here
+// so the catalog is never hidden from the picker.
+const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
+  { label: 'Hat', tags: ['Hat'] },
+  { label: 'Top', tags: ['Top', 'Jacket', 'Dress'] },
+  { label: 'Bottoms', tags: ['Pants'] },
+  { label: 'Shoes', tags: ['Shoes'] },
+  { label: 'Accessories', tags: ['Bag', 'Jewelry', 'Sunglasses', 'Accessory'] },
+  { label: 'Objects', tags: null },
+];
+
+/** True if the product belongs to the named bucket. `Objects` matches
+ *  anything that doesn't fit a clothing role. */
+function productInCategory(p: { role_tag?: string | null }, group: typeof CATEGORY_GROUPS[number]): boolean {
+  if (group.tags === null) {
+    return !p.role_tag || !ROLE_TAGS.includes(p.role_tag);
+  }
+  return !!p.role_tag && group.tags.includes(p.role_tag);
+}
+
 // Height options cover 4'10" – 6'8" in 1" increments; we store the cm value
 // on the row and the human label verbatim in the Seedance prompt so the
 // model hears "5'10\"" the way the shopper picked it.
