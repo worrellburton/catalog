@@ -187,7 +187,7 @@ export async function addProductUrl(url: string): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase
     .from('products')
-    .insert({ url, scrape_status: 'pending' })
+    .insert({ url, scrape_status: 'pending', source: 'brand_url' })
     .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at')
     .single();
   if (error) throw new Error(error.message);

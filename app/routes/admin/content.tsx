@@ -30,6 +30,21 @@ interface CrawledProduct {
   is_elite?: boolean;
   type?: string | null;
   gender?: 'male' | 'female' | 'unisex' | null;
+  created_at?: string | null;
+  source?: string | null;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  google_shopping: 'Google Shopping',
+  amazon: 'Amazon',
+  brand_url: 'Brand URL',
+};
+
+function formatDateAdded(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -527,7 +542,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -573,12 +588,13 @@ export default function AdminContent() {
         // columns accept null.
         type: inferProductType(p.name, p.brand),
         gender: inferProductGenderFromName(p.name),
+        source: 'google_shopping',
       };
     });
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -891,7 +907,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -950,7 +966,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -982,6 +998,8 @@ export default function AdminContent() {
         entry.is_elite = !!cp.is_elite;
         entry.type = cp.type ?? null;
         entry.gender = cp.gender ?? null;
+        entry.created_at = cp.created_at ?? null;
+        entry.source = cp.source ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -1009,6 +1027,8 @@ export default function AdminContent() {
           is_elite: !!cp.is_elite,
           type: cp.type ?? null,
           gender: cp.gender ?? null,
+          created_at: cp.created_at ?? null,
+          source: cp.source ?? null,
         });
       }
     });
@@ -1256,7 +1276,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1287,7 +1307,7 @@ export default function AdminContent() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1867,6 +1887,8 @@ export default function AdminContent() {
                 <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
                 <th></th>
@@ -2134,6 +2156,34 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
+                  <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                    {formatDateAdded(p.created_at)}
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {p.source ? (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        borderRadius: 12,
+                        background: p.source === 'amazon'
+                          ? '#fef3c7'
+                          : p.source === 'google_shopping'
+                          ? '#dbeafe'
+                          : '#e9d5ff',
+                        color: p.source === 'amazon'
+                          ? '#92400e'
+                          : p.source === 'google_shopping'
+                          ? '#1d4ed8'
+                          : '#6b21a8',
+                      }}>
+                        {SOURCE_LABELS[p.source] || p.source}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                    )}
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
                       className="admin-btn admin-btn-secondary"
@@ -2235,7 +2285,7 @@ export default function AdminContent() {
                 </tr>
                 {creativeOpen && (
                   <tr className="admin-product-creative-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -2322,7 +2372,7 @@ export default function AdminContent() {
                 )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -2347,7 +2397,7 @@ export default function AdminContent() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
