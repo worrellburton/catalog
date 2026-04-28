@@ -884,6 +884,14 @@ export default function GeneratePage() {
                   <div key={group.label} className="gen-cat-row">
                     <div className="gen-cat-row-head">
                       <span className="gen-cat-row-label">{group.label}</span>
+                      <input
+                        type="search"
+                        className="gen-cat-row-search"
+                        placeholder={`Search ${group.label.toLowerCase()}…`}
+                        value={rowQuery}
+                        onChange={e => setCategoryQuery(group.label, e.target.value)}
+                        aria-label={`Search ${group.label}`}
+                      />
                     </div>
                     <div className="gen-cat-row-scroll">
                       {rowProducts.length === 0 ? (
