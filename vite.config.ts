@@ -15,7 +15,7 @@ export default defineConfig({
     remix({
       ssr: false,
       basename: basePath,
-      ignoredRouteFiles: ["routes/admin/**", "routes/partners/**"],
+      ignoredRouteFiles: ["routes/admin/**"],
       routes(defineRoutes) {
         return defineRoutes((route) => {
           // Root index
@@ -77,20 +77,6 @@ export default defineConfig({
             route("site-crawls", "routes/admin/site-crawls.tsx");
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
-          });
-
-          // Partners routes
-          route("partners", "routes/partners/route.tsx", () => {
-            route("", "routes/partners/_index.tsx", { index: true });
-            route("appearance", "routes/partners/appearance.tsx");
-            route("audience", "routes/partners/audience.tsx");
-            route("campaigns", "routes/partners/campaigns.tsx");
-            route("collections", "routes/partners/collections.tsx");
-            route("creative", "routes/partners/creative.tsx");
-            route("growth", "routes/partners/growth.tsx");
-            route("orders", "routes/partners/orders.tsx");
-            route("products", "routes/partners/products.tsx");
-            route("store", "routes/partners/store.tsx");
           });
         });
       },
