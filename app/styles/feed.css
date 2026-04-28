@@ -108,6 +108,11 @@
   width: 100%;
   max-width: none;
   margin: 0;
+  /* Match the .look-card base color so any auto-flow gaps (created when
+     the seeded shuffle happens to drop two 2-span tiles next to each
+     other in the rightmost column) read as "another card without
+     content" instead of pure-black holes against the page bg. */
+  background: #111;
 }
 
 /* ===== Layout Mode Variations ===== */
