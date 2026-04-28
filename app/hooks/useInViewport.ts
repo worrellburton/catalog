@@ -36,7 +36,12 @@ function getPool(rootMargin: string): Pool {
 
 export function useInViewport(
   ref: RefObject<Element | null>,
-  rootMargin = '800px',
+  // Default: 2 viewports above + below. Using % (relative to the root /
+  // viewport) instead of a fixed px value so phones, tablets, and
+  // desktops all get the same "2 screens ahead" prep band proportional
+  // to whatever device they're on. Mobile portrait ≈ 1600px each side,
+  // desktop ≈ 2000px each side — more than enough for full buffer.
+  rootMargin = '200% 0%',
 ): boolean {
   const [visible, setVisible] = useState(false);
 

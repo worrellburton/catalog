@@ -14,11 +14,11 @@ import type { ProductAd } from '~/services/product-creative';
 import { supabaseImage } from './supabaseImage';
 
 const POSTERS_TO_WARM = 16;
-// Bumped from 3 to 9 — covers the first ~5 rows of the 2-col mobile grid
-// so by the time the user starts scrolling, the next ~9 cards' bytes are
-// already in the browser cache and CreativeCard's <video> renders without
-// a buffer pause.
-const VIDEOS_TO_WARM = 9;
+// Warm the first ~2 viewports of cards. At ~6 cards per mobile viewport
+// that's 12; bumping to 18 covers fast-scrollers who blow past the
+// initial set before the in-page IntersectionObserver has time to trigger
+// the regular preload chain.
+const VIDEOS_TO_WARM = 18;
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();

@@ -33,14 +33,12 @@ import {
   type ReactNode,
 } from 'react';
 
-// Mobile devices have far less GPU/decoder budget — Safari iOS in particular
-// stutters when more than ~6 <video> elements are decoding at once. Halve
-// the pool on small screens so eviction kicks in earlier and the active
-// cards keep their decoder slots.
-const POOL_MAX = (() => {
-  if (typeof window === 'undefined') return 16;
-  return window.innerWidth <= 768 ? 8 : 16;
-})();
+// Pool cap. We size for "2 viewports of cards stay alive at once" — at
+// ~6 cards per mobile viewport that's 12 cards, so 16 gives comfortable
+// headroom before eviction. Videos that exit the 2-viewport band get
+// returned to the off-screen pool (paused) and only get evicted entirely
+// once the cap is exceeded.
+const POOL_MAX = 16;
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
@@ -97,10 +95,12 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       el.muted = true;
       el.loop = true;
       el.playsInline = true;
-      // 'metadata' over 'auto' so we don't yank bandwidth for cards the user
-      // never actually scrolls to. The host's prime step (preload links via
-      // primeTrailAssets) covers the above-the-fold cards anyway.
-      el.preload = 'metadata';
+      // 'auto' so the video buffers fully while the card sits in the
+      // 2-viewport prep band — by the time the user actually scrolls to
+      // it, frames are already decoded and playback starts instantly.
+      // Bandwidth-heavy on mobile, but bounded by POOL_MAX (16) so worst
+      // case is ~16 buffered videos at any moment.
+      el.preload = 'auto';
       el.crossOrigin = 'anonymous';
       el.src = src;
       el.setAttribute('data-trail-id', id);
