@@ -97,8 +97,10 @@ function FeedSection({
     | { type: 'placeholder'; key: string };
 
   const pool = useMemo<PoolItem[]>(() => {
-    if (looks.length === 0) return [];
     const creativeList = isInitial ? (creatives ?? []) : [];
+    // The initial segment is creative-only, so it should render even when
+    // looks haven't resolved yet. Sub-segments need looks to draw similars.
+    if (!isInitial && looks.length === 0) return [];
     const targetCells = isInitial ? 200 : 50;
 
     if (isInitial && creativesLoading) {
@@ -176,7 +178,9 @@ function FeedSection({
     setVisibleCount(batch);
   }, [looks, batch]);
 
-  if (looks.length === 0) return null;
+  // Hide only when both inputs are empty. Initial sections show creatives
+  // before looks resolve; sub-segments render the looks-driven similars.
+  if (pool.length === 0) return null;
 
   return (
     <div className={`feed-section layout-${layout.name}`}>
