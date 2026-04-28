@@ -1726,11 +1726,16 @@ html[data-shell="catalog-app"] .gen-page {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.gen-photos-title {
+/* Higher specificity (.gen-step h2.gen-photos-title) so this beats the
+   global .gen-step h2 rule that sets clamp(28px, 3.4vw, 44px). Without
+   the override below the title rendered as the page-headline 40px+
+   even though we wanted a compact section header. */
+.gen-step h2.gen-photos-title {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
+  line-height: 1.2;
 }
 
 .gen-step-photos .gen-slots {
@@ -1816,7 +1821,7 @@ html[data-shell="catalog-app"] .gen-page {
   }
   .gen-photos-form::-webkit-scrollbar { display: none; }
 
-  .gen-photos-title {
+  .gen-step h2.gen-photos-title {
     font-size: 15px;
   }
 }
