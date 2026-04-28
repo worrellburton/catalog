@@ -696,6 +696,10 @@
      riding right above the input. */
   bottom: calc(env(safe-area-inset-bottom) + 80px);
   width: min(720px, calc(100vw - 24px));
+  /* Clip the translating track so pills disappear off the edges
+     under the gradient mask instead of bleeding past the container. */
+  overflow: hidden;
+  border-radius: 999px;
   z-index: 101;
   pointer-events: none;
   opacity: 0;
@@ -721,16 +725,26 @@
   visibility: visible;
 }
 
+/* The clipping container holds the glass + the gradient mask. The
+   inner track translates horizontally inside it via the JS rAF loop;
+   the doubled suggestions array makes the loop read as continuous. */
+.search-suggestions {
+  /* Adds a horizontal fade on the left/right edges so pills entering
+     and leaving the loop don't pop visually. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+}
+
 .search-suggestions-track {
-  display: flex;
+  display: inline-flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
+  /* The whole row is being translated by JS — let it overflow off the
+     edges of the clipping container instead of trying to scroll. */
+  white-space: nowrap;
+  will-change: transform;
   /* Faint glass strip behind the pills so they read as a unit. */
   background: rgba(20, 20, 20, 0.62);
   backdrop-filter: blur(24px) saturate(180%);
@@ -739,7 +753,6 @@
   border-radius: 999px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
-.search-suggestions-track::-webkit-scrollbar { display: none; }
 
 .search-suggestion {
   flex-shrink: 0;

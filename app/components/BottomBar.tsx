@@ -58,17 +58,45 @@ function BottomBar({
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    // Single pass — the previous duplication was for the auto-scroll
-    // loop, which is gone now that the suggestions live as a static
-    // horizontal pill row above the bar.
-    return shuffled;
+    // Doubled so the horizontal auto-scroll can wrap seamlessly: when
+    // the first half scrolls off-screen we snap back to the start and
+    // the second half is already mid-frame, so the loop reads as
+    // continuous.
+    return [...shuffled, ...shuffled];
   }, []);
 
-  // (Auto-scroll effect removed — the suggestions render as a static
-  // horizontal pill row above the search input now, so there's
-  // nothing to animate. trackRef is preserved for future scroll-into-
-  // view-on-open if we want to re-add a "scroll the just-typed query
-  // into view" behavior.)
+  // Horizontal auto-scroll. The track is doubled so we can translate
+  // it to the left forever; when X passes half the track width we
+  // subtract that half and the second copy carries the eye onward
+  // with no visible reset. Pause when search closes so the rAF loop
+  // releases.
+  useEffect(() => {
+    if (!searchOpen || !trackRef.current) {
+      if (scrollRAF.current) {
+        cancelAnimationFrame(scrollRAF.current);
+        scrollRAF.current = null;
+      }
+      return;
+    }
+    const track = trackRef.current;
+    const SPEED = 0.4; // px per frame ≈ 24 px/s
+    let offset = scrollY.current; // reuse the ref to survive remount
+    function tick() {
+      offset += SPEED;
+      const half = track.scrollWidth / 2;
+      if (half > 0 && offset >= half) offset -= half;
+      track.style.transform = `translateX(-${offset}px)`;
+      scrollY.current = offset;
+      scrollRAF.current = requestAnimationFrame(tick);
+    }
+    scrollRAF.current = requestAnimationFrame(tick);
+    return () => {
+      if (scrollRAF.current) {
+        cancelAnimationFrame(scrollRAF.current);
+        scrollRAF.current = null;
+      }
+    };
+  }, [searchOpen]);
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
