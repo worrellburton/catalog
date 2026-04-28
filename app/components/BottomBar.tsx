@@ -1,5 +1,5 @@
 
-import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import { searchSuggestions } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
@@ -14,7 +14,7 @@ interface BottomBarProps {
   catalogName?: string;
 }
 
-export default function BottomBar({
+function BottomBar({
   activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName
 }: BottomBarProps) {
   const { user } = useAuth();
@@ -242,3 +242,7 @@ export default function BottomBar({
     </>
   );
 }
+
+// Memoized — _index.tsx renders this on every state tick; without memo,
+// every keystroke / overlay open re-rendered the whole search bar.
+export default memo(BottomBar);

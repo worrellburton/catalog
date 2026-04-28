@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -541,6 +541,54 @@ export default function Home() {
     setIsLightMode(prev => !prev);
   }, []);
 
+  // Header / BottomBar / UserMenu callbacks. Stable refs so the memo
+  // wrappers on BottomBar and UserMenu actually cut renders — inline
+  // arrow functions in JSX would create new identities every render.
+  const openBookmarks = useCallback(() => setShowBookmarks(true), []);
+  const openMyLooks = useCallback(() => setShowMyLooks(true), []);
+  const closeBookmarks = useCallback(() => {
+    history.replaceState({}, '', '/#app');
+    setShowBookmarks(false);
+  }, []);
+  const closeMyLooks = useCallback(() => {
+    history.replaceState({}, '', '/#app');
+    setShowMyLooks(false);
+  }, []);
+  const handleLogout = useCallback(async () => {
+    await logout();
+    setView('locked');
+  }, [logout]);
+  const handleSearchChange = useCallback((q: string) => {
+    setSearchQuery(q);
+    if (q.trim()) setCatalogName(getRandomCatalogName(q));
+  }, []);
+  const handleSelectSuggestion = useCallback((q: string) => {
+    setSearchQuery(q.toLowerCase());
+    setCatalogName(q.replace(/\b\w/g, (c) => c.toUpperCase()));
+  }, []);
+  const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
+  const handleProductClose = useCallback(() => {
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedSimilar(null);
+    setSimilarCreatives(null);
+    setBrandCreatives(null);
+  }, []);
+  const handleBookmarksOpenCreator = useCallback((handle: string) => {
+    history.replaceState({}, '', '/#app');
+    setShowBookmarks(false);
+    handleOpenCreator(handle);
+  }, [handleOpenCreator]);
+  const handleBrowserClose = useCallback(() => setBrowserState(null), []);
+
+  // Derived list — depends on liveLooks (changes once on mount) and
+  // bookmarkedLooks (changes only on bookmark toggle). Memoizing keeps
+  // UserMenu's savedLooks prop stable across unrelated re-renders.
+  const savedLooksForMenu = useMemo(
+    () => liveLooks.filter(l => bookmarks.bookmarkedLooks.includes(l.id)),
+    [liveLooks, bookmarks.bookmarkedLooks],
+  );
+
   const isAppVisible = view === 'app';
 
   // Once the user is in the main app, kick off background imports of every
@@ -590,19 +638,19 @@ export default function Home() {
               </button>
             </div>
             <div className="header-right">
-              <button className="bookmark-toggle" onClick={() => setShowBookmarks(true)} aria-label="Bookmarks">
+              <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
               </button>
               <UserMenu
-                onOpenBookmarks={() => setShowBookmarks(true)}
-                onOpenMyLooks={() => setShowMyLooks(true)}
+                onOpenBookmarks={openBookmarks}
+                onOpenMyLooks={openMyLooks}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
-                onLogout={async () => { await logout(); setView('locked'); }}
+                onLogout={handleLogout}
                 recentProducts={recentProducts}
                 savedProducts={bookmarks.bookmarkedProducts}
-                savedLooks={liveLooks.filter(l => bookmarks.bookmarkedLooks.includes(l.id))}
+                savedLooks={savedLooksForMenu}
                 onOpenLook={handleOpenLook}
                 onOpenProduct={handleOpenProduct}
               />
@@ -627,12 +675,9 @@ export default function Home() {
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
             searchQuery={searchQuery}
-            onSearchChange={(q: string) => { setSearchQuery(q); if (q.trim()) setCatalogName(getRandomCatalogName(q)); }}
-            onSelectSuggestion={(q: string) => {
-              setSearchQuery(q.toLowerCase());
-              setCatalogName(q.replace(/\b\w/g, (c) => c.toUpperCase()));
-            }}
-            onOpenCreators={() => setCreatorFilter('@lilywittman')}
+            onSearchChange={handleSearchChange}
+            onSelectSuggestion={handleSelectSuggestion}
+            onOpenCreators={handleOpenLilyCreator}
             catalogName={catalogName}
           />
 
@@ -673,17 +718,17 @@ export default function Home() {
             <Suspense fallback={null}>
               <BookmarksPage
                 bookmarks={bookmarks}
-                onClose={() => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); }}
+                onClose={closeBookmarks}
                 onOpenLook={handleOpenLook}
                 onOpenBrowser={handleOpenBrowser}
-                onOpenCreator={(handle) => { history.replaceState({}, '', '/#app'); setShowBookmarks(false); handleOpenCreator(handle); }}
+                onOpenCreator={handleBookmarksOpenCreator}
               />
             </Suspense>
           )}
 
           {showMyLooks && (
             <Suspense fallback={null}>
-              <MyLooks onClose={() => { history.replaceState({}, '', '/#app'); setShowMyLooks(false); }} />
+              <MyLooks onClose={closeMyLooks} />
             </Suspense>
           )}
 
@@ -691,7 +736,7 @@ export default function Home() {
             <Suspense fallback={null}>
               <ProductPage
                 product={selectedProduct}
-                onClose={() => { setSelectedProduct(null); setSelectedCreative(null); setSelectedSimilar(null); setSimilarCreatives(null); setBrandCreatives(null); }}
+                onClose={handleProductClose}
                 onOpenLook={handleOpenLook}
                 onOpenBrowser={handleOpenBrowser}
                 onOpenProduct={handleOpenProduct}
@@ -722,7 +767,7 @@ export default function Home() {
             product={browserState.product}
             isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
             onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
-            onClose={() => setBrowserState(null)}
+            onClose={handleBrowserClose}
           />
         </Suspense>
       )}

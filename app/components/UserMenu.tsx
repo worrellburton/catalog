@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from '@remix-run/react';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -42,7 +42,7 @@ function MiniTile({ src, label, onClick }: { src?: string; label: string; onClic
   );
 }
 
-export default function UserMenu({
+function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
   bookmarkCount,
@@ -247,3 +247,8 @@ export default function UserMenu({
     </div>
   );
 }
+
+// Memoized — _index.tsx re-renders on every search keystroke and overlay
+// open. Without memo + stable callbacks from the parent, the menu re-ran
+// its avatar / strip layout for every state change.
+export default memo(UserMenu);
