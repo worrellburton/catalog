@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
   { to: '/admin/apis', label: 'APIs', icon: 'M4 6h16M4 12h16M4 18h16' },
   { to: '/admin/branding', label: 'Branding', icon: 'M4 7h16M4 12h10M4 17h16' },
+  { to: '/admin/ui', label: 'UI', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
 ];
 
@@ -68,6 +69,10 @@ const allSearchItems: SearchItem[] = [
   { label: 'Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
+  { label: 'UI', type: 'Page', to: '/admin/ui' },
+  { label: 'Brand', type: 'Page', to: '/admin/ui/brand' },
+  { label: 'Search bar', type: 'Page', to: '/admin/ui/search-bar' },
+  { label: 'Beam', type: 'Page', to: '/admin/ui/search-bar' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
