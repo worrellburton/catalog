@@ -708,6 +708,25 @@
   transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
 }
 
+@media (min-width: 769px) {
+  /* Desktop: restore the original full-height vertical column of
+     auto-scrolling suggestions. Sits above the bottom bar, centered
+     across the whole viewport, large editorial typography, vertical
+     fade mask. The pill-row treatment was a mobile compaction —
+     desktop has the room for the original layout. */
+  .search-suggestions {
+    left: 0;
+    transform: none;
+    width: 100%;
+    bottom: 140px;
+    top: 0;
+    border-radius: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+  }
+}
+
 @media (max-width: 768px) {
   .search-suggestions {
     /* Anchor relative to the iOS chrome so pinned URL bar / iOS
@@ -754,6 +773,25 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
+@media (min-width: 769px) {
+  /* Desktop track: vertical column, no glass pill, no boundary. The
+     parent .search-suggestions provides the fade mask. */
+  .search-suggestions-track {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 40px 20px;
+    white-space: normal;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 .search-suggestion {
   flex-shrink: 0;
   padding: 8px 14px;
@@ -774,6 +812,28 @@
 .search-suggestion:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+@media (min-width: 769px) {
+  /* Desktop suggestions: editorial vertical list. Big quiet text that
+     brightens on hover. No pill chrome — the suggestion IS just the
+     word. Matches the original full-page treatment before mobile got
+     the horizontal pill compaction. */
+  .search-suggestion {
+    padding: 10px 24px;
+    border-radius: 20px;
+    background: transparent;
+    border: 0;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.8;
+    white-space: nowrap;
+  }
+  .search-suggestion:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+  }
 }
 
 /* Tap animation */

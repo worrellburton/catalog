@@ -65,11 +65,11 @@ function BottomBar({
     return [...shuffled, ...shuffled];
   }, []);
 
-  // Horizontal auto-scroll. The track is doubled so we can translate
-  // it to the left forever; when X passes half the track width we
-  // subtract that half and the second copy carries the eye onward
-  // with no visible reset. Pause when search closes so the rAF loop
-  // releases.
+  // Auto-scroll. Mobile renders the suggestions as a horizontal pill
+  // row above the bar — translate X. Desktop restores the original
+  // full-height vertical column — translate Y. Direction is chosen on
+  // mount via matchMedia and re-checked on resize so a window resize
+  // across the breakpoint flips smoothly.
   useEffect(() => {
     if (!searchOpen || !trackRef.current) {
       if (scrollRAF.current) {
@@ -79,18 +79,30 @@ function BottomBar({
       return;
     }
     const track = trackRef.current;
-    const SPEED = 0.4; // px per frame ≈ 24 px/s
-    let offset = scrollY.current; // reuse the ref to survive remount
+    let isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+    const SPEED = 0.4;
+    let offset = scrollY.current;
+    const onResize = () => {
+      isMobile = window.matchMedia('(max-width: 768px)').matches;
+      // Reset offset on breakpoint flip so we don't carry an X offset
+      // into a Y layout (or vice-versa).
+      offset = 0;
+      track.style.transform = '';
+    };
+    window.addEventListener('resize', onResize);
     function tick() {
       offset += SPEED;
-      const half = track.scrollWidth / 2;
+      const half = isMobile ? track.scrollWidth / 2 : track.scrollHeight / 2;
       if (half > 0 && offset >= half) offset -= half;
-      track.style.transform = `translateX(-${offset}px)`;
+      track.style.transform = isMobile
+        ? `translateX(-${offset}px)`
+        : `translateY(-${offset}px)`;
       scrollY.current = offset;
       scrollRAF.current = requestAnimationFrame(tick);
     }
     scrollRAF.current = requestAnimationFrame(tick);
     return () => {
+      window.removeEventListener('resize', onResize);
       if (scrollRAF.current) {
         cancelAnimationFrame(scrollRAF.current);
         scrollRAF.current = null;
