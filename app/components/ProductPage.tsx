@@ -258,15 +258,23 @@ export default function ProductPage({
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
-  // Shop dropdown — retailer chips stay collapsed by default so the action
-  // row reads clean. Tapping the Shop button expands them; tapping again
-  // (or selecting a retailer) closes.
-  const [showRetailers, setShowRetailers] = useState(false);
+  // Shop dropdown — collapsed by default on mobile so the action row
+  // reads clean; auto-expanded on desktop because the split layout
+  // gives the right column plenty of vertical space and the retailer
+  // comparison is the highest-value content there.
+  const isDesktop = typeof window !== 'undefined'
+    && window.matchMedia('(min-width: 960px)').matches;
+  const [showRetailers, setShowRetailers] = useState(isDesktop);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-collapse the Shop drawer when the user navigates to a different
-  // product so the next page also starts with it closed.
-  useEffect(() => { setShowRetailers(false); }, [product.brand, product.name]);
+  // Re-sync the drawer when the user navigates to a different product:
+  // open by default on desktop, closed on mobile.
+  useEffect(() => {
+    setShowRetailers(
+      typeof window !== 'undefined'
+        && window.matchMedia('(min-width: 960px)').matches,
+    );
+  }, [product.brand, product.name]);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
