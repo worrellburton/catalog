@@ -1135,3 +1135,36 @@
     animation: bb-beam-rotate-fallback 12s linear infinite;
   }
 }
+
+/* Comet — single hot spot with a fading tail trailing behind it.
+   The wedge starts very dim ~120° behind the head, ramps up through
+   the head, and cuts off sharp on the leading edge. Reads as a
+   shooting-star / loading-energy feel. */
+.bottom-bar.is-beam-comet::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(255, 255, 255, 0.04) 220deg,
+    rgba(255, 200, 130, 0.05) 235deg,
+    rgba(255, 200, 130, 0.18) 280deg,
+    rgba(255, 220, 180, 0.5) 330deg,
+    rgba(255, 240, 220, 0.95) 355deg,
+    rgba(255, 255, 255, 1) 360deg,
+    rgba(255, 255, 255, 0.04) 365deg,
+    rgba(255, 255, 255, 0.04) 360deg
+  );
+  animation: bb-beam-spin 5s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-comet::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(255, 200, 130, 0.18) 280deg,
+      rgba(255, 220, 180, 0.5) 330deg,
+      rgba(255, 255, 255, 1) 360deg,
+      rgba(255, 255, 255, 0.04) 365deg
+    );
+    animation: bb-beam-rotate-fallback 5s linear infinite;
+  }
+}
