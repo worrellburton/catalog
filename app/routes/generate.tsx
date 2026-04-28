@@ -846,15 +846,8 @@ export default function GeneratePage() {
         )}
 
         {step === 'products' && (
-          <section className="gen-step">
+          <section className="gen-step gen-step-products">
             <h2>2. Pick up to {MAX_PRODUCTS} products</h2>
-            <input
-              type="search"
-              className="gen-search"
-              placeholder="Search by name or brand…"
-              value={productQuery}
-              onChange={e => setProductQuery(e.target.value)}
-            />
             {picked.length > 0 && (
               <div className="gen-picked">
                 {picked.map(p => (
@@ -876,30 +869,50 @@ export default function GeneratePage() {
                 ))}
               </div>
             )}
-            <div className="gen-productgrid">
-              {productsLoading && productResults.length === 0 ? (
-                <div className="gen-empty">Loading products…</div>
-              ) : productResults.length === 0 ? (
-                <div className="gen-empty">No products match "{productQuery}"</div>
-              ) : (
-                productResults.map(p => {
-                  const isPicked = picked.some(x => x.id === p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`gen-productcard${isPicked ? ' is-picked' : ''}`}
-                      onClick={() => togglePick(p)}
-                      disabled={!isPicked && picked.length >= MAX_PRODUCTS}
-                    >
-                      {p.image_url && <img src={p.image_url} alt="" />}
-                      <span className="gen-productcard-name">{p.name || 'Product'}</span>
-                      <span className="gen-productcard-brand">{p.brand}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+
+            {/* Six horizontal-scroll rows. Each row is one of CATEGORY_GROUPS
+                — Hat / Top / Bottoms / Shoes / Accessories / Objects.
+                Empty rows are still rendered so the layout is predictable
+                across catalog states; they show a quiet empty hint. */}
+            {productsLoading && productResults.length === 0 ? (
+              <div className="gen-empty">Loading products…</div>
+            ) : (
+              CATEGORY_GROUPS.map(group => {
+                const rowProducts = productsByCategory[group.label] || [];
+                const rowQuery = categoryQueries[group.label] || '';
+                return (
+                  <div key={group.label} className="gen-cat-row">
+                    <div className="gen-cat-row-head">
+                      <span className="gen-cat-row-label">{group.label}</span>
+                    </div>
+                    <div className="gen-cat-row-scroll">
+                      {rowProducts.length === 0 ? (
+                        <div className="gen-cat-row-empty">
+                          {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
+                        </div>
+                      ) : (
+                        rowProducts.map(p => {
+                          const isPicked = picked.some(x => x.id === p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
+                              onClick={() => togglePick(p)}
+                              disabled={!isPicked && picked.length >= MAX_PRODUCTS}
+                            >
+                              {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
+                              <span className="gen-cat-card-name">{p.name || 'Product'}</span>
+                              <span className="gen-cat-card-brand">{p.brand}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </section>
         )}
 
