@@ -1069,3 +1069,38 @@
     animation: bb-beam-rotate-fallback 6s linear infinite;
   }
 }
+
+/* Mirrored — two opposing white beams, 180° apart, spinning together.
+   Same wedge shape as Apple but duplicated to 170°-190°. Slightly
+   slower (8s) so the eye can register both spots. */
+.bottom-bar.is-beam-mirrored::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(180, 200, 255, 0.95) 25deg,
+    rgba(180, 200, 255, 1) 35deg,
+    rgba(180, 200, 255, 0.95) 45deg,
+    rgba(255, 255, 255, 0.04) 90deg,
+    rgba(255, 255, 255, 0.04) 195deg,
+    rgba(180, 200, 255, 0.95) 215deg,
+    rgba(180, 200, 255, 1) 225deg,
+    rgba(180, 200, 255, 0.95) 235deg,
+    rgba(255, 255, 255, 0.04) 280deg,
+    rgba(255, 255, 255, 0.04) 360deg
+  );
+  animation: bb-beam-spin 8s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-mirrored::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(180, 200, 255, 1) 35deg,
+      rgba(255, 255, 255, 0.04) 90deg,
+      rgba(255, 255, 255, 0.04) 195deg,
+      rgba(180, 200, 255, 1) 225deg,
+      rgba(255, 255, 255, 0.04) 280deg
+    );
+    animation: bb-beam-rotate-fallback 8s linear infinite;
+  }
+}
