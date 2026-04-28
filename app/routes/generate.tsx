@@ -720,10 +720,16 @@ export default function GeneratePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
-        {/* The photos and products steps are dense input surfaces — the
-            page-level "Generate" header would just push everything below
-            the fold on mobile. Show it only on the secondary steps where
-            it serves as orientation. */}
+        {/* Photos step gets a "Try this on" headline — the actual primary
+            verb the page does. Products is dense and gets the back-only
+            header. Other secondary steps fall back to the original
+            "Generate" framing. */}
+        {step === 'photos' && (
+          <>
+            <h1>Try this on</h1>
+            <p className="gen-sub">Drop in a few clean shots of yourself, then pick up to five products to dress up in.</p>
+          </>
+        )}
         {step !== 'products' && step !== 'photos' && (
           <>
             <h1>Generate</h1>
@@ -739,7 +745,7 @@ export default function GeneratePage() {
                 look button. Capped at ~1/3 of the viewport height so the
                 "Your looks" grid below can dominate the screen. */}
             <div className="gen-photos-form">
-              <h2 className="gen-photos-title">Your reference photos</h2>
+              <h2 className="gen-photos-title">You</h2>
 
               <input
                 ref={fileInputRef}
@@ -859,6 +865,25 @@ export default function GeneratePage() {
                 Create look
               </button>
             </div>
+
+            {/* Creator CTA — sits above the Your Looks grid so anyone
+                browsing their own looks sees a clean path to publishing
+                them as a creator. Wired to the consumer creator-page
+                surface for now (the same overlay that opens when a
+                shopper taps a creator's avatar in the feed). Replace
+                the navigate target once the dedicated creator-signup
+                flow lands. */}
+            <button
+              type="button"
+              className="gen-creator-cta"
+              onClick={() => navigate('/admin/creators')}
+            >
+              <span className="gen-creator-cta-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+              </span>
+              <span className="gen-creator-cta-label">Become a creator</span>
+              <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
+            </button>
 
             {(generations.length > 0 || loadingList) && (
               <>

@@ -39,7 +39,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Lock zoom on mobile Safari. user-scalable=no + min/max=1
+            covers the standard pinch-zoom path; the touch-action +
+            JS guard below catches Safari's iOS-10+ override that
+            ignores user-scalable. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <title>catalog</title>
         <meta
           name="description"
@@ -64,11 +68,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
 *{scrollbar-width:none;-ms-overflow-style:none}
 *::-webkit-scrollbar{display:none}
 :root{--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
-body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overscroll-behavior:none}
 .app-root{min-height:100vh}
 .password-gate{position:fixed;inset:0;z-index:500;background:radial-gradient(circle at 30% 20%,rgba(80,70,90,.18),transparent 55%),radial-gradient(circle at 75% 80%,rgba(60,80,110,.15),transparent 55%),#000;display:flex;align-items:center;justify-content:center;padding:32px 20px}
 .splash-screen{position:fixed;inset:0;z-index:1000;background:#0a0a0a;display:flex;align-items:center;justify-content:center}
         ` }} />
+        {/* iOS Safari ignores user-scalable=no on the viewport meta since
+            iOS 10. These two listeners are the only reliable way to kill
+            pinch-zoom and double-tap-zoom on iPhones. Inlined so they
+            arm before any user interaction. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: `
+(function(){
+  if(typeof document==='undefined')return;
+  // Block pinch (gesturestart/change/end) — Safari-specific events.
+  ['gesturestart','gesturechange','gestureend'].forEach(function(evt){
+    document.addEventListener(evt,function(e){e.preventDefault();},{passive:false});
+  });
+  // Block double-tap-zoom by suppressing the second tap inside 350 ms.
+  var lastTouchEnd=0;
+  document.addEventListener('touchend',function(e){
+    var now=Date.now();
+    if(now-lastTouchEnd<=350)e.preventDefault();
+    lastTouchEnd=now;
+  },{passive:false});
+})();
+          `}}
+        />
         {/* Inter (admin/partners chrome) and DM Sans (MyLooks) are the only
             two families actually referenced in the stylesheets. The other
             eight families this request used to pull (Plus Jakarta, Outfit,

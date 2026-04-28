@@ -1825,3 +1825,61 @@ html[data-shell="catalog-app"] .gen-page {
     font-size: 15px;
   }
 }
+
+/* Become a creator CTA — sits above the "Your looks" grid on the
+   photos step. Pill-shaped row that reads as a navigation entry
+   point, not a primary action. Subtle treatment so it doesn't
+   compete with the Create look button above. */
+.gen-creator-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 18px 0 14px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.gen-creator-cta:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gen-creator-cta:active {
+  transform: scale(0.99);
+}
+
+.gen-creator-cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.gen-creator-cta-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gen-creator-cta-chevron {
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+  margin-right: -2px;
+}
