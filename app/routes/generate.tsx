@@ -551,12 +551,23 @@ export default function GeneratePage() {
 
   const togglePick = (p: PickedProduct) => {
     let wasPicked = false;
+    let hitLimit = false;
     setPicked(prev => {
       wasPicked = prev.some(x => x.id === p.id);
       if (wasPicked) return prev.filter(x => x.id !== p.id);
-      if (prev.length >= MAX_PRODUCTS) return prev;
+      if (prev.length >= MAX_PRODUCTS) {
+        hitLimit = true;
+        return prev;
+      }
       return [...prev, p];
     });
+    if (hitLimit) {
+      // Surface the limit so the tap doesn't feel like a silent no-op.
+      // The dock's count chip already shows "5/5", but a tap on a 6th
+      // card needs explicit feedback or it reads as broken.
+      setLimitWarning(`You can pick up to ${MAX_PRODUCTS} products. Remove one to swap.`);
+      return;
+    }
     // Scroll the freshly-picked card into the visible center of its
     // category row so the user gets immediate confirmation. Only fires
     // on the pick (not the unpick) and waits a tick for React to apply
@@ -570,6 +581,22 @@ export default function GeneratePage() {
       });
     }
   };
+
+  // Transient toast surfaced when the user taps a 6th product. Auto-
+  // dismisses after a few seconds; clears on next successful pick or
+  // unpick so it never lingers past relevance.
+  const [limitWarning, setLimitWarning] = useState<string | null>(null);
+  useEffect(() => {
+    if (!limitWarning) return;
+    const t = window.setTimeout(() => setLimitWarning(null), 2800);
+    return () => window.clearTimeout(t);
+  }, [limitWarning]);
+  useEffect(() => {
+    // Any change to picked while the warning is up means the user
+    // resolved the situation — drop the toast immediately.
+    if (limitWarning) setLimitWarning(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked.length]);
 
   const setPickedRole = (id: string, role: string | null) => {
     setPicked(prev => prev.map(x => x.id === id ? { ...x, role_tag: role } : x));
@@ -935,7 +962,7 @@ export default function GeneratePage() {
 
         {step === 'products' && (
           <section className="gen-step gen-step-products">
-            <h2>2. Pick up to {MAX_PRODUCTS} products</h2>
+            <h2>2. Pick your products</h2>
             {/* Picked-products preview moved into the unified gen-dock at
                 the bottom (see render below) so the three previously
                 separate fixed elements (picks, Back/Next, step rail)
@@ -979,7 +1006,9 @@ export default function GeneratePage() {
                               className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
                               data-gen-card-id={p.id}
                               onClick={() => togglePick(p)}
-                              disabled={!isPicked && picked.length >= MAX_PRODUCTS}
+                              /* No disabled state — a tap on a 6th card
+                                 surfaces the limit toast instead of
+                                 silently doing nothing. */
                             >
                               {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
                               <span className="gen-cat-card-name">{p.name || 'Product'}</span>
@@ -1224,6 +1253,12 @@ export default function GeneratePage() {
           request; the section heading on the page already tells you
           which step you're on. */}
       {step !== 'result' && step !== 'photos' && (
+        <>
+        {limitWarning && (
+          <div className="gen-limit-toast" role="status" aria-live="polite">
+            {limitWarning}
+          </div>
+        )}
         <aside className="gen-dock" aria-label="Step controls">
           {step === 'products' && picked.length > 0 && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
@@ -1259,6 +1294,7 @@ export default function GeneratePage() {
             )}
           </div>
         </aside>
+        </>
       )}
     </div>
   );

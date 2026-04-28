@@ -1919,3 +1919,30 @@ html[data-shell="catalog-app"] .gen-page {
   flex-shrink: 0;
   margin-right: -2px;
 }
+
+/* Limit warning toast — surfaces when the user taps a 6th product
+   on the picker. Sits just above the gen-dock, fades in/out. */
+.gen-limit-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  z-index: 60;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(40, 20, 20, 0.92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: 1px solid rgba(255, 80, 80, 0.32);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: gen-limit-toast-in 0.18s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes gen-limit-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
