@@ -1104,3 +1104,34 @@
     animation: bb-beam-rotate-fallback 8s linear infinite;
   }
 }
+
+/* Aurora — full iridescent wash rotating slowly (12s). All colors
+   present at all times; the rotation cycles which color sits where
+   on the ring. Reads as "magic / generative" — the standard
+   gen-AI / creative-tool trim. */
+.bottom-bar.is-beam-aurora::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    #5b8cff 0deg,
+    #b86dff 60deg,
+    #ff6db8 120deg,
+    #ffb86d 180deg,
+    #6dffd6 240deg,
+    #5b8cff 360deg
+  );
+  animation: bb-beam-spin 12s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-aurora::before {
+    background: conic-gradient(
+      from 0deg,
+      #5b8cff 0deg,
+      #b86dff 60deg,
+      #ff6db8 120deg,
+      #ffb86d 180deg,
+      #6dffd6 240deg,
+      #5b8cff 360deg
+    );
+    animation: bb-beam-rotate-fallback 12s linear infinite;
+  }
+}
