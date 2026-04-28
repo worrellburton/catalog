@@ -549,11 +549,25 @@ export default function GeneratePage() {
   };
 
   const togglePick = (p: PickedProduct) => {
+    let wasPicked = false;
     setPicked(prev => {
-      if (prev.some(x => x.id === p.id)) return prev.filter(x => x.id !== p.id);
+      wasPicked = prev.some(x => x.id === p.id);
+      if (wasPicked) return prev.filter(x => x.id !== p.id);
       if (prev.length >= MAX_PRODUCTS) return prev;
       return [...prev, p];
     });
+    // Scroll the freshly-picked card into the visible center of its
+    // category row so the user gets immediate confirmation. Only fires
+    // on the pick (not the unpick) and waits a tick for React to apply
+    // the is-picked class before the smooth scroll starts.
+    if (!wasPicked && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`);
+        if (card && 'scrollIntoView' in card) {
+          (card as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      });
+    }
   };
 
   const setPickedRole = (id: string, role: string | null) => {
@@ -905,6 +919,7 @@ export default function GeneratePage() {
                               key={p.id}
                               type="button"
                               className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
+                              data-gen-card-id={p.id}
                               onClick={() => togglePick(p)}
                               disabled={!isPicked && picked.length >= MAX_PRODUCTS}
                             >
