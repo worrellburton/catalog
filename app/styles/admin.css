@@ -386,6 +386,7 @@
   flex: 1;
   margin-left: 200px;
   min-height: 100vh;
+  min-width: 0;
 }
 
 /* Admin top search bar */
@@ -623,6 +624,7 @@
 .admin-page {
   padding: 24px 28px;
   max-width: 1400px;
+  min-width: 0;
 }
 
 .admin-page-header {
@@ -1031,6 +1033,29 @@
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
+}
+
+.admin-row-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.admin-row-delete:hover {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.admin-dark .admin-row-delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .admin-table {

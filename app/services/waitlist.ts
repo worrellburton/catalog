@@ -59,6 +59,19 @@ export async function joinWaitlist(user: AuthUser): Promise<WaitlistStatus | nul
   return getWaitlistStatus(user.id);
 }
 
+export async function getWaitlistIds(): Promise<Set<string>> {
+  if (!supabase) return new Set();
+  const { data, error } = await supabase
+    .from('waitlist')
+    .select('id')
+    .eq('approved', false);
+  if (error) {
+    console.error('Failed to load waitlist ids', error);
+    return new Set();
+  }
+  return new Set((data || []).map(r => r.id as string));
+}
+
 export async function getWaitlist(): Promise<WaitlistEntry[]> {
   if (!supabase) return [];
   const { data, error } = await supabase

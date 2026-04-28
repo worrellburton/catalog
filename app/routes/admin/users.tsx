@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { getProfiles, updateUserRole, updateUserIsAdmin, type Profile } from '~/services/profiles';
+import { getProfiles, updateUserRole, updateUserIsAdmin, deleteProfile, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
 import { auditAllUserGenders, type UserGender } from '~/services/genders';
+import { getWaitlistIds } from '~/services/waitlist';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -264,6 +265,7 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
   const [allUsers, setAllUsers] = useState<UserRow[]>([]);
+  const [waitlistIds, setWaitlistIds] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [auditingGender, setAuditingGender] = useState(false);
   const toastIdRef = useRef(0);
@@ -272,15 +274,17 @@ export default function AdminUsers() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Fetch profiles + per-user generated-look counts in parallel.
-      // Looks count for DB users is the number of user_generations
-      // rows they own (any status). Seed-data creators not present
-      // in profiles still count from looksPerCreator below.
-      const [profiles, genRowsRes] = await Promise.all([
+      // Fetch profiles + per-user generated-look counts + waitlist
+      // ids in parallel. Waitlist ids let us exclude users still
+      // pending approval from the Shoppers tab — once you're on the
+      // waitlist you're not a shopper.
+      const [profiles, genRowsRes, ids] = await Promise.all([
         getProfiles(),
         supabase ? supabase.from('user_generations').select('user_id') : Promise.resolve({ data: null }),
+        getWaitlistIds(),
       ]);
       if (cancelled) return;
+      setWaitlistIds(ids);
       const counts = new Map<string, number>();
       const rows = ((genRowsRes as { data: { user_id: string }[] | null }).data) || [];
       for (const r of rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
@@ -330,7 +334,7 @@ export default function AdminUsers() {
     });
   }, [showToast]);
 
-  const shoppers = allUsers.filter(u => u.role === 'shopper');
+  const shoppers = allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id));
   const dbCreators = allUsers.filter(u => u.role === 'creator');
 
   // Merge content creators from looks data with DB creators
@@ -363,6 +367,29 @@ export default function AdminUsers() {
   // profile, not the role text column. Keeps role for display while
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
+
+  const handleDelete = useCallback(async (userId: string) => {
+    const target = allUsers.find(u => u.id === userId);
+    if (!target) return;
+    if (target.id.startsWith('content-')) {
+      showToast('Seed-data creators are bundled with the app and can’t be deleted from here.', 'info');
+      return;
+    }
+    if (!confirm(`Delete ${target.name}? This removes their profile permanently.`)) return;
+    const { error } = await deleteProfile(userId);
+    if (error) {
+      showToast(`Failed to delete: ${error}`, 'warning');
+      return;
+    }
+    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    setWaitlistIds(prev => {
+      if (!prev.has(userId)) return prev;
+      const next = new Set(prev);
+      next.delete(userId);
+      return next;
+    });
+    showToast(`${target.name} deleted`, 'success');
+  }, [allUsers, showToast]);
 
   const handleAdminToggle = useCallback(async (userId: string, next: boolean) => {
     const target = allUsers.find(u => u.id === userId);
@@ -410,6 +437,7 @@ export default function AdminUsers() {
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Via Creator" sortKey="creator" currentSort={table.sort} onSort={table.handleSort} />
+              <th style={{ width: 80 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -454,6 +482,22 @@ export default function AdminUsers() {
                 <td>{u.saved}</td>
                 <td>{u.followings}</td>
                 <td className="admin-cell-muted">{u.creator}</td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="admin-row-delete"
+                    onClick={() => handleDelete(u.id)}
+                    aria-label={`Delete ${u.name}`}
+                    title="Delete"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6M14 11v6" />
+                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
