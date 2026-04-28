@@ -47,23 +47,57 @@ A visual lookbook webapp for browsing fashion "looks" — short video clips pair
 
 ## Live Site
 
-https://worrellburton.github.io/catalog/
+| Environment | URL |
+|---|---|
+| Production / Dev | https://catalogdev.vercel.app |
+
+(GitHub Pages at `worrellburton.github.io/catalog/` was the previous host
+and has been retired — see "Deployment" below. If you find a `gh-pages`
+URL referenced anywhere in code, it's stale and should be removed.)
 
 ## Tech Stack
 
 - **Remix v2** with Vite in SPA mode and TypeScript
 - **React 19** with functional components and hooks
-- **Static SPA export** — `remix vite:build` outputs to `build/client/` for GitHub Pages deployment
+- **Static SPA export** — `remix vite:build` outputs to `build/client/`,
+  served from Vercel's edge as a static SPA
 - **No external UI libraries** — all styling via vanilla CSS (`globals.css`)
 
 ## Deployment
 
-- **Workflow**: `.github/workflows/deploy.yml` deploys to GitHub Pages
-- **Triggers**: Pushes to `main`, `dev`, or `staging` branches
-- **Method**: `npm ci` → `npm run build` → uploads `build/client/` directory as GitHub Pages artifact
-- **Base path**: `/catalog/` (configured in `vite.config.ts` via `base` and Remix `basename`)
-- **SPA fallback**: `index.html` is copied to `404.html` at build time so GitHub Pages serves the SPA for all routes
-- **Environment**: The GitHub Pages environment must have `dev`, `staging`, and `main` listed as allowed deployment branches (configured in repo Settings > Environments > github-pages)
+Deployments run on **Vercel**. Vercel watches the GitHub repo and
+auto-builds on push.
+
+- **Branch ↔ environment**: pushing to any of `dev`, `staging`, or
+  `main` triggers a Vercel build. The Vercel dashboard determines
+  which deployment URL each branch ships to.
+- **Build command**: `npm run build` (default Vite/Remix flow)
+- **Output directory**: `build/client/`
+- **Base path**: `/` (Vercel serves at the domain root, not under
+  `/catalog/`). `vite.config.ts` reads `NEXT_PUBLIC_BASE_PATH` — leave
+  unset for Vercel.
+
+### Required Vercel environment variables
+
+Configure in **Vercel dashboard → Project → Settings → Environment Variables**.
+All are public — they get baked into the client bundle at build time.
+
+| Variable | Purpose |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Supabase anon key |
+| `VITE_MODAL_CRAWLER_URL` | Modal crawler endpoint |
+| `VITE_MODAL_SCRAPER_URL` | Modal scraper endpoint |
+
+### Migrations
+
+Vercel does **not** run database migrations. Apply Supabase migrations
+manually via the Supabase MCP (`mcp__supabase__apply_migration`) or the
+`supabase db push` CLI. See Section 7 for the operational reference.
+
+The legacy GitHub Actions workflow (`.github/workflows/deploy.yml`) had
+a `migrate` job that ran `supabase db push` on push. That workflow is
+disabled — Vercel is the only deploy path now.
 
 ## Git / Branch Strategy
 
@@ -71,9 +105,9 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 
 | Branch | Purpose | Maps to |
 |---|---|---|
-| `dev` | Active development, all new work goes here first | Dev environment |
-| `staging` | Pre-release testing and QA | Staging environment |
-| `main` | Production-ready code only | Production / GitHub Pages |
+| `dev` | Active development, all new work goes here first | Vercel preview (per-branch URL) |
+| `staging` | Pre-release testing and QA | Vercel preview (per-branch URL) |
+| `main` | Production-ready code only | Production at https://catalogdev.vercel.app |
 
 ### Rules
 

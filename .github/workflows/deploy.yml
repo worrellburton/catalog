@@ -1,11 +1,17 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (DISABLED)
 
+# Vercel is now the sole deploy pipeline (catalogdev.vercel.app). This
+# workflow is preserved as a reference in case the team ever wants to
+# re-enable GitHub Pages as a fallback host, but it no longer runs on
+# push. To re-enable: replace `workflow_dispatch:` with the push trigger
+# below (and re-add the SUPABASE_* repo secrets if migrate is wanted).
 on:
-  push:
-    branches:
-      - main
-      - dev
-      - staging
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  #     - dev
+  #     - staging
 
 permissions:
   contents: read
