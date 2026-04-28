@@ -50,8 +50,28 @@ header {
   padding: 0;
   cursor: pointer;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   transition: transform 0.2s ease;
+}
+
+.logo-catalog-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.85;
+  letter-spacing: 0.02em;
+  /* Sit flush under the logo. The logo itself is 36px tall with no
+     bottom whitespace, so a tiny negative margin tucks the name in
+     without leaving an awkward gap from the logo's baseline. */
+  margin-top: -2px;
+  text-transform: none;
+  text-align: left;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logo-btn:hover {

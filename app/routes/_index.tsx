@@ -126,6 +126,17 @@ const KEYWORD_ALIASES: Record<string, string> = {
   mens: 'men', guys: 'men', guy: 'men',
 };
 
+// Title-case the user's literal search so it reads as a proper catalog
+// name beneath the logo. Short single tokens are kept uppercase so
+// "omg" → "OMG", but longer words use Title Case.
+function toCatalogName(query: string): string {
+  return query
+    .trim()
+    .split(/\s+/)
+    .map(w => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
+}
+
 function getRandomCatalogName(query?: string): string {
   if (query && query.trim()) {
     const q = query.toLowerCase().trim();
@@ -578,7 +589,11 @@ export default function Home() {
     setSelectedProduct(null);
     setSelectedLook(null);
     setSearchQuery(query);
-    setCatalogName(getRandomCatalogName(query));
+    // The catalog name is the user's actual query, title-cased — so a
+    // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
+    // Single short tokens (acronyms) stay uppercase.
+    const trimmed = query.trim();
+    setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
   }, []);
 
   const toggleTheme = useCallback(() => {
@@ -604,11 +619,11 @@ export default function Home() {
   }, [logout]);
   const handleSearchChange = useCallback((q: string) => {
     setSearchQuery(q);
-    if (q.trim()) setCatalogName(getRandomCatalogName(q));
+    setCatalogName(q.trim() ? toCatalogName(q) : 'all');
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
-    setCatalogName(q.replace(/\b\w/g, (c) => c.toUpperCase()));
+    setCatalogName(toCatalogName(q));
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
@@ -687,6 +702,9 @@ export default function Home() {
             <div className="header-left">
               <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
                 <CatalogLogo className="logo" />
+                {catalogName && catalogName !== 'all' && (
+                  <span className="logo-catalog-name">{catalogName}</span>
+                )}
               </button>
             </div>
             <div className="header-right">
