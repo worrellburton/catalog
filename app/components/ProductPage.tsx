@@ -333,26 +333,27 @@ export default function ProductPage({
           </svg>
         </button>
 
-        <section className={heroClassName}>
-          {creative ? (
-            <div
-              ref={setHeroSlot}
-              className="pd-hero-media pd-hero-video-slot"
-              data-trail-id={creative.id}
-            />
-          ) : product.image ? (
-            <img
-              src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
-              alt={product.name}
-              className="pd-hero-media"
-            />
-          ) : (
-            <div className="pd-hero-placeholder" />
-          )}
-          <div className="pd-hero-scrim" />
-        </section>
+        <div className="pd-split">
+          <section className={heroClassName}>
+            {creative ? (
+              <div
+                ref={setHeroSlot}
+                className="pd-hero-media pd-hero-video-slot"
+                data-trail-id={creative.id}
+              />
+            ) : product.image ? (
+              <img
+                src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
+                alt={product.name}
+                className="pd-hero-media"
+              />
+            ) : (
+              <div className="pd-hero-placeholder" />
+            )}
+            <div className="pd-hero-scrim" />
+          </section>
 
-        <section className="pd-info">
+          <section className="pd-info">
           <div className="pd-info-inner">
             {product.brand && <div className="pd-brand">{product.brand}</div>}
             <h1 className="pd-name">{product.name}</h1>
@@ -453,6 +454,7 @@ export default function ProductPage({
             )}
           </div>
         </section>
+        </div>
 
         {brandCreatives && brandCreatives.length > 0 && (
           <section className="pd-brand-strip-section" aria-label="More from this brand">
