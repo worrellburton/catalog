@@ -1168,3 +1168,51 @@
     animation: bb-beam-rotate-fallback 5s linear infinite;
   }
 }
+
+/* Pulse — combines an outer halo glow that breathes with a rotating
+   beam on top. Two layers: ::before for the rotating beam (uses the
+   apple-style single hot spot but tinted cyan), and a box-shadow on
+   the bar itself that pulses 0.4 ↔ 1.0 opacity in 3s. */
+.bottom-bar.is-beam-pulse {
+  animation: bb-pulse-halo 3s ease-in-out infinite;
+}
+
+@keyframes bb-pulse-halo {
+  0%, 100% {
+    box-shadow:
+      0 0 18px rgba(120, 200, 255, 0.18),
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(120, 200, 255, 0.45),
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+.bottom-bar.is-beam-pulse::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(120, 200, 255, 0.04) 0deg,
+    rgba(120, 200, 255, 0.04) 320deg,
+    rgba(120, 200, 255, 0.95) 350deg,
+    rgba(160, 220, 255, 1) 360deg,
+    rgba(120, 200, 255, 0.95) 370deg,
+    rgba(120, 200, 255, 0.04) 400deg
+  );
+  animation: bb-beam-spin 5s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-pulse::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(120, 200, 255, 0.04) 0deg,
+      rgba(120, 200, 255, 0.04) 320deg,
+      rgba(160, 220, 255, 1) 360deg,
+      rgba(120, 200, 255, 0.04) 400deg
+    );
+    animation: bb-beam-rotate-fallback 5s linear infinite;
+  }
+}
