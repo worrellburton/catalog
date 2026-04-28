@@ -720,10 +720,11 @@ export default function GeneratePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
-        {/* On the products step the screen is fully dedicated to the
-            category browser — the page-level header would just push
-            everything below the fold. Keep the back button only. */}
-        {step !== 'products' && (
+        {/* The photos and products steps are dense input surfaces — the
+            page-level "Generate" header would just push everything below
+            the fold on mobile. Show it only on the secondary steps where
+            it serves as orientation. */}
+        {step !== 'products' && step !== 'photos' && (
           <>
             <h1>Generate</h1>
             <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
@@ -733,17 +734,20 @@ export default function GeneratePage() {
 
       <main className="gen-main">
         {step === 'photos' && (
-          <section className="gen-step">
-            <h2>Your reference photos</h2>
-            <p>Drop in up to {MAX_PHOTOS} clean face / full-body shots. We'll use them to identify you and then dress you in the products you pick next.</p>
+          <section className="gen-step gen-step-photos">
+            {/* Compact input form: title + slots + height + age + Create
+                look button. Capped at ~1/3 of the viewport height so the
+                "Your looks" grid below can dominate the screen. */}
+            <div className="gen-photos-form">
+              <h2 className="gen-photos-title">Your reference photos</h2>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              hidden
-              onChange={onFileInput}
-            />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic"
+                hidden
+                onChange={onFileInput}
+              />
 
             <div className="gen-slots">
               {slots.map((uploadId, i) => {
@@ -814,14 +818,47 @@ export default function GeneratePage() {
 
             {uploadError && <div className="gen-error">{uploadError}</div>}
 
-            <button
-              type="button"
-              className="gen-btn-primary gen-create-btn"
-              disabled={!canAdvance}
-              onClick={() => goNext(step, setStep)}
-            >
-              Create look
-            </button>
+              <div className="gen-photos-meta">
+                <label className="gen-photos-meta-field">
+                  <span className="gen-photos-meta-label">Height</span>
+                  <select
+                    className="gen-photos-meta-select"
+                    value={heightCm}
+                    onChange={e => {
+                      const cm = Number(e.target.value);
+                      const opt = HEIGHT_OPTIONS.find(o => o.cm === cm);
+                      setHeightCm(cm);
+                      if (opt) setHeightLabel(opt.label);
+                    }}
+                  >
+                    {HEIGHT_OPTIONS.map(opt => (
+                      <option key={opt.cm} value={opt.cm}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="gen-photos-meta-field">
+                  <span className="gen-photos-meta-label">Age</span>
+                  <select
+                    className="gen-photos-meta-select"
+                    value={ageLabel}
+                    onChange={e => setAgeLabel(e.target.value)}
+                  >
+                    {AGE_PRESETS.map(opt => (
+                      <option key={opt.label} value={opt.label}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                className="gen-btn-primary gen-create-btn"
+                disabled={!canAdvance}
+                onClick={() => goNext(step, setStep)}
+              >
+                Create look
+              </button>
+            </div>
 
             {(generations.length > 0 || loadingList) && (
               <>

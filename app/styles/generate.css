@@ -1703,3 +1703,120 @@ html[data-shell="catalog-app"] .gen-page {
   align-items: center;
   gap: 8px;
 }
+
+/* ===== Photos step compact layout =====
+   Reference photos + height + age are bundled in a single .gen-photos-form
+   container at the top of the screen. The form caps at ~1/3 of the
+   viewport so the "Your looks" grid below can dominate the page. */
+
+.gen-step-photos {
+  /* The photos step lays out as a header form on top + Your Looks grid
+     below. No centered text alignment — the form is left-aligned so the
+     row of slots reads naturally. */
+  text-align: left;
+  padding-top: 8px;
+}
+
+.gen-photos-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gen-photos-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.gen-step-photos .gen-slots {
+  /* Compact slot strip: 3 squares in a row, smaller than the original
+     grid. Aspect ratio stays 3:4 so the slot still reads as portrait. */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.gen-step-photos .gen-slot {
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+}
+
+.gen-photos-meta {
+  display: flex;
+  gap: 10px;
+}
+
+.gen-photos-meta-field {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gen-photos-meta-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+  padding-left: 2px;
+}
+
+.gen-photos-meta-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 10px 32px 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  outline: none;
+  cursor: pointer;
+  /* Custom chevron — built-in select arrow doesn't blend with the dark
+     theme on iOS Safari. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff99' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+.gen-photos-meta-select:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.gen-photos-meta-select option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.gen-step-photos .gen-create-btn {
+  margin-top: 4px;
+  padding: 12px 24px;
+  font-size: 15px;
+}
+
+@media (max-width: 768px) {
+  /* Cap the input form so the looks grid takes the bottom 2/3. The
+     content inside is allowed to scroll if the user has all three slots
+     filled + selects open simultaneously, but in practice it fits. */
+  .gen-photos-form {
+    max-height: 36vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .gen-photos-form::-webkit-scrollbar { display: none; }
+
+  .gen-photos-title {
+    font-size: 15px;
+  }
+}
