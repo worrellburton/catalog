@@ -836,7 +836,7 @@
 }
 
 .bottom-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* Mobile: iOS Safari's bottom URL toolbar overlays the viewport when
@@ -848,16 +848,18 @@
    normal floating offset. */
 @media (max-width: 768px) {
   .bottom-bar {
+    /* 20px breathing room above the iOS URL chrome (was 12 — too tight,
+       the bar visually crashed into the toolbar on Safari iOS). */
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 12px),
-      calc(var(--ios-bottom-chrome, 0px) + 12px)
+      calc(env(safe-area-inset-bottom) + 20px),
+      calc(var(--ios-bottom-chrome, 0px) + 20px)
     );
     border-radius: 22px;
   }
   .bottom-bar.search-open {
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 20px),
-      calc(var(--ios-bottom-chrome, 0px) + 20px)
+      calc(env(safe-area-inset-bottom) + 28px),
+      calc(var(--ios-bottom-chrome, 0px) + 28px)
     );
   }
   .bottom-bar.filters-open {

@@ -81,6 +81,20 @@
   width: 100%;
 }
 
+/* Mobile: the floating search bar lifts above the iOS URL chrome via
+   --ios-bottom-chrome (set live by BottomBar). The feed itself has to
+   reserve at least that much room PLUS the bar height + breathing
+   space, otherwise the last row of cards gets hidden behind the bar
+   when the URL toolbar is expanded. */
+@media (max-width: 768px) {
+  .continuous-feed {
+    padding-bottom: max(
+      140px,
+      calc(var(--ios-bottom-chrome, 0px) + env(safe-area-inset-bottom) + 96px)
+    );
+  }
+}
+
 /* Feed Section */
 .feed-section {
   margin-bottom: 8px;
