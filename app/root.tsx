@@ -51,8 +51,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             parses, so the first auth check, looks fetch, and video stream
             don't pay the ~150 ms handshake cost. crossOrigin is required
             for storage assets (videos/images) to count as primed. */}
-        <link rel="preconnect" href="https://vtarjrnqvcqbhoclvcur.supabase.co" crossOrigin="" />
-        <link rel="dns-prefetch" href="https://vtarjrnqvcqbhoclvcur.supabase.co" />
+        <link rel="preconnect" href="https://hmgnrowqjrxvesmdshnp.supabase.co" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://hmgnrowqjrxvesmdshnp.supabase.co" />
         {/* Critical above-the-fold CSS, inlined. The full stylesheet
             (root-*.css, ~336 kB) is render-blocking; while it's in flight
             the user used to see a flash of unstyled text. These ~40 lines

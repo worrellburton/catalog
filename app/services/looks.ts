@@ -87,6 +87,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     const primary = row.looks_creative[0];
     return {
       id: row.legacy_id ?? -(index + 1),
+      uuid: row.id,
       title: row.title,
       video: primary.video_url || '',
       gender: (row.gender as 'men' | 'women') || 'women',

@@ -11,6 +11,7 @@ import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
+import { useSemanticSearch } from '~/hooks/useSemanticSearch';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -145,8 +146,49 @@ export default function ContinuousFeed({
     return base;
   }, [activeFilter, searchQuery, allLooks]);
 
+  // ── Semantic search ────────────────────────────────────────────────────────
+  // Kicks in for queries ≥ 3 chars; reorders filteredLooks so semantically
+  // ranked looks float to the top. Falls back to the local text filter when
+  // the edge function is unavailable or the query is too short.
+  const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt });
+
+  // Reorder filteredLooks: semantic matches first (in rank order), rest after.
+  const semanticallyOrderedLooks = useMemo(() => {
+    const ids = semantic.lookIds;
+    if (ids.length === 0) return filteredLooks;
+
+    // Build UUID → Look map for fast lookup
+    const uuidMap = new Map<string, Look>();
+    for (const l of filteredLooks) {
+      if (l.uuid) uuidMap.set(l.uuid, l);
+    }
+
+    // Also try to supplement with looks from allLooks (not in filteredLooks
+    // because they were filtered out by text match — but semantic overrides
+    // the text filter).
+    const allUuidMap = new Map<string, Look>();
+    for (const l of allLooks) {
+      if (l.uuid) allUuidMap.set(l.uuid, l);
+    }
+
+    const matched: Look[] = [];
+    const matchedSet = new Set<number>();
+    for (const id of ids) {
+      const look = uuidMap.get(id) ?? allUuidMap.get(id);
+      if (look && !matchedSet.has(look.id)) {
+        matched.push(look);
+        matchedSet.add(look.id);
+      }
+    }
+
+    // Append any filteredLooks not already in the semantic results
+    const rest = filteredLooks.filter(l => !matchedSet.has(l.id));
+    return [...matched, ...rest];
+  }, [semantic.lookIds, filteredLooks, allLooks]);
+
   const [state, dispatch] = useReducer(feedReducer, {
-    segments: [{ type: 'feed', id: 'initial', looks: filteredLooks, isInitial: true }],
+    segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],
     seenLookIds: new Set<number>(),
   });
 
@@ -226,13 +268,13 @@ export default function ContinuousFeed({
       logSearch({
         query: q,
         user_handle: handle,
-        results_count: filteredLooks.length,
+        results_count: semanticallyOrderedLooks.length,
         clicked: false,
         filter: activeFilter,
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [searchQuery, filteredLooks.length, activeFilter, user]);
+  }, [searchQuery, semanticallyOrderedLooks.length, activeFilter, user]);
 
   // Reset when filters/search/shuffle change
   const prevFilterRef = useRef({ activeFilter, searchQuery, shuffleKey });
@@ -243,10 +285,10 @@ export default function ContinuousFeed({
       prev.searchQuery !== searchQuery ||
       prev.shuffleKey !== shuffleKey
     ) {
-      dispatch({ type: 'RESET', looks: filteredLooks });
+      dispatch({ type: 'RESET', looks: semanticallyOrderedLooks });
       prevFilterRef.current = { activeFilter, searchQuery, shuffleKey };
     }
-  }, [activeFilter, searchQuery, shuffleKey, filteredLooks]);
+  }, [activeFilter, searchQuery, shuffleKey, semanticallyOrderedLooks]);
 
   // Scroll to newly added detail
   const lastDetailRef = useRef<HTMLDivElement>(null);
@@ -311,15 +353,35 @@ export default function ContinuousFeed({
   // empty state during the brief mount-to-data window) and only when the
   // search bar has actual user intent in it (so unfiltered "all" never lands
   // here, even on a brand-new install with zero data).
+  //
+  // When the semantic search is still in-flight (loading=true) or returned a
+  // cold-miss, we show the empty state with a "sourcing" flag so the copy
+  // reads "We're finding this for you" rather than "nothing here yet".
   const trimmedQuery = searchQuery.trim();
+  const semanticActive = trimmedQuery.length >= 3;
   const showEmptyState =
     !creativesLoading &&
+    !semantic.loading &&
     trimmedQuery.length > 0 &&
+    filteredCreatives.length === 0 &&
+    semanticallyOrderedLooks.length === 0;
+
+  // While semantic search is loading (only for long-enough queries), show the
+  // sourcing state immediately so the user sees feedback during the round-trip.
+  const showSourcingState =
+    !showEmptyState &&
+    semanticActive &&
+    semantic.loading &&
     filteredCreatives.length === 0 &&
     filteredLooks.length === 0;
 
-  if (showEmptyState) {
-    return <EmptyCatalogState catalogName={trimmedQuery} />;
+  if (showEmptyState || showSourcingState) {
+    return (
+      <EmptyCatalogState
+        catalogName={trimmedQuery}
+        isSourcing={showSourcingState || (showEmptyState && semantic.coldMiss)}
+      />
+    );
   }
 
   return (
