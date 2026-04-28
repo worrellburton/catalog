@@ -7,21 +7,14 @@
 // inner gradients on the cards so the page reads as a control surface
 // rather than a generic admin form.
 
-import { useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from '@remix-run/react';
-import { useAuth } from '~/hooks/useAuth';
+import { NavLink, Outlet } from '@remix-run/react';
 
 export default function AdminUiHub() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
-  // Same admin gate the rest of the surfaces use.
-  useEffect(() => {
-    if (!user) return;
-    if (user.role !== 'admin' && user.role !== 'super_admin') {
-      navigate('/admin', { replace: true });
-    }
-  }, [user, navigate]);
+  // The /admin route layout already gates on a signed-in user; admin
+  // status itself is driven by the is_admin flag on the profile (see
+  // /admin/users), not the role text column. The previous role-string
+  // check redirected legitimate admins whose primary role was still
+  // 'shopper', leaving the UI page blank.
 
   return (
     <div className="admin-ui">

@@ -5,8 +5,6 @@
 // across the app immediately.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from '@remix-run/react';
-import { useAuth } from '~/hooks/useAuth';
 import { useBrandLogo } from '~/hooks/useBrandLogo';
 import { BRAND_VARIANTS, ensureBrandFont, getVariant, type BrandVariant } from '~/utils/brandFonts';
 import { useInViewport } from '~/hooks/useInViewport';
@@ -48,18 +46,12 @@ function VariantPreview({ variant }: { variant: BrandVariant }) {
 }
 
 export default function AdminBranding() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const { variantId, setVariant, reset } = useBrandLogo();
 
-  // Admin gate. We don't want non-admins peeking at this surface even if
-  // they guessed the URL. Redirect quietly to the home admin page.
-  useEffect(() => {
-    if (!user) return;
-    if (user.role !== 'admin' && user.role !== 'super_admin') {
-      navigate('/admin', { replace: true });
-    }
-  }, [user, navigate]);
+  // The /admin route layout already gates on a signed-in user; admin
+  // status itself is driven by the is_admin flag on the profile, not
+  // the role text column. The previous role-string check redirected
+  // legitimate admins whose primary role was still 'shopper'.
 
   // Always preload the currently-active variant's font so the "Currently
   // set" badge in the header renders correctly without a fallback flash.
