@@ -66,7 +66,7 @@ function prefetchOverlayChunks() {
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
+import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
@@ -215,6 +215,15 @@ export default function Home() {
   const bookmarks = useBookmarks();
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
+
+  // Computed once at mount. If the URL shows we just landed from a
+  // Supabase OAuth redirect (#access_token=…, ?code=…, or an error
+  // message), we want to suppress the password gate during the brief
+  // window where supabase-js is still exchanging the token for a
+  // session. Without this, users see "Sign in to continue" *while*
+  // they're being signed in — which makes them click sign-in again,
+  // which is the "SSO takes 4 times" symptom.
+  const oauthInFlight = useRef(isOAuthReturn()).current;
 
   // Track recent catalogs
   useEffect(() => {
@@ -615,7 +624,16 @@ export default function Home() {
     <TrailRoot>
     <TrailVideoHost>
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
-      {view === 'locked' && <PasswordGate />}
+      {/* During the OAuth callback race, show "Signing you in…" instead
+          of the password gate. PasswordGate only renders once we've
+          confirmed there's genuinely no session in flight. */}
+      {view === 'locked' && oauthInFlight && authLoading && (
+        <div className="signing-in-overlay" role="status" aria-live="polite">
+          <div className="signing-in-spinner" />
+          <div className="signing-in-text">Signing you in…</div>
+        </div>
+      )}
+      {view === 'locked' && !(oauthInFlight && authLoading) && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}

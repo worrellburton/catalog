@@ -26,27 +26,43 @@ function setState(next: AuthState) {
   for (const l of listeners) l();
 }
 
+// Exposed so _index.tsx can decide whether to render the password gate or a
+// "Signing you in…" overlay during the OAuth callback race window.
+export function isOAuthReturn(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.location.search.includes('code=') ||
+    window.location.hash.includes('access_token=') ||
+    window.location.search.includes('error_description=')
+  );
+}
+
 function bootstrap() {
   if (bootstrapped) return;
   bootstrapped = true;
 
-  // Same OAuth-return guard as before: if we landed from a Supabase OAuth
-  // redirect, the SIGNED_IN event will arrive shortly — don't flip
-  // loading=false off the initial getSession() call or the locked screen
-  // flashes for a tick.
-  const url = typeof window !== 'undefined' ? window.location.href : '';
-  const isOAuthReturn =
-    url.includes('code=') ||
-    url.includes('access_token=') ||
-    url.includes('error_description=');
+  // OAuth-return guard: if we landed from a Supabase OAuth redirect, the
+  // SIGNED_IN event will arrive shortly — don't flip loading=false off the
+  // initial getSession() call or the password gate flashes for a tick.
+  const fromOAuth = isOAuthReturn();
 
   getCurrentUser().then((u) => {
-    setState({ user: u, loading: isOAuthReturn ? state.loading : false });
+    setState({ user: u, loading: fromOAuth ? state.loading : false });
   });
 
   onAuthStateChange((u) => {
     setState({ user: u, loading: false });
   });
+
+  // Fallback: if we're in an OAuth return state and SIGNED_IN never fires
+  // (network blip, expired state token, Safari ITP killed storage, etc.),
+  // give up after 6 seconds and let loading=false so the user can retry
+  // sign-in instead of being stuck on a "Signing in…" spinner forever.
+  if (fromOAuth && typeof window !== 'undefined') {
+    window.setTimeout(() => {
+      if (state.loading) setState({ user: null, loading: false });
+    }, 6000);
+  }
 }
 
 function subscribe(listener: () => void) {
