@@ -1,4 +1,4 @@
-import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
+import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
@@ -6,6 +6,7 @@ import { getLooks, getCreators } from '~/services/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
+import { addProductUrl } from '~/services/scrape-product';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
@@ -381,6 +382,29 @@ export default function AdminContent() {
 
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
+
+  // Add Products dropdown — opens a menu with three sources (Google
+  // Shopping → existing research modal, Amazon → Rainforest lookup,
+  // Brand Website → URL paste).
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [addMenuOpen]);
+
+  // Add via Brand Website — small modal with a URL input that hits the
+  // shared scrape-product service.
+  const [showBrandUrl, setShowBrandUrl] = useState(false);
+  const [brandUrlInput, setBrandUrlInput] = useState('');
+  const [brandUrlBusy, setBrandUrlBusy] = useState(false);
+  const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
   const [researchQuery, setResearchQuery] = useState('');
   const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
   const [researchLoading, setResearchLoading] = useState(false);
@@ -1281,22 +1305,68 @@ export default function AdminContent() {
               </svg>
               {auditingGenders ? 'Auditing…' : 'Gender audit'}
             </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={() => setShowAmazonLookup(true)}
-              title="Pull an Amazon product by ASIN or URL via Rainforest API"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M3 3h18v4H3zM3 11h18v4H3zM3 19h18v2H3z"/>
-              </svg>
-              Add from Amazon
-            </button>
-            <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Add Products
-            </button>
+            <div ref={addMenuRef} style={{ position: 'relative' }}>
+              <button
+                className="admin-btn admin-btn-primary"
+                onClick={() => setAddMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={addMenuOpen}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add Products
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 6 }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {addMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: 240,
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                    padding: 4,
+                    zIndex: 50,
+                  }}
+                >
+                  {[
+                    { label: 'Add via Google Shopping', onClick: () => { setAddMenuOpen(false); setShowAddProducts(true); } },
+                    { label: 'Add via Amazon Shopping', onClick: () => { setAddMenuOpen(false); setShowAmazonLookup(true); } },
+                    { label: 'Add via Brand Website',   onClick: () => { setAddMenuOpen(false); setBrandUrlInput(''); setBrandUrlError(null); setShowBrandUrl(true); } },
+                  ].map(item => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={item.onClick}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#111',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2851,6 +2921,78 @@ export default function AdminContent() {
             setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
           }}
         />
+      )}
+
+      {showBrandUrl && (
+        <div
+          className="admin-modal-overlay"
+          onClick={() => !brandUrlBusy && setShowBrandUrl(false)}
+        >
+          <div
+            className="admin-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}
+          >
+            <div style={{ padding: 20 }}>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add via Brand Website</h2>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#666' }}>
+                Paste a product URL from any brand site. We'll scrape the page
+                and ingest the product.
+              </p>
+              <input
+                type="url"
+                autoFocus
+                value={brandUrlInput}
+                onChange={(e) => { setBrandUrlInput(e.target.value); setBrandUrlError(null); }}
+                placeholder="https://brand.com/products/..."
+                disabled={brandUrlBusy}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${brandUrlError ? '#dc2626' : '#e5e7eb'}`,
+                  fontSize: 14,
+                  marginBottom: brandUrlError ? 6 : 16,
+                  boxSizing: 'border-box',
+                }}
+              />
+              {brandUrlError && (
+                <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 16 }}>{brandUrlError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setShowBrandUrl(false)}
+                  disabled={brandUrlBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="admin-btn admin-btn-primary"
+                  disabled={brandUrlBusy || !brandUrlInput.trim()}
+                  onClick={async () => {
+                    const url = brandUrlInput.trim();
+                    if (!url) return;
+                    setBrandUrlBusy(true);
+                    setBrandUrlError(null);
+                    try {
+                      await addProductUrl(url);
+                      setBrandUrlBusy(false);
+                      setShowBrandUrl(false);
+                      showToast('Product queued for scrape — refreshing…');
+                      setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
+                    } catch (err) {
+                      setBrandUrlBusy(false);
+                      setBrandUrlError(err instanceof Error ? err.message : 'Failed to queue scrape');
+                    }
+                  }}
+                >
+                  {brandUrlBusy ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showAddProducts && (
