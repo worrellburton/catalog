@@ -849,24 +849,23 @@ export default function GeneratePage() {
           <section className="gen-step gen-step-products">
             <h2>2. Pick up to {MAX_PRODUCTS} products</h2>
             {picked.length > 0 && (
-              <div className="gen-picked">
-                {picked.map(p => (
-                  <div key={p.id} className="gen-picked-chip">
-                    {p.image_url && <img src={p.image_url} alt="" />}
-                    <div className="gen-picked-chip-info">
-                      <span className="gen-picked-chip-name">{p.name || 'Product'}</span>
-                      <select
-                        value={p.role_tag || ''}
-                        onChange={e => setPickedRole(p.id, e.target.value || null)}
-                        aria-label="Role"
-                      >
-                        <option value="">Auto</option>
-                        {ROLE_TAGS.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
+              <div className="gen-picked-floating" role="region" aria-label="Selected products">
+                <div className="gen-picked-floating-label">
+                  {picked.length} of {MAX_PRODUCTS} picked
+                </div>
+                <div className="gen-picked-floating-strip">
+                  {picked.map(p => (
+                    <div key={p.id} className="gen-picked-mini">
+                      {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
+                      <button
+                        type="button"
+                        className="gen-picked-mini-x"
+                        onClick={() => togglePick(p)}
+                        aria-label={`Remove ${p.name || 'product'}`}
+                      >×</button>
                     </div>
-                    <button className="gen-picked-chip-x" onClick={() => togglePick(p)} aria-label="Remove">×</button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
