@@ -2,6 +2,44 @@ import { supabase } from '~/utils/supabase';
 import type { UserRole } from '~/types/roles';
 import { inferUserGenderFromName } from './genders';
 
+// Lightweight diagnostic logger for the SSO flow. Toggled on whenever
+// the URL contains ?auth-debug=1, or persistently if 'auth:debug' is
+// set in localStorage. Emits structured lines so flakey users can
+// open Safari Web Inspector → Console and copy them straight into a
+// bug report. Stays silent otherwise to keep prod logs clean.
+//
+// Things to look for in the trace:
+//   • Did SIGNED_IN ever fire after the redirect, or did the page mount
+//     with no session at all? (PKCE exchange failed.)
+//   • Is the session restored on next pageload, or is the session
+//     cleared between visits? (Safari ITP nuked storage.)
+//   • Does TOKEN_REFRESHED loop without SIGNED_IN? (Expired refresh
+//     token; supabase-js can't promote it.)
+const AUTH_DEBUG = (() => {
+  if (typeof window === 'undefined') return false;
+  if (window.location.search.includes('auth-debug=1')) {
+    try { localStorage.setItem('auth:debug', '1'); } catch { /* */ }
+    return true;
+  }
+  try { return localStorage.getItem('auth:debug') === '1'; } catch { return false; }
+})();
+
+function authLog(...args: unknown[]) {
+  if (!AUTH_DEBUG) return;
+  // eslint-disable-next-line no-console
+  console.log('[auth]', new Date().toISOString().slice(11, 23), ...args);
+}
+
+if (AUTH_DEBUG && typeof window !== 'undefined') {
+  authLog('debug-enabled', {
+    href: window.location.href,
+    hasCode: window.location.search.includes('code='),
+    hasAccessToken: window.location.hash.includes('access_token'),
+    hasErrorDesc: window.location.search.includes('error_description='),
+    userAgent: navigator.userAgent,
+  });
+}
+
 export interface AuthUser {
   id: string;
   email?: string;
@@ -32,6 +70,7 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
   // wildcard, which surfaces as "Safari cannot open the page because the
   // address is invalid." after the Google consent screen.
   const redirectTo = window.location.href.split('#')[0];
+  authLog('signInWithGoogle:start', { redirectTo });
 
   // Drop the `prompt: 'consent'` + `access_type: 'offline'` flags. We
   // don't use refresh tokens for anything, and forcing consent on every
@@ -44,6 +83,7 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
     },
   });
 
+  if (error) authLog('signInWithGoogle:error', error.message);
   return { error: error?.message };
 }
 
@@ -83,7 +123,10 @@ function clearAuthCache(): void {
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  if (!supabase) return null;
+  if (!supabase) {
+    authLog('getCurrentUser:no-supabase');
+    return null;
+  }
 
   // Use getSession (local-storage read) instead of getUser (network call to
   // /user). The /user endpoint occasionally 500s when Supabase Auth can't
@@ -93,6 +136,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   // point, so reading from storage is enough.
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
+    authLog('getCurrentUser:no-session');
     clearAuthCache();
     return null;
   }
@@ -100,7 +144,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   // Fast path: same user as last visit, cache fresh — return without the
   // profiles round trip.
   const cached = readAuthCache(session.user.id);
-  if (cached) return cached;
+  if (cached) {
+    authLog('getCurrentUser:cache-hit', { id: session.user.id });
+    return cached;
+  }
+  authLog('getCurrentUser:session-found', { id: session.user.id });
 
   const authUser = mapUser(session.user);
 
@@ -142,7 +190,8 @@ export async function signOut(): Promise<void> {
 export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
   if (!supabase) return { unsubscribe: () => {} };
 
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    authLog('onAuthStateChange', event, { hasSession: !!session, userId: session?.user?.id });
     if (!session?.user) {
       clearAuthCache();
       callback(null);
