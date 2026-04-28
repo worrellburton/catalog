@@ -1528,7 +1528,10 @@ html[data-shell="catalog-app"] .gen-page {
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  /* opacity transition included so the row-fade-out (when another
+     card in the row is picked) animates smoothly. */
+  transition: transform 0.28s ease, opacity 0.28s ease,
+              border-color 0.18s ease, background 0.18s ease;
   padding: 0;
   text-align: left;
   font-family: inherit;
@@ -1544,6 +1547,19 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-card.is-picked {
   border-color: #fff;
   background: rgba(255, 255, 255, 0.08);
+  /* Lift the picked card slightly above the dimmed siblings so the
+     "this is your selection" read is unmistakable. */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* When any card in the row is picked, fade the rest so the user's
+   selection visually anchors the row. Picked card stays at full
+   opacity. Click any other card to also pick it (multi-pick within a
+   row stays allowed); click the picked one to release. */
+.gen-cat-row-scroll:has(.gen-cat-card.is-picked) .gen-cat-card:not(.is-picked) {
+  opacity: 0.32;
+  transform: scale(0.96);
 }
 .gen-cat-card img {
   width: 100%;
