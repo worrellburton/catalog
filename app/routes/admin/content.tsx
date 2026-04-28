@@ -1149,7 +1149,7 @@ export default function AdminContent() {
     }),
     [allProducts, productFilter, deletedProductKeys, adminQuery]
   );
-  const productTable = useSortableTable(filteredProductsList);
+  const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
 
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
