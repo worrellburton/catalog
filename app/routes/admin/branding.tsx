@@ -62,6 +62,13 @@ export default function AdminBranding() {
     if (active.googleFontUrl) ensureBrandFont(active.googleFontUrl);
   }, [active.googleFontUrl]);
 
+  // Same dark-canvas guard as /admin/ui — keeps the sticky topbar black
+  // while this page is mounted, regardless of :has() support.
+  useEffect(() => {
+    document.documentElement.classList.add('admin-on-dark-canvas');
+    return () => document.documentElement.classList.remove('admin-on-dark-canvas');
+  }, []);
+
   return (
     <div className="admin-branding">
       <header className="admin-branding-header">

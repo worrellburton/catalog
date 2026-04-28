@@ -7,6 +7,7 @@
 // inner gradients on the cards so the page reads as a control surface
 // rather than a generic admin form.
 
+import { useEffect } from 'react';
 import { NavLink, Outlet } from '@remix-run/react';
 
 export default function AdminUiHub() {
@@ -15,6 +16,15 @@ export default function AdminUiHub() {
   // /admin/users), not the role text column. The previous role-string
   // check redirected legitimate admins whose primary role was still
   // 'shopper', leaving the UI page blank.
+
+  // Pin a body-level class while this page is mounted so the sticky
+  // admin topbar can pick a black opaque fill even on browsers / states
+  // where :has() doesn't kick in reliably. Without this, scrolled page
+  // content visibly bled through the topbar.
+  useEffect(() => {
+    document.documentElement.classList.add('admin-on-dark-canvas');
+    return () => document.documentElement.classList.remove('admin-on-dark-canvas');
+  }, []);
 
   return (
     <div className="admin-ui">

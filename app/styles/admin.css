@@ -412,7 +412,11 @@
 
 /* /admin/ui & /admin/branding render on a black canvas — keep the
    topbar opaque against that surface so the search input and the
-   page heading don't visually collide as the user scrolls. */
+   page heading don't visually collide as the user scrolls. The body-
+   level class is set by the page components themselves; the :has()
+   selector is a CSS-only fallback for browsers where the page hasn't
+   mounted yet on first paint. */
+html.admin-on-dark-canvas .admin-topbar,
 .admin-main:has(.admin-ui) .admin-topbar,
 .admin-main:has(.admin-branding) .admin-topbar {
   background: #000;
@@ -2912,11 +2916,13 @@
   background: #000;
   min-height: calc(100vh - var(--admin-header-height, 0px));
   padding: 32px clamp(16px, 4vw, 48px) 80px;
-  /* Break out of admin-page horizontal padding (no negative top
-     margin: extending under the sticky topbar caused the page heading
-     to bleed through it). */
-  margin: 0 -24px;
+  /* No negative margin: AdminUiHub renders directly under .admin-main
+     (not inside .admin-page), so any negative inset would escape into
+     the sidebar gutter. */
+  margin: 0;
   color: #fff;
+  position: relative;
+  z-index: 0;
 }
 
 .admin-ui-header {
