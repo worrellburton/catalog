@@ -41,6 +41,7 @@ interface UserRow {
   id: string;
   initials: string;
   name: string;
+  email: string;
   avatar: string;
   sso: string;
   role: UserRole;
@@ -49,7 +50,6 @@ interface UserRow {
   createdAt: string;
   lastSignIn: string;
   looksCount: number;
-  shopping: string;
   location: string;
   saved: number;
   followings: number;
@@ -68,6 +68,7 @@ function profileToRow(p: Profile): UserRow {
     id: p.id,
     initials: name.slice(0, 2).toUpperCase(),
     name,
+    email: p.email || '',
     avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
@@ -76,7 +77,6 @@ function profileToRow(p: Profile): UserRow {
     createdAt: formatDate(p.created_at),
     lastSignIn: formatRelative(p.last_sign_in_at),
     looksCount: 0,
-    shopping: '-',
     location: '-',
     saved: 0,
     followings: 0,
@@ -360,6 +360,7 @@ export default function AdminUsers() {
         id: `content-${c.name}`,
         initials: c.displayName.slice(0, 2).toUpperCase(),
         name: c.displayName,
+        email: '',
         avatar: c.avatar,
         sso: '-',
         role: 'creator' as UserRole,
@@ -368,7 +369,6 @@ export default function AdminUsers() {
         createdAt: '-',
         lastSignIn: '-',
         looksCount: looksPerCreator[c.name] || 0,
-        shopping: '-',
         location: '-',
         saved: 0,
         followings: 0,
@@ -446,7 +446,6 @@ export default function AdminUsers() {
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Last Online" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Shopping" sortKey="shopping" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Location" sortKey="location" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
@@ -461,7 +460,7 @@ export default function AdminUsers() {
                 className="admin-clickable-row"
                 onClick={() => navigate(`/admin/user/${u.id}`)}
               >
-                <td className="admin-cell-name">
+                <td className="admin-cell-name" title={u.email || undefined}>
                   <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />
                   {u.name}
                 </td>
@@ -491,7 +490,6 @@ export default function AdminUsers() {
                 <td><span className="admin-sso-badge">{u.sso}</span></td>
                 <td className="admin-cell-muted">{u.createdAt}</td>
                 <td className="admin-cell-muted">{u.lastSignIn}</td>
-                <td>{u.shopping}</td>
                 <td className="admin-cell-muted">{u.location}</td>
                 <td>{u.saved}</td>
                 <td>{u.followings}</td>
