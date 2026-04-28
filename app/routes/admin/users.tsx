@@ -17,10 +17,24 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function formatDateTime(iso: string | null): string {
+// "Last online" reads better at a glance as a relative duration than
+// an absolute timestamp. Falls back to absolute date once the gap is
+// older than a week so the column never shows "37 days ago" — that's
+// less useful than the actual date.
+function formatRelative(iso: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso);
-  return d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '-';
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
 interface UserRow {
@@ -60,7 +74,7 @@ function profileToRow(p: Profile): UserRow {
     isAdmin: p.is_admin === true,
     gender: ((p as { gender?: string }).gender as UserGender) || 'unknown',
     createdAt: formatDate(p.created_at),
-    lastSignIn: formatDateTime(p.last_sign_in_at),
+    lastSignIn: formatRelative(p.last_sign_in_at),
     looksCount: 0,
     shopping: '-',
     location: '-',
@@ -431,7 +445,7 @@ export default function AdminUsers() {
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Last Sign In" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Last Online" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Shopping" sortKey="shopping" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Location" sortKey="location" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
