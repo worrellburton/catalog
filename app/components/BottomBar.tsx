@@ -2,6 +2,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import { searchSuggestions } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
+import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 
 interface BottomBarProps {
@@ -19,6 +20,7 @@ function BottomBar({
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -201,7 +203,7 @@ function BottomBar({
         </div>
       )}
 
-      <div className={`bottom-bar ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
+      <div className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
         {/* The bottom centered control is always an input — no more
             click-to-open. Default empty state shows the placeholder, which
             doubles as a CTA inviting shoppers to coin a brand-new catalog.
