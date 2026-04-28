@@ -1572,37 +1572,39 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-cat-card { width: 168px; }
 }
 
-/* ===== Centered floating picked-products preview (products step) ===== */
+/* ===== Bottom-anchored picked-products preview (products step) =====
+   Lives in its own region above the Back/Next nav so it never covers
+   the category rows the user is scrolling through. Slides up from the
+   bottom when the first product is picked. */
 
 .gen-picked-floating {
-  /* Fixed mid-viewport so it's always visible no matter where in the
-     category rows the user has scrolled to. Centered horizontally;
-     vertically anchored just above the page midline so it doesn't
-     cover the row currently in focus when the user is browsing. */
   position: fixed;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
+  /* Sit above whatever bottom nav is on screen — the gen page's
+     primary action bar lives at the very bottom (Back/Next), so we
+     anchor with enough lift to clear it on every device. */
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
   z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 12px;
+  padding: 12px 16px 14px;
   border-radius: 22px;
-  background: rgba(20, 20, 20, 0.78);
+  background: rgba(20, 20, 20, 0.88);
   backdrop-filter: blur(18px) saturate(1.4);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
   max-width: min(540px, calc(100vw - 32px));
-  animation: gen-picked-fade-in 0.18s ease-out;
+  animation: gen-picked-slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-@keyframes gen-picked-fade-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+@keyframes gen-picked-slide-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .gen-picked-floating-label {
