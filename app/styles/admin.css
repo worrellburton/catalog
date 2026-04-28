@@ -398,12 +398,26 @@
   height: 53px;
   display: flex;
   align-items: center;
-  background: inherit;
+  /* Opaque fill so sticky topbar doesn't let page content bleed
+     through. Pages with their own dark surface (e.g. /admin/ui)
+     override this rule below. */
+  background: #fafafa;
   border-bottom: 1px solid #eee;
 }
 
 .admin-dark .admin-topbar {
+  background: #0b0b0b;
   border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+/* /admin/ui & /admin/branding render on a black canvas — keep the
+   topbar opaque against that surface so the search input and the
+   page heading don't visually collide as the user scrolls. */
+.admin-main:has(.admin-ui) .admin-topbar,
+.admin-main:has(.admin-branding) .admin-topbar {
+  background: #000;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .admin-search-wrap {
@@ -2022,17 +2036,6 @@
   .admin-page {
     padding: 16px;
   }
-
-  .glass-portal-toggle {
-    bottom: 16px;
-    right: 16px;
-    padding: 8px 14px;
-    font-size: 11px;
-  }
-
-  .glass-portal-toggle span {
-    display: none;
-  }
 }
 
 @media (max-width: 480px) {
@@ -3078,17 +3081,22 @@
   max-width: 560px;
 }
 
-/* Beam variant tiles */
+/* Beam variant tiles — vertical list. Each row stacks preview-on-top,
+   label + Set button below, so subtle differences between beams
+   (single vs mirrored vs comet) are easier to spot side-by-side as
+   you scan down the list. */
 .admin-ui-beam-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .admin-ui-beam-tile {
   display: flex;
-  flex-direction: column;
-  padding: 16px;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 16px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -3101,11 +3109,12 @@
 }
 
 .admin-ui-beam-preview {
-  height: 80px;
+  flex: 0 0 auto;
+  width: 360px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 14px;
   /* Matte black so the beam reads against the same surface the bar
      normally floats over. */
   background: #050505;
@@ -3125,9 +3134,20 @@
   bottom: auto;
   left: auto;
   transform: none;
-  width: min(240px, calc(100% - 16px));
+  width: min(320px, calc(100% - 16px));
   z-index: auto;
   margin: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-ui-beam-tile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .admin-ui-beam-preview {
+    width: 100%;
+  }
 }
 
 .admin-ui-beam-mock-inner {

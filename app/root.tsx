@@ -10,7 +10,7 @@ import { Analytics } from "@vercel/analytics/remix";
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
  * surfaces every visitor sees) live here. Per-route stylesheets
- * (admin.css, partners.css, generate.css, deck-view.css, deck-v6.css,
+ * (admin.css, generate.css, deck-view.css, deck-v6.css,
  * deck-selector.css) are imported from inside their respective route
  * files so they only ship to users who actually visit those routes.
  */
@@ -96,7 +96,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 })();
           `}}
         />
-        {/* Inter (admin/partners chrome) and DM Sans (MyLooks) are the only
+        {/* Inter (admin chrome) and DM Sans (MyLooks) are the only
             two families actually referenced in the stylesheets. The other
             eight families this request used to pull (Plus Jakarta, Outfit,
             Space Grotesk, Sora, Manrope, Poppins, Nunito Sans, Figtree)
