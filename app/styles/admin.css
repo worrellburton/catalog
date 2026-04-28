@@ -3044,3 +3044,120 @@
   font-weight: 600;
   color: rgba(255, 255, 255, 0.92);
 }
+
+.admin-ui-section-blurb {
+  margin: 0 0 22px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+/* Beam variant tiles */
+.admin-ui-beam-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.admin-ui-beam-tile {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.18s ease;
+}
+
+.admin-ui-beam-tile.is-active {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-ui-beam-preview {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  /* Matte black so the beam reads against the same surface the bar
+     normally floats over. */
+  background: #050505;
+  border-radius: 10px;
+  overflow: hidden;
+  /* Establish a stacking context so the bar's ::before pseudo
+     stays scoped inside this card, not the page. */
+  position: relative;
+  isolation: isolate;
+}
+
+/* Override the real bottom-bar fixed positioning so it lays out
+   normally inside the preview card. Keeps every beam class effect
+   working but breaks the "fixed at viewport bottom" rule. */
+.admin-ui-beam-mock.bottom-bar {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  width: min(240px, calc(100% - 16px));
+  z-index: auto;
+  margin: 0;
+}
+
+.admin-ui-beam-mock-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.admin-ui-beam-mock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.admin-ui-beam-mock-placeholder {
+  flex: 1 1 auto;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-ui-beam-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-ui-beam-meta-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-ui-beam-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.admin-ui-beam-blurb {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+}
