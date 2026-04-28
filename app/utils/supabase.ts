@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Public Supabase credentials — anon key is designed to be exposed in client bundles.
 // RLS enforces access control.
-const DEFAULT_SUPABASE_URL = 'https://hmgnrowqjrxvesmdshnp.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://vtarjrnqvcqbhoclvcur.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtZ25yb3dxanJ4dmVzbWRzaG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzkwMTAsImV4cCI6MjA5MDQ1NTAxMH0.XI1-XJtaTEu2rMBwmsUUGMUG3wWhnbiy-qW0Mx2c-zI';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0YXJqcm5xdmNxYmhvY2x2Y3VyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTIzNzksImV4cCI6MjA5MDM4ODM3OX0.OMoLmVDtXLw5hL0k7icaBJlIbLPnN9UeCzv8C-o4III';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||

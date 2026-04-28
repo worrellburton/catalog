@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  */
 
 // ── Constants mirrored from the service ──────────────────────────────────────
-const SUPABASE_URL = 'https://hmgnrowqjrxvesmdshnp.supabase.co';
+const SUPABASE_URL = 'https://vtarjrnqvcqbhoclvcur.supabase.co';
 const ANON_KEY = 'test-anon-key';
 
 // ── Types mirrored from the service ─────────────────────────────────────────
@@ -167,13 +167,13 @@ function makeNlSearchResponse(overrides: Partial<NlSearchResponse> = {}): NlSear
 describe('URL construction', () => {
   it('builds nl-search URL correctly', () => {
     expect(buildNlSearchUrl(SUPABASE_URL)).toBe(
-      'https://hmgnrowqjrxvesmdshnp.supabase.co/functions/v1/nl-search',
+      'https://vtarjrnqvcqbhoclvcur.supabase.co/functions/v1/nl-search',
     );
   });
 
   it('builds embed-entity URL correctly', () => {
     expect(buildEmbedEntityUrl(SUPABASE_URL)).toBe(
-      'https://hmgnrowqjrxvesmdshnp.supabase.co/functions/v1/embed-entity',
+      'https://vtarjrnqvcqbhoclvcur.supabase.co/functions/v1/embed-entity',
     );
   });
 });

@@ -1,25 +1,44 @@
--- 052: Semantic search RPCs
+-- 053: Fix text_embedding dimensions for Marengo 3.0 (1024 → 512)
 --
--- Hybrid retrieval functions used by the nl-search edge function.
--- Each function fuses dense vector search with BM25 lexical search via
--- Reciprocal Rank Fusion (RRF, k=60). RRF is parameter-free and consistently
--- outperforms weighted score fusion by 15-30% NDCG@10 on mixed-intent queries.
+-- Marengo-retrieval-2.7 produced 1024-dim text embeddings.
+-- Marengo 3.0 (successor, required since 2.7 was sunset 2026-03-30) produces
+-- 512-dim embeddings for all modalities (text, visual, audio).
 --
--- Functions:
---   search_products_hybrid(query_embedding, query_text, k, filter_gender, filter_type)
---   search_looks_hybrid(query_embedding, query_text, k)
---   search_products_by_entity_edges(anchor_id, anchor_type, k)  -- outfit pairing graph walk
---   build_entity_edges_from_looks()                             -- offline graph builder
+-- Changes:
+--   1. Drop HNSW indexes (required before column type change)
+--   2. Drop text_embedding columns on products + looks; re-add as vector(512)
+--   3. Recreate HNSW indexes
+--   4. Drop old RPC functions with vector(1024) signatures
+--   5. Recreate search_products_hybrid and search_looks_hybrid with vector(512)
 
--- ── 1. search_products_hybrid ────────────────────────────────────────────────
--- Returns top-k products ranked by RRF(dense cosine rank, BM25 rank).
--- Both paths run against is_active=true rows. Dense path requires a populated
--- text_embedding; rows without it are only reachable via BM25.
--- Soft facet filters (gender, type) apply to both paths as WHERE clauses so
--- they never hard-block a result, only tighten the candidate pool.
+-- ── 1. Drop HNSW indexes ──────────────────────────────────────────────────────
+drop index if exists public.idx_products_text_embedding_hnsw;
+drop index if exists public.idx_looks_text_embedding_hnsw;
 
+-- ── 2. Resize text_embedding columns ─────────────────────────────────────────
+-- All rows are NULL (backfill has not run yet), so no data is lost.
+alter table public.products drop column if exists text_embedding;
+alter table public.products add column text_embedding vector(512);
+
+alter table public.looks drop column if exists text_embedding;
+alter table public.looks add column text_embedding vector(512);
+
+-- ── 3. Recreate HNSW indexes ──────────────────────────────────────────────────
+create index idx_products_text_embedding_hnsw
+  on public.products using hnsw (text_embedding vector_cosine_ops)
+  where text_embedding is not null;
+
+create index idx_looks_text_embedding_hnsw
+  on public.looks using hnsw (text_embedding vector_cosine_ops)
+  where text_embedding is not null;
+
+-- ── 4. Drop old 1024-dim RPC functions ────────────────────────────────────────
+drop function if exists public.search_products_hybrid(vector, text, int, text, text);
+drop function if exists public.search_looks_hybrid(vector, text, int);
+
+-- ── 5a. Recreate search_products_hybrid (vector(512)) ─────────────────────────
 create or replace function public.search_products_hybrid(
-  query_embedding vector(1024),
+  query_embedding vector(512),
   query_text      text,
   k               int     default 20,
   filter_gender   text    default null,
@@ -42,7 +61,6 @@ create or replace function public.search_products_hybrid(
   bm25_rank      bigint
 ) language sql stable as $$
   with
-  -- Dense: rank by cosine distance (lower = closer = rank 1)
   dense as (
     select
       p.id,
@@ -55,7 +73,6 @@ create or replace function public.search_products_hybrid(
     order by p.text_embedding <=> query_embedding
     limit k * 4
   ),
-  -- BM25: rank by Postgres ts_rank_cd over a weighted tsvector
   bm25 as (
     select
       p.id,
@@ -82,7 +99,6 @@ create or replace function public.search_products_hybrid(
       and (filter_type   is null or p.type = filter_type)
     limit k * 4
   ),
-  -- RRF fusion (k=60 as per the original RRF paper)
   rrf as (
     select
       coalesce(d.id, b.id)                                              as id,
@@ -119,12 +135,9 @@ $$;
 grant execute on function public.search_products_hybrid(vector, text, int, text, text)
   to anon, authenticated;
 
--- ── 2. search_looks_hybrid ───────────────────────────────────────────────────
--- Same RRF pattern for looks. Requires status='live' and enabled=true.
--- Visual embedding on looks points at the look's video creative via TwelveLabs.
-
+-- ── 5b. Recreate search_looks_hybrid (vector(512)) ────────────────────────────
 create or replace function public.search_looks_hybrid(
-  query_embedding vector(1024),
+  query_embedding vector(512),
   query_text      text,
   k               int default 12
 ) returns table (
@@ -195,7 +208,6 @@ create or replace function public.search_looks_hybrid(
     l.title,
     l.creator_handle,
     l.description,
-    -- First video poster as thumbnail; first video URL as video_path
     (select lv.poster_url from public.look_videos lv
        where lv.look_id = l.id order by lv.order_index asc limit 1)   as thumbnail_url,
     (select lv.url      from public.look_videos lv
@@ -213,101 +225,3 @@ $$;
 
 grant execute on function public.search_looks_hybrid(vector, text, int)
   to anon, authenticated;
-
--- ── 3. search_products_by_entity_edges ───────────────────────────────────────
--- Graph walk: given an anchor product/look, return products connected via
--- entity_edges (outfit-pairing intent: "what to wear with X").
--- Weights edges by `weight` and then by the connected product's text_embedding
--- similarity to the query for secondary ranking.
-
-create or replace function public.search_products_by_entity_edges(
-  anchor_id        uuid,
-  anchor_type      text  default 'product',
-  k                int   default 12,
-  edge_type_filter text  default 'pairs_with'
-) returns table (
-  id          uuid,
-  entity_type text,
-  name        text,
-  brand       text,
-  price       text,
-  image_url   text,
-  description text,
-  url         text,
-  edge_weight float
-) language sql stable as $$
-  select
-    p.id,
-    'product'::text as entity_type,
-    p.name,
-    p.brand,
-    p.price,
-    p.image_url,
-    p.description,
-    p.url,
-    e.weight        as edge_weight
-  from public.entity_edges e
-  join public.products p on p.id = e.dst_id and e.dst_type = 'product'
-  where e.src_id    = anchor_id
-    and e.src_type  = anchor_type
-    and e.edge_type = edge_type_filter
-    and p.is_active = true
-  order by e.weight desc
-  limit k;
-$$;
-
-grant execute on function public.search_products_by_entity_edges(uuid, text, int, text)
-  to anon, authenticated;
-
--- ── 4. build_entity_edges_from_looks ─────────────────────────────────────────
--- Offline utility: derives pairs_with edges from look co-occurrence.
--- When two products appear in the same look, they get a pairs_with edge.
--- Edge weight = look_count / max_look_count across all pairs (normalised).
--- Run manually (or via cron) after bulk product ingestion.
-
-create or replace function public.build_entity_edges_from_looks()
-returns void
-language plpgsql
-security definer as $$
-declare
-  max_weight integer;
-begin
-  -- Compute co-occurrence counts into a temp table
-  create temp table if not exists _edge_counts as
-    select
-      lp1.product_id as src_id,
-      lp2.product_id as dst_id,
-      count(*)       as co_count
-    from public.look_products lp1
-    join public.look_products lp2
-      on lp1.look_id = lp2.look_id
-     and lp1.product_id <> lp2.product_id
-    group by lp1.product_id, lp2.product_id;
-
-  select max(co_count) into max_weight from _edge_counts;
-
-  if max_weight is null or max_weight = 0 then
-    drop table if exists _edge_counts;
-    return;
-  end if;
-
-  -- Upsert edges, normalising weight to 0..1
-  insert into public.entity_edges (src_id, src_type, dst_id, dst_type, edge_type, weight, source)
-    select
-      src_id,
-      'product',
-      dst_id,
-      'product',
-      'pairs_with',
-      (co_count::float / max_weight::float),
-      'look_cooccurrence'
-    from _edge_counts
-  on conflict (src_id, dst_id, edge_type) do update
-    set weight = excluded.weight,
-        source = excluded.source;
-
-  drop table if exists _edge_counts;
-end;
-$$;
-
-grant execute on function public.build_entity_edges_from_looks() to service_role;

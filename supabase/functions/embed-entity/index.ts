@@ -88,18 +88,19 @@ async function generateConcept(
   return parsed;
 }
 
-// ── TwelveLabs: text embedding (Marengo-retrieval-2.7, 1024-dim) ─────────────
+// ── TwelveLabs: text embedding (Marengo 3.0, 512-dim) ───────────────────────
 
 async function embedText(text: string, twelveLabsKey: string): Promise<number[]> {
-  const res = await fetch('https://api.twelvelabs.io/v1.3/embed', {
+  const res = await fetch('https://api.twelvelabs.io/v1.3/embed-v2', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': twelveLabsKey,
     },
     body: JSON.stringify({
-      model_name: 'Marengo-retrieval-2.7',
-      text,
+      input_type: 'text',
+      model_name: 'marengo3.0',
+      text: { input_text: text },
     }),
   });
 
@@ -108,10 +109,8 @@ async function embedText(text: string, twelveLabsKey: string): Promise<number[]>
     throw new Error(`TwelveLabs embed error ${res.status}: ${errText.slice(0, 200)}`);
   }
 
-  const json = await res.json() as {
-    text_embedding?: { segments?: Array<{ float?: number[] }> };
-  };
-  const embedding = json.text_embedding?.segments?.[0]?.float;
+  const json = await res.json() as { data?: Array<{ embedding?: number[] }> };
+  const embedding = json.data?.[0]?.embedding;
   if (!embedding?.length) throw new Error('TwelveLabs returned empty text embedding');
   return embedding;
 }

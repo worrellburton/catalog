@@ -134,7 +134,7 @@ const PROVIDERS: ApiProvider[] = [
     status: 'connected',
     purpose: 'Primary DB, auth, edge functions, storage',
     usedBy: ['everything'],
-    dashboard: 'https://supabase.com/dashboard/project/hmgnrowqjrxvesmdshnp',
+    dashboard: 'https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur',
   },
   {
     id: 'flexoffers',
@@ -319,7 +319,7 @@ export default function AdminApis() {
       <div style={{ marginTop: 24, padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, color: '#475569' }}>
         <strong>Adding a provider:</strong> drop an entry into <code>PROVIDERS</code> in
         <code> app/routes/admin/apis.tsx</code>, set the matching secret in
-        Supabase (<a href="https://supabase.com/dashboard/project/hmgnrowqjrxvesmdshnp/functions/secrets" target="_blank" rel="noopener noreferrer">Functions → Secrets</a>)
+        Supabase (<a href="https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur/functions/secrets" target="_blank" rel="noopener noreferrer">Functions → Secrets</a>)
         or the Modal worker env, and deploy the consuming edge function.
       </div>
     </div>

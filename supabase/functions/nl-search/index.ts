@@ -151,17 +151,21 @@ function heuristicQueryPlan(query: string): QueryPlan {
   };
 }
 
-// ── TwelveLabs: text embedding (Marengo-retrieval-2.7, 1024-dim) ─────────────
+// ── TwelveLabs: text embedding (Marengo 3.0, 512-dim) ───────────────────────
 
 async function embedText(text: string, twelveLabsKey: string): Promise<number[]> {
-  const res = await fetch('https://api.twelvelabs.io/v1.3/embed', {
+  const res = await fetch('https://api.twelvelabs.io/v1.3/embed-v2', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': twelveLabsKey },
-    body: JSON.stringify({ model_name: 'Marengo-retrieval-2.7', text }),
+    body: JSON.stringify({
+      input_type: 'text',
+      model_name: 'marengo3.0',
+      text: { input_text: text },
+    }),
   });
   if (!res.ok) throw new Error(`TwelveLabs ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const json = await res.json() as { text_embedding?: { segments?: Array<{ float?: number[] }> } };
-  const vec = json.text_embedding?.segments?.[0]?.float;
+  const json = await res.json() as { data?: Array<{ embedding?: number[] }> };
+  const vec = json.data?.[0]?.embedding;
   if (!vec?.length) throw new Error('TwelveLabs returned empty text embedding');
   return vec;
 }
