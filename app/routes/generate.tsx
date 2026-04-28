@@ -856,6 +856,13 @@ export default function GeneratePage() {
                 </label>
               </div>
 
+            </div>
+
+            {/* Create look CTA — fixed to the bottom of the viewport
+                across the photos step (same anchor pattern the gen-dock
+                uses on later steps). Always reachable without scrolling
+                even when the user has many "Your looks" cards below. */}
+            <div className="gen-photos-cta-bar">
               <button
                 type="button"
                 className="gen-btn-primary gen-create-btn"

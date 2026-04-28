@@ -1803,10 +1803,46 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fff;
 }
 
-.gen-step-photos .gen-create-btn {
-  margin-top: 4px;
-  padding: 12px 24px;
+/* Create look CTA — pinned to the bottom of the viewport on the
+   photos step. Mirrors the gen-dock anchor pattern so the user
+   always has a one-tap path to the next step regardless of how
+   far they've scrolled into "Your looks". */
+.gen-photos-cta-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 50;
+  width: min(720px, calc(100vw - 24px));
+  display: flex;
+  justify-content: stretch;
+  pointer-events: none;
+}
+
+.gen-photos-cta-bar .gen-create-btn {
+  pointer-events: auto;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 14px 28px;
   font-size: 15px;
+  font-weight: 600;
+  border-radius: 999px;
+  /* Liquid-glass match to the gen-dock so the bottom of every step
+     reads as the same control surface. */
+  background: #fff;
+  color: #0a0a0a;
+  border: 0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.gen-photos-cta-bar .gen-create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gen-photos-cta-bar .gen-create-btn:not(:disabled):active {
+  transform: scale(0.985);
 }
 
 @media (max-width: 768px) {
