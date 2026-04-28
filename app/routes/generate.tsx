@@ -219,6 +219,24 @@ export default function GeneratePage() {
   const setCategoryQuery = useCallback((label: string, value: string) => {
     setCategoryQueries(prev => (prev[label] === value ? prev : { ...prev, [label]: value }));
   }, []);
+
+  // Slice productResults into the 6 display buckets. Each bucket also
+  // applies its own per-row search query (name/brand contains). Memoized
+  // so re-renders that don't change inputs skip the work entirely.
+  const productsByCategory = useMemo(() => {
+    const out: Record<string, PickedProduct[]> = {};
+    for (const group of CATEGORY_GROUPS) {
+      const q = (categoryQueries[group.label] || '').trim().toLowerCase();
+      out[group.label] = productResults.filter(p => {
+        if (!productInCategory(p, group)) return false;
+        if (!q) return true;
+        const name = (p.name || '').toLowerCase();
+        const brand = (p.brand || '').toLowerCase();
+        return name.includes(q) || brand.includes(q);
+      });
+    }
+    return out;
+  }, [productResults, categoryQueries]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
   // Phase 9/10 — height + style
