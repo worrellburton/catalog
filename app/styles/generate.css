@@ -165,6 +165,27 @@ html[data-shell="catalog-app"] .gen-page {
   width: min(720px, calc(100vw - 24px));
   pointer-events: none;
 }
+
+/* When the rail is rendered as a row inside the unified gen-dock,
+   it loses its fixed positioning and its own glass — the dock
+   provides both. Keeps the same pill layout for the items. */
+.gen-rail.is-embedded {
+  position: static;
+  transform: none;
+  width: 100%;
+  pointer-events: auto;
+  z-index: auto;
+  bottom: auto;
+  left: auto;
+}
+.gen-rail.is-embedded .gen-rail-glass {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+}
 .gen-rail-glass {
   list-style: none;
   margin: 0;
@@ -674,23 +695,9 @@ html[data-shell="catalog-app"] .gen-page {
   font-size: 11px; color: rgba(255, 255, 255, 0.85);
 }
 
-.gen-foot {
-  position: fixed;
-  /* Sits above the liquid-glass step dock. The dock is ~52px tall plus
-     16px of breathing room above the home-bar safe area, so the footer
-     starts ~76px above the bottom edge to clear it. */
-  bottom: calc(76px + env(safe-area-inset-bottom));
-  left: 0; right: 0;
-  padding: 14px 20px;
-  background: rgba(10, 10, 10, 0.92);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  z-index: 51;
-}
+/* .gen-foot is no longer used — Back/Next live inside the unified
+   gen-dock. Kept the .gen-btn-primary/.gen-btn-secondary classes
+   below since the dock still uses them. */
 .gen-btn-primary, .gen-btn-secondary {
   padding: 10px 18px;
   border-radius: 999px;
@@ -1588,85 +1595,93 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-cat-card { width: 168px; }
 }
 
-/* ===== Bottom-anchored picked-products preview (products step) =====
-   Lives in its own region above the Back/Next nav so it never covers
-   the category rows the user is scrolling through. Slides up from the
-   bottom when the first product is picked. */
+/* ===== Unified bottom dock =====
+   Single liquid-glass surface at the bottom of /generate that combines
+   what used to be three separate fixed elements (picked-products tray,
+   Back/Next footer, step-progress rail). Three internal rows top-to-
+   bottom: picks → actions → step pills. */
 
-.gen-picked-floating {
+.gen-dock {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  /* Sit above whatever bottom nav is on screen — the gen page's
-     primary action bar lives at the very bottom (Back/Next), so we
-     anchor with enough lift to clear it on every device. */
-  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 50;
+  width: min(720px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 26px;
+  background: rgba(20, 20, 20, 0.62);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 48px rgba(0, 0, 0, 0.55);
+  animation: gen-dock-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes gen-dock-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Row 1 — picks summary (only on products step when picks > 0). */
+.gen-dock-picks {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px 14px;
-  border-radius: 22px;
-  background: rgba(20, 20, 20, 0.88);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
-  max-width: min(540px, calc(100vw - 32px));
-  animation: gen-picked-slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  padding: 6px 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-@keyframes gen-picked-slide-up {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-.gen-picked-floating-label {
-  font-size: 11px;
+.gen-dock-picks-label {
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.55);
 }
 
-.gen-picked-floating-strip {
+.gen-dock-picks-strip {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
 }
 
-.gen-picked-mini {
+.gen-dock-pick {
   position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   overflow: hidden;
   background: #0a0a0a;
   border: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
-.gen-picked-mini img {
+.gen-dock-pick img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.gen-picked-mini-x {
+.gen-dock-pick-x {
   position: absolute;
   top: -6px;
   right: -6px;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 0;
   padding: 0;
   background: rgba(0, 0, 0, 0.92);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -1675,8 +1690,23 @@ html[data-shell="catalog-app"] .gen-page {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
   transition: background 0.15s ease, transform 0.15s ease;
 }
-
-.gen-picked-mini-x:hover {
+.gen-dock-pick-x:hover {
   background: rgba(220, 30, 30, 0.95);
   transform: scale(1.08);
+}
+
+/* Row 2 — Back / Next action buttons. */
+.gen-dock-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+/* Row 3 — step progress rail rendered inside the dock. The rail
+   component handles its own layout via .is-embedded; this just adds a
+   thin separator above it. */
+.gen-dock > .gen-rail.is-embedded {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
 }

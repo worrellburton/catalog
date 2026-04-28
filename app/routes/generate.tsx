@@ -862,26 +862,10 @@ export default function GeneratePage() {
         {step === 'products' && (
           <section className="gen-step gen-step-products">
             <h2>2. Pick up to {MAX_PRODUCTS} products</h2>
-            {picked.length > 0 && (
-              <div className="gen-picked-floating" role="region" aria-label="Selected products">
-                <div className="gen-picked-floating-label">
-                  {picked.length} of {MAX_PRODUCTS} picked
-                </div>
-                <div className="gen-picked-floating-strip">
-                  {picked.map(p => (
-                    <div key={p.id} className="gen-picked-mini">
-                      {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
-                      <button
-                        type="button"
-                        className="gen-picked-mini-x"
-                        onClick={() => togglePick(p)}
-                        aria-label={`Remove ${p.name || 'product'}`}
-                      >×</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Picked-products preview moved into the unified gen-dock at
+                the bottom (see render below) so the three previously
+                separate fixed elements (picks, Back/Next, step rail)
+                read as one cohesive control surface. */}
 
             {/* Six horizontal-scroll rows. Each row is one of CATEGORY_GROUPS
                 — Hat / Top / Bottoms / Shoes / Accessories / Objects.
@@ -1160,25 +1144,62 @@ export default function GeneratePage() {
         )}
       </main>
 
+      {/* Unified bottom dock — combines the three previously separate
+          fixed elements (picked-tray + Back/Next + step rail) into one
+          liquid-glass surface. Three internal rows, top to bottom:
+            1. picked-products strip (only on products step with picks)
+            2. Back / Next action row
+            3. Step progress rail
+          The dock is the single source of bottom-anchored chrome on
+          this page. */}
       {step !== 'result' && step !== 'photos' && (
-        <footer className="gen-foot">
-          <button className="gen-btn-secondary" onClick={() => goPrev(step, setStep)}>
-            Back
-          </button>
-          {step === 'review' ? (
-            <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Starting…' : 'Generate look'}
-            </button>
-          ) : (
-            <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
-              Next
-            </button>
+        <aside className="gen-dock" aria-label="Step controls">
+          {step === 'products' && picked.length > 0 && (
+            <div className="gen-dock-picks" role="region" aria-label="Selected products">
+              <div className="gen-dock-picks-label">
+                {picked.length} of {MAX_PRODUCTS} picked
+              </div>
+              <div className="gen-dock-picks-strip">
+                {picked.map(p => (
+                  <div key={p.id} className="gen-dock-pick">
+                    {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
+                    <button
+                      type="button"
+                      className="gen-dock-pick-x"
+                      onClick={() => togglePick(p)}
+                      aria-label={`Remove ${p.name || 'product'}`}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </footer>
-      )}
 
-      {step !== 'result' && step !== 'photos' && (
-        <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} ageLabel={ageLabel} style={style} />
+          <div className="gen-dock-actions">
+            <button className="gen-btn-secondary" onClick={() => goPrev(step, setStep)}>
+              Back
+            </button>
+            {step === 'review' ? (
+              <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Starting…' : 'Generate look'}
+              </button>
+            ) : (
+              <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
+                Next
+              </button>
+            )}
+          </div>
+
+          <StepRail
+            step={step}
+            photosCount={pickedUploadIds.length}
+            productsCount={picked.length}
+            heightLabel={heightLabel}
+            ageLabel={ageLabel}
+            style={style}
+            embedded
+          />
+        </aside>
       )}
     </div>
   );
@@ -1637,7 +1658,7 @@ function UploadPickerModal({
 }
 
 function StepRail({
-  step, photosCount, productsCount, heightLabel, ageLabel, style,
+  step, photosCount, productsCount, heightLabel, ageLabel, style, embedded = false,
 }: {
   step: Step;
   photosCount: number;
@@ -1645,6 +1666,10 @@ function StepRail({
   heightLabel: string;
   ageLabel: string;
   style: string;
+  /** When true, the rail is being rendered as a row inside the unified
+   *  gen-dock — drop the fixed positioning + glass background since
+   *  the dock supplies both. */
+  embedded?: boolean;
 }) {
   const filled = {
     photos: photosCount > 0,
@@ -1663,7 +1688,7 @@ function StepRail({
   ];
   const activeIdx = STEP_ORDER.indexOf(step);
   return (
-    <nav className="gen-rail" aria-label="Generate steps">
+    <nav className={`gen-rail${embedded ? ' is-embedded' : ''}`} aria-label="Generate steps">
       <ol className="gen-rail-glass">
         {items.map((item, i) => {
           const cls =
