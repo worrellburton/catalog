@@ -975,3 +975,64 @@
   }
 }
 
+
+/* ===== Animated border-beam scaffolding =====
+   The bottom-bar pill takes a class like .is-beam-{variant} which
+   activates a rotating gradient on a ::before pseudo-element. The
+   pseudo lives behind the bar (z-index: -1 is unsafe inside fixed
+   parents so we use absolute + negative z-index relative to the
+   pill's own content). The conic-gradient angle is driven by a
+   CSS custom property --beam-angle that animates via @property,
+   which gives buttery rotation on Chrome/Safari/Firefox 128+.
+
+   Each variant overrides the gradient stops + the rotation speed.
+   Phase 3 onward fills in the variant-specific rules. */
+
+@property --beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes bb-beam-spin {
+  to { --beam-angle: 360deg; }
+}
+
+/* Fallback for browsers that don't support @property — rotate the
+   pseudo-element itself instead. Slightly less smooth but visually
+   equivalent. */
+@keyframes bb-beam-rotate-fallback {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none) {
+  /* Make sure children sit above the beam pseudo. */
+  isolation: isolate;
+}
+
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none)::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  border-radius: inherit;
+  /* The beam draws as a thin ring by masking out the inside with
+     two layered gradients composited via mask-composite: exclude. */
+  padding: 2px;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Children of the bar need to sit above the beam pseudo. */
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none) > * {
+  position: relative;
+  z-index: 1;
+}
