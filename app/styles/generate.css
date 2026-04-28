@@ -1571,3 +1571,94 @@ html[data-shell="catalog-app"] .gen-page {
 @media (min-width: 900px) {
   .gen-cat-card { width: 168px; }
 }
+
+/* ===== Centered floating picked-products preview (products step) ===== */
+
+.gen-picked-floating {
+  /* Fixed mid-viewport so it's always visible no matter where in the
+     category rows the user has scrolled to. Centered horizontally;
+     vertically anchored just above the page midline so it doesn't
+     cover the row currently in focus when the user is browsing. */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-radius: 22px;
+  background: rgba(20, 20, 20, 0.78);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  max-width: min(540px, calc(100vw - 32px));
+  animation: gen-picked-fade-in 0.18s ease-out;
+}
+
+@keyframes gen-picked-fade-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.gen-picked-floating-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.gen-picked-floating-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gen-picked-mini {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0a0a;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+}
+
+.gen-picked-mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gen-picked-mini-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.gen-picked-mini-x:hover {
+  background: rgba(220, 30, 30, 0.95);
+  transform: scale(1.08);
+}
