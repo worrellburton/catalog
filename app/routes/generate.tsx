@@ -212,6 +212,13 @@ export default function GeneratePage() {
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PickedProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  // Per-category client-side search. Each row in the new horizontal-
+  // scroll picker has its own input that filters that row's products
+  // by name/brand without re-fetching from Supabase.
+  const [categoryQueries, setCategoryQueries] = useState<Record<string, string>>({});
+  const setCategoryQuery = useCallback((label: string, value: string) => {
+    setCategoryQueries(prev => (prev[label] === value ? prev : { ...prev, [label]: value }));
+  }, []);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
   // Phase 9/10 — height + style
