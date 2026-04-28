@@ -641,7 +641,7 @@ export default function GeneratePage() {
 
   return (
     <div className="gen-page">
-      <div className="gen-head">
+      <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
         <button
           className="gen-back"
           onClick={() => {
@@ -659,8 +659,15 @@ export default function GeneratePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
-        <h1>Generate</h1>
-        <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+        {/* On the products step the screen is fully dedicated to the
+            category browser — the page-level header would just push
+            everything below the fold. Keep the back button only. */}
+        {step !== 'products' && (
+          <>
+            <h1>Generate</h1>
+            <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+          </>
+        )}
       </div>
 
       <main className="gen-main">
