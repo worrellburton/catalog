@@ -137,13 +137,11 @@
 }
 
 @media (max-width: 768px) {
-  .bottom-bar:not(.search-open) {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: none;
-    box-shadow: none;
-  }
+  /* (Removed: the .bottom-bar:not(.search-open) rule that stripped the
+     pill background on mobile. It existed for the legacy
+     "tap-to-search-button" layout where the bar was just a wrapper
+     around a separate pill button. With the inline always-on search
+     input, the bar IS the pill — same treatment as desktop. */
   .search-btn {
     width: auto;
     height: 40px;
