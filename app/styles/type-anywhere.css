@@ -42,7 +42,8 @@
   color: #fff;
   text-shadow:
     0 2px 18px rgba(0, 0, 0, 0.6),
-    0 0 32px rgba(155, 122, 240, 0.18);
+    0 0 24px rgba(255, 255, 255, 0.18),
+    0 0 48px rgba(255, 255, 255, 0.08);
   max-width: 92vw;
   word-break: break-word;
 }
@@ -51,9 +52,9 @@
   background: linear-gradient(
     100deg,
     #ffffff 0%,
-    #f5e9ff 35%,
-    #d9c2ff 50%,
-    #f5e9ff 65%,
+    #d8d8d8 35%,
+    #b6b6b6 50%,
+    #d8d8d8 65%,
     #ffffff 100%
   );
   background-size: 200% 100%;
