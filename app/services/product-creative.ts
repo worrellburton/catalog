@@ -505,6 +505,87 @@ export async function getCreativesByBrand(
   return rows.filter(r => passesGenderFilter(r.product as { gender?: string | null } | null)).slice(0, limit);
 }
 
+// Look up creatives (with playable video) for an arbitrary set of product
+// UUIDs. Used by the consumer feed to surface video ads for products that
+// nl-search returned but which aren't in the curated `is_elite` rotation.
+// Falls back gracefully — products with no creative simply drop out.
+//
+// Results are returned in the same order as `productIds` (rank-preserving)
+// so the caller can prepend them to the feed without re-sorting. When a
+// product has multiple creatives, the most recently-completed one wins.
+export async function getCreativesByProductIds(productIds: string[]): Promise<ProductAd[]> {
+  if (!supabase || productIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('product_creative')
+    .select(AD_SELECT)
+    .in('product_id', productIds)
+    .eq('status', 'live')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.warn('[getCreativesByProductIds] query error:', error.message);
+    return [];
+  }
+  // Pick the freshest creative per product, then sort by the order of
+  // productIds so semantic rank is preserved.
+  const byProduct = new Map<string, ProductAd>();
+  for (const row of (data || []) as ProductAd[]) {
+    if (!byProduct.has(row.product_id)) byProduct.set(row.product_id, row);
+  }
+  const ordered: ProductAd[] = [];
+  for (const id of productIds) {
+    const hit = byProduct.get(id);
+    if (hit) ordered.push(hit);
+  }
+  return ordered;
+}
+
+// Resolve a ranked list of look UUIDs to live product creatives by walking
+// look_products → products → product_creative. Used by the semantic search
+// path: nl-search frequently returns looks (e.g. "summer", "red carpet"),
+// but the feed surface is creative-only, so we hydrate each look into the
+// creatives that back its products.
+//
+// Rank-preserving: results are emitted in look order, then by sort_order
+// within each look. Deduped by product_id so a single product that appears
+// in multiple semantic looks only surfaces once.
+export async function getCreativesByLookIds(lookIds: string[]): Promise<ProductAd[]> {
+  if (!supabase || lookIds.length === 0) return [];
+  // 1) look_id → ordered product_ids
+  const { data: lpRows, error: lpErr } = await supabase
+    .from('look_products')
+    .select('look_id, product_id, sort_order')
+    .in('look_id', lookIds);
+  if (lpErr) {
+    console.warn('[getCreativesByLookIds] look_products error:', lpErr.message);
+    return [];
+  }
+  if (!lpRows || lpRows.length === 0) return [];
+
+  // Preserve look rank, then sort_order within each look. Dedupe product_ids
+  // (a product shared across two semantic-hit looks should only appear once).
+  const lookRank = new Map<string, number>();
+  lookIds.forEach((id, idx) => lookRank.set(id, idx));
+  const seenProductIds = new Set<string>();
+  const orderedProductIds: string[] = [];
+  const sorted = [...(lpRows as Array<{ look_id: string; product_id: string; sort_order: number | null }>)]
+    .sort((a, b) => {
+      const ra = lookRank.get(a.look_id) ?? Infinity;
+      const rb = lookRank.get(b.look_id) ?? Infinity;
+      if (ra !== rb) return ra - rb;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+  for (const row of sorted) {
+    if (seenProductIds.has(row.product_id)) continue;
+    seenProductIds.add(row.product_id);
+    orderedProductIds.push(row.product_id);
+  }
+  if (orderedProductIds.length === 0) return [];
+
+  // 2) Reuse the existing product → creative resolver (preserves order).
+  return getCreativesByProductIds(orderedProductIds);
+}
+
 // Per-brand promise cache so hover and tap coalesce.
 const brandCache = new Map<string, Promise<ProductAd[]>>();
 

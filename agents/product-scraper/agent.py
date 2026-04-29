@@ -35,7 +35,7 @@ load_dotenv()
 MODEL = "claude-sonnet-4-20250514"
 # Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
 # anything past 6 means the agent is wandering on a non-product page.
-MAX_AGENT_TURNS = 6
+MAX_AGENT_TURNS = 8
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
 MAX_IMAGES_RETURN = 15
@@ -201,14 +201,28 @@ def _non_product_url_reason(raw_url: str) -> str | None:
     path = (parsed.path or "").lower()
 
     if host == "google.com" or host.endswith(".google.com"):
-        if path.startswith("/search") or path.startswith("/shopping"):
+        # Allow Google Shopping product detail pages — they get resolved to
+        # the underlying merchant URL before scraping (see resolve_google_shopping).
+        # Two known product-detail URL shapes:
+        #   1. /shopping/product/<id>
+        #   2. /search?ibp=oshop&prds=... (single-product shopping panel)
+        from urllib.parse import parse_qs
+        qs = parse_qs(parsed.query)
+        is_google_shopping_product = (
+            path.startswith("/shopping/product/")
+            or (path.startswith("/search") and qs.get("ibp") == ["oshop"] and "prds" in qs)
+        )
+        if is_google_shopping_product:
+            pass
+        elif path.startswith("/search") or path.startswith("/shopping"):
             return "Google search results page"
     if host in ("bing.com", "duckduckgo.com"):
         return "search engine page"
     if path in ("", "/"):
         return "site homepage"
     if path == "/search" or path.startswith("/search/") or path == "/s" or path.startswith("/s/"):
-        return f'non-product path "{path}"'
+        if not (host == "google.com" or host.endswith(".google.com")):
+            return f'non-product path "{path}"'
     if (host == "amazon.com" or host.endswith(".amazon.com")) and (
         "/dp/" not in path and "/gp/product/" not in path
     ):
@@ -532,6 +546,115 @@ class BrowserSession:
         self.page.evaluate("window.scrollBy(0, window.innerHeight)")
         self.page.wait_for_timeout(1000)
 
+    def resolve_google_shopping(self, url: str) -> str:
+        """Navigate to a Google Shopping product page and return the actual
+        merchant product URL (the "Most popular" / first buying option).
+
+        Google Shopping pages list multiple merchants in the right-hand
+        "Buying options" panel. Each offer links out to the merchant's
+        product page \u2014 sometimes directly, sometimes through a Google
+        redirect (/url?q=, /aclk?). This method follows the first viable
+        offer and returns the final resolved merchant URL.
+        """
+        self.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+        self.page.wait_for_timeout(3000)
+
+        candidate = self.page.evaluate(
+            """() => {
+            const isOffsite = (h) => {
+                if (!h) return false;
+                if (h.startsWith('/url?') || h.startsWith('/aclk?')) return true;
+                try {
+                    const u = new URL(h, location.href);
+                    if (!u.protocol.startsWith('http')) return false;
+                    if (u.hostname.endsWith('google.com')) {
+                        return u.pathname === '/url' || u.pathname === '/aclk';
+                    }
+                    return true;
+                } catch { return false; }
+            };
+            const priceRe = /[\\$£€¥]\\s?\\d/;
+            const blocklist = ['terms', 'privacy', 'help', 'feedback',
+                'sign in', 'about', 'sponsored', 'ads by google',
+                'send feedback', 'how search works'];
+            const anchors = Array.from(document.querySelectorAll('a[href]'));
+            const candidates = [];
+            for (const a of anchors) {
+                const href = a.getAttribute('href') || '';
+                if (!isOffsite(href)) continue;
+                const txt = (a.innerText || '').toLowerCase().trim();
+                if (blocklist.some(b => txt === b)) continue;
+                const rect = a.getBoundingClientRect();
+                if (rect.width < 5 || rect.height < 5) continue;
+                // Must have price text within 5 ancestors — filters out
+                // page chrome (header/footer/nav) and keeps only real offer cards.
+                let el = a;
+                let depth = -1;
+                for (let i = 0; i < 6 && el; i++) {
+                    if (priceRe.test(el.innerText || '')) { depth = i; break; }
+                    el = el.parentElement;
+                }
+                if (depth < 0) continue;
+                candidates.push({ href: a.href, depth, top: rect.top });
+            }
+            // Prefer the offer closest to the price text, then highest in
+            // viewport (Google lists "Most popular" first).
+            candidates.sort((a, b) => a.depth - b.depth || a.top - b.top);
+            return candidates[0]?.href || null;
+        }"""
+        )
+
+        if not candidate:
+            raise RuntimeError(
+                f"Could not find a merchant offer link on Google Shopping page: {url}"
+            )
+
+        # Follow the candidate URL — Google's /url? and /aclk? endpoints
+        # redirect to the real merchant URL. A direct merchant URL just
+        # navigates straight there.
+        try:
+            self.page.goto(candidate, wait_until="domcontentloaded", timeout=60_000)
+            self.page.wait_for_timeout(2000)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to follow Google Shopping merchant link {candidate}: {e}"
+            )
+
+        final_url = self.page.url
+        final_host = (urlparse(final_url).hostname or "").lower()
+        if not final_url or "google.com" in final_host:
+            raise RuntimeError(
+                f"Google Shopping link did not resolve to a merchant URL "
+                f"(landed on {final_url})"
+            )
+        return final_url
+
+
+def _is_google_shopping_url(raw_url: str) -> bool:
+    """True iff the URL is a Google Shopping product detail page.
+
+    Handles two URL shapes:
+      1. /shopping/product/<id>
+      2. /search?ibp=oshop&prds=...
+    """
+    from urllib.parse import parse_qs
+    try:
+        parsed = urlparse(raw_url)
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host != "google.com" and not host.endswith(".google.com"):
+        return False
+    path = parsed.path or ""
+    if path.startswith("/shopping/product/"):
+        return True
+    if path.startswith("/search"):
+        qs = parse_qs(parsed.query)
+        return qs.get("ibp") == ["oshop"] and "prds" in qs
+    return False
+
 
 # ─── Tool execution ──────────────────────────────────────────────────
 
@@ -748,6 +871,20 @@ def run_agent(
     try:
         browser.start()
         print(f"🌐 Agent started — visiting {product_url}\n")
+
+        # If this is a Google Shopping product page, resolve it to the
+        # underlying merchant URL first. Google Shopping pages are not
+        # scrapeable directly (different DOM, no canonical product image
+        # for the chosen seller, etc.) — but each one lists merchant
+        # offers we can follow.
+        if _is_google_shopping_url(product_url):
+            print(f"🛒 Google Shopping URL detected — resolving merchant…")
+            resolved = browser.resolve_google_shopping(product_url)
+            print(f"   → resolved to {resolved}\n")
+            product_url = resolved
+            messages = [
+                {"role": "user", "content": f"Extract product data from: {product_url}"}
+            ]
 
         for turn in range(MAX_AGENT_TURNS):
             # Trim old tool results to keep token usage manageable

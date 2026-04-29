@@ -1,0 +1,2 @@
+-- Remote migration placeholder (already applied on the remote DB).
+-- Do not delete — required by `supabase migration list` / db push reconciliation.

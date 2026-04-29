@@ -19,6 +19,14 @@ interface FeedSectionProps {
   batchSize?: number;
   isInitial?: boolean;
   layoutMode?: number;
+  /**
+   * When true the pool is built once (no cycling) so the user sees each
+   * creative exactly once. When the sentinel fires at the pool end,
+   * `onLoadMore` is called instead of cycling back to the start.
+   */
+  searchMode?: boolean;
+  /** Called when the user scrolls to the end of the current pool in search mode. */
+  onLoadMore?: () => void;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -53,6 +61,8 @@ function FeedSection({
   batchSize,
   isInitial = false,
   layoutMode = 0,
+  searchMode = false,
+  onLoadMore,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -144,6 +154,20 @@ function FeedSection({
     // — leave the grid empty rather than falling back to looks.
     if (deck.length === 0) return items;
 
+    // In search mode: render each creative exactly once (no cycling).
+    // The sentinel fires onLoadMore() when the user reaches the end.
+    if (searchMode) {
+      while (deck.length > 0) {
+        const next = deck.shift()!;
+        if (next.type === 'look') {
+          items.push({ type: 'look', look: { ...next.look, displayIndex: displayIndex++ } });
+        } else {
+          items.push({ type: 'creative', creative: next.creative });
+        }
+      }
+      return items;
+    }
+
     while (items.length < targetCells) {
       if (deck.length === 0) deck = buildDeck();
       const next = deck.shift()!;
@@ -155,7 +179,7 @@ function FeedSection({
     }
 
     return items;
-  }, [looks, creatives, creativesLoading, isInitial, layoutMode]);
+  }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode]);
 
   const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
 
@@ -165,14 +189,19 @@ function FeedSection({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setVisibleCount(prev => Math.min(prev + batch, pool.length));
+          if (visibleCount >= pool.length && searchMode && onLoadMore) {
+            // We've shown all current results — ask the parent for more.
+            onLoadMore();
+          } else {
+            setVisibleCount(prev => Math.min(prev + batch, pool.length));
+          }
         }
       },
       { rootMargin: '400px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [batch, pool.length]);
+  }, [batch, pool.length, visibleCount, searchMode, onLoadMore]);
 
   useEffect(() => {
     setVisibleCount(batch);

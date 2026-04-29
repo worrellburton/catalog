@@ -45,6 +45,7 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
 
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
+
 @app.function(
     image=scraper_image,
     secrets=secrets,
@@ -59,14 +60,16 @@ def scrape_and_update(product_id: str, url: str):
     from supabase import create_client
     from agent import run_agent
 
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+    sb_url = os.environ["SUPABASE_URL"]
+    sb_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    supabase = create_client(sb_url, sb_key)
 
     # Mark as processing
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
 
     def _write_to_db(product: dict):
         """Called immediately when Claude calls save_product — no waiting for loop end."""
-        supabase.table("products").update({
+        update_payload = {
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "scrape_error": None,
@@ -78,9 +81,16 @@ def scrape_and_update(product_id: str, url: str):
             "currency": product.get("currency"),
             "images": product.get("images", []),
             "image_url": (product.get("images") or [None])[0],
-            "image_missing_reason": product.get("image_missing_reason"),
             "availability": product.get("availability"),
-        }).eq("id", product_id).execute()
+        }
+        # If the original URL was a Google Shopping link, overwrite it with the
+        # resolved merchant URL so the row points to the actual product page.
+        resolved_url = product.get("url")
+        if resolved_url and resolved_url != url:
+            update_payload["url"] = resolved_url
+            print(f"  🔗 [{product_id}] URL updated to resolved merchant URL: {resolved_url}")
+
+        supabase.table("products").update(update_payload).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
 
     try:

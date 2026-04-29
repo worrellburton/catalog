@@ -15,9 +15,13 @@ interface EmptyCatalogStateProps {
    *  used for counting is the normalized lowercase version, computed
    *  server-side in request_catalog(). */
   catalogName: string;
+  /** When true, shows a "sourcing" message instead of the normal demand-signal
+   *  copy — used when the semantic search returned a cold miss and the backfill
+   *  agent is queued to fetch products for this query. */
+  isSourcing?: boolean;
 }
 
-export default function EmptyCatalogState({ catalogName }: EmptyCatalogStateProps) {
+export default function EmptyCatalogState({ catalogName, isSourcing = false }: EmptyCatalogStateProps) {
   // Slug used to query the count row. Mirrors the normalization done by
   // request_catalog() so the realtime filter matches the upserted row.
   const slug = catalogName.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -97,33 +101,50 @@ export default function EmptyCatalogState({ catalogName }: EmptyCatalogStateProp
     <div className="empty-catalog">
       <ParticleBackground />
       <div className="empty-catalog-content">
-        <p className="empty-catalog-eyebrow">No creatives yet</p>
-        <h2 className="empty-catalog-headline">
-          Nothing in <em>{catalogName}</em> yet.
-        </h2>
-        <p className="empty-catalog-subhead">
-          Tap the button if you'd shop this. We surface what people ask for.
-        </p>
+        {isSourcing ? (
+          <>
+            <p className="empty-catalog-eyebrow">Sourcing now</p>
+            <h2 className="empty-catalog-headline">
+              We're finding <em>{catalogName}</em> for you.
+            </h2>
+            <p className="empty-catalog-subhead">
+              Our agents are pulling looks and products. Check back shortly — this catalog is being built.
+            </p>
+            <div className="empty-catalog-sourcing-indicator" aria-live="polite">
+              <span className="sourcing-dot" /><span className="sourcing-dot" /><span className="sourcing-dot" />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="empty-catalog-eyebrow">No creatives yet</p>
+            <h2 className="empty-catalog-headline">
+              Nothing in <em>{catalogName}</em> yet.
+            </h2>
+            <p className="empty-catalog-subhead">
+              Tap the button if you'd shop this. We surface what people ask for.
+            </p>
 
-        <button
-          type="button"
-          className={`empty-catalog-cta ${pressed ? 'is-pressed' : ''}`}
-          onClick={handleRequest}
-          disabled={pressed}
-          aria-pressed={pressed}
-        >
-          {pressed ? 'Got it — we hear you' : 'I want this catalog'}
-        </button>
+            <button
+              type="button"
+              className={`empty-catalog-cta ${pressed ? 'is-pressed' : ''}`}
+              onClick={handleRequest}
+              disabled={pressed}
+              aria-pressed={pressed}
+            >
+              {pressed ? 'Got it — we hear you' : 'I want this catalog'}
+            </button>
 
-        <div className={`empty-catalog-counter ${pulse ? 'pulse' : ''}`} aria-live="polite">
-          {count == null ? (
-            <span className="empty-catalog-counter-loading">…</span>
-          ) : (
-            <span>
-              <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
-            </span>
-          )}
-        </div>
+            <div className={`empty-catalog-counter ${pulse ? 'pulse' : ''}`} aria-live="polite">
+              {count == null ? (
+                <span className="empty-catalog-counter-loading">…</span>
+              ) : (
+                <span>
+                  <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

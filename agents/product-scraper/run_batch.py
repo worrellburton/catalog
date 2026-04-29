@@ -15,10 +15,35 @@ import os
 import sys
 import json
 import argparse
+import urllib.request
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def trigger_embed(product_id: str):
+    """Fire embed-entity edge function for the product (best-effort)."""
+    sb_url = os.environ.get("SUPABASE_URL", "")
+    sb_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not sb_url or not sb_key:
+        return
+    url = f"{sb_url}/functions/v1/embed-entity"
+    payload = json.dumps({"id": product_id, "entity_type": "product"}).encode()
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {sb_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            print(f"  🧠 embed-entity → HTTP {resp.status}")
+    except Exception as e:
+        print(f"  ⚠️  embed-entity error (non-fatal): {e}")
 
 
 def get_supabase():
@@ -61,6 +86,8 @@ def mark_done(supabase, product_id: str, data: dict):
             "image_url": data.get("images", [None])[0],  # first image as primary
         }
     ).eq("id", product_id).execute()
+    # Trigger semantic embedding immediately after save
+    trigger_embed(product_id)
 
 
 def mark_failed(supabase, product_id: str, error: str):
