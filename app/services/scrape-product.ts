@@ -153,12 +153,18 @@ export async function listProducts(options?: {
 /**
  * Reset a product's scrape_status back to 'pending' and immediately trigger
  * the scraper so it doesn't wait for the daily cron.
+ *
+ * NOTE: scraped_at is set to now() (not null) so the watchdog's
+ * COALESCE(scraped_at, created_at) uses the retry time rather than the
+ * original created_at, preventing the row from being immediately re-failed
+ * by reconcileStuckScrapes when created_at is old.
  */
-export async function retryProductScrape(productId: string): Promise<void> {
+export async function retryProductScrape(productId: string): Promise<{ url: string | null; retriedAt: string }> {
   if (!supabase) throw new Error('Supabase not configured');
+  const retriedAt = new Date().toISOString();
   const { data, error } = await supabase
     .from('products')
-    .update({ scrape_status: 'pending', scrape_error: null, scraped_at: null })
+    .update({ scrape_status: 'pending', scrape_error: null, scraped_at: retriedAt })
     .eq('id', productId)
     .select('url')
     .single();
@@ -166,6 +172,22 @@ export async function retryProductScrape(productId: string): Promise<void> {
   if (data?.url) {
     await _triggerScrape(productId, data.url);
   }
+  return { url: data?.url ?? null, retriedAt };
+}
+
+/**
+ * Delete all products whose URL is a Google search/shopping page.
+ * These were ingested before the URL pre-filter was added and can
+ * never be scraped. Returns the number of rows deleted.
+ */
+export async function deleteGoogleUrlProducts(): Promise<number> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { count, error } = await supabase
+    .from('products')
+    .delete({ count: 'exact' })
+    .ilike('url', '%google.com%');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 /**

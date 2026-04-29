@@ -55,6 +55,10 @@ function fmtElapsed(seconds: number): string {
   return `${h}h ${m}m`;
 }
 
+// Typical Modal cold-start (container warm-up) for the scraper function.
+// Used to show "~Xs to start" countdown while a job is still in the queue.
+const QUEUE_WARMUP_S = 60;
+
 export default function JobProgress({
   status,
   startedAt,
@@ -99,7 +103,14 @@ export default function JobProgress({
   if (phase === 'stuck') {
     timeLabel = `Stuck • ${fmtElapsed(elapsed)}`;
   } else if (phase === 'queued') {
-    timeLabel = elapsed < 60 ? 'Queued…' : `Queued • ${fmtElapsed(elapsed)}`;
+    const toStart = Math.max(0, QUEUE_WARMUP_S - elapsed);
+    if (toStart > 0) {
+      timeLabel = toStart < 60
+        ? `~${Math.ceil(toStart)}s to start`
+        : `~${Math.ceil(toStart / 60)}m to start`;
+    } else {
+      timeLabel = `Queued • ${fmtElapsed(elapsed)}`;
+    }
   } else {
     timeLabel = fmtRemaining(remaining);
   }
