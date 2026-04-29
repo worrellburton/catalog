@@ -1,11 +1,13 @@
-import { useState, Fragment, useMemo, useCallback, useEffect } from 'react';
+import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
-import { getLooks, getCreators } from '~/services/looks';
+import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
+import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
+import { addProductUrl } from '~/services/scrape-product';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
@@ -13,6 +15,7 @@ import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
+import { useAdminConfirm } from '~/components/AdminConfirm';
 
 interface CrawledProduct {
   id: string;
@@ -29,6 +32,21 @@ interface CrawledProduct {
   is_elite?: boolean;
   type?: string | null;
   gender?: 'male' | 'female' | 'unisex' | null;
+  created_at?: string | null;
+  source?: string | null;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  google_shopping: 'Google Shopping',
+  amazon: 'Amazon',
+  brand_url: 'Brand URL',
+};
+
+function formatDateAdded(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -200,6 +218,49 @@ interface UnpublishedLook {
   creator_email: string | null;
 }
 
+// Defers attaching the <video> until the row scrolls into the
+// viewport. Without this, the Unpublished tab stamps ~14 cross-
+// origin Supabase video sources into the DOM at once and the
+// browser stalls under the concurrent decoder/network load —
+// which is what was making the thumbnails slow to paint and the
+// admin tab feel sluggish.
+function LazyThumb({ url }: { url: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      entries => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            return;
+          }
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {inView ? (
+        <>
+          <video src={url} autoPlay muted loop playsInline preload="metadata" />
+          <div className="admin-look-preview">
+            <video src={url} autoPlay muted loop playsInline />
+          </div>
+        </>
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: '#111' }} />
+      )}
+    </div>
+  );
+}
+
 export default function AdminContent() {
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
   // is deep-linkable and the browser back button works like users expect.
@@ -322,6 +383,172 @@ export default function AdminContent() {
     return () => { cancelled = true; };
   }, []);
 
+  // Bottom-center publish toast. Stays up ~3.2s and fades. The
+  // unpublished-row Publish button drives this — single-shot so we
+  // don't need a queue.
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+  const publishTimerRef = useRef<number | null>(null);
+
+  const flashPublishMsg = useCallback((msg: string) => {
+    setPublishMsg(msg);
+    if (publishTimerRef.current != null) window.clearTimeout(publishTimerRef.current);
+    publishTimerRef.current = window.setTimeout(() => setPublishMsg(null), 3200);
+  }, []);
+
+  // Expanded-row state for the Unpublished looks table — fetches the
+  // generation's products on demand so the initial list query stays
+  // cheap. Cached after the first fetch so re-expanding is instant.
+  interface UnpublishedProduct {
+    id: string;
+    name: string;
+    brand: string;
+    price: string | null;
+    image_url: string | null;
+    role_tag: string | null;
+  }
+  const [expandedUnpublishedId, setExpandedUnpublishedId] = useState<string | null>(null);
+  const [unpublishedProducts, setUnpublishedProducts] = useState<Map<string, UnpublishedProduct[]>>(new Map());
+  const [unpublishedProductsLoading, setUnpublishedProductsLoading] = useState<Set<string>>(new Set());
+
+  const toggleUnpublishedExpand = useCallback(async (genId: string) => {
+    setExpandedUnpublishedId(prev => (prev === genId ? null : genId));
+    if (unpublishedProducts.has(genId) || unpublishedProductsLoading.has(genId)) return;
+    if (!supabase) return;
+    setUnpublishedProductsLoading(prev => {
+      const next = new Set(prev);
+      next.add(genId);
+      return next;
+    });
+    const { data, error } = await supabase
+      .from('user_generation_products')
+      .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+      .eq('generation_id', genId)
+      .order('sort_order');
+    if (!error && data) {
+      const rows: UnpublishedProduct[] = (data as unknown as Array<{
+        product_id: string;
+        role_tag: string | null;
+        sort_order: number;
+        products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+      }>)
+        .filter(r => !!r.products)
+        .map(r => ({
+          id: r.products!.id,
+          name: r.products!.name || '—',
+          brand: r.products!.brand || '—',
+          price: r.products!.price,
+          image_url: r.products!.image_url,
+          role_tag: r.role_tag,
+        }));
+      setUnpublishedProducts(prev => {
+        const next = new Map(prev);
+        next.set(genId, rows);
+        return next;
+      });
+    }
+    setUnpublishedProductsLoading(prev => {
+      const next = new Set(prev);
+      next.delete(genId);
+      return next;
+    });
+  }, [unpublishedProducts, unpublishedProductsLoading]);
+
+  const publishUnpublishedInline = useCallback(async (g: UnpublishedLook) => {
+    if (publishingIds.has(g.id)) return;
+    if (g.status !== 'done') return;
+    setPublishingIds(prev => {
+      const next = new Set(prev);
+      next.add(g.id);
+      return next;
+    });
+    // Optimistic UX: drop the row from the unpublished list and
+    // flash the bottom-center toast IMMEDIATELY. The Supabase
+    // round-trip then runs in the background; on failure we put
+    // the row back and replace the toast with the error.
+    setUnpublished(prev => prev.filter(u => u.id !== g.id));
+    flashPublishMsg('This look is published');
+
+    try {
+      // Need the linked products to attach after the look is created.
+      let products = unpublishedProducts.get(g.id);
+      if (!products && supabase) {
+        const { data: prodRows } = await supabase
+          .from('user_generation_products')
+          .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+          .eq('generation_id', g.id)
+          .order('sort_order');
+        products = ((prodRows || []) as unknown as Array<{
+          product_id: string;
+          role_tag: string | null;
+          sort_order: number;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+        }>)
+          .filter(r => !!r.products)
+          .map(r => ({
+            id: r.products!.id,
+            name: r.products!.name || '—',
+            brand: r.products!.brand || '—',
+            price: r.products!.price,
+            image_url: r.products!.image_url,
+            role_tag: r.role_tag,
+          }));
+      }
+      const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
+      const { data: look } = await createLook({
+        title: `${creatorLabel}’s ${g.style} look`,
+        description: `Promoted from generation ${g.id}`,
+        gender: 'unisex',
+      });
+      // Don't block the toast / list refresh on per-product attaches.
+      // Each one round-trips the manage-looks edge function and a
+      // failed product shouldn't fail the whole publish.
+      void Promise.all((products || []).map(p =>
+        addProductToLook(look.id, { product_id: p.id }).catch(err => {
+          console.warn('[publish-inline] addProductToLook failed:', err);
+        })
+      ));
+      // Same two follow-ups as the dedicated screen — without these
+      // the new row never appears in the Published list.
+      const followUps: Promise<unknown>[] = [];
+      if (supabase && g.video_url) {
+        followUps.push(supabase
+          .from('looks_creative')
+          .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
+          .then(({ error }: { error: { message: string } | null }) => {
+            if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
+          }));
+      }
+      if (supabase) {
+        followUps.push(supabase
+          .from('looks')
+          .update({ status: 'live' })
+          .eq('id', look.id)
+          .then(({ error }: { error: { message: string } | null }) => {
+            if (error) console.warn('[publish-inline] status update failed:', error.message);
+          }));
+      }
+      await Promise.all(followUps);
+      invalidateLooksCache();
+      // Refresh the Published tab in the background so the new row
+      // shows up. This may take a moment but the UI already moved on.
+      const fresh = await getLooks();
+      setLooks(fresh);
+    } catch (err) {
+      console.error('[publish-inline] failed:', err);
+      // Put the row back and replace the optimistic toast with an
+      // error so the admin knows it didn't actually go through.
+      setUnpublished(prev => prev.some(u => u.id === g.id) ? prev : [g, ...prev]);
+      flashPublishMsg(err instanceof Error ? `Publish failed: ${err.message}` : 'Publish failed');
+    } finally {
+      setPublishingIds(prev => {
+        const next = new Set(prev);
+        next.delete(g.id);
+        return next;
+      });
+    }
+  }, [publishingIds, unpublishedProducts, flashPublishMsg]);
+
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
   const [genSplit, setGenSplit] = useState<boolean>(false);
@@ -381,6 +608,29 @@ export default function AdminContent() {
 
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
+
+  // Add Products dropdown — opens a menu with three sources (Google
+  // Shopping → existing research modal, Amazon → Rainforest lookup,
+  // Brand Website → URL paste).
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [addMenuOpen]);
+
+  // Add via Brand Website — small modal with a URL input that hits the
+  // shared scrape-product service.
+  const [showBrandUrl, setShowBrandUrl] = useState(false);
+  const [brandUrlInput, setBrandUrlInput] = useState('');
+  const [brandUrlBusy, setBrandUrlBusy] = useState(false);
+  const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
   const [researchQuery, setResearchQuery] = useState('');
   const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
   const [researchLoading, setResearchLoading] = useState(false);
@@ -503,7 +753,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -549,12 +799,13 @@ export default function AdminContent() {
         // columns accept null.
         type: inferProductType(p.name, p.brand),
         gender: inferProductGenderFromName(p.name),
+        source: 'google_shopping',
       };
     });
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -758,13 +1009,17 @@ export default function AdminContent() {
       return {
         id: look.id,
         creator: look.creator,
-        creatorDisplay: c?.displayName || look.creator,
+        creatorDisplay: c?.displayName || look.creator || '—',
         creatorAvatar: c?.avatar || '',
         video: look.video,
         products: look.products.length,
       };
     });
-  }, [deletedLookIds, lookOrder, adminQuery]);
+    // looks + creators must be in deps — without them the memoized
+    // rows array goes stale after a publish (cache is invalidated and
+    // looks state refetches, but the table keeps rendering the
+    // previous snapshot).
+  }, [looks, creators, deletedLookIds, lookOrder, adminQuery]);
 
   // Brand-to-domain mapping for Brandfetch logos
   const brandDomains: Record<string, string> = useMemo(() => ({
@@ -867,7 +1122,7 @@ export default function AdminContent() {
       if (!supabase) return;
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -926,7 +1181,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -958,6 +1213,8 @@ export default function AdminContent() {
         entry.is_elite = !!cp.is_elite;
         entry.type = cp.type ?? null;
         entry.gender = cp.gender ?? null;
+        entry.created_at = cp.created_at ?? null;
+        entry.source = cp.source ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -985,6 +1242,8 @@ export default function AdminContent() {
           is_elite: !!cp.is_elite,
           type: cp.type ?? null,
           gender: cp.gender ?? null,
+          created_at: cp.created_at ?? null,
+          source: cp.source ?? null,
         });
       }
     });
@@ -1105,7 +1364,7 @@ export default function AdminContent() {
     }),
     [allProducts, productFilter, deletedProductKeys, adminQuery]
   );
-  const productTable = useSortableTable(filteredProductsList);
+  const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
 
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -1232,7 +1491,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1263,7 +1522,7 @@ export default function AdminContent() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1281,22 +1540,68 @@ export default function AdminContent() {
               </svg>
               {auditingGenders ? 'Auditing…' : 'Gender audit'}
             </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              onClick={() => setShowAmazonLookup(true)}
-              title="Pull an Amazon product by ASIN or URL via Rainforest API"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M3 3h18v4H3zM3 11h18v4H3zM3 19h18v2H3z"/>
-              </svg>
-              Add from Amazon
-            </button>
-            <button className="admin-btn admin-btn-primary" onClick={() => setShowAddProducts(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Add Products
-            </button>
+            <div ref={addMenuRef} style={{ position: 'relative' }}>
+              <button
+                className="admin-btn admin-btn-primary"
+                onClick={() => setAddMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={addMenuOpen}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add Products
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 6 }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {addMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: 240,
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                    padding: 4,
+                    zIndex: 50,
+                  }}
+                >
+                  {[
+                    { label: 'Add via Google Shopping', onClick: () => { setAddMenuOpen(false); setShowAddProducts(true); } },
+                    { label: 'Add via Amazon Shopping', onClick: () => { setAddMenuOpen(false); setShowAmazonLookup(true); } },
+                    { label: 'Add via Brand Website',   onClick: () => { setAddMenuOpen(false); setBrandUrlInput(''); setBrandUrlError(null); setShowBrandUrl(true); } },
+                  ].map(item => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={item.onClick}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#111',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1371,15 +1676,32 @@ export default function AdminContent() {
                       </td>
                       <td>
                         <div className="admin-look-thumb">
-                          <video src={`${basePath}/${row.video}`} muted loop playsInline preload="metadata" />
-                          <div className="admin-look-preview">
-                            <video src={`${basePath}/${row.video}`} autoPlay muted loop playsInline />
-                          </div>
+                          {(() => {
+                            // New looks published from the unpublished
+                            // tab carry an absolute Supabase URL; legacy
+                            // seed rows are relative paths under
+                            // basePath. Branch so neither breaks.
+                            const isAbsolute = row.video && /^https?:\/\//i.test(row.video);
+                            const src = row.video ? (isAbsolute ? row.video : `${basePath}/${row.video}`) : '';
+                            if (!src) return <div style={{ width: '100%', height: '100%', background: '#111' }} />;
+                            return (
+                              <>
+                                <video src={src} autoPlay muted loop playsInline preload="metadata" />
+                                <div className="admin-look-preview">
+                                  <video src={src} autoPlay muted loop playsInline />
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td>
                         <div className="admin-look-creator">
-                          <img className="admin-look-creator-avatar" src={row.creatorAvatar} alt={row.creator} />
+                          {row.creatorAvatar ? (
+                            <img className="admin-look-creator-avatar" src={row.creatorAvatar} alt={row.creator} />
+                          ) : (
+                            <div className="admin-look-creator-avatar" style={{ background: '#e5e7eb' }} />
+                          )}
                           <span>{row.creatorDisplay}</span>
                         </div>
                       </td>
@@ -1398,6 +1720,15 @@ export default function AdminContent() {
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="admin-product-actions">
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-primary"
+                            style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
+                            title="Open the publish flow for this look"
+                            onClick={() => navigate(`/admin/publish/${row.id}`)}
+                          >
+                            Publish
+                          </button>
                           <button className="admin-icon-btn" aria-label="Move up" onClick={() => moveLook(row.id, -1)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                           </button>
@@ -1537,38 +1868,37 @@ export default function AdminContent() {
                 <th>Status</th>
                 <th>Products</th>
                 <th>Model</th>
+                <th style={{ width: 110 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {unpublishedLoading && unpublished.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
                 </tr>
               ) : unpublished.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
                 </tr>
               ) : unpublished.map(g => {
                 const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
                 const created = new Date(g.created_at).toLocaleString(undefined, {
                   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
                 });
+                const isExpanded = expandedUnpublishedId === g.id;
+                const productRows = unpublishedProducts.get(g.id);
+                const productsLoading = unpublishedProductsLoading.has(g.id);
                 return (
+                  <Fragment key={g.id}>
                   <tr
-                    key={g.id}
                     className="admin-look-main-row"
-                    onClick={() => navigate(`/admin/user/${g.user_id}`)}
+                    onClick={() => toggleUnpublishedExpand(g.id)}
                     style={{ cursor: 'pointer' }}
                   >
                     <td>
                       <div className="admin-look-thumb">
                         {g.video_url ? (
-                          <>
-                            <video src={g.video_url} muted loop playsInline preload="metadata" />
-                            <div className="admin-look-preview">
-                              <video src={g.video_url} autoPlay muted loop playsInline />
-                            </div>
-                          </>
+                          <LazyThumb url={g.video_url} />
                         ) : (
                           <div style={{
                             width: '100%', height: '100%', background: '#111', color: '#aaa',
@@ -1611,9 +1941,83 @@ export default function AdminContent() {
                         {g.status}
                       </span>
                     </td>
-                    <td>{g.product_count}</td>
+                    <td onClick={(e) => { e.stopPropagation(); toggleUnpublishedExpand(g.id); }}>
+                      <button className="admin-products-dropdown" type="button" onClick={(e) => { e.stopPropagation(); toggleUnpublishedExpand(g.id); }}>
+                        <span>{g.product_count} Products</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                    </td>
                     <td style={{ textTransform: 'capitalize' }}>{g.model || '—'}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {/* Publish: routes to the curated-looks management
+                          page with ?publish=<gen_id>. The looks page can
+                          pick that param up and open a publish dialog;
+                          for now it lands the admin in the right view to
+                          take the next step manually. */}
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-primary"
+                        style={{ fontSize: 11, padding: '4px 10px' }}
+                        disabled={g.status !== 'done' || publishingIds.has(g.id)}
+                        title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish — status is ${g.status}`}
+                        onClick={() => publishUnpublishedInline(g)}
+                      >
+                        {publishingIds.has(g.id) ? 'Publishing…' : 'Publish'}
+                      </button>
+                    </td>
                   </tr>
+                  <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
+                    <td colSpan={8} style={{ padding: 0 }}>
+                      <div className="admin-expand-animate">
+                        <div className="admin-look-products">
+                          <h3 className="admin-products-title">Products</h3>
+                          {productsLoading && !productRows ? (
+                            <div style={{ padding: 12, fontSize: 12, color: '#888' }}>Loading products…</div>
+                          ) : !productRows || productRows.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 12, color: '#888' }}>No products linked to this generation.</div>
+                          ) : (
+                            <table className="admin-table admin-products-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ textAlign: 'left' }}>Photo</th>
+                                  <th style={{ textAlign: 'left' }}>Product</th>
+                                  <th>Role</th>
+                                  <th>Price</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {productRows.map(p => (
+                                  <tr key={p.id}>
+                                    <td>
+                                      {p.image_url ? (
+                                        <img
+                                          src={p.image_url}
+                                          alt={p.name}
+                                          style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }}
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                      ) : (
+                                        <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f3f4f6' }} />
+                                      )}
+                                    </td>
+                                    <td style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                                      <div style={{ fontSize: 10, color: '#999' }}>{p.brand}</div>
+                                    </td>
+                                    <td style={{ textTransform: 'capitalize', fontSize: 11, color: '#666' }}>{p.role_tag || '—'}</td>
+                                    <td style={{ fontWeight: 600 }}>{p.price || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -1797,6 +2201,8 @@ export default function AdminContent() {
                 <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
                 <th></th>
@@ -2064,6 +2470,34 @@ export default function AdminContent() {
                   <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
+                  <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                    {formatDateAdded(p.created_at)}
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {p.source ? (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        borderRadius: 12,
+                        background: p.source === 'amazon'
+                          ? '#fef3c7'
+                          : p.source === 'google_shopping'
+                          ? '#dbeafe'
+                          : '#e9d5ff',
+                        color: p.source === 'amazon'
+                          ? '#92400e'
+                          : p.source === 'google_shopping'
+                          ? '#1d4ed8'
+                          : '#6b21a8',
+                      }}>
+                        {SOURCE_LABELS[p.source] || p.source}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                    )}
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
                       className="admin-btn admin-btn-secondary"
@@ -2165,7 +2599,7 @@ export default function AdminContent() {
                 </tr>
                 {creativeOpen && (
                   <tr className="admin-product-creative-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -2252,7 +2686,7 @@ export default function AdminContent() {
                 )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -2277,7 +2711,7 @@ export default function AdminContent() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={15} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -2853,6 +3287,78 @@ export default function AdminContent() {
         />
       )}
 
+      {showBrandUrl && (
+        <div
+          className="admin-modal-overlay"
+          onClick={() => !brandUrlBusy && setShowBrandUrl(false)}
+        >
+          <div
+            className="admin-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}
+          >
+            <div style={{ padding: 20 }}>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add via Brand Website</h2>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#666' }}>
+                Paste a product URL from any brand site. We'll scrape the page
+                and ingest the product.
+              </p>
+              <input
+                type="url"
+                autoFocus
+                value={brandUrlInput}
+                onChange={(e) => { setBrandUrlInput(e.target.value); setBrandUrlError(null); }}
+                placeholder="https://brand.com/products/..."
+                disabled={brandUrlBusy}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${brandUrlError ? '#dc2626' : '#e5e7eb'}`,
+                  fontSize: 14,
+                  marginBottom: brandUrlError ? 6 : 16,
+                  boxSizing: 'border-box',
+                }}
+              />
+              {brandUrlError && (
+                <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 16 }}>{brandUrlError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  className="admin-btn admin-btn-secondary"
+                  onClick={() => setShowBrandUrl(false)}
+                  disabled={brandUrlBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="admin-btn admin-btn-primary"
+                  disabled={brandUrlBusy || !brandUrlInput.trim()}
+                  onClick={async () => {
+                    const url = brandUrlInput.trim();
+                    if (!url) return;
+                    setBrandUrlBusy(true);
+                    setBrandUrlError(null);
+                    try {
+                      await addProductUrl(url);
+                      setBrandUrlBusy(false);
+                      setShowBrandUrl(false);
+                      showToast('Product queued for scrape — refreshing…');
+                      setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
+                    } catch (err) {
+                      setBrandUrlBusy(false);
+                      setBrandUrlError(err instanceof Error ? err.message : 'Failed to queue scrape');
+                    }
+                  }}
+                >
+                  {brandUrlBusy ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAddProducts && (
         <div className="admin-modal-overlay" onClick={() => !ingesting && setShowAddProducts(false)}>
           <div
@@ -3082,6 +3588,40 @@ export default function AdminContent() {
         >
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px rgba(34,197,94,0.2)' }} />
           {toast}
+        </div>
+      )}
+
+      {/* Bottom-center publish notification — fades after ~3.2s. */}
+      {publishMsg && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            bottom: 28,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 11000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 18px',
+            borderRadius: 999,
+            background: 'rgba(15, 23, 42, 0.92)',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 500,
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.32)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            pointerEvents: 'none',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {publishMsg}
         </div>
       )}
     </div>

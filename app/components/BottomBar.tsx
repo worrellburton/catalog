@@ -2,6 +2,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import { searchSuggestions } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
+import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 
 interface BottomBarProps {
@@ -21,6 +22,7 @@ function BottomBar({
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -65,10 +67,18 @@ function BottomBar({
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
+    // Doubled so the horizontal auto-scroll can wrap seamlessly: when
+    // the first half scrolls off-screen we snap back to the start and
+    // the second half is already mid-frame, so the loop reads as
+    // continuous.
     return [...shuffled, ...shuffled];
   }, []);
 
-  // Auto-scroll suggestions
+  // Auto-scroll. Mobile renders the suggestions as a horizontal pill
+  // row above the bar — translate X. Desktop restores the original
+  // full-height vertical column — translate Y. Direction is chosen on
+  // mount via matchMedia and re-checked on resize so a window resize
+  // across the breakpoint flips smoothly.
   useEffect(() => {
     if (!searchOpen || !trackRef.current) {
       if (scrollRAF.current) {
@@ -77,22 +87,31 @@ function BottomBar({
       }
       return;
     }
-
     const track = trackRef.current;
-    const scrollSpeed = 0.5;
-
-    function autoScroll() {
-      scrollY.current += scrollSpeed;
-      const halfHeight = track.scrollHeight / 2;
-      if (halfHeight > 0 && scrollY.current >= halfHeight) {
-        scrollY.current -= halfHeight;
-      }
-      track.style.transform = `translateY(-${scrollY.current}px)`;
-      scrollRAF.current = requestAnimationFrame(autoScroll);
+    let isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+    const SPEED = 0.4;
+    let offset = scrollY.current;
+    const onResize = () => {
+      isMobile = window.matchMedia('(max-width: 768px)').matches;
+      // Reset offset on breakpoint flip so we don't carry an X offset
+      // into a Y layout (or vice-versa).
+      offset = 0;
+      track.style.transform = '';
+    };
+    window.addEventListener('resize', onResize);
+    function tick() {
+      offset += SPEED;
+      const half = isMobile ? track.scrollWidth / 2 : track.scrollHeight / 2;
+      if (half > 0 && offset >= half) offset -= half;
+      track.style.transform = isMobile
+        ? `translateX(-${offset}px)`
+        : `translateY(-${offset}px)`;
+      scrollY.current = offset;
+      scrollRAF.current = requestAnimationFrame(tick);
     }
-
-    scrollRAF.current = requestAnimationFrame(autoScroll);
+    scrollRAF.current = requestAnimationFrame(tick);
     return () => {
+      window.removeEventListener('resize', onResize);
       if (scrollRAF.current) {
         cancelAnimationFrame(scrollRAF.current);
         scrollRAF.current = null;
@@ -191,7 +210,7 @@ function BottomBar({
         </div>
       )}
 
-      <div className={`bottom-bar ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
+      <div className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
         {/* The bottom centered control is always an input — no more
             click-to-open. Default empty state shows the placeholder, which
             doubles as a CTA inviting shoppers to coin a brand-new catalog.
@@ -207,7 +226,20 @@ function BottomBar({
           </button>
           <input
             ref={searchInputRef}
-            type="text"
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoComplete="off"
+            // 1Password / Bitwarden / Chrome each respect a different
+            // signal — set them all so the browser doesn't pop its
+            // history dropdown over our suggestion popover.
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            name="catalog-search"
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"
@@ -216,11 +248,21 @@ function BottomBar({
             onFocus={openSearch}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                // iOS Safari fires Enter on the keyboard's "search"
+                // / "go" key. Push the trimmed query through the
+                // suggestion handler so the catalog name updates,
+                // then close + blur to dismiss the keyboard.
+                e.preventDefault();
                 const q = localSearch.trim();
-                if (q && onSelectSuggestion) onSelectSuggestion(q);
+                if (q) {
+                  if (onSelectSuggestion) onSelectSuggestion(q);
+                  else onSearchChange(q.toLowerCase());
+                }
                 closeSearch();
+                searchInputRef.current?.blur();
               } else if (e.key === 'Escape') {
                 closeSearch();
+                searchInputRef.current?.blur();
               }
             }}
           />

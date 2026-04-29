@@ -1,5 +1,42 @@
 import { supabase } from '~/utils/supabase';
 
+// Module-level shopper gender. Consumer routes call setShopperGender
+// once after auth resolves so every product-creative query (brand
+// strip, similar rail, live ads) can scope to male+unisex / female+
+// unisex without each caller threading the gender prop through.
+// 'unknown' (the default) disables filtering — we never hide the
+// catalog from someone we can't tag.
+type ShopperGender = 'male' | 'female' | 'unknown';
+let shopperGender: ShopperGender = 'unknown';
+export function setShopperGender(g: ShopperGender) {
+  if (g === shopperGender) return;
+  shopperGender = g;
+  // Drop caches so the next callers re-fetch with the new scope.
+  liveAdsPromise = null;
+  brandCache.clear();
+  similarCache.clear();
+}
+
+/** Returns the genders we should accept for the current shopper. */
+function visibleGenders(): Array<'male' | 'female' | 'unisex'> | null {
+  if (shopperGender === 'male') return ['male', 'unisex'];
+  if (shopperGender === 'female') return ['female', 'unisex'];
+  return null; // 'unknown' → no filter
+}
+
+/** Post-filter products by the shopper's gender. Untagged products
+ *  (gender is null) stay visible to everyone. */
+function passesGenderFilter(p: { gender?: string | null } | null | undefined): boolean {
+  if (!p) return true;
+  if (shopperGender === 'unknown') return true;
+  const g = p.gender;
+  if (!g) return true; // untagged
+  if (g === 'unisex') return true;
+  if (shopperGender === 'male') return g === 'male';
+  if (shopperGender === 'female') return g === 'female';
+  return true;
+}
+
 export interface ProductAd {
   id: string;
   product_id: string;
@@ -81,7 +118,10 @@ export async function getLiveAds(): Promise<ProductAd[]> {
   // creatives from the admin Creative view appear in the grid.
   const { data, error } = await supabase
     .from('product_creative')
-    .select(AD_SELECT)
+    .select(`
+      *,
+      product:products(id, name, brand, price, image_url, images, url, catalog_tags, is_active, is_elite, gender)
+    `)
     .eq('status', 'live')
     .eq('is_elite', true)
     .not('video_url', 'is', null)
@@ -96,8 +136,9 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     // When the join returned a product row, it must be active. If the join
     // was filtered out (product deleted), keep the ad — the client-side
     // admin_hidden_products filter handles that case.
-    const active = (ad.product as any)?.is_active;
-    return active !== false;
+    const active = (ad.product as { is_active?: boolean } | null | undefined)?.is_active;
+    if (active === false) return false;
+    return passesGenderFilter(ad.product as { gender?: string | null } | null);
   });
 }
 
@@ -334,6 +375,24 @@ export async function deleteProductAd(id: string): Promise<{ error: string | nul
   return { error: null };
 }
 
+/** Delete an entire product from the catalog. Cascades through every
+ *  creative that references it (the FK has ON DELETE CASCADE in the
+ *  product_creative schema), so this is the heavy hammer the consumer
+ *  feed's super-admin long-press uses to nuke a product end-to-end. */
+export async function deleteProduct(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  // Defensive cleanup first — explicitly drop every creative referencing
+  // this product so we never end up with orphan rows even if the FK
+  // cascade isn't set up on a given env.
+  await supabase.from('product_creative').delete().eq('product_id', id);
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id);
+  if (error) return { error: error.message };
+  return { error: null };
+}
+
 // Flip the elite flag on a creative AND its parent product together. Marking
 // a product elite requires that at least one of its creatives is elite, so we
 // keep the two in sync from this one entry point. Used by the admin Creative
@@ -421,25 +480,29 @@ export async function getCreativesByBrand(
   limit = 12,
 ): Promise<ProductAd[]> {
   if (!supabase || !brand) return [];
+  // Pull a margin over `limit` so the gender post-filter doesn't
+  // leave the rail short. We still cap the returned slice to `limit`.
+  const fetchLimit = shopperGender === 'unknown' ? limit : Math.min(limit * 2, 48);
   let query = supabase
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags)
+      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags, gender)
     `)
     .eq('status', 'live')
     .eq('product.brand', brand)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
   if (excludeProductId) query = query.neq('product_id', excludeProductId);
   const { data, error } = await query;
   if (error) {
     console.warn('[getCreativesByBrand] query error:', error.message);
     return [];
   }
-  return (data || []) as ProductAd[];
+  const rows = (data || []) as ProductAd[];
+  return rows.filter(r => passesGenderFilter(r.product as { gender?: string | null } | null)).slice(0, limit);
 }
 
 // Look up creatives (with playable video) for an arbitrary set of product
@@ -563,12 +626,28 @@ export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<Produc
 // the seed has an embedding, otherwise falls back to same-brand → newest.
 export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k });
+  // Pull a margin so the gender post-filter doesn't leave the rail short.
+  const fetchK = shopperGender === 'unknown' ? k : Math.min(k * 2, 48);
+  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK });
   if (error || !data) {
     if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
     return [];
   }
-  return (data as Array<{
+  // The RPC doesn't return product.gender, so when a gender scope is
+  // active we hydrate the missing column with one batched lookup
+  // before post-filtering. Untagged products stay visible.
+  let genderById: Map<string, string | null> | null = null;
+  if (shopperGender !== 'unknown') {
+    const ids = Array.from(new Set((data as Array<{ product_id: string }>).map(r => r.product_id))).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, gender')
+        .in('id', ids);
+      genderById = new Map((prods || []).map((p: { id: string; gender: string | null }) => [p.id, p.gender]));
+    }
+  }
+  const mapped = (data as Array<{
     id: string;
     product_id: string;
     video_url: string | null;
@@ -611,6 +690,10 @@ export async function getSimilarCreatives(seedId: string, k = 12): Promise<Produ
       url: null,
     },
   } as ProductAd));
+  if (!genderById) return mapped.slice(0, k);
+  return mapped
+    .filter(ad => passesGenderFilter({ gender: genderById!.get(ad.product_id) ?? null }))
+    .slice(0, k);
 }
 
 // Impression batching. The consumer feed mounts ~50 CreativeCards at once

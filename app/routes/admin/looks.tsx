@@ -1,6 +1,9 @@
-import { useState, Fragment, useMemo } from 'react';
+import { useState, Fragment, useMemo, useEffect } from 'react';
+import { useSearchParams } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import { supabase } from '~/utils/supabase';
+import { createLook, addProductToLook } from '~/services/manage-looks';
 
 interface LookRow {
   id: number;
@@ -11,10 +14,149 @@ interface LookRow {
   products: number;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface PublishDraft {
+  generationId: string;
+  videoUrl: string | null;
+  style: string;
+  creatorName: string;
+  products: Array<{ id: string; name: string; brand: string; price: string | null; image_url: string | null; role_tag: string | null }>;
+}
+
 export default function AdminLooks() {
   const [activeTab, setActiveTab] = useState<'active' | 'incoming'>('active');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Publish flow state. The Publish buttons in admin/content.tsx
+  // navigate here with ?publish=<id>. If the id is a UUID we treat
+  // it as a user_generations row and load a confirm dialog; if it's
+  // a numeric look id we just expand that row to show what's already
+  // published.
+  const [draft, setDraft] = useState<PublishDraft | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const publishParam = searchParams.get('publish');
+    if (!publishParam) {
+      setDraft(null);
+      setDraftError(null);
+      return;
+    }
+    if (!UUID_RE.test(publishParam)) {
+      // Numeric / non-UUID — assume it's a static look id and expand
+      // that row instead of opening the publish dialog.
+      const numeric = Number(publishParam);
+      if (!Number.isNaN(numeric)) setExpandedId(numeric);
+      return;
+    }
+    if (!supabase) {
+      setDraftError('Supabase not configured — can’t load the unpublished look.');
+      return;
+    }
+    let cancelled = false;
+    setDraftLoading(true);
+    setDraftError(null);
+    (async () => {
+      const [{ data: gen, error: genErr }, { data: prodRows, error: prodErr }] = await Promise.all([
+        supabase
+          .from('user_generations')
+          .select('id, style, video_url, status, user_id')
+          .eq('id', publishParam)
+          .maybeSingle(),
+        supabase
+          .from('user_generation_products')
+          .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+          .eq('generation_id', publishParam)
+          .order('sort_order'),
+      ]);
+      if (cancelled) return;
+      if (genErr || !gen) {
+        setDraftError(genErr?.message || 'Generation not found.');
+        setDraftLoading(false);
+        return;
+      }
+      let creatorName = 'Unknown';
+      if (gen.user_id) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', gen.user_id)
+          .maybeSingle();
+        creatorName = prof?.full_name || prof?.email || 'Unknown';
+      }
+      if (prodErr) {
+        setDraftError(prodErr.message);
+        setDraftLoading(false);
+        return;
+      }
+      const products = ((prodRows || []) as unknown as Array<{
+        product_id: string;
+        role_tag: string | null;
+        sort_order: number;
+        products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+      }>)
+        .filter(r => !!r.products)
+        .map(r => ({
+          id: r.products!.id,
+          name: r.products!.name || '—',
+          brand: r.products!.brand || '—',
+          price: r.products!.price,
+          image_url: r.products!.image_url,
+          role_tag: r.role_tag,
+        }));
+      setDraft({
+        generationId: gen.id,
+        videoUrl: gen.video_url,
+        style: gen.style,
+        creatorName,
+        products,
+      });
+      setDraftLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams]);
+
+  const closePublish = () => {
+    setDraft(null);
+    setDraftError(null);
+    setPublishMessage(null);
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.delete('publish');
+      return p;
+    });
+  };
+
+  const confirmPublish = async () => {
+    if (!draft) return;
+    setPublishing(true);
+    setPublishMessage(null);
+    try {
+      const { data: look } = await createLook({
+        title: `${draft.creatorName}’s ${draft.style} look`,
+        description: `Promoted from generation ${draft.generationId}`,
+        gender: 'unisex',
+      });
+      // Best-effort attach products. Ignore individual product
+      // failures so a single bad row doesn't fail the whole publish.
+      await Promise.all(draft.products.map(p =>
+        addProductToLook(look.id, { product_id: p.id }).catch(err => {
+          console.warn('[publish] addProductToLook failed:', err);
+        })
+      ));
+      setPublishMessage('Published to the catalog. Refresh once the look pipeline picks it up.');
+    } catch (err) {
+      setPublishMessage(err instanceof Error ? err.message : 'Publish failed.');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const lookRows: LookRow[] = useMemo(() =>
     looks.map(look => {
@@ -168,6 +310,73 @@ export default function AdminLooks() {
         </div>
       ) : (
         <div className="admin-empty">No incoming looks yet</div>
+      )}
+
+      {(draft || draftLoading || draftError) && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+          onClick={closePublish}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 12, width: 520, maxWidth: '94vw',
+              maxHeight: '92vh', overflow: 'auto', padding: 24,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700 }}>Publish look</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#666' }}>
+              Promote this user-generated look into the curated catalog.
+            </p>
+            {draftLoading && <div style={{ padding: 24, textAlign: 'center', color: '#888' }}>Loading…</div>}
+            {draftError && <div style={{ padding: 16, background: '#fee2e2', color: '#991b1b', borderRadius: 8, fontSize: 13 }}>{draftError}</div>}
+            {draft && (
+              <>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                  <div style={{ width: 120, aspectRatio: '9 / 16', borderRadius: 8, overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                    {draft.videoUrl ? (
+                      <video src={draft.videoUrl} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>No video</div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{draft.creatorName}’s {draft.style} look</div>
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>{draft.products.length} product{draft.products.length === 1 ? '' : 's'}</div>
+                    <ul style={{ margin: '10px 0 0', padding: 0, listStyle: 'none', fontSize: 12, color: '#444' }}>
+                      {draft.products.slice(0, 4).map(p => (
+                        <li key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                          {p.image_url && <img src={p.image_url} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />}
+                          <span style={{ fontWeight: 500 }}>{p.brand}</span>
+                          <span style={{ color: '#888' }}>—</span>
+                          <span>{p.name}</span>
+                        </li>
+                      ))}
+                      {draft.products.length > 4 && <li style={{ color: '#888', padding: '4px 0' }}>+{draft.products.length - 4} more</li>}
+                    </ul>
+                  </div>
+                </div>
+                {publishMessage && (
+                  <div style={{ padding: 12, background: publishMessage.toLowerCase().includes('fail') ? '#fee2e2' : '#dcfce7', color: publishMessage.toLowerCase().includes('fail') ? '#991b1b' : '#166534', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>
+                    {publishMessage}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="admin-btn admin-btn-secondary" onClick={closePublish} disabled={publishing}>
+                    Cancel
+                  </button>
+                  <button className="admin-btn admin-btn-primary" onClick={confirmPublish} disabled={publishing}>
+                    {publishing ? 'Publishing…' : 'Publish to catalog'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

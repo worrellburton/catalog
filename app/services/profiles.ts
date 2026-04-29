@@ -74,6 +74,20 @@ export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
   });
 }
 
+export async function deleteProfile(userId: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { data, error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', userId)
+    .select('id');
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: 'Delete blocked by RLS. Sign in as an admin to remove profiles.' };
+  }
+  return {};
+}
+
 export async function updateUserRole(userId: string, role: UserRole): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const { data, error } = await supabase

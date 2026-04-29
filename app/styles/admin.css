@@ -386,6 +386,7 @@
   flex: 1;
   margin-left: 200px;
   min-height: 100vh;
+  min-width: 0;
 }
 
 /* Admin top search bar */
@@ -397,12 +398,30 @@
   height: 53px;
   display: flex;
   align-items: center;
-  background: inherit;
+  /* Opaque fill so sticky topbar doesn't let page content bleed
+     through. Pages with their own dark surface (e.g. /admin/ui)
+     override this rule below. */
+  background: #fafafa;
   border-bottom: 1px solid #eee;
 }
 
 .admin-dark .admin-topbar {
+  background: #0b0b0b;
   border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+/* /admin/ui & /admin/branding render on a black canvas — keep the
+   topbar opaque against that surface so the search input and the
+   page heading don't visually collide as the user scrolls. The body-
+   level class is set by the page components themselves; the :has()
+   selector is a CSS-only fallback for browsers where the page hasn't
+   mounted yet on first paint. */
+html.admin-on-dark-canvas .admin-topbar,
+.admin-main:has(.admin-ui) .admin-topbar,
+.admin-main:has(.admin-branding) .admin-topbar {
+  background: #000;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .admin-search-wrap {
@@ -623,6 +642,7 @@
 .admin-page {
   padding: 24px 28px;
   max-width: 1400px;
+  min-width: 0;
 }
 
 .admin-page-header {
@@ -1031,6 +1051,29 @@
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
+}
+
+.admin-row-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.admin-row-delete:hover {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.admin-dark .admin-row-delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .admin-table {
@@ -1997,17 +2040,6 @@
   .admin-page {
     padding: 16px;
   }
-
-  .glass-portal-toggle {
-    bottom: 16px;
-    right: 16px;
-    padding: 8px 14px;
-    font-size: 11px;
-  }
-
-  .glass-portal-toggle span {
-    display: none;
-  }
 }
 
 @media (max-width: 480px) {
@@ -2756,6 +2788,20 @@
   margin-top: 4px;
 }
 
+/* Group section — wraps a category's grid with its label */
+.admin-branding-group {
+  margin-top: 28px;
+}
+
+.admin-branding-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 12px;
+}
+
 /* Variant grid */
 .admin-branding-grid {
   display: grid;
@@ -2859,4 +2905,313 @@
 .admin-branding-reset:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ===== /admin/ui hub =====
+   Per the design brief: black background, soft cards. Each subroute
+   renders inside this shell — the header + tab strip stays put while
+   the <Outlet /> below changes. */
+
+.admin-ui {
+  background: #000;
+  min-height: calc(100vh - var(--admin-header-height, 0px));
+  padding: 32px clamp(16px, 4vw, 48px) 80px;
+  /* No negative margin: AdminUiHub renders directly under .admin-main
+     (not inside .admin-page), so any negative inset would escape into
+     the sidebar gutter. */
+  margin: 0;
+  color: #fff;
+  position: relative;
+  z-index: 0;
+}
+
+.admin-ui-header {
+  margin-bottom: 32px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-ui-header h1 {
+  margin: 0 0 4px;
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.admin-ui-sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+.admin-ui-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.admin-ui-tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  border: 1px solid transparent;
+  text-decoration: none;
+  letter-spacing: -0.005em;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.admin-ui-tab:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-ui-tab.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Index (overview) cards */
+.admin-ui-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.admin-ui-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  text-decoration: none;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.admin-ui-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.admin-ui-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.admin-ui-card-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-ui-card-label {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.admin-ui-card-blurb {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.45;
+}
+
+.admin-ui-card-chevron {
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+  margin-right: -4px;
+}
+
+/* Section header inside a subroute (Brand / Search bar) */
+.admin-ui-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.admin-ui-section-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.admin-ui-active {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.admin-ui-active-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.admin-ui-active-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.admin-ui-section-blurb {
+  margin: 0 0 22px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+/* Beam variant tiles — vertical list. Each row stacks preview-on-top,
+   label + Set button below, so subtle differences between beams
+   (single vs mirrored vs comet) are easier to spot side-by-side as
+   you scan down the list. */
+.admin-ui-beam-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-ui-beam-tile {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.18s ease;
+}
+
+.admin-ui-beam-tile.is-active {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.admin-ui-beam-preview {
+  flex: 0 0 auto;
+  width: 360px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Matte black so the beam reads against the same surface the bar
+     normally floats over. */
+  background: #050505;
+  border-radius: 10px;
+  overflow: hidden;
+  /* Establish a stacking context so the bar's ::before pseudo
+     stays scoped inside this card, not the page. */
+  position: relative;
+  isolation: isolate;
+}
+
+/* Override the real bottom-bar fixed positioning so it lays out
+   normally inside the preview card. Keeps every beam class effect
+   working but breaks the "fixed at viewport bottom" rule. */
+.admin-ui-beam-mock.bottom-bar {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  width: min(320px, calc(100% - 16px));
+  z-index: auto;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-ui-beam-tile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .admin-ui-beam-preview {
+    width: 100%;
+  }
+}
+
+.admin-ui-beam-mock-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.admin-ui-beam-mock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.admin-ui-beam-mock-placeholder {
+  flex: 1 1 auto;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-ui-beam-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-ui-beam-meta-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-ui-beam-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.admin-ui-beam-blurb {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
 }

@@ -40,6 +40,30 @@ if (AUTH_DEBUG && typeof window !== 'undefined') {
   });
 }
 
+/** Synchronous check for "is there any sign of a Supabase session in
+ *  localStorage." Used at app boot to decide whether to render the
+ *  password gate immediately (no session at all → gate) or render a
+ *  splash while we wait for getCurrentUser to confirm (session present
+ *  → splash, then app). Doesn't validate the session — it just looks
+ *  for the well-known sb-{ref}-auth-token key supabase-js writes. */
+export function hasStoredSupabaseSession(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // supabase-js v2 keys look like 'sb-{project-ref}-auth-token'.
+      if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+        const v = localStorage.getItem(k);
+        // Empty / 'null' / very-short values mean an explicit signed-out
+        // marker rather than a real session.
+        if (v && v !== 'null' && v.length > 16) return true;
+      }
+    }
+  } catch { /* private mode etc. */ }
+  return false;
+}
+
 export interface AuthUser {
   id: string;
   email?: string;

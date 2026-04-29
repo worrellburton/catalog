@@ -66,6 +66,7 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
     currency: product.currency ?? null,
     images: product.images.length > 0 ? product.images : null,
     is_active: true,
+    source: 'amazon',
   };
   const { data: existing } = await supabase
     .from('products')

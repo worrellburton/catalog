@@ -66,11 +66,13 @@ function prefetchOverlayChunks() {
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
+import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
+import { hasStoredSupabaseSession } from '~/services/auth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
+import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
@@ -124,6 +126,17 @@ const KEYWORD_ALIASES: Record<string, string> = {
   girly: 'women', girl: 'women', girls: 'women',
   mens: 'men', guys: 'men', guy: 'men',
 };
+
+// Title-case the user's literal search so it reads as a proper catalog
+// name beneath the logo. Short single tokens are kept uppercase so
+// "omg" → "OMG", but longer words use Title Case.
+function toCatalogName(query: string): string {
+  return query
+    .trim()
+    .split(/\s+/)
+    .map(w => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
+}
 
 function getRandomCatalogName(query?: string): string {
   if (query && query.trim()) {
@@ -198,6 +211,14 @@ export default function Home() {
   // that makes the field-comparison deps appear unchanged.
   const [productNavCount, setProductNavCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
+  // Once the user manually toggles the gender chip we stop auto-syncing
+  // it from the profile — otherwise their override would get clobbered
+  // on the next session-restore.
+  const filterUserOverride = useRef(false);
+  const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
+    filterUserOverride.current = true;
+    setActiveFilter(next);
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
@@ -220,6 +241,49 @@ export default function Home() {
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
 
+  // Computed once at mount. Two signals tell us "don't show the
+  // password gate, the user is (probably) about to be signed in":
+  //
+  //   1. oauthInFlight — the URL shows we just landed from a Supabase
+  //      OAuth redirect (#access_token=…, ?code=…). We need to wait for
+  //      supabase-js to exchange the token before we know who they are.
+  //
+  //   2. resumeFromStoredSession — localStorage already has a Supabase
+  //      session token. getCurrentUser() will resolve them in <100ms;
+  //      flashing the password gate during that race made cold loads
+  //      feel jenky.
+  //
+  // While either is true we render a branded splash (the same one
+  // first-time visitors see on entry), not a spinner — the user
+  // perceives "the app is loading," not "I'm being authenticated
+  // again." Once auth resolves, the auto-route effect flips the view
+  // to 'app' and the splash unmounts.
+  const oauthInFlight = useRef(isOAuthReturn()).current;
+  const resumeFromStoredSession = useRef(hasStoredSupabaseSession()).current;
+
+  // Two-stage splash unmount: while auth is resolving we render the
+  // splash; once resolved (authLoading flips false) we keep rendering
+  // it for one extra animation tick with .leaving = true so it fades
+  // out instead of hard-cutting to the gate / app underneath.
+  const showAuthSplash = view === 'locked' && authLoading && (oauthInFlight || resumeFromStoredSession);
+  const [splashLeaving, setSplashLeaving] = useState(false);
+  const [splashMounted, setSplashMounted] = useState(showAuthSplash);
+  useEffect(() => {
+    if (showAuthSplash) {
+      setSplashMounted(true);
+      setSplashLeaving(false);
+      return;
+    }
+    if (splashMounted) {
+      // Auth resolved — start the fade-out, then unmount after the
+      // CSS transition completes (240 ms; matching .auth-splash
+      // transition duration).
+      setSplashLeaving(true);
+      const t = window.setTimeout(() => setSplashMounted(false), 280);
+      return () => window.clearTimeout(t);
+    }
+  }, [showAuthSplash, splashMounted]);
+
   // Track recent catalogs
   useEffect(() => {
     if (catalogName) {
@@ -230,6 +294,30 @@ export default function Home() {
       });
     }
   }, [catalogName]);
+
+  // Auto-scope the feed by the shopper's profile gender so a guy lands
+  // on men + unisex looks, a girl on women + unisex. Manual taps on the
+  // gender chip set filterUserOverride so we never clobber the user's
+  // explicit choice. Runs once per session-bound user id.
+  useEffect(() => {
+    if (!user || authLoading) return;
+    if (filterUserOverride.current) return;
+    let cancelled = false;
+    getUserGender(user.id).then(g => {
+      if (cancelled) return;
+      // Always tell product-creative the gender so brand-strip and
+      // live-ads queries scope correctly, even when the looks-level
+      // filter is overridden by the user. Skip 'unknown' — that's the
+      // null-state and we never want to hide the catalog from someone
+      // we can't tag.
+      if (g === 'male' || g === 'female') setShopperGender(g);
+      if (filterUserOverride.current) return;
+      if (g === 'male') setActiveFilter('men');
+      else if (g === 'female') setActiveFilter('women');
+      // 'unknown' leaves the catalog wide-open ('all').
+    });
+    return () => { cancelled = true; };
+  }, [user, authLoading]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -462,9 +550,19 @@ export default function Home() {
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
+    setBrandCreatives(null);
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
+      // Same data the creative-trail uses to fill the "More from
+      // this brand" rail — without this, products opened from a
+      // Look, search, or recents see an empty strip.
+      prefetchCreativesByBrand(product.brand, null, 12)
+        .then(rows => {
+          primeTrailAssets(rows);
+          setBrandCreatives(rows);
+        })
+        .catch(() => { /* leave strip empty rather than throw */ });
     }
   }, [fetchSimilarProducts, pushRecent]);
 
@@ -538,8 +636,30 @@ export default function Home() {
     setSelectedProduct(null);
     setSelectedLook(null);
     setSearchQuery(query);
-    setCatalogName(getRandomCatalogName(query));
+    // The catalog name is the user's actual query, title-cased — so a
+    // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
+    // Single short tokens (acronyms) stay uppercase.
+    const trimmed = query.trim();
+    setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
   }, []);
+
+  // The TypeAnywhere overlay (mounted in root.tsx) lands new
+  // searches on /?q=<query>. Read the param on every URL change,
+  // apply it, then strip it so refresh / share doesn't re-fire.
+  // Also forces view='app' so the user lands on the grid even if
+  // they were on the landing page or password gate.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (!q) return;
+    handleCreateCatalog(q);
+    setView('app');
+    params.delete('q');
+    const remaining = params.toString();
+    const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', url);
+  }, [handleCreateCatalog]);
 
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
@@ -564,11 +684,11 @@ export default function Home() {
   }, [logout]);
   const handleSearchChange = useCallback((q: string) => {
     setSearchQuery(q);
-    if (q.trim()) setCatalogName(getRandomCatalogName(q));
+    setCatalogName(q.trim() ? toCatalogName(q) : 'all');
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
-    setCatalogName(q.replace(/\b\w/g, (c) => c.toUpperCase()));
+    setCatalogName(toCatalogName(q));
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
@@ -619,7 +739,15 @@ export default function Home() {
     <TrailRoot>
     <TrailVideoHost>
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
-      {view === 'locked' && <PasswordGate />}
+      {/* Branded splash while auth is resolving. Stays mounted for one
+          extra fade-out tick after auth resolves, so the gate or app
+          underneath cross-fades in instead of snapping. */}
+      {splashMounted && (
+        <div className={`auth-splash${splashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+          <CatalogLogo className="auth-splash-logo" />
+        </div>
+      )}
+      {view === 'locked' && !showAuthSplash && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
@@ -639,6 +767,9 @@ export default function Home() {
             <div className="header-left">
               <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
                 <CatalogLogo className="logo" />
+                {catalogName && catalogName !== 'all' && (
+                  <span className="logo-catalog-name">{catalogName}</span>
+                )}
               </button>
             </div>
             <div className="header-right">
@@ -678,7 +809,7 @@ export default function Home() {
 
           <BottomBar
             activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
+            onFilterChange={handleGenderFilterChange}
             searchQuery={searchQuery}
             onSearchChange={handleSearchChange}
             onSelectSuggestion={handleSelectSuggestion}

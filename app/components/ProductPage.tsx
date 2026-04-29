@@ -258,15 +258,23 @@ export default function ProductPage({
 }: ProductPageProps) {
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
-  // Shop dropdown — retailer chips stay collapsed by default so the action
-  // row reads clean. Tapping the Shop button expands them; tapping again
-  // (or selecting a retailer) closes.
-  const [showRetailers, setShowRetailers] = useState(false);
+  // Shop dropdown — collapsed by default on mobile so the action row
+  // reads clean; auto-expanded on desktop because the split layout
+  // gives the right column plenty of vertical space and the retailer
+  // comparison is the highest-value content there.
+  const isDesktop = typeof window !== 'undefined'
+    && window.matchMedia('(min-width: 960px)').matches;
+  const [showRetailers, setShowRetailers] = useState(isDesktop);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-collapse the Shop drawer when the user navigates to a different
-  // product so the next page also starts with it closed.
-  useEffect(() => { setShowRetailers(false); }, [product.brand, product.name]);
+  // Re-sync the drawer when the user navigates to a different product:
+  // open by default on desktop, closed on mobile.
+  useEffect(() => {
+    setShowRetailers(
+      typeof window !== 'undefined'
+        && window.matchMedia('(min-width: 960px)').matches,
+    );
+  }, [product.brand, product.name]);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -333,26 +341,27 @@ export default function ProductPage({
           </svg>
         </button>
 
-        <section className={heroClassName}>
-          {creative ? (
-            <div
-              ref={setHeroSlot}
-              className="pd-hero-media pd-hero-video-slot"
-              data-trail-id={creative.id}
-            />
-          ) : product.image ? (
-            <img
-              src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
-              alt={product.name}
-              className="pd-hero-media"
-            />
-          ) : (
-            <div className="pd-hero-placeholder" />
-          )}
-          <div className="pd-hero-scrim" />
-        </section>
+        <div className="pd-split">
+          <section className={heroClassName}>
+            {creative ? (
+              <div
+                ref={setHeroSlot}
+                className="pd-hero-media pd-hero-video-slot"
+                data-trail-id={creative.id}
+              />
+            ) : product.image ? (
+              <img
+                src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
+                alt={product.name}
+                className="pd-hero-media"
+              />
+            ) : (
+              <div className="pd-hero-placeholder" />
+            )}
+            <div className="pd-hero-scrim" />
+          </section>
 
-        <section className="pd-info">
+          <section className="pd-info">
           <div className="pd-info-inner">
             {product.brand && <div className="pd-brand">{product.brand}</div>}
             <h1 className="pd-name">{product.name}</h1>
@@ -451,8 +460,26 @@ export default function ProductPage({
                 </div>
               </div>
             )}
+
+            {/* Desktop-only rail strip — fills the negative space below
+                the Shop drawer with up to 6 brand-mate creatives in a
+                2-up grid. The full-width strip below is hidden on
+                desktop (see CSS) so we don't duplicate. */}
+            {brandCreatives && brandCreatives.length > 0 && onOpenCreative && (
+              <section className="pd-info-brand-rail" aria-label="More from this brand">
+                <h2 className="pd-info-brand-rail-title">
+                  More from {product.brand || 'this brand'}
+                </h2>
+                <div className="pd-info-brand-rail-grid">
+                  {brandCreatives.slice(0, 6).map(c => (
+                    <BrandStripTile key={c.id} creative={c} onOpen={onOpenCreative} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
+        </div>
 
         {brandCreatives && brandCreatives.length > 0 && (
           <section className="pd-brand-strip-section" aria-label="More from this brand">

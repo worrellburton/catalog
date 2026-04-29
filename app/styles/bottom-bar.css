@@ -1,4 +1,9 @@
-/* Bottom bar - liquid glass */
+/* Bottom bar - liquid glass.
+   Hidden on desktop — the desktop search experience is a
+   type-anywhere overlay (see TypeAnywhere). The pill is mobile-only. */
+@media (min-width: 769px) {
+  .bottom-bar { display: none !important; }
+}
 .bottom-bar {
   position: fixed;
   bottom: 24px;
@@ -151,13 +156,11 @@
 }
 
 @media (max-width: 768px) {
-  .bottom-bar:not(.search-open) {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: none;
-    box-shadow: none;
-  }
+  /* (Removed: the .bottom-bar:not(.search-open) rule that stripped the
+     pill background on mobile. It existed for the legacy
+     "tap-to-search-button" layout where the bar was just a wrapper
+     around a separate pill button. With the inline always-on search
+     input, the bar IS the pill — same treatment as desktop. */
   .search-btn {
     width: auto;
     height: 40px;
@@ -697,21 +700,62 @@
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — over backdrop when search is open */
+/* Search suggestions — sit immediately above the bottom-bar input
+   when search is open. Single horizontal-scroll pill row on mobile
+   (and tight single-line on desktop) so the user's eye never has to
+   leave the input to scan. Replaces the previous full-screen
+   auto-scrolling vertical list which sat far above the input and
+   read as ambient text rather than a tap target. */
 .search-suggestions {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Sit ~12 px above the bar — bar is at safe-area + 20px on mobile,
+     bar is roughly 48 px tall, so 80 px clearance keeps the pills
+     riding right above the input. */
+  bottom: calc(env(safe-area-inset-bottom) + 80px);
+  width: min(720px, calc(100vw - 24px));
+  /* Clip the translating track so pills disappear off the edges
+     under the gradient mask instead of bleeding past the container. */
+  overflow: hidden;
+  border-radius: 999px;
   z-index: 101;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+  transform-origin: bottom center;
+  transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+}
+
+@media (min-width: 769px) {
+  /* Desktop: restore the original full-height vertical column of
+     auto-scrolling suggestions. Sits above the bottom bar, centered
+     across the whole viewport, large editorial typography, vertical
+     fade mask. The pill-row treatment was a mobile compaction —
+     desktop has the room for the original layout. */
+  .search-suggestions {
+    left: 0;
+    transform: none;
+    width: 100%;
+    bottom: 140px;
+    top: 0;
+    border-radius: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .search-suggestions {
+    /* Anchor relative to the iOS chrome so pinned URL bar / iOS
+       keyboard don't cover them. --ios-bottom-chrome is the live
+       value BottomBar's useEffect writes onto :root. */
+    bottom: max(
+      calc(env(safe-area-inset-bottom) + 88px),
+      calc(var(--ios-bottom-chrome, 0px) + 88px)
+    );
+  }
 }
 
 .search-suggestions.visible {
@@ -719,33 +763,96 @@
   visibility: visible;
 }
 
+/* The clipping container holds the glass + the gradient mask. The
+   inner track translates horizontally inside it via the JS rAF loop;
+   the doubled suggestions array makes the loop read as continuous. */
+.search-suggestions {
+  /* Adds a horizontal fade on the left/right edges so pills entering
+     and leaving the loop don't pop visually. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+}
+
 .search-suggestions-track {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 40px 20px;
+  gap: 8px;
+  padding: 6px 12px;
+  /* The whole row is being translated by JS — let it overflow off the
+     edges of the clipping container instead of trying to scroll. */
+  white-space: nowrap;
   will-change: transform;
+  /* Faint glass strip behind the pills so they read as a unit. */
+  background: rgba(20, 20, 20, 0.62);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 769px) {
+  /* Desktop track: vertical column, no glass pill, no boundary. The
+     parent .search-suggestions provides the fade mask. */
+  .search-suggestions-track {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 40px 20px;
+    white-space: normal;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 
 .search-suggestion {
-  padding: 10px 24px;
-  border-radius: 20px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 28px;
-  font-weight: 600;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   cursor: pointer;
   white-space: nowrap;
   pointer-events: auto;
   font-family: inherit;
-  transition: color 0.2s ease, transform 0.2s ease;
-  line-height: 1.8;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.18s ease;
 }
 
 .search-suggestion:hover {
-  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+@media (min-width: 769px) {
+  /* Desktop suggestions: editorial vertical list. Big quiet text that
+     brightens on hover. No pill chrome — the suggestion IS just the
+     word. Matches the original full-page treatment before mobile got
+     the horizontal pill compaction. */
+  .search-suggestion {
+    padding: 10px 24px;
+    border-radius: 20px;
+    background: transparent;
+    border: 0;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.8;
+    white-space: nowrap;
+  }
+  .search-suggestion:hover {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+  }
 }
 
 /* Tap animation */
@@ -850,7 +957,7 @@
 }
 
 .bottom-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* Mobile: iOS Safari's bottom URL toolbar overlays the viewport when
@@ -862,16 +969,18 @@
    normal floating offset. */
 @media (max-width: 768px) {
   .bottom-bar {
+    /* 20px breathing room above the iOS URL chrome (was 12 — too tight,
+       the bar visually crashed into the toolbar on Safari iOS). */
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 12px),
-      calc(var(--ios-bottom-chrome, 0px) + 12px)
+      calc(env(safe-area-inset-bottom) + 20px),
+      calc(var(--ios-bottom-chrome, 0px) + 20px)
     );
     border-radius: 22px;
   }
   .bottom-bar.search-open {
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 20px),
-      calc(var(--ios-bottom-chrome, 0px) + 20px)
+      calc(env(safe-area-inset-bottom) + 28px),
+      calc(var(--ios-bottom-chrome, 0px) + 28px)
     );
   }
   .bottom-bar.filters-open {
@@ -885,3 +994,244 @@
   }
 }
 
+
+/* ===== Animated border-beam scaffolding =====
+   The bottom-bar pill takes a class like .is-beam-{variant} which
+   activates a rotating gradient on a ::before pseudo-element. The
+   pseudo lives behind the bar (z-index: -1 is unsafe inside fixed
+   parents so we use absolute + negative z-index relative to the
+   pill's own content). The conic-gradient angle is driven by a
+   CSS custom property --beam-angle that animates via @property,
+   which gives buttery rotation on Chrome/Safari/Firefox 128+.
+
+   Each variant overrides the gradient stops + the rotation speed.
+   Phase 3 onward fills in the variant-specific rules. */
+
+@property --beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes bb-beam-spin {
+  to { --beam-angle: 360deg; }
+}
+
+/* Fallback for browsers that don't support @property — rotate the
+   pseudo-element itself instead. Slightly less smooth but visually
+   equivalent. */
+@keyframes bb-beam-rotate-fallback {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none) {
+  /* Make sure children sit above the beam pseudo. */
+  isolation: isolate;
+}
+
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none)::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  border-radius: inherit;
+  /* The beam draws as a thin ring by masking out the inside with
+     two layered gradients composited via mask-composite: exclude. */
+  padding: 2px;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Children of the bar need to sit above the beam pseudo. */
+.bottom-bar[class*="is-beam-"]:not(.is-beam-none) > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Apple — single white hot spot orbits the pill once every 6s. The
+   conic-gradient has one bright wedge fading symmetrically into
+   transparent on both sides, with the rest of the ring barely
+   visible (subtle base white at 0.05). */
+.bottom-bar.is-beam-apple::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(255, 255, 255, 0.04) 320deg,
+    rgba(255, 255, 255, 0.95) 350deg,
+    rgba(255, 255, 255, 1) 360deg,
+    rgba(255, 255, 255, 0.95) 370deg,
+    rgba(255, 255, 255, 0.04) 400deg
+  );
+  animation: bb-beam-spin 6s linear infinite;
+}
+
+/* Fallback for browsers without @property: rotate the whole pseudo
+   instead. The conic-gradient becomes a static spotlight that gets
+   transformed. */
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-apple::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(255, 255, 255, 0.04) 320deg,
+      rgba(255, 255, 255, 1) 360deg,
+      rgba(255, 255, 255, 0.04) 400deg
+    );
+    animation: bb-beam-rotate-fallback 6s linear infinite;
+  }
+}
+
+/* Mirrored — two opposing white beams, 180° apart, spinning together.
+   Same wedge shape as Apple but duplicated to 170°-190°. Slightly
+   slower (8s) so the eye can register both spots. */
+.bottom-bar.is-beam-mirrored::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(180, 200, 255, 0.95) 25deg,
+    rgba(180, 200, 255, 1) 35deg,
+    rgba(180, 200, 255, 0.95) 45deg,
+    rgba(255, 255, 255, 0.04) 90deg,
+    rgba(255, 255, 255, 0.04) 195deg,
+    rgba(180, 200, 255, 0.95) 215deg,
+    rgba(180, 200, 255, 1) 225deg,
+    rgba(180, 200, 255, 0.95) 235deg,
+    rgba(255, 255, 255, 0.04) 280deg,
+    rgba(255, 255, 255, 0.04) 360deg
+  );
+  animation: bb-beam-spin 8s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-mirrored::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(180, 200, 255, 1) 35deg,
+      rgba(255, 255, 255, 0.04) 90deg,
+      rgba(255, 255, 255, 0.04) 195deg,
+      rgba(180, 200, 255, 1) 225deg,
+      rgba(255, 255, 255, 0.04) 280deg
+    );
+    animation: bb-beam-rotate-fallback 8s linear infinite;
+  }
+}
+
+/* Aurora — full iridescent wash rotating slowly (12s). All colors
+   present at all times; the rotation cycles which color sits where
+   on the ring. Reads as "magic / generative" — the standard
+   gen-AI / creative-tool trim. */
+.bottom-bar.is-beam-aurora::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    #5b8cff 0deg,
+    #b86dff 60deg,
+    #ff6db8 120deg,
+    #ffb86d 180deg,
+    #6dffd6 240deg,
+    #5b8cff 360deg
+  );
+  animation: bb-beam-spin 12s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-aurora::before {
+    background: conic-gradient(
+      from 0deg,
+      #5b8cff 0deg,
+      #b86dff 60deg,
+      #ff6db8 120deg,
+      #ffb86d 180deg,
+      #6dffd6 240deg,
+      #5b8cff 360deg
+    );
+    animation: bb-beam-rotate-fallback 12s linear infinite;
+  }
+}
+
+/* Comet — single hot spot with a fading tail trailing behind it.
+   The wedge starts very dim ~120° behind the head, ramps up through
+   the head, and cuts off sharp on the leading edge. Reads as a
+   shooting-star / loading-energy feel. */
+.bottom-bar.is-beam-comet::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(255, 255, 255, 0.04) 0deg,
+    rgba(255, 255, 255, 0.04) 220deg,
+    rgba(255, 200, 130, 0.05) 235deg,
+    rgba(255, 200, 130, 0.18) 280deg,
+    rgba(255, 220, 180, 0.5) 330deg,
+    rgba(255, 240, 220, 0.95) 355deg,
+    rgba(255, 255, 255, 1) 360deg,
+    rgba(255, 255, 255, 0.04) 365deg,
+    rgba(255, 255, 255, 0.04) 360deg
+  );
+  animation: bb-beam-spin 5s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-comet::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.04) 0deg,
+      rgba(255, 200, 130, 0.18) 280deg,
+      rgba(255, 220, 180, 0.5) 330deg,
+      rgba(255, 255, 255, 1) 360deg,
+      rgba(255, 255, 255, 0.04) 365deg
+    );
+    animation: bb-beam-rotate-fallback 5s linear infinite;
+  }
+}
+
+/* Pulse — combines an outer halo glow that breathes with a rotating
+   beam on top. Two layers: ::before for the rotating beam (uses the
+   apple-style single hot spot but tinted cyan), and a box-shadow on
+   the bar itself that pulses 0.4 ↔ 1.0 opacity in 3s. */
+.bottom-bar.is-beam-pulse {
+  animation: bb-pulse-halo 3s ease-in-out infinite;
+}
+
+@keyframes bb-pulse-halo {
+  0%, 100% {
+    box-shadow:
+      0 0 18px rgba(120, 200, 255, 0.18),
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(120, 200, 255, 0.45),
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+.bottom-bar.is-beam-pulse::before {
+  background: conic-gradient(
+    from var(--beam-angle),
+    rgba(120, 200, 255, 0.04) 0deg,
+    rgba(120, 200, 255, 0.04) 320deg,
+    rgba(120, 200, 255, 0.95) 350deg,
+    rgba(160, 220, 255, 1) 360deg,
+    rgba(120, 200, 255, 0.95) 370deg,
+    rgba(120, 200, 255, 0.04) 400deg
+  );
+  animation: bb-beam-spin 5s linear infinite;
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-pulse::before {
+    background: conic-gradient(
+      from 0deg,
+      rgba(120, 200, 255, 0.04) 0deg,
+      rgba(120, 200, 255, 0.04) 320deg,
+      rgba(160, 220, 255, 1) 360deg,
+      rgba(120, 200, 255, 0.04) 400deg
+    );
+    animation: bb-beam-rotate-fallback 5s linear infinite;
+  }
+}

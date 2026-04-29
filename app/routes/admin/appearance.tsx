@@ -46,7 +46,7 @@ export default function AdminAppearance() {
           <h1>Appearance</h1>
           <p className="admin-page-subtitle">Customize your platform experience</p>
         </div>
-        <button className="partners-done-btn" onClick={() => navigate('/admin')}>
+        <button className="admin-btn admin-btn-secondary" onClick={() => navigate('/admin')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           Done
         </button>

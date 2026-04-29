@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { getProfiles, updateUserRole, updateUserIsAdmin, type Profile } from '~/services/profiles';
+import { getProfiles, updateUserRole, updateUserIsAdmin, deleteProfile, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
 import { auditAllUserGenders, type UserGender } from '~/services/genders';
+import { getWaitlistIds } from '~/services/waitlist';
 import { creators as lookCreators, looks } from '~/data/looks';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -16,16 +17,31 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function formatDateTime(iso: string | null): string {
+// "Last online" reads better at a glance as a relative duration than
+// an absolute timestamp. Falls back to absolute date once the gap is
+// older than a week so the column never shows "37 days ago" — that's
+// less useful than the actual date.
+function formatRelative(iso: string | null): string {
   if (!iso) return '-';
-  const d = new Date(iso);
-  return d.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '-';
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
 interface UserRow {
   id: string;
   initials: string;
   name: string;
+  email: string;
   avatar: string;
   sso: string;
   role: UserRole;
@@ -34,7 +50,6 @@ interface UserRow {
   createdAt: string;
   lastSignIn: string;
   looksCount: number;
-  shopping: string;
   location: string;
   saved: number;
   followings: number;
@@ -53,15 +68,15 @@ function profileToRow(p: Profile): UserRow {
     id: p.id,
     initials: name.slice(0, 2).toUpperCase(),
     name,
+    email: p.email || '',
     avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
     isAdmin: p.is_admin === true,
     gender: ((p as { gender?: string }).gender as UserGender) || 'unknown',
     createdAt: formatDate(p.created_at),
-    lastSignIn: formatDateTime(p.last_sign_in_at),
+    lastSignIn: formatRelative(p.last_sign_in_at),
     looksCount: 0,
-    shopping: '-',
     location: '-',
     saved: 0,
     followings: 0,
@@ -107,9 +122,11 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
         style={{
           position: 'fixed',
           bottom: 24,
-          right: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
+          alignItems: 'center',
           gap: 8,
           zIndex: 10000,
           pointerEvents: 'none',
@@ -261,26 +278,59 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
   );
 }
 
+// Seed-data creators come from app/data/looks.ts so the row can't be
+// removed from the bundle, but the admin still needs delete semantics.
+// We persist a localStorage set of "deleted" handles and filter them
+// out of the Creators tab — same end-state as a real delete from the
+// admin's POV (gone, doesn't return on refresh).
+const DELETED_CONTENT_CREATORS_KEY = 'catalog:admin-deleted-content-creators';
+
+function readDeletedContentCreators(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(DELETED_CONTENT_CREATORS_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+    // Migrate the legacy "hidden" key once so admins don't lose deletes.
+    const legacy = window.localStorage.getItem('catalog:admin-hidden-content-creators');
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as string[];
+      window.localStorage.setItem(DELETED_CONTENT_CREATORS_KEY, JSON.stringify(parsed));
+      window.localStorage.removeItem('catalog:admin-hidden-content-creators');
+      return new Set(parsed);
+    }
+  } catch { /* parse / quota */ }
+  return new Set();
+}
+
+function writeDeletedContentCreators(set: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(DELETED_CONTENT_CREATORS_KEY, JSON.stringify([...set])); } catch { /* quota */ }
+}
+
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
   const [allUsers, setAllUsers] = useState<UserRow[]>([]);
+  const [waitlistIds, setWaitlistIds] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [auditingGender, setAuditingGender] = useState(false);
+  const [deletedContentCreators, setDeletedContentCreators] = useState<Set<string>>(() => readDeletedContentCreators());
   const toastIdRef = useRef(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Fetch profiles + per-user generated-look counts in parallel.
-      // Looks count for DB users is the number of user_generations
-      // rows they own (any status). Seed-data creators not present
-      // in profiles still count from looksPerCreator below.
-      const [profiles, genRowsRes] = await Promise.all([
+      // Fetch profiles + per-user generated-look counts + waitlist
+      // ids in parallel. Waitlist ids let us exclude users still
+      // pending approval from the Shoppers tab — once you're on the
+      // waitlist you're not a shopper.
+      const [profiles, genRowsRes, ids] = await Promise.all([
         getProfiles(),
         supabase ? supabase.from('user_generations').select('user_id') : Promise.resolve({ data: null }),
+        getWaitlistIds(),
       ]);
       if (cancelled) return;
+      setWaitlistIds(ids);
       const counts = new Map<string, number>();
       const rows = ((genRowsRes as { data: { user_id: string }[] | null }).data) || [];
       for (const r of rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
@@ -330,7 +380,7 @@ export default function AdminUsers() {
     });
   }, [showToast]);
 
-  const shoppers = allUsers.filter(u => u.role === 'shopper');
+  const shoppers = allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id));
   const dbCreators = allUsers.filter(u => u.role === 'creator');
 
   // Merge content creators from looks data with DB creators
@@ -338,10 +388,12 @@ export default function AdminUsers() {
     const dbNames = new Set(dbCreators.map(c => c.name.toLowerCase()));
     return Object.values(lookCreators)
       .filter(c => !dbNames.has(c.displayName.toLowerCase()))
+      .filter(c => !deletedContentCreators.has(c.name))
       .map(c => ({
         id: `content-${c.name}`,
         initials: c.displayName.slice(0, 2).toUpperCase(),
         name: c.displayName,
+        email: '',
         avatar: c.avatar,
         sso: '-',
         role: 'creator' as UserRole,
@@ -350,7 +402,6 @@ export default function AdminUsers() {
         createdAt: '-',
         lastSignIn: '-',
         looksCount: looksPerCreator[c.name] || 0,
-        shopping: '-',
         location: '-',
         saved: 0,
         followings: 0,
@@ -363,6 +414,96 @@ export default function AdminUsers() {
   // profile, not the role text column. Keeps role for display while
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
+
+  // Per-row delete. Real DB profiles → deleteProfile + cascade to
+  // their generated_videos / user_generations. Seed-data ("content-*")
+  // creators → mark the handle deleted in localStorage so the
+  // Creators tab filters them out, and add their bundled look ids to
+  // admin_hidden_looks (or the local mirror) so the published feed
+  // drops the looks too. The confirm copy reports the look count
+  // we're about to take down with them.
+  const handleDelete = useCallback(async (userId: string, fallbackName?: string) => {
+    const target = allUsers.find(u => u.id === userId);
+
+    if (target?.id.startsWith('content-') || (!target && userId.startsWith('content-'))) {
+      const handle = userId.slice('content-'.length);
+      const seed = lookCreators[handle];
+      const label = target?.name || seed?.displayName || fallbackName || handle;
+      const seedLooks = looks.filter(l => l.creator === handle);
+      const lookCount = seedLooks.length;
+      const lookLabel = lookCount === 1 ? '1 look' : `${lookCount} looks`;
+      const message = lookCount > 0
+        ? `This will permanently delete ${label} and ${lookLabel} they’ve published. This can’t be undone.`
+        : `This will permanently delete ${label}. This can’t be undone.`;
+      if (!confirm(`Delete ${label}?\n\n${message}`)) return;
+      // Filter the creator out everywhere they show up.
+      setDeletedContentCreators(prev => {
+        const next = new Set(prev);
+        next.add(handle);
+        writeDeletedContentCreators(next);
+        return next;
+      });
+      // And drop their looks from the consumer feed via the same
+      // localStorage hidden-looks mirror useHiddenLooks reads on the
+      // home grid. Best-effort upsert into admin_hidden_looks for
+      // consistency when supabase is configured.
+      if (seedLooks.length > 0) {
+        try {
+          const KEY = 'catalog:admin-hidden-looks';
+          const raw = window.localStorage.getItem(KEY);
+          const existing = new Set<number>(raw ? JSON.parse(raw) as number[] : []);
+          for (const l of seedLooks) existing.add(l.id);
+          window.localStorage.setItem(KEY, JSON.stringify([...existing]));
+        } catch { /* quota */ }
+        if (supabase) {
+          await supabase
+            .from('admin_hidden_looks')
+            .upsert(seedLooks.map(l => ({ look_id: l.id })), { onConflict: 'look_id' })
+            .then(({ error }) => { if (error) console.warn('[users] hide looks upsert failed:', error.message); });
+        }
+      }
+      showToast(
+        lookCount > 0 ? `${label} and ${lookLabel} deleted` : `${label} deleted`,
+        'success',
+      );
+      return;
+    }
+
+    if (!target) return;
+    const dbLookCount = looksPerCreator[target.name.toLowerCase()] || 0;
+    const message = dbLookCount > 0
+      ? `This will permanently delete ${target.name} and ${dbLookCount === 1 ? '1 look' : `${dbLookCount} looks`} they’ve published. This can’t be undone.`
+      : `This will permanently delete ${target.name}. This can’t be undone.`;
+    if (!confirm(`Delete ${target.name}?\n\n${message}`)) return;
+    const { error } = await deleteProfile(userId);
+    if (error) {
+      showToast(`Failed to delete: ${error}`, 'warning');
+      return;
+    }
+    // Best-effort cascade for the user's content. deleteProfile only
+    // takes the profile row; their generations + admin-hide rows live
+    // in adjacent tables and are dropped here so the feed doesn't
+    // keep their content live after the account is gone.
+    if (supabase) {
+      await Promise.all([
+        supabase.from('user_generations').delete().eq('user_id', userId),
+        supabase.from('user_uploads').delete().eq('user_id', userId),
+      ]).catch(err => console.warn('[users] cascade delete failed:', err));
+    }
+    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    setWaitlistIds(prev => {
+      if (!prev.has(userId)) return prev;
+      const next = new Set(prev);
+      next.delete(userId);
+      return next;
+    });
+    showToast(
+      dbLookCount > 0
+        ? `${target.name} and ${dbLookCount === 1 ? '1 look' : `${dbLookCount} looks`} deleted`
+        : `${target.name} deleted`,
+      'success',
+    );
+  }, [allUsers, showToast]);
 
   const handleAdminToggle = useCallback(async (userId: string, next: boolean) => {
     const target = allUsers.find(u => u.id === userId);
@@ -404,12 +545,12 @@ export default function AdminUsers() {
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Joined" sortKey="createdAt" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Last Sign In" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Shopping" sortKey="shopping" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Last Online" sortKey="lastSignIn" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Location" sortKey="location" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Via Creator" sortKey="creator" currentSort={table.sort} onSort={table.handleSort} />
+              <th style={{ width: 80 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -419,7 +560,7 @@ export default function AdminUsers() {
                 className="admin-clickable-row"
                 onClick={() => navigate(`/admin/user/${u.id}`)}
               >
-                <td className="admin-cell-name">
+                <td className="admin-cell-name" title={u.email || undefined}>
                   <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />
                   {u.name}
                 </td>
@@ -449,11 +590,26 @@ export default function AdminUsers() {
                 <td><span className="admin-sso-badge">{u.sso}</span></td>
                 <td className="admin-cell-muted">{u.createdAt}</td>
                 <td className="admin-cell-muted">{u.lastSignIn}</td>
-                <td>{u.shopping}</td>
                 <td className="admin-cell-muted">{u.location}</td>
                 <td>{u.saved}</td>
                 <td>{u.followings}</td>
                 <td className="admin-cell-muted">{u.creator}</td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="admin-row-delete"
+                    onClick={() => handleDelete(u.id)}
+                    aria-label={`Delete ${u.name}`}
+                    title="Delete"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6M14 11v6" />
+                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -163,7 +163,12 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
   ), [dbLooks, hiddenLookIds, hiddenProductKeys]);
 
   const filteredLooks = useMemo(() => {
-    let filtered = activeFilter === 'all' ? looks : looks.filter(l => l.gender === activeFilter);
+    // Gender filter: 'men' shows men + unisex (and vice-versa). Unisex
+    // looks always cross both genders so we don't bury catalog-wide
+    // staples behind a binary toggle.
+    let filtered = activeFilter === 'all'
+      ? looks
+      : looks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(l =>

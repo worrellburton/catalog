@@ -1,11 +1,12 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import LiveCursors from '~/components/LiveCursors';
 import { useAuth } from '~/hooks/useAuth';
 import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
 // imported from the global root.tsx where every consumer page paid the
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
   { to: '/admin/apis', label: 'APIs', icon: 'M4 6h16M4 12h16M4 18h16' },
   { to: '/admin/branding', label: 'Branding', icon: 'M4 7h16M4 12h10M4 17h16' },
+  { to: '/admin/ui', label: 'UI', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
 ];
 
@@ -68,6 +70,10 @@ const allSearchItems: SearchItem[] = [
   { label: 'Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
+  { label: 'UI', type: 'Page', to: '/admin/ui' },
+  { label: 'Brand', type: 'Page', to: '/admin/ui/brand' },
+  { label: 'Search bar', type: 'Page', to: '/admin/ui/search-bar' },
+  { label: 'Beam', type: 'Page', to: '/admin/ui/search-bar' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
@@ -265,10 +271,6 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
-  // Hide the floating Partners portal on the deck viewer — the deck should
-  // present clean, and this pill floats over its bottom-right corner.
-  const isOnDeckViewer = /^\/admin\/decks\/[^/]+/.test(location.pathname);
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
@@ -453,6 +455,7 @@ export default function AdminLayout() {
   }
 
   return (
+    <AdminConfirmProvider>
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
       <LiveCursors cursors={liveCursors} />
       <div
@@ -774,12 +777,7 @@ export default function AdminLayout() {
         </div>
         <Outlet />
       </main>
-      {!isOnDeckViewer && (
-        <button className="glass-portal-toggle" onClick={() => navigate('/partners')} aria-label="Go to Partners">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-          <span>Partners</span>
-        </button>
-      )}
     </div>
+    </AdminConfirmProvider>
   );
 }

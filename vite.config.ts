@@ -15,7 +15,7 @@ export default defineConfig({
     remix({
       ssr: false,
       basename: basePath,
-      ignoredRouteFiles: ["routes/admin/**", "routes/partners/**"],
+      ignoredRouteFiles: ["routes/admin/**"],
       routes(defineRoutes) {
         return defineRoutes((route) => {
           // Root index
@@ -44,6 +44,11 @@ export default defineConfig({
             route("catalogs", "routes/admin/catalogs.tsx");
             route("catalogs/:slug", "routes/admin/catalogs.$slug.tsx");
             route("branding", "routes/admin/branding.tsx");
+            route("ui", "routes/admin/ui.tsx", () => {
+              route("", "routes/admin/ui._index.tsx", { index: true });
+              route("brand", "routes/admin/ui.brand.tsx");
+              route("search-bar", "routes/admin/ui.search-bar.tsx");
+            });
             route("decks", "routes/admin/decks.tsx", () => {
               route("", "routes/admin/decks._index.tsx", { index: true });
               route(":version", "routes/admin/decks.$version.tsx");
@@ -53,6 +58,7 @@ export default defineConfig({
             route("links", "routes/admin/links.tsx");
             route("affiliate", "routes/admin/affiliate.tsx");
             route("looks", "routes/admin/looks.tsx");
+            route("publish/:id", "routes/admin/publish.$id.tsx");
             route("moderation", "routes/admin/moderation.tsx");
             route("musics", "routes/admin/musics.tsx");
             route("places", "routes/admin/places.tsx");
@@ -72,20 +78,6 @@ export default defineConfig({
             route("site-crawls", "routes/admin/site-crawls.tsx");
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
-          });
-
-          // Partners routes
-          route("partners", "routes/partners/route.tsx", () => {
-            route("", "routes/partners/_index.tsx", { index: true });
-            route("appearance", "routes/partners/appearance.tsx");
-            route("audience", "routes/partners/audience.tsx");
-            route("campaigns", "routes/partners/campaigns.tsx");
-            route("collections", "routes/partners/collections.tsx");
-            route("creative", "routes/partners/creative.tsx");
-            route("growth", "routes/partners/growth.tsx");
-            route("orders", "routes/partners/orders.tsx");
-            route("products", "routes/partners/products.tsx");
-            route("store", "routes/partners/store.tsx");
           });
         });
       },

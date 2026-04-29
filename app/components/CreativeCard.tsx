@@ -198,10 +198,10 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
           <button
             type="button"
             className="creative-delete-btn"
-            aria-label="Delete creative"
+            aria-label="Delete product"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete creative for ${creative.product?.name || 'this product'}?`)) {
+              if (confirm(`Delete product "${creative.product?.name || "this product"}" everywhere?`)) {
                 onDelete(creative.id);
               }
             }}
@@ -242,7 +242,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             onClick={(e) => {
               e.stopPropagation();
               setMenu(null);
-              if (onDelete && confirm(`Delete creative for ${creative.product?.name || 'this product'}?`)) {
+              if (onDelete && confirm(`Delete product "${creative.product?.name || "this product"}" everywhere?`)) {
                 onDelete(creative.id);
               }
             }}
@@ -253,7 +253,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
               <path d="M10 11v6" />
               <path d="M14 11v6" />
             </svg>
-            Delete creative
+            Delete product
           </button>
         </div>
       )}

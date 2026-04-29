@@ -127,6 +127,12 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Mobile: hero + info stack normally inside .pd-split (the desktop
+   split rules below override at >= 960px). */
+.pd-split {
+  display: contents;
+}
+
 /* Hero: creative video or image, full-width, capped at 80vh on desktop so
    the feed hint is visible without scrolling. On mobile it takes most of
    the viewport so the video reads as the primary content. */
@@ -139,6 +145,98 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Desktop split: full-bleed hero pinned on the left (sticky inside the
+   split block), product info column on the right. As the user scrolls,
+   the hero stays put while info + galleries below scroll past. Once the
+   user scrolls past the split block, the existing gallery sections take
+   over at full width. */
+@media (min-width: 960px) {
+  .pd-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: start;
+    min-height: 100vh;
+  }
+  .pd-split .pd-hero {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    width: 100%;
+  }
+  /* Image hero: contain so the entire product is visible — never crop
+     a body part or the brand logo at the top of the asset. */
+  .pd-split .pd-hero .pd-hero-media {
+    object-fit: contain;
+    background: #0a0a0a;
+  }
+  /* Video creatives still cover by default (they're shot full-frame),
+     but cap at the column so nothing escapes the left rail. */
+  .pd-split .pd-hero--video .pd-hero-media {
+    object-fit: cover;
+  }
+  /* The bottom-fade scrim only makes sense when info sits BELOW the
+     hero (mobile). On desktop the info is to the right, so the scrim
+     would just darken the bottom of the hero for no reason. */
+  .pd-split .pd-hero-scrim {
+    display: none;
+  }
+  .pd-split .pd-info {
+    padding: 64px 48px 48px;
+    align-self: stretch;
+    justify-content: flex-start;
+  }
+  .pd-split .pd-info-inner {
+    max-width: 520px;
+    gap: 12px;
+  }
+
+  /* On desktop the rail variant of the brand strip lives in the right
+     column. Hide the bottom full-width strip so we don't duplicate. */
+  .pd-brand-strip-section {
+    display: none;
+  }
+}
+
+/* Rail variant of "More from this brand" — desktop-only, 2-up grid
+   that fills the negative space below the Shop drawer. Hidden on
+   mobile because the full-width strip below the hero is already there. */
+.pd-info-brand-rail {
+  display: none;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-info-brand-rail-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+
+.pd-info-brand-rail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Tiles in the rail use the existing .pd-brand-tile sizing, but flex
+   to the column width instead of the fixed 132x176 px the bottom strip
+   uses. */
+.pd-info-brand-rail .pd-brand-tile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+}
+
+@media (min-width: 960px) {
+  .pd-info-brand-rail {
+    display: block;
+  }
 }
 
 .pd-hero-media {

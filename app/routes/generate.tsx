@@ -10,6 +10,7 @@ import {
   STYLE_PRESETS,
   buildGenerationPrompt,
   createGeneration,
+  nameLookForGeneration,
   deleteUserGeneration,
   deleteUserUpload,
   getGeneration,
@@ -128,6 +129,28 @@ interface PickedProduct {
 
 const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
 
+// User-facing category buckets for the products picker. Each row in the
+// product picker maps to one of these. `tags: null` is the Objects
+// bucket — anything roleTagFromName() couldn't classify falls in here
+// so the catalog is never hidden from the picker.
+const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
+  { label: 'Hat', tags: ['Hat'] },
+  { label: 'Top', tags: ['Top', 'Jacket', 'Dress'] },
+  { label: 'Bottoms', tags: ['Pants'] },
+  { label: 'Shoes', tags: ['Shoes'] },
+  { label: 'Accessories', tags: ['Bag', 'Jewelry', 'Sunglasses', 'Accessory'] },
+  { label: 'Objects', tags: null },
+];
+
+/** True if the product belongs to the named bucket. `Objects` matches
+ *  anything that doesn't fit a clothing role. */
+function productInCategory(p: { role_tag?: string | null }, group: typeof CATEGORY_GROUPS[number]): boolean {
+  if (group.tags === null) {
+    return !p.role_tag || !ROLE_TAGS.includes(p.role_tag);
+  }
+  return !!p.role_tag && group.tags.includes(p.role_tag);
+}
+
 // Height options cover 4'10" – 6'8" in 1" increments; we store the cm value
 // on the row and the human label verbatim in the Seedance prompt so the
 // model hears "5'10\"" the way the shopper picked it.
@@ -190,6 +213,31 @@ export default function GeneratePage() {
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PickedProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  // Per-category client-side search. Each row in the new horizontal-
+  // scroll picker has its own input that filters that row's products
+  // by name/brand without re-fetching from Supabase.
+  const [categoryQueries, setCategoryQueries] = useState<Record<string, string>>({});
+  const setCategoryQuery = useCallback((label: string, value: string) => {
+    setCategoryQueries(prev => (prev[label] === value ? prev : { ...prev, [label]: value }));
+  }, []);
+
+  // Slice productResults into the 6 display buckets. Each bucket also
+  // applies its own per-row search query (name/brand contains). Memoized
+  // so re-renders that don't change inputs skip the work entirely.
+  const productsByCategory = useMemo(() => {
+    const out: Record<string, PickedProduct[]> = {};
+    for (const group of CATEGORY_GROUPS) {
+      const q = (categoryQueries[group.label] || '').trim().toLowerCase();
+      out[group.label] = productResults.filter(p => {
+        if (!productInCategory(p, group)) return false;
+        if (!q) return true;
+        const name = (p.name || '').toLowerCase();
+        const brand = (p.brand || '').toLowerCase();
+        return name.includes(q) || brand.includes(q);
+      });
+    }
+    return out;
+  }, [productResults, categoryQueries]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
   // Phase 9/10 — height + style
@@ -502,12 +550,53 @@ export default function GeneratePage() {
   };
 
   const togglePick = (p: PickedProduct) => {
+    let wasPicked = false;
+    let hitLimit = false;
     setPicked(prev => {
-      if (prev.some(x => x.id === p.id)) return prev.filter(x => x.id !== p.id);
-      if (prev.length >= MAX_PRODUCTS) return prev;
+      wasPicked = prev.some(x => x.id === p.id);
+      if (wasPicked) return prev.filter(x => x.id !== p.id);
+      if (prev.length >= MAX_PRODUCTS) {
+        hitLimit = true;
+        return prev;
+      }
       return [...prev, p];
     });
+    if (hitLimit) {
+      // Surface the limit so the tap doesn't feel like a silent no-op.
+      // The dock's count chip already shows "5/5", but a tap on a 6th
+      // card needs explicit feedback or it reads as broken.
+      setLimitWarning(`You can pick up to ${MAX_PRODUCTS} products. Remove one to swap.`);
+      return;
+    }
+    // Scroll the freshly-picked card into the visible center of its
+    // category row so the user gets immediate confirmation. Only fires
+    // on the pick (not the unpick) and waits a tick for React to apply
+    // the is-picked class before the smooth scroll starts.
+    if (!wasPicked && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`);
+        if (card && 'scrollIntoView' in card) {
+          (card as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      });
+    }
   };
+
+  // Transient toast surfaced when the user taps a 6th product. Auto-
+  // dismisses after a few seconds; clears on next successful pick or
+  // unpick so it never lingers past relevance.
+  const [limitWarning, setLimitWarning] = useState<string | null>(null);
+  useEffect(() => {
+    if (!limitWarning) return;
+    const t = window.setTimeout(() => setLimitWarning(null), 2800);
+    return () => window.clearTimeout(t);
+  }, [limitWarning]);
+  useEffect(() => {
+    // Any change to picked while the warning is up means the user
+    // resolved the situation — drop the toast immediately.
+    if (limitWarning) setLimitWarning(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked.length]);
 
   const setPickedRole = (id: string, role: string | null) => {
     setPicked(prev => prev.map(x => x.id === id ? { ...x, role_tag: role } : x));
@@ -618,6 +707,10 @@ export default function GeneratePage() {
       return;
     }
     setGeneration(data);
+    // Fire-and-forget Claude name generation. Doesn't block the user
+    // from advancing to the result screen — the name lands on the row
+    // asynchronously and shows up in "Your looks" once it does.
+    void nameLookForGeneration(data.id);
     // Prepend the new row to the in-memory list so it shows up in
     // "Your looks" the moment the shopper hits Back from the result
     // screen — no page refresh needed. The list-polling effect will
@@ -641,7 +734,7 @@ export default function GeneratePage() {
 
   return (
     <div className="gen-page">
-      <div className="gen-head">
+      <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
         <button
           className="gen-back"
           onClick={() => {
@@ -659,23 +752,40 @@ export default function GeneratePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
-        <h1>Generate</h1>
-        <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+        {/* Photos step gets a "Try this on" headline — the actual primary
+            verb the page does. Products is dense and gets the back-only
+            header. Other secondary steps fall back to the original
+            "Generate" framing. */}
+        {step === 'photos' && (
+          <>
+            <h1>Try this on</h1>
+            <p className="gen-sub">Drop in a few clean shots of yourself, then pick up to five products to dress up in.</p>
+          </>
+        )}
+        {step !== 'products' && step !== 'photos' && (
+          <>
+            <h1>Generate</h1>
+            <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+          </>
+        )}
       </div>
 
       <main className="gen-main">
         {step === 'photos' && (
-          <section className="gen-step">
-            <h2>Your reference photos</h2>
-            <p>Drop in up to {MAX_PHOTOS} clean face / full-body shots. We'll use them to identify you and then dress you in the products you pick next.</p>
+          <section className="gen-step gen-step-photos">
+            {/* Compact input form: title + slots + height + age + Create
+                look button. Capped at ~1/3 of the viewport height so the
+                "Your looks" grid below can dominate the screen. */}
+            <div className="gen-photos-form">
+              <h2 className="gen-photos-title">You</h2>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              hidden
-              onChange={onFileInput}
-            />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic"
+                hidden
+                onChange={onFileInput}
+              />
 
             <div className="gen-slots">
               {slots.map((uploadId, i) => {
@@ -746,13 +856,71 @@ export default function GeneratePage() {
 
             {uploadError && <div className="gen-error">{uploadError}</div>}
 
+              <div className="gen-photos-meta">
+                <label className="gen-photos-meta-field">
+                  <span className="gen-photos-meta-label">Height</span>
+                  <select
+                    className="gen-photos-meta-select"
+                    value={heightCm}
+                    onChange={e => {
+                      const cm = Number(e.target.value);
+                      const opt = HEIGHT_OPTIONS.find(o => o.cm === cm);
+                      setHeightCm(cm);
+                      if (opt) setHeightLabel(opt.label);
+                    }}
+                  >
+                    {HEIGHT_OPTIONS.map(opt => (
+                      <option key={opt.cm} value={opt.cm}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="gen-photos-meta-field">
+                  <span className="gen-photos-meta-label">Age</span>
+                  <select
+                    className="gen-photos-meta-select"
+                    value={ageLabel}
+                    onChange={e => setAgeLabel(e.target.value)}
+                  >
+                    {AGE_PRESETS.map(opt => (
+                      <option key={opt.label} value={opt.label}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+            </div>
+
+            {/* Create look CTA — fixed to the bottom of the viewport
+                across the photos step (same anchor pattern the gen-dock
+                uses on later steps). Always reachable without scrolling
+                even when the user has many "Your looks" cards below. */}
+            <div className="gen-photos-cta-bar">
+              <button
+                type="button"
+                className="gen-btn-primary gen-create-btn"
+                disabled={!canAdvance}
+                onClick={() => goNext(step, setStep)}
+              >
+                Create look
+              </button>
+            </div>
+
+            {/* Make a new look CTA — sits above the Your Looks grid as
+                a quick path to start a fresh generation. Scrolls back to
+                the top of the photos step so the user lands on the
+                upload slots and can begin a new look. */}
             <button
               type="button"
-              className="gen-btn-primary gen-create-btn"
-              disabled={!canAdvance}
-              onClick={() => goNext(step, setStep)}
+              className="gen-creator-cta"
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             >
-              Create look
+              <span className="gen-creator-cta-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </span>
+              <span className="gen-creator-cta-label">Make a new look</span>
+              <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
             </button>
 
             {(generations.length > 0 || loadingList) && (
@@ -792,60 +960,67 @@ export default function GeneratePage() {
         )}
 
         {step === 'products' && (
-          <section className="gen-step">
-            <h2>2. Pick up to {MAX_PRODUCTS} products</h2>
-            <input
-              type="search"
-              className="gen-search"
-              placeholder="Search by name or brand…"
-              value={productQuery}
-              onChange={e => setProductQuery(e.target.value)}
-            />
-            {picked.length > 0 && (
-              <div className="gen-picked">
-                {picked.map(p => (
-                  <div key={p.id} className="gen-picked-chip">
-                    {p.image_url && <img src={p.image_url} alt="" />}
-                    <div className="gen-picked-chip-info">
-                      <span className="gen-picked-chip-name">{p.name || 'Product'}</span>
-                      <select
-                        value={p.role_tag || ''}
-                        onChange={e => setPickedRole(p.id, e.target.value || null)}
-                        aria-label="Role"
-                      >
-                        <option value="">Auto</option>
-                        {ROLE_TAGS.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
+          <section className="gen-step gen-step-products">
+            <h2>2. Pick your products</h2>
+            {/* Picked-products preview moved into the unified gen-dock at
+                the bottom (see render below) so the three previously
+                separate fixed elements (picks, Back/Next, step rail)
+                read as one cohesive control surface. */}
+
+            {/* Six horizontal-scroll rows. Each row is one of CATEGORY_GROUPS
+                — Hat / Top / Bottoms / Shoes / Accessories / Objects.
+                Empty rows are still rendered so the layout is predictable
+                across catalog states; they show a quiet empty hint. */}
+            {productsLoading && productResults.length === 0 ? (
+              <div className="gen-empty">Loading products…</div>
+            ) : (
+              CATEGORY_GROUPS.map(group => {
+                const rowProducts = productsByCategory[group.label] || [];
+                const rowQuery = categoryQueries[group.label] || '';
+                return (
+                  <div key={group.label} className="gen-cat-row">
+                    <div className="gen-cat-row-head">
+                      <span className="gen-cat-row-label">{group.label}</span>
+                      <input
+                        type="search"
+                        className="gen-cat-row-search"
+                        placeholder={`Search ${group.label.toLowerCase()}…`}
+                        value={rowQuery}
+                        onChange={e => setCategoryQuery(group.label, e.target.value)}
+                        aria-label={`Search ${group.label}`}
+                      />
                     </div>
-                    <button className="gen-picked-chip-x" onClick={() => togglePick(p)} aria-label="Remove">×</button>
+                    <div className="gen-cat-row-scroll">
+                      {rowProducts.length === 0 ? (
+                        <div className="gen-cat-row-empty">
+                          {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
+                        </div>
+                      ) : (
+                        rowProducts.map(p => {
+                          const isPicked = picked.some(x => x.id === p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
+                              data-gen-card-id={p.id}
+                              onClick={() => togglePick(p)}
+                              /* No disabled state — a tap on a 6th card
+                                 surfaces the limit toast instead of
+                                 silently doing nothing. */
+                            >
+                              {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
+                              <span className="gen-cat-card-name">{p.name || 'Product'}</span>
+                              <span className="gen-cat-card-brand">{p.brand}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })
             )}
-            <div className="gen-productgrid">
-              {productsLoading && productResults.length === 0 ? (
-                <div className="gen-empty">Loading products…</div>
-              ) : productResults.length === 0 ? (
-                <div className="gen-empty">No products match "{productQuery}"</div>
-              ) : (
-                productResults.map(p => {
-                  const isPicked = picked.some(x => x.id === p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`gen-productcard${isPicked ? ' is-picked' : ''}`}
-                      onClick={() => togglePick(p)}
-                      disabled={!isPicked && picked.length >= MAX_PRODUCTS}
-                    >
-                      {p.image_url && <img src={p.image_url} alt="" />}
-                      <span className="gen-productcard-name">{p.name || 'Product'}</span>
-                      <span className="gen-productcard-brand">{p.brand}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
           </section>
         )}
 
@@ -976,6 +1151,8 @@ export default function GeneratePage() {
         {step === 'result' && (
           <section className="gen-step gen-step-result">
             <h2>Your look</h2>
+            <div className="gen-result-layout">
+              <div className="gen-result-stage">
             {!generation && <div className="gen-empty">Loading…</div>}
             {(generation?.status === 'pending' || generation?.status === 'generating') && (
               <GenerationProgress generation={generation} />
@@ -1067,29 +1244,101 @@ export default function GeneratePage() {
                 }}
               />
             )}
+              </div>
+
+              {/* Desktop-only "while you wait" rail. The phone-mockup
+                  progress fills the left column; we use the right column
+                  to surface the user's other looks so the wait feels
+                  like browsing their own catalog. Hidden on mobile via
+                  CSS so the existing single-column flow is preserved. */}
+              <aside className="gen-result-side" aria-label="Your other looks">
+                <div className="gen-result-side-label">
+                  {generation?.status === 'done' ? 'Your looks' : 'While Vision composes…'}
+                </div>
+                {generations.filter(g => g.id !== generation?.id && g.video_url).length === 0 ? (
+                  <div className="gen-result-side-empty">
+                    Your past looks will appear here as you make more.
+                  </div>
+                ) : (
+                  <div className="gen-result-side-grid">
+                    {generations
+                      .filter(g => g.id !== generation?.id && g.video_url)
+                      .slice(0, 8)
+                      .map(g => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          className="gen-result-side-tile"
+                          onClick={() => openGeneration(g)}
+                          aria-label="Open this look"
+                        >
+                          <video
+                            src={g.video_url || undefined}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <span className="gen-result-side-tile-style">{g.style}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </aside>
+            </div>
           </section>
         )}
       </main>
 
+      {/* Unified bottom dock — single horizontal row that combines the
+          picked-products strip (when applicable) with the Back/Next
+          action buttons. Step progress rail removed at the user's
+          request; the section heading on the page already tells you
+          which step you're on. */}
       {step !== 'result' && step !== 'photos' && (
-        <footer className="gen-foot">
-          <button className="gen-btn-secondary" onClick={() => goPrev(step, setStep)}>
-            Back
-          </button>
-          {step === 'review' ? (
-            <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Starting…' : 'Generate look'}
-            </button>
-          ) : (
-            <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
-              Next
-            </button>
+        <>
+        {limitWarning && (
+          <div className="gen-limit-toast" role="status" aria-live="polite">
+            {limitWarning}
+          </div>
+        )}
+        <aside className="gen-dock" aria-label="Step controls">
+          {step === 'products' && picked.length > 0 && (
+            <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
+              {picked.map(p => (
+                <div key={p.id} className="gen-dock-pick">
+                  {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
+                  <button
+                    type="button"
+                    className="gen-dock-pick-x"
+                    onClick={() => togglePick(p)}
+                    aria-label={`Remove ${p.name || 'product'}`}
+                  >×</button>
+                </div>
+              ))}
+              <div className="gen-dock-picks-count" aria-hidden="true">
+                {picked.length}/{MAX_PRODUCTS}
+              </div>
+            </div>
           )}
-        </footer>
-      )}
 
-      {step !== 'result' && step !== 'photos' && (
-        <StepRail step={step} photosCount={pickedUploadIds.length} productsCount={picked.length} heightLabel={heightLabel} ageLabel={ageLabel} style={style} />
+          <div className="gen-dock-actions">
+            <button className="gen-btn-secondary" onClick={() => goPrev(step, setStep)}>
+              Back
+            </button>
+            {step === 'review' ? (
+              <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Starting…' : 'Generate look'}
+              </button>
+            ) : (
+              <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
+                Next
+              </button>
+            )}
+          </div>
+        </aside>
+        </>
       )}
     </div>
   );
@@ -1439,7 +1688,7 @@ function LookCard({
         >×</button>
       </button>
       <div className="gen-lookcard-foot">
-        <span className="gen-lookcard-label">{style?.label || generation.style}</span>
+        <span className="gen-lookcard-label">{generation.display_name || style?.label || generation.style}</span>
         <button
           type="button"
           className="gen-lookcard-regen"
@@ -1548,7 +1797,7 @@ function UploadPickerModal({
 }
 
 function StepRail({
-  step, photosCount, productsCount, heightLabel, ageLabel, style,
+  step, photosCount, productsCount, heightLabel, ageLabel, style, embedded = false,
 }: {
   step: Step;
   photosCount: number;
@@ -1556,6 +1805,10 @@ function StepRail({
   heightLabel: string;
   ageLabel: string;
   style: string;
+  /** When true, the rail is being rendered as a row inside the unified
+   *  gen-dock — drop the fixed positioning + glass background since
+   *  the dock supplies both. */
+  embedded?: boolean;
 }) {
   const filled = {
     photos: photosCount > 0,
@@ -1574,7 +1827,7 @@ function StepRail({
   ];
   const activeIdx = STEP_ORDER.indexOf(step);
   return (
-    <nav className="gen-rail" aria-label="Generate steps">
+    <nav className={`gen-rail${embedded ? ' is-embedded' : ''}`} aria-label="Generate steps">
       <ol className="gen-rail-glass">
         {items.map((item, i) => {
           const cls =
