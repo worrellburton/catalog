@@ -338,6 +338,64 @@ export default function AdminContent() {
     return () => { cancelled = true; };
   }, []);
 
+  // Expanded-row state for the Unpublished looks table — fetches the
+  // generation's products on demand so the initial list query stays
+  // cheap. Cached after the first fetch so re-expanding is instant.
+  interface UnpublishedProduct {
+    id: string;
+    name: string;
+    brand: string;
+    price: string | null;
+    image_url: string | null;
+    role_tag: string | null;
+  }
+  const [expandedUnpublishedId, setExpandedUnpublishedId] = useState<string | null>(null);
+  const [unpublishedProducts, setUnpublishedProducts] = useState<Map<string, UnpublishedProduct[]>>(new Map());
+  const [unpublishedProductsLoading, setUnpublishedProductsLoading] = useState<Set<string>>(new Set());
+
+  const toggleUnpublishedExpand = useCallback(async (genId: string) => {
+    setExpandedUnpublishedId(prev => (prev === genId ? null : genId));
+    if (unpublishedProducts.has(genId) || unpublishedProductsLoading.has(genId)) return;
+    if (!supabase) return;
+    setUnpublishedProductsLoading(prev => {
+      const next = new Set(prev);
+      next.add(genId);
+      return next;
+    });
+    const { data, error } = await supabase
+      .from('user_generation_products')
+      .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+      .eq('generation_id', genId)
+      .order('sort_order');
+    if (!error && data) {
+      const rows: UnpublishedProduct[] = (data as unknown as Array<{
+        product_id: string;
+        role_tag: string | null;
+        sort_order: number;
+        products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+      }>)
+        .filter(r => !!r.products)
+        .map(r => ({
+          id: r.products!.id,
+          name: r.products!.name || '—',
+          brand: r.products!.brand || '—',
+          price: r.products!.price,
+          image_url: r.products!.image_url,
+          role_tag: r.role_tag,
+        }));
+      setUnpublishedProducts(prev => {
+        const next = new Map(prev);
+        next.set(genId, rows);
+        return next;
+      });
+    }
+    setUnpublishedProductsLoading(prev => {
+      const next = new Set(prev);
+      next.delete(genId);
+      return next;
+    });
+  }, [unpublishedProducts, unpublishedProductsLoading]);
+
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
   const [genSplit, setGenSplit] = useState<boolean>(false);
@@ -1488,6 +1546,15 @@ export default function AdminContent() {
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="admin-product-actions">
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-primary"
+                            style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
+                            title="Open the publish flow for this look"
+                            onClick={() => navigate(`/admin/looks?publish=${row.id}`)}
+                          >
+                            Publish
+                          </button>
                           <button className="admin-icon-btn" aria-label="Move up" onClick={() => moveLook(row.id, -1)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                           </button>
@@ -1627,27 +1694,31 @@ export default function AdminContent() {
                 <th>Status</th>
                 <th>Products</th>
                 <th>Model</th>
+                <th style={{ width: 110 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {unpublishedLoading && unpublished.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
                 </tr>
               ) : unpublished.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
                 </tr>
               ) : unpublished.map(g => {
                 const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
                 const created = new Date(g.created_at).toLocaleString(undefined, {
                   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
                 });
+                const isExpanded = expandedUnpublishedId === g.id;
+                const productRows = unpublishedProducts.get(g.id);
+                const productsLoading = unpublishedProductsLoading.has(g.id);
                 return (
+                  <Fragment key={g.id}>
                   <tr
-                    key={g.id}
                     className="admin-look-main-row"
-                    onClick={() => navigate(`/admin/user/${g.user_id}`)}
+                    onClick={() => toggleUnpublishedExpand(g.id)}
                     style={{ cursor: 'pointer' }}
                   >
                     <td>
@@ -1706,9 +1777,83 @@ export default function AdminContent() {
                         {g.status}
                       </span>
                     </td>
-                    <td>{g.product_count}</td>
+                    <td onClick={(e) => { e.stopPropagation(); toggleUnpublishedExpand(g.id); }}>
+                      <button className="admin-products-dropdown" type="button" onClick={(e) => { e.stopPropagation(); toggleUnpublishedExpand(g.id); }}>
+                        <span>{g.product_count} Products</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                    </td>
                     <td style={{ textTransform: 'capitalize' }}>{g.model || '—'}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {/* Publish: routes to the curated-looks management
+                          page with ?publish=<gen_id>. The looks page can
+                          pick that param up and open a publish dialog;
+                          for now it lands the admin in the right view to
+                          take the next step manually. */}
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-primary"
+                        style={{ fontSize: 11, padding: '4px 10px' }}
+                        disabled={g.status !== 'done'}
+                        title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish — status is ${g.status}`}
+                        onClick={() => navigate(`/admin/looks?publish=${g.id}`)}
+                      >
+                        Publish
+                      </button>
+                    </td>
                   </tr>
+                  <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
+                    <td colSpan={8} style={{ padding: 0 }}>
+                      <div className="admin-expand-animate">
+                        <div className="admin-look-products">
+                          <h3 className="admin-products-title">Products</h3>
+                          {productsLoading && !productRows ? (
+                            <div style={{ padding: 12, fontSize: 12, color: '#888' }}>Loading products…</div>
+                          ) : !productRows || productRows.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 12, color: '#888' }}>No products linked to this generation.</div>
+                          ) : (
+                            <table className="admin-table admin-products-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ textAlign: 'left' }}>Photo</th>
+                                  <th style={{ textAlign: 'left' }}>Product</th>
+                                  <th>Role</th>
+                                  <th>Price</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {productRows.map(p => (
+                                  <tr key={p.id}>
+                                    <td>
+                                      {p.image_url ? (
+                                        <img
+                                          src={p.image_url}
+                                          alt={p.name}
+                                          style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }}
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                      ) : (
+                                        <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f3f4f6' }} />
+                                      )}
+                                    </td>
+                                    <td style={{ textAlign: 'left' }}>
+                                      <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
+                                      <div style={{ fontSize: 10, color: '#999' }}>{p.brand}</div>
+                                    </td>
+                                    <td style={{ textTransform: 'capitalize', fontSize: 11, color: '#666' }}>{p.role_tag || '—'}</td>
+                                    <td style={{ fontWeight: 600 }}>{p.price || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

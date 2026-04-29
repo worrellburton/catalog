@@ -276,12 +276,32 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
   );
 }
 
+// Seed-data creators come from app/data/looks.ts and can't be deleted
+// from the database. We persist a localStorage set so admins can still
+// hide them from the Creators tab; ships with the rest of the
+// admin-hide patterns (admin_hidden_looks, admin_hidden_products).
+const HIDDEN_CONTENT_CREATORS_KEY = 'catalog:admin-hidden-content-creators';
+
+function readHiddenContentCreators(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_CONTENT_CREATORS_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+
+function writeHiddenContentCreators(set: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(HIDDEN_CONTENT_CREATORS_KEY, JSON.stringify([...set])); } catch { /* quota */ }
+}
+
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
   const [allUsers, setAllUsers] = useState<UserRow[]>([]);
   const [waitlistIds, setWaitlistIds] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [auditingGender, setAuditingGender] = useState(false);
+  const [hiddenContentCreators, setHiddenContentCreators] = useState<Set<string>>(() => readHiddenContentCreators());
   const toastIdRef = useRef(0);
   const navigate = useNavigate();
 
@@ -356,6 +376,7 @@ export default function AdminUsers() {
     const dbNames = new Set(dbCreators.map(c => c.name.toLowerCase()));
     return Object.values(lookCreators)
       .filter(c => !dbNames.has(c.displayName.toLowerCase()))
+      .filter(c => !hiddenContentCreators.has(c.name))
       .map(c => ({
         id: `content-${c.name}`,
         initials: c.displayName.slice(0, 2).toUpperCase(),
@@ -382,13 +403,27 @@ export default function AdminUsers() {
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
 
-  const handleDelete = useCallback(async (userId: string) => {
+  // Surface a per-row delete that handles both real DB profiles and
+  // the seed-data "content-*" rows. We can't hard-delete a creator
+  // bundled into app/data/looks.ts, so for those we mark the handle
+  // as hidden in localStorage and the Creators tab filters them out.
+  const handleDelete = useCallback(async (userId: string, fallbackName?: string) => {
     const target = allUsers.find(u => u.id === userId);
-    if (!target) return;
-    if (target.id.startsWith('content-')) {
-      showToast('Seed-data creators are bundled with the app and can’t be deleted from here.', 'info');
+    if (target?.id.startsWith('content-') || (!target && userId.startsWith('content-'))) {
+      const handle = userId.slice('content-'.length);
+      const seed = lookCreators[handle];
+      const label = target?.name || seed?.displayName || fallbackName || handle;
+      if (!confirm(`Hide ${label} from the admin list?\n\nThey’ll stop appearing here, but their bundled looks remain in the seed catalog until you delete those separately.`)) return;
+      setHiddenContentCreators(prev => {
+        const next = new Set(prev);
+        next.add(handle);
+        writeHiddenContentCreators(next);
+        return next;
+      });
+      showToast(`${label} hidden from creators`, 'success');
       return;
     }
+    if (!target) return;
     if (!confirm(`Delete ${target.name}? This removes their profile permanently.`)) return;
     const { error } = await deleteProfile(userId);
     if (error) {

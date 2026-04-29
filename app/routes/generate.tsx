@@ -1151,6 +1151,8 @@ export default function GeneratePage() {
         {step === 'result' && (
           <section className="gen-step gen-step-result">
             <h2>Your look</h2>
+            <div className="gen-result-layout">
+              <div className="gen-result-stage">
             {!generation && <div className="gen-empty">Loading…</div>}
             {(generation?.status === 'pending' || generation?.status === 'generating') && (
               <GenerationProgress generation={generation} />
@@ -1242,6 +1244,49 @@ export default function GeneratePage() {
                 }}
               />
             )}
+              </div>
+
+              {/* Desktop-only "while you wait" rail. The phone-mockup
+                  progress fills the left column; we use the right column
+                  to surface the user's other looks so the wait feels
+                  like browsing their own catalog. Hidden on mobile via
+                  CSS so the existing single-column flow is preserved. */}
+              <aside className="gen-result-side" aria-label="Your other looks">
+                <div className="gen-result-side-label">
+                  {generation?.status === 'done' ? 'Your looks' : 'While Vision composes…'}
+                </div>
+                {generations.filter(g => g.id !== generation?.id && g.video_url).length === 0 ? (
+                  <div className="gen-result-side-empty">
+                    Your past looks will appear here as you make more.
+                  </div>
+                ) : (
+                  <div className="gen-result-side-grid">
+                    {generations
+                      .filter(g => g.id !== generation?.id && g.video_url)
+                      .slice(0, 8)
+                      .map(g => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          className="gen-result-side-tile"
+                          onClick={() => openGeneration(g)}
+                          aria-label="Open this look"
+                        >
+                          <video
+                            src={g.video_url || undefined}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          <span className="gen-result-side-tile-style">{g.style}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </aside>
+            </div>
           </section>
         )}
       </main>
