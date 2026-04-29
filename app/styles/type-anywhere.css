@@ -127,7 +127,39 @@
   100% { background-position: 100% 50%; }
 }
 
+/* Faint top-of-grid hint. Visible while the user is at the top of
+   the page and hasn't started typing; fades out the moment they
+   scroll or begin typing. */
+.type-anywhere-toast {
+  position: fixed;
+  top: calc(var(--header-height, 100px) + 4px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  z-index: 70;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 360ms ease, transform 360ms ease;
+}
+
+.type-anywhere-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.light-mode .type-anywhere-toast {
+  color: rgba(0, 0, 0, 0.32);
+  text-shadow: none;
+}
+
 /* Mobile — hard hide, BottomBar takes over. */
 @media (max-width: 768px) {
-  .type-anywhere { display: none !important; }
+  .type-anywhere,
+  .type-anywhere-toast { display: none !important; }
 }

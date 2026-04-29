@@ -25,9 +25,20 @@ const HELPER_HINTS = [
 export default function TypeAnywhere({ onSubmit }: Props) {
   const [text, setText] = useState('');
   const [active, setActive] = useState(false);
+  // Faint "type anywhere to search" hint at the top — shown until the
+  // user has scrolled past a small threshold or has typed something.
+  const [scrolled, setScrolled] = useState(false);
   const hideTimer = useRef<number | null>(null);
   // Stable hint per mount — rotating per keystroke would feel jittery.
   const hintRef = useRef(HELPER_HINTS[Math.floor(Math.random() * HELPER_HINTS.length)]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onScroll = () => setScrolled(window.scrollY > 80);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -96,21 +107,33 @@ export default function TypeAnywhere({ onSubmit }: Props) {
   }, [onSubmit, text, active]);
 
   const visible = active && text.length > 0;
+  const hintVisible = !visible && !scrolled;
 
   return (
-    <div
-      className={`type-anywhere ${visible ? 'is-visible' : ''}`}
-      aria-hidden={!visible}
-    >
-      <div className="type-anywhere-text">
-        <span className="type-anywhere-quote-open" aria-hidden="true">“</span>
-        <span className="type-anywhere-value">{text || hintRef.current}</span>
-        <span className="type-anywhere-caret" aria-hidden="true" />
-        <span className="type-anywhere-quote-close" aria-hidden="true">”</span>
+    <>
+      {/* Faint top-of-grid hint. Fades out the moment the user
+          scrolls past 80px or starts typing. */}
+      <div
+        className={`type-anywhere-toast ${hintVisible ? 'is-visible' : ''}`}
+        aria-hidden={!hintVisible}
+      >
+        type anywhere to search
       </div>
-      <div className="type-anywhere-hint">
-        press <kbd>enter</kbd> to make a catalog · <kbd>esc</kbd> to clear
+
+      <div
+        className={`type-anywhere ${visible ? 'is-visible' : ''}`}
+        aria-hidden={!visible}
+      >
+        <div className="type-anywhere-text">
+          <span className="type-anywhere-quote-open" aria-hidden="true">“</span>
+          <span className="type-anywhere-value">{text || hintRef.current}</span>
+          <span className="type-anywhere-caret" aria-hidden="true" />
+          <span className="type-anywhere-quote-close" aria-hidden="true">”</span>
+        </div>
+        <div className="type-anywhere-hint">
+          press <kbd>enter</kbd> to make a catalog · <kbd>esc</kbd> to clear
+        </div>
       </div>
-    </div>
+    </>
   );
 }
