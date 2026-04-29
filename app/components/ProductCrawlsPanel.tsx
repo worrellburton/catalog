@@ -252,10 +252,23 @@ export default function ProductCrawlsPanel() {
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <RerunAllStuckButton
-            stuckCount={rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS)).length}
+            stuckCount={rows.filter(r =>
+              r.scrape_status === 'failed' ||
+              ((r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS))
+            ).length}
+            label={(() => {
+              const failed = rows.filter(r => r.scrape_status === 'failed').length;
+              const stuck = rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS)).length;
+              if (failed > 0 && stuck > 0) return `↺ Rerun failed + stuck (${failed + stuck})`;
+              if (failed > 0) return `↺ Rerun all failed (${failed})`;
+              return `↺ Rerun all stuck (${stuck})`;
+            })()}
             onRerunAll={async () => {
-              const stuck = rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS));
-              for (const r of stuck) {
+              const retryable = rows.filter(r =>
+                r.scrape_status === 'failed' ||
+                ((r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS))
+              );
+              for (const r of retryable) {
                 try { await handleRetry(r.id); } catch (e) { console.warn('rerun failed', r.id, e); }
               }
             }}
