@@ -225,6 +225,12 @@ interface UnpublishedLook {
 // browser stalls under the concurrent decoder/network load —
 // which is what was making the thumbnails slow to paint and the
 // admin tab feel sluggish.
+//
+// Once a row's video has been mounted, we never tear it down — the
+// observer self-disconnects on first sight, so scrolling away and
+// back is instant (no re-fetch). The wrapper also keeps the
+// <video> mounted across hidden-tab toggles since the parent
+// table is now display:none rather than conditionally rendered.
 function LazyThumb({ url }: { url: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
@@ -241,7 +247,10 @@ function LazyThumb({ url }: { url: string }) {
           }
         }
       },
-      { rootMargin: '200px 0px' },
+      // Generous margin so videos are pre-warmed well before the
+      // row enters the viewport. Big-enough number that on most
+      // first loads every row is already inside the threshold.
+      { rootMargin: '1200px 0px' },
     );
     io.observe(node);
     return () => io.disconnect();
@@ -1643,8 +1652,11 @@ export default function AdminContent() {
         </div>
       )}
 
-      {activeTab === 'looks' && looksFilter === 'published' && (
-        <div className="admin-table-wrap">
+      {activeTab === 'looks' && (
+        <div
+          className="admin-table-wrap"
+          style={{ display: looksFilter === 'published' ? undefined : 'none' }}
+        >
           <table className="admin-table">
             <thead>
               <tr>
@@ -1866,8 +1878,11 @@ export default function AdminContent() {
         </div>
       )}
 
-      {activeTab === 'looks' && looksFilter === 'unpublished' && (
-        <div className="admin-table-wrap">
+      {activeTab === 'looks' && (
+        <div
+          className="admin-table-wrap"
+          style={{ display: looksFilter === 'unpublished' ? undefined : 'none' }}
+        >
           <table className="admin-table">
             <thead>
               <tr>
