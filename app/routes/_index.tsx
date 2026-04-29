@@ -71,7 +71,7 @@ import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
 import { hasStoredSupabaseSession } from '~/services/auth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -301,7 +301,14 @@ export default function Home() {
     if (filterUserOverride.current) return;
     let cancelled = false;
     getUserGender(user.id).then(g => {
-      if (cancelled || filterUserOverride.current) return;
+      if (cancelled) return;
+      // Always tell product-creative the gender so brand-strip and
+      // live-ads queries scope correctly, even when the looks-level
+      // filter is overridden by the user. Skip 'unknown' — that's the
+      // null-state and we never want to hide the catalog from someone
+      // we can't tag.
+      if (g === 'male' || g === 'female') setShopperGender(g);
+      if (filterUserOverride.current) return;
       if (g === 'male') setActiveFilter('men');
       else if (g === 'female') setActiveFilter('women');
       // 'unknown' leaves the catalog wide-open ('all').
