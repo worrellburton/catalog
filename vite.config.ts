@@ -58,6 +58,7 @@ export default defineConfig({
             route("links", "routes/admin/links.tsx");
             route("affiliate", "routes/admin/affiliate.tsx");
             route("looks", "routes/admin/looks.tsx");
+            route("publish/:id", "routes/admin/publish.$id.tsx");
             route("moderation", "routes/admin/moderation.tsx");
             route("musics", "routes/admin/musics.tsx");
             route("places", "routes/admin/places.tsx");
