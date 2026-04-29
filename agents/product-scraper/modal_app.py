@@ -45,6 +45,30 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
 
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
+def _trigger_embed(product_id: str, supabase_url: str, service_key: str):
+    """Fire the embed-entity edge function for a product (best-effort, non-blocking)."""
+    import json
+    import urllib.request
+    url = f"{supabase_url}/functions/v1/embed-entity"
+    payload = json.dumps({"id": product_id, "entity_type": "product"}).encode()
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {service_key}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            status = resp.status
+            print(f"  🧠 [{product_id}] embed-entity → HTTP {status}")
+    except Exception as e:
+        # Best-effort — scrape success is not affected by embed failure
+        print(f"  ⚠️  [{product_id}] embed-entity error (non-fatal): {e}")
+
+
 @app.function(
     image=scraper_image,
     secrets=secrets,
@@ -59,7 +83,9 @@ def scrape_and_update(product_id: str, url: str):
     from supabase import create_client
     from agent import run_agent
 
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+    sb_url = os.environ["SUPABASE_URL"]
+    sb_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    supabase = create_client(sb_url, sb_key)
 
     # Mark as processing
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
@@ -82,6 +108,8 @@ def scrape_and_update(product_id: str, url: str):
             "availability": product.get("availability"),
         }).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
+        # Trigger semantic embedding in the background (best-effort)
+        _trigger_embed(product_id, sb_url, sb_key)
 
     try:
         run_agent(url, save=False, on_save=_write_to_db)
