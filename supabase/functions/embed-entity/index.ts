@@ -83,12 +83,47 @@ async function generateConcept(
 
   // Strip potential markdown code fences before parsing
   const cleaned = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
-  const parsed = JSON.parse(cleaned) as ConceptResult;
 
-  if (!parsed.concept_doc || !parsed.concept_facets) {
-    throw new Error('Claude returned incomplete concept: ' + cleaned.slice(0, 200));
+  // If Claude refused or returned prose instead of JSON, fall back to heuristic
+  try {
+    const parsed = JSON.parse(cleaned) as ConceptResult;
+    if (!parsed.concept_doc || !parsed.concept_facets) {
+      throw new Error('incomplete');
+    }
+    return parsed;
+  } catch {
+    return heuristicConcept(input, entityType);
   }
-  return parsed;
+}
+
+// Fallback when Claude refuses or returns non-JSON — builds a minimal but
+// valid concept_doc from the raw product/look fields.
+function heuristicConcept(input: string, entityType: 'product' | 'look'): ConceptResult {
+  // Extract key lines from the structured input string
+  const lines = input.split('\n');
+  const get = (prefix: string) =>
+    lines.find(l => l.startsWith(prefix))?.slice(prefix.length).trim() ?? '';
+
+  const name  = get('Name:') || get('Title:') || 'item';
+  const brand = get('Brand:');
+  const desc  = get('Description:');
+
+  const brandStr  = brand ? ` by ${brand}` : '';
+  const descStr   = desc  ? ` ${desc}`     : '';
+  const concept_doc = entityType === 'product'
+    ? `${name}${brandStr}.${descStr} A versatile piece suitable for a range of occasions and styles.`
+    : `A fashion look featuring ${name}.${descStr} Suitable for casual to dressed-up occasions.`;
+
+  return {
+    concept_doc,
+    concept_facets: {
+      garment_type: entityType === 'look' ? 'outfit' : 'clothing',
+      color_family: [],
+      occasion: ['casual'],
+      style_tags: [],
+      formality_score: 0.5,
+    },
+  };
 }
 
 // ── TwelveLabs: text embedding (Marengo 3.0, 512-dim) ───────────────────────
