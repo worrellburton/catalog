@@ -512,7 +512,11 @@ export default function ContinuousFeed({
   if (showEmptyState || showSourcingState) {
     return (
       <EmptyCatalogState
-        catalogName={trimmedQuery}
+        // While sourcing, prefer the live query so a fresh "Shirts"
+        // search doesn't render under the previous "Pants" heading.
+        // Empty (committed) state still uses the committed query —
+        // that's the result the user actually got back.
+        catalogName={showSourcingState ? (liveTrimmed || trimmedQuery) : trimmedQuery}
         isSourcing={showSourcingState || (showEmptyState && semantic.coldMiss)}
       />
     );
