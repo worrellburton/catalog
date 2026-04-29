@@ -13,10 +13,12 @@ interface BottomBarProps {
   onSelectSuggestion?: (query: string) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
+  /** True while nl-search is resolving — shows a spinner in the input. */
+  searchLoading?: boolean;
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -28,6 +30,11 @@ function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
+  // onSearchChange fires on every keystroke — no debounce here.
+  // The feed itself only commits once nl-search resolves, so the spinner
+  // appears immediately and the grid stays frozen until results are ready.
+  const emitSearch = onSearchChange;
+  const emitSearchImmediate = onSearchChange;
 
   // Lift the bar above iOS Safari's bottom URL toolbar. The toolbar is
   // part of the layout viewport (not the visual viewport) and isn't
@@ -136,8 +143,8 @@ function BottomBar({
   const handleSearchInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setLocalSearch(val);
-    onSearchChange(val.trim().toLowerCase());
-  }, [onSearchChange]);
+    emitSearch(val.trim().toLowerCase());
+  }, [emitSearch]);
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
@@ -147,12 +154,12 @@ function BottomBar({
       if (onSelectSuggestion) {
         onSelectSuggestion(query);
       } else {
-        onSearchChange(query.toLowerCase());
+        emitSearch(query.toLowerCase());
       }
       setSearchOpen(false);
       btn.classList.remove('tapped');
     }, 600);
-  }, [onSearchChange, onSelectSuggestion]);
+  }, [emitSearch, onSelectSuggestion]);
 
   const handleFilterApply = useCallback(() => {
     // Sync gender filters
@@ -260,14 +267,28 @@ function BottomBar({
             }}
           />
           {localSearch && (
-            <button
-              type="button"
-              className="bottom-search-clear"
-              onClick={() => { setLocalSearch(''); onSearchChange(''); }}
-              aria-label="Clear search"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            searchLoading ? (
+              // Spinner while nl-search is resolving
+              <span className="bottom-search-spinner" aria-label="Searching" aria-live="polite">
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ animation: 'search-spin 0.7s linear infinite', display: 'block' }}
+                >
+                  <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
+                  <path d="M12 3a9 9 0 0 1 9 9" />
+                </svg>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="bottom-search-clear"
+                onClick={() => { setLocalSearch(''); emitSearch(''); }}
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            )
           )}
         </div>
 

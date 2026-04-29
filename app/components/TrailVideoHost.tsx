@@ -34,11 +34,12 @@ import {
 } from 'react';
 
 // Pool cap. We size for "2 viewports of cards stay alive at once" — at
-// ~6 cards per mobile viewport that's 12 cards, so 16 gives comfortable
-// headroom before eviction. Videos that exit the 2-viewport band get
-// returned to the off-screen pool (paused) and only get evicted entirely
-// once the cap is exceeded.
-const POOL_MAX = 16;
+// ~6 cards per mobile viewport that's 12 cards. 32 gives enough headroom
+// for search results (up to 48 items per page) so videos beyond row 3
+// don't lose their buffered frames. Videos that exit the 2-viewport band
+// get returned to the off-screen pool (paused) and only get evicted
+// entirely once the cap is exceeded.
+const POOL_MAX = 32;
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.

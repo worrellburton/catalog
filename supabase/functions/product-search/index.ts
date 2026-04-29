@@ -2,8 +2,16 @@
 // Keeps the SERPAPI_KEY secret server-side and forwards normalized results
 // to the admin "Add Products" research modal.
 //
-// Required Supabase secret:
-//   supabase secrets set SERPAPI_KEY=xxxxxxxxxxxx
+// When called with `{ ingest: true }`, also persists each scraped product
+// into the `products` table and triggers `embed-entity` so it becomes
+// searchable. Used by the search-backfill closed-loop agent.
+//
+// Required Supabase secrets:
+//   SERPAPI_KEY                 — SerpAPI Google Shopping
+//   SUPABASE_URL                — for ingest path
+//   SUPABASE_SERVICE_ROLE_KEY   — for ingest path
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -192,9 +200,15 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     let query = url.searchParams.get('q') || '';
-    if (!query && req.method === 'POST') {
+    let ingest = url.searchParams.get('ingest') === 'true';
+    let ingestGender: 'men' | 'women' | 'unisex' | undefined;
+    if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
-      query = String(body.query || body.q || '');
+      if (!query) query = String(body.query || body.q || '');
+      if (body.ingest === true) ingest = true;
+      if (body.gender && ['men', 'women', 'unisex'].includes(body.gender)) {
+        ingestGender = body.gender;
+      }
     }
     query = query.trim();
     if (!query) return jsonRes({ success: false, error: 'missing query' }, 400);
@@ -208,7 +222,72 @@ Deno.serve(async (req: Request) => {
     if (detailLimit > 20) detailLimit = 20;
 
     const products = await searchSerpApi(query, serpKey, detailLimit);
-    return jsonRes({ success: true, query, count: products.length, detailLimit, products });
+
+    // ── Ingest path: persist + queue embeddings ─────────────────────────────
+    let ingested: { id: string; name: string }[] = [];
+    if (ingest && products.length) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (!supabaseUrl || !serviceKey) {
+        return jsonRes({ success: false, error: 'ingest requested but Supabase env missing' }, 500);
+      }
+      const admin = createClient(supabaseUrl, serviceKey);
+
+      // Skip products that already exist (dedupe by url)
+      const urls = products.map(p => p.url).filter(Boolean);
+      const { data: existing } = await admin
+        .from('products')
+        .select('url')
+        .in('url', urls);
+      const existingUrls = new Set((existing ?? []).map(r => r.url));
+
+      const rowsToInsert = products
+        .filter(p => p.url && !existingUrls.has(p.url))
+        .map(p => ({
+          name: p.name,
+          brand: p.brand || null,
+          price: p.price || null,
+          url: p.url,
+          image_url: p.image_url || null,
+          gender: ingestGender ?? p.gender,
+          is_active: true,
+        }));
+
+      if (rowsToInsert.length) {
+        const { data: inserted, error: insertErr } = await admin
+          .from('products')
+          .insert(rowsToInsert)
+          .select('id, name');
+        if (insertErr) {
+          return jsonRes({ success: false, error: `ingest insert: ${insertErr.message}` }, 500);
+        }
+        ingested = inserted ?? [];
+
+        // Fire embed-entity for each newly inserted product (best-effort, parallel)
+        await Promise.allSettled(
+          ingested.map(row =>
+            fetch(`${supabaseUrl}/functions/v1/embed-entity`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${serviceKey}`,
+                apikey: serviceKey,
+              },
+              body: JSON.stringify({ id: row.id, entity_type: 'product' }),
+            })
+          )
+        );
+      }
+    }
+
+    return jsonRes({
+      success: true,
+      query,
+      count: products.length,
+      detailLimit,
+      products,
+      ingested: ingest ? { count: ingested.length, ids: ingested.map(r => r.id) } : undefined,
+    });
   } catch (err) {
     return jsonRes({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }

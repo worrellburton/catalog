@@ -48,27 +48,48 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     }
   }, [inViewport, creative.id]);
 
-  // Mark "loaded" when the shared <video> element actually has frames. We
-  // reach into the slot for it because we don't own the element — the host
-  // does. This is for the shimmer overlay only.
+  // Mark "loaded" when the shared <video> element actually has frames.
+  // We reach into the slot for it because TrailVideoHost owns the element.
+  //
+  // Race condition: useTrailVideo appends the <video> during the React
+  // commit phase (ref callback), but this effect also fires on the same
+  // commit. The video may not be in the DOM yet when the effect runs, so we
+  // use a MutationObserver to wait for it rather than querying immediately.
   useEffect(() => {
     if (!inViewport) return;
-    const node = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
-    if (!node) return;
-    if (node.readyState >= 2) {
-      setLoaded(true);
-      return;
-    }
-    const handler = () => setLoaded(true);
-    ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-      node.addEventListener(evt, handler, { once: true });
-    });
-    const timeout = setTimeout(() => setLoaded(true), 8000);
-    return () => {
-      clearTimeout(timeout);
-      ['playing', 'canplay', 'loadeddata'].forEach(evt => {
-        node.removeEventListener(evt, handler);
+    const slot = slotRef.current;
+    if (!slot) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let mo: MutationObserver | undefined;
+
+    const attachListeners = (node: HTMLVideoElement) => {
+      if (node.readyState >= 2) { setLoaded(true); return; }
+      const handler = () => setLoaded(true);
+      ['playing', 'canplay', 'loadeddata'].forEach(evt =>
+        node.addEventListener(evt, handler, { once: true })
+      );
+    };
+
+    const existing = slot.querySelector('video') as HTMLVideoElement | null;
+    if (existing) {
+      attachListeners(existing);
+    } else {
+      mo = new MutationObserver(() => {
+        const v = slot.querySelector('video') as HTMLVideoElement | null;
+        if (v) { mo!.disconnect(); mo = undefined; attachListeners(v); }
       });
+      mo.observe(slot, { childList: true, subtree: true });
+    }
+
+    // Hard cap: if the video never fires a ready event (network error,
+    // unsupported codec, etc.) hide the shimmer after 4 s so the card
+    // still looks correct even with a broken source.
+    timeoutId = setTimeout(() => setLoaded(true), 4000);
+
+    return () => {
+      clearTimeout(timeoutId);
+      mo?.disconnect();
     };
   }, [inViewport, creative.id]);
 

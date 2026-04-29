@@ -15,6 +15,8 @@ export interface Creator {
 
 export interface Look {
   id: number;
+  /** Supabase UUID — present for DB-sourced looks, absent for static seed data. */
+  uuid?: string;
   title: string;
   video: string;
   // 'unisex' looks (and the rare untyped null in the DB) stay visible

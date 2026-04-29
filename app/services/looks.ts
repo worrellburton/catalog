@@ -143,6 +143,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     const fallbackName = fallbackProfile?.full_name || fallbackProfile?.email?.split('@')[0] || null;
     return {
       id: row.legacy_id ?? -(index + 1),
+      uuid: row.id,
       title: row.title,
       video: primary.video_url || '',
       gender: (row.gender as 'men' | 'women') || 'women',
