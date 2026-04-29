@@ -462,6 +462,13 @@ export default function AdminContent() {
       next.add(g.id);
       return next;
     });
+    // Optimistic UX: drop the row from the unpublished list and
+    // flash the bottom-center toast IMMEDIATELY. The Supabase
+    // round-trip then runs in the background; on failure we put
+    // the row back and replace the toast with the error.
+    setUnpublished(prev => prev.filter(u => u.id !== g.id));
+    flashPublishMsg('This look is published');
+
     try {
       // Need the linked products to attach after the look is created.
       let products = unpublishedProducts.get(g.id);
@@ -493,36 +500,45 @@ export default function AdminContent() {
         description: `Promoted from generation ${g.id}`,
         gender: 'unisex',
       });
-      await Promise.all((products || []).map(p =>
+      // Don't block the toast / list refresh on per-product attaches.
+      // Each one round-trips the manage-looks edge function and a
+      // failed product shouldn't fail the whole publish.
+      void Promise.all((products || []).map(p =>
         addProductToLook(look.id, { product_id: p.id }).catch(err => {
           console.warn('[publish-inline] addProductToLook failed:', err);
         })
       ));
       // Same two follow-ups as the dedicated screen — without these
       // the new row never appears in the Published list.
+      const followUps: Promise<unknown>[] = [];
       if (supabase && g.video_url) {
-        const { error: creativeErr } = await supabase
+        followUps.push(supabase
           .from('looks_creative')
-          .insert({ look_id: look.id, video_url: g.video_url, is_primary: true });
-        if (creativeErr) console.warn('[publish-inline] looks_creative insert failed:', creativeErr.message);
+          .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
+          .then(({ error }: { error: { message: string } | null }) => {
+            if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
+          }));
       }
       if (supabase) {
-        const { error: statusErr } = await supabase
+        followUps.push(supabase
           .from('looks')
           .update({ status: 'live' })
-          .eq('id', look.id);
-        if (statusErr) console.warn('[publish-inline] status update failed:', statusErr.message);
+          .eq('id', look.id)
+          .then(({ error }: { error: { message: string } | null }) => {
+            if (error) console.warn('[publish-inline] status update failed:', error.message);
+          }));
       }
+      await Promise.all(followUps);
       invalidateLooksCache();
-      // Drop the row from the unpublished list and bump the published
-      // looks state so the Published tab reflects the new entry
-      // without a hard refresh.
-      setUnpublished(prev => prev.filter(u => u.id !== g.id));
+      // Refresh the Published tab in the background so the new row
+      // shows up. This may take a moment but the UI already moved on.
       const fresh = await getLooks();
       setLooks(fresh);
-      flashPublishMsg('This look is published');
     } catch (err) {
       console.error('[publish-inline] failed:', err);
+      // Put the row back and replace the optimistic toast with an
+      // error so the admin knows it didn't actually go through.
+      setUnpublished(prev => prev.some(u => u.id === g.id) ? prev : [g, ...prev]);
       flashPublishMsg(err instanceof Error ? `Publish failed: ${err.message}` : 'Publish failed');
     } finally {
       setPublishingIds(prev => {
@@ -1660,15 +1676,32 @@ export default function AdminContent() {
                       </td>
                       <td>
                         <div className="admin-look-thumb">
-                          <video src={`${basePath}/${row.video}`} muted loop playsInline preload="metadata" />
-                          <div className="admin-look-preview">
-                            <video src={`${basePath}/${row.video}`} autoPlay muted loop playsInline />
-                          </div>
+                          {(() => {
+                            // New looks published from the unpublished
+                            // tab carry an absolute Supabase URL; legacy
+                            // seed rows are relative paths under
+                            // basePath. Branch so neither breaks.
+                            const isAbsolute = row.video && /^https?:\/\//i.test(row.video);
+                            const src = row.video ? (isAbsolute ? row.video : `${basePath}/${row.video}`) : '';
+                            if (!src) return <div style={{ width: '100%', height: '100%', background: '#111' }} />;
+                            return (
+                              <>
+                                <video src={src} autoPlay muted loop playsInline preload="metadata" />
+                                <div className="admin-look-preview">
+                                  <video src={src} autoPlay muted loop playsInline />
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td>
                         <div className="admin-look-creator">
-                          <img className="admin-look-creator-avatar" src={row.creatorAvatar} alt={row.creator} />
+                          {row.creatorAvatar ? (
+                            <img className="admin-look-creator-avatar" src={row.creatorAvatar} alt={row.creator} />
+                          ) : (
+                            <div className="admin-look-creator-avatar" style={{ background: '#e5e7eb' }} />
+                          )}
                           <span>{row.creatorDisplay}</span>
                         </div>
                       </td>
