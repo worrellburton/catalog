@@ -36,7 +36,7 @@
   gap: 4px;
   font-family: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
   font-weight: 500;
-  font-size: clamp(40px, 8vw, 112px);
+  font-size: clamp(32px, 6vw, 88px);
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: #fff;
