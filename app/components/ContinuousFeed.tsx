@@ -34,6 +34,8 @@ interface ContinuousFeedProps {
   bookmarks: BookmarksInterface;
   /** Called with true when nl-search is in-flight, false when resolved. */
   onSearchLoadingChange?: (loading: boolean) => void;
+  /** Incremented on each Enter/submit to bypass debounce and fire immediately. */
+  searchTrigger?: number;
 }
 
 type Segment =
@@ -93,6 +95,7 @@ export default function ContinuousFeed({
   onCreateCatalog,
   bookmarks,
   onSearchLoadingChange,
+  searchTrigger = 0,
 }: ContinuousFeedProps) {
   // ── Committed query — the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -168,7 +171,7 @@ export default function ContinuousFeed({
   // ranked looks float to the top. Falls back to the local text filter when
   // the edge function is unavailable or the query is too short.
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt });
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the
