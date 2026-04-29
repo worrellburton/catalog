@@ -127,14 +127,16 @@
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 70;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 12px;
+  font-family: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
+  font-size: clamp(32px, 6vw, 88px);
   font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  text-transform: none;
   color: rgba(255, 255, 255, 0.42);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  padding: 10px 22px;
+  text-shadow:
+    0 2px 18px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(255, 255, 255, 0.12);
+  padding: 14px 32px;
   border-radius: 999px;
   background: transparent;
   border: 1px solid transparent;
