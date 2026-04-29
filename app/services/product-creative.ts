@@ -545,12 +545,28 @@ export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<Produc
 // the seed has an embedding, otherwise falls back to same-brand → newest.
 export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k });
+  // Pull a margin so the gender post-filter doesn't leave the rail short.
+  const fetchK = shopperGender === 'unknown' ? k : Math.min(k * 2, 48);
+  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK });
   if (error || !data) {
     if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
     return [];
   }
-  return (data as Array<{
+  // The RPC doesn't return product.gender, so when a gender scope is
+  // active we hydrate the missing column with one batched lookup
+  // before post-filtering. Untagged products stay visible.
+  let genderById: Map<string, string | null> | null = null;
+  if (shopperGender !== 'unknown') {
+    const ids = Array.from(new Set((data as Array<{ product_id: string }>).map(r => r.product_id))).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, gender')
+        .in('id', ids);
+      genderById = new Map((prods || []).map((p: { id: string; gender: string | null }) => [p.id, p.gender]));
+    }
+  }
+  const mapped = (data as Array<{
     id: string;
     product_id: string;
     video_url: string | null;
@@ -593,6 +609,10 @@ export async function getSimilarCreatives(seedId: string, k = 12): Promise<Produ
       url: null,
     },
   } as ProductAd));
+  if (!genderById) return mapped.slice(0, k);
+  return mapped
+    .filter(ad => passesGenderFilter({ gender: genderById!.get(ad.product_id) ?? null }))
+    .slice(0, k);
 }
 
 // Impression batching. The consumer feed mounts ~50 CreativeCards at once
