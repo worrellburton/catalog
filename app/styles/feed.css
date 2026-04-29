@@ -532,6 +532,7 @@
 }
 
 .promo-card:hover .creative-delete-btn,
+.look-card:hover .creative-delete-btn,
 .creative-delete-btn:focus-visible {
   opacity: 1;
   transform: scale(1);
