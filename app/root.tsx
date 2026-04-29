@@ -34,6 +34,7 @@ import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
+import "./styles/import.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

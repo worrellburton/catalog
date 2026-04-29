@@ -25,9 +25,13 @@ const HELPER_HINTS = [
 export default function TypeAnywhere({ onSubmit }: Props) {
   const [text, setText] = useState('');
   const [active, setActive] = useState(false);
-  // Faint "type anywhere to search" hint at the top — shown until the
-  // user has scrolled past a small threshold or has typed something.
+  // "type anywhere to search" hint pinned to viewport center. Starts
+  // with a solid pill backdrop so the text stands out against the
+  // grid; the moment the user moves the mouse (a signal they're
+  // engaging with the page), the backdrop fades away. Scrolling past
+  // a small threshold dismisses it entirely.
   const [scrolled, setScrolled] = useState(false);
+  const [mouseMoved, setMouseMoved] = useState(false);
   const hideTimer = useRef<number | null>(null);
   // Stable hint per mount — rotating per keystroke would feel jittery.
   const hintRef = useRef(HELPER_HINTS[Math.floor(Math.random() * HELPER_HINTS.length)]);
@@ -39,6 +43,17 @@ export default function TypeAnywhere({ onSubmit }: Props) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (mouseMoved) return;
+    // First mousemove after mount kills the solid pill. We don't
+    // re-arm — once the user has touched the page, they don't need
+    // the bold prompt again this session.
+    const onMove = () => setMouseMoved(true);
+    window.addEventListener('mousemove', onMove, { passive: true, once: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [mouseMoved]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -111,10 +126,11 @@ export default function TypeAnywhere({ onSubmit }: Props) {
 
   return (
     <>
-      {/* Faint top-of-grid hint. Fades out the moment the user
-          scrolls past 80px or starts typing. */}
+      {/* Centered "type anywhere to search" hint. Solid-ish glass
+          pill backdrop until the user moves the mouse; then it
+          melts to faint text only. Fades fully on scroll. */}
       <div
-        className={`type-anywhere-toast ${hintVisible ? 'is-visible' : ''}`}
+        className={`type-anywhere-toast ${hintVisible ? 'is-visible' : ''} ${!mouseMoved ? 'is-solid' : ''}`}
         aria-hidden={!hintVisible}
       >
         type anywhere to search

@@ -116,35 +116,65 @@
   100% { background-position: 100% 50%; }
 }
 
-/* Faint top-of-grid hint. Visible while the user is at the top of
-   the page and hasn't started typing; fades out the moment they
-   scroll or begin typing. */
+/* Centered "type anywhere to search" hint. Defaults to a soft
+   glass pill so the text stands out against busy grid videos;
+   loses the pill (becomes faint text only) once the user moves
+   the mouse, and dismisses entirely on scroll. */
 .type-anywhere-toast {
   position: fixed;
-  top: calc(var(--header-height, 100px) + 4px);
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translate(-50%, -50%);
   z-index: 70;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.32);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.42);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid transparent;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
   pointer-events: none;
   opacity: 0;
-  transition: opacity 360ms ease, transform 360ms ease;
+  transition:
+    opacity 360ms ease,
+    background 480ms ease,
+    border-color 480ms ease,
+    color 360ms ease,
+    backdrop-filter 480ms ease,
+    -webkit-backdrop-filter 480ms ease;
 }
 
 .type-anywhere-toast.is-visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+}
+
+/* "Kinda glass not really" — light translucent fill, gentle blur,
+   subtle ring. Soft enough that scrolling video underneath still
+   bleeds through, solid enough the text reads against it. */
+.type-anywhere-toast.is-solid {
+  background: rgba(20, 20, 22, 0.42);
+  border-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  color: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .light-mode .type-anywhere-toast {
-  color: rgba(0, 0, 0, 0.32);
+  color: rgba(0, 0, 0, 0.42);
   text-shadow: none;
+}
+
+.light-mode .type-anywhere-toast.is-solid {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.78);
 }
 
 /* Mobile — hard hide, BottomBar takes over. */
