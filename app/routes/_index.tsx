@@ -8,6 +8,7 @@ import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import TypeAnywhere from '~/components/TypeAnywhere';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint — the user has to tap into them. Splitting trims the
@@ -776,6 +777,11 @@ export default function Home() {
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
           />
+
+          {/* Desktop "type-anywhere" search. Mobile keeps the
+              BottomBar pill below — both mount, CSS hides the
+              other per breakpoint. */}
+          <TypeAnywhere onSubmit={handleCreateCatalog} />
 
           <BottomBar
             activeFilter={activeFilter}

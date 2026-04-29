@@ -20,6 +20,7 @@ import "./styles/waitlist.css";
 import "./styles/splash-screen.css";
 import "./styles/header.css";
 import "./styles/bottom-bar.css";
+import "./styles/type-anywhere.css";
 import "./styles/bookmarks.css";
 import "./styles/grid-view.css";
 import "./styles/look-overlay.css";

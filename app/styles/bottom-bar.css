@@ -1,4 +1,9 @@
-/* Bottom bar - liquid glass */
+/* Bottom bar - liquid glass.
+   Hidden on desktop — the desktop search experience is a
+   type-anywhere overlay (see TypeAnywhere). The pill is mobile-only. */
+@media (min-width: 769px) {
+  .bottom-bar { display: none !important; }
+}
 .bottom-bar {
   position: fixed;
   bottom: 24px;
