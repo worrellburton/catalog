@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { nonProductUrlReason } from '~/utils/productUrl';
 
 // Modal scraper endpoint — called on retry/add so products don't wait for
 // the 8am UTC daily cron. Gracefully no-ops if the env var isn't set.
@@ -152,12 +153,18 @@ export async function listProducts(options?: {
 /**
  * Reset a product's scrape_status back to 'pending' and immediately trigger
  * the scraper so it doesn't wait for the daily cron.
+ *
+ * NOTE: scraped_at is set to now() (not null) so the watchdog's
+ * COALESCE(scraped_at, created_at) uses the retry time rather than the
+ * original created_at, preventing the row from being immediately re-failed
+ * by reconcileStuckScrapes when created_at is old.
  */
-export async function retryProductScrape(productId: string): Promise<void> {
+export async function retryProductScrape(productId: string): Promise<{ url: string | null; retriedAt: string }> {
   if (!supabase) throw new Error('Supabase not configured');
+  const retriedAt = new Date().toISOString();
   const { data, error } = await supabase
     .from('products')
-    .update({ scrape_status: 'pending', scrape_error: null, scraped_at: null })
+    .update({ scrape_status: 'pending', scrape_error: null, scraped_at: retriedAt })
     .eq('id', productId)
     .select('url')
     .single();
@@ -165,6 +172,22 @@ export async function retryProductScrape(productId: string): Promise<void> {
   if (data?.url) {
     await _triggerScrape(productId, data.url);
   }
+  return { url: data?.url ?? null, retriedAt };
+}
+
+/**
+ * Delete all products whose URL is a Google search/shopping page.
+ * These were ingested before the URL pre-filter was added and can
+ * never be scraped. Returns the number of rows deleted.
+ */
+export async function deleteGoogleUrlProducts(): Promise<number> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { count, error } = await supabase
+    .from('products')
+    .delete({ count: 'exact' })
+    .ilike('url', '%google.com%');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 /**
@@ -180,11 +203,43 @@ export async function deleteProduct(productId: string): Promise<void> {
 }
 
 /**
+ * Watchdog: flips any product stuck in scrape_status='processing' for
+ * more than `staleAfterMinutes` to 'failed'. Modal containers occasionally
+ * die mid-run and never write the final status. Returns the number of
+ * rows reconciled. Safe to call on every panel load.
+ */
+export async function reconcileStuckScrapes(staleAfterMinutes = 20): Promise<number> {
+  if (!supabase) return 0;
+  const { data, error } = await supabase.rpc('reconcile_stuck_product_scrapes', {
+    stale_after_minutes: staleAfterMinutes,
+  });
+  if (error) {
+    // RPC may not exist yet (migration not applied) — fall back to a
+    // best-effort client-side update so the panel still self-heals.
+    const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000).toISOString();
+    const { count } = await supabase
+      .from('products')
+      .update({
+        scrape_status: 'failed',
+        scrape_error: `Auto-failed by watchdog: stuck in processing > ${staleAfterMinutes} minutes`,
+        scraped_at: new Date().toISOString(),
+      }, { count: 'exact' })
+      .eq('scrape_status', 'processing')
+      .lt('created_at', cutoff)
+      .select('id');
+    return count ?? 0;
+  }
+  return typeof data === 'number' ? data : 0;
+}
+
+/**
  * Insert a new product URL row with scrape_status='pending' and immediately
  * trigger the scraper (don't rely solely on the Supabase INSERT webhook).
  */
 export async function addProductUrl(url: string): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
+  const reason = nonProductUrlReason(url);
+  if (reason) throw new Error(`Refusing to add: ${reason}. Paste a direct product page URL.`);
   const { data, error } = await supabase
     .from('products')
     .insert({ url, scrape_status: 'pending', source: 'brand_url' })

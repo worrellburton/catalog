@@ -1328,7 +1328,10 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 
 /* Toggle switch (interactive) */
-/* iOS-style toggle for the Admin column in /admin/users. */
+/* iOS-style toggle for the Admin column in /admin/users.
+   Scoped under .admin-toggle (the <label>) so its ::after thumb
+   doesn't leak onto the button-based .admin-toggle-btn variant
+   below — they share .admin-toggle-track but render differently. */
 .admin-toggle {
   position: relative;
   display: inline-block;
@@ -1343,14 +1346,14 @@ html.admin-on-dark-canvas .admin-topbar,
   height: 0;
   position: absolute;
 }
-.admin-toggle-track {
+.admin-toggle .admin-toggle-track {
   position: absolute;
   inset: 0;
   background: #d4d4d8;
   border-radius: 999px;
   transition: background 0.18s ease;
 }
-.admin-toggle-track::after {
+.admin-toggle .admin-toggle-track::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -1374,7 +1377,7 @@ html.admin-on-dark-canvas .admin-topbar,
   outline: none;
   -webkit-tap-highlight-color: transparent;
 }
-.admin-toggle-track {
+.admin-toggle-btn .admin-toggle-track {
   display: flex;
   align-items: center;
   width: 28px;
@@ -1390,7 +1393,7 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-toggle-btn.off .admin-toggle-track {
   background: #d1d1d6;
 }
-.admin-toggle-thumb {
+.admin-toggle-btn .admin-toggle-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;

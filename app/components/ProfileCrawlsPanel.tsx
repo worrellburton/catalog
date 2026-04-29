@@ -7,6 +7,13 @@ import {
   retryCrawlJob,
   type CrawlJob,
 } from '~/services/site-crawls';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
+
+// Typical wall-clock for a profile crawl (single shopmy/ltk/linktree
+// page → enumerate every product link). Past 2x this we flag as stuck.
+const ESTIMATED_PROFILE_CRAWL_SECONDS = 300;
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#f59e0b',
@@ -178,17 +185,28 @@ export default function ProfileCrawlsPanel() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
           Crawl a creator/curator profile (e.g. shopmy.us/drconnieyang) and ingest every
           product they’ve linked, across all brands.
         </p>
-        <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New Profile Crawl
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <RerunAllStuckButton
+            stuckCount={jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_PROFILE_CRAWL_SECONDS)).length}
+            onRerunAll={async () => {
+              const stuck = jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_PROFILE_CRAWL_SECONDS));
+              for (const j of stuck) {
+                try { await handleRetry(j); } catch (e) { console.warn('rerun failed', j.id, e); }
+              }
+            }}
+          />
+          <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Profile Crawl
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -226,7 +244,19 @@ export default function ProfileCrawlsPanel() {
                     </a>
                   </td>
                   <td>
-                    <StatusBadge status={j.status} />
+                    {(j.status === 'pending' || j.status === 'crawling') ? (
+                      <JobProgress
+                        status={j.status}
+                        startedAt={j.started_at}
+                        createdAt={j.created_at}
+                        estimatedSeconds={ESTIMATED_PROFILE_CRAWL_SECONDS}
+                        isQueued={j.status === 'pending' && !j.started_at}
+                        onRerun={() => handleRetry(j)}
+                        rerunning={busyId === j.id}
+                      />
+                    ) : (
+                      <StatusBadge status={j.status} />
+                    )}
                     {j.error && (
                       <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={j.error}>
                         {j.error}

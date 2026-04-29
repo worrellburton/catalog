@@ -65,10 +65,22 @@ function guessBrand(title: string, source: string): string {
   return '';
 }
 
-// Fetch full gallery via SerpAPI's google_immersive_product engine using the
-// page_token returned with each google_shopping result. Google's older
-// google_product engine has been deprecated.
-async function fetchImmersiveMedia(pageToken: string, apiKey: string): Promise<string[]> {
+// Fetch the full gallery AND resolve the merchant URL via SerpAPI's
+// google_immersive_product engine using the page_token returned with each
+// google_shopping result. SerpAPI's `link` / `product_link` fields are usually
+// google.com/shopping/product/... pages that the scraper agent can never turn
+// into a real PDP, so we pull the top online seller's direct merchant URL out
+// of the immersive details and use that instead.
+interface ImmersiveDetails {
+  images: string[];
+  merchantUrl: string;
+}
+
+function isGoogleUrl(u: string): boolean {
+  return /^https?:\/\/(www\.)?google\.com\//i.test(u);
+}
+
+async function fetchImmersiveDetails(pageToken: string, apiKey: string): Promise<ImmersiveDetails> {
   try {
     const params = new URLSearchParams({
       engine: 'google_immersive_product',
@@ -76,13 +88,38 @@ async function fetchImmersiveMedia(pageToken: string, apiKey: string): Promise<s
       api_key: apiKey,
     });
     const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-    if (!res.ok) return [];
+    if (!res.ok) return { images: [], merchantUrl: '' };
     const json = await res.json();
     const thumbs = json?.product_results?.thumbnails;
-    if (!Array.isArray(thumbs)) return [];
-    return thumbs.filter((u: unknown) => typeof u === 'string' && (u as string).startsWith('http'));
+    const images = Array.isArray(thumbs)
+      ? thumbs.filter((u: unknown): u is string => typeof u === 'string' && u.startsWith('http'))
+      : [];
+
+    // Walk SerpAPI's online_sellers list and pick the first non-Google merchant URL.
+    // Schema across versions: stores | online_sellers | sellers_results.online_sellers
+    type Seller = { direct_link?: string; link?: string };
+    const sellerLists: Seller[][] = [
+      json?.sellers_results?.online_sellers,
+      json?.online_sellers,
+      json?.stores,
+      json?.product_results?.online_sellers,
+    ].filter((x: unknown) => Array.isArray(x)) as Seller[][];
+
+    let merchantUrl = '';
+    for (const sellers of sellerLists) {
+      for (const s of sellers) {
+        const candidate = String(s?.direct_link || s?.link || '').trim();
+        if (candidate && /^https?:\/\//i.test(candidate) && !isGoogleUrl(candidate)) {
+          merchantUrl = candidate;
+          break;
+        }
+      }
+      if (merchantUrl) break;
+    }
+
+    return { images, merchantUrl };
   } catch {
-    return [];
+    return { images: [], merchantUrl: '' };
   }
 }
 
@@ -107,14 +144,14 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
     .map((r: Record<string, unknown>, i: number) => ({ i, token: String(r.immersive_product_page_token || '') }))
     .filter((x: { token: string }) => x.token);
 
-  const detailMap = new Map<number, string[]>();
+  const detailMap = new Map<number, ImmersiveDetails>();
   const detailResults = await Promise.all(
     detailTargets.map(async (t: { i: number; token: string }) => ({
       i: t.i,
-      media: await fetchImmersiveMedia(t.token, apiKey),
+      details: await fetchImmersiveDetails(t.token, apiKey),
     }))
   );
-  for (const d of detailResults) detailMap.set(d.i, d.media);
+  for (const d of detailResults) detailMap.set(d.i, d.details);
 
   return trimmed.map((r: Record<string, unknown>, i: number) => {
     const title = String(r.title || '');
@@ -122,23 +159,40 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
     const thumbnail = String(r.thumbnail || '');
     const thumbPlural = Array.isArray(r.thumbnails) ? (r.thumbnails as string[]) : [];
     const extractedImages = Array.isArray(r.extracted_images) ? (r.extracted_images as string[]) : [];
-    const gallery = detailMap.get(i) || [];
+    const details = detailMap.get(i);
+    const gallery = details?.images || [];
     const seen = new Set<string>();
     const images: string[] = [];
     for (const u of [thumbnail, ...thumbPlural, ...extractedImages, ...gallery]) {
       if (u && !seen.has(u)) { seen.add(u); images.push(u); }
     }
+
+    // URL resolution chain:
+    //  1. immersive merchant URL (resolved via google_immersive_product sellers)
+    //  2. r.product_link / r.link if it's NOT google.com (rare but possible)
+    //  3. drop the row in the .filter() below
+    const candidates = [
+      details?.merchantUrl || '',
+      String(r.product_link || ''),
+      String(r.link || ''),
+    ];
+    const resolvedUrl = candidates.find(u => u && /^https?:\/\//i.test(u) && !isGoogleUrl(u)) || '';
+
     return {
       name: title,
       brand: guessBrand(title, source),
       price: String(r.price || r.extracted_price || ''),
       image_url: images[0] || thumbnail,
       image_urls: images,
-      url: String(r.product_link || r.link || ''),
+      url: resolvedUrl,
       gender: inferGender(title),
       source,
     } as NormalizedProduct;
-  }).filter((p: NormalizedProduct) => p.image_url && p.name);
+  }).filter((p: NormalizedProduct) =>
+    // Drop anything still missing a usable merchant URL or image — these are
+    // unscrapeable and would clog the products table forever.
+    p.url && p.image_url && p.name && !isGoogleUrl(p.url),
+  );
 }
 
 Deno.serve(async (req: Request) => {

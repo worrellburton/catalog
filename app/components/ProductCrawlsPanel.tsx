@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, addProductUrl, deleteProduct, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, type ProductRow } from '~/services/scrape-product';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
 
 const STATUS_FILTERS = ['all', 'done', 'pending', 'processing', 'failed'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
+
+// Typical wall-clock for a single product scrape (Modal Playwright run).
+const ESTIMATED_SCRAPE_SECONDS = 90;
 
 const STATUS_STYLES: Record<string, { color: string; background: string; label: string }> = {
   done:       { color: '#16a34a', background: 'rgba(22,163,74,0.1)',   label: 'DONE' },
@@ -67,7 +73,32 @@ function ErrorTooltip({ error }: { error: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  createdAt,
+  startedAt,
+  onRerun,
+  rerunning,
+}: {
+  status: string;
+  createdAt?: string | null;
+  startedAt?: string | null;
+  onRerun?: () => void;
+  rerunning?: boolean;
+}) {
+  if ((status === 'pending' || status === 'processing') && createdAt) {
+    return (
+      <JobProgress
+        status={status}
+        createdAt={createdAt}
+        startedAt={startedAt}
+        estimatedSeconds={ESTIMATED_SCRAPE_SECONDS}
+        isQueued={status === 'pending'}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
+    );
+  }
   const s = STATUS_STYLES[status] ?? { color: '#6b7280', background: 'rgba(107,114,128,0.1)', label: status.toUpperCase() };
   return (
     <span style={{
@@ -97,6 +128,10 @@ export default function ProductCrawlsPanel() {
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Tracks when each row was last retried — used as startedAt so the
+  // JobProgress timer counts from the retry click, not from created_at.
+  const [retriedAt, setRetriedAt] = useState<Record<string, string>>({});
+  const [clearingBadUrls, setClearingBadUrls] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -137,6 +172,10 @@ export default function ProductCrawlsPanel() {
   }, [statusFilter, search, page]);
 
   useEffect(() => {
+    // Auto-fail any rows that have been stuck in 'processing' for too long
+    // (Modal containers occasionally die mid-run). Fire-and-forget; the
+    // subsequent loadData() call will reflect the updated statuses.
+    reconcileStuckScrapes(20).catch(() => {});
     loadData();
   }, [loadData]);
 
@@ -185,14 +224,29 @@ export default function ProductCrawlsPanel() {
   const handleRetry = async (id: string) => {
     setRetrying(id);
     try {
-      await retryProductScrape(id);
+      const { retriedAt: ts } = await retryProductScrape(id);
+      setRetriedAt((prev) => ({ ...prev, [id]: ts }));
       setRows((prev) =>
-        prev.map((r) => r.id === id ? { ...r, scrape_status: 'pending', scrape_error: null, scraped_at: null } : r)
+        prev.map((r) => r.id === id ? { ...r, scrape_status: 'pending', scrape_error: null, scraped_at: ts } : r)
       );
     } catch (e) {
       console.error('Failed to retry scrape:', e);
     } finally {
       setRetrying(null);
+    }
+  };
+
+  const handleClearBadUrls = async () => {
+    if (!window.confirm('Delete all products with Google.com URLs? These cannot be scraped and will be permanently removed.')) return;
+    setClearingBadUrls(true);
+    try {
+      const deleted = await deleteGoogleUrlProducts();
+      await loadData();
+      if (deleted > 0) alert(`Cleared ${deleted} unscrapeable Google URL row${deleted === 1 ? '' : 's'}.`);
+    } catch (e) {
+      console.error('Failed to clear bad URLs:', e);
+    } finally {
+      setClearingBadUrls(false);
     }
   };
 
@@ -218,16 +272,49 @@ export default function ProductCrawlsPanel() {
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
           All products indexed by the site crawler and product scraper agents.
         </p>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search products…"
-            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200 }}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={handleClearBadUrls}
+            disabled={clearingBadUrls}
+            style={{ fontSize: 12, color: '#b45309', borderColor: '#fcd34d' }}
+            title="Delete all rows whose URL is a Google search page (cannot be scraped)"
+          >
+            {clearingBadUrls ? 'Clearing…' : '🗑 Clear Google URLs'}
+          </button>
+          <RerunAllStuckButton
+            stuckCount={rows.filter(r =>
+              r.scrape_status === 'failed' ||
+              ((r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS))
+            ).length}
+            label={(() => {
+              const failed = rows.filter(r => r.scrape_status === 'failed').length;
+              const stuck = rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS)).length;
+              if (failed > 0 && stuck > 0) return `↺ Rerun failed + stuck (${failed + stuck})`;
+              if (failed > 0) return `↺ Rerun all failed (${failed})`;
+              return `↺ Rerun all stuck (${stuck})`;
+            })()}
+            onRerunAll={async () => {
+              const retryable = rows.filter(r =>
+                r.scrape_status === 'failed' ||
+                ((r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS))
+              );
+              for (const r of retryable) {
+                try { await handleRetry(r.id); } catch (e) { console.warn('rerun failed', r.id, e); }
+              }
+            }}
           />
-          <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
-        </form>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search products…"
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200 }}
+            />
+            <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
+          </form>
+        </div>
       </div>
 
       {/* Add product URL */}
@@ -363,7 +450,7 @@ export default function ProductCrawlsPanel() {
                     </td>
                     <td className="admin-cell-muted">{r.brand || '—'}</td>
                     <td className="admin-cell-muted">{r.price || '—'}</td>
-                    <td><StatusBadge status={r.scrape_status} /></td>
+                    <td><StatusBadge status={r.scrape_status} createdAt={r.created_at} startedAt={retriedAt[r.id] ?? r.scraped_at} onRerun={() => handleRetry(r.id)} rerunning={retrying === r.id} /></td>
                     <td className="admin-cell-muted">{timeAgo(r.scraped_at)}</td>
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
                     <td>

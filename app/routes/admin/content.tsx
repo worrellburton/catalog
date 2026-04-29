@@ -8,6 +8,7 @@ import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
 import { addProductUrl } from '~/services/scrape-product';
+import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
@@ -224,6 +225,12 @@ interface UnpublishedLook {
 // browser stalls under the concurrent decoder/network load —
 // which is what was making the thumbnails slow to paint and the
 // admin tab feel sluggish.
+//
+// Once a row's video has been mounted, we never tear it down — the
+// observer self-disconnects on first sight, so scrolling away and
+// back is instant (no re-fetch). The wrapper also keeps the
+// <video> mounted across hidden-tab toggles since the parent
+// table is now display:none rather than conditionally rendered.
 function LazyThumb({ url }: { url: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
@@ -240,7 +247,10 @@ function LazyThumb({ url }: { url: string }) {
           }
         }
       },
-      { rootMargin: '200px 0px' },
+      // Generous margin so videos are pre-warmed well before the
+      // row enters the viewport. Big-enough number that on most
+      // first loads every row is already inside the threshold.
+      { rootMargin: '1200px 0px' },
     );
     io.observe(node);
     return () => io.disconnect();
@@ -783,8 +793,12 @@ export default function AdminContent() {
     if (!supabase || researchSelected.size === 0) return;
     setIngesting(true);
     const nowIso = new Date().toISOString();
-    const rows = Array.from(researchSelected).map(i => {
-      const p = researchResults[i];
+    const rows = Array.from(researchSelected)
+      .map(i => researchResults[i])
+      // Drop search-result / non-product URLs so they never end up in the
+      // products table where the scraper would chew on them forever.
+      .filter(p => isLikelyProductUrl(p.url))
+      .map(p => {
       return {
         name: p.name,
         brand: p.brand,
@@ -802,6 +816,11 @@ export default function AdminContent() {
         source: 'google_shopping',
       };
     });
+    if (rows.length === 0) {
+      setIngesting(false);
+      showToast('No valid product URLs in selection');
+      return;
+    }
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
@@ -1006,11 +1025,15 @@ export default function AdminContent() {
       : filtered;
     return ordered.map(look => {
       const c = creators[look.creator];
+      // Fallback chain: seed-creator map → profile data emitted by
+      // fetchLooksFromSupabase for user-published looks → '—'.
+      const display = c?.displayName || look.creatorDisplayName || (look.creator?.startsWith('user:') ? '' : look.creator) || '—';
+      const avatar = c?.avatar || look.creatorAvatar || '';
       return {
         id: look.id,
         creator: look.creator,
-        creatorDisplay: c?.displayName || look.creator || '—',
-        creatorAvatar: c?.avatar || '',
+        creatorDisplay: display,
+        creatorAvatar: avatar,
         video: look.video,
         products: look.products.length,
       };
@@ -1633,8 +1656,11 @@ export default function AdminContent() {
         </div>
       )}
 
-      {activeTab === 'looks' && looksFilter === 'published' && (
-        <div className="admin-table-wrap">
+      {activeTab === 'looks' && (
+        <div
+          className="admin-table-wrap"
+          style={{ display: looksFilter === 'published' ? undefined : 'none' }}
+        >
           <table className="admin-table">
             <thead>
               <tr>
@@ -1856,8 +1882,11 @@ export default function AdminContent() {
         </div>
       )}
 
-      {activeTab === 'looks' && looksFilter === 'unpublished' && (
-        <div className="admin-table-wrap">
+      {activeTab === 'looks' && (
+        <div
+          className="admin-table-wrap"
+          style={{ display: looksFilter === 'unpublished' ? undefined : 'none' }}
+        >
           <table className="admin-table">
             <thead>
               <tr>
