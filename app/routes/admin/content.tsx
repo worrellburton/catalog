@@ -1025,11 +1025,15 @@ export default function AdminContent() {
       : filtered;
     return ordered.map(look => {
       const c = creators[look.creator];
+      // Fallback chain: seed-creator map → profile data emitted by
+      // fetchLooksFromSupabase for user-published looks → '—'.
+      const display = c?.displayName || look.creatorDisplayName || (look.creator?.startsWith('user:') ? '' : look.creator) || '—';
+      const avatar = c?.avatar || look.creatorAvatar || '';
       return {
         id: look.id,
         creator: look.creator,
-        creatorDisplay: c?.displayName || look.creator || '—',
-        creatorAvatar: c?.avatar || '',
+        creatorDisplay: display,
+        creatorAvatar: avatar,
         video: look.video,
         products: look.products.length,
       };

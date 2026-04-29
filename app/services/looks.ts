@@ -16,6 +16,7 @@ interface SupabaseLook {
   title: string;
   gender: 'men' | 'women' | 'unisex' | null;
   creator_handle: string | null;
+  user_id: string | null;
   description: string | null;
   color: string | null;
   status: string | null;
@@ -49,6 +50,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       title,
       gender,
       creator_handle,
+      user_id,
       description,
       color,
       status,
@@ -83,14 +85,40 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     return primary?.video_url && (!row.status || row.status === 'live');
   });
 
+  // For looks without a creator_handle (user-published looks created
+  // via the manage-looks edge fn — handle is null because the fn
+  // doesn't accept it), pull the publisher's profile so the admin
+  // table + consumer-facing surfaces have a name + avatar to render.
+  const orphanUserIds = Array.from(new Set(
+    liveLooks
+      .filter(r => !r.creator_handle && r.user_id)
+      .map(r => r.user_id as string),
+  ));
+  const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
+  if (orphanUserIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url, email')
+      .in('id', orphanUserIds);
+    (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null }) => {
+      profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email });
+    });
+  }
+
   return liveLooks.map((row, index) => {
     const primary = row.looks_creative[0];
+    const fallbackProfile = !row.creator_handle && row.user_id ? profileById.get(row.user_id) : undefined;
+    const fallbackName = fallbackProfile?.full_name || fallbackProfile?.email?.split('@')[0] || null;
     return {
       id: row.legacy_id ?? -(index + 1),
       title: row.title,
       video: primary.video_url || '',
       gender: (row.gender as 'men' | 'women') || 'women',
-      creator: row.creator_handle || '',
+      // Synthetic key so the creators-map lookup misses cleanly and
+      // the consumer falls back to creatorDisplayName / Avatar below.
+      creator: row.creator_handle || (row.user_id ? `user:${row.user_id}` : ''),
+      creatorDisplayName: fallbackName || undefined,
+      creatorAvatar: fallbackProfile?.avatar_url || undefined,
       description: row.description || '',
       color: row.color || '#888',
       products: (row.look_products || [])

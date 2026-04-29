@@ -24,6 +24,13 @@ export interface Look {
   description: string;
   color: string;
   products: Product[];
+  // Set when the look's creator isn't in the seed creators map —
+  // typically a user-published look whose creator_handle is null
+  // and whose author lives in profiles instead. The admin Looks
+  // table reads these as a fallback so the row still shows a name
+  // and avatar.
+  creatorDisplayName?: string;
+  creatorAvatar?: string;
 }
 
 export const creators: Record<string, Creator> = {
