@@ -8,7 +8,6 @@ import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
-import TypeAnywhere from '~/components/TypeAnywhere';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint — the user has to tap into them. Splitting trims the
@@ -640,6 +639,24 @@ export default function Home() {
     setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
   }, []);
 
+  // The TypeAnywhere overlay (mounted in root.tsx) lands new
+  // searches on /?q=<query>. Read the param on every URL change,
+  // apply it, then strip it so refresh / share doesn't re-fire.
+  // Also forces view='app' so the user lands on the grid even if
+  // they were on the landing page or password gate.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (!q) return;
+    handleCreateCatalog(q);
+    setView('app');
+    params.delete('q');
+    const remaining = params.toString();
+    const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', url);
+  }, [handleCreateCatalog]);
+
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
   }, []);
@@ -784,11 +801,6 @@ export default function Home() {
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
           />
-
-          {/* Desktop "type-anywhere" search. Mobile keeps the
-              BottomBar pill below — both mount, CSS hides the
-              other per breakpoint. */}
-          <TypeAnywhere onSubmit={handleCreateCatalog} />
 
           <BottomBar
             activeFilter={activeFilter}

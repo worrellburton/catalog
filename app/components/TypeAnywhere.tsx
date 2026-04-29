@@ -1,18 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from '@remix-run/react';
 
 /* Desktop-only "just start typing" search.
  *
- * No visible input chrome — the user begins typing anywhere and the
- * letters bloom in the middle of the screen. Enter fires the catalog
- * handler, Escape clears.
- *
- * Mobile (≤768px) keeps the BottomBar pill instead. We early-return
- * on touch / narrow viewports.
+ * Mounted in root.tsx so it works on every page — type from a
+ * brand page, /generate, /admin, /import, anywhere, hit Enter,
+ * and we navigate back to / with ?q=<query> applied to the home
+ * grid. Mobile (≤768px) keeps the BottomBar pill instead.
  */
-interface Props {
-  onSubmit: (query: string) => void;
-}
-
 const HELPER_HINTS = [
   'type anything',
   'try "omg shoes"',
@@ -22,7 +17,9 @@ const HELPER_HINTS = [
   'try "off duty"',
 ];
 
-export default function TypeAnywhere({ onSubmit }: Props) {
+export default function TypeAnywhere() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [text, setText] = useState('');
   const [active, setActive] = useState(false);
   // "type anywhere to search" hint pinned to viewport center. Starts
@@ -62,6 +59,15 @@ export default function TypeAnywhere({ onSubmit }: Props) {
     const mql = window.matchMedia('(max-width: 768px)');
     if (mql.matches) return;
 
+    const submit = (q: string) => {
+      // Always land on /#app with ?q=<query>. _index.tsx reads the
+      // param on mount and applies it via handleCreateCatalog, then
+      // strips the param off the URL so it doesn't linger. From any
+      // other route this also handles the navigation back home.
+      const target = `/?q=${encodeURIComponent(q)}#app`;
+      navigate(target);
+    };
+
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       // Don't intercept when the user is typing in a real form field
@@ -77,7 +83,7 @@ export default function TypeAnywhere({ onSubmit }: Props) {
         const q = text.trim();
         if (!q) return;
         e.preventDefault();
-        onSubmit(q);
+        submit(q);
         setText('');
         setActive(false);
         return;
@@ -119,7 +125,14 @@ export default function TypeAnywhere({ onSubmit }: Props) {
       window.removeEventListener('keydown', onKey);
       if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
     };
-  }, [onSubmit, text, active]);
+  }, [navigate, text, active]);
+
+  // Reset transient state on route change so a stale buffer doesn't
+  // hang around when the user navigates between pages.
+  useEffect(() => {
+    setText('');
+    setActive(false);
+  }, [location.pathname]);
 
   const visible = active && text.length > 0;
   const hintVisible = !visible && !scrolled;

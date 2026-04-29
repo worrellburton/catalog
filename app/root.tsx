@@ -6,6 +6,7 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
+import TypeAnywhere from "~/components/TypeAnywhere";
 
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
@@ -121,5 +122,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <>
+      {/* Type-anywhere search lives at the app root so a stray
+          keystroke on any page (admin, generate, import, brand
+          page, anywhere) bounces back to the home grid with the
+          query applied. Component is desktop-only and ignores
+          keys when focus is in another input. */}
+      <TypeAnywhere />
+      <Outlet />
+    </>
+  );
 }
