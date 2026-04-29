@@ -35,7 +35,7 @@ load_dotenv()
 MODEL = "claude-sonnet-4-20250514"
 # Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
 # anything past 6 means the agent is wandering on a non-product page.
-MAX_AGENT_TURNS = 8
+MAX_AGENT_TURNS = 6
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
 MAX_IMAGES_RETURN = 15
@@ -221,8 +221,7 @@ def _non_product_url_reason(raw_url: str) -> str | None:
     if path in ("", "/"):
         return "site homepage"
     if path == "/search" or path.startswith("/search/") or path == "/s" or path.startswith("/s/"):
-        if not (host == "google.com" or host.endswith(".google.com")):
-            return f'non-product path "{path}"'
+        return f'non-product path "{path}"'
     if (host == "amazon.com" or host.endswith(".amazon.com")) and (
         "/dp/" not in path and "/gp/product/" not in path
     ):

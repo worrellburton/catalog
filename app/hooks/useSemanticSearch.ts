@@ -58,9 +58,9 @@ const EMPTY_STATE: Omit<SemanticSearchState, 'loadMore'> = {
 
 export function useSemanticSearch(
   query: string,
-  options: { gender?: string; userId?: string; k?: number } = {}
+  options: { gender?: string; userId?: string; k?: number; trigger?: number } = {}
 ): SemanticSearchState {
-  const { gender, userId } = options;
+  const { gender, userId, trigger = 0 } = options;
   const [baseCreatives, setBaseCreatives] = useState<SemanticCreative[]>([]);
   const [loading, setLoading] = useState(false);
   const [coldMiss, setColdMiss] = useState(false);
@@ -76,6 +76,9 @@ export function useSemanticSearch(
   // Snapshot the IDs at request-time so async resolution can't deduplicate
   // against a stale baseCreatives reference.
   const seenIdsRef = useRef<Set<string>>(new Set());
+  // Tracks the last trigger value seen; when it changes, skip debounce and
+  // fire immediately so Enter press results feel instant.
+  const triggerRef = useRef(0);
 
   const runSearch = useCallback(async (q: string, append: boolean) => {
     abortRef.current?.abort();
@@ -156,10 +159,13 @@ export function useSemanticSearch(
     seenIdsRef.current = new Set();
     setBaseCreatives([]);
 
-    timerRef.current = setTimeout(() => runSearch(q, false), DEBOUNCE_MS);
+    // Enter press increments trigger — skip debounce so search fires immediately.
+    const immediate = trigger !== triggerRef.current;
+    triggerRef.current = trigger;
+    timerRef.current = setTimeout(() => runSearch(q, false), immediate ? 0 : DEBOUNCE_MS);
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, runSearch]);
+  }, [query, runSearch, trigger]);
 
   const loadMore = useCallback(() => {
     if (loading) return;

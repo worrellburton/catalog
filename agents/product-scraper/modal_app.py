@@ -45,29 +45,6 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
 
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
-def _trigger_embed(product_id: str, supabase_url: str, service_key: str):
-    """Fire the embed-entity edge function for a product (best-effort, non-blocking)."""
-    import json
-    import urllib.request
-    url = f"{supabase_url}/functions/v1/embed-entity"
-    payload = json.dumps({"id": product_id, "entity_type": "product"}).encode()
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {service_key}",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            status = resp.status
-            print(f"  🧠 [{product_id}] embed-entity → HTTP {status}")
-    except Exception as e:
-        # Best-effort — scrape success is not affected by embed failure
-        print(f"  ⚠️  [{product_id}] embed-entity error (non-fatal): {e}")
-
 
 @app.function(
     image=scraper_image,
@@ -92,7 +69,7 @@ def scrape_and_update(product_id: str, url: str):
 
     def _write_to_db(product: dict):
         """Called immediately when Claude calls save_product — no waiting for loop end."""
-        supabase.table("products").update({
+        update_payload = {
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "scrape_error": None,
@@ -104,12 +81,17 @@ def scrape_and_update(product_id: str, url: str):
             "currency": product.get("currency"),
             "images": product.get("images", []),
             "image_url": (product.get("images") or [None])[0],
-            "image_missing_reason": product.get("image_missing_reason"),
             "availability": product.get("availability"),
-        }).eq("id", product_id).execute()
+        }
+        # If the original URL was a Google Shopping link, overwrite it with the
+        # resolved merchant URL so the row points to the actual product page.
+        resolved_url = product.get("url")
+        if resolved_url and resolved_url != url:
+            update_payload["url"] = resolved_url
+            print(f"  🔗 [{product_id}] URL updated to resolved merchant URL: {resolved_url}")
+
+        supabase.table("products").update(update_payload).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
-        # Trigger semantic embedding in the background (best-effort)
-        _trigger_embed(product_id, sb_url, sb_key)
 
     try:
         run_agent(url, save=False, on_save=_write_to_db)

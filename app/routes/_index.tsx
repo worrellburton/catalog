@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useLocation } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -221,6 +222,7 @@ export default function Home() {
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchTrigger, setSearchTrigger] = useState(0);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
   }, []);
@@ -648,18 +650,20 @@ export default function Home() {
   // apply it, then strip it so refresh / share doesn't re-fire.
   // Also forces view='app' so the user lands on the grid even if
   // they were on the landing page or password gate.
+  const location = useLocation();
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const q = params.get('q');
     if (!q) return;
     handleCreateCatalog(q);
+    setSearchTrigger(t => t + 1);
     setView('app');
     params.delete('q');
     const remaining = params.toString();
     const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
     window.history.replaceState({}, '', url);
-  }, [handleCreateCatalog]);
+  }, [location.search, handleCreateCatalog]);
 
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
@@ -689,6 +693,7 @@ export default function Home() {
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
     setCatalogName(toCatalogName(q));
+    setSearchTrigger(t => t + 1);
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
@@ -763,6 +768,9 @@ export default function Home() {
 
       {isAppVisible && (
         <>
+          {/* Top search loading bar — thin shimmer across the very top of the viewport */}
+          <div className={`search-loading-bar${searchLoading ? ' visible' : ''}`} aria-hidden="true" />
+
           <header>
             <div className="header-left">
               <button className="logo-btn" onClick={handleLogoClick} aria-label="Home">
@@ -805,6 +813,7 @@ export default function Home() {
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
             onSearchLoadingChange={handleSearchLoadingChange}
+            searchTrigger={searchTrigger}
           />
 
           <BottomBar
