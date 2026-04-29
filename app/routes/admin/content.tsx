@@ -530,9 +530,16 @@ export default function AdminContent() {
           }));
       }
       if (supabase) {
+        // Also overwrite user_id with the source generation's creator
+        // so the consumer + admin Looks list attribute the look to the
+        // person who *made* it, not the admin who clicked Publish.
+        // manage-looks writes user_id = auth.uid() (the admin), and
+        // fetchLooksFromSupabase keys the profile lookup off user_id.
+        const updates: Record<string, unknown> = { status: 'live' };
+        if (g.user_id) updates.user_id = g.user_id;
         followUps.push(supabase
           .from('looks')
-          .update({ status: 'live' })
+          .update(updates)
           .eq('id', look.id)
           .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] status update failed:', error.message);

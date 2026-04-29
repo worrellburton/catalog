@@ -89,10 +89,41 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // via the manage-looks edge fn — handle is null because the fn
   // doesn't accept it), pull the publisher's profile so the admin
   // table + consumer-facing surfaces have a name + avatar to render.
+  //
+  // Two sources for the right user_id, in order of trust:
+  //  1. Older rows where manage-looks wrote user_id = admin's auth.uid()
+  //     — those rows carry "Promoted from generation <uuid>" in their
+  //     description. We resolve the generation's actual user_id from
+  //     user_generations and use *that* for the profile lookup so the
+  //     creator column reads as the creator (not the admin).
+  //  2. New rows where the publish flow patches user_id to the
+  //     creator's id directly (fall-through from row.user_id).
+  const PROMOTED_RE = /Promoted from generation ([0-9a-f-]{36})/i;
+  const generationIdToLookId = new Map<string, string>();
+  for (const r of liveLooks) {
+    if (!r.creator_handle && r.description) {
+      const m = r.description.match(PROMOTED_RE);
+      if (m) generationIdToLookId.set(m[1], r.id);
+    }
+  }
+  const userIdByLookId = new Map<string, string>();
+  if (generationIdToLookId.size > 0) {
+    const genIds = Array.from(generationIdToLookId.keys());
+    const { data: gens } = await supabase
+      .from('user_generations')
+      .select('id, user_id')
+      .in('id', genIds);
+    (gens || []).forEach((g: { id: string; user_id: string | null }) => {
+      const lookId = generationIdToLookId.get(g.id);
+      if (lookId && g.user_id) userIdByLookId.set(lookId, g.user_id);
+    });
+  }
+
   const orphanUserIds = Array.from(new Set(
     liveLooks
-      .filter(r => !r.creator_handle && r.user_id)
-      .map(r => r.user_id as string),
+      .filter(r => !r.creator_handle)
+      .map(r => userIdByLookId.get(r.id) || r.user_id)
+      .filter((v): v is string => !!v),
   ));
   const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
   if (orphanUserIds.length > 0) {
@@ -107,7 +138,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
 
   return liveLooks.map((row, index) => {
     const primary = row.looks_creative[0];
-    const fallbackProfile = !row.creator_handle && row.user_id ? profileById.get(row.user_id) : undefined;
+    const profileUserId = !row.creator_handle ? (userIdByLookId.get(row.id) || row.user_id) : undefined;
+    const fallbackProfile = profileUserId ? profileById.get(profileUserId) : undefined;
     const fallbackName = fallbackProfile?.full_name || fallbackProfile?.email?.split('@')[0] || null;
     return {
       id: row.legacy_id ?? -(index + 1),
@@ -116,7 +148,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       gender: (row.gender as 'men' | 'women') || 'women',
       // Synthetic key so the creators-map lookup misses cleanly and
       // the consumer falls back to creatorDisplayName / Avatar below.
-      creator: row.creator_handle || (row.user_id ? `user:${row.user_id}` : ''),
+      creator: row.creator_handle || (profileUserId ? `user:${profileUserId}` : ''),
       creatorDisplayName: fallbackName || undefined,
       creatorAvatar: fallbackProfile?.avatar_url || undefined,
       description: row.description || '',
