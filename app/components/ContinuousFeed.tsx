@@ -127,7 +127,12 @@ export default function ContinuousFeed({
   }, [dbLooks, hiddenLookIds, hiddenProductKeys]);
 
   const filteredLooks = useMemo(() => {
-    const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
+    // Gender filter: 'men' includes 'unisex' looks too (and vice-versa)
+    // so catalog-wide staples surface for everyone regardless of the
+    // shopper's profile gender.
+    const base = activeFilter === 'all'
+      ? allLooks
+      : allLooks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       // Strict match. We used to fall back to the full look set when no look

@@ -17,7 +17,9 @@ export interface Look {
   id: number;
   title: string;
   video: string;
-  gender: 'men' | 'women';
+  // 'unisex' looks (and the rare untyped null in the DB) stay visible
+  // to every shopper regardless of profile.gender.
+  gender: 'men' | 'women' | 'unisex';
   creator: string;
   description: string;
   color: string;

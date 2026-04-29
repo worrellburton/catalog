@@ -72,6 +72,7 @@ import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
+import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
@@ -210,6 +211,14 @@ export default function Home() {
   // that makes the field-comparison deps appear unchanged.
   const [productNavCount, setProductNavCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
+  // Once the user manually toggles the gender chip we stop auto-syncing
+  // it from the profile — otherwise their override would get clobbered
+  // on the next session-restore.
+  const filterUserOverride = useRef(false);
+  const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
+    filterUserOverride.current = true;
+    setActiveFilter(next);
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [isLightMode, setIsLightMode] = useState(false);
@@ -281,6 +290,23 @@ export default function Home() {
       });
     }
   }, [catalogName]);
+
+  // Auto-scope the feed by the shopper's profile gender so a guy lands
+  // on men + unisex looks, a girl on women + unisex. Manual taps on the
+  // gender chip set filterUserOverride so we never clobber the user's
+  // explicit choice. Runs once per session-bound user id.
+  useEffect(() => {
+    if (!user || authLoading) return;
+    if (filterUserOverride.current) return;
+    let cancelled = false;
+    getUserGender(user.id).then(g => {
+      if (cancelled || filterUserOverride.current) return;
+      if (g === 'male') setActiveFilter('men');
+      else if (g === 'female') setActiveFilter('women');
+      // 'unknown' leaves the catalog wide-open ('all').
+    });
+    return () => { cancelled = true; };
+  }, [user, authLoading]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -743,7 +769,7 @@ export default function Home() {
 
           <BottomBar
             activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
+            onFilterChange={handleGenderFilterChange}
             searchQuery={searchQuery}
             onSearchChange={handleSearchChange}
             onSelectSuggestion={handleSelectSuggestion}
