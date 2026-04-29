@@ -12,6 +12,9 @@ import {
 } from '~/services/product-creative';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -37,7 +40,17 @@ const AD_STYLES = [
 
 const ESTIMATED_GENERATION_SECONDS = 150;
 
-function StatusBadge({ status, createdAt }: { status: string; createdAt?: string | null }) {
+function StatusBadge({
+  status,
+  createdAt,
+  onRerun,
+  rerunning,
+}: {
+  status: string;
+  createdAt?: string | null;
+  onRerun?: () => void;
+  rerunning?: boolean;
+}) {
   const colors: Record<string, string> = {
     pending: '#f59e0b',
     queued: '#94a3b8',
@@ -49,8 +62,17 @@ function StatusBadge({ status, createdAt }: { status: string; createdAt?: string
   };
   const bg = colors[status] || '#6b7280';
 
-  if ((status === 'pending' || status === 'generating') && createdAt) {
-    return <GenerationProgress status={status} createdAt={createdAt} />;
+  if ((status === 'pending' || status === 'queued' || status === 'generating') && createdAt) {
+    return (
+      <JobProgress
+        status={status}
+        createdAt={createdAt}
+        estimatedSeconds={ESTIMATED_GENERATION_SECONDS}
+        isQueued={status === 'pending' || status === 'queued'}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
+    );
   }
 
   return (
@@ -69,52 +91,6 @@ function StatusBadge({ status, createdAt }: { status: string; createdAt?: string
     >
       {status}
     </span>
-  );
-}
-
-function GenerationProgress({ status, createdAt }: { status: string; createdAt: string }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const elapsed = (now - new Date(createdAt).getTime()) / 1000;
-  const pct = status === 'pending'
-    ? Math.min(15, (elapsed / 30) * 15)
-    : Math.min(95, (elapsed / ESTIMATED_GENERATION_SECONDS) * 100);
-  const remaining = Math.max(0, ESTIMATED_GENERATION_SECONDS - elapsed);
-  const mins = Math.floor(remaining / 60);
-  const secs = Math.floor(remaining % 60);
-  const timeLabel = status === 'pending'
-    ? 'Queued…'
-    : remaining > 0
-      ? `~${mins}:${String(secs).padStart(2, '0')} left`
-      : 'Finishing…';
-
-  return (
-    <div style={{ minWidth: 120 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: status === 'pending' ? '#f59e0b' : '#3b82f6' }}>
-          {status === 'pending' ? 'Pending' : 'Generating'}
-        </span>
-        <span style={{ fontSize: 10, color: '#888' }}>{timeLabel}</span>
-      </div>
-      <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0, width: `${pct}%`,
-          background: status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-          transition: 'width 1s ease',
-        }} />
-        {status === 'generating' && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
-            animation: 'admin-shimmer 1.4s infinite',
-          }} />
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -207,9 +183,24 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
 
   const { sortedData, sort, handleSort } = useSortableTable(filtered);
 
+  // Stuck = generating/pending/queued AND elapsed > 2× expected wall-clock.
+  const stuckAds = ads.filter(
+    (a) =>
+      (a.status === 'generating' || a.status === 'pending' || a.status === 'queued') &&
+      isStuck(a.created_at, ESTIMATED_GENERATION_SECONDS),
+  );
+
   // Actions
   const handleRegenerate = async (id: string) => {
     await regenerateAd(id);
+    loadAds();
+  };
+
+  const handleRerunAllStuck = async () => {
+    // Sequential to avoid hammering the Modal endpoint.
+    for (const ad of stuckAds) {
+      try { await regenerateAd(ad.id); } catch (e) { console.warn('rerun failed', ad.id, e); }
+    }
     loadAds();
   };
 
@@ -290,6 +281,12 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
             <p className="admin-page-subtitle">Generate and manage AI video ads for products</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <RerunAllStuckButton
+              budgetGated
+              stuckCount={stuckAds.length}
+              jobs={stuckAds.map(a => ({ model: a.model }))}
+              onRerunAll={handleRerunAllStuck}
+            />
             <button className="admin-btn admin-btn-secondary" onClick={loadAds} disabled={loading}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh
@@ -304,6 +301,12 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <p className="admin-page-subtitle" style={{ margin: 0 }}>Generate and manage AI video ads for products</p>
           <div style={{ display: 'flex', gap: 8 }}>
+            <RerunAllStuckButton
+              budgetGated
+              stuckCount={stuckAds.length}
+              jobs={stuckAds.map(a => ({ model: a.model }))}
+              onRerunAll={handleRerunAllStuck}
+            />
             <button className="admin-btn admin-btn-secondary" onClick={loadAds} disabled={loading}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh
@@ -449,7 +452,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                       </td>
 
                       {/* Status */}
-                      <td><StatusBadge status={ad.status} createdAt={ad.created_at} /></td>
+                      <td><StatusBadge status={ad.status} createdAt={ad.created_at} onRerun={() => handleRegenerate(ad.id)} /></td>
 
                       {/* Impressions */}
                       <td style={{ fontSize: 13 }}>{(ad.impressions || 0).toLocaleString()}</td>

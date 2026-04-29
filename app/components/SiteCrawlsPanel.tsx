@@ -10,6 +10,14 @@ import {
   type CrawlJob,
   type CrawlDiscoveredUrl,
 } from '~/services/site-crawls';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
+
+// Typical wall-clock for a full-site sitemap crawl. Past 2x this we
+// flag the job as stuck and surface a manual rerun button — the Modal
+// trigger is fire-and-forget so jobs occasionally never start.
+const ESTIMATED_SITE_CRAWL_SECONDS = 600;
 
 interface SiteCrawlsPanelProps {
   embedded?: boolean;
@@ -653,17 +661,37 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
             <h1>Site Crawls</h1>
             <p className="admin-page-subtitle">Crawl e-commerce sites to discover product URLs</p>
           </div>
-          <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Crawl
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <RerunAllStuckButton
+              stuckCount={jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_SITE_CRAWL_SECONDS)).length}
+              onRerunAll={async () => {
+                const stuck = jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_SITE_CRAWL_SECONDS));
+                for (const j of stuck) {
+                  try { await handleRetry(j.id, j.site_url); } catch (e) { console.warn('rerun failed', j.id, e); }
+                }
+              }}
+            />
+            <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New Crawl
+            </button>
+          </div>
         </div>
       )}
 
       {embedded && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, gap: 8 }}>
+          <RerunAllStuckButton
+            stuckCount={jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_SITE_CRAWL_SECONDS)).length}
+            onRerunAll={async () => {
+              const stuck = jobs.filter(j => (j.status === 'pending' || j.status === 'crawling') && isStuck(j.created_at, ESTIMATED_SITE_CRAWL_SECONDS));
+              for (const j of stuck) {
+                try { await handleRetry(j.id, j.site_url); } catch (e) { console.warn('rerun failed', j.id, e); }
+              }
+            }}
+          />
           <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -773,7 +801,19 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                       </div>
                     </td>
                     <td>
-                      <StatusBadge status={job.status} />
+                      {(job.status === 'pending' || job.status === 'crawling') ? (
+                        <JobProgress
+                          status={job.status}
+                          startedAt={job.started_at}
+                          createdAt={job.created_at}
+                          estimatedSeconds={ESTIMATED_SITE_CRAWL_SECONDS}
+                          isQueued={job.status === 'pending' && !job.started_at}
+                          onRerun={() => handleRetry(job.id, job.site_url)}
+                          rerunning={actionLoading === job.id}
+                        />
+                      ) : (
+                        <StatusBadge status={job.status} />
+                      )}
                       {job.error && (
                         <div style={{ fontSize: 11, color: '#ef4444', marginTop: 2, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {job.error}

@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listProducts, retryProductScrape, addProductUrl, deleteProduct, type ProductRow } from '~/services/scrape-product';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
 
 const STATUS_FILTERS = ['all', 'done', 'pending', 'processing', 'failed'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
+
+// Typical wall-clock for a single product scrape (Modal Playwright run).
+const ESTIMATED_SCRAPE_SECONDS = 90;
 
 const STATUS_STYLES: Record<string, { color: string; background: string; label: string }> = {
   done:       { color: '#16a34a', background: 'rgba(22,163,74,0.1)',   label: 'DONE' },
@@ -67,7 +73,29 @@ function ErrorTooltip({ error }: { error: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  status,
+  createdAt,
+  onRerun,
+  rerunning,
+}: {
+  status: string;
+  createdAt?: string | null;
+  onRerun?: () => void;
+  rerunning?: boolean;
+}) {
+  if ((status === 'pending' || status === 'processing') && createdAt) {
+    return (
+      <JobProgress
+        status={status}
+        createdAt={createdAt}
+        estimatedSeconds={ESTIMATED_SCRAPE_SECONDS}
+        isQueued={status === 'pending'}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
+    );
+  }
   const s = STATUS_STYLES[status] ?? { color: '#6b7280', background: 'rgba(107,114,128,0.1)', label: status.toUpperCase() };
   return (
     <span style={{
@@ -218,16 +246,27 @@ export default function ProductCrawlsPanel() {
         <p className="admin-page-subtitle" style={{ margin: 0 }}>
           All products indexed by the site crawler and product scraper agents.
         </p>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search products…"
-            style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200 }}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <RerunAllStuckButton
+            stuckCount={rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS)).length}
+            onRerunAll={async () => {
+              const stuck = rows.filter(r => (r.scrape_status === 'pending' || r.scrape_status === 'processing') && isStuck(r.created_at, ESTIMATED_SCRAPE_SECONDS));
+              for (const r of stuck) {
+                try { await handleRetry(r.id); } catch (e) { console.warn('rerun failed', r.id, e); }
+              }
+            }}
           />
-          <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
-        </form>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search products…"
+              style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200 }}
+            />
+            <button type="submit" className="admin-btn admin-btn-secondary">Search</button>
+          </form>
+        </div>
       </div>
 
       {/* Add product URL */}
@@ -363,7 +402,7 @@ export default function ProductCrawlsPanel() {
                     </td>
                     <td className="admin-cell-muted">{r.brand || '—'}</td>
                     <td className="admin-cell-muted">{r.price || '—'}</td>
-                    <td><StatusBadge status={r.scrape_status} /></td>
+                    <td><StatusBadge status={r.scrape_status} createdAt={r.created_at} onRerun={() => handleRetry(r.id)} rerunning={retrying === r.id} /></td>
                     <td className="admin-cell-muted">{timeAgo(r.scraped_at)}</td>
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
                     <td>

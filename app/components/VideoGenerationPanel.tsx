@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import JobProgress from '~/components/JobProgress';
+import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import { isStuck } from '~/utils/aiBudget';
 import {
   getGeneratedVideos,
   retryGeneratedVideo,
@@ -11,7 +14,21 @@ import {
 
 // ─── Status badge ────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
+// Typical wall-clock for a Veo/Seedance look video. Past 2x this we
+// flag the job as stuck and surface a manual rerun button.
+const ESTIMATED_VIDEO_GEN_SECONDS = 240;
+
+function StatusBadge({
+  status,
+  createdAt,
+  onRerun,
+  rerunning,
+}: {
+  status: string;
+  createdAt?: string | null;
+  onRerun?: () => void;
+  rerunning?: boolean;
+}) {
   const colors: Record<string, string> = {
     pending: '#f59e0b',
     generating: '#3b82f6',
@@ -20,6 +37,20 @@ function StatusBadge({ status }: { status: string }) {
     failed: '#ef4444',
   };
   const bg = colors[status] || '#6b7280';
+
+  if ((status === 'pending' || status === 'generating' || status === 'uploading') && createdAt) {
+    return (
+      <JobProgress
+        status={status}
+        createdAt={createdAt}
+        estimatedSeconds={ESTIMATED_VIDEO_GEN_SECONDS}
+        isQueued={status === 'pending'}
+        onRerun={onRerun}
+        rerunning={rerunning}
+      />
+    );
+  }
+
   return (
     <span
       style={{
@@ -118,6 +149,20 @@ export default function AdminVideoGeneration({ embedded = false }: { embedded?: 
     loadVideos();
   };
 
+  // Stuck = pending/generating/uploading AND elapsed > 2× expected wall-clock.
+  const stuckVideos = videos.filter(
+    (v) =>
+      (v.status === 'pending' || v.status === 'generating' || v.status === 'uploading') &&
+      isStuck(v.created_at, ESTIMATED_VIDEO_GEN_SECONDS),
+  );
+
+  const handleRerunAllStuck = async () => {
+    for (const v of stuckVideos) {
+      try { await retryGeneratedVideo(v.id); } catch (e) { console.warn('rerun failed', v.id, e); }
+    }
+    loadVideos();
+  };
+
   const handleDelete = async (id: string) => {
     await deleteGeneratedVideo(id);
     loadVideos();
@@ -151,20 +196,36 @@ export default function AdminVideoGeneration({ embedded = false }: { embedded?: 
             <h1>Video Generation</h1>
             <p className="admin-page-subtitle">Track AI-generated look videos</p>
           </div>
-          <button className="admin-btn admin-btn-secondary" onClick={loadVideos} disabled={loading}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <RerunAllStuckButton
+              budgetGated
+              stuckCount={stuckVideos.length}
+              jobs={stuckVideos.map(v => ({ veo_model: v.veo_model }))}
+              onRerunAll={handleRerunAllStuck}
+            />
+            <button className="admin-btn admin-btn-secondary" onClick={loadVideos} disabled={loading}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
         </div>
       )}
 
       {embedded && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <p className="admin-page-subtitle" style={{ margin: 0 }}>Track AI-generated look videos</p>
-          <button className="admin-btn admin-btn-secondary" onClick={loadVideos} disabled={loading}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <RerunAllStuckButton
+              budgetGated
+              stuckCount={stuckVideos.length}
+              jobs={stuckVideos.map(v => ({ veo_model: v.veo_model }))}
+              onRerunAll={handleRerunAllStuck}
+            />
+            <button className="admin-btn admin-btn-secondary" onClick={loadVideos} disabled={loading}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh
+            </button>
+          </div>
         </div>
       )}
 
@@ -302,7 +363,7 @@ export default function AdminVideoGeneration({ embedded = false }: { embedded?: 
                       </td>
 
                       {/* Status */}
-                      <td><StatusBadge status={v.status} /></td>
+                      <td><StatusBadge status={v.status} createdAt={v.created_at} onRerun={() => handleRetry(v.id)} /></td>
 
                       {/* Cost */}
                       <td style={{ fontSize: 13 }}>{formatCost(v.cost_usd)}</td>
