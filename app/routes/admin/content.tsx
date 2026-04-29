@@ -1551,7 +1551,7 @@ export default function AdminContent() {
                             className="admin-btn admin-btn-primary"
                             style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
                             title="Open the publish flow for this look"
-                            onClick={() => navigate(`/admin/looks?publish=${row.id}`)}
+                            onClick={() => navigate(`/admin/publish/${row.id}`)}
                           >
                             Publish
                           </button>
@@ -1798,7 +1798,7 @@ export default function AdminContent() {
                         style={{ fontSize: 11, padding: '4px 10px' }}
                         disabled={g.status !== 'done'}
                         title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish — status is ${g.status}`}
-                        onClick={() => navigate(`/admin/looks?publish=${g.id}`)}
+                        onClick={() => navigate(`/admin/publish/${g.id}`)}
                       >
                         Publish
                       </button>
