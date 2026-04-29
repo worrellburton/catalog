@@ -14,6 +14,7 @@ import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
+import { useAdminConfirm } from '~/components/AdminConfirm';
 
 interface CrawledProduct {
   id: string;
@@ -214,6 +215,49 @@ interface UnpublishedLook {
   creator_name: string | null;
   creator_avatar: string | null;
   creator_email: string | null;
+}
+
+// Defers attaching the <video> until the row scrolls into the
+// viewport. Without this, the Unpublished tab stamps ~14 cross-
+// origin Supabase video sources into the DOM at once and the
+// browser stalls under the concurrent decoder/network load —
+// which is what was making the thumbnails slow to paint and the
+// admin tab feel sluggish.
+function LazyThumb({ url }: { url: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      entries => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            return;
+          }
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {inView ? (
+        <>
+          <video src={url} autoPlay muted loop playsInline preload="metadata" />
+          <div className="admin-look-preview">
+            <video src={url} autoPlay muted loop playsInline />
+          </div>
+        </>
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: '#111' }} />
+      )}
+    </div>
+  );
 }
 
 export default function AdminContent() {

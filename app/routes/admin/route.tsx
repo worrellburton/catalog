@@ -6,6 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
 // imported from the global root.tsx where every consumer page paid the
@@ -454,6 +455,7 @@ export default function AdminLayout() {
   }
 
   return (
+    <AdminConfirmProvider>
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
       <LiveCursors cursors={liveCursors} />
       <div
@@ -776,5 +778,6 @@ export default function AdminLayout() {
         <Outlet />
       </main>
     </div>
+    </AdminConfirmProvider>
   );
 }

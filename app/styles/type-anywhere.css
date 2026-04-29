@@ -128,10 +128,16 @@
   transform: translate(-50%, -50%);
   z-index: 70;
   font-family: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
-  font-size: clamp(32px, 6vw, 88px);
+  /* Sized to fit "type anywhere to search" on a single line at any
+     desktop width — vw scales it up on wide screens, the px max
+     keeps it from going huge, and white-space: nowrap guards
+     against ever wrapping. */
+  font-size: clamp(28px, 4.6vw, 72px);
   font-weight: 500;
   letter-spacing: -0.01em;
   text-transform: none;
+  white-space: nowrap;
+  max-width: calc(100vw - 48px);
   color: rgba(255, 255, 255, 0.42);
   text-shadow:
     0 2px 18px rgba(0, 0, 0, 0.6),
