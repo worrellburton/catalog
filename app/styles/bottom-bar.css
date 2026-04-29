@@ -69,6 +69,20 @@
   color: #fff;
 }
 
+/* Spinner shown while nl-search is resolving */
+@keyframes search-spin {
+  to { transform: rotate(360deg); }
+}
+.bottom-search-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .bottom-divider {
   width: 1px;
   height: 20px;

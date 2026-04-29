@@ -32,6 +32,8 @@ interface ContinuousFeedProps {
   onOpenCreative?: (creative: ProductAd) => void;
   onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
+  /** Called with true when nl-search is in-flight, false when resolved. */
+  onSearchLoadingChange?: (loading: boolean) => void;
 }
 
 type Segment =
@@ -90,8 +92,23 @@ export default function ContinuousFeed({
   onOpenCreative,
   onCreateCatalog,
   bookmarks,
+  onSearchLoadingChange,
 }: ContinuousFeedProps) {
-  // Respect admin deletes: looks/products hidden via the Content admin panel
+  // ── Committed query — the feed only updates when nl-search resolves ─────
+  // While the user is typing (or nl-search is in flight), committedQuery stays
+  // at the last resolved value so the grid doesn't jump on every keystroke.
+  // For short queries (< 3 chars, no semantic call) we commit immediately.
+  const [committedQuery, setCommittedQuery] = useState('');
+  const wasLoadingRef = useRef(false);
+
+  // Short / empty queries: commit immediately (no semantic search fires).
+  useEffect(() => {
+    if (searchQuery.trim().length < 3) {
+      setCommittedQuery(searchQuery);
+    }
+  }, [searchQuery]);
+
+  // ── Filtering uses committedQuery so grid doesn't change while typing ──
   // must never appear in the consumer feed, detail pages, or similar-look rows.
   const hiddenLookIds = useHiddenLooks();
   const hiddenProductKeys = useHiddenProductKeys();
@@ -129,13 +146,8 @@ export default function ContinuousFeed({
 
   const filteredLooks = useMemo(() => {
     const base = activeFilter === 'all' ? allLooks : allLooks.filter(l => l.gender === activeFilter);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      // Strict match. We used to fall back to the full look set when no look
-      // matched the query so the grid wasn't blank — but that leaks unrelated
-      // looks into catalog-scoped searches (e.g. "white shoes" surfacing a
-      // random creator). If no look matches, show none and let the creative
-      // grid carry the search result.
+    if (committedQuery) {
+      const q = committedQuery.toLowerCase();
       return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
@@ -144,7 +156,7 @@ export default function ContinuousFeed({
       );
     }
     return base;
-  }, [activeFilter, searchQuery, allLooks]);
+  }, [activeFilter, committedQuery, allLooks]);
 
   // ── Semantic search ────────────────────────────────────────────────────────
   // Kicks in for queries ≥ 3 chars; reorders filteredLooks so semantically
@@ -152,6 +164,30 @@ export default function ContinuousFeed({
   // the edge function is unavailable or the query is too short.
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
   const semantic = useSemanticSearch(searchQuery, { gender: genderOpt });
+
+  // Semantic queries: commit on the loading true → false transition.
+  // wasLoadingRef tracks the previous value so we only commit on the
+  // falling edge, not on every render while idle.
+  useEffect(() => {
+    const justFinished = wasLoadingRef.current && !semantic.loading;
+    wasLoadingRef.current = semantic.loading;
+    if (justFinished) {
+      setCommittedQuery(searchQuery);
+    }
+  });
+
+  // Notify parent of pending search state so it can show a spinner in the
+  // search bar. "Pending" = user typed something long enough for semantic
+  // but results haven't arrived yet.
+  const isSearchPending = searchQuery.trim().length >= 3 && (
+    searchQuery !== committedQuery || semantic.loading
+  );
+  useEffect(() => {
+    onSearchLoadingChange?.(isSearchPending);
+  }, [isSearchPending, onSearchLoadingChange]);
+
+  // Clean up spinner on unmount
+  useEffect(() => () => onSearchLoadingChange?.(false), [onSearchLoadingChange]);
 
   // Reorder filteredLooks: semantic matches first (in rank order), rest after.
   const semanticallyOrderedLooks = useMemo(() => {
@@ -246,7 +282,7 @@ export default function ContinuousFeed({
   // a catalog lookup and keep only creatives whose product is tagged with it.
   // Otherwise fall back to a text match on product name / brand.
   const filteredCreatives = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = committedQuery.trim().toLowerCase();
     if (!q) return liveCreatives;
 
     const isCatalogMatch = liveCreatives.some(c =>
@@ -272,7 +308,7 @@ export default function ContinuousFeed({
     // grid isn't blank while the user is mid-word.
     if (matches.length === 0) return q.length >= 3 ? [] : liveCreatives;
     return matches;
-  }, [liveCreatives, searchQuery]);
+  }, [liveCreatives, committedQuery]);
 
   // When the semantic lane returned product hits, surface them at the top of
   // the creative grid in rank order, then dedupe the rest of filteredCreatives
@@ -306,7 +342,7 @@ export default function ContinuousFeed({
   const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = committedQuery.trim().toLowerCase();
     if (!q || q.length < 2) return;
     const last = lastLoggedQueryRef.current;
     if (q === last || last.startsWith(q)) return;
@@ -326,21 +362,22 @@ export default function ContinuousFeed({
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [searchQuery, semanticallyOrderedLooks.length, activeFilter, user]);
+  }, [committedQuery, semanticallyOrderedLooks.length, activeFilter, user]);
 
-  // Reset when filters/search/shuffle change
-  const prevFilterRef = useRef({ activeFilter, searchQuery, shuffleKey });
+  // Reset when filters/search/shuffle change — use committedQuery so the
+  // feed only resets after nl-search resolves, not on every keystroke.
+  const prevFilterRef = useRef({ activeFilter, committedQuery, shuffleKey });
   useEffect(() => {
     const prev = prevFilterRef.current;
     if (
       prev.activeFilter !== activeFilter ||
-      prev.searchQuery !== searchQuery ||
+      prev.committedQuery !== committedQuery ||
       prev.shuffleKey !== shuffleKey
     ) {
       dispatch({ type: 'RESET', looks: semanticallyOrderedLooks });
-      prevFilterRef.current = { activeFilter, searchQuery, shuffleKey };
+      prevFilterRef.current = { activeFilter, committedQuery, shuffleKey };
     }
-  }, [activeFilter, searchQuery, shuffleKey, semanticallyOrderedLooks]);
+  }, [activeFilter, committedQuery, shuffleKey, semanticallyOrderedLooks]);
 
   // Scroll to newly added detail
   const lastDetailRef = useRef<HTMLDivElement>(null);
@@ -409,7 +446,9 @@ export default function ContinuousFeed({
   // When the semantic search is still in-flight (loading=true) or returned a
   // cold-miss, we show the empty state with a "sourcing" flag so the copy
   // reads "We're finding this for you" rather than "nothing here yet".
-  const trimmedQuery = searchQuery.trim();
+  // Empty-catalog and sourcing states use committedQuery so they only
+  // appear after the search has resolved, not while the user is still typing.
+  const trimmedQuery = committedQuery.trim();
   const semanticActive = trimmedQuery.length >= 3;
   const showEmptyState =
     !creativesLoading &&

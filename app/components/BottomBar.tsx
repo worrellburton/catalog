@@ -12,10 +12,12 @@ interface BottomBarProps {
   onSelectSuggestion?: (query: string) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
+  /** True while nl-search is resolving — shows a spinner in the input. */
+  searchLoading?: boolean;
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -26,27 +28,11 @@ function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
-  // Debounce timer for onSearchChange — keeps the input feeling instant while
-  // deferring downstream filtering + the nl-search round trip until the user
-  // stops typing. 350 ms is short enough to feel reactive but long enough to
-  // collapse a fast typist's keystrokes into a single search.
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const emitSearch = useCallback((value: string) => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      onSearchChange(value);
-    }, 350);
-  }, [onSearchChange]);
-  const emitSearchImmediate = useCallback((value: string) => {
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = null;
-    }
-    onSearchChange(value);
-  }, [onSearchChange]);
-  useEffect(() => () => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-  }, []);
+  // onSearchChange fires on every keystroke — no debounce here.
+  // The feed itself only commits once nl-search resolves, so the spinner
+  // appears immediately and the grid stays frozen until results are ready.
+  const emitSearch = onSearchChange;
+  const emitSearchImmediate = onSearchChange;
 
   // Lift the bar above iOS Safari's bottom URL toolbar. The toolbar is
   // part of the layout viewport (not the visual viewport) and isn't
@@ -138,12 +124,8 @@ function BottomBar({
   const handleSearchInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setLocalSearch(val);
-    const next = val.trim().toLowerCase();
-    // Empty string short-circuits the debounce so the feed resets immediately
-    // when the user clears the input by hand.
-    if (next === '') emitSearchImmediate('');
-    else emitSearch(next);
-  }, [emitSearch, emitSearchImmediate]);
+    emitSearch(val.trim().toLowerCase());
+  }, [emitSearch]);
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
@@ -153,12 +135,12 @@ function BottomBar({
       if (onSelectSuggestion) {
         onSelectSuggestion(query);
       } else {
-        emitSearchImmediate(query.toLowerCase());
+        emitSearch(query.toLowerCase());
       }
       setSearchOpen(false);
       btn.classList.remove('tapped');
     }, 600);
-  }, [emitSearchImmediate, onSelectSuggestion]);
+  }, [emitSearch, onSelectSuggestion]);
 
   const handleFilterApply = useCallback(() => {
     // Sync gender filters
@@ -243,14 +225,28 @@ function BottomBar({
             }}
           />
           {localSearch && (
-            <button
-              type="button"
-              className="bottom-search-clear"
-              onClick={() => { setLocalSearch(''); emitSearchImmediate(''); }}
-              aria-label="Clear search"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            searchLoading ? (
+              // Spinner while nl-search is resolving
+              <span className="bottom-search-spinner" aria-label="Searching" aria-live="polite">
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ animation: 'search-spin 0.7s linear infinite', display: 'block' }}
+                >
+                  <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
+                  <path d="M12 3a9 9 0 0 1 9 9" />
+                </svg>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="bottom-search-clear"
+                onClick={() => { setLocalSearch(''); emitSearch(''); }}
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            )
           )}
         </div>
 

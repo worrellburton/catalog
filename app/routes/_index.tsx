@@ -199,6 +199,10 @@ export default function Home() {
   const [productNavCount, setProductNavCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const handleSearchLoadingChange = useCallback((loading: boolean) => {
+    setSearchLoading(loading);
+  }, []);
 
   const [isLightMode, setIsLightMode] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(1);
@@ -669,6 +673,7 @@ export default function Home() {
             onOpenCreative={handleOpenCreative}
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
+            onSearchLoadingChange={handleSearchLoadingChange}
           />
 
           <BottomBar
@@ -679,6 +684,7 @@ export default function Home() {
             onSelectSuggestion={handleSelectSuggestion}
             onOpenCreators={handleOpenLilyCreator}
             catalogName={catalogName}
+            searchLoading={searchLoading}
           />
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
