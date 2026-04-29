@@ -51,9 +51,12 @@ async function generateConcept(
     ? `You are a fashion search indexer. Your job is to write a rich semantic document for a product that will be used to match natural-language fashion queries like "what to wear with white jeans" or "red carpet evening look". Capture physical details, styling context, occasions, and cultural/trend references.`
     : `You are a fashion search indexer. Your job is to write a rich semantic document for a fashion "look" (an outfit video) that will match natural-language queries. Describe the overall vibe, component pieces, occasion fit, and aesthetic references.`;
 
+  // Truncate long inputs to avoid overflowing Claude's context and getting back a truncated JSON response
+  const inputTruncated = input.length > 1500 ? input.slice(0, 1500) + '…' : input;
+
   const userPrompt = entityType === 'product'
-    ? `Generate a semantic search document for this product:\n\n${input}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing what the item IS, who wears it, what occasions it suits, what it pairs with, and what aesthetic/trend it belongs to. Write naturally, as if a stylish person is describing it. Include synonyms and style terms a shopper might search.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`
-    : `Generate a semantic search document for this fashion look:\n\n${input}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing the look's vibe, the pieces in it, the occasion it suits, and the aesthetic it represents. Write naturally for search.\n- "concept_facets": {"garment_type":"outfit","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`;
+    ? `Generate a semantic search document for this product:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing what the item IS, who wears it, what occasions it suits, what it pairs with, and what aesthetic/trend it belongs to. Write naturally, as if a stylish person is describing it. Include synonyms and style terms a shopper might search.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`
+    : `Generate a semantic search document for this fashion look:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing the look's vibe, the pieces in it, the occasion it suits, and the aesthetic it represents. Write naturally for search.\n- "concept_facets": {"garment_type":"outfit","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -64,7 +67,7 @@ async function generateConcept(
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5',
-      max_tokens: 512,
+      max_tokens: 600,
       messages: [{ role: 'user', content: userPrompt }],
       system: systemPrompt,
     }),
