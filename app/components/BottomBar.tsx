@@ -225,6 +225,14 @@ function BottomBar({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            autoComplete="off"
+            // 1Password / Bitwarden / Chrome each respect a different
+            // signal — set them all so the browser doesn't pop its
+            // history dropdown over our suggestion popover.
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            name="catalog-search"
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"

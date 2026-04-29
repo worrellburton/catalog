@@ -905,22 +905,21 @@ export default function GeneratePage() {
               </button>
             </div>
 
-            {/* Creator CTA — sits above the Your Looks grid so anyone
-                browsing their own looks sees a clean path to publishing
-                them as a creator. Wired to the consumer creator-page
-                surface for now (the same overlay that opens when a
-                shopper taps a creator's avatar in the feed). Replace
-                the navigate target once the dedicated creator-signup
-                flow lands. */}
+            {/* Make a new look CTA — sits above the Your Looks grid as
+                a quick path to start a fresh generation. Scrolls back to
+                the top of the photos step so the user lands on the
+                upload slots and can begin a new look. */}
             <button
               type="button"
               className="gen-creator-cta"
-              onClick={() => navigate('/admin/creators')}
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             >
               <span className="gen-creator-cta-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </span>
-              <span className="gen-creator-cta-label">Become a creator</span>
+              <span className="gen-creator-cta-label">Make a new look</span>
               <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
             </button>
 

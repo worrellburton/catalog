@@ -1654,7 +1654,12 @@ export default function AdminContent() {
                       <div className="admin-look-thumb">
                         {g.video_url ? (
                           <>
-                            <video src={g.video_url} muted loop playsInline preload="metadata" />
+                            {/* autoPlay on the outer video forces the
+                                first frame to paint for remote URLs —
+                                preload="metadata" alone leaves the tile
+                                blank in Chrome/Safari for cross-origin
+                                Supabase storage URLs. */}
+                            <video src={g.video_url} autoPlay muted loop playsInline preload="metadata" />
                             <div className="admin-look-preview">
                               <video src={g.video_url} autoPlay muted loop playsInline />
                             </div>
