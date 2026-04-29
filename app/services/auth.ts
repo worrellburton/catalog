@@ -86,14 +86,15 @@ function mapUser(user: { id: string; email?: string; phone?: string; user_metada
 export async function signInWithGoogle(): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
 
-  // Use the currently-loaded URL (minus any hash) as the redirect target.
-  // This is the most reliable on mobile Safari: the URL is guaranteed to
-  // match whatever the user is on, including the correct base path on
-  // GitHub Pages (/catalog/) and Vercel (/). Bare window.location.origin
-  // drops paths and sometimes mismatches Supabase's allowed-redirects
-  // wildcard, which surfaces as "Safari cannot open the page because the
-  // address is invalid." after the Google consent screen.
-  const redirectTo = window.location.href.split('#')[0];
+  // Build a clean redirect target: protocol + host + pathname only.
+  // window.location.href drags any query string (?q=…, ?code=…) and hash
+  // back through the OAuth round-trip — both racing the auth listener
+  // (?q= re-fires the search effect before SIGNED_IN lands) and worse,
+  // ?code= sticks around if the user retried after a failure, leaving a
+  // stale OAuth code in the redirect URL that supabase-js refuses to
+  // exchange. Strip both.
+  const { protocol, host, pathname } = window.location;
+  const redirectTo = `${protocol}//${host}${pathname}`;
   authLog('signInWithGoogle:start', { redirectTo });
 
   // Drop the `prompt: 'consent'` + `access_type: 'offline'` flags. We
@@ -104,6 +105,10 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
     provider: 'google',
     options: {
       redirectTo,
+      // skipBrowserRedirect=false (default) hands off via window.location
+      // .assign which is the most compatible path inside the Flutter
+      // InAppWebView and on iOS Safari. We never run this in a popup so
+      // there's no need to override.
     },
   });
 

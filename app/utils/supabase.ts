@@ -19,7 +19,23 @@ const supabaseKey =
 
 console.log('[Supabase] init url:', supabaseUrl?.substring(0, 30) + '...', 'key present:', !!supabaseKey, 'key length:', supabaseKey?.length);
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Explicit auth config so mobile Safari (and the Flutter webview) get a
+// reliable OAuth flow regardless of browser default. PKCE is required
+// for the code-exchange path that catches the Google redirect on
+// devices where Safari ITP would otherwise drop the access_token from
+// the URL hash. detectSessionInUrl + persistSession let supabase-js
+// auto-handle the ?code=… callback and stash the resulting session in
+// localStorage so a hard reload picks the user back up.
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    flowType: 'pkce',
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'sb-vtarjrnqvcqbhoclvcur-auth-token',
+  },
+});
 
 // Re-exported for the few call sites (e.g. XHR-based storage upload with
 // progress events) that need to talk to the Storage REST API directly.

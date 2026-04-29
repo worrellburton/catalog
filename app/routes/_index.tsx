@@ -656,6 +656,15 @@ export default function Home() {
     const params = new URLSearchParams(location.search);
     const q = params.get('q');
     if (!q) return;
+    // Don't fire the search while supabase-js is mid-OAuth callback.
+    // The URL during that window has both ?q=… (carried through from
+    // the page the user signed in from) and ?code=… (the OAuth code
+    // supabase-js is about to exchange). Stripping ?q= before exchange
+    // would leave the user pointed at a search they didn't run; running
+    // the search before exchange races the SIGNED_IN event. Skip until
+    // the auth listener clears the code from the URL, then this effect
+    // re-runs on the next location update.
+    if (params.has('code') || params.has('error_description')) return;
     handleCreateCatalog(q);
     setSearchTrigger(t => t + 1);
     setView('app');
