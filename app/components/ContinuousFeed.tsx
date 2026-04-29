@@ -416,10 +416,10 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
-  // Delete-on-feed is destructive on a public surface — gate strictly to
-  // super-admins. Regular admins keep edit access on /admin pages but won't
-  // see the trash affordance directly on the consumer grid.
-  const canDeleteCreative = user?.role === 'super_admin';
+  // Delete-on-feed is destructive on a public surface — gate to admins
+  // (admin or super_admin). Regular shoppers / creators don't see the
+  // trash affordance.
+  const canDeleteCreative = user?.role === 'super_admin' || user?.role === 'admin';
 
   const handleDeleteCreative = useCallback(async (id: string) => {
     // Super-admin long-press on the consumer feed deletes the underlying

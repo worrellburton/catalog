@@ -504,38 +504,40 @@
   height: 100%;
 }
 
-/* Admin-only delete button on creative cards — hover-revealed on desktop,
-   always visible on touch devices since hover isn't reliable. */
+/* Admin-only delete button on creative cards. The component only mounts
+   when canDelete=true (super-admins), so when present it should always
+   be visible — admins shouldn't have to hunt for the affordance. */
 .creative-delete-btn {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 3;
-  width: 28px;
-  height: 28px;
+  z-index: 5;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
-  background: rgba(220, 38, 38, 0.9);
+  background: rgb(220, 38, 38);
   color: #fff;
   cursor: pointer;
-  opacity: 0;
-  transform: scale(0.9);
+  opacity: 0.92;
+  transform: scale(1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
   transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
 }
 
 .creative-delete-btn:hover {
-  background: rgb(220, 38, 38);
-  transform: scale(1);
+  background: rgb(185, 28, 28);
+  opacity: 1;
+  transform: scale(1.08);
 }
 
 .promo-card:hover .creative-delete-btn,
 .look-card:hover .creative-delete-btn,
 .creative-delete-btn:focus-visible {
   opacity: 1;
-  transform: scale(1);
 }
 
 @media (hover: none) {
