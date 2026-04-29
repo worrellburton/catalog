@@ -122,9 +122,11 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
         style={{
           position: 'fixed',
           bottom: 24,
-          right: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
+          alignItems: 'center',
           gap: 8,
           zIndex: 10000,
           pointerEvents: 'none',
@@ -276,23 +278,33 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
   );
 }
 
-// Seed-data creators come from app/data/looks.ts and can't be deleted
-// from the database. We persist a localStorage set so admins can still
-// hide them from the Creators tab; ships with the rest of the
-// admin-hide patterns (admin_hidden_looks, admin_hidden_products).
-const HIDDEN_CONTENT_CREATORS_KEY = 'catalog:admin-hidden-content-creators';
+// Seed-data creators come from app/data/looks.ts so the row can't be
+// removed from the bundle, but the admin still needs delete semantics.
+// We persist a localStorage set of "deleted" handles and filter them
+// out of the Creators tab — same end-state as a real delete from the
+// admin's POV (gone, doesn't return on refresh).
+const DELETED_CONTENT_CREATORS_KEY = 'catalog:admin-deleted-content-creators';
 
-function readHiddenContentCreators(): Set<string> {
+function readDeletedContentCreators(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = window.localStorage.getItem(HIDDEN_CONTENT_CREATORS_KEY);
-    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-  } catch { return new Set(); }
+    const raw = window.localStorage.getItem(DELETED_CONTENT_CREATORS_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+    // Migrate the legacy "hidden" key once so admins don't lose deletes.
+    const legacy = window.localStorage.getItem('catalog:admin-hidden-content-creators');
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as string[];
+      window.localStorage.setItem(DELETED_CONTENT_CREATORS_KEY, JSON.stringify(parsed));
+      window.localStorage.removeItem('catalog:admin-hidden-content-creators');
+      return new Set(parsed);
+    }
+  } catch { /* parse / quota */ }
+  return new Set();
 }
 
-function writeHiddenContentCreators(set: Set<string>) {
+function writeDeletedContentCreators(set: Set<string>) {
   if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(HIDDEN_CONTENT_CREATORS_KEY, JSON.stringify([...set])); } catch { /* quota */ }
+  try { window.localStorage.setItem(DELETED_CONTENT_CREATORS_KEY, JSON.stringify([...set])); } catch { /* quota */ }
 }
 
 export default function AdminUsers() {
@@ -301,7 +313,7 @@ export default function AdminUsers() {
   const [waitlistIds, setWaitlistIds] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [auditingGender, setAuditingGender] = useState(false);
-  const [hiddenContentCreators, setHiddenContentCreators] = useState<Set<string>>(() => readHiddenContentCreators());
+  const [deletedContentCreators, setDeletedContentCreators] = useState<Set<string>>(() => readDeletedContentCreators());
   const toastIdRef = useRef(0);
   const navigate = useNavigate();
 
@@ -376,7 +388,7 @@ export default function AdminUsers() {
     const dbNames = new Set(dbCreators.map(c => c.name.toLowerCase()));
     return Object.values(lookCreators)
       .filter(c => !dbNames.has(c.displayName.toLowerCase()))
-      .filter(c => !hiddenContentCreators.has(c.name))
+      .filter(c => !deletedContentCreators.has(c.name))
       .map(c => ({
         id: `content-${c.name}`,
         initials: c.displayName.slice(0, 2).toUpperCase(),
@@ -403,32 +415,80 @@ export default function AdminUsers() {
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
 
-  // Surface a per-row delete that handles both real DB profiles and
-  // the seed-data "content-*" rows. We can't hard-delete a creator
-  // bundled into app/data/looks.ts, so for those we mark the handle
-  // as hidden in localStorage and the Creators tab filters them out.
+  // Per-row delete. Real DB profiles → deleteProfile + cascade to
+  // their generated_videos / user_generations. Seed-data ("content-*")
+  // creators → mark the handle deleted in localStorage so the
+  // Creators tab filters them out, and add their bundled look ids to
+  // admin_hidden_looks (or the local mirror) so the published feed
+  // drops the looks too. The confirm copy reports the look count
+  // we're about to take down with them.
   const handleDelete = useCallback(async (userId: string, fallbackName?: string) => {
     const target = allUsers.find(u => u.id === userId);
+
     if (target?.id.startsWith('content-') || (!target && userId.startsWith('content-'))) {
       const handle = userId.slice('content-'.length);
       const seed = lookCreators[handle];
       const label = target?.name || seed?.displayName || fallbackName || handle;
-      if (!confirm(`Hide ${label} from the admin list?\n\nThey’ll stop appearing here, but their bundled looks remain in the seed catalog until you delete those separately.`)) return;
-      setHiddenContentCreators(prev => {
+      const seedLooks = looks.filter(l => l.creator === handle);
+      const lookCount = seedLooks.length;
+      const lookLabel = lookCount === 1 ? '1 look' : `${lookCount} looks`;
+      const message = lookCount > 0
+        ? `This will permanently delete ${label} and ${lookLabel} they’ve published. This can’t be undone.`
+        : `This will permanently delete ${label}. This can’t be undone.`;
+      if (!confirm(`Delete ${label}?\n\n${message}`)) return;
+      // Filter the creator out everywhere they show up.
+      setDeletedContentCreators(prev => {
         const next = new Set(prev);
         next.add(handle);
-        writeHiddenContentCreators(next);
+        writeDeletedContentCreators(next);
         return next;
       });
-      showToast(`${label} hidden from creators`, 'success');
+      // And drop their looks from the consumer feed via the same
+      // localStorage hidden-looks mirror useHiddenLooks reads on the
+      // home grid. Best-effort upsert into admin_hidden_looks for
+      // consistency when supabase is configured.
+      if (seedLooks.length > 0) {
+        try {
+          const KEY = 'catalog:admin-hidden-looks';
+          const raw = window.localStorage.getItem(KEY);
+          const existing = new Set<number>(raw ? JSON.parse(raw) as number[] : []);
+          for (const l of seedLooks) existing.add(l.id);
+          window.localStorage.setItem(KEY, JSON.stringify([...existing]));
+        } catch { /* quota */ }
+        if (supabase) {
+          await supabase
+            .from('admin_hidden_looks')
+            .upsert(seedLooks.map(l => ({ look_id: l.id })), { onConflict: 'look_id' })
+            .then(({ error }) => { if (error) console.warn('[users] hide looks upsert failed:', error.message); });
+        }
+      }
+      showToast(
+        lookCount > 0 ? `${label} and ${lookLabel} deleted` : `${label} deleted`,
+        'success',
+      );
       return;
     }
+
     if (!target) return;
-    if (!confirm(`Delete ${target.name}? This removes their profile permanently.`)) return;
+    const dbLookCount = looksPerCreator[target.name.toLowerCase()] || 0;
+    const message = dbLookCount > 0
+      ? `This will permanently delete ${target.name} and ${dbLookCount === 1 ? '1 look' : `${dbLookCount} looks`} they’ve published. This can’t be undone.`
+      : `This will permanently delete ${target.name}. This can’t be undone.`;
+    if (!confirm(`Delete ${target.name}?\n\n${message}`)) return;
     const { error } = await deleteProfile(userId);
     if (error) {
       showToast(`Failed to delete: ${error}`, 'warning');
       return;
+    }
+    // Best-effort cascade for the user's content. deleteProfile only
+    // takes the profile row; their generations + admin-hide rows live
+    // in adjacent tables and are dropped here so the feed doesn't
+    // keep their content live after the account is gone.
+    if (supabase) {
+      await Promise.all([
+        supabase.from('user_generations').delete().eq('user_id', userId),
+        supabase.from('user_uploads').delete().eq('user_id', userId),
+      ]).catch(err => console.warn('[users] cascade delete failed:', err));
     }
     setAllUsers(prev => prev.filter(u => u.id !== userId));
     setWaitlistIds(prev => {
@@ -437,7 +497,12 @@ export default function AdminUsers() {
       next.delete(userId);
       return next;
     });
-    showToast(`${target.name} deleted`, 'success');
+    showToast(
+      dbLookCount > 0
+        ? `${target.name} and ${dbLookCount === 1 ? '1 look' : `${dbLookCount} looks`} deleted`
+        : `${target.name} deleted`,
+      'success',
+    );
   }, [allUsers, showToast]);
 
   const handleAdminToggle = useCallback(async (userId: string, next: boolean) => {

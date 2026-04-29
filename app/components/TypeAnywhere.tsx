@@ -52,8 +52,15 @@ export default function TypeAnywhere() {
     return () => window.removeEventListener('mousemove', onMove);
   }, [mouseMoved]);
 
+  // Suppress on admin routes — admins are typing into form fields
+  // constantly and the search overlay would interfere. Same for the
+  // generate flow's deeper steps where the wizard owns keyboard
+  // focus.
+  const onAdmin = location.pathname.startsWith('/admin');
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (onAdmin) return;
     // Mobile uses the BottomBar pill — type-anywhere only fires on
     // pointer-and-keyboard devices wide enough to have a header.
     const mql = window.matchMedia('(max-width: 768px)');
@@ -125,7 +132,7 @@ export default function TypeAnywhere() {
       window.removeEventListener('keydown', onKey);
       if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
     };
-  }, [navigate, text, active]);
+  }, [navigate, text, active, onAdmin]);
 
   // Reset transient state on route change so a stale buffer doesn't
   // hang around when the user navigates between pages.
@@ -134,8 +141,8 @@ export default function TypeAnywhere() {
     setActive(false);
   }, [location.pathname]);
 
-  const visible = active && text.length > 0;
-  const hintVisible = !visible && !scrolled;
+  const visible = !onAdmin && active && text.length > 0;
+  const hintVisible = !onAdmin && !visible && !scrolled;
 
   return (
     <>
