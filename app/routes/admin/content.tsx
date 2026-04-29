@@ -900,13 +900,17 @@ export default function AdminContent() {
       return {
         id: look.id,
         creator: look.creator,
-        creatorDisplay: c?.displayName || look.creator,
+        creatorDisplay: c?.displayName || look.creator || '—',
         creatorAvatar: c?.avatar || '',
         video: look.video,
         products: look.products.length,
       };
     });
-  }, [deletedLookIds, lookOrder, adminQuery]);
+    // looks + creators must be in deps — without them the memoized
+    // rows array goes stale after a publish (cache is invalidated and
+    // looks state refetches, but the table keeps rendering the
+    // previous snapshot).
+  }, [looks, creators, deletedLookIds, lookOrder, adminQuery]);
 
   // Brand-to-domain mapping for Brandfetch logos
   const brandDomains: Record<string, string> = useMemo(() => ({
