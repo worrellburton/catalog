@@ -539,9 +539,19 @@ export default function Home() {
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
+    setBrandCreatives(null);
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
+      // Same data the creative-trail uses to fill the "More from
+      // this brand" rail — without this, products opened from a
+      // Look, search, or recents see an empty strip.
+      prefetchCreativesByBrand(product.brand, null, 12)
+        .then(rows => {
+          primeTrailAssets(rows);
+          setBrandCreatives(rows);
+        })
+        .catch(() => { /* leave strip empty rather than throw */ });
     }
   }, [fetchSimilarProducts, pushRecent]);
 
