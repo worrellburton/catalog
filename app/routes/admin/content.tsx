@@ -1724,17 +1724,7 @@ export default function AdminContent() {
                     <td>
                       <div className="admin-look-thumb">
                         {g.video_url ? (
-                          <>
-                            {/* autoPlay on the outer video forces the
-                                first frame to paint for remote URLs —
-                                preload="metadata" alone leaves the tile
-                                blank in Chrome/Safari for cross-origin
-                                Supabase storage URLs. */}
-                            <video src={g.video_url} autoPlay muted loop playsInline preload="metadata" />
-                            <div className="admin-look-preview">
-                              <video src={g.video_url} autoPlay muted loop playsInline />
-                            </div>
-                          </>
+                          <LazyThumb url={g.video_url} />
                         ) : (
                           <div style={{
                             width: '100%', height: '100%', background: '#111', color: '#aaa',

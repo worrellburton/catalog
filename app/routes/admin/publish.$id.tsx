@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { createLook, addProductToLook } from '~/services/manage-looks';
+import { invalidateLooksCache } from '~/services/looks';
 
 /* /admin/publish/:id — promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
@@ -140,6 +141,27 @@ export default function AdminPublishScreen() {
           console.warn('[publish] addProductToLook failed:', err);
         })
       ));
+      // The Content/Looks list joins `looks_creative!inner` and only
+      // surfaces looks with status='live' — createLook writes draft
+      // and never inserts a creative row, so without these two
+      // follow-ups the published look is silently dropped from the
+      // Published tab.
+      if (supabase && draft.videoUrl) {
+        const { error: creativeErr } = await supabase
+          .from('looks_creative')
+          .insert({ look_id: look.id, video_url: draft.videoUrl, is_primary: true });
+        if (creativeErr) console.warn('[publish] looks_creative insert failed:', creativeErr.message);
+      }
+      if (supabase) {
+        const { error: statusErr } = await supabase
+          .from('looks')
+          .update({ status: 'live' })
+          .eq('id', look.id);
+        if (statusErr) console.warn('[publish] status update failed:', statusErr.message);
+      }
+      // Drop the cached promise so the next /admin/content render
+      // refetches and shows the new row in the Published tab.
+      invalidateLooksCache();
       setPublished({ id: look.id });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed.');
@@ -182,7 +204,15 @@ export default function AdminPublishScreen() {
             <button className="admin-btn admin-btn-secondary" onClick={() => navigate('/admin/content?tab=looks&looks=unpublished')}>
               Back to unpublished
             </button>
-            <button className="admin-btn admin-btn-primary" onClick={() => navigate('/admin/content?tab=looks')}>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={() => {
+                // Hard reload so admin/content remounts and the
+                // (just-invalidated) looks cache refetches with the
+                // new row included.
+                window.location.assign('/admin/content?tab=looks');
+              }}
+            >
               See it in Looks
             </button>
           </div>
