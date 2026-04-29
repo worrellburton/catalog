@@ -2,7 +2,8 @@ import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'rea
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
-import { getLooks, getCreators } from '~/services/looks';
+import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
+import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
@@ -382,6 +383,19 @@ export default function AdminContent() {
     return () => { cancelled = true; };
   }, []);
 
+  // Bottom-center publish toast. Stays up ~3.2s and fades. The
+  // unpublished-row Publish button drives this — single-shot so we
+  // don't need a queue.
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+  const publishTimerRef = useRef<number | null>(null);
+
+  const flashPublishMsg = useCallback((msg: string) => {
+    setPublishMsg(msg);
+    if (publishTimerRef.current != null) window.clearTimeout(publishTimerRef.current);
+    publishTimerRef.current = window.setTimeout(() => setPublishMsg(null), 3200);
+  }, []);
+
   // Expanded-row state for the Unpublished looks table — fetches the
   // generation's products on demand so the initial list query stays
   // cheap. Cached after the first fetch so re-expanding is instant.
@@ -439,6 +453,85 @@ export default function AdminContent() {
       return next;
     });
   }, [unpublishedProducts, unpublishedProductsLoading]);
+
+  const publishUnpublishedInline = useCallback(async (g: UnpublishedLook) => {
+    if (publishingIds.has(g.id)) return;
+    if (g.status !== 'done') return;
+    setPublishingIds(prev => {
+      const next = new Set(prev);
+      next.add(g.id);
+      return next;
+    });
+    try {
+      // Need the linked products to attach after the look is created.
+      let products = unpublishedProducts.get(g.id);
+      if (!products && supabase) {
+        const { data: prodRows } = await supabase
+          .from('user_generation_products')
+          .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+          .eq('generation_id', g.id)
+          .order('sort_order');
+        products = ((prodRows || []) as unknown as Array<{
+          product_id: string;
+          role_tag: string | null;
+          sort_order: number;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+        }>)
+          .filter(r => !!r.products)
+          .map(r => ({
+            id: r.products!.id,
+            name: r.products!.name || '—',
+            brand: r.products!.brand || '—',
+            price: r.products!.price,
+            image_url: r.products!.image_url,
+            role_tag: r.role_tag,
+          }));
+      }
+      const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
+      const { data: look } = await createLook({
+        title: `${creatorLabel}’s ${g.style} look`,
+        description: `Promoted from generation ${g.id}`,
+        gender: 'unisex',
+      });
+      await Promise.all((products || []).map(p =>
+        addProductToLook(look.id, { product_id: p.id }).catch(err => {
+          console.warn('[publish-inline] addProductToLook failed:', err);
+        })
+      ));
+      // Same two follow-ups as the dedicated screen — without these
+      // the new row never appears in the Published list.
+      if (supabase && g.video_url) {
+        const { error: creativeErr } = await supabase
+          .from('looks_creative')
+          .insert({ look_id: look.id, video_url: g.video_url, is_primary: true });
+        if (creativeErr) console.warn('[publish-inline] looks_creative insert failed:', creativeErr.message);
+      }
+      if (supabase) {
+        const { error: statusErr } = await supabase
+          .from('looks')
+          .update({ status: 'live' })
+          .eq('id', look.id);
+        if (statusErr) console.warn('[publish-inline] status update failed:', statusErr.message);
+      }
+      invalidateLooksCache();
+      // Drop the row from the unpublished list and bump the published
+      // looks state so the Published tab reflects the new entry
+      // without a hard refresh.
+      setUnpublished(prev => prev.filter(u => u.id !== g.id));
+      const fresh = await getLooks();
+      setLooks(fresh);
+      flashPublishMsg('This look is published');
+    } catch (err) {
+      console.error('[publish-inline] failed:', err);
+      flashPublishMsg(err instanceof Error ? `Publish failed: ${err.message}` : 'Publish failed');
+    } finally {
+      setPublishingIds(prev => {
+        const next = new Set(prev);
+        next.delete(g.id);
+        return next;
+      });
+    }
+  }, [publishingIds, unpublishedProducts, flashPublishMsg]);
 
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
@@ -1834,11 +1927,11 @@ export default function AdminContent() {
                         type="button"
                         className="admin-btn admin-btn-primary"
                         style={{ fontSize: 11, padding: '4px 10px' }}
-                        disabled={g.status !== 'done'}
+                        disabled={g.status !== 'done' || publishingIds.has(g.id)}
                         title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish — status is ${g.status}`}
-                        onClick={() => navigate(`/admin/publish/${g.id}`)}
+                        onClick={() => publishUnpublishedInline(g)}
                       >
-                        Publish
+                        {publishingIds.has(g.id) ? 'Publishing…' : 'Publish'}
                       </button>
                     </td>
                   </tr>
@@ -3462,6 +3555,40 @@ export default function AdminContent() {
         >
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 4px rgba(34,197,94,0.2)' }} />
           {toast}
+        </div>
+      )}
+
+      {/* Bottom-center publish notification — fades after ~3.2s. */}
+      {publishMsg && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            bottom: 28,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 11000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 18px',
+            borderRadius: 999,
+            background: 'rgba(15, 23, 42, 0.92)',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 500,
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.32)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            pointerEvents: 'none',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {publishMsg}
         </div>
       )}
     </div>
