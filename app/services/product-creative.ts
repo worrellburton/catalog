@@ -442,6 +442,41 @@ export async function getCreativesByBrand(
   return (data || []) as ProductAd[];
 }
 
+// Look up creatives (with playable video) for an arbitrary set of product
+// UUIDs. Used by the consumer feed to surface video ads for products that
+// nl-search returned but which aren't in the curated `is_elite` rotation.
+// Falls back gracefully — products with no creative simply drop out.
+//
+// Results are returned in the same order as `productIds` (rank-preserving)
+// so the caller can prepend them to the feed without re-sorting. When a
+// product has multiple creatives, the most recently-completed one wins.
+export async function getCreativesByProductIds(productIds: string[]): Promise<ProductAd[]> {
+  if (!supabase || productIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('product_creative')
+    .select(AD_SELECT)
+    .in('product_id', productIds)
+    .eq('status', 'live')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.warn('[getCreativesByProductIds] query error:', error.message);
+    return [];
+  }
+  // Pick the freshest creative per product, then sort by the order of
+  // productIds so semantic rank is preserved.
+  const byProduct = new Map<string, ProductAd>();
+  for (const row of (data || []) as ProductAd[]) {
+    if (!byProduct.has(row.product_id)) byProduct.set(row.product_id, row);
+  }
+  const ordered: ProductAd[] = [];
+  for (const id of productIds) {
+    const hit = byProduct.get(id);
+    if (hit) ordered.push(hit);
+  }
+  return ordered;
+}
+
 // Per-brand promise cache so hover and tap coalesce.
 const brandCache = new Map<string, Promise<ProductAd[]>>();
 

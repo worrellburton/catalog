@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchLiveAds, getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, deleteProductAd, getCreativesByProductIds, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -219,6 +219,28 @@ export default function ContinuousFeed({
     return () => { cancelled = true; };
   }, []);
 
+  // Fetch product_creative entries for semantic search products that aren't
+  // already in the elite rotation. The semantic lane returns product UUIDs
+  // ranked by relevance — we hydrate each into a CreativeCard with its real
+  // video so the search grid matches the feed visually (no static thumbnails).
+  const [semanticCreatives, setSemanticCreatives] = useState<ProductAd[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const ids = semantic.products.map(p => p.id);
+    if (ids.length === 0) {
+      setSemanticCreatives([]);
+      return;
+    }
+    getCreativesByProductIds(ids)
+      .then(rows => {
+        if (cancelled) return;
+        setSemanticCreatives(rows);
+        primeTrailAssets(rows);
+      })
+      .catch(err => console.warn('[ContinuousFeed] semantic creatives fetch failed:', err));
+    return () => { cancelled = true; };
+  }, [semantic.products]);
+
   // Filter creatives by the current search. If any product in the library has
   // catalog_tags that match the query (case-insensitive), treat the search as
   // a catalog lookup and keep only creatives whose product is tagged with it.
@@ -246,6 +268,31 @@ export default function ContinuousFeed({
     // rather than showing a blank grid.
     return matches.length > 0 ? matches : liveCreatives;
   }, [liveCreatives, searchQuery]);
+
+  // When the semantic lane returned product hits, surface them at the top of
+  // the creative grid in rank order, then dedupe the rest of filteredCreatives
+  // so the same product can't appear twice. Falls through to filteredCreatives
+  // unchanged when there are no semantic product matches.
+  const semanticallyOrderedCreatives = useMemo<ProductAd[]>(() => {
+    if (semanticCreatives.length === 0) return filteredCreatives;
+    const seen = new Set<string>();
+    const out: ProductAd[] = [];
+    for (const c of semanticCreatives) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
+    }
+    for (const c of filteredCreatives) {
+      if (seen.has(c.id)) continue;
+      // Also dedupe by product_id so we don't show two videos for the same
+      // product (semantic hit + elite rotation entry for the same product).
+      const productId = c.product_id;
+      if (productId && out.some(x => x.product_id === productId)) continue;
+      seen.add(c.id);
+      out.push(c);
+    }
+    return out;
+  }, [semanticCreatives, filteredCreatives]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
@@ -363,7 +410,7 @@ export default function ContinuousFeed({
     !creativesLoading &&
     !semantic.loading &&
     trimmedQuery.length > 0 &&
-    filteredCreatives.length === 0 &&
+    semanticallyOrderedCreatives.length === 0 &&
     semanticallyOrderedLooks.length === 0;
 
   // While semantic search is loading (only for long-enough queries), show the
@@ -372,7 +419,7 @@ export default function ContinuousFeed({
     !showEmptyState &&
     semanticActive &&
     semantic.loading &&
-    filteredCreatives.length === 0 &&
+    semanticallyOrderedCreatives.length === 0 &&
     filteredLooks.length === 0;
 
   if (showEmptyState || showSourcingState) {
@@ -396,7 +443,7 @@ export default function ContinuousFeed({
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
               onOpenCreativeProduct={handleOpenCreativeProduct}
-              creatives={segment.isInitial ? filteredCreatives : undefined}
+              creatives={segment.isInitial ? semanticallyOrderedCreatives : undefined}
               creativesLoading={segment.isInitial ? creativesLoading : false}
               canDeleteCreative={canDeleteCreative}
               onDeleteCreative={handleDeleteCreative}

@@ -26,6 +26,27 @@ function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
+  // Debounce timer for onSearchChange — keeps the input feeling instant while
+  // deferring downstream filtering + the nl-search round trip until the user
+  // stops typing. 350 ms is short enough to feel reactive but long enough to
+  // collapse a fast typist's keystrokes into a single search.
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emitSearch = useCallback((value: string) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      onSearchChange(value);
+    }, 350);
+  }, [onSearchChange]);
+  const emitSearchImmediate = useCallback((value: string) => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    onSearchChange(value);
+  }, [onSearchChange]);
+  useEffect(() => () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  }, []);
 
   // Lift the bar above iOS Safari's bottom URL toolbar. The toolbar is
   // part of the layout viewport (not the visual viewport) and isn't
@@ -117,8 +138,12 @@ function BottomBar({
   const handleSearchInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setLocalSearch(val);
-    onSearchChange(val.trim().toLowerCase());
-  }, [onSearchChange]);
+    const next = val.trim().toLowerCase();
+    // Empty string short-circuits the debounce so the feed resets immediately
+    // when the user clears the input by hand.
+    if (next === '') emitSearchImmediate('');
+    else emitSearch(next);
+  }, [emitSearch, emitSearchImmediate]);
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
@@ -128,12 +153,12 @@ function BottomBar({
       if (onSelectSuggestion) {
         onSelectSuggestion(query);
       } else {
-        onSearchChange(query.toLowerCase());
+        emitSearchImmediate(query.toLowerCase());
       }
       setSearchOpen(false);
       btn.classList.remove('tapped');
     }, 600);
-  }, [onSearchChange, onSelectSuggestion]);
+  }, [emitSearchImmediate, onSelectSuggestion]);
 
   const handleFilterApply = useCallback(() => {
     // Sync gender filters
@@ -221,7 +246,7 @@ function BottomBar({
             <button
               type="button"
               className="bottom-search-clear"
-              onClick={() => { setLocalSearch(''); onSearchChange(''); }}
+              onClick={() => { setLocalSearch(''); emitSearchImmediate(''); }}
               aria-label="Clear search"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
