@@ -125,10 +125,8 @@ export default function TypeAnywhere({ onSubmit }: Props) {
         aria-hidden={!visible}
       >
         <div className="type-anywhere-text">
-          <span className="type-anywhere-quote-open" aria-hidden="true">“</span>
           <span className="type-anywhere-value">{text || hintRef.current}</span>
           <span className="type-anywhere-caret" aria-hidden="true" />
-          <span className="type-anywhere-quote-close" aria-hidden="true">”</span>
         </div>
         <div className="type-anywhere-hint">
           press <kbd>enter</kbd> to make a catalog · <kbd>esc</kbd> to clear
