@@ -477,6 +477,52 @@ export async function getCreativesByProductIds(productIds: string[]): Promise<Pr
   return ordered;
 }
 
+// Resolve a ranked list of look UUIDs to live product creatives by walking
+// look_products → products → product_creative. Used by the semantic search
+// path: nl-search frequently returns looks (e.g. "summer", "red carpet"),
+// but the feed surface is creative-only, so we hydrate each look into the
+// creatives that back its products.
+//
+// Rank-preserving: results are emitted in look order, then by sort_order
+// within each look. Deduped by product_id so a single product that appears
+// in multiple semantic looks only surfaces once.
+export async function getCreativesByLookIds(lookIds: string[]): Promise<ProductAd[]> {
+  if (!supabase || lookIds.length === 0) return [];
+  // 1) look_id → ordered product_ids
+  const { data: lpRows, error: lpErr } = await supabase
+    .from('look_products')
+    .select('look_id, product_id, sort_order')
+    .in('look_id', lookIds);
+  if (lpErr) {
+    console.warn('[getCreativesByLookIds] look_products error:', lpErr.message);
+    return [];
+  }
+  if (!lpRows || lpRows.length === 0) return [];
+
+  // Preserve look rank, then sort_order within each look. Dedupe product_ids
+  // (a product shared across two semantic-hit looks should only appear once).
+  const lookRank = new Map<string, number>();
+  lookIds.forEach((id, idx) => lookRank.set(id, idx));
+  const seenProductIds = new Set<string>();
+  const orderedProductIds: string[] = [];
+  const sorted = [...(lpRows as Array<{ look_id: string; product_id: string; sort_order: number | null }>)]
+    .sort((a, b) => {
+      const ra = lookRank.get(a.look_id) ?? Infinity;
+      const rb = lookRank.get(b.look_id) ?? Infinity;
+      if (ra !== rb) return ra - rb;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+  for (const row of sorted) {
+    if (seenProductIds.has(row.product_id)) continue;
+    seenProductIds.add(row.product_id);
+    orderedProductIds.push(row.product_id);
+  }
+  if (orderedProductIds.length === 0) return [];
+
+  // 2) Reuse the existing product → creative resolver (preserves order).
+  return getCreativesByProductIds(orderedProductIds);
+}
+
 // Per-brand promise cache so hover and tap coalesce.
 const brandCache = new Map<string, Promise<ProductAd[]>>();
 

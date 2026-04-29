@@ -8,10 +8,10 @@
 // existing local text filter in GridView (no API call).
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { nlSearch, SemanticLook, SemanticProduct, QueryPlan } from '~/services/semantic-search';
+import { nlSearch, SemanticCreative, QueryPlan } from '~/services/semantic-search';
 
 const MIN_QUERY_LENGTH = 3;
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 200;
 
 // A stable session ID for anonymous query logging (generated once per page load).
 function getSessionId(): string {
@@ -25,13 +25,9 @@ function getSessionId(): string {
 }
 
 export interface SemanticSearchState {
-  /** Ordered look UUIDs from the semantic search. Use to reorder GridView. */
-  lookIds: string[];
-  /** Ranked product results (UUID + display data) for a "products found" rail. */
-  products: SemanticProduct[];
-  /** Raw look objects from the search — enough to render preview cards. */
-  looks: SemanticLook[];
-  /** True while the edge function is in flight. */
+  /** Ranked creative results returned directly from nl-search. The feed renders these. */
+  creatives: SemanticCreative[];
+  /** True while the edge function is in flight (initial fetch OR loadMore). */
   loading: boolean;
   /** True when the query matched fewer than 3 results or had a very low score.
    *  The backfill agent will pick this up automatically. */
@@ -42,96 +38,150 @@ export interface SemanticSearchState {
   queryId: string | null;
   /** Non-null when the last request failed. */
   error: string | null;
+  /** Load the next page of results (appends to creatives). Safe to call while loading. */
+  loadMore: () => void;
+  /** True when there are likely more results to load (last fetch returned a full page). */
+  hasMore: boolean;
 }
 
-const EMPTY_STATE: SemanticSearchState = {
-  lookIds: [],
-  products: [],
-  looks: [],
+const PAGE_SIZE = 24;
+
+const EMPTY_STATE: Omit<SemanticSearchState, 'loadMore'> = {
+  creatives: [],
   loading: false,
   coldMiss: false,
   queryPlan: null,
   queryId: null,
   error: null,
+  hasMore: false,
 };
 
 export function useSemanticSearch(
   query: string,
   options: { gender?: string; userId?: string; k?: number } = {}
 ): SemanticSearchState {
-  const { gender, userId, k = 20 } = options;
-  const [state, setState] = useState<SemanticSearchState>(EMPTY_STATE);
+  const { gender, userId } = options;
+  const [baseCreatives, setBaseCreatives] = useState<SemanticCreative[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [coldMiss, setColdMiss] = useState(false);
+  const [queryPlan, setQueryPlan] = useState<QueryPlan | null>(null);
+  const [queryId, setQueryId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
   const abortRef  = useRef<AbortController | null>(null);
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionId = useRef(getSessionId());
+  const committedQueryRef = useRef('');
+  // Snapshot the IDs at request-time so async resolution can't deduplicate
+  // against a stale baseCreatives reference.
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
-  const runSearch = useCallback(async (q: string) => {
-    // Cancel any in-flight request
+  const runSearch = useCallback(async (q: string, append: boolean) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setLoading(true);
+    setError(null);
 
     try {
       const resp = await nlSearch(q, {
-        k,
+        k:           PAGE_SIZE,
         gender,
-        user_id:    userId,
-        session_id: sessionId.current,
-        signal:     controller.signal,
+        user_id:     userId,
+        session_id:  sessionId.current,
+        // On loadMore, ask the DB to skip everything we already have so we
+        // get a true fresh page instead of paying the full pipeline cost
+        // just to dedupe overlap on the client.
+        exclude_ids: append ? Array.from(seenIdsRef.current) : undefined,
+        signal:      controller.signal,
       });
 
-      // Silently bail if this request was superseded
       if (controller.signal.aborted) return;
 
       if (!resp.ok) {
-        setState(prev => ({ ...prev, loading: false, error: resp.error ?? 'Search failed' }));
+        setLoading(false);
+        setError(resp.error ?? 'Search failed');
         return;
       }
 
-      const looks    = resp.results.filter((r): r is SemanticLook    => r.entity_type === 'look');
-      const products = resp.results.filter((r): r is SemanticProduct => r.entity_type === 'product');
+      const incoming = resp.results.filter((r): r is SemanticCreative => r.entity_type === 'creative');
 
-      setState({
-        lookIds:    looks.map(l => l.id),
-        products,
-        looks,
-        loading:    false,
-        coldMiss:   resp.cold_miss,
-        queryPlan:  resp.query_plan,
-        queryId:    resp.query_id,
-        error:      null,
+      setBaseCreatives(prev => {
+        const next = append ? [...prev] : [];
+        const seen = new Set(next.map(c => c.id));
+        for (const c of incoming) {
+          if (seen.has(c.id)) continue;
+          seen.add(c.id);
+          next.push(c);
+        }
+        seenIdsRef.current = seen;
+        return next;
       });
+      setColdMiss(resp.cold_miss);
+      setQueryPlan(resp.query_plan);
+      setQueryId(resp.query_id);
+      // Full page back ⇒ probably more results behind it. An empty page (or
+      // partial) means we've drained the candidate pool for this query.
+      setHasMore(incoming.length >= PAGE_SIZE);
+      setLoading(false);
     } catch (err) {
-      // Ignore aborts — they are intentional (new query superseded this one)
       if (err instanceof Error && err.name === 'AbortError') return;
-      setState(prev => ({ ...prev, loading: false, error: 'Search unavailable' }));
+      setLoading(false);
+      setError('Search unavailable');
     }
-  }, [k, gender, userId]);
+  }, [gender, userId]);
 
+  // When query changes: reset everything and run fresh search.
   useEffect(() => {
-    // Clear any pending debounce
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Short queries → reset to empty (local filter takes over)
     if (query.trim().length < MIN_QUERY_LENGTH) {
       abortRef.current?.abort();
-      setState(EMPTY_STATE);
+      setBaseCreatives([]);
+      setLoading(false);
+      setColdMiss(false);
+      setQueryPlan(null);
+      setQueryId(null);
+      setError(null);
+      setHasMore(false);
+      seenIdsRef.current = new Set();
+      committedQueryRef.current = '';
       return;
     }
 
-    timerRef.current = setTimeout(() => runSearch(query.trim()), DEBOUNCE_MS);
+    const q = query.trim();
+    committedQueryRef.current = q;
+    seenIdsRef.current = new Set();
+    setBaseCreatives([]);
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    timerRef.current = setTimeout(() => runSearch(q, false), DEBOUNCE_MS);
+
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [query, runSearch]);
+
+  const loadMore = useCallback(() => {
+    if (loading) return;
+    if (!hasMore) return;
+    const q = committedQueryRef.current;
+    if (!q || q.length < MIN_QUERY_LENGTH) return;
+    runSearch(q, true);
+  }, [loading, hasMore, runSearch]);
 
   // Abort on unmount
   useEffect(() => {
     return () => { abortRef.current?.abort(); };
   }, []);
 
-  return state;
+  return {
+    creatives: baseCreatives,
+    loading,
+    coldMiss,
+    queryPlan,
+    queryId,
+    error,
+    hasMore,
+    loadMore,
+  };
 }

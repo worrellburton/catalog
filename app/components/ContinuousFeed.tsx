@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchLiveAds, getLiveAds, deleteProductAd, getCreativesByProductIds, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, deleteProductAd, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -189,39 +189,10 @@ export default function ContinuousFeed({
   // Clean up spinner on unmount
   useEffect(() => () => onSearchLoadingChange?.(false), [onSearchLoadingChange]);
 
-  // Reorder filteredLooks: semantic matches first (in rank order), rest after.
-  const semanticallyOrderedLooks = useMemo(() => {
-    const ids = semantic.lookIds;
-    if (ids.length === 0) return filteredLooks;
-
-    // Build UUID → Look map for fast lookup
-    const uuidMap = new Map<string, Look>();
-    for (const l of filteredLooks) {
-      if (l.uuid) uuidMap.set(l.uuid, l);
-    }
-
-    // Also try to supplement with looks from allLooks (not in filteredLooks
-    // because they were filtered out by text match — but semantic overrides
-    // the text filter).
-    const allUuidMap = new Map<string, Look>();
-    for (const l of allLooks) {
-      if (l.uuid) allUuidMap.set(l.uuid, l);
-    }
-
-    const matched: Look[] = [];
-    const matchedSet = new Set<number>();
-    for (const id of ids) {
-      const look = uuidMap.get(id) ?? allUuidMap.get(id);
-      if (look && !matchedSet.has(look.id)) {
-        matched.push(look);
-        matchedSet.add(look.id);
-      }
-    }
-
-    // Append any filteredLooks not already in the semantic results
-    const rest = filteredLooks.filter(l => !matchedSet.has(l.id));
-    return [...matched, ...rest];
-  }, [semantic.lookIds, filteredLooks, allLooks]);
+  // Reorder filteredLooks: with creative-first search, look ordering is no
+  // longer driven by semantic results (creatives are inserted into the feed
+  // separately). Pass filteredLooks through unchanged.
+  const semanticallyOrderedLooks = useMemo(() => filteredLooks, [filteredLooks]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],
@@ -255,27 +226,55 @@ export default function ContinuousFeed({
     return () => { cancelled = true; };
   }, []);
 
-  // Fetch product_creative entries for semantic search products that aren't
-  // already in the elite rotation. The semantic lane returns product UUIDs
-  // ranked by relevance — we hydrate each into a CreativeCard with its real
-  // video so the search grid matches the feed visually (no static thumbnails).
-  const [semanticCreatives, setSemanticCreatives] = useState<ProductAd[]>([]);
+  // Map semantic creatives (returned directly by nl-search) into ProductAd
+  // shape for CreativeCard rendering. nl-search now indexes product_creative
+  // directly via search_creatives_hybrid, so each result row already carries
+  // the joined product fields — no client-side hydration through
+  // products/look_products needed.
+  const semanticCreatives = useMemo<ProductAd[]>(() => {
+    if (!semantic.creatives.length) return [];
+    return semantic.creatives.map(c => ({
+      id:               c.id,
+      product_id:       c.product_id,
+      look_id:          null,
+      title:            null,
+      description:      null,
+      video_url:        c.video_url,
+      storage_path:     null,
+      thumbnail_url:    c.thumbnail_url,
+      affiliate_url:    c.affiliate_url,
+      prompt:           null,
+      prompt_extra:     null,
+      style:            'semantic',
+      model:            null,
+      status:           'live' as const,
+      duration_seconds: c.duration_seconds,
+      aspect_ratio:     null,
+      resolution:       null,
+      cost_usd:         null,
+      impressions:      0,
+      clicks:           0,
+      error:            null,
+      enabled:          true,
+      is_elite:         c.is_elite ?? false,
+      created_at:       new Date().toISOString(),
+      completed_at:     null,
+      updated_at:       null,
+      product: {
+        id:           c.product_id,
+        name:         c.product_name,
+        brand:        c.product_brand,
+        price:        c.product_price,
+        image_url:    c.product_image_url,
+        url:          c.product_url,
+        catalog_tags: null,
+      },
+    }));
+  }, [semantic.creatives]);
+
   useEffect(() => {
-    let cancelled = false;
-    const ids = semantic.products.map(p => p.id);
-    if (ids.length === 0) {
-      setSemanticCreatives([]);
-      return;
-    }
-    getCreativesByProductIds(ids)
-      .then(rows => {
-        if (cancelled) return;
-        setSemanticCreatives(rows);
-        primeTrailAssets(rows);
-      })
-      .catch(err => console.warn('[ContinuousFeed] semantic creatives fetch failed:', err));
-    return () => { cancelled = true; };
-  }, [semantic.products]);
+    if (semanticCreatives.length) primeTrailAssets(semanticCreatives);
+  }, [semanticCreatives]);
 
   // Filter creatives by the current search. If any product in the library has
   // catalog_tags that match the query (case-insensitive), treat the search as
@@ -283,6 +282,15 @@ export default function ContinuousFeed({
   // Otherwise fall back to a text match on product name / brand.
   const filteredCreatives = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
+    // Live (uncommitted) query — used to suppress the elite fallback the
+    // moment the user starts typing a semantic-eligible query, so the grid
+    // doesn't flash with unrelated creatives while nl-search is in flight.
+    const liveQ = searchQuery.trim().toLowerCase();
+    if (liveQ.length >= 3 && liveQ !== q) {
+      // Semantic search is pending — show nothing from the text/elite lane.
+      // semanticallyOrderedCreatives + the sourcing state below take over.
+      return [];
+    }
     if (!q) return liveCreatives;
 
     const isCatalogMatch = liveCreatives.some(c =>
@@ -308,7 +316,7 @@ export default function ContinuousFeed({
     // grid isn't blank while the user is mid-word.
     if (matches.length === 0) return q.length >= 3 ? [] : liveCreatives;
     return matches;
-  }, [liveCreatives, committedQuery]);
+  }, [liveCreatives, committedQuery, searchQuery]);
 
   // When the semantic lane returned product hits, surface them at the top of
   // the creative grid in rank order, then dedupe the rest of filteredCreatives
@@ -449,10 +457,14 @@ export default function ContinuousFeed({
   // Empty-catalog and sourcing states use committedQuery so they only
   // appear after the search has resolved, not while the user is still typing.
   const trimmedQuery = committedQuery.trim();
+  const liveTrimmed = searchQuery.trim();
   const semanticActive = trimmedQuery.length >= 3;
+  // Pending = user has typed enough to fire semantic but it hasn't resolved yet.
+  const semanticPending = liveTrimmed.length >= 3 && (semantic.loading || liveTrimmed !== trimmedQuery);
   const showEmptyState =
     !creativesLoading &&
     !semantic.loading &&
+    !semanticPending &&
     trimmedQuery.length > 0 &&
     semanticallyOrderedCreatives.length === 0 &&
     semanticallyOrderedLooks.length === 0;
@@ -461,8 +473,8 @@ export default function ContinuousFeed({
   // sourcing state immediately so the user sees feedback during the round-trip.
   const showSourcingState =
     !showEmptyState &&
-    semanticActive &&
-    semantic.loading &&
+    (semanticActive || semanticPending) &&
+    (semantic.loading || semanticPending) &&
     semanticallyOrderedCreatives.length === 0 &&
     filteredLooks.length === 0;
 
@@ -494,6 +506,8 @@ export default function ContinuousFeed({
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}
+              searchMode={segment.isInitial && semantic.creatives.length > 0}
+              onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
             />
           );
         }

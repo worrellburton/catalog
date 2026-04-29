@@ -1,18 +1,29 @@
-// embed-entity — generates a semantic concept document + embeddings for a
-// single product or look and writes them back to the DB.
+// embed-entity — generates a semantic concept document + embedding for a
+// single entity (product_creative or look row) and writes it back to the DB.
 //
 // Two-step per entity:
-//   1. Claude Haiku             → concept_doc (rich semantic description) + concept_facets JSON
-//   2. TwelveLabs Marengo-retrieval-2.7 text embed (1024-dim) → text_embedding
+//   1. Claude Haiku             → concept_doc (factual semantic description) + concept_facets JSON
+//   2. OpenAI text-embedding-3-small (1536-dim) → text_embedding
 //
 // Required Supabase secrets:
 //   ANTHROPIC_API_KEY   — Claude Haiku for concept generation
 //   OPENAI_API_KEY      — text-embedding-3-small (1536-dim)
 //
 // Request body:
-//   { id: string, entity_type: 'product' | 'look', force?: boolean }
+//   { id: string, entity_type: 'creative' | 'look', force?: boolean }
+//
+// entity_type='creative': reads product_creative joined to products, writes back
+//   to product_creative.{concept_doc, concept_facets, text_embedding, concept_at}.
+// entity_type='look': reads looks joined to its products via look_products, writes
+//   back to looks.{concept_doc, concept_facets, text_embedding, concept_at}.
 //
 // force=true regenerates even if concept_doc already exists.
+//
+// IMPORTANT — concept_doc must be a FACTUAL description, not a query bait
+// list. Earlier versions of this prompt seeded example shopper phrases
+// ("summer outfit", "date night look") which Claude obediently injected into
+// every doc, polluting BM25 with verbatim matches on items that didn't
+// actually fit the query. Keep the prompt descriptive only.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -42,21 +53,25 @@ interface ConceptResult {
   };
 }
 
+type EntityType = 'creative' | 'look';
+
 async function generateConcept(
   input: string,
-  entityType: 'product' | 'look',
+  entityType: EntityType,
   anthropicKey: string
 ): Promise<ConceptResult> {
-  const systemPrompt = entityType === 'product'
-    ? `You are a fashion search indexer. Your job is to write a rich semantic document for a product that will be used to match natural-language fashion queries like "what to wear with white jeans" or "red carpet evening look". Capture physical details, styling context, occasions, and cultural/trend references.`
-    : `You are a fashion search indexer. Your job is to write a rich semantic document for a fashion "look" (an outfit video) that will match natural-language queries. Describe the overall vibe, component pieces, occasion fit, and aesthetic references.`;
+  const isLook = entityType === 'look';
+
+  const systemPrompt = isLook
+    ? `You are a fashion search indexer. Your job is to write a FACTUAL semantic document for a shoppable outfit look — a curated set of fashion items worn together. The document is used both as a BM25 keyword source and as the input to a dense embedding, so accuracy beats coverage. Describe the overall aesthetic, the key garments and their colours, who the look is designed for, and the realistic occasions it suits. Do NOT invent occasions to widen reach; do NOT list speculative shopper search phrases; do NOT pad with synonyms.`
+    : `You are a fashion search indexer. Your job is to write a FACTUAL semantic document for a short shoppable video creative that advertises a single fashion product. The document is used both as a BM25 keyword source and as the input to a dense embedding, so accuracy beats coverage. Describe what the product IS, the colour and material, the body part it covers, the styling actually shown in the video, and the realistic occasions it suits. Do NOT invent occasions to widen reach; do NOT list speculative shopper search phrases; do NOT pad with synonyms. If an item is underwear, it is underwear — do not also call it a "summer outfit".`;
 
   // Truncate long inputs to avoid overflowing Claude's context and getting back a truncated JSON response
   const inputTruncated = input.length > 1500 ? input.slice(0, 1500) + '…' : input;
 
-  const userPrompt = entityType === 'product'
-    ? `Generate a semantic search document for this product:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing what the item IS, who wears it, what occasions it suits, what it pairs with, and what aesthetic/trend it belongs to. Write naturally, as if a stylish person is describing it. Include synonyms and style terms a shopper might search.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`
-    : `Generate a semantic search document for this fashion look:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 3-5 sentences describing the look's vibe, the pieces in it, the occasion it suits, and the aesthetic it represents. Write naturally for search.\n- "concept_facets": {"garment_type":"outfit","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`;
+  const userPrompt = isLook
+    ? `Generate a factual semantic document for this shoppable outfit look:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) the overall aesthetic or vibe of the look; (2) the key garments, their colours and materials; (3) who it is designed for; (4) realistic occasions. Write plain descriptive prose. Do NOT list shopper search phrases.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`
+    : `Generate a factual semantic document for this shoppable video creative:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) what the product is — garment type, colour, material; (2) who it's designed for; (3) the realistic occasions it suits based on the product type itself, not aspirational stretches. Write plain descriptive prose. Do NOT include lists of shopper search phrases. Do NOT call accessories or underwear an "outfit" or "look".\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n  • occasion must be honest: only list occasions where this single item is the headline piece, not occasions where it might be worn under something else.\n\nRespond with ONLY the JSON object, no other text.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -92,7 +107,7 @@ async function generateConcept(
     }
     return parsed;
   } catch {
-    return heuristicConcept(input, entityType);
+    return heuristicConcept(input, _entityType);
   }
 }
 
@@ -145,12 +160,12 @@ const COLOR_PATTERNS: Array<[RegExp, string]> = [
 const FORMAL_KEYWORDS = /\b(suit|tuxedo|gown|formal|cocktail|evening|black tie|dressy|tailored|wedding|red carpet)\b/i;
 const CASUAL_KEYWORDS = /\b(joggers?|sweatpants|hoodie|tee|t-shirt|sneakers?|loungewear|athleisure|relaxed|casual|everyday)\b/i;
 
-function heuristicConcept(input: string, entityType: 'product' | 'look'): ConceptResult {
+function heuristicConcept(input: string, _entityType: EntityType): ConceptResult {
   const lines = input.split('\n');
   const get = (prefix: string) =>
     lines.find(l => l.startsWith(prefix))?.slice(prefix.length).trim() ?? '';
 
-  const name  = get('Name:') || get('Title:') || '';
+  const name  = get('Product:') || get('Name:') || '';
   const brand = get('Brand:');
   const type  = get('Type:');
   const desc  = get('Description:');
@@ -159,7 +174,7 @@ function heuristicConcept(input: string, entityType: 'product' | 'look'): Concep
   const corpus = [name, type, desc].filter(Boolean).join(' ');
 
   // Garment type
-  let garment = entityType === 'look' ? 'outfit' : 'clothing';
+  let garment = 'clothing';
   for (const [re, g] of GARMENT_PATTERNS) {
     if (re.test(corpus)) { garment = g; break; }
   }
@@ -205,9 +220,8 @@ function heuristicConcept(input: string, entityType: 'product' | 'look'): Concep
   const occasionPhrase = ` Suited to ${occasions.join(', ')} settings.`;
   const genderPhrase = gender && gender !== 'unisex' ? ` Designed for ${gender}.` : '';
 
-  const concept_doc = entityType === 'product'
-    ? `${name || 'A piece'}${brandPhrase} — a ${colorPhrase}${garment}.${stylePhrase}${occasionPhrase}${genderPhrase}${desc ? ' ' + desc.slice(0, 200) : ''}`.trim()
-    : `A ${colorPhrase}${garment} look${brandPhrase ? brandPhrase : ''}, "${name}".${stylePhrase}${occasionPhrase}${genderPhrase}${desc ? ' ' + desc.slice(0, 200) : ''}`.trim();
+  const concept_doc =
+    `A short shoppable video featuring ${name || 'this piece'}${brandPhrase} — a ${colorPhrase}${garment}.${stylePhrase}${occasionPhrase}${genderPhrase}${desc ? ' ' + desc.slice(0, 200) : ''}`.trim();
 
   return {
     concept_doc,
@@ -269,81 +283,143 @@ Deno.serve(async (req: Request) => {
   let body: { id?: string; entity_type?: string; force?: boolean };
   try { body = await req.json(); } catch { return jsonRes({ ok: false, error: 'Invalid JSON' }, 400); }
 
-  const { id, entity_type, force = false } = body;
-  if (!id)          return jsonRes({ ok: false, error: 'id required' }, 400);
-  if (!entity_type || !['product', 'look'].includes(entity_type)) {
-    return jsonRes({ ok: false, error: 'entity_type must be product or look' }, 400);
+  const { id, entity_type = 'creative', force = false } = body;
+  if (!id) return jsonRes({ ok: false, error: 'id required' }, 400);
+  if (entity_type !== 'creative' && entity_type !== 'look') {
+    return jsonRes({ ok: false, error: 'entity_type must be "creative" or "look"' }, 400);
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
 
-  // ── Fetch entity ────────────────────────────────────────────────────────────
-  const table = entity_type === 'product' ? 'products' : 'looks';
+  // ── Route to the appropriate handler ────────────────────────────────────
+  if (entity_type === 'look') {
+    return handleLook(id, force, admin, anthropicKey, openaiKey);
+  }
+  return handleCreative(id, force, admin, anthropicKey, openaiKey);
+});
+
+// ── Creative handler ─────────────────────────────────────────────────────────
+async function handleCreative(
+  id: string,
+  force: boolean,
+  admin: ReturnType<typeof createClient>,
+  anthropicKey: string,
+  openaiKey: string,
+): Promise<Response> {
   const { data: row, error: fetchErr } = await admin
-    .from(table)
-    .select(entity_type === 'product'
-      ? 'id, name, brand, description, price, type, gender, concept_doc'
-      : 'id, title, creator_handle, description, gender, concept_doc')
+    .from('product_creative')
+    .select('id, style, prompt, prompt_extra, title, description, concept_doc, product:products(id, name, brand, description, price, type, gender)')
     .eq('id', id)
     .maybeSingle();
 
   if (fetchErr) return jsonRes({ ok: false, error: fetchErr.message }, 500);
-  if (!row)     return jsonRes({ ok: false, error: `${entity_type} not found` }, 404);
+  if (!row)     return jsonRes({ ok: false, error: 'creative not found' }, 404);
 
-  // Skip if already embedded and force=false
   if (!force && row.concept_doc) {
     return jsonRes({ ok: true, skipped: 'already has concept_doc', id });
   }
 
-  // ── Build input string for concept generation ────────────────────────────
-  let inputStr: string;
-  if (entity_type === 'product') {
-    inputStr = [
-      `Name: ${row.name ?? 'Unknown'}`,
-      row.brand       ? `Brand: ${row.brand}` : null,
-      row.type        ? `Type: ${row.type}` : null,
-      row.price       ? `Price: ${row.price}` : null,
-      row.gender      ? `Gender: ${row.gender}` : null,
-      row.description ? `Description: ${row.description}` : null,
-    ].filter(Boolean).join('\n');
-  } else {
-    inputStr = [
-      `Title: ${row.title ?? 'Untitled look'}`,
-      row.creator_handle ? `Creator: ${row.creator_handle}` : null,
-      row.gender         ? `Gender: ${row.gender}` : null,
-      row.description    ? `Description: ${row.description}` : null,
-    ].filter(Boolean).join('\n');
-  }
+  const p = (row as Record<string, unknown>).product as Record<string, unknown> | null;
+  if (!p) return jsonRes({ ok: false, error: 'creative is missing joined product' }, 400);
 
-  // ── Step 1: Generate concept_doc + facets via Claude ────────────────────
+  const inputStr = [
+    `Product: ${p.name ?? 'Unknown'}`,
+    p.brand       ? `Brand: ${p.brand}` : null,
+    p.type        ? `Type: ${p.type}` : null,
+    p.price       ? `Price: ${p.price}` : null,
+    p.gender      ? `Gender: ${p.gender}` : null,
+    p.description ? `Description: ${p.description}` : null,
+    row.style          ? `Creative style: ${row.style}` : null,
+    row.prompt         ? `Generation prompt: ${row.prompt}` : null,
+    row.prompt_extra   ? `Prompt notes: ${row.prompt_extra}` : null,
+    row.title          ? `Creative title: ${row.title}` : null,
+    row.description    ? `Creative description: ${row.description}` : null,
+  ].filter(Boolean).join('\n');
+
   let concept: ConceptResult;
-  try {
-    concept = await generateConcept(inputStr, entity_type as 'product' | 'look', anthropicKey);
-  } catch (err) {
-    return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502);
-  }
+  try { concept = await generateConcept(inputStr, 'creative', anthropicKey); }
+  catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
 
-  // ── Step 2: Embed concept_doc via OpenAI ────────────────────────────────────
   let embedding: number[];
-  try {
-    embedding = await embedText(concept.concept_doc, openaiKey);
-  } catch (err) {
-    return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502);
-  }
+  try { embedding = await embedText(concept.concept_doc, openaiKey); }
+  catch (err) { return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502); }
 
-  // ── Step 3: Write back to DB ─────────────────────────────────────────────
   const { error: updateErr } = await admin
-    .from(table)
+    .from('product_creative')
     .update({
       concept_doc:    concept.concept_doc,
       concept_facets: concept.concept_facets,
       concept_at:     new Date().toISOString(),
       text_embedding: toPgVector(embedding),
-      embedded_at:    new Date().toISOString(),
     })
     .eq('id', id);
 
   if (updateErr) return jsonRes({ ok: false, stage: 'db_update', error: updateErr.message }, 500);
+  return jsonRes({ ok: true, id, entity_type: 'creative', concept_doc_length: concept.concept_doc.length });
+}
 
-  return jsonRes({ ok: true, id, entity_type, concept_doc_length: concept.concept_doc.length });
-});
+// ── Look handler ─────────────────────────────────────────────────────────────
+async function handleLook(
+  id: string,
+  force: boolean,
+  admin: ReturnType<typeof createClient>,
+  anthropicKey: string,
+  openaiKey: string,
+): Promise<Response> {
+  // Fetch the look with its tagged products via look_products junction.
+  const { data: look, error: lookErr } = await admin
+    .from('looks')
+    .select('id, title, creator_handle, description, gender, concept_doc, look_products(product:products(name, brand, type, description))')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (lookErr) return jsonRes({ ok: false, error: lookErr.message }, 500);
+  if (!look)   return jsonRes({ ok: false, error: 'look not found' }, 404);
+
+  if (!force && (look as Record<string, unknown>).concept_doc) {
+    return jsonRes({ ok: true, skipped: 'already has concept_doc', id });
+  }
+
+  // Build input string: look metadata + its products
+  const l = look as Record<string, unknown>;
+  const lpRows = (l.look_products as Array<Record<string, unknown>> | null) ?? [];
+  const productLines = lpRows
+    .map(lp => {
+      const p = (lp.product as Record<string, unknown> | null);
+      if (!p) return null;
+      return [p.name, p.brand, p.type].filter(Boolean).join(' · ');
+    })
+    .filter(Boolean)
+    .slice(0, 10);
+
+  const inputStr = [
+    l.title       ? `Look title: ${l.title}` : null,
+    l.creator_handle ? `Creator: ${l.creator_handle}` : null,
+    l.description ? `Description: ${l.description}` : null,
+    l.gender      ? `Gender: ${l.gender}` : null,
+    productLines.length ? `Products in look:\n${productLines.map(s => `  • ${s}`).join('\n')}` : null,
+  ].filter(Boolean).join('\n');
+
+  let concept: ConceptResult;
+  try { concept = await generateConcept(inputStr, 'look', anthropicKey); }
+  catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+
+  let embedding: number[];
+  try { embedding = await embedText(concept.concept_doc, openaiKey); }
+  catch (err) { return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502); }
+
+  const { error: updateErr } = await admin
+    .from('looks')
+    .update({
+      concept_doc:    concept.concept_doc,
+      concept_facets: concept.concept_facets,
+      concept_at:     new Date().toISOString(),
+      text_embedding: toPgVector(embedding),
+    })
+    .eq('id', id);
+
+  if (updateErr) return jsonRes({ ok: false, stage: 'db_update', error: updateErr.message }, 500);
+  return jsonRes({ ok: true, id, entity_type: 'look', concept_doc_length: concept.concept_doc.length });
+}
+
+

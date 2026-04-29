@@ -1,8 +1,12 @@
 // Thin client for the nl-search and embed-entity edge functions.
 // All heavy logic (query planning, embedding, retrieval) lives server-side.
 //
-// Embedding backend : TwelveLabs Marengo-retrieval-2.7 (1024-dim text)
+// Embedding backend : OpenAI text-embedding-3-small (1536-dim) for the text
+//                     lane; TwelveLabs Marengo 3.0 (512-dim) for the visual lane.
 // Concept generation: Anthropic Claude Haiku
+//
+// Search is creative-first: every result is a SemanticCreative carrying its
+// joined product fields. Legacy product/look entity types have been removed.
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
 
@@ -24,34 +28,27 @@ export interface QueryPlan {
   anchor_name?: string;
 }
 
-export interface SemanticLook {
-  id: string;        // UUID
-  entity_type: 'look';
-  title: string;
-  creator_handle: string;
-  description: string | null;
+export interface SemanticCreative {
+  id: string;                       // creative UUID
+  entity_type: 'creative';
+  product_id: string;
+  video_url: string | null;
   thumbnail_url: string | null;
-  video_path: string | null;
-  gender: string | null;
+  affiliate_url: string | null;
+  duration_seconds: number | null;
+  is_elite: boolean | null;
+  product_name: string | null;
+  product_brand: string | null;
+  product_price: string | null;
+  product_image_url: string | null;
+  product_url: string | null;
+  product_gender: string | null;
+  product_type: string | null;
   concept_doc: string | null;
   score: number;
 }
 
-export interface SemanticProduct {
-  id: string;        // UUID
-  entity_type: 'product';
-  name: string;
-  brand: string | null;
-  price: string | null;
-  image_url: string | null;
-  description: string | null;
-  url: string | null;
-  gender: string | null;
-  type: string | null;
-  score: number;
-}
-
-export type SemanticResult = SemanticLook | SemanticProduct;
+export type SemanticResult = SemanticCreative;
 
 export interface NlSearchResponse {
   ok: boolean;
@@ -64,6 +61,7 @@ export interface NlSearchResponse {
     top_score: number | null;
     embeddings_used: number;
     rewrites_used: number;
+    visual_lane?: boolean;
   } | null;
   error?: string;
 }
@@ -77,10 +75,11 @@ export async function nlSearch(
     gender?: string;
     session_id?: string;
     user_id?: string;
+    exclude_ids?: string[];
     signal?: AbortSignal;
   } = {}
 ): Promise<NlSearchResponse> {
-  const { k = 20, gender, session_id, user_id, signal } = options;
+  const { k = 24, gender, session_id, user_id, exclude_ids, signal } = options;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/nl-search`, {
     method: 'POST',
@@ -89,7 +88,7 @@ export async function nlSearch(
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       apikey: SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ query, k, gender, session_id, user_id }),
+    body: JSON.stringify({ query, k, gender, session_id, user_id, exclude_ids }),
     signal,
   });
 
@@ -110,12 +109,12 @@ export async function nlSearch(
 }
 
 // ── embed-entity call (admin / background use) ────────────────────────────────
-// Trigger the embed-entity function for a specific product or look.
-// Called by the admin panel after creating/updating entities.
+// Trigger the embed-entity function for a specific creative. Called by the
+// admin panel / backfill script after creating or updating a product creative.
 
 export async function triggerEmbedEntity(
   id: string,
-  entity_type: 'product' | 'look',
+  entity_type: 'creative' = 'creative',
   force = false,
   authToken?: string
 ): Promise<{ ok: boolean; error?: string }> {

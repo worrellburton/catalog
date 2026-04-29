@@ -1,12 +1,14 @@
-// nl-search — Natural-language search orchestrator.
+// nl-search — Natural-language search orchestrator (creative-first).
 //
 // Pipeline:
 //   1. QueryPlan via Claude Haiku            — classify intent, generate rewrites, extract constraints
-//   2. Embed query + rewrites                — TwelveLabs Marengo-retrieval-2.7 text embed (1024-dim), parallel
-//   3. Hybrid retrieval                      — search_products_hybrid + search_looks_hybrid RPCs per embedding
+//   2. Embed query + rewrites                — OpenAI text-embedding-3-small (1536-dim, text lanes), parallel
+//      └─ plus TwelveLabs Marengo 3.0 (512-dim) for the visual creative lane
+//   3. Hybrid retrieval                      — search_creatives_hybrid (text + BM25) and search_creatives_visual
 //   4. RRF fusion                            — merge all retrieval sets into one ranked list
-//   5. Graph augment                         — for outfit_pairing intent, add entity_edges neighbours
-//   6. Log query                             — log_search_query RPC, return cold_miss flag
+//   5. Outfit-intent guard                   — strip accessory/underwear false positives from outfit/look queries
+//   6. Dedupe by product_id                  — prevent one product stacking the grid
+//   7. Log query                             — log_search_query RPC, return cold_miss flag
 //
 // Request body:
 //   { query: string, k?: number, gender?: string, session_id?: string, user_id?: string }
@@ -47,33 +49,22 @@ interface QueryPlan {
   anchor_name?: string;   // for outfit_pairing: what is the anchor item ("white jeans")
 }
 
-interface ProductRow {
+interface CreativeRow {
   id: string;
-  entity_type: 'product';
-  name: string;
-  brand: string;
-  price: string;
-  image_url: string;
-  description: string;
-  concept_doc: string | null;
-  concept_facets: Record<string, unknown> | null;
-  gender: string;
-  type: string;
-  url: string;
-  rrf_score: number;
-  dense_rank: number | null;
-  bm25_rank:  number | null;
-}
-
-interface LookRow {
-  id: string;
-  entity_type: 'look';
-  title: string;
-  creator_handle: string;
-  description: string;
-  thumbnail_url: string;
-  video_path: string;
-  gender: string;
+  entity_type: 'creative';
+  product_id: string;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  affiliate_url: string | null;
+  duration_seconds: number | null;
+  is_elite: boolean | null;
+  product_name: string | null;
+  product_brand: string | null;
+  product_price: string | null;
+  product_image_url: string | null;
+  product_url: string | null;
+  product_gender: string | null;
+  product_type: string | null;
   concept_doc: string | null;
   concept_facets: Record<string, unknown> | null;
   rrf_score: number;
@@ -81,7 +72,7 @@ interface LookRow {
   bm25_rank:  number | null;
 }
 
-type SearchResult = (ProductRow | LookRow) & { score: number };
+type SearchResult = CreativeRow & { score: number };
 
 // ── Claude: QueryPlan generation ─────────────────────────────────────────────
 
@@ -233,20 +224,42 @@ Deno.serve(async (req: Request) => {
 
   if (!supabaseUrl || !serviceKey) return jsonRes({ ok: false, error: 'Supabase env missing' }, 500);
 
-  let body: { query?: string; k?: number; gender?: string; session_id?: string; user_id?: string };
+  let body: { query?: string; k?: number; gender?: string; session_id?: string; user_id?: string; exclude_ids?: string[] };
   try { body = await req.json(); } catch { return jsonRes({ ok: false, error: 'Invalid JSON' }, 400); }
 
   const { query, session_id, user_id } = body;
-  const k = Math.min(Math.max(body.k ?? 20, 5), 50);
+  const k = Math.min(Math.max(body.k ?? 24, 5), 60);
+  // Pagination: caller passes the IDs already shown so the DB can return
+  // truly fresh results instead of forcing a client-side dedupe of overlap.
+  const excludeIds = Array.isArray(body.exclude_ids)
+    ? body.exclude_ids.filter((s): s is string => typeof s === 'string').slice(0, 500)
+    : [];
 
   if (!query?.trim()) return jsonRes({ ok: false, error: 'query required' }, 400);
 
   const admin = createClient(supabaseUrl, serviceKey);
 
-  // ── Step 1+2 (parallel): QueryPlan + embed raw query ─────────────────────
-  const [planResult, rawEmbedResult] = await Promise.allSettled([
-    anthropicKey ? buildQueryPlan(query, anthropicKey)  : Promise.resolve(heuristicQueryPlan(query)),
-    openaiKey    ? embedTextOpenAI(query, openaiKey)    : Promise.reject(new Error('no OPENAI_API_KEY')),
+  // ── Step 1+2+TwelveLabs (all parallel): QueryPlan + raw embed + visual embed ─
+  //
+  // Performance notes:
+  // • Claude Haiku gets a 700 ms hard cap — if it hasn't replied by then we
+  //   fall back to the heuristic plan immediately.  This prevents a cold-start
+  //   Anthropic round-trip from blocking the whole search pipeline.
+  // • TwelveLabs (512-dim visual lane) is now kicked off at the same time as
+  //   Claude and OpenAI instead of serially after them, saving ~300–600 ms.
+  const planWithTimeout = anthropicKey
+    ? Promise.race([
+        buildQueryPlan(query, anthropicKey),
+        new Promise<QueryPlan>(resolve =>
+          setTimeout(() => resolve(heuristicQueryPlan(query)), 700)
+        ),
+      ])
+    : Promise.resolve(heuristicQueryPlan(query));
+
+  const [planResult, rawEmbedResult, visualResult] = await Promise.allSettled([
+    planWithTimeout,
+    openaiKey    ? embedTextOpenAI(query, openaiKey)              : Promise.reject(new Error('no OPENAI_API_KEY')),
+    twelveLabsKey ? embedTextTwelveLabs(query, twelveLabsKey)     : Promise.reject(new Error('no TWELVELABS_API_KEY')),
   ]);
 
   const queryPlan: QueryPlan = planResult.status === 'fulfilled'
@@ -267,124 +280,148 @@ Deno.serve(async (req: Request) => {
       .map(r => r.value);
   }
 
-  // Embed the raw query via TwelveLabs for the visual lane (512-dim, cross-modal text→video)
-  let visualEmbedding: number[] | null = null;
-  if (twelveLabsKey) {
-    const visualResult = await Promise.allSettled([embedTextTwelveLabs(query, twelveLabsKey)]);
-    if (visualResult[0].status === 'fulfilled') visualEmbedding = visualResult[0].value;
-  }
+  // Visual embedding resolved in parallel above (phase 1).
+  const visualEmbedding: number[] | null =
+    visualResult.status === 'fulfilled' ? visualResult.value : null;
 
   const allEmbeddings: number[][] = [
     ...(rawEmbedding ? [rawEmbedding] : []),
     ...rewriteEmbeddings,
   ];
 
-  // ── Step 3: Hybrid retrieval (parallel across embeddings + entity types) ──
-  const productSets: SearchResult[][] = [];
-  const lookSets:    SearchResult[][] = [];
+  // ── Step 3: Hybrid retrieval over CREATIVES (parallel across embeddings) ──
+  // The consumer feed only renders creatives, so we query product_creative
+  // directly via search_creatives_hybrid. Each creative carries its joined
+  // product fields in the result row, so the client doesn't need to hydrate
+  // through products → look_products → product_creative.
+  const creativeSets: SearchResult[][] = [];
 
   const gender = queryPlan.constraints.gender ?? body.gender ?? null;
 
-  // Visual intents fire the creative-video lane (uses the same Marengo 3.0
-  // embedding the products/looks dense lane uses, since product_creative.embedding
-  // is also Marengo-encoded video). Cross-modal text→video matching is exactly
-  // what Marengo was designed for, so for these intents the visual lane often
-  // surfaces results the text lane misses.
-  const VISUAL_INTENTS: SearchIntent[] = ['outfit_pairing', 'occasion_lookup', 'lookalike', 'vibe_browse'];
-  const useVisualLane = VISUAL_INTENTS.includes(queryPlan.intent);
-
   if (allEmbeddings.length > 0) {
-    const retrievalCalls = allEmbeddings.flatMap(emb => {
-      const pgVec = toPgVector(emb);
-      return [
-        admin.rpc('search_products_hybrid', {
-          query_embedding: pgVec,
-          query_text: query,
-          k,
-          filter_gender: gender,
-          filter_type: null,
-        }),
-        admin.rpc('search_looks_hybrid', {
-          query_embedding: pgVec,
-          query_text: query,
-          k: Math.ceil(k * 0.6),
-        }),
-      ];
-    });
+    const retrievalCalls = allEmbeddings.map(emb =>
+      admin.rpc('search_creatives_hybrid', {
+        query_embedding: toPgVector(emb),
+        query_text:      query,
+        k,
+        filter_gender:   gender,
+        filter_type:     null,
+        require_elite:   false,
+        exclude_ids:     excludeIds,
+      })
+    );
 
-    // Visual lane: 512-dim TwelveLabs embedding against product_creative video embeddings.
-    // Uses separate visualEmbedding (not rawEmbedding which is now OpenAI 1536-dim).
-    if (useVisualLane && visualEmbedding) {
+    // Visual lane: 512-dim TwelveLabs embedding against product_creative.embedding.
+    // The visual RPC returns a product-shaped row, so we normalise it into
+    // CreativeRow shape before fusion so RRF treats every set on equal footing.
+    if (visualEmbedding) {
       retrievalCalls.push(
         admin.rpc('search_creatives_visual', {
           query_embedding: toPgVector(visualEmbedding),
-          k: Math.ceil(k * 0.5),
-          filter_gender: gender,
+          k:               Math.ceil(k * 0.5),
+          filter_gender:   gender,
         })
       );
     }
 
     const results = await Promise.all(retrievalCalls);
 
-    // The first allEmbeddings.length * 2 are product/look pairs; if visual lane
-    // is on, the trailing call is creatives → product set.
-    const pairCount = allEmbeddings.length * 2;
-    results.forEach((res, i) => {
-      const rows = (res.data ?? []) as SearchResult[];
-      if (i < pairCount) {
-        if (i % 2 === 0) productSets.push(rows);
-        else             lookSets.push(rows);
+    results.forEach((res: { data?: unknown }, i: number) => {
+      const rows = (res.data ?? []) as Array<Record<string, unknown>>;
+      if (rows.length === 0) return;
+
+      const isVisualLane = visualEmbedding != null && i === retrievalCalls.length - 1;
+      if (isVisualLane) {
+        // visual RPC row → normalise into CreativeRow shape
+        const normalised: SearchResult[] = rows.map(r => ({
+          id:                r.creative_id as string,
+          entity_type:       'creative' as const,
+          product_id:        r.id as string,
+          video_url:         (r.creative_video_url as string) ?? null,
+          thumbnail_url:     (r.creative_thumbnail_url as string) ?? null,
+          affiliate_url:     null,
+          duration_seconds:  null,
+          is_elite:          null,
+          product_name:      (r.name as string) ?? null,
+          product_brand:     (r.brand as string) ?? null,
+          product_price:     (r.price as string) ?? null,
+          product_image_url: (r.image_url as string) ?? null,
+          product_url:       (r.url as string) ?? null,
+          product_gender:    (r.gender as string) ?? null,
+          product_type:      (r.type as string) ?? null,
+          concept_doc:       (r.concept_doc as string) ?? null,
+          concept_facets:    (r.concept_facets as Record<string, unknown>) ?? null,
+          rrf_score:         (r.rrf_score as number) ?? 0,
+          dense_rank:        (r.dense_rank as number) ?? null,
+          bm25_rank:         null,
+          score:             0,
+        }));
+        creativeSets.push(normalised);
       } else {
-        // Visual creative results — map into product surface (each row is a product)
-        productSets.push(rows);
+        // text-lane: the RPC result has all CreativeRow fields EXCEPT entity_type
+        // (Postgres doesn't emit a literal column for it). Inject it so the
+        // client-side type guard `r.entity_type === 'creative'` works.
+        const normalised = (rows as Array<Record<string, unknown>>).map(r => ({
+          ...r,
+          entity_type: 'creative' as const,
+          score: 0,
+        })) as unknown as SearchResult[];
+        creativeSets.push(normalised);
       }
     });
   } else {
-    // No embeddings → BM25-only fallback: call with a zero vector stub that
-    // the RPC degrades gracefully from (dense path finds nothing, BM25 works).
+    // No embeddings → BM25-only fallback via the hybrid RPC with a zero vector.
     const zeroVec = toPgVector(new Array(1536).fill(0));
-    const [prodRes, looksRes] = await Promise.all([
-      admin.rpc('search_products_hybrid', { query_embedding: zeroVec, query_text: query, k, filter_gender: gender, filter_type: null }),
-      admin.rpc('search_looks_hybrid',    { query_embedding: zeroVec, query_text: query, k: Math.ceil(k * 0.6) }),
-    ]);
-    if (prodRes.data?.length)  productSets.push(prodRes.data as SearchResult[]);
-    if (looksRes.data?.length) lookSets.push(looksRes.data as SearchResult[]);
-  }
-
-  // ── Step 4: RRF fusion across sets, then compose by result_shape ─────────
-  const fusedProducts = rrfFuse(productSets, k);
-  const fusedLooks    = rrfFuse(lookSets,    Math.ceil(k * 0.6));
-
-  // ── Step 5: Graph augment for outfit_pairing intent ───────────────────────
-  if (queryPlan.intent === 'outfit_pairing' && fusedProducts.length > 0) {
-    const anchorId = fusedProducts[0].id;
-    const { data: graphRows } = await admin.rpc('search_products_by_entity_edges', {
-      anchor_id:        anchorId,
-      anchor_type:      'product',
-      k:                Math.ceil(k * 0.5),
-      edge_type_filter: 'pairs_with',
+    const res = await admin.rpc('search_creatives_hybrid', {
+      query_embedding: zeroVec,
+      query_text:      query,
+      k,
+      filter_gender:   gender,
+      filter_type:     null,
+      require_elite:   false,
+      exclude_ids:     excludeIds,
     });
-    if (graphRows?.length) {
-      // Prepend graph neighbours with high prior before the fused set
-      const graphSet = (graphRows as SearchResult[]).map(r => ({ ...r, score: r.edge_weight ?? 0.8 }));
-      fusedProducts.unshift(...graphSet.slice(0, 4));
+    if (res.data?.length) {
+      const normalised = (res.data as Array<Record<string, unknown>>).map(r => ({
+        ...r,
+        entity_type: 'creative' as const,
+        score: 0,
+      })) as unknown as SearchResult[];
+      creativeSets.push(normalised);
     }
   }
 
-  // ── Build final result list ───────────────────────────────────────────────
-  const results: SearchResult[] = [];
-  for (const surface of queryPlan.result_shape) {
-    if (surface === 'products')  results.push(...fusedProducts);
-    else if (surface === 'looks') results.push(...fusedLooks);
-    // 'creatives' surface is handled client-side via product_creative join
+  // ── Step 4: RRF fusion across all creative sets ──────────────────────────
+  let fusedCreatives = rrfFuse(creativeSets, k);
+
+  // ── Step 4b: Outfit-intent guard ────────────────────────────────────────
+  // When the user is shopping for an outfit/look/vibe, accessories and
+  // underwear are almost never the headline answer — they're sub-pieces.
+  // Strip them unless the query explicitly asks for them, otherwise a
+  // bra concept_doc that mentions "summer" can outrank actual summer dresses.
+  const intent = queryPlan.intent;
+  const isOutfitIntent = (intent === 'occasion_lookup' || intent === 'vibe_browse' || intent === 'outfit_pairing')
+    && /\b(outfit|look|fit|wear|style|ensemble|set)\b/i.test(query);
+  if (isOutfitIntent) {
+    const explicitlyAsks = /\b(underwear|bra|panties|lingerie|brief|boxer|thong|swimsuit|bikini|trunks|accessor|jewell?ery|necklace|earrings?|bracelet|watch|hat|cap|beanie|scarf|belt|bag|sunglass|sock)\b/i.test(query);
+    if (!explicitlyAsks) {
+      const blocked = new Set(['underwear', 'lingerie', 'accessories', 'jewellery', 'jewelry', 'socks', 'hosiery']);
+      fusedCreatives = fusedCreatives.filter(c => {
+        const t = (c.product_type ?? '').toLowerCase();
+        return !blocked.has(t);
+      });
+    }
   }
-  // Deduplicate by id (a product might appear in both products + looks passes)
-  const seen = new Set<string>();
-  const dedupedResults = results.filter(r => {
-    if (seen.has(r.id)) return false;
-    seen.add(r.id);
-    return true;
-  });
+
+  // ── Step 5: Dedupe by product_id so one product can't dominate the grid ──
+  // (a product with multiple live creatives would otherwise stack).
+  const seenProductIds = new Set<string>();
+  const dedupedResults: SearchResult[] = [];
+  for (const c of fusedCreatives) {
+    if (c.product_id && seenProductIds.has(c.product_id)) continue;
+    if (c.product_id) seenProductIds.add(c.product_id);
+    dedupedResults.push(c);
+  }
 
   // ── Step 6: Log query ─────────────────────────────────────────────────────
   const topScore = dedupedResults[0]?.score ?? null;
@@ -417,6 +454,7 @@ Deno.serve(async (req: Request) => {
       top_score:    topScore,
       embeddings_used: allEmbeddings.length,
       rewrites_used:   rewriteEmbeddings.length,
+      visual_lane:     visualEmbedding != null,
     },
   });
 });

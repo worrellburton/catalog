@@ -987,7 +987,19 @@ Before merging:
 
 ---
 
-## 16. Enforcement
+## 16. AI-Assisted Development Hygiene (Claude + Copilot + Others)
+
+After **every task** — human or AI-generated — the following cleanup is mandatory before committing:
+
+* **Remove dead code**: unused imports, unreferenced variables/functions, commented-out blocks, obsolete TODO stubs, and superseded helper code.
+* **No scaffolding left behind**: temporary test handlers, placeholder components, and stub implementations must be deleted once the real implementation is in place.
+* **Import hygiene**: verify every added import is actually consumed; remove it if the using code was later deleted or refactored away.
+* **Pre-commit scan**: grep for `console.log`, `// TODO`, `// FIXME`, and `any` type casts introduced in the session; remove or resolve each one before the commit lands.
+* **No half-measures**: if a function, hook, or component is no longer called anywhere, delete it entirely — do not leave it "just in case".
+
+---
+
+## 17. Enforcement
 
 If any developer or AI-generated code violates rules:
 
@@ -996,7 +1008,7 @@ If any developer or AI-generated code violates rules:
 
 ---
 
-## 17. Goal
+## 18. Goal
 
 Build a system that:
 
