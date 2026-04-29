@@ -1,0 +1,801 @@
+{
+  "ok": true,
+  "results": [
+    {
+      "id": "ba0a3b9f-6d12-40ee-a31d-94bc84300975",
+      "entity_type": "look",
+      "title": "Look 09",
+      "creator_handle": "@lilywittman",
+      "description": "Artful draping and fluid movement.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "women",
+      "concept_doc": "This look celebrates artistic elegance through masterfully draped fabrics that create fluid, sculptural silhouettes. The outfit features flowing pieces with intentional wrapping and layering that emphasize movement and dimension, perfect for someone seeking a refined yet creative aesthetic. It's ideal for upscale casual occasions, creative events, or anyone wanting to make an artistic statement through fashion. The overall vibe is contemporary and sophisticated, drawing inspiration from avant-garde design and modern art, with an emphasis on how fabric interacts with the body rather than traditional structured tailoring.",
+      "concept_facets": {
+        "occasion": [
+          "upscale casual",
+          "creative events",
+          "artistic gatherings",
+          "brunch",
+          "gallery openings"
+        ],
+        "style_tags": [
+          "draped",
+          "fluid",
+          "sculptural",
+          "avant-garde",
+          "contemporary",
+          "artistic",
+          "minimalist elegance",
+          "movement-forward",
+          "refined",
+          "creative styling"
+        ],
+        "color_family": [
+          "neutral",
+          "earth tones",
+          "monochromatic"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.65
+      },
+      "rrf_score": 0.0163934426229508,
+      "dense_rank": 1,
+      "bm25_rank": null,
+      "score": 0.04891591750396616
+    },
+    {
+      "id": "a6e97bd3-f379-432d-830c-24f28e4631f9",
+      "entity_type": "look",
+      "title": "Look 06",
+      "creator_handle": "@garrett",
+      "description": "Evening allure with timeless sophistication.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "men",
+      "concept_doc": "This sophisticated evening look captures timeless elegance through a carefully curated ensemble of refined basics. The outfit features classic tailoring pieces in neutral tones that exude understated luxury and refined masculinity. Perfect for formal evening events, upscale dinners, or occasions requiring polished dressing, this look emphasizes the power of quality fabrics and precise silhouettes. The aesthetic draws from traditional menswear heritage while maintaining contemporary relevance, proving that true style transcends trends through investment in foundational pieces.",
+      "concept_facets": {
+        "occasion": [
+          "evening wear",
+          "formal dinner",
+          "upscale events",
+          "cocktail party",
+          "date night"
+        ],
+        "style_tags": [
+          "sophisticated",
+          "timeless",
+          "tailored",
+          "minimalist",
+          "classic menswear",
+          "elegant",
+          "refined",
+          "understated luxury",
+          "formal",
+          "black tie optional"
+        ],
+        "color_family": [
+          "neutrals",
+          "black",
+          "white",
+          "grey"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.85
+      },
+      "rrf_score": 0.0158730158730159,
+      "dense_rank": 3,
+      "bm25_rank": null,
+      "score": 0.04839549075403121
+    },
+    {
+      "id": "2ec8dd8e-4d83-4a5f-9e6c-d765daf264cc",
+      "entity_type": "look",
+      "title": "Look 04",
+      "creator_handle": "@garrett",
+      "description": "Minimalist elegance with bold accessories.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "men",
+      "concept_doc": "This minimalist elegance look by @garrett demonstrates the power of refined simplicity paired with statement-making accessories. The outfit features clean-lined basics in neutral tones as the foundation, allowing bold accessories to take center stage and add personality without overwhelming the silhouette. Perfect for smart casual occasions, date nights, or contemporary professional settings, this aesthetic celebrates the principle that less is more while refusing to be boring. The look bridges the gap between understated sophistication and modern edge, appealing to those who appreciate intentional styling and curated details. It's ideal for anyone seeking a polished yet approachable vibe that lets carefully chosen accent pieces do the talking.",
+      "concept_facets": {
+        "occasion": [
+          "smart casual",
+          "date night",
+          "contemporary professional",
+          "casual elegant"
+        ],
+        "style_tags": [
+          "minimalist",
+          "modern",
+          "sophisticated",
+          "statement accessories",
+          "clean lines",
+          "curated",
+          "understated",
+          "refined simplicity"
+        ],
+        "color_family": [
+          "neutral",
+          "monochromatic",
+          "black",
+          "white",
+          "gray"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.6
+      },
+      "rrf_score": 0.0161290322580645,
+      "dense_rank": 2,
+      "bm25_rank": null,
+      "score": 0.04715356328259554
+    },
+    {
+      "id": "d1e3475a-5899-4afc-8f18-fb4f3e733708",
+      "entity_type": "look",
+      "title": "Look 11",
+      "creator_handle": "@lilywittman",
+      "description": "Soft palette with unexpected proportions.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "women",
+      "concept_doc": "This look from @lilywittman embraces a soft, romantic aesthetic with a playful twist on proportions that keeps it modern and fresh. Neutral tones dominate the palette—creams, beiges, and muted earth tones—creating a calming, understated foundation that feels effortlessly elegant. The styling plays with volume and silhouette in unexpected ways, pairing oversized or flowing pieces with more fitted elements to create visual interest and dimension. Perfect for creative professionals, casual dates, or anyone seeking a relaxed-yet-curated vibe that balances softness with intentional design. This is contemporary minimalism meets romantic proportionality—think quiet luxury with a hint of experimental fashion-forward thinking.",
+      "concept_facets": {
+        "occasion": [
+          "casual",
+          "creative workplace",
+          "date",
+          "weekend brunch",
+          "coffee date"
+        ],
+        "style_tags": [
+          "soft proportions",
+          "romantic minimalism",
+          "unexpected silhouettes",
+          "neutral palette",
+          "contemporary",
+          "effortless elegance",
+          "quiet luxury",
+          "proportional play"
+        ],
+        "color_family": [
+          "cream",
+          "beige",
+          "taupe",
+          "off-white",
+          "warm neutrals"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.35
+      },
+      "rrf_score": 0.0153846153846154,
+      "dense_rank": 5,
+      "bm25_rank": null,
+      "score": 0.04639423076923077
+    },
+    {
+      "id": "bf6709e7-6c12-4a8a-a3a9-e95e437075b6",
+      "entity_type": "look",
+      "title": "Look 10",
+      "creator_handle": "@garrett",
+      "description": "Power dressing reimagined for today.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "men",
+      "concept_doc": "This modern power dressing look reimagines professional tailoring with a contemporary edge, blending classic suiting with unexpected details for today's confident man. The outfit features sharp, well-fitted pieces that command attention in boardrooms and business settings while maintaining an approachable, forward-thinking aesthetic. It's the perfect balance of authority and accessibility—structured enough for serious business contexts yet refined enough to feel current and intentional. This look suits ambitious professionals, creative executives, and anyone looking to make a polished statement without feeling stuffy or dated. The styling represents a fresh take on power dressing that respects tradition while pushing it boldly into the modern era.",
+      "concept_facets": {
+        "occasion": [
+          "business",
+          "corporate",
+          "executive meeting",
+          "professional event",
+          "high-stakes presentation"
+        ],
+        "style_tags": [
+          "power dressing",
+          "tailored",
+          "contemporary",
+          "sharp",
+          "refined",
+          "modern professional",
+          "executive wear",
+          "polished",
+          "structured",
+          "confident"
+        ],
+        "color_family": [
+          "neutral",
+          "monochrome",
+          "black",
+          "white",
+          "gray"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.85
+      },
+      "rrf_score": 0.0158730158730159,
+      "dense_rank": 3,
+      "bm25_rank": null,
+      "score": 0.031024531024531024
+    },
+    {
+      "id": "39c2ec3a-eeb1-4076-9405-458025d78dc4",
+      "entity_type": "look",
+      "title": "Look 01",
+      "creator_handle": "@lilywittman",
+      "description": "A curated selection of essential pieces for the modern wardrobe.",
+      "thumbnail_url": null,
+      "video_path": null,
+      "gender": "women",
+      "concept_doc": "This curated wardrobe look presents a collection of timeless essential pieces designed for the modern woman who values versatility and sophistication. The outfit combines classic basics with clean silhouettes that seamlessly transition from casual everyday wear to professional settings. Perfect for building a minimalist capsule wardrobe, these foundational pieces emphasize quality fabrics, neutral color palettes, and understated elegance. The aesthetic draws from contemporary minimalism and modern femininity, celebrating the power of simple, well-crafted garments that work together harmoniously. This is ideal for anyone seeking to streamline their closet with pieces that are endlessly combinable and effortlessly chic.",
+      "concept_facets": {
+        "occasion": [
+          "casual",
+          "work",
+          "everyday",
+          "professional",
+          "versatile"
+        ],
+        "style_tags": [
+          "minimalist",
+          "capsule wardrobe",
+          "essentials",
+          "modern",
+          "clean lines",
+          "versatile",
+          "timeless",
+          "neutral",
+          "contemporary",
+          "sophisticated"
+        ],
+        "color_family": [
+          "neutral",
+          "black",
+          "white",
+          "beige",
+          "gray"
+        ],
+        "garment_type": "outfit",
+        "formality_score": 0.6
+      },
+      "rrf_score": 0.015625,
+      "dense_rank": 4,
+      "bm25_rank": null,
+      "score": 0.031009615384615385
+    },
+    {
+      "id": "39aa3f57-b4ca-45f8-92d8-36c0fe19ba0b",
+      "entity_type": "product",
+      "name": "Unisex Wool Cashmere New Class Crewneck Sweater - Platinum Grey",
+      "brand": "Alo Yoga",
+      "description": "Call us cashmere obsessed. The Unisex Wool Cashmere New Class Crewneck Sweater is a must for chill nights, cozy days, and every moment in between. This unisex style features a relaxed fit with that perfect drape.",
+      "image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/U3045R_06129_b1_s1_a1_1_m221.jpg?v=1738173155",
+      "price": "$398",
+      "type": "Top",
+      "gender": "unisex",
+      "concept_doc": "The Unisex Wool Cashmere New Class Crewneck Sweater in Platinum Grey is a luxury essentials piece that bridges the gap between comfort and sophistication. This relaxed-fit pullover sweater is crafted from a premium wool-cashmere blend, offering the buttery softness and refined drape that elevates any casual wardrobe. Perfect for anyone seeking elevated basics—whether you're dressing down with tailored trousers and loafers for smart-casual sophistication, pairing it with straight-leg jeans for effortless cool-girl styling, or layering it under oversized blazers for minimalist professional looks. The neutral platinum grey tone is endlessly versatile, working as a foundational neutral that complements everything from neutral palettes to bold color blocking. It's the kind of investment sweater that feels like a second skin while maintaining that understated luxury aesthetic that appeals to modern minimalists, wellness enthusiasts, and anyone who values timeless quality basics.",
+      "concept_facets": {
+        "occasion": [
+          "casual everyday",
+          "working from home",
+          "weekend",
+          "layering",
+          "smart casual",
+          "date night",
+          "travel"
+        ],
+        "style_tags": [
+          "minimalist",
+          "luxury basics",
+          "elevated casual",
+          "contemporary",
+          "relaxed fit",
+          "effortless",
+          "timeless",
+          "cozy chic",
+          "quiet luxury",
+          "unisex styling",
+          "investment piece"
+        ],
+        "color_family": [
+          "grey",
+          "neutral",
+          "platinum",
+          "warm grey",
+          "taupe-grey"
+        ],
+        "garment_type": [
+          "crewneck sweater",
+          "pullover",
+          "luxury knit",
+          "crew neck top"
+        ],
+        "formality_score": 0.4
+      },
+      "rrf_score": 0.0163934426229508,
+      "dense_rank": 1,
+      "bm25_rank": null,
+      "score": 0.04891591750396616
+    },
+    {
+      "id": "5ea258ee-7d15-4f73-b370-2c04c2042ead",
+      "entity_type": "product",
+      "name": "Unisex Wool Cashmere New Class Crewneck Sweater - Black",
+      "brand": "Alo Yoga",
+      "description": "Call us cashmere obsessed. The Unisex Wool Cashmere New Class Crewneck Sweater is a must for chill nights, cozy days, and every moment in between. This unisex style features a relaxed fit with that perfect drape.",
+      "image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/U3045R_01_b1_s1_a1_1_m231.jpg?v=1738173001",
+      "price": "$298",
+      "type": "Top",
+      "gender": "unisex",
+      "concept_doc": "This is a luxurious unisex crewneck sweater that blends premium wool and cashmere for an impossibly soft, elevated everyday essential. Perfect for anyone seeking that effortless, understated luxury vibe—whether you're a minimalist, wellness enthusiast, or someone who appreciates high-quality basics. It works for casual cozy nights at home, relaxed weekend getaways, layering under blazers for smart-casual looks, or pairing with tailored trousers for a refined office aesthetic. The black colorway is infinitely versatile, pairing beautifully with white jeans, neutral bottoms, leather pants, or even flowing skirts for an androgynous, contemporary style. This is the kind of investment piece that embodies quiet luxury, modern minimalism, and the 'less is more' philosophy—a staple for building a curated, timeless wardrobe.",
+      "concept_facets": {
+        "occasion": [
+          "casual",
+          "weekend",
+          "cozy nights",
+          "work from home",
+          "layering",
+          "smart casual",
+          "relaxed office"
+        ],
+        "style_tags": [
+          "luxury basics",
+          "minimalist",
+          "unisex",
+          "wool cashmere blend",
+          "elevated casual",
+          "investment piece",
+          "quiet luxury",
+          "relaxed fit",
+          "sustainable aesthetic",
+          "gender neutral",
+          "contemporary",
+          "effortless chic",
+          "wardrobe staple"
+        ],
+        "color_family": [
+          "black",
+          "neutral"
+        ],
+        "garment_type": [
+          "crewneck sweater",
+          "pullover",
+          "knit top"
+        ],
+        "formality_score": 0.45
+      },
+      "rrf_score": 0.0161290322580645,
+      "dense_rank": 2,
+      "bm25_rank": null,
+      "score": 0.048651507139079855
+    },
+    {
+      "id": "d0b8f58c-35fc-4f54-867f-3f475af8e8dc",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter The Burrow Building Sets for Adults - Collectible Harry Potter Weasley House Kits with 10 Minifigures - Gifts for Men and Women, Fans - 76437",
+      "brand": "LEGO",
+      "description": "Build an iconic Harry Potter location to add to your magical collection with this detailed Weasley house building kit for adults. Includes Percy Weasley, Charlie Weasley, Bill Weasley, Molly Weasley, Fred Weasley, George Weasley, Arthur Weasley, Ginny Weasley, Ron Weasley and Harry Potter, plus an Errol figure.",
+      "image_url": "https://m.media-amazon.com/images/I/81BuGoqMKYL._AC_SX522_.jpg",
+      "price": "$259.99",
+      "type": null,
+      "gender": "unisex",
+      "concept_doc": "This isn't wearable fashion—it's a collectible building set that celebrates fandom and nostalgia culture, perfect for Harry Potter enthusiasts and LEGO collectors who express their style through curated home décor and display pieces. The Burrow set functions as an interior design statement piece, appealing to fans of maximalist, nerdy-chic, and geek-culture aesthetics who proudly showcase their passions through collectibles rather than clothing. It pairs with cozy, whimsical home styling, vintage-inspired décor, and magical-themed interior design trends, sitting alongside other pop culture collectibles, fantasy memorabilia, and artisanal craft projects. This gift appeals to adults seeking meaningful, experiential entertainment that blends nostalgia, creative building, and fan community belonging—perfect for styling a bedroom, study, or display shelf with personality. The set embodies collectible culture, gift-giving moments, and the intersection of childhood wonder with adult fandom appreciation.",
+      "concept_facets": {
+        "occasion": [
+          "gift-giving",
+          "personal collection display",
+          "hobby activity",
+          "fandom celebration",
+          "home décor styling",
+          "collector showcase"
+        ],
+        "style_tags": [
+          "geek-chic",
+          "fandom",
+          "nostalgic",
+          "whimsical",
+          "collectible",
+          "nerdy-aesthetic",
+          "magical",
+          "maximalist-décor",
+          "pop-culture",
+          "fantasy-themed",
+          "artisanal",
+          "retro",
+          "camp",
+          "character-driven",
+          "community-oriented"
+        ],
+        "color_family": [
+          "red",
+          "brown",
+          "tan",
+          "gold",
+          "multi-color"
+        ],
+        "garment_type": "collectible building set, interior décor object, display piece, hobby kit",
+        "formality_score": 0.1
+      },
+      "rrf_score": 0.0158730158730159,
+      "dense_rank": 3,
+      "bm25_rank": null,
+      "score": 0.047371031746031744
+    },
+    {
+      "id": "60f6b2e0-7ab4-405a-a72e-4f67e059bc63",
+      "entity_type": "product",
+      "name": "Unisex Half-Crew Understated Sock - Taupe",
+      "brand": "Alo Yoga",
+      "description": "Stitched with a shiny silver ALO patch, these socks are the cutest way to get the logo look without going overboard. Plus, they're soft, stretchy, and conform to the foot perfectly—everything you want from your favorite pair of socks.",
+      "image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/A0649U_04481_b1_s1_a3.jpg?v=1750739200",
+      "price": "$32",
+      "type": "Socks",
+      "gender": "unisex",
+      "concept_doc": "These understated taupe socks from Alo Yoga are the perfect minimal logo piece for athleisure devotees who want brand recognition without the loudness. Featuring a subtle shiny silver Alo patch, they're soft, stretchy, and form-fitting—ideal for yoga enthusiasts, gym-goers, and casual comfort seekers. Style them with sneakers for a polished workout look, slip them into loafers for effortless weekend vibes, or pair with running shoes for that elevated athleisure aesthetic. The neutral taupe tone works seamlessly with any color palette, from monochromatic fits to bold graphic tees. Perfect for anyone embracing the quiet luxury trend or the wellness-focused, minimalist fashion movement.",
+      "concept_facets": {
+        "occasion": [
+          "gym",
+          "yoga class",
+          "casual daily wear",
+          "athletic training",
+          "weekend leisure",
+          "travel"
+        ],
+        "style_tags": [
+          "athleisure",
+          "minimalist",
+          "quiet luxury",
+          "wellness wear",
+          "unisex",
+          "logo detail",
+          "understated",
+          "comfort",
+          "performance fabric",
+          "streetwear"
+        ],
+        "color_family": [
+          "taupe",
+          "neutral",
+          "beige",
+          "warm grey"
+        ],
+        "garment_type": "crew socks, athletic socks, lifestyle socks",
+        "formality_score": 0.2
+      },
+      "rrf_score": 0.0151515151515152,
+      "dense_rank": 6,
+      "bm25_rank": null,
+      "score": 0.046176046176046176
+    },
+    {
+      "id": "9dd5ea8f-51ce-4491-a289-e68ed54cca71",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter The Burrow Building Sets for Adults - Collectible Harry Potter Weasley House Kits with 10 Minifigures - Gifts for Men and Women, Fans - 76437",
+      "brand": "LEGO",
+      "description": "Build an iconic Harry Potter location with this detailed Weasley house building kit for adults. Includes 10 LEGO minifigures including Percy Weasley, Charlie Weasley, Bill Weasley, Molly Weasley, Fred Weasley, George Weasley, Arthur Weasley, Ginny Weasley, Ron Weasley and Harry Potter, plus an Errol figure.",
+      "image_url": "https://m.media-amazon.com/images/I/81BuGoqMKYL._AC_SX522_.jpg",
+      "price": "$259.99",
+      "type": null,
+      "gender": "unisex",
+      "concept_doc": "This isn't wearable fashion—it's a collectible building experience that appeals to Harry Potter enthusiasts and LEGO devotees who appreciate immersive nostalgia and detailed craftsmanship. The Burrow set serves as a conversation starter and decorative display piece for fans seeking to recreate the whimsical Weasley house from the beloved film franchise. Perfect for gift-giving occasions celebrating fandom culture, this set bridges the gap between childhood play and adult collecting, offering a meditative building experience that results in a showstopping shelf display. It pairs well with other Harry Potter merchandise, themed room décor, and fantasy fan collections, embodying the cottagecore aesthetic with magical, nostalgic charm. This collector's item suits fans of bookish home styling, fantasy culture, creative hobby engagement, and timeless pop culture appreciation.",
+      "concept_facets": {
+        "occasion": [
+          "gift-giving",
+          "collector display",
+          "hobby engagement",
+          "fan celebration",
+          "home décor styling",
+          "themed room display"
+        ],
+        "style_tags": [
+          "cottagecore",
+          "fantasy fandom",
+          "nostalgia",
+          "whimsical",
+          "collectible",
+          "pop culture",
+          "bookish aesthetic",
+          "magical realism",
+          "detailed craftsmanship",
+          "immersive storytelling",
+          "Harry Potter merchandise",
+          "adult building kit",
+          "character figurines",
+          "functional art"
+        ],
+        "color_family": [
+          "cream",
+          "red",
+          "brown",
+          "green",
+          "beige",
+          "multi-color"
+        ],
+        "garment_type": "collectible building set / decorative display piece",
+        "formality_score": 0.2
+      },
+      "rrf_score": 0.015625,
+      "dense_rank": 4,
+      "bm25_rank": null,
+      "score": 0.04617537313432836
+    },
+    {
+      "id": "07dec49b-ea28-40fe-8747-616af9d71d94",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter Hogwarts Castle Owlery Toy, Wizarding World Fantasy Toy for Girls and Boys, Harry Potter Castle Playset with 3 Characters, Birthday Gift Idea for Kids Ages 8 and Up, 76430",
+      "brand": "LEGO",
+      "description": "A detailed LEGO Harry Potter Owlery tower playset featuring 3 minifigures and 5 different owl toy figures, including Hedwig. The brick-built Owlery tower includes window ledges for the owls to perch on, an owl statue, and accessories for owl care.",
+      "image_url": "https://m.media-amazon.com/images/I/81bFiVXV-OL._AC_SX679_.jpg",
+      "price": "$41.99",
+      "type": null,
+      "gender": "unisex",
+      "concept_doc": "This isn't a wearable fashion item, but rather a collectible LEGO playset inspired by the magical Harry Potter universe—specifically the iconic Hogwarts Castle Owlery tower. It's designed for young fans and fantasy enthusiasts ages 8 and up who love immersive brick-building experiences and wizarding world storytelling. The set functions as both a creative building project and a display piece that appeals to collectors seeking nostalgic, pop-culture-inspired decor and imaginative play environments. It pairs perfectly with other Harry Potter LEGO sets, fantasy-themed bedroom décor, and serves as a thoughtful birthday gift for kids interested in fantasy franchises, magical creatures, and detailed construction play. This collectible celebrates the whimsical, enchanted aesthetic that defines contemporary fandom culture and appeals to anyone seeking interactive, fantasy-inspired entertainment.",
+      "concept_facets": {
+        "occasion": [
+          "birthday gift",
+          "holiday present",
+          "collector hobby",
+          "imaginative play",
+          "display décor"
+        ],
+        "style_tags": [
+          "fantasy",
+          "wizarding world",
+          "Harry Potter",
+          "LEGO",
+          "collectible",
+          "magical creatures",
+          "castle building",
+          "pop culture",
+          "whimsical",
+          "nostalgic",
+          "fandom",
+          "brick-built",
+          "playset",
+          "Hogwarts",
+          "owls"
+        ],
+        "color_family": [
+          "grey",
+          "tan",
+          "brown",
+          "multi-color"
+        ],
+        "garment_type": "collectible toy playset / building set",
+        "formality_score": 0
+      },
+      "rrf_score": 0.0149253731343284,
+      "dense_rank": 7,
+      "bm25_rank": null,
+      "score": 0.04569460390355913
+    },
+    {
+      "id": "95617e28-6c50-4954-b973-215358eacd0c",
+      "entity_type": "product",
+      "name": "Unisex Half-Crew Throwback Sock - White/Navy",
+      "brand": "Alo Yoga",
+      "description": "Instant classic. The Unisex Half-Crew Throwback Sock has all the features of a fave: a super-soft feel, comfy cushioning and classic stripe detail. Wear it tall or scrunched with leggings or shorts and your go-to sneakers.",
+      "image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/A0480U_05423_b1_s1_a1.jpg?v=1743072023",
+      "price": "$34",
+      "type": "Socks",
+      "gender": "unisex",
+      "concept_doc": "These unisex half-crew throwback socks from Alo Yoga are a wardrobe staple that brings retro athletic vibes to contemporary casual wear. Featuring a classic white and navy stripe pattern with plush cushioning, they're designed to be worn either pulled up or scrunched down with sneakers, leggings, shorts, or athleisure fits. Perfect for anyone seeking that '90s and Y2K nostalgia look—whether you're hitting the gym, running errands, or channeling vintage-inspired streetwear—these socks work for all genders and age groups. The ultra-soft feel and supportive arch make them ideal for active lifestyle dressing, from yoga sessions to casual weekend outfits. They embody the contemporary trend of visible socks as a style statement, mixing comfort with retro aesthetic appeal.",
+      "concept_facets": {
+        "occasion": [
+          "casual",
+          "athleisure",
+          "gym/workout",
+          "weekend wear",
+          "streetwear",
+          "athletic"
+        ],
+        "style_tags": [
+          "throwback",
+          "retro",
+          "Y2K",
+          "90s aesthetic",
+          "vintage-inspired",
+          "striped",
+          "unisex",
+          "comfortable",
+          "soft",
+          "cushioned",
+          "active lifestyle",
+          "contemporary classic"
+        ],
+        "color_family": [
+          "white",
+          "navy",
+          "blue and white",
+          "neutral"
+        ],
+        "garment_type": [
+          "socks",
+          "crew socks",
+          "athletic socks",
+          "unisex socks"
+        ],
+        "formality_score": 0.15
+      },
+      "rrf_score": 0.0153846153846154,
+      "dense_rank": 5,
+      "bm25_rank": null,
+      "score": 0.0454615036704589
+    },
+    {
+      "id": "4a1cccef-ac84-44a1-99dc-bb51dc8c0da0",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter Book Nook: Hogwarts Express Building Set - Bedroom Shelf Decor for Boys, Girls, & Fans, Ages 10+ - Collectible Harry & Ron Minifigures - Birthday Gift Idea - 76450",
+      "brand": "LEGO",
+      "description": "A buildable book nook featuring the iconic Hogwarts Express train from Harry Potter. This decorative set fits perfectly between books on a shelf and includes Harry Potter and Ron Weasley minifigures. Designed for ages 10+ as bedroom shelf decor and a collectible gift idea.",
+      "image_url": "https://m.media-amazon.com/images/I/81aPEEGNjfL._AC_SX679_.jpg",
+      "price": "$88.14",
+      "type": "Book",
+      "gender": "unisex",
+      "concept_doc": "This LEGO Harry Potter Book Nook is a decorative collectible display piece that transforms bedroom shelving into an immersive wizarding world vignette. Perfect for Harry Potter fans, collectors, and fantasy enthusiasts aged 10 and up, it serves as both functional shelf decor and a nostalgic conversation starter that celebrates pop culture fandom. The buildable Hogwarts Express train set combines creative play with curated interior styling, appealing to those who love book nooks, miniature dioramas, and character-driven storytelling. It pairs beautifully with existing book collections, fantasy-themed bedroom designs, and collector shelves displaying action figures and memorabilia. This gift bridges childhood imagination with sophisticated display aesthetics—a trendy fusion of geek chic, bookish minimalism, and curated nostalgia that suits anyone building a fandom-inspired personal sanctuary.",
+      "concept_facets": {
+        "occasion": [
+          "bedroom decor",
+          "shelf styling",
+          "gift giving",
+          "collector display",
+          "birthday present",
+          "fan appreciation"
+        ],
+        "style_tags": [
+          "Harry Potter",
+          "wizarding world",
+          "LEGO",
+          "book nook",
+          "collectible",
+          "miniature diorama",
+          "geek chic",
+          "fandom decor",
+          "nostalgia",
+          "pop culture",
+          "fantasy aesthetic",
+          "curated shelving",
+          "character figures",
+          "decorative building set",
+          "gift idea",
+          "unisex appeal"
+        ],
+        "color_family": [
+          "red",
+          "gold",
+          "black",
+          "silver",
+          "multicolor"
+        ],
+        "garment_type": "decorative collectible toy set, shelf display, book nook",
+        "formality_score": 0.2
+      },
+      "rrf_score": 0.0147058823529412,
+      "dense_rank": 8,
+      "bm25_rank": null,
+      "score": 0.044117647058823525
+    },
+    {
+      "id": "aa8a34a4-7bc2-410a-b993-9f256e65117d",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter Hagrid & Harry's Privet Drive Escape Building Toy for Boys & Girls - Pretend Play Set for Kids, Ages 8+ - W/Mini Hagrid's Motorcycle & 4 Minifigures - Gift for Birthdays - 76459",
+      "brand": "LEGO",
+      "description": "LEGO Harry Potter building set featuring Hagrid's motorcycle with Harry Potter in the sidecar and a mini build street scene featuring a lamppost and 2 flowerpots that can be flipped over mid-action. Includes 4 minifigures and 124 pieces total, ages 8+.",
+      "image_url": "https://m.media-amazon.com/images/I/812e8jK6Q7L._AC_SX679_.jpg",
+      "price": "$19.97",
+      "type": null,
+      "gender": "unisex",
+      "concept_doc": "This LEGO Harry Potter Hagrid & Harry's Privet Drive Escape set is a collectible building toy and pretend play set perfect for young fans of the wizarding world franchise. It's designed for children ages 8+ who love creative construction play, imaginative storytelling, and Harry Potter-themed collectibles. The set pairs perfectly with other LEGO Harry Potter builds to create an expanded magical universe display, works great as a birthday gift or special occasion present, and appeals to both boys and girls interested in building, pop culture, and nostalgic fandom merchandise. This playful, colorful construction toy captures the iconic motorcycle escape scene from the films and makes an excellent shelf display or hands-on building project for kids who enjoy creative play, LEGO collecting, and immersive character-driven storytelling.",
+      "concept_facets": {
+        "occasion": [
+          "birthday gift",
+          "holiday gift",
+          "casual play",
+          "display collectible",
+          "rainy day activity"
+        ],
+        "style_tags": [
+          "LEGO",
+          "Harry Potter",
+          "wizarding world",
+          "fandom merchandise",
+          "pop culture collectible",
+          "nostalgic",
+          "iconic characters",
+          "action scene",
+          "creative play",
+          "building toy",
+          "children's toy",
+          "character minifigures"
+        ],
+        "color_family": [
+          "multi-color",
+          "primary colors",
+          "neutral"
+        ],
+        "garment_type": [
+          "building toy",
+          "collectible toy",
+          "pretend play set",
+          "construction set"
+        ],
+        "formality_score": 0.1
+      },
+      "rrf_score": 0.0144927536231884,
+      "dense_rank": 9,
+      "bm25_rank": null,
+      "score": 0.0432712215320911
+    },
+    {
+      "id": "4612205e-0ad1-4f4f-b021-2d04ce3337a2",
+      "entity_type": "product",
+      "name": "LEGO Harry Potter Hogwarts Castle Owlery Toy, Wizarding World Fantasy Toy for Girls and Boys, Harry Potter Castle Playset with 3 Characters, Birthday Gift Idea for Kids Ages 8 and Up, 76430",
+      "brand": "LEGO",
+      "description": "LEGO Harry Potter Hogwarts Castle Owlery building toy featuring 3 characters from the Wizarding World. Perfect fantasy playset gift for kids ages 8 and up.",
+      "image_url": "https://m.media-amazon.com/images/I/81bFiVXV-OL._AC_SX679_.jpg",
+      "price": "$44.99",
+      "type": null,
+      "gender": "unisex",
+      "concept_doc": "The LEGO Harry Potter Hogwarts Castle Owlery is a fantasy-themed building toy set that brings the magical wizarding world to life for creative kids and collectors alike. This detailed playset features iconic characters from the Harry Potter universe and serves as the perfect gift for imaginative play, creative building sessions, and fantasy-themed room displays. It's ideal for children ages 8 and up who love castle playsets, magical adventures, and constructive toys that combine storytelling with hands-on building. The set pairs beautifully with other LEGO Harry Potter collections, fantasy figurines, and wizarding world merchandise, making it a cornerstone piece for any young fan's collection. This whimsical, nostalgia-driven toy embodies the timeless appeal of castle construction sets, magical roleplay, and pop culture-inspired collectibles that blend play value with displayable design.",
+      "concept_facets": {
+        "occasion": [
+          "birthday gift",
+          "holiday present",
+          "playtime",
+          "creative building",
+          "display collecting"
+        ],
+        "style_tags": [
+          "fantasy",
+          "wizarding world",
+          "castle playset",
+          "magical theme",
+          "character toys",
+          "LEGO construction",
+          "pop culture",
+          "nostalgia",
+          "collectible",
+          "imaginative play",
+          "Harry Potter merchandise"
+        ],
+        "color_family": [
+          "tan",
+          "gray",
+          "brown",
+          "gold",
+          "purple"
+        ],
+        "garment_type": "toy building set, castle playset, fantasy collectible",
+        "formality_score": 0.1
+      },
+      "rrf_score": 0.0142857142857143,
+      "dense_rank": 10,
+      "bm25_rank": null,
+      "score": 0.043064182194616975
+    }
+  ],
+  "query_plan": {
+    "intent": "occasion_lookup",
+    "rewrites": [
+      "formal red carpet gown",
+      "elegant evening dress for red carpet event"
+    ],
+    "constraints": {
+      "gender": "women",
+      "occasion": "red carpet event",
+      "price_band": "luxury"
+    },
+    "result_shape": [
+      "looks",
+      "products"
+    ]
+  },
+  "cold_miss": false,
+  "query_id": "ad15d252-a33e-4c68-aaf3-1938e8c46b4a",
+  "meta": {
+    "result_count": 16,
+    "top_score": 0.04891591750396616,
+    "embeddings_used": 3,
+    "rewrites_used": 2
+  }
+}

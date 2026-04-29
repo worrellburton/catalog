@@ -36,7 +36,7 @@
    one-time `claude mcp add …` bootstrap, then restart the session.
    Until that's done, fall back to asking the user to run
    migrations/deploys from their machine.
-3. Project ref is `hmgnrowqjrxvesmdshnp`. See Section 7 for the full
+3. Project ref is `vtarjrnqvcqbhoclvcur`. See Section 7 for the full
    operational reference.
 
 ---
@@ -1019,9 +1019,9 @@ the Supabase MCP server for all cloud ops so work stays in chat.
 
 | Field | Value |
 |---|---|
-| Project ref | `hmgnrowqjrxvesmdshnp` |
-| URL | `https://hmgnrowqjrxvesmdshnp.supabase.co` |
-| Dashboard | https://supabase.com/dashboard/project/hmgnrowqjrxvesmdshnp |
+| Project ref | `vtarjrnqvcqbhoclvcur` |
+| URL | `https://vtarjrnqvcqbhoclvcur.supabase.co` |
+| Dashboard | https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur |
 | Default client URL | `DEFAULT_SUPABASE_URL` in `app/utils/supabase.ts` |
 
 ## MCP Server Registration (one-time)
@@ -1036,7 +1036,7 @@ From a regular terminal in the repo root (not the IDE extension), run:
 
 ```
 claude mcp add --scope project --transport http supabase \
-  "https://mcp.supabase.com/mcp?project_ref=hmgnrowqjrxvesmdshnp"
+  "https://mcp.supabase.com/mcp?project_ref=vtarjrnqvcqbhoclvcur"
 ```
 
 Then authenticate the server (interactive, user-only — Claude can't do
@@ -1113,7 +1113,7 @@ Required for current features:
 - `GOOGLE_API_KEY` / `FAL_KEY` — for the video-generation worker
   (`agents/video-generator`), not used by edge functions directly.
 
-Manage at https://supabase.com/dashboard/project/hmgnrowqjrxvesmdshnp/functions/secrets
+Manage at https://supabase.com/dashboard/project/vtarjrnqvcqbhoclvcur/functions/secrets
 
 ## Admin-Hide Tables
 
@@ -1173,7 +1173,7 @@ The following patterns exist specifically for the Flutter shell integration. **D
 | `document.documentElement.dataset.shell === 'catalog-app'` | Webapp reads | Guards logic that should only run inside the native shell |
 | `localStorage.getItem('catalog-access')` | Webapp reads | Shell pre-sets this to `'123'` to bypass the password gate |
 | `localStorage.getItem('catalog:visited')` | Webapp reads | Shell pre-sets this to skip the splash screen |
-| `localStorage.getItem('sb-hmgnrowqjrxvesmdshnp-auth-token')` | Webapp reads | Shell injects the Supabase session so the webapp boots authenticated |
+| `localStorage.getItem('sb-vtarjrnqvcqbhoclvcur-auth-token')` | Webapp reads | Shell injects the Supabase session so the webapp boots authenticated |
 
 ### Class / State
 
@@ -1187,7 +1187,7 @@ The following patterns exist specifically for the Flutter shell integration. **D
 2. **Never remove or rename the bridge events** (`catalog:open-bookmarks`, `catalog:open-my-looks`, `catalogOverlayChanged`). The Flutter app depends on these exact event names.
 3. **Never remove `has-overlay` class toggling** from `.app-root`. The Flutter native header visibility depends on it.
 4. **Never restore the webapp `<header>` to `display: block`** when inside the shell. The Flutter layer draws its own header.
-5. **Never change the Supabase localStorage key** (`sb-hmgnrowqjrxvesmdshnp-auth-token`). Flutter writes to this exact key.
+5. **Never change the Supabase localStorage key** (`sb-vtarjrnqvcqbhoclvcur-auth-token`). Flutter writes to this exact key.
 6. **Do not add `pointer-events: auto`** or any CSS that re-enables clicks in the top ~60 px zone while inside the shell — that zone is owned by the native Flutter header.
 7. **Do not add `touchstart` / `click` handlers that call `stopPropagation` or `preventDefault` globally** without first checking `data-shell` — it will break Flutter's touch-passthrough guards.
 
