@@ -264,9 +264,14 @@ export default function ContinuousFeed({
       (c.product?.brand || '').toLowerCase().includes(q) ||
       (c.product?.catalog_tags || []).some(t => t.toLowerCase().includes(q)),
     );
-    // Empty match = user typed a theme we don't have; fall back to everything
-    // rather than showing a blank grid.
-    return matches.length > 0 ? matches : liveCreatives;
+    // When the query is long enough to trigger the semantic lane (≥ 3 chars),
+    // do NOT fall back to the full live pool on a text miss — that floods the
+    // grid with unrelated products (e.g. wool sweaters for "summer"). Return []
+    // so only the semantically-ranked video creatives fill the grid.
+    // Short queries (<3 chars, text-only) still fall back to everything so the
+    // grid isn't blank while the user is mid-word.
+    if (matches.length === 0) return q.length >= 3 ? [] : liveCreatives;
+    return matches;
   }, [liveCreatives, searchQuery]);
 
   // When the semantic lane returned product hits, surface them at the top of
