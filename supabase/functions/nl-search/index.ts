@@ -261,6 +261,14 @@ Deno.serve(async (req: Request) => {
 
   const gender = queryPlan.constraints.gender ?? body.gender ?? null;
 
+  // Visual intents fire the creative-video lane (uses the same Marengo 3.0
+  // embedding the products/looks dense lane uses, since product_creative.embedding
+  // is also Marengo-encoded video). Cross-modal text→video matching is exactly
+  // what Marengo was designed for, so for these intents the visual lane often
+  // surfaces results the text lane misses.
+  const VISUAL_INTENTS: SearchIntent[] = ['outfit_pairing', 'occasion_lookup', 'lookalike', 'vibe_browse'];
+  const useVisualLane = VISUAL_INTENTS.includes(queryPlan.intent);
+
   if (allEmbeddings.length > 0) {
     const retrievalCalls = allEmbeddings.flatMap(emb => {
       const pgVec = toPgVector(emb);
@@ -280,13 +288,32 @@ Deno.serve(async (req: Request) => {
       ];
     });
 
+    // Visual lane: only on the raw query embedding (not on each rewrite — cost
+    // would scale linearly and Marengo's text encoder is expressive enough).
+    if (useVisualLane && rawEmbedding) {
+      retrievalCalls.push(
+        admin.rpc('search_creatives_visual', {
+          query_embedding: toPgVector(rawEmbedding),
+          k: Math.ceil(k * 0.5),
+          filter_gender: gender,
+        })
+      );
+    }
+
     const results = await Promise.all(retrievalCalls);
 
-    // Interleave: even-indexed = products, odd-indexed = looks
+    // The first allEmbeddings.length * 2 are product/look pairs; if visual lane
+    // is on, the trailing call is creatives → product set.
+    const pairCount = allEmbeddings.length * 2;
     results.forEach((res, i) => {
       const rows = (res.data ?? []) as SearchResult[];
-      if (i % 2 === 0) productSets.push(rows);
-      else             lookSets.push(rows);
+      if (i < pairCount) {
+        if (i % 2 === 0) productSets.push(rows);
+        else             lookSets.push(rows);
+      } else {
+        // Visual creative results — map into product surface (each row is a product)
+        productSets.push(rows);
+      }
     });
   } else {
     // No embeddings → BM25-only fallback: call with a zero vector stub that
@@ -353,7 +380,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Cold miss: very few results or very low score → backfill agent will pick up
-  const coldMiss = resultCount < 3 || topScore === null || topScore < 0.015;
+  const coldMiss = resultCount < 5 || topScore === null || topScore < 0.020;
 
   return jsonRes({
     ok: true,

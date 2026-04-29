@@ -96,32 +96,127 @@ async function generateConcept(
   }
 }
 
-// Fallback when Claude refuses or returns non-JSON — builds a minimal but
-// valid concept_doc from the raw product/look fields.
+// Fallback when Claude refuses or returns non-JSON.
+//
+// Bad fallbacks are worse than no fallback: if every refused product gets the
+// same boilerplate ("A versatile piece suitable for a range of occasions"),
+// they all collapse into the same vector cluster and pollute every search.
+// Instead, mine the raw fields (name, brand, type, description) for concrete
+// signals — garment type, color, gender, formality, occasion — so each
+// fallback row gets a distinctive concept_doc that still reads naturally.
+
+const GARMENT_PATTERNS: Array<[RegExp, string]> = [
+  [/\b(t-?shirt|tee|tank top|polo|henley|crew\s*neck)\b/i, 't-shirt'],
+  [/\b(button[- ]?down|button[- ]?up|oxford shirt|dress shirt|blouse|shirt)\b/i, 'shirt'],
+  [/\b(hoodie|sweatshirt|crewneck sweater|sweater|cardigan|jumper|pullover|knit)\b/i, 'sweater'],
+  [/\b(jacket|blazer|coat|trench|parka|puffer|bomber|peacoat|overcoat)\b/i, 'jacket'],
+  [/\b(jeans|denim)\b/i, 'jeans'],
+  [/\b(trousers?|chinos|slacks|pants|cargos?|joggers?|sweatpants|leggings)\b/i, 'pants'],
+  [/\b(shorts)\b/i, 'shorts'],
+  [/\b(skirt|midi skirt|maxi skirt|mini skirt)\b/i, 'skirt'],
+  [/\b(dress|gown|maxi|midi)\b/i, 'dress'],
+  [/\b(jumpsuit|romper|playsuit)\b/i, 'jumpsuit'],
+  [/\b(sneakers?|trainers?|kicks)\b/i, 'sneakers'],
+  [/\b(boots?|booties?|chelseas?)\b/i, 'boots'],
+  [/\b(heels?|pumps?|stilettos?)\b/i, 'heels'],
+  [/\b(loafers?|mules?|slides?|sandals?|flats?)\b/i, 'shoes'],
+  [/\b(bag|tote|backpack|clutch|crossbody|satchel|purse)\b/i, 'bag'],
+  [/\b(belt|scarf|hat|beanie|cap|sunglasses|jewellery|jewelry|necklace|earrings?|ring|watch)\b/i, 'accessory'],
+  [/\b(swim(suit|wear)?|bikini|trunks)\b/i, 'swimwear'],
+  [/\b(suit|tuxedo)\b/i, 'suit'],
+];
+
+const COLOR_PATTERNS: Array<[RegExp, string]> = [
+  [/\b(black|jet|onyx|noir)\b/i, 'black'],
+  [/\b(white|ivory|cream|ecru|off[- ]white)\b/i, 'white'],
+  [/\b(grey|gray|charcoal|slate|graphite)\b/i, 'grey'],
+  [/\b(navy|midnight blue|indigo)\b/i, 'navy'],
+  [/\b(blue|cobalt|sapphire|cerulean|sky blue|powder blue)\b/i, 'blue'],
+  [/\b(red|crimson|scarlet|burgundy|maroon|wine)\b/i, 'red'],
+  [/\b(pink|blush|rose|fuchsia|magenta|coral)\b/i, 'pink'],
+  [/\b(green|olive|sage|forest|emerald|mint|khaki)\b/i, 'green'],
+  [/\b(yellow|mustard|gold|ochre|amber)\b/i, 'yellow'],
+  [/\b(orange|rust|terracotta|tangerine)\b/i, 'orange'],
+  [/\b(purple|lilac|lavender|violet|plum)\b/i, 'purple'],
+  [/\b(brown|tan|camel|cognac|chocolate|espresso|taupe|beige|nude|sand)\b/i, 'brown'],
+  [/\b(silver|metallic|chrome)\b/i, 'silver'],
+];
+
+const FORMAL_KEYWORDS = /\b(suit|tuxedo|gown|formal|cocktail|evening|black tie|dressy|tailored|wedding|red carpet)\b/i;
+const CASUAL_KEYWORDS = /\b(joggers?|sweatpants|hoodie|tee|t-shirt|sneakers?|loungewear|athleisure|relaxed|casual|everyday)\b/i;
+
 function heuristicConcept(input: string, entityType: 'product' | 'look'): ConceptResult {
-  // Extract key lines from the structured input string
   const lines = input.split('\n');
   const get = (prefix: string) =>
     lines.find(l => l.startsWith(prefix))?.slice(prefix.length).trim() ?? '';
 
-  const name  = get('Name:') || get('Title:') || 'item';
+  const name  = get('Name:') || get('Title:') || '';
   const brand = get('Brand:');
+  const type  = get('Type:');
   const desc  = get('Description:');
+  const gender = get('Gender:').toLowerCase();
 
-  const brandStr  = brand ? ` by ${brand}` : '';
-  const descStr   = desc  ? ` ${desc}`     : '';
+  const corpus = [name, type, desc].filter(Boolean).join(' ');
+
+  // Garment type
+  let garment = entityType === 'look' ? 'outfit' : 'clothing';
+  for (const [re, g] of GARMENT_PATTERNS) {
+    if (re.test(corpus)) { garment = g; break; }
+  }
+
+  // Colors (multiple allowed)
+  const colorSet = new Set<string>();
+  for (const [re, c] of COLOR_PATTERNS) {
+    if (re.test(corpus)) colorSet.add(c);
+  }
+  const colors = Array.from(colorSet).slice(0, 3);
+
+  // Formality
+  const formality = FORMAL_KEYWORDS.test(corpus) ? 0.85
+                  : CASUAL_KEYWORDS.test(corpus) ? 0.25
+                  : 0.5;
+
+  // Occasion suggestions derived from formality
+  const occasions = formality > 0.7  ? ['formal', 'evening', 'special occasion']
+                  : formality < 0.35 ? ['casual', 'everyday', 'weekend']
+                  : ['casual', 'work', 'going out'];
+
+  // Style tags from common buzzwords
+  const styleTags: string[] = [];
+  const styleHits: Array<[RegExp, string]> = [
+    [/\b(minimal|minimalist|clean|simple)\b/i, 'minimalist'],
+    [/\b(quiet luxury|stealth wealth|elevated)\b/i, 'quiet luxury'],
+    [/\b(streetwear|street|urban|grunge)\b/i, 'streetwear'],
+    [/\b(vintage|retro|y2k|nineties|90s|80s)\b/i, 'vintage'],
+    [/\b(classic|timeless|preppy|heritage)\b/i, 'classic'],
+    [/\b(bohemian|boho|coastal|cottagecore)\b/i, 'bohemian'],
+    [/\b(athleisure|sporty|athletic|active)\b/i, 'sporty'],
+    [/\b(romantic|feminine|girly|pretty|floral)\b/i, 'romantic'],
+    [/\b(edgy|punk|gothic|leather)\b/i, 'edgy'],
+  ];
+  for (const [re, t] of styleHits) {
+    if (re.test(corpus)) styleTags.push(t);
+  }
+
+  // Build a varied, descriptive concept_doc that won't collapse into one cluster
+  const colorPhrase = colors.length ? colors.join(' and ') + ' ' : '';
+  const brandPhrase = brand ? ` from ${brand}` : '';
+  const stylePhrase = styleTags.length ? ` It has a ${styleTags.slice(0, 2).join(' and ')} aesthetic.` : '';
+  const occasionPhrase = ` Suited to ${occasions.join(', ')} settings.`;
+  const genderPhrase = gender && gender !== 'unisex' ? ` Designed for ${gender}.` : '';
+
   const concept_doc = entityType === 'product'
-    ? `${name}${brandStr}.${descStr} A versatile piece suitable for a range of occasions and styles.`
-    : `A fashion look featuring ${name}.${descStr} Suitable for casual to dressed-up occasions.`;
+    ? `${name || 'A piece'}${brandPhrase} — a ${colorPhrase}${garment}.${stylePhrase}${occasionPhrase}${genderPhrase}${desc ? ' ' + desc.slice(0, 200) : ''}`.trim()
+    : `A ${colorPhrase}${garment} look${brandPhrase ? brandPhrase : ''}, "${name}".${stylePhrase}${occasionPhrase}${genderPhrase}${desc ? ' ' + desc.slice(0, 200) : ''}`.trim();
 
   return {
     concept_doc,
     concept_facets: {
-      garment_type: entityType === 'look' ? 'outfit' : 'clothing',
-      color_family: [],
-      occasion: ['casual'],
-      style_tags: [],
-      formality_score: 0.5,
+      garment_type: garment,
+      color_family: colors,
+      occasion: occasions,
+      style_tags: styleTags,
+      formality_score: formality,
     },
   };
 }
