@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { nonProductUrlReason } from '~/utils/productUrl';
 
 // Modal scraper endpoint — called on retry/add so products don't wait for
 // the 8am UTC daily cron. Gracefully no-ops if the env var isn't set.
@@ -180,11 +181,43 @@ export async function deleteProduct(productId: string): Promise<void> {
 }
 
 /**
+ * Watchdog: flips any product stuck in scrape_status='processing' for
+ * more than `staleAfterMinutes` to 'failed'. Modal containers occasionally
+ * die mid-run and never write the final status. Returns the number of
+ * rows reconciled. Safe to call on every panel load.
+ */
+export async function reconcileStuckScrapes(staleAfterMinutes = 20): Promise<number> {
+  if (!supabase) return 0;
+  const { data, error } = await supabase.rpc('reconcile_stuck_product_scrapes', {
+    stale_after_minutes: staleAfterMinutes,
+  });
+  if (error) {
+    // RPC may not exist yet (migration not applied) — fall back to a
+    // best-effort client-side update so the panel still self-heals.
+    const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000).toISOString();
+    const { count } = await supabase
+      .from('products')
+      .update({
+        scrape_status: 'failed',
+        scrape_error: `Auto-failed by watchdog: stuck in processing > ${staleAfterMinutes} minutes`,
+        scraped_at: new Date().toISOString(),
+      }, { count: 'exact' })
+      .eq('scrape_status', 'processing')
+      .lt('created_at', cutoff)
+      .select('id');
+    return count ?? 0;
+  }
+  return typeof data === 'number' ? data : 0;
+}
+
+/**
  * Insert a new product URL row with scrape_status='pending' and immediately
  * trigger the scraper (don't rely solely on the Supabase INSERT webhook).
  */
 export async function addProductUrl(url: string): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
+  const reason = nonProductUrlReason(url);
+  if (reason) throw new Error(`Refusing to add: ${reason}. Paste a direct product page URL.`);
   const { data, error } = await supabase
     .from('products')
     .insert({ url, scrape_status: 'pending', source: 'brand_url' })

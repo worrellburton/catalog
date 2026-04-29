@@ -120,17 +120,25 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
     for (const u of [thumbnail, ...thumbPlural, ...extractedImages, ...gallery]) {
       if (u && !seen.has(u)) { seen.add(u); images.push(u); }
     }
+    // Only use product_link (the merchant's PDP). Never fall back to r.link
+    // because Google returns its own /search?ibp=… intermediate page there,
+    // which the scraper agent can never resolve to a product.
+    const productLink = String(r.product_link || '');
     return {
       name: title,
       brand: guessBrand(title, source),
       price: String(r.price || r.extracted_price || ''),
       image_url: images[0] || thumbnail,
       image_urls: images,
-      url: String(r.product_link || r.link || ''),
+      url: productLink,
       gender: inferGender(title),
       source,
     } as NormalizedProduct;
-  }).filter((p: NormalizedProduct) => p.image_url && p.name);
+  }).filter((p: NormalizedProduct) =>
+    // Drop anything missing the merchant URL or a usable image — these are
+    // unscrapeable and would clog the products table forever.
+    p.url && p.image_url && p.name && !/^https?:\/\/(www\.)?google\.com\//i.test(p.url),
+  );
 }
 
 Deno.serve(async (req: Request) => {

@@ -8,6 +8,7 @@ import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
 import { addProductUrl } from '~/services/scrape-product';
+import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
@@ -783,8 +784,12 @@ export default function AdminContent() {
     if (!supabase || researchSelected.size === 0) return;
     setIngesting(true);
     const nowIso = new Date().toISOString();
-    const rows = Array.from(researchSelected).map(i => {
-      const p = researchResults[i];
+    const rows = Array.from(researchSelected)
+      .map(i => researchResults[i])
+      // Drop search-result / non-product URLs so they never end up in the
+      // products table where the scraper would chew on them forever.
+      .filter(p => isLikelyProductUrl(p.url))
+      .map(p => {
       return {
         name: p.name,
         brand: p.brand,
@@ -802,6 +807,11 @@ export default function AdminContent() {
         source: 'google_shopping',
       };
     });
+    if (rows.length === 0) {
+      setIngesting(false);
+      showToast('No valid product URLs in selection');
+      return;
+    }
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)

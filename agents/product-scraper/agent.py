@@ -33,7 +33,9 @@ load_dotenv()
 # ─── Configuration ────────────────────────────────────────────────────
 
 MODEL = "claude-sonnet-4-20250514"
-MAX_AGENT_TURNS = 10
+# Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
+# anything past 6 means the agent is wandering on a non-product page.
+MAX_AGENT_TURNS = 6
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
 MAX_IMAGES_RETURN = 15
@@ -176,6 +178,42 @@ _IMAGE_CHECK_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
+
+
+# ─── URL pre-filter ───────────────────────────────────────────────────
+
+
+def _non_product_url_reason(raw_url: str) -> str | None:
+    """Cheap check that mirrors app/utils/productUrl.ts. Returns a reason
+    string when the URL clearly isn't a product page so the agent can
+    refuse before burning a Claude call."""
+    if not raw_url:
+        return "empty URL"
+    try:
+        parsed = urlparse(raw_url)
+    except Exception:
+        return "invalid URL"
+    if parsed.scheme not in ("http", "https"):
+        return "unsupported protocol"
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").lower()
+
+    if host == "google.com" or host.endswith(".google.com"):
+        if path.startswith("/search") or path.startswith("/shopping"):
+            return "Google search results page"
+    if host in ("bing.com", "duckduckgo.com"):
+        return "search engine page"
+    if path in ("", "/"):
+        return "site homepage"
+    if path == "/search" or path.startswith("/search/") or path == "/s" or path.startswith("/s/"):
+        return f'non-product path "{path}"'
+    if (host == "amazon.com" or host.endswith(".amazon.com")) and (
+        "/dp/" not in path and "/gp/product/" not in path
+    ):
+        return "Amazon non-product page (no /dp/ in URL)"
+    return None
 
 
 def _is_image_url_accessible(url: str) -> bool:
@@ -699,7 +737,13 @@ def run_agent(
 
     saved_product = None
     nudge_count = 0
-    MAX_NUDGES = 2
+    MAX_NUDGES = 1
+
+    # Fast-fail on URLs that obviously aren't product pages (Google search
+    # results, bare homepages, etc.). Saves a Claude call per row.
+    bad_url_reason = _non_product_url_reason(product_url)
+    if bad_url_reason:
+        raise RuntimeError(f"Not a product page — {bad_url_reason}: {product_url}")
 
     try:
         browser.start()

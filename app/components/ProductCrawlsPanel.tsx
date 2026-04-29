@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, addProductUrl, deleteProduct, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, type ProductRow } from '~/services/scrape-product';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import { isStuck } from '~/utils/aiBudget';
@@ -165,6 +165,10 @@ export default function ProductCrawlsPanel() {
   }, [statusFilter, search, page]);
 
   useEffect(() => {
+    // Auto-fail any rows that have been stuck in 'processing' for too long
+    // (Modal containers occasionally die mid-run). Fire-and-forget; the
+    // subsequent loadData() call will reflect the updated statuses.
+    reconcileStuckScrapes(20).catch(() => {});
     loadData();
   }, [loadData]);
 
