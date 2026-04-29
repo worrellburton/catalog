@@ -7,7 +7,7 @@
 //
 // Required Supabase secrets:
 //   ANTHROPIC_API_KEY   — Claude Haiku for concept generation
-//   TWELVELABS_API_KEY  — Marengo-retrieval-2.7 text embedding
+//   OPENAI_API_KEY      — text-embedding-3-small (1536-dim)
 //
 // Request body:
 //   { id: string, entity_type: 'product' | 'look', force?: boolean }
@@ -221,30 +221,29 @@ function heuristicConcept(input: string, entityType: 'product' | 'look'): Concep
   };
 }
 
-// ── TwelveLabs: text embedding (Marengo 3.0, 512-dim) ───────────────────────
+// ── OpenAI: text embedding (text-embedding-3-small, 1536-dim) ──────────────
 
-async function embedText(text: string, twelveLabsKey: string): Promise<number[]> {
-  const res = await fetch('https://api.twelvelabs.io/v1.3/embed-v2', {
+async function embedText(text: string, openaiKey: string): Promise<number[]> {
+  const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': twelveLabsKey,
+      'Authorization': `Bearer ${openaiKey}`,
     },
     body: JSON.stringify({
-      input_type: 'text',
-      model_name: 'marengo3.0',
-      text: { input_text: text },
+      model: 'text-embedding-3-small',
+      input: text,
     }),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`TwelveLabs embed error ${res.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`OpenAI embed error ${res.status}: ${errText.slice(0, 200)}`);
   }
 
   const json = await res.json() as { data?: Array<{ embedding?: number[] }> };
   const embedding = json.data?.[0]?.embedding;
-  if (!embedding?.length) throw new Error('TwelveLabs returned empty text embedding');
+  if (!embedding?.length) throw new Error('OpenAI returned empty embedding');
   return embedding;
 }
 
@@ -261,11 +260,11 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey     = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anthropicKey   = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
-  const twelveLabsKey  = Deno.env.get('TWELVELABS_API_KEY') ?? '';
+  const openaiKey      = Deno.env.get('OPENAI_API_KEY') ?? '';
 
   if (!supabaseUrl || !serviceKey) return jsonRes({ ok: false, error: 'Supabase env missing' }, 500);
   if (!anthropicKey)   return jsonRes({ ok: false, error: 'ANTHROPIC_API_KEY missing' }, 500);
-  if (!twelveLabsKey)  return jsonRes({ ok: false, error: 'TWELVELABS_API_KEY missing' }, 500);
+  if (!openaiKey)      return jsonRes({ ok: false, error: 'OPENAI_API_KEY missing' }, 500);
 
   let body: { id?: string; entity_type?: string; force?: boolean };
   try { body = await req.json(); } catch { return jsonRes({ ok: false, error: 'Invalid JSON' }, 400); }
@@ -324,10 +323,10 @@ Deno.serve(async (req: Request) => {
     return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502);
   }
 
-  // ── Step 2: Embed concept_doc via TwelveLabs ───────────────────────────────
+  // ── Step 2: Embed concept_doc via OpenAI ────────────────────────────────────
   let embedding: number[];
   try {
-    embedding = await embedText(concept.concept_doc, twelveLabsKey);
+    embedding = await embedText(concept.concept_doc, openaiKey);
   } catch (err) {
     return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502);
   }

@@ -16,7 +16,8 @@
 //
 // Required secrets:
 //   ANTHROPIC_API_KEY   — Claude Haiku (QueryPlan generation)
-//   TWELVELABS_API_KEY  — Marengo-retrieval-2.7 (text embeddings)
+//   OPENAI_API_KEY     — text-embedding-3-small (1536-dim, text lanes)
+//   TWELVELABS_API_KEY — Marengo 3.0 (512-dim, visual creative lane only)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -151,9 +152,24 @@ function heuristicQueryPlan(query: string): QueryPlan {
   };
 }
 
-// ── TwelveLabs: text embedding (Marengo 3.0, 512-dim) ───────────────────────
+// ── OpenAI: text embedding (text-embedding-3-small, 1536-dim) ──────────────
 
-async function embedText(text: string, twelveLabsKey: string): Promise<number[]> {
+async function embedTextOpenAI(text: string, openaiKey: string): Promise<number[]> {
+  const res = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
+    body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
+  });
+  if (!res.ok) throw new Error(`OpenAI embed ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = await res.json() as { data?: Array<{ embedding?: number[] }> };
+  const vec = json.data?.[0]?.embedding;
+  if (!vec?.length) throw new Error('OpenAI returned empty embedding');
+  return vec;
+}
+
+// ── TwelveLabs: text→video embedding (Marengo 3.0, 512-dim, visual lane only) ────
+
+async function embedTextTwelveLabs(text: string, twelveLabsKey: string): Promise<number[]> {
   const res = await fetch('https://api.twelvelabs.io/v1.3/embed-v2', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': twelveLabsKey },
@@ -212,6 +228,7 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl   = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anthropicKey  = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+  const openaiKey     = Deno.env.get('OPENAI_API_KEY') ?? '';
   const twelveLabsKey = Deno.env.get('TWELVELABS_API_KEY') ?? '';
 
   if (!supabaseUrl || !serviceKey) return jsonRes({ ok: false, error: 'Supabase env missing' }, 500);
@@ -228,8 +245,8 @@ Deno.serve(async (req: Request) => {
 
   // ── Step 1+2 (parallel): QueryPlan + embed raw query ─────────────────────
   const [planResult, rawEmbedResult] = await Promise.allSettled([
-    anthropicKey  ? buildQueryPlan(query, anthropicKey)   : Promise.resolve(heuristicQueryPlan(query)),
-    twelveLabsKey ? embedText(query, twelveLabsKey)        : Promise.reject(new Error('no TWELVELABS_API_KEY')),
+    anthropicKey ? buildQueryPlan(query, anthropicKey)  : Promise.resolve(heuristicQueryPlan(query)),
+    openaiKey    ? embedTextOpenAI(query, openaiKey)    : Promise.reject(new Error('no OPENAI_API_KEY')),
   ]);
 
   const queryPlan: QueryPlan = planResult.status === 'fulfilled'
@@ -241,13 +258,20 @@ Deno.serve(async (req: Request) => {
 
   // ── Step 2b: embed rewrites (best-effort, parallel) ──────────────────────
   let rewriteEmbeddings: number[][] = [];
-  if (canEmbed && twelveLabsKey && queryPlan.rewrites.length > 0) {
+  if (canEmbed && openaiKey && queryPlan.rewrites.length > 0) {
     const rewriteResults = await Promise.allSettled(
-      queryPlan.rewrites.slice(0, 2).map(r => embedText(r, twelveLabsKey))
+      queryPlan.rewrites.slice(0, 2).map(r => embedTextOpenAI(r, openaiKey))
     );
     rewriteEmbeddings = rewriteResults
       .filter((r): r is PromiseFulfilledResult<number[]> => r.status === 'fulfilled')
       .map(r => r.value);
+  }
+
+  // Embed the raw query via TwelveLabs for the visual lane (512-dim, cross-modal text→video)
+  let visualEmbedding: number[] | null = null;
+  if (twelveLabsKey) {
+    const visualResult = await Promise.allSettled([embedTextTwelveLabs(query, twelveLabsKey)]);
+    if (visualResult[0].status === 'fulfilled') visualEmbedding = visualResult[0].value;
   }
 
   const allEmbeddings: number[][] = [
@@ -288,12 +312,12 @@ Deno.serve(async (req: Request) => {
       ];
     });
 
-    // Visual lane: only on the raw query embedding (not on each rewrite — cost
-    // would scale linearly and Marengo's text encoder is expressive enough).
-    if (useVisualLane && rawEmbedding) {
+    // Visual lane: 512-dim TwelveLabs embedding against product_creative video embeddings.
+    // Uses separate visualEmbedding (not rawEmbedding which is now OpenAI 1536-dim).
+    if (useVisualLane && visualEmbedding) {
       retrievalCalls.push(
         admin.rpc('search_creatives_visual', {
-          query_embedding: toPgVector(rawEmbedding),
+          query_embedding: toPgVector(visualEmbedding),
           k: Math.ceil(k * 0.5),
           filter_gender: gender,
         })
@@ -318,7 +342,7 @@ Deno.serve(async (req: Request) => {
   } else {
     // No embeddings → BM25-only fallback: call with a zero vector stub that
     // the RPC degrades gracefully from (dense path finds nothing, BM25 works).
-    const zeroVec = toPgVector(new Array(512).fill(0));
+    const zeroVec = toPgVector(new Array(1536).fill(0));
     const [prodRes, looksRes] = await Promise.all([
       admin.rpc('search_products_hybrid', { query_embedding: zeroVec, query_text: query, k, filter_gender: gender, filter_type: null }),
       admin.rpc('search_looks_hybrid',    { query_embedding: zeroVec, query_text: query, k: Math.ceil(k * 0.6) }),
