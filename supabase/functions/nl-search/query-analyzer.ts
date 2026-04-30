@@ -1,7 +1,8 @@
-// query-analyzer — keyword-expansion search planner.
+// query-analyzer — static keyword-expansion search planner.
 //
-// Replaces the Claude-driven intent classifier for the common query path.
-// Pure function, no external calls — runs in <1 ms.
+// Hard-timeout fallback for the Haiku-driven expander in nl-search/index.ts.
+// When Haiku is unavailable / times out / errors, we run this pure function
+// (<1 ms) so the request never stalls.
 //
 // Output shapes:
 //   { kind: 'typed',   types, keywords }
@@ -9,14 +10,14 @@
 //     The DB query gets a hard `filter_types=[...]` so results can never bleed
 //     into other categories.
 //
-//   { kind: 'pairing', pair_types, anchor, keywords }
+//   { kind: 'pairing', pair_types, anchor_type, keywords }
 //     User asked "what to wear with X" / "pair with X" / "goes with X".
 //     We extract the anchor's catalog type from CATALOG_TYPE_SYNONYMS and
 //     look up complementary types in OUTFIT_PAIRS.
 //
 //   { kind: 'vibe',    keywords }
-//     No catalog type detected. Falls through to the original Claude+OpenAI
-//     +Marengo pipeline ("quiet luxury", "Y2K aesthetic", "coastal grandmother").
+//     No catalog type detected. Caller falls back to vibe-mode handling
+//     ("quiet luxury", "Y2K aesthetic", "coastal grandmother").
 //
 // Source-of-truth note: CATALOG_TYPE_SYNONYMS mirrors
 // app/services/product-creative.ts. When you add a new entry, update both.
@@ -162,7 +163,7 @@ const STOPWORDS = new Set([
 
 export type AnalyzerResult =
   | { kind: 'typed';   types: string[]; keywords: string[] }
-  | { kind: 'pairing'; pair_types: string[]; anchor: string; anchor_type: string; keywords: string[] }
+  | { kind: 'pairing'; pair_types: string[]; anchor_type: string; keywords: string[] }
   | { kind: 'vibe';    keywords: string[] };
 
 function tokenize(query: string): string[] {
@@ -219,7 +220,6 @@ export function analyzeQuery(rawQuery: string): AnalyzerResult {
         return {
           kind: 'pairing',
           pair_types: pairs,
-          anchor: anchorResolved.matched,
           anchor_type: anchorType,
           keywords,
         };
@@ -246,30 +246,4 @@ export function analyzeQuery(rawQuery: string): AnalyzerResult {
   // No catalog noun, no pair phrase → genuine vibe / aesthetic query.
   // Caller should fall through to the slow Claude+OpenAI+Marengo pipeline.
   return { kind: 'vibe', keywords };
-}
-
-// Helper: BM25 query string for typed/pairing branches. Drops the catalog
-// noun (it's already enforced by filter_types) so BM25 ranks WITHIN the
-// type subset by the modifiers ("white" in "white sneakers", "summer" in
-// "summer dress").
-export function bm25TextFor(result: AnalyzerResult, originalQuery: string): string {
-  if (result.kind === 'vibe') return originalQuery;
-
-  // Strip the matched catalog noun(s) from the query so BM25 doesn't waste
-  // ranking signal on a token that's already enforced by the type filter.
-  let stripped = ` ${originalQuery.toLowerCase()} `;
-  if (result.kind === 'typed') {
-    // Remove every synonym key that resolves to the same type set.
-    for (const [key, types] of Object.entries(CATALOG_TYPE_SYNONYMS)) {
-      if (types.length === result.types.length && types.every(t => result.types.includes(t))) {
-        stripped = stripped.replace(new RegExp(`\\b${key}\\b`, 'gi'), ' ');
-      }
-    }
-  } else {
-    // pairing: drop the pair phrase + anchor noun.
-    stripped = stripped.replace(PAIR_PHRASE_RE, ' ');
-    stripped = stripped.replace(new RegExp(`\\b${result.anchor}\\b`, 'gi'), ' ');
-  }
-  const cleaned = stripped.replace(/\s+/g, ' ').trim();
-  return cleaned.length > 0 ? cleaned : originalQuery;
 }
