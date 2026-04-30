@@ -312,13 +312,34 @@ Deno.serve(async (req: Request) => {
   // route reference-to-video through /fast (Pro doesn't ship for
   // this variant), so clamp to 5.
   const durationSeconds = 5;
-  // Strip parenthetical brand/name annotations from any client-supplied
-  // prompt. Older client builds shipped patterns like "hat (Alo Yoga
-  // Velvet Off-Duty Cap - Black)" — Seedance rejects those. The new
-  // client only emits role tags, but until every shopper has the new
-  // bundle this regex is the safety belt.
+  // Scrub brand-trademarked names from any client-supplied prompt so
+  // Bytedance's partner_validation_failed filter doesn't kill the job.
+  // Older client bundles shipped two patterns we have to handle:
+  //   1. Parenthetical product annotations: "hat (Alo Yoga Velvet Cap)".
+  //   2. Naked brand mentions baked into the commercial-style prompt:
+  //      "Cast them as the lead in a Alo Yoga × Thursday crossover
+  //      commercial — meshing Alo Yoga house-style spot ..."
+  // Strip both. The list mirrors BRAND_COMMERCIAL_TONES on the client.
+  // For unknown brands we'd need a generic dictionary; covering the
+  // tone-presets is enough today because those are the only ones the
+  // commercial style names verbatim.
+  const BRAND_NAMES_TO_STRIP: RegExp[] = [
+    /\bnike\b/gi, /\badidas\b/gi, /\blululemon\b/gi, /\bunder\s*armour\b/gi,
+    /\bpuma\b/gi, /\breebok\b/gi, /\bgap\b/gi, /\blevi'?s?\b/gi,
+    /\bralph\s*lauren\b/gi, /\bbrooks\s*brothers\b/gi, /\btommy\s*hilfiger\b/gi,
+    /\blacoste\b/gi, /\buniqlo\b/gi, /\bzara\b/gi, /\bh&m\b/gi, /\bhennes\b/gi,
+    /\bpatagonia\b/gi, /\bnorth\s*face\b/gi, /\bcolumbia\b/gi,
+    /\balo\s*yoga\b/gi, /\balo\b/gi, /\bthursday\s*boots\b/gi, /\bthursday\b/gi,
+    /\brag\s*&\s*bone\b/gi, /\brag\s*and\s*bone\b/gi,
+  ];
   function stripBrandAnnotations(p: string): string {
-    return p.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+    let out = p.replace(/\s*\([^)]*\)/g, '');
+    for (const rx of BRAND_NAMES_TO_STRIP) out = out.replace(rx, '');
+    // Collapse "× × ×" / "  / " / dangling hyphens / multi-spaces left
+    // behind by the strip so the final prompt reads cleanly.
+    out = out.replace(/×+/g, '×').replace(/\s+×\s+/g, ' ').replace(/\s+\/\s+/g, ' / ');
+    out = out.replace(/\s*-\s*([,.])/g, '$1').replace(/\s+/g, ' ').trim();
+    return out;
   }
   const rawClientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
     ? stripBrandAnnotations(gen.prompt)

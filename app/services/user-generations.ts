@@ -756,18 +756,23 @@ export function buildGenerationPrompt(opts: {
     const tones = detectBrandTones(opts.productLines);
     let castLine: string;
     let cameraLine: string;
+    // Brand-tone presets give Seedance the visual language (palette,
+    // pacing, camera moves), but Bytedance's partner_validation_failed
+    // filter rejects prompts that name commercial brands verbatim. So
+    // we keep the tone+camera *descriptors* and drop every brand-name
+    // label. The visual cues do the actual work in the model — the
+    // brand key was only a human-readable navigator in the template.
     if (tones.length === 0) {
       castLine = 'Cast them as the lead in a polished branded commercial — hero pacing, clean grade, on-brand palette.';
       cameraLine = 'Cinematography: bold dolly-in, low-angle hero framing, single rack focus to a product detail, motion-blur transition that reads as a cut.';
     } else if (tones.length === 1) {
-      castLine = `Cast them as the lead in a ${tones[0].key} commercial — ${tones[0].tone}.`;
-      cameraLine = `Cinematography (${tones[0].key} house style): ${tones[0].camera}.`;
+      castLine = `Cast them as the lead in a polished commercial spot — ${tones[0].tone}.`;
+      cameraLine = `Cinematography: ${tones[0].camera}.`;
     } else {
-      const names = tones.map(t => t.key).join(' × ');
       const blendedTone = tones.map(t => t.tone).join('; meshing ');
-      const blendedCamera = tones.map(t => `${t.key}: ${t.camera}`).join(' / ');
-      castLine = `Cast them as the lead in a ${names} crossover commercial — meshing ${blendedTone}. Frame it as an unmistakable collab spot, blending each brand's house style into one cohesive look.`;
-      cameraLine = `Cinematography blends both brands' camera languages — ${blendedCamera}.`;
+      const blendedCamera = tones.map(t => t.camera).join(' / ');
+      castLine = `Cast them as the lead in a polished crossover commercial — meshing ${blendedTone}. Frame it as a cohesive house-style spot.`;
+      cameraLine = `Cinematography blends multiple house languages — ${blendedCamera}.`;
     }
     // Three-beat structure inside the single Seedance clip so it
     // reads as a commercial, not a static fit-cam. Seedance can't do
