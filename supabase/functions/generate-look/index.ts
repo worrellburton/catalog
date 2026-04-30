@@ -35,28 +35,21 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 reference-to-video model slugs in priority order. We
-// walk this list at submit time and use the first slug Fal accepts.
-//
-// /fast historically worked with multi-image input but Fal silently
-// changed routing on Apr 30 2026 so /fast now bounces multi-image
-// payloads with partner_validation_failed.
-//
-// /pro/reference-to-video is empirically a queue-accepts-worker-404
-// black hole (see gen 7140a01b 2026-04-30): the queue returns a
-// request_id so our submit-time retry loop can't detect the failure,
-// then the worker rejects later via webhook with "Path /pro/
-// reference-to-video not found". Drop it from the rotation until Fal
-// actually routes it.
-//
-// /reference-to-video (bare slug) is the wild card — historically
-// also 404'd at worker but Fal may have shipped it. Try it first.
-// /fast is the always-routed fallback.
-const MODEL_SLUGS: string[] = [
-  'bytedance/seedance-2.0/reference-to-video',
-  'bytedance/seedance-2.0/fast/reference-to-video',
-];
+// Seedance 2 reference-to-video. /fast is the only variant fal.ai
+// exposes — submits to /pro and /lite return queue request_ids but
+// the workers themselves 404 ("Path /pro/reference-to-video not
+// found"), which only surfaces when the webhook fires later. So we
+// always submit to /fast regardless of model='pro' on the user_generation
+// row, and surface the actual slug used in veo_model.
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
+// Other Pro slugs we used to walk through. Kept here only as a
+// reminder — every one of them 404s on the worker side as of
+// Apr 2026. Re-add to the rotation if fal.ai ever ships a Pro
+// reference-to-video endpoint.
+// const PRO_CANDIDATES = [
+//   'bytedance/seedance-2.0/pro/reference-to-video',
+//   'bytedance/seedance-2.0/reference-to-video',
+// ];
 
 async function tryFal(
   modelSlug: string,
@@ -65,7 +58,6 @@ async function tryFal(
   durationSeconds: number,
   falKey: string,
   webhookUrl: string,
-  endUserId: string,
 ): Promise<{ status: number; request_id: string | null; error: string | null }> {
   const submit = await fetch(
     `${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
@@ -82,19 +74,11 @@ async function tryFal(
         aspect_ratio: '9:16',
         resolution: '720p',
         generate_audio: false,
-        // Bytedance/Seedance enforces a non-null end_user_id for
-        // content-moderation accounting (April 30 2026 silent change).
-        // Sending null bounces every job with partner_validation_failed.
-        // Pass the shopper's stable supabase user_id; it's an opaque
-        // UUID so it functions as a per-user moderation key without
-        // leaking PII.
-        end_user_id: endUserId,
       }),
     },
   );
   if (!submit.ok) {
     const text = await submit.text();
-    console.error('[generate-look] Fal submit rejected', submit.status, text);
     return { status: submit.status, request_id: null, error: `${submit.status} ${text.slice(0, 400)}` };
   }
   const submitData = await submit.json() as { request_id?: string };
@@ -111,39 +95,14 @@ async function submitFal(
   _durationSeconds: number,
   falKey: string,
   webhookUrl: string,
-  endUserId: string,
 ): Promise<{ request_id: string | null; model_slug: string; error: string | null; fellBack: boolean }> {
-  // Walk MODEL_SLUGS top to bottom. A 404 from a worker means the slug
-  // isn't routed at Fal — keep trying. Anything else (200 with a
-  // request_id, or a 4xx from a slug that *is* routed) ends the loop
-  // because we want one definitive submit per generation. Most rows
-  // will land on the first slug once Fal ships /pro; until then we
-  // burn one round-trip each before falling back to /fast.
-  const errors: string[] = [];
-  for (const slug of MODEL_SLUGS) {
-    const r = await tryFal(slug, prompt, referenceImageUrls, 5, falKey, webhookUrl, endUserId);
-    if (r.request_id) {
-      const fellBack = wantsPro && slug === MODEL_SLUG_FAST;
-      console.log('[generate-look] submit accepted by', slug);
-      return { request_id: r.request_id, model_slug: slug, error: null, fellBack };
-    }
-    // 404 = slug isn't routed at the worker. Move on quietly. Anything
-    // else (e.g. a real validation error) we surface and bail — no
-    // point trying every slug if Fal is rejecting the *content*.
-    if (r.status === 404) {
-      console.log('[generate-look] slug not routed', slug);
-      errors.push(`${slug}: 404`);
-      continue;
-    }
-    errors.push(`${slug}: ${r.error}`);
-    return { request_id: null, model_slug: slug, error: `Fal submit failed: ${r.error}`, fellBack: wantsPro };
+  // /fast caps at 5s regardless of what the row asked for. It's the
+  // only slug fal.ai accepts for reference-to-video right now.
+  const r = await tryFal(MODEL_SLUG_FAST, prompt, referenceImageUrls, 5, falKey, webhookUrl);
+  if (r.request_id) {
+    return { request_id: r.request_id, model_slug: MODEL_SLUG_FAST, error: null, fellBack: wantsPro };
   }
-  return {
-    request_id: null,
-    model_slug: MODEL_SLUG_FAST,
-    error: `Fal submit failed across all slugs: ${errors.join(' | ')}`,
-    fellBack: wantsPro,
-  };
+  return { request_id: null, model_slug: MODEL_SLUG_FAST, error: `Fal submit failed: ${r.error}`, fellBack: wantsPro };
 }
 
 Deno.serve(async (req: Request) => {
@@ -251,38 +210,6 @@ Deno.serve(async (req: Request) => {
   // image of reasonable size. Drop products that fail rather than
   // killing the whole job — face photos are required so we surface a
   // hard error if any of those bounce.
-  //
-  // HEIC/HEIF is rejected explicitly: Fal/Seedance can't decode it and
-  // returns partner_validation_failed for the whole job. iPhones default
-  // to HEIC, so legacy uploads in the bucket from before the client-side
-  // guard landed will hit this branch.
-  function isHeicUrl(url: string, contentType: string): boolean {
-    if (contentType === 'image/heic' || contentType === 'image/heif') return true;
-    try {
-      const path = new URL(url).pathname.toLowerCase();
-      return path.endsWith('.heic') || path.endsWith('.heif');
-    } catch { return false; }
-  }
-
-  // 16-bit-per-channel PNGs (iPhone HDR screenshots saved at 1179×2556
-  // are the canonical case) also trigger partner_validation_failed. Sniff
-  // the IHDR chunk: 8-byte PNG signature + 4-byte length + 4-byte type
-  // ("IHDR") + 4-byte width + 4-byte height puts bit-depth at offset 24.
-  // Anything > 8 we reject.
-  async function isPng16Bit(url: string): Promise<boolean> {
-    try {
-      const r = await fetch(url, { headers: { Range: 'bytes=0-32' } });
-      if (!r.ok) return false;
-      const buf = new Uint8Array(await r.arrayBuffer());
-      if (buf.length < 25) return false;
-      const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-      if (!isPng) return false;
-      return buf[24] > 8;
-    } catch {
-      return false;
-    }
-  }
-
   async function isImageUrlOk(url: string): Promise<boolean> {
     if (isHostBlocked(url)) return false;
     try {
@@ -290,10 +217,8 @@ Deno.serve(async (req: Request) => {
       if (!r.ok) return false;
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (ct && !ct.startsWith('image/')) return false;
-      if (isHeicUrl(url, ct)) return false;
       const len = Number(r.headers.get('content-length') || '0');
       if (len > 30 * 1024 * 1024) return false; // Fal cap is 30 MB per image
-      if (ct === 'image/png' && await isPng16Bit(url)) return false;
       return true;
     } catch {
       return false;
@@ -303,16 +228,12 @@ Deno.serve(async (req: Request) => {
   const faceChecks = await Promise.all(facesUsed.map(isImageUrlOk));
   const badFaceCount = faceChecks.filter(ok => !ok).length;
   if (badFaceCount === facesUsed.length) {
-    const allHeic = facesUsed.every(u => isHeicUrl(u, ''));
-    const message = allHeic
-      ? 'Your photo is in HEIC format, which we can’t use. Please re-upload as JPEG or PNG.'
-      : 'All reference photos failed to load — please re-upload.';
     await admin.from('user_generations').update({
       status: 'failed',
-      error: message,
+      error: 'All reference photos failed to load — please re-upload.',
       completed_at: new Date().toISOString(),
     }).eq('id', generationId);
-    return jsonRes({ error: message }, 400);
+    return jsonRes({ error: 'All face photos unreachable' }, 400);
   }
   const goodFaces = facesUsed.filter((_, i) => faceChecks[i]);
 
@@ -337,12 +258,8 @@ Deno.serve(async (req: Request) => {
   // so Seedance composes the subject in the right range rather than
   // guessing from the face photo alone.
   const faceTags = goodFaces.map((_, i) => `@Image${i + 1}`).join(' and ');
-  // Drop brand + product names from the per-reference clauses for the
-  // same reason buildGenerationPrompt drops them on the client side:
-  // Bytedance/Seedance partner_validation_failed fires on prompts that
-  // mention specific commercial brands or trademarked product titles.
   const productClauses = productsUsed.map((p, i) =>
-    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1})`,
+    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`,
   );
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
@@ -352,73 +269,28 @@ Deno.serve(async (req: Request) => {
   // route reference-to-video through /fast (Pro doesn't ship for
   // this variant), so clamp to 5.
   const durationSeconds = 5;
-  // Scrub brand-trademarked names from any client-supplied prompt so
-  // Bytedance's partner_validation_failed filter doesn't kill the job.
-  // Older client bundles shipped patterns like:
-  //   1. Parenthetical product annotations: "hat (Alo Yoga Velvet Cap)".
-  //   2. Naked brand mentions in the commercial-style fallback path:
-  //      "...meshing Alo Yoga house-style spot ... meshing Thursday
-  //      house-style spot ..."
-  // Build the strip-list dynamically from the products actually picked
-  // for THIS generation. That covers every brand a shopper might see,
-  // not just a curated list we'd have to keep in sync. Still keep a
-  // hardcoded baseline so prompts that name brands the shopper didn't
-  // pick (e.g. inspirational mentions) get scrubbed too.
-  const STATIC_BRAND_STRIP: RegExp[] = [
-    /\bnike\b/gi, /\badidas\b/gi, /\blululemon\b/gi, /\bunder\s*armour\b/gi,
-    /\bpuma\b/gi, /\breebok\b/gi, /\bgap\b/gi, /\blevi'?s?\b/gi,
-    /\bralph\s*lauren\b/gi, /\bbrooks\s*brothers\b/gi, /\btommy\s*hilfiger\b/gi,
-    /\blacoste\b/gi, /\buniqlo\b/gi, /\bzara\b/gi, /\bh&m\b/gi, /\bhennes\b/gi,
-    /\bpatagonia\b/gi, /\bnorth\s*face\b/gi, /\bcolumbia\b/gi,
-  ];
-  function escapeRegex(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-  const dynamicBrands = Array.from(new Set(
-    productsUsedRaw
-      .map(p => (p.label || '').split(' ')[0])
-      .filter(s => s && s.length > 1 && /^[a-z]/i.test(s)),
-  ));
-  // Also scrub the full brand strings (handles two-word brands like
-  // "Alo Yoga", "Thursday Boots", "Rag & Bone").
-  const dynamicBrandPhrases = Array.from(new Set(
-    productLinks?.map(r => {
-      const p = r.products as unknown as { brand: string | null } | null;
-      return (p?.brand || '').trim();
-    }).filter((s): s is string => !!s && s.length > 1) ?? [],
-  ));
-  const DYNAMIC_BRAND_STRIP: RegExp[] = [
-    ...dynamicBrandPhrases.map(b => new RegExp(`\\b${escapeRegex(b)}\\b`, 'gi')),
-    ...dynamicBrands.map(b => new RegExp(`\\b${escapeRegex(b)}\\b`, 'gi')),
-  ];
-
-  function stripBrandAnnotations(p: string): string {
-    let out = p.replace(/\s*\([^)]*\)/g, '');
-    for (const rx of STATIC_BRAND_STRIP) out = out.replace(rx, '');
-    for (const rx of DYNAMIC_BRAND_STRIP) out = out.replace(rx, '');
-    // Collapse "× × ×" / "  / " / dangling hyphens / multi-spaces left
-    // behind by the strip so the final prompt reads cleanly.
-    out = out.replace(/×+/g, '×').replace(/\s+×\s+/g, ' ').replace(/\s+\/\s+/g, ' / ');
-    out = out.replace(/\s*-\s*([,.])/g, '$1').replace(/\s+/g, ' ').trim();
-    return out;
-  }
-  const rawClientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
-    ? stripBrandAnnotations(gen.prompt)
+  // Prefer the rich prompt the client built (carries framing,
+  // commercial cinematography, brand camera language) — the original
+  // tagged-prompt fallback below is only used if the client didn't
+  // ship one. Either way we replace any "5-second" string with the
+  // actual duration so the model is told the right clip length.
+  const clientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
+    ? gen.prompt
     : null;
   const fallbackPrompt = [
     `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.`,
     heightClause,
     ageClause,
     productClauses.length > 0
-      ? `Dress them in: ${productClauses.join(', ')}. Match the colors and silhouette of each reference garment.`
+      ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
       : 'Dress them in the provided products.',
     `Natural full-body motion, ${durationSeconds}-second portrait clip${styleSuffix}.`,
   ].filter(Boolean).join(' ');
   // Always re-prepend the @ImageN binding lines so Seedance binds
   // each reference photo to its tag even when the client supplied
   // a fully-formed prompt without them.
-  const taggedPrompt = rawClientPrompt
-    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${rawClientPrompt}`
+  const taggedPrompt = clientPrompt
+    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${clientPrompt}`
     : fallbackPrompt;
 
   // Webhook: Fal POSTs the result to /functions/v1/fal-webhook when
@@ -426,21 +298,8 @@ Deno.serve(async (req: Request) => {
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
-  // Log the exact payload being sent so when the async webhook fires
-  // back partner_validation_failed minutes later we can correlate the
-  // failure to the inputs we shipped. The /generate-look HTTP call has
-  // already returned 200 by then so this is the only paper trail.
-  console.log('[generate-look] submitting gen=', generationId, JSON.stringify({
-    prompt: taggedPrompt,
-    image_urls: referenceUrls,
-    duration: durationSeconds,
-    style: gen.style,
-    height: gen.height_label,
-    age: gen.age_label,
-    model: gen.model,
-  }).slice(0, 1500));
   const { request_id, model_slug, error, fellBack } = await submitFal(
-    taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl, gen.user_id,
+    taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl,
   );
   if (fellBack) {
     console.log('[generate-look] gen=', generationId, 'requested pro, fell back to fast');
