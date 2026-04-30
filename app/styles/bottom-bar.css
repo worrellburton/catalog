@@ -74,6 +74,41 @@
   color: #fff;
 }
 
+/* In-app submit button. Sits to the right of the clear button when
+   the input has content. Solid white pill so it reads as the
+   primary action — mirrors the keyboard's "Search" key without
+   making users reach for it. */
+.bottom-search-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  margin-left: 4px;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.bottom-search-submit:hover {
+  transform: translateY(-1px);
+}
+
+.bottom-search-submit:active {
+  transform: translateY(0);
+  opacity: 0.85;
+}
+
+.light-mode .bottom-search-submit {
+  background: #111;
+  color: #fff;
+}
+
 /* Spinner shown while nl-search is resolving */
 @keyframes search-spin {
   to { transform: rotate(360deg); }
@@ -700,11 +735,13 @@
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — full-width vertical editorial column on
-   both mobile and desktop. Stretches the full viewport so its
-   gradient mask can fade smoothly behind the input bar/keyboard
-   instead of leaving a hard seam where the previous (bar-anchored)
-   container ended. */
+/* Search suggestions — full-width vertical editorial column.
+   Sits on top of the .search-backdrop full-viewport dim, so the
+   scrim is uniform across the whole screen and doesn't visually
+   shift when the iOS keyboard slides up.
+   No gradient mask: the backdrop owns the dim, the column just
+   shows its content. Top/bottom fades on the column itself are
+   small and viewport-relative so they don't track the keyboard. */
 .search-suggestions {
   position: fixed;
   inset: 0;
@@ -715,38 +752,29 @@
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.18s ease, visibility 0.18s ease;
-  /* Pixel-anchored mask stops so the bottom fade always lands just
-     above the search input bar regardless of viewport height or
-     keyboard state. --ios-bottom-chrome is BottomBar's live
-     keyboard-height value; safe-area + 88 is the bar's height +
-     padding. The fade window starts ~110 px above the bar (so it's
-     visibly soft) and is fully transparent ~30 px above it. The top
-     fade is a flat 100 px so first-row pills enter quietly. */
+  /* Reserve space at the bottom for the input bar so the scroll
+     track doesn't run pills into / under the bar. Uses the live
+     --ios-bottom-chrome var BottomBar writes; on desktop it's 0. */
   --suggestions-bar-clear: max(
     calc(env(safe-area-inset-bottom) + 88px),
     calc(var(--ios-bottom-chrome, 0px) + 88px)
   );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0px,
-    black 100px,
-    black calc(100% - var(--suggestions-bar-clear) - 110px),
-    transparent calc(100% - var(--suggestions-bar-clear) - 30px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0px,
-    black 100px,
-    black calc(100% - var(--suggestions-bar-clear) - 110px),
-    transparent calc(100% - var(--suggestions-bar-clear) - 30px),
-    transparent 100%
-  );
-  /* Reserve the area where the bar lives so suggestions don't
-     scroll into / under the bar — the mask hides them but the
-     scroll track shouldn't run into that space. */
   padding-bottom: var(--suggestions-bar-clear);
   box-sizing: border-box;
+  /* Soft entrance fade on just the top edge so the first row of
+     pills doesn't pop visually. No bottom mask — the input bar
+     itself is opaque and naturally clips the column. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 80px, black 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
+}
+
+/* Make the underlying scrim a touch darker + blurrier so the
+   solid dim itself does the work of dimming the feed; no need
+   for a tracking gradient on the suggestions container. */
+.search-backdrop {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
 .search-suggestions.visible {

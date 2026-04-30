@@ -134,6 +134,20 @@ function BottomBar({
     emitSearch(val.trim().toLowerCase());
   }, [emitSearch]);
 
+  // Shared submit path for both the Enter keydown and the in-app
+  // send button. Mobile users on iOS often miss that the keyboard's
+  // "Search" key is the submit; an explicit button removes the
+  // ambiguity.
+  const submitSearch = useCallback(() => {
+    const q = localSearch.trim();
+    if (q) {
+      if (onSelectSuggestion) onSelectSuggestion(q);
+      else onSearchChange(q.toLowerCase());
+    }
+    closeSearch();
+    searchInputRef.current?.blur();
+  }, [localSearch, onSelectSuggestion, onSearchChange, closeSearch]);
+
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
     btn.classList.add('tapped');
@@ -236,18 +250,8 @@ function BottomBar({
             onFocus={openSearch}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                // iOS Safari fires Enter on the keyboard's "search"
-                // / "go" key. Push the trimmed query through the
-                // suggestion handler so the catalog name updates,
-                // then close + blur to dismiss the keyboard.
                 e.preventDefault();
-                const q = localSearch.trim();
-                if (q) {
-                  if (onSelectSuggestion) onSelectSuggestion(q);
-                  else onSearchChange(q.toLowerCase());
-                }
-                closeSearch();
-                searchInputRef.current?.blur();
+                submitSearch();
               } else if (e.key === 'Escape') {
                 closeSearch();
                 searchInputRef.current?.blur();
@@ -268,14 +272,30 @@ function BottomBar({
                 </svg>
               </span>
             ) : (
-              <button
-                type="button"
-                className="bottom-search-clear"
-                onClick={() => { setLocalSearch(''); emitSearch(''); }}
-                aria-label="Clear search"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="bottom-search-clear"
+                  onClick={() => { setLocalSearch(''); emitSearch(''); searchInputRef.current?.focus(); }}
+                  aria-label="Clear search"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+                {/* In-app submit. iOS keyboards expose a "Search" key
+                    when enterKeyHint="search" but most users don't
+                    realize that's the submit affordance, especially
+                    if they typed via voice or pasted. An explicit
+                    button removes the ambiguity. */}
+                <button
+                  type="button"
+                  className="bottom-search-submit"
+                  onMouseDown={(e) => e.preventDefault() /* don't blur the input before we read its value */}
+                  onClick={submitSearch}
+                  aria-label="Search"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              </>
             )
           )}
         </div>
