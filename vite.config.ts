@@ -21,6 +21,13 @@ export default defineConfig({
           // Root index
           route("", "routes/_index.tsx", { index: true });
 
+          // Shareable deep-links. All three re-export _index so the
+          // home component mounts; Index reads useParams() to decide
+          // whether to open a product / look / brand modal on top.
+          route("p/:slug", "routes/p.$slug.tsx");
+          route("l/:slug", "routes/l.$slug.tsx");
+          route("b/:slug", "routes/b.$slug.tsx");
+
           // Admin routes
           route("admin", "routes/admin/route.tsx", () => {
             route("", "routes/admin/_index.tsx", { index: true });

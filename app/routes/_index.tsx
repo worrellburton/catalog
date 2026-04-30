@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { useLocation } from '@remix-run/react';
+import { useLocation, useParams } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -66,7 +66,14 @@ function prefetchOverlayChunks() {
   if (ric) ric(tick, { timeout: 2000 });
   else window.setTimeout(tick, 800);
 }
-import { Look, Product } from '~/data/looks';
+import { Look, Product, looks as seedLooks } from '~/data/looks';
+import {
+  productSlug,
+  lookSlug,
+  brandSlug,
+  extractIdPrefix,
+  extractLookId,
+} from '~/utils/slug';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
@@ -740,7 +747,132 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
+    // Pop the /p/<slug> URL when the user closes the modal so the
+    // address bar matches what's visible. We use replaceState so the
+    // browser history doesn't grow with every open/close cycle.
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/p/')) {
+      window.history.replaceState({}, '', '/');
+    }
   }, []);
+
+  // Sync handlers — push the canonical share URL whenever a modal
+  // opens via in-app interaction. We use replaceState (not navigate)
+  // so the SPA doesn't remount the whole feed; we just update the
+  // address bar so copy-link / back-button / refresh all do the
+  // right thing.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedProduct) return;
+    const slug = productSlug({
+      id: selectedProduct.id ?? null,
+      brand: selectedProduct.brand ?? null,
+      name: selectedProduct.name ?? null,
+    });
+    if (!slug) return;
+    const target = `/p/${slug}`;
+    if (window.location.pathname !== target) {
+      window.history.replaceState({}, '', target);
+    }
+  }, [selectedProduct]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!selectedLook) return;
+    const slug = lookSlug({
+      id: selectedLook.id ?? null,
+      creator: selectedLook.creator ?? null,
+      title: selectedLook.title ?? null,
+    });
+    if (!slug) return;
+    const target = `/l/${slug}`;
+    if (window.location.pathname !== target) {
+      window.history.replaceState({}, '', target);
+    }
+  }, [selectedLook]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!brandFilter) return;
+    const slug = brandSlug(brandFilter);
+    if (!slug) return;
+    const target = `/b/${slug}`;
+    if (window.location.pathname !== target) {
+      window.history.replaceState({}, '', target);
+    }
+  }, [brandFilter]);
+
+  // Pop URL when brand / look modals close. Product close handles
+  // its own pop above (it has more state to clear).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (brandFilter) return;
+    if (window.location.pathname.startsWith('/b/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [brandFilter]);
+
+  // Fresh-load handler: read the route param the Remix router gave
+  // us and open the matching modal once. Runs on mount only — after
+  // that, in-app navigation drives state, and the URL syncs back via
+  // the effects above.
+  const params = useParams();
+  const slugParam = params.slug;
+  const initialSlugConsumed = useRef(false);
+  useEffect(() => {
+    if (initialSlugConsumed.current) return;
+    if (!slugParam) return;
+    initialSlugConsumed.current = true;
+    const path = location.pathname;
+    if (path.startsWith('/p/')) {
+      const idPrefix = extractIdPrefix(slugParam);
+      if (!idPrefix || !supabase) return;
+      // Look up the product by the 8-char UUID prefix. Sequence is
+      // products → handleOpenProduct so the rest of the modal stack
+      // (similar / brand rails) loads exactly like a tap-to-open.
+      supabase
+        .from('products')
+        .select('id, name, brand, price, image_url, images, url, catalog_tags, type, is_elite')
+        .ilike('id', `${idPrefix}%`)
+        .limit(1)
+        .then(({ data }) => {
+          const row = data?.[0];
+          if (!row) return;
+          const product: Product = {
+            id: row.id,
+            name: row.name || '',
+            brand: row.brand || '',
+            price: row.price || '',
+            url: row.url || '',
+            image: row.image_url || undefined,
+          };
+          handleOpenProduct(product);
+        });
+    } else if (path.startsWith('/l/')) {
+      const id = extractLookId(slugParam);
+      if (id == null) return;
+      const look = seedLooks.find(l => l.id === id);
+      if (look) handleOpenLook(look);
+    } else if (path.startsWith('/b/')) {
+      // Brand slug is the kebab brand name. Reverse-lookup against
+      // the products table to find the canonical brand string
+      // (preserves original casing / spacing).
+      if (!supabase) return;
+      supabase
+        .from('products')
+        .select('brand')
+        .not('brand', 'is', null)
+        .limit(2000)
+        .then(({ data }) => {
+          if (!data) return;
+          const target = slugParam.toLowerCase();
+          const match = (data as { brand: string }[]).find(r => brandSlug(r.brand) === target);
+          if (match?.brand) handleOpenBrand(match.brand);
+        });
+    }
+    // handleOpen* are stable refs; deliberately empty deps so this
+    // only runs once. The initialSlugConsumed ref guards re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slugParam]);
   const handleBookmarksOpenCreator = useCallback((handle: string) => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
