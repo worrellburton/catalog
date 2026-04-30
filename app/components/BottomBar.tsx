@@ -134,6 +134,22 @@ function BottomBar({
     emitSearch(val.trim().toLowerCase());
   }, [emitSearch]);
 
+  // Listen for the 'catalog:close-search' event _index.tsx fires
+  // when the Catalog logo is tapped. The logo handler can't reach
+  // into BottomBar's local searchOpen / filtersOpen state directly,
+  // so the event is the cheapest cross-component bridge.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onClose = () => {
+      setSearchOpen(false);
+      setFiltersOpen(false);
+      setLocalSearch('');
+      searchInputRef.current?.blur();
+    };
+    window.addEventListener('catalog:close-search', onClose);
+    return () => window.removeEventListener('catalog:close-search', onClose);
+  }, []);
+
   // Shared submit path for both the Enter keydown and the in-app
   // send button. Mobile users on iOS often miss that the keyboard's
   // "Search" key is the submit; an explicit button removes the

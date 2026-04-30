@@ -425,11 +425,29 @@ export default function Home() {
   }, []);
 
   const handleLogoClick = useCallback(() => {
+    // Reset every layer that could be sitting on top of the feed:
+    // search query + filters, all modal overlays (product, look,
+    // brand, creator, bookmarks, my-looks). Then bump shuffleKey
+    // so the feed re-rolls to a fresh order, and dispatch a
+    // 'catalog:close-search' event so BottomBar can drop its
+    // local searchOpen state (the suggestions column).
     setSearchQuery('');
     setActiveFilter('all');
     setCreatorFilter(null);
+    setBrandFilter(null);
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedLook(null);
+    setShowBookmarks(false);
+    setShowMyLooks(false);
     setShuffleKey(k => k + 1);
     setCatalogName('all');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('catalog:close-search'));
+      // Scroll to top of the feed so the user lands at the start
+      // of the grid, not wherever they were last reading.
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
   const handleLandingToApp = useCallback(() => {
