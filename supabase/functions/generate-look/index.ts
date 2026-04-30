@@ -35,21 +35,22 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 reference-to-video. /fast is the only variant fal.ai
-// exposes — submits to /pro and /lite return queue request_ids but
-// the workers themselves 404 ("Path /pro/reference-to-video not
-// found"), which only surfaces when the webhook fires later. So we
-// always submit to /fast regardless of model='pro' on the user_generation
-// row, and surface the actual slug used in veo_model.
+// Seedance 2 reference-to-video model slugs in priority order. We
+// walk this list at submit time and use the first slug Fal accepts.
+//
+// Why a list: the /fast variant historically accepted up to 9 reference
+// images, but on Apr 30 2026 Fal/Bytedance silently changed routing on
+// /fast so multi-image payloads started bouncing with
+// partner_validation_failed even though the same payload worked
+// Apr 25-29. The /pro and /reference-to-video slugs used to 404 at the
+// worker but Fal may have shipped them since — try those first now,
+// fall back to /fast as the safety net.
+const MODEL_SLUGS: string[] = [
+  'bytedance/seedance-2.0/pro/reference-to-video',
+  'bytedance/seedance-2.0/reference-to-video',
+  'bytedance/seedance-2.0/fast/reference-to-video',
+];
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-// Other Pro slugs we used to walk through. Kept here only as a
-// reminder — every one of them 404s on the worker side as of
-// Apr 2026. Re-add to the rotation if fal.ai ever ships a Pro
-// reference-to-video endpoint.
-// const PRO_CANDIDATES = [
-//   'bytedance/seedance-2.0/pro/reference-to-video',
-//   'bytedance/seedance-2.0/reference-to-video',
-// ];
 
 async function tryFal(
   modelSlug: string,
@@ -97,13 +98,37 @@ async function submitFal(
   falKey: string,
   webhookUrl: string,
 ): Promise<{ request_id: string | null; model_slug: string; error: string | null; fellBack: boolean }> {
-  // /fast caps at 5s regardless of what the row asked for. It's the
-  // only slug fal.ai accepts for reference-to-video right now.
-  const r = await tryFal(MODEL_SLUG_FAST, prompt, referenceImageUrls, 5, falKey, webhookUrl);
-  if (r.request_id) {
-    return { request_id: r.request_id, model_slug: MODEL_SLUG_FAST, error: null, fellBack: wantsPro };
+  // Walk MODEL_SLUGS top to bottom. A 404 from a worker means the slug
+  // isn't routed at Fal — keep trying. Anything else (200 with a
+  // request_id, or a 4xx from a slug that *is* routed) ends the loop
+  // because we want one definitive submit per generation. Most rows
+  // will land on the first slug once Fal ships /pro; until then we
+  // burn one round-trip each before falling back to /fast.
+  const errors: string[] = [];
+  for (const slug of MODEL_SLUGS) {
+    const r = await tryFal(slug, prompt, referenceImageUrls, 5, falKey, webhookUrl);
+    if (r.request_id) {
+      const fellBack = wantsPro && slug === MODEL_SLUG_FAST;
+      console.log('[generate-look] submit accepted by', slug);
+      return { request_id: r.request_id, model_slug: slug, error: null, fellBack };
+    }
+    // 404 = slug isn't routed at the worker. Move on quietly. Anything
+    // else (e.g. a real validation error) we surface and bail — no
+    // point trying every slug if Fal is rejecting the *content*.
+    if (r.status === 404) {
+      console.log('[generate-look] slug not routed', slug);
+      errors.push(`${slug}: 404`);
+      continue;
+    }
+    errors.push(`${slug}: ${r.error}`);
+    return { request_id: null, model_slug: slug, error: `Fal submit failed: ${r.error}`, fellBack: wantsPro };
   }
-  return { request_id: null, model_slug: MODEL_SLUG_FAST, error: `Fal submit failed: ${r.error}`, fellBack: wantsPro };
+  return {
+    request_id: null,
+    model_slug: MODEL_SLUG_FAST,
+    error: `Fal submit failed across all slugs: ${errors.join(' | ')}`,
+    fellBack: wantsPro,
+  };
 }
 
 Deno.serve(async (req: Request) => {
