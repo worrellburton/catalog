@@ -4,7 +4,6 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import EmptyCatalogState from './EmptyCatalogState';
 import { prefetchLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
@@ -177,9 +176,13 @@ export default function ContinuousFeed({
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
   // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
-  // We still run semantic in the background to broaden coverage, but we
-  // suppress the pending/loading UX so the UI stays instant.
+  // We still run semantic in the background so Haiku-driven expansion can
+  // broaden / refine results, but we suppress the pending/loading UX so
+  // the UI stays instant for these common queries.
   const tier1Eligible = !!resolveCatalogTypes(searchQuery);
+  // Always run nl-search so Haiku gets to expand every query against the
+  // canonical product.type set. Cache hits are ~80ms; misses ~400ms with
+  // Haiku+embed running in parallel. Tier-1 still wins the first paint.
   const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
 
   // Semantic queries: commit on the loading true → false transition.
@@ -515,8 +518,14 @@ export default function ContinuousFeed({
       prev.committedQuery !== committedQuery ||
       prev.shuffleKey !== shuffleKey
     ) {
-      dispatch({ type: 'RESET', looks: semanticallyOrderedLooks });
       prevFilterRef.current = { activeFilter, committedQuery, shuffleKey };
+      // Only remount the segment tree when there are actual new look results,
+      // or when clearing the search back to the full feed. Skipping RESET on a
+      // no-results query keeps segment keys stable so video IntersectionObserver
+      // callbacks don't need to re-fire (avoids black-card flicker).
+      if (semanticallyOrderedLooks.length > 0 || committedQuery.trim().length === 0) {
+        dispatch({ type: 'RESET', looks: semanticallyOrderedLooks });
+      }
     }
   }, [activeFilter, committedQuery, shuffleKey, semanticallyOrderedLooks]);
 
@@ -601,94 +610,121 @@ export default function ContinuousFeed({
     return -1;
   }, [state.segments]);
 
-  // Empty-catalog state: shopper searched something we have nothing for.
-  // We only show this once the initial fetch has resolved (don't flash an
-  // empty state during the brief mount-to-data window) and only when the
-  // search bar has actual user intent in it (so unfiltered "all" never lands
-  // here, even on a brand-new install with zero data).
-  //
-  // When the semantic search is still in-flight (loading=true) or returned a
-  // cold-miss, we show the empty state with a "sourcing" flag so the copy
-  // reads "We're finding this for you" rather than "nothing here yet".
-  // Empty-catalog and sourcing states use committedQuery so they only
-  // appear after the search has resolved, not while the user is still typing.
+  // ── Stale-while-refresh ──────────────────────────────────────────────────
+  // Keep previous feed content visible at all times during a search refresh.
+  // The loader bar appears above, content swaps with a fade when results land.
+  // Empty results never blank the feed — they show a transient toast instead.
   const trimmedQuery = committedQuery.trim();
   const liveTrimmed = searchQuery.trim();
   const semanticActive = trimmedQuery.length >= 3;
-  // Pending = user has typed enough to fire semantic but it hasn't resolved yet.
   const semanticPending = !tier1Eligible && liveTrimmed.length >= 3 && (semantic.loading || liveTrimmed !== trimmedQuery);
-  const showEmptyState =
-    !creativesLoading &&
-    !semantic.loading &&
-    !semanticPending &&
-    trimmedQuery.length > 0 &&
-    renderedCreatives.length === 0 &&
-    semanticallyOrderedLooks.length === 0;
 
-  // While semantic search is loading (only for long-enough queries), show the
-  // sourcing state immediately so the user sees feedback during the round-trip.
-  // Tier-1 (catalog_tags) hits suppress the sourcing screen — if we already
-  // have results to render, don't flash a loading state.
-  const showSourcingState =
-    !showEmptyState &&
+  // Searching = any in-flight semantic fetch (loader bar is shown).
+  const isSearching =
     (semanticActive || semanticPending) &&
     (semantic.loading || semanticPending) &&
     renderedCreatives.length === 0 &&
     filteredLooks.length === 0;
 
-  if (showEmptyState || showSourcingState) {
-    return (
-      <EmptyCatalogState
-        // While sourcing, prefer the live query so a fresh "Shirts"
-        // search doesn't render under the previous "Pants" heading.
-        // Empty (committed) state still uses the committed query —
-        // that's the result the user actually got back.
-        catalogName={showSourcingState ? (liveTrimmed || trimmedQuery) : trimmedQuery}
-        isSourcing={showSourcingState || (showEmptyState && semantic.coldMiss)}
-      />
-    );
-  }
+  const [staleCreatives, setStaleCreatives] = useState<ProductAd[]>([]);
+  const [staleLooks, setStaleLooks] = useState<Look[]>([]);
+  const [feedContentKey, setFeedContentKey] = useState(0);
+  const prevSearchingRef = useRef(false);
+
+  // Cache last successful content for stale display.
+  useEffect(() => {
+    if (!isSearching && renderedCreatives.length > 0) setStaleCreatives(renderedCreatives);
+  }, [renderedCreatives, isSearching]);
+
+  useEffect(() => {
+    if (!isSearching && semanticallyOrderedLooks.length > 0) setStaleLooks(semanticallyOrderedLooks);
+  }, [semanticallyOrderedLooks, isSearching]);
+
+  // Toast state — fires when a search resolves with no results.
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Detect search resolving: loading → done transition.
+  useEffect(() => {
+    const justFinished = prevSearchingRef.current && !isSearching;
+    prevSearchingRef.current = isSearching;
+    if (!justFinished) return;
+
+    const hasResults = renderedCreatives.length > 0 || semanticallyOrderedLooks.length > 0;
+    if (hasResults) {
+      setFeedContentKey(k => k + 1);
+    } else if (liveTrimmed.length > 0) {
+      const label = liveTrimmed.length > 30 ? liveTrimmed.slice(0, 30) + '…' : liveTrimmed;
+      setToastMsg(`No results for "${label}"`);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToastMsg(null), 3000);
+    }
+  }, [isSearching, renderedCreatives.length, semanticallyOrderedLooks.length, liveTrimmed]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
+
+  // Show fresh data after load; stale data while loading; fall back to stale if fresh is empty.
+  const displayCreatives = isSearching
+    ? (staleCreatives.length > 0 ? staleCreatives : renderedCreatives)
+    : (renderedCreatives.length > 0 ? renderedCreatives : staleCreatives);
+  const displayLooks = isSearching
+    ? (staleLooks.length > 0 ? staleLooks : semanticallyOrderedLooks)
+    : (semanticallyOrderedLooks.length > 0 ? semanticallyOrderedLooks : staleLooks);
 
   return (
     <div className="continuous-feed" id="grid-viewport">
-      {state.segments.map((segment, idx) => {
-        if (segment.type === 'feed') {
+      {/* Top overlay loader — appears above existing content during search. */}
+      {isSearching && (
+        <div className="feed-search-loader" aria-hidden="true">
+          <div className="feed-search-loader-bar" />
+        </div>
+      )}
+      {/* No-results toast */}
+      {toastMsg && (
+        <div className="feed-no-results-toast" role="status">{toastMsg}</div>
+      )}
+      <div key={feedContentKey} className={feedContentKey > 0 ? 'feed-content-fadein' : undefined}>
+        {state.segments.map((segment, idx) => {
+          if (segment.type === 'feed') {
+            return (
+              <FeedSection
+                key={segment.id}
+                looks={segment.isInitial ? displayLooks : segment.looks}
+                onOpenLook={handleOpenLook}
+                onOpenCreator={onOpenCreator}
+                onCreateCatalog={onCreateCatalog}
+                onOpenCreativeProduct={handleOpenCreativeProduct}
+                creatives={segment.isInitial ? displayCreatives : undefined}
+                creativesLoading={segment.isInitial ? creativesLoading : false}
+                canDeleteCreative={canDeleteCreative}
+                onDeleteCreative={handleDeleteCreative}
+                title={segment.title}
+                isInitial={segment.isInitial}
+                layoutMode={layoutMode}
+                searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0)}
+                onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
+              />
+            );
+          }
           return (
-            <FeedSection
+            <div
               key={segment.id}
-              looks={segment.looks}
-              onOpenLook={handleOpenLook}
-              onOpenCreator={onOpenCreator}
-              onCreateCatalog={onCreateCatalog}
-              onOpenCreativeProduct={handleOpenCreativeProduct}
-              creatives={segment.isInitial ? renderedCreatives : undefined}
-              creativesLoading={segment.isInitial ? creativesLoading : false}
-              canDeleteCreative={canDeleteCreative}
-              onDeleteCreative={handleDeleteCreative}
-              title={segment.title}
-              isInitial={segment.isInitial}
-              layoutMode={layoutMode}
-              searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0)}
-              onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
-            />
+              ref={idx === lastDetailIdx ? lastDetailRef : undefined}
+            >
+              <InlineLookDetail
+                look={segment.look}
+                onOpenCreator={onOpenCreator}
+                onOpenBrowser={onOpenBrowser}
+                onOpenProduct={onOpenProduct}
+                onCreateCatalog={onCreateCatalog}
+                bookmarks={bookmarks}
+              />
+            </div>
           );
-        }
-        return (
-          <div
-            key={segment.id}
-            ref={idx === lastDetailIdx ? lastDetailRef : undefined}
-          >
-            <InlineLookDetail
-              look={segment.look}
-              onOpenCreator={onOpenCreator}
-              onOpenBrowser={onOpenBrowser}
-              onOpenProduct={onOpenProduct}
-              onCreateCatalog={onCreateCatalog}
-              bookmarks={bookmarks}
-            />
-          </div>
-        );
-      })}
+        })}
+      </div>
     </div>
   );
 }

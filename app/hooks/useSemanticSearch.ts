@@ -1,8 +1,9 @@
 // useSemanticSearch — debounced natural-language search hook.
 //
-// Calls the nl-search edge function after the user stops typing (500 ms debounce).
-// Returns ranked look IDs and product IDs along with loading/cold-miss state so
-// the calling component can reorder its local data without an extra fetch.
+// Calls the nl-search edge function after the user stops typing (200 ms debounce,
+// or immediately on Enter when `trigger` increments). Returns ranked creative
+// results plus loading / cold-miss / queryPlan state so the calling component
+// can render without an extra fetch.
 //
 // Only fires for queries of 3+ characters. Short queries fall back to the
 // existing local text filter in GridView (no API call).
