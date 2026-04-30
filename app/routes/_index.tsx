@@ -826,6 +826,7 @@ export default function Home() {
             onOpenBrowser={handleOpenBrowser}
             onOpenProduct={handleOpenProduct}
             onOpenCreative={handleOpenCreative}
+            onOpenBrand={handleOpenBrand}
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
             onSearchLoadingChange={handleSearchLoadingChange}
@@ -894,6 +895,7 @@ export default function Home() {
                 onOpenLook={handleOpenLook}
                 onOpenBrowser={handleOpenBrowser}
                 onOpenCreator={handleBookmarksOpenCreator}
+                onOpenBrand={handleOpenBrand}
               />
             </Suspense>
           )}

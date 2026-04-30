@@ -13,11 +13,12 @@ interface InlineLookDetailProps {
   onOpenCreator: (name: string) => void;
   onOpenBrowser: (url: string, title: string) => void;
   onOpenProduct?: (product: Product) => void;
+  onOpenBrand?: (brandName: string) => void;
   onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
 }
 
-export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, bookmarks }: InlineLookDetailProps) {
+export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, onOpenProduct, onOpenBrand, onCreateCatalog, bookmarks }: InlineLookDetailProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
@@ -138,7 +139,19 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
                 )}
               </div>
               <div className="inline-product-info">
-                {p.brand && <span className="inline-product-brand">{p.brand}</span>}
+                {p.brand && (
+                  onOpenBrand
+                    ? (
+                      <button
+                        type="button"
+                        className="inline-product-brand brand-link"
+                        onClick={(e) => { e.stopPropagation(); onOpenBrand(p.brand!); }}
+                      >
+                        {p.brand}
+                      </button>
+                    )
+                    : <span className="inline-product-brand">{p.brand}</span>
+                )}
                 <span className="inline-product-name">{p.name}</span>
                 <span className="inline-product-price">{p.price}</span>
               </div>

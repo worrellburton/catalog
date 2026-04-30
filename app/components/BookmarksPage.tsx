@@ -22,9 +22,10 @@ interface BookmarksPageProps {
   onOpenLook: (look: Look) => void;
   onOpenBrowser: (url: string, title: string) => void;
   onOpenCreator?: (handle: string) => void;
+  onOpenBrand?: (brandName: string) => void;
 }
 
-export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser, onOpenCreator }: BookmarksPageProps) {
+export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBrowser, onOpenCreator, onOpenBrand }: BookmarksPageProps) {
   const savedLooks = looks.filter(l => bookmarks.bookmarkedLooks.includes(l.id));
   const followedCreatorData = bookmarks.followedCreators
     .map(handle => ({ handle, data: creators[handle] }))
@@ -120,7 +121,19 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
                       }}
                       style={{ cursor: 'pointer' }}
                     >
-                      <span className="bp-brand">{p.brand || ''}</span>
+                      {p.brand
+                        ? (onOpenBrand
+                          ? (
+                            <button
+                              type="button"
+                              className="bp-brand brand-link"
+                              onClick={(e) => { e.stopPropagation(); onOpenBrand(p.brand!); }}
+                            >
+                              {p.brand}
+                            </button>
+                          )
+                          : <span className="bp-brand">{p.brand}</span>)
+                        : <span className="bp-brand"></span>}
                       <span className="bp-name">{p.name}</span>
                       <span className="bp-price">{p.price}</span>
                     </div>
