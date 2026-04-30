@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -106,8 +106,11 @@ export default function ContinuousFeed({
   const wasLoadingRef = useRef(false);
 
   // Short / empty queries: commit immediately (no semantic search fires).
+  // Tier-1 eligible queries (catalog types like "shoes") also commit
+  // immediately — we know nl-search is disabled for them and the tag
+  // fast-path will populate results within ~10 ms.
   useEffect(() => {
-    if (searchQuery.trim().length < 3) {
+    if (searchQuery.trim().length < 3 || !!resolveCatalogTypes(searchQuery)) {
       setCommittedQuery(searchQuery);
     }
   }, [searchQuery]);
@@ -172,7 +175,12 @@ export default function ContinuousFeed({
   // ranked looks float to the top. Falls back to the local text filter when
   // the edge function is unavailable or the query is too short.
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger });
+  // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
+  // "shoes", "pants"), the in-memory + DB tag fast-path will handle it in
+  // <50 ms. Skip the 4–8 s nl-search pipeline entirely in that case so the
+  // grid doesn't reflow a second time when nl-search resolves.
+  const tier1Eligible = !!resolveCatalogTypes(searchQuery);
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: !tier1Eligible });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the

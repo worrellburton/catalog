@@ -58,9 +58,9 @@ const EMPTY_STATE: Omit<SemanticSearchState, 'loadMore'> = {
 
 export function useSemanticSearch(
   query: string,
-  options: { gender?: string; userId?: string; k?: number; trigger?: number } = {}
+  options: { gender?: string; userId?: string; k?: number; trigger?: number; enabled?: boolean } = {}
 ): SemanticSearchState {
-  const { gender, userId, trigger = 0 } = options;
+  const { gender, userId, trigger = 0, enabled = true } = options;
   const [baseCreatives, setBaseCreatives] = useState<SemanticCreative[]>([]);
   const [loading, setLoading] = useState(false);
   const [coldMiss, setColdMiss] = useState(false);
@@ -140,7 +140,7 @@ export function useSemanticSearch(
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    if (query.trim().length < MIN_QUERY_LENGTH) {
+    if (!enabled || query.trim().length < MIN_QUERY_LENGTH) {
       abortRef.current?.abort();
       setBaseCreatives([]);
       setLoading(false);
@@ -165,7 +165,7 @@ export function useSemanticSearch(
     timerRef.current = setTimeout(() => runSearch(q, false), immediate ? 0 : DEBOUNCE_MS);
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, runSearch, trigger]);
+  }, [query, runSearch, trigger, enabled]);
 
   const loadMore = useCallback(() => {
     if (loading) return;
