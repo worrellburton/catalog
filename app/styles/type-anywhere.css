@@ -1,186 +1,189 @@
-/* Desktop "type-anywhere" search overlay.
-   Hidden until the user starts typing on the home grid; the letters
-   bloom at viewport center, on-brand and minimal. Mobile (≤768px)
-   keeps the BottomBar pill, so this whole layer is suppressed there
-   to avoid double-search UI. */
-.type-anywhere {
+/* Desktop AI-style search bar. Bottom-anchored, capped width.
+   Mobile (≤768px) uses the BottomBar pill — this whole layer is
+   suppressed there to avoid double-search UI. */
+.ai-bar-wrap {
   position: fixed;
-  inset: 0;
-  z-index: 80;
+  left: 0;
+  right: 0;
+  bottom: max(env(safe-area-inset-bottom), 24px);
+  z-index: 70;
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 220ms ease;
-  padding: 0 8vw;
-  text-align: center;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 0.55) 0%,
-    rgba(0, 0, 0, 0.32) 38%,
-    rgba(0, 0, 0, 0) 70%
-  );
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  padding: 0 24px;
 }
 
-.type-anywhere.is-visible {
-  opacity: 1;
+.ai-bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 720px;
+  min-height: 56px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 32px;
+  background: rgba(20, 20, 22, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #f5f5f7;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
-.type-anywhere-text {
+.ai-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.36),
+    0 0 0 3px rgba(255, 255, 255, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.ai-bar-icon-btn {
+  flex: 0 0 auto;
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
-  font-weight: 500;
-  font-size: clamp(32px, 6vw, 88px);
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ai-bar-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
-  text-shadow:
-    0 2px 18px rgba(0, 0, 0, 0.6),
-    0 0 24px rgba(255, 255, 255, 0.18),
-    0 0 48px rgba(255, 255, 255, 0.08);
-  max-width: 92vw;
-  word-break: break-word;
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
-.type-anywhere-value {
-  background: linear-gradient(
-    100deg,
-    #ffffff 0%,
-    #d8d8d8 35%,
-    #b6b6b6 50%,
-    #d8d8d8 65%,
-    #ffffff 100%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: type-anywhere-shine 4.5s ease-in-out infinite;
+.ai-bar-icon-btn.is-active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* While the helper hint is showing (no real text yet), tone the value
-   down so it reads as placeholder, not as the user's input. */
-.type-anywhere:not(.is-visible) .type-anywhere-value {
-  opacity: 0.55;
+/* Mic listening — soft red pulse so users see the recording state. */
+.ai-bar-icon-btn.is-listening {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fca5a5;
+  border-color: rgba(244, 63, 94, 0.4);
+  animation: ai-bar-mic-pulse 1.2s ease-in-out infinite;
 }
 
-.type-anywhere-caret {
-  display: inline-block;
-  width: 3px;
-  height: 0.9em;
-  background: #fff;
-  border-radius: 2px;
-  margin-left: 2px;
-  animation: type-anywhere-blink 1.05s steps(2, end) infinite;
-  align-self: center;
-  transform: translateY(0.05em);
+@keyframes ai-bar-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(244, 63, 94, 0); }
 }
 
-.type-anywhere-hint {
-  margin-top: 28px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
-}
-
-.type-anywhere-hint kbd {
-  display: inline-block;
-  font-family: inherit;
-  font-size: 10.5px;
-  padding: 2px 6px;
-  margin: 0 1px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.85);
-  letter-spacing: 0.04em;
-}
-
-@keyframes type-anywhere-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-@keyframes type-anywhere-shine {
-  0% { background-position: 100% 50%; }
-  50% { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
-}
-
-/* Centered "type anywhere to search" hint. Defaults to a soft
-   glass pill so the text stands out against busy grid videos;
-   loses the pill (becomes faint text only) once the user moves
-   the mouse, and dismisses entirely on scroll. */
-.type-anywhere-toast {
-  position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 70;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.42);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-  padding: 10px 22px;
-  border-radius: 999px;
+.ai-bar-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
   background: transparent;
-  border: 1px solid transparent;
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
-  pointer-events: none;
-  opacity: 0;
-  transition:
-    opacity 360ms ease,
-    background 480ms ease,
-    border-color 480ms ease,
-    color 360ms ease,
-    backdrop-filter 480ms ease,
-    -webkit-backdrop-filter 480ms ease;
+  color: inherit;
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: -0.005em;
 }
 
-.type-anywhere-toast.is-visible {
-  opacity: 1;
+.ai-bar-input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
 }
 
-/* "Kinda glass not really" — light translucent fill, gentle blur,
-   subtle ring. Soft enough that scrolling video underneath still
-   bleeds through, solid enough the text reads against it. */
-.type-anywhere-toast.is-solid {
-  background: rgba(20, 20, 22, 0.42);
-  border-color: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px) saturate(1.2);
-  -webkit-backdrop-filter: blur(8px) saturate(1.2);
-  color: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+/* Strip the search-input X UA decoration so it doesn't overlap our
+   send button on Chrome / Safari. */
+.ai-bar-input::-webkit-search-cancel-button,
+.ai-bar-input::-webkit-search-decoration { -webkit-appearance: none; }
+
+.ai-bar-send {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
 }
 
-.light-mode .type-anywhere-toast {
+.ai-bar-send:hover:not(:disabled) {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.ai-bar-send:disabled {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.42);
+  cursor: default;
+}
+
+/* Light mode — softer glass + dark icon set. */
+.light-mode .ai-bar {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #111;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.12),
+    0 1px 0 rgba(0, 0, 0, 0.04) inset;
+}
+
+.light-mode .ai-bar-icon-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.light-mode .ai-bar-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #111;
+  border-color: rgba(0, 0, 0, 0.16);
+}
+
+.light-mode .ai-bar-icon-btn.is-active {
+  background: rgba(0, 0, 0, 0.12);
+  color: #111;
+}
+
+.light-mode .ai-bar-input::placeholder {
   color: rgba(0, 0, 0, 0.42);
-  text-shadow: none;
 }
 
-.light-mode .type-anywhere-toast.is-solid {
-  background: rgba(255, 255, 255, 0.5);
-  border-color: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.78);
+.light-mode .ai-bar-send {
+  background: #111;
+  color: #fff;
+}
+
+.light-mode .ai-bar-send:hover:not(:disabled) {
+  background: #222;
+}
+
+.light-mode .ai-bar-send:disabled {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.4);
 }
 
 /* Mobile — hard hide, BottomBar takes over. */
 @media (max-width: 768px) {
-  .type-anywhere,
-  .type-anywhere-toast { display: none !important; }
+  .ai-bar-wrap { display: none !important; }
 }
+
+/* Flutter shell — hide on the native webview. The shell has its
+   own bottom UI and we don't want to stack our bar on top of it. */
+html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
