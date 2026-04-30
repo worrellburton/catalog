@@ -732,12 +732,13 @@ export function buildGenerationPrompt(opts: {
   durationSeconds?: number;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
+  // Strip brand + product names from the prompt — Bytedance/Seedance's
+  // partner_validation_failed filter rejects prompts that name specific
+  // commercial brands or trademarked product titles. Only the role tag
+  // (hat, jacket, sneakers, etc.) is kept so the model knows which slot
+  // each reference image fills, without tripping content moderation.
   const productList = opts.productLines
-    .map(p => {
-      const name = [p.brand, p.name].filter(Boolean).join(' ').trim();
-      if (p.role_tag && name) return `${p.role_tag.toLowerCase()} (${name})`;
-      return p.role_tag?.toLowerCase() || name || 'product';
-    })
+    .map(p => p.role_tag?.toLowerCase() || 'item')
     .filter(Boolean)
     .join(', ');
 

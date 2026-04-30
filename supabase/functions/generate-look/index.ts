@@ -79,6 +79,7 @@ async function tryFal(
   );
   if (!submit.ok) {
     const text = await submit.text();
+    console.error('[generate-look] Fal submit rejected', submit.status, text);
     return { status: submit.status, request_id: null, error: `${submit.status} ${text.slice(0, 400)}` };
   }
   const submitData = await submit.json() as { request_id?: string };
@@ -296,8 +297,12 @@ Deno.serve(async (req: Request) => {
   // so Seedance composes the subject in the right range rather than
   // guessing from the face photo alone.
   const faceTags = goodFaces.map((_, i) => `@Image${i + 1}`).join(' and ');
+  // Drop brand + product names from the per-reference clauses for the
+  // same reason buildGenerationPrompt drops them on the client side:
+  // Bytedance/Seedance partner_validation_failed fires on prompts that
+  // mention specific commercial brands or trademarked product titles.
   const productClauses = productsUsed.map((p, i) =>
-    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`,
+    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1})`,
   );
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
@@ -307,28 +312,31 @@ Deno.serve(async (req: Request) => {
   // route reference-to-video through /fast (Pro doesn't ship for
   // this variant), so clamp to 5.
   const durationSeconds = 5;
-  // Prefer the rich prompt the client built (carries framing,
-  // commercial cinematography, brand camera language) — the original
-  // tagged-prompt fallback below is only used if the client didn't
-  // ship one. Either way we replace any "5-second" string with the
-  // actual duration so the model is told the right clip length.
-  const clientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
-    ? gen.prompt
+  // Strip parenthetical brand/name annotations from any client-supplied
+  // prompt. Older client builds shipped patterns like "hat (Alo Yoga
+  // Velvet Off-Duty Cap - Black)" — Seedance rejects those. The new
+  // client only emits role tags, but until every shopper has the new
+  // bundle this regex is the safety belt.
+  function stripBrandAnnotations(p: string): string {
+    return p.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+  }
+  const rawClientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
+    ? stripBrandAnnotations(gen.prompt)
     : null;
   const fallbackPrompt = [
     `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.`,
     heightClause,
     ageClause,
     productClauses.length > 0
-      ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
+      ? `Dress them in: ${productClauses.join(', ')}. Match the colors and silhouette of each reference garment.`
       : 'Dress them in the provided products.',
     `Natural full-body motion, ${durationSeconds}-second portrait clip${styleSuffix}.`,
   ].filter(Boolean).join(' ');
   // Always re-prepend the @ImageN binding lines so Seedance binds
   // each reference photo to its tag even when the client supplied
   // a fully-formed prompt without them.
-  const taggedPrompt = clientPrompt
-    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${clientPrompt}`
+  const taggedPrompt = rawClientPrompt
+    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${rawClientPrompt}`
     : fallbackPrompt;
 
   // Webhook: Fal POSTs the result to /functions/v1/fal-webhook when
