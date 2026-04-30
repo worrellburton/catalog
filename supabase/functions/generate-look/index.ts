@@ -65,6 +65,7 @@ async function tryFal(
   durationSeconds: number,
   falKey: string,
   webhookUrl: string,
+  endUserId: string,
 ): Promise<{ status: number; request_id: string | null; error: string | null }> {
   const submit = await fetch(
     `${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
@@ -81,6 +82,13 @@ async function tryFal(
         aspect_ratio: '9:16',
         resolution: '720p',
         generate_audio: false,
+        // Bytedance/Seedance enforces a non-null end_user_id for
+        // content-moderation accounting (April 30 2026 silent change).
+        // Sending null bounces every job with partner_validation_failed.
+        // Pass the shopper's stable supabase user_id; it's an opaque
+        // UUID so it functions as a per-user moderation key without
+        // leaking PII.
+        end_user_id: endUserId,
       }),
     },
   );
@@ -103,6 +111,7 @@ async function submitFal(
   _durationSeconds: number,
   falKey: string,
   webhookUrl: string,
+  endUserId: string,
 ): Promise<{ request_id: string | null; model_slug: string; error: string | null; fellBack: boolean }> {
   // Walk MODEL_SLUGS top to bottom. A 404 from a worker means the slug
   // isn't routed at Fal — keep trying. Anything else (200 with a
@@ -112,7 +121,7 @@ async function submitFal(
   // burn one round-trip each before falling back to /fast.
   const errors: string[] = [];
   for (const slug of MODEL_SLUGS) {
-    const r = await tryFal(slug, prompt, referenceImageUrls, 5, falKey, webhookUrl);
+    const r = await tryFal(slug, prompt, referenceImageUrls, 5, falKey, webhookUrl, endUserId);
     if (r.request_id) {
       const fellBack = wantsPro && slug === MODEL_SLUG_FAST;
       console.log('[generate-look] submit accepted by', slug);
@@ -431,7 +440,7 @@ Deno.serve(async (req: Request) => {
     model: gen.model,
   }).slice(0, 1500));
   const { request_id, model_slug, error, fellBack } = await submitFal(
-    taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl,
+    taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl, gen.user_id,
   );
   if (fellBack) {
     console.log('[generate-look] gen=', generationId, 'requested pro, fell back to fast');
