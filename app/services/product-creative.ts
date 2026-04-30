@@ -76,7 +76,7 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, images, url, catalog_tags)
+  product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
 `;
 
 export async function getProductAds(): Promise<ProductAd[]> {

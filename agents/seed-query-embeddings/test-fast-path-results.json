@@ -1,0 +1,391 @@
+{
+  "timestamp": "2026-04-30T12:48:36.886Z",
+  "liveCreativesLoadMs": 3561,
+  "liveCreativesCount": 185,
+  "summary": {
+    "hits": 10,
+    "misses": 2,
+    "avgDbMs": 519,
+    "maxDbMs": 666
+  },
+  "results": [
+    {
+      "term": "shoes",
+      "resolvedTypes": [
+        "Sneakers",
+        "Boots",
+        "Sandals",
+        "Heels",
+        "Loafers",
+        "Flats",
+        "Mules"
+      ],
+      "inMemoryRows": 4,
+      "inMemoryMs": 0,
+      "dbRows": 4,
+      "dbMs": 666,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "beba7ba2-8f60-4dcc-8a47-8b8fe189d470",
+          "product_name": "rag & bone Women's Retro Runner Sneaker",
+          "product_brand": "Rag & Bone",
+          "product_type": "Sneakers",
+          "gender": "female"
+        },
+        {
+          "creative_id": "45305861-2331-4d66-ac2a-9dd116eb26fc",
+          "product_name": "rag & bone Women's Retro Runner Sneaker",
+          "product_brand": "Rag & Bone",
+          "product_type": "Sneakers",
+          "gender": "female"
+        },
+        {
+          "creative_id": "eaa2bfc9-4262-4bf2-9748-c1c849082829",
+          "product_name": "Men B GRADE Tracksmith Eliot Runner",
+          "product_brand": "Tracksmith",
+          "product_type": "Sneakers",
+          "gender": "male"
+        }
+      ]
+    },
+    {
+      "term": "pants",
+      "resolvedTypes": [
+        "Pants"
+      ],
+      "inMemoryRows": 4,
+      "inMemoryMs": 0,
+      "dbRows": 4,
+      "dbMs": 455,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "8f28a3b0-b356-43e9-92de-1d0e10d1744f",
+          "product_name": "High-Waist Origin Wide Leg Track Pant - Navy/Black",
+          "product_brand": "ALO",
+          "product_type": "Pants",
+          "gender": null
+        },
+        {
+          "creative_id": "359fa375-a3d8-4d98-b4af-b977106ca157",
+          "product_name": "High-Waist Origin Wide Leg Track Pant - Navy/Black",
+          "product_brand": "ALO",
+          "product_type": "Pants",
+          "gender": null
+        },
+        {
+          "creative_id": "f2506f79-913a-4615-807c-2c5016eeea75",
+          "product_name": "Alo Accolade Straight Leg Sweatpant",
+          "product_brand": "ALO",
+          "product_type": "Pants",
+          "gender": null
+        }
+      ]
+    },
+    {
+      "term": "tops",
+      "resolvedTypes": [
+        "Top"
+      ],
+      "inMemoryRows": 38,
+      "inMemoryMs": 0,
+      "dbRows": 38,
+      "dbMs": 594,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "8268558a-a622-4ce9-877d-b4105a8672de",
+          "product_name": "Triumph Raglan Tee - Steel Grey",
+          "product_brand": "Alo Yoga",
+          "product_type": "Top",
+          "gender": null
+        },
+        {
+          "creative_id": "d3773263-d353-4975-a6f2-5f9495b85488",
+          "product_name": "Triumph Raglan Tee - Steel Grey",
+          "product_brand": "Alo Yoga",
+          "product_type": "Top",
+          "gender": null
+        },
+        {
+          "creative_id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+          "product_name": "Gregory Crewneck Sweater - Desert Sand",
+          "product_brand": "rag & bone",
+          "product_type": "Top",
+          "gender": "male"
+        }
+      ]
+    },
+    {
+      "term": "shirts",
+      "resolvedTypes": [
+        "Top"
+      ],
+      "inMemoryRows": 38,
+      "inMemoryMs": 0,
+      "dbRows": 38,
+      "dbMs": 467,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "8268558a-a622-4ce9-877d-b4105a8672de",
+          "product_name": "Triumph Raglan Tee - Steel Grey",
+          "product_brand": "Alo Yoga",
+          "product_type": "Top",
+          "gender": null
+        },
+        {
+          "creative_id": "d3773263-d353-4975-a6f2-5f9495b85488",
+          "product_name": "Triumph Raglan Tee - Steel Grey",
+          "product_brand": "Alo Yoga",
+          "product_type": "Top",
+          "gender": null
+        },
+        {
+          "creative_id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+          "product_name": "Gregory Crewneck Sweater - Desert Sand",
+          "product_brand": "rag & bone",
+          "product_type": "Top",
+          "gender": "male"
+        }
+      ]
+    },
+    {
+      "term": "jackets",
+      "resolvedTypes": [
+        "Jacket"
+      ],
+      "inMemoryRows": 7,
+      "inMemoryMs": 0,
+      "dbRows": 7,
+      "dbMs": 410,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "67a47a2e-4ee1-4379-beb8-079303783b8b",
+          "product_name": "Alpha Industries Women's MA-1 Bomber Jacket",
+          "product_brand": "Alpha Industries",
+          "product_type": "Jacket",
+          "gender": "female"
+        },
+        {
+          "creative_id": "3c034685-56a0-475c-88e6-211ef298aa82",
+          "product_name": "Sterling & Stitch Women's Cotton Pieced Denim Jacket",
+          "product_brand": "Sterling & Stitch",
+          "product_type": "Jacket",
+          "gender": "female"
+        },
+        {
+          "creative_id": "6e3a4a1e-6d93-4b42-a0a7-54e5303735cf",
+          "product_name": "Sterling & Stitch Women's Cotton Pieced Denim Jacket",
+          "product_brand": "Sterling & Stitch",
+          "product_type": "Jacket",
+          "gender": "female"
+        }
+      ]
+    },
+    {
+      "term": "shorts",
+      "resolvedTypes": [
+        "Shorts"
+      ],
+      "inMemoryRows": 12,
+      "inMemoryMs": 0,
+      "dbRows": 12,
+      "dbMs": 540,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "a565cdc3-b405-44b9-88ec-2693cef2309d",
+          "product_name": "Mesh Mirage Short - White",
+          "product_brand": "Alo Yoga",
+          "product_type": "Shorts",
+          "gender": null
+        },
+        {
+          "creative_id": "9405dcc1-fa6f-49a1-a691-c750abd0cd57",
+          "product_name": "Mesh Mirage Short - White",
+          "product_brand": "Alo Yoga",
+          "product_type": "Shorts",
+          "gender": null
+        },
+        {
+          "creative_id": "45c69d69-d6f0-46eb-96fc-eaf74c6aba31",
+          "product_name": "Game Time Short",
+          "product_brand": "Alo Yoga",
+          "product_type": "Shorts",
+          "gender": null
+        }
+      ]
+    },
+    {
+      "term": "dresses",
+      "resolvedTypes": [
+        "Dress"
+      ],
+      "inMemoryRows": 4,
+      "inMemoryMs": 0,
+      "dbRows": 4,
+      "dbMs": 455,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "59bfeac9-eb40-421c-a6fa-d24db30337a6",
+          "product_name": "Breezy Tennis Dress - Black",
+          "product_brand": "Alo Yoga",
+          "product_type": "Dress",
+          "gender": null
+        },
+        {
+          "creative_id": "8b6c971f-ab4a-4fd9-b80c-f1f38f8b37f7",
+          "product_name": "Breezy Tennis Dress - Black",
+          "product_brand": "Alo Yoga",
+          "product_type": "Dress",
+          "gender": null
+        },
+        {
+          "creative_id": "4332ecb1-c802-428b-8d2a-ac27c2d77216",
+          "product_name": "Cupshe Women's Perfect Tan Lines Cover-Up Mini Beach Dress",
+          "product_brand": "Cupshe",
+          "product_type": "Dress",
+          "gender": "female"
+        }
+      ]
+    },
+    {
+      "term": "hats",
+      "resolvedTypes": [
+        "Hat"
+      ],
+      "inMemoryRows": 8,
+      "inMemoryMs": 0,
+      "dbRows": 8,
+      "dbMs": 653,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "aa022b22-7d59-4ebb-98b2-6b7e7b9c7e9a",
+          "product_name": "Courchevel Cashmere Beanie - Alpine Cocoa Heather",
+          "product_brand": "ALO",
+          "product_type": "Hat",
+          "gender": null
+        },
+        {
+          "creative_id": "8548fe9b-9710-47f7-8688-8a713fa1914e",
+          "product_name": "Courchevel Cashmere Beanie - Alpine Cocoa Heather",
+          "product_brand": "ALO",
+          "product_type": "Hat",
+          "gender": null
+        },
+        {
+          "creative_id": "46246869-fd01-40f9-9aab-364dd1037ad7",
+          "product_name": "Velvet Off-Duty Cap - Black",
+          "product_brand": "Alo Yoga",
+          "product_type": "Hat",
+          "gender": null
+        }
+      ]
+    },
+    {
+      "term": "activewear",
+      "resolvedTypes": [
+        "Activewear"
+      ],
+      "inMemoryRows": 4,
+      "inMemoryMs": 0,
+      "dbRows": 4,
+      "dbMs": 448,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "ec9892f2-7e29-4c0c-8432-662b641b6cbb",
+          "product_name": "7/8 High-Waist Airlift Legging - Candy Red",
+          "product_brand": "ALO",
+          "product_type": "Activewear",
+          "gender": null
+        },
+        {
+          "creative_id": "80dc0166-09ec-4650-be84-9c24d7411ea1",
+          "product_name": "7/8 High-Waist Airlift Legging - Candy Red",
+          "product_brand": "ALO",
+          "product_type": "Activewear",
+          "gender": null
+        },
+        {
+          "creative_id": "68c43029-df46-435e-a792-798969d54309",
+          "product_name": "High-Waist Airlift Legging - Seashell Blue",
+          "product_brand": "Alo Yoga",
+          "product_type": "Activewear",
+          "gender": null
+        }
+      ]
+    },
+    {
+      "term": "sneakers",
+      "resolvedTypes": [
+        "Sneakers"
+      ],
+      "inMemoryRows": 4,
+      "inMemoryMs": 0,
+      "dbRows": 4,
+      "dbMs": 502,
+      "tier1Hit": true,
+      "error": null,
+      "sample": [
+        {
+          "creative_id": "beba7ba2-8f60-4dcc-8a47-8b8fe189d470",
+          "product_name": "rag & bone Women's Retro Runner Sneaker",
+          "product_brand": "Rag & Bone",
+          "product_type": "Sneakers",
+          "gender": "female"
+        },
+        {
+          "creative_id": "45305861-2331-4d66-ac2a-9dd116eb26fc",
+          "product_name": "rag & bone Women's Retro Runner Sneaker",
+          "product_brand": "Rag & Bone",
+          "product_type": "Sneakers",
+          "gender": "female"
+        },
+        {
+          "creative_id": "eaa2bfc9-4262-4bf2-9748-c1c849082829",
+          "product_name": "Men B GRADE Tracksmith Eliot Runner",
+          "product_brand": "Tracksmith",
+          "product_type": "Sneakers",
+          "gender": "male"
+        }
+      ]
+    },
+    {
+      "term": "furniture",
+      "resolvedTypes": null,
+      "inMemoryRows": 0,
+      "inMemoryMs": 0,
+      "dbRows": 0,
+      "dbMs": 0,
+      "tier1Hit": false,
+      "error": null,
+      "sample": []
+    },
+    {
+      "term": "blazer",
+      "resolvedTypes": null,
+      "inMemoryRows": 0,
+      "inMemoryMs": 0,
+      "dbRows": 0,
+      "dbMs": 0,
+      "tier1Hit": false,
+      "error": null,
+      "sample": []
+    }
+  ]
+}
