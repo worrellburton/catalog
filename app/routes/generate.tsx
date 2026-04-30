@@ -513,15 +513,18 @@ export default function GeneratePage() {
     if (slotForProgress >= 0) setUploadProgress({ slot: slotForProgress, pct: 0 });
 
     // Fal/Seedance partner-validates every reference image and rejects
-    // anything outside plain 8-bit sRGB JPEG/PNG. The two failure modes
-    // we hit in practice are iPhone HEIC (Bytedance can't decode it) and
-    // iPhone HDR screenshots saved as 16-bit-per-channel PNG. Both kill
-    // the whole job with 422 partner_validation_failed.
+    // anything outside plain 8-bit sRGB JPEG/PNG. Three failure modes we
+    // saw in practice: iPhone HEIC (Bytedance can't decode it), iPhone
+    // HDR screenshots saved as 16-bit-per-channel PNG, and iPhone
+    // screenshots in 9:19.5 aspect ratio that fall outside Seedance's
+    // accepted input window. All three kill the job with 422
+    // partner_validation_failed.
     //
     // Solution: pipe every upload through createImageBitmap → canvas →
     // toBlob('image/jpeg'). HEIC gets pre-decoded with heic2any (lazy-
-    // loaded). The canvas pass normalizes bit depth, color profile,
-    // EXIF rotation, and any alpha channel so what reaches storage is
+    // loaded). The canvas pass normalizes bit depth + color profile +
+    // EXIF rotation + alpha channel, center-crops to 9:16 to match the
+    // generation aspect ratio, and caps long-edge at 1920 px. Output is
     // always a standard sRGB 8-bit baseline JPEG.
     const nameLower = file.name.toLowerCase();
     const isHeic = file.type === 'image/heic'
@@ -538,16 +541,41 @@ export default function GeneratePage() {
       }
       const bitmap = await createImageBitmap(source, { imageOrientation: 'from-image' });
       try {
+        // Center-crop to 9:16 portrait. iPhone screenshots come in at
+        // 9:19.5 which sometimes trips Seedance's input validator.
+        const TARGET_W = 9;
+        const TARGET_H = 16;
+        const targetRatio = TARGET_W / TARGET_H;
+        const srcRatio = bitmap.width / bitmap.height;
+        let cropX = 0, cropY = 0, cropW = bitmap.width, cropH = bitmap.height;
+        if (srcRatio > targetRatio) {
+          cropW = Math.round(bitmap.height * targetRatio);
+          cropX = Math.round((bitmap.width - cropW) / 2);
+        } else if (srcRatio < targetRatio) {
+          cropH = Math.round(bitmap.width / targetRatio);
+          cropY = Math.round((bitmap.height - cropH) / 2);
+        }
+        // Cap the long edge at 1920 px so the JPEG stays under Fal's
+        // 30 MB ceiling and Bytedance's input-resolution limits.
+        const MAX_EDGE = 1920;
+        let outW = cropW;
+        let outH = cropH;
+        const longEdge = Math.max(outW, outH);
+        if (longEdge > MAX_EDGE) {
+          const scale = MAX_EDGE / longEdge;
+          outW = Math.round(outW * scale);
+          outH = Math.round(outH * scale);
+        }
         const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
+        canvas.width = outW;
+        canvas.height = outH;
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas 2D context unavailable');
         // Flatten any alpha channel onto white so transparent PNGs don't
         // produce a JPEG with black artifacts.
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(bitmap, 0, 0);
+        ctx.fillRect(0, 0, outW, outH);
+        ctx.drawImage(bitmap, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
         const blob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.92);
         });
