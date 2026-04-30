@@ -27,6 +27,7 @@ import "./styles/grid-view.css";
 import "./styles/look-overlay.css";
 import "./styles/product-page.css";
 import "./styles/creator-page.css";
+import "./styles/brand-page.css";
 import "./styles/user-menu.css";
 import "./styles/in-app-browser.css";
 import "./styles/light-mode.css";
