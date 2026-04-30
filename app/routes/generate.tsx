@@ -505,26 +505,39 @@ export default function GeneratePage() {
   // first empty slot.
   const uploadFileIntoSlot = async (file: File, targetSlot: number | null) => {
     if (!user?.id) return;
-    // Fal/Seedance can't decode HEIC, and Safari/iOS file pickers will
-    // hand back a HEIC even when our accept list excludes it. Reject up
-    // front so the user converts to JPEG/PNG before the upload, rather
-    // than discovering it after the generation 422s.
-    const nameLower = file.name.toLowerCase();
-    const isHeic = file.type === 'image/heic'
-      || file.type === 'image/heif'
-      || nameLower.endsWith('.heic')
-      || nameLower.endsWith('.heif');
-    if (isHeic) {
-      setUploadError('HEIC photos aren’t supported. Please use JPEG, PNG, or WebP.');
-      return;
-    }
     setUploading(true);
     setUploadError(null);
     const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
       ? targetSlot
       : slots.indexOf(null);
     if (slotForProgress >= 0) setUploadProgress({ slot: slotForProgress, pct: 0 });
-    const { data, error } = await uploadUserPhoto(file, user.id, (pct) => {
+
+    // Fal/Seedance can't decode HEIC and the whole job 422s if we ship
+    // one. iPhones default to HEIC, so transcode to JPEG in the browser
+    // before upload. heic2any is lazy-loaded so we only pay the ~50KB
+    // cost when a HEIC actually shows up.
+    const nameLower = file.name.toLowerCase();
+    const isHeic = file.type === 'image/heic'
+      || file.type === 'image/heif'
+      || nameLower.endsWith('.heic')
+      || nameLower.endsWith('.heif');
+    let fileToUpload = file;
+    if (isHeic) {
+      try {
+        const { default: heic2any } = await import('heic2any');
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+        const blob = Array.isArray(converted) ? converted[0] : converted;
+        const baseName = file.name.replace(/\.(heic|heif)$/i, '');
+        fileToUpload = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      } catch (err) {
+        setUploading(false);
+        setUploadProgress(null);
+        setUploadError(err instanceof Error ? `Couldn’t convert HEIC: ${err.message}` : 'Couldn’t convert HEIC photo. Please pick a JPEG or PNG.');
+        return;
+      }
+    }
+
+    const { data, error } = await uploadUserPhoto(fileToUpload, user.id, (pct) => {
       setUploadProgress(prev => prev?.slot === slotForProgress
         ? { slot: slotForProgress, pct }
         : prev);
@@ -548,7 +561,14 @@ export default function GeneratePage() {
   const onSlotDrop = (slotIndex: number, e: React.DragEvent) => {
     e.preventDefault();
     setDragSlots(prev => { const next = new Set(prev); next.delete(slotIndex); return next; });
-    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+    // HEIC files often report no mime type on drop, so fall back to the
+    // file extension. uploadFileIntoSlot will transcode HEIC→JPEG before
+    // it hits storage.
+    const file = Array.from(e.dataTransfer.files).find(f => {
+      if (f.type.startsWith('image/')) return true;
+      const n = f.name.toLowerCase();
+      return n.endsWith('.heic') || n.endsWith('.heif');
+    });
     if (!file) return;
     uploadFileIntoSlot(file, slotIndex);
   };
@@ -795,7 +815,7 @@ export default function GeneratePage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 hidden
                 onChange={onFileInput}
               />
