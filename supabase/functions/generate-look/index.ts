@@ -223,6 +223,25 @@ Deno.serve(async (req: Request) => {
     } catch { return false; }
   }
 
+  // 16-bit-per-channel PNGs (iPhone HDR screenshots saved at 1179×2556
+  // are the canonical case) also trigger partner_validation_failed. Sniff
+  // the IHDR chunk: 8-byte PNG signature + 4-byte length + 4-byte type
+  // ("IHDR") + 4-byte width + 4-byte height puts bit-depth at offset 24.
+  // Anything > 8 we reject.
+  async function isPng16Bit(url: string): Promise<boolean> {
+    try {
+      const r = await fetch(url, { headers: { Range: 'bytes=0-32' } });
+      if (!r.ok) return false;
+      const buf = new Uint8Array(await r.arrayBuffer());
+      if (buf.length < 25) return false;
+      const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+      if (!isPng) return false;
+      return buf[24] > 8;
+    } catch {
+      return false;
+    }
+  }
+
   async function isImageUrlOk(url: string): Promise<boolean> {
     if (isHostBlocked(url)) return false;
     try {
@@ -233,6 +252,7 @@ Deno.serve(async (req: Request) => {
       if (isHeicUrl(url, ct)) return false;
       const len = Number(r.headers.get('content-length') || '0');
       if (len > 30 * 1024 * 1024) return false; // Fal cap is 30 MB per image
+      if (ct === 'image/png' && await isPng16Bit(url)) return false;
       return true;
     } catch {
       return false;
