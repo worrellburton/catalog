@@ -769,6 +769,15 @@ html[data-shell="catalog-app"] .gen-page {
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.4;
+  /* Hard-cap the box at the parent's width so a single unbroken token
+     (a long URL with no spaces) can't push the box wider than the
+     viewport. min-width: 0 is the trick that lets word-break actually
+     win against flex/grid intrinsic-size machinery in parent layouts. */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .gen-error-summary {
@@ -806,6 +815,21 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fecaca;
   max-height: 220px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.gen-error-build {
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(252, 165, 165, 0.55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .gen-error-details dl { margin: 0; }
@@ -1302,6 +1326,12 @@ html[data-shell="catalog-app"] .gen-page {
 
 .gen-result-stage {
   width: 100%;
+  /* min-width: 0 lets flex children (like .gen-error) actually shrink
+     to the parent's box width instead of being sized to their intrinsic
+     content. Without it a single unbroken JSON blob inside .gen-error
+     pushes the whole stage past the viewport on mobile. */
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
