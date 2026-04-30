@@ -176,11 +176,11 @@ export default function ContinuousFeed({
   // the edge function is unavailable or the query is too short.
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
-  // "shoes", "pants"), the in-memory + DB tag fast-path will handle it in
-  // <50 ms. Skip the 4–8 s nl-search pipeline entirely in that case so the
-  // grid doesn't reflow a second time when nl-search resolves.
+  // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
+  // We still run semantic in the background to broaden coverage, but we
+  // suppress the pending/loading UX so the UI stays instant.
   const tier1Eligible = !!resolveCatalogTypes(searchQuery);
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: !tier1Eligible });
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the
@@ -196,7 +196,7 @@ export default function ContinuousFeed({
   // Notify parent of pending search state so it can show a spinner in the
   // search bar. "Pending" = user typed something long enough for semantic
   // but results haven't arrived yet.
-  const isSearchPending = searchQuery.trim().length >= 3 && (
+  const isSearchPending = !tier1Eligible && searchQuery.trim().length >= 3 && (
     searchQuery !== committedQuery || semantic.loading
   );
   useEffect(() => {
@@ -616,7 +616,7 @@ export default function ContinuousFeed({
   const liveTrimmed = searchQuery.trim();
   const semanticActive = trimmedQuery.length >= 3;
   // Pending = user has typed enough to fire semantic but it hasn't resolved yet.
-  const semanticPending = liveTrimmed.length >= 3 && (semantic.loading || liveTrimmed !== trimmedQuery);
+  const semanticPending = !tier1Eligible && liveTrimmed.length >= 3 && (semantic.loading || liveTrimmed !== trimmedQuery);
   const showEmptyState =
     !creativesLoading &&
     !semantic.loading &&
