@@ -38,15 +38,21 @@ const FAL_BASE = 'https://queue.fal.run';
 // Seedance 2 reference-to-video model slugs in priority order. We
 // walk this list at submit time and use the first slug Fal accepts.
 //
-// Why a list: the /fast variant historically accepted up to 9 reference
-// images, but on Apr 30 2026 Fal/Bytedance silently changed routing on
-// /fast so multi-image payloads started bouncing with
-// partner_validation_failed even though the same payload worked
-// Apr 25-29. The /pro and /reference-to-video slugs used to 404 at the
-// worker but Fal may have shipped them since — try those first now,
-// fall back to /fast as the safety net.
+// /fast historically worked with multi-image input but Fal silently
+// changed routing on Apr 30 2026 so /fast now bounces multi-image
+// payloads with partner_validation_failed.
+//
+// /pro/reference-to-video is empirically a queue-accepts-worker-404
+// black hole (see gen 7140a01b 2026-04-30): the queue returns a
+// request_id so our submit-time retry loop can't detect the failure,
+// then the worker rejects later via webhook with "Path /pro/
+// reference-to-video not found". Drop it from the rotation until Fal
+// actually routes it.
+//
+// /reference-to-video (bare slug) is the wild card — historically
+// also 404'd at worker but Fal may have shipped it. Try it first.
+// /fast is the always-routed fallback.
 const MODEL_SLUGS: string[] = [
-  'bytedance/seedance-2.0/pro/reference-to-video',
   'bytedance/seedance-2.0/reference-to-video',
   'bytedance/seedance-2.0/fast/reference-to-video',
 ];
