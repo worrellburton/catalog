@@ -468,12 +468,16 @@ export default function Home() {
     setCreatorFilter(null);
   }, []);
 
-  // Brand catalog overlay. Opening from a product detail or look
-  // overlay clears the selected product / look so the BrandPage
-  // becomes the foreground; closing it surfaces the previous layer
-  // again unchanged because we never unmounted the underlying state.
+  // Brand catalog overlay. Opening from a product detail (or any
+  // higher-stacked modal) closes those overlays so the new brand
+  // catalog comes to the foreground. Without this, a tap on the
+  // brand label inside ProductPage would silently update the
+  // BrandPage *underneath* the still-visible ProductPage.
   const handleOpenBrand = useCallback((brandName: string) => {
     if (!brandName) return;
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedLook(null);
     setBrandFilter(brandName);
   }, []);
 
