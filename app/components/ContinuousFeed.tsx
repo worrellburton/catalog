@@ -180,7 +180,11 @@ export default function ContinuousFeed({
   // We still run semantic in the background to broaden coverage, but we
   // suppress the pending/loading UX so the UI stays instant.
   const tier1Eligible = !!resolveCatalogTypes(searchQuery);
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
+  // Skip nl-search entirely for tier-1 catalog queries — the in-memory +
+  // DB tag fast-path already returns the full type-constrained result set
+  // in <50ms, so paying for an OpenAI embed + edge-function round-trip
+  // (often 5-10s on cold starts) just to re-rank the same rows is waste.
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: !tier1Eligible });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the

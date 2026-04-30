@@ -63,13 +63,22 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   sweater:      ['Top'],
   hoodies:      ['Top'],
   hoodie:       ['Top'],
-  // Bottoms
-  pants:        ['Pants'],
-  pant:         ['Pants'],
+  // Bottoms — "pants" is generic shopper speech: yoga pants/leggings get
+  // tagged Activewear, athletic shorts get tagged Shorts. Map the generic
+  // term to the full bottom-wear set so users see the breadth they expect.
+  // Specific terms (jeans, trousers) stay narrow.
+  pants:        ['Pants', 'Shorts', 'Activewear'],
+  pant:         ['Pants', 'Shorts', 'Activewear'],
+  bottoms:      ['Pants', 'Shorts', 'Skirt', 'Activewear'],
   trousers:     ['Pants'],
   trouser:      ['Pants'],
   jeans:        ['Pants'],
   jean:         ['Pants'],
+  leggings:     ['Activewear', 'Pants'],
+  legging:      ['Activewear', 'Pants'],
+  joggers:      ['Pants', 'Activewear'],
+  jogger:       ['Pants', 'Activewear'],
+  sweatpants:   ['Pants', 'Activewear'],
   shorts:       ['Shorts'],
   short:        ['Shorts'],
   skirts:       ['Skirt'],
