@@ -197,10 +197,16 @@ function detectBrandTones(
     if (hit) {
       if (!seen.has(hit.key)) seen.set(hit.key, { key: hit.key, tone: hit.tone, camera: hit.camera });
     } else {
+      // Brand isn't in BRAND_COMMERCIAL_TONES. Fall back to a generic
+      // commercial template — do NOT inject the brand name into the
+      // prompt (Bytedance content moderation rejects naked brand
+      // mentions and we don't have a curated visual language for this
+      // brand anyway). Key the seen-map by brand so we still dedupe,
+      // but the rendered prompt stays brand-neutral.
       if (!seen.has(brand)) {
         seen.set(brand, {
           key: brand,
-          tone: `${brand} house-style spot, hero pacing, on-brand palette, polished grade`,
+          tone: 'polished house-style spot, hero pacing, on-brand palette, polished grade',
           camera: 'cinematic dolly-in, hero low-angle, single rack focus to product detail, motion-blur transition that reads as a cut',
         });
       }

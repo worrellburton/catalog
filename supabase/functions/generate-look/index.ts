@@ -314,27 +314,48 @@ Deno.serve(async (req: Request) => {
   const durationSeconds = 5;
   // Scrub brand-trademarked names from any client-supplied prompt so
   // Bytedance's partner_validation_failed filter doesn't kill the job.
-  // Older client bundles shipped two patterns we have to handle:
+  // Older client bundles shipped patterns like:
   //   1. Parenthetical product annotations: "hat (Alo Yoga Velvet Cap)".
-  //   2. Naked brand mentions baked into the commercial-style prompt:
-  //      "Cast them as the lead in a Alo Yoga × Thursday crossover
-  //      commercial — meshing Alo Yoga house-style spot ..."
-  // Strip both. The list mirrors BRAND_COMMERCIAL_TONES on the client.
-  // For unknown brands we'd need a generic dictionary; covering the
-  // tone-presets is enough today because those are the only ones the
-  // commercial style names verbatim.
-  const BRAND_NAMES_TO_STRIP: RegExp[] = [
+  //   2. Naked brand mentions in the commercial-style fallback path:
+  //      "...meshing Alo Yoga house-style spot ... meshing Thursday
+  //      house-style spot ..."
+  // Build the strip-list dynamically from the products actually picked
+  // for THIS generation. That covers every brand a shopper might see,
+  // not just a curated list we'd have to keep in sync. Still keep a
+  // hardcoded baseline so prompts that name brands the shopper didn't
+  // pick (e.g. inspirational mentions) get scrubbed too.
+  const STATIC_BRAND_STRIP: RegExp[] = [
     /\bnike\b/gi, /\badidas\b/gi, /\blululemon\b/gi, /\bunder\s*armour\b/gi,
     /\bpuma\b/gi, /\breebok\b/gi, /\bgap\b/gi, /\blevi'?s?\b/gi,
     /\bralph\s*lauren\b/gi, /\bbrooks\s*brothers\b/gi, /\btommy\s*hilfiger\b/gi,
     /\blacoste\b/gi, /\buniqlo\b/gi, /\bzara\b/gi, /\bh&m\b/gi, /\bhennes\b/gi,
     /\bpatagonia\b/gi, /\bnorth\s*face\b/gi, /\bcolumbia\b/gi,
-    /\balo\s*yoga\b/gi, /\balo\b/gi, /\bthursday\s*boots\b/gi, /\bthursday\b/gi,
-    /\brag\s*&\s*bone\b/gi, /\brag\s*and\s*bone\b/gi,
   ];
+  function escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  const dynamicBrands = Array.from(new Set(
+    productsUsedRaw
+      .map(p => (p.label || '').split(' ')[0])
+      .filter(s => s && s.length > 1 && /^[a-z]/i.test(s)),
+  ));
+  // Also scrub the full brand strings (handles two-word brands like
+  // "Alo Yoga", "Thursday Boots", "Rag & Bone").
+  const dynamicBrandPhrases = Array.from(new Set(
+    productLinks?.map(r => {
+      const p = r.products as unknown as { brand: string | null } | null;
+      return (p?.brand || '').trim();
+    }).filter((s): s is string => !!s && s.length > 1) ?? [],
+  ));
+  const DYNAMIC_BRAND_STRIP: RegExp[] = [
+    ...dynamicBrandPhrases.map(b => new RegExp(`\\b${escapeRegex(b)}\\b`, 'gi')),
+    ...dynamicBrands.map(b => new RegExp(`\\b${escapeRegex(b)}\\b`, 'gi')),
+  ];
+
   function stripBrandAnnotations(p: string): string {
     let out = p.replace(/\s*\([^)]*\)/g, '');
-    for (const rx of BRAND_NAMES_TO_STRIP) out = out.replace(rx, '');
+    for (const rx of STATIC_BRAND_STRIP) out = out.replace(rx, '');
+    for (const rx of DYNAMIC_BRAND_STRIP) out = out.replace(rx, '');
     // Collapse "× × ×" / "  / " / dangling hyphens / multi-spaces left
     // behind by the strip so the final prompt reads cleanly.
     out = out.replace(/×+/g, '×').replace(/\s+×\s+/g, ' ').replace(/\s+\/\s+/g, ' / ');
