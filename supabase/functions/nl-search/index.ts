@@ -158,6 +158,66 @@ async function embedTextOpenAI(text: string, openaiKey: string): Promise<number[
   return vec;
 }
 
+// ── Query-embedding cache ────────────────────────────────────────────────────
+// Persistent cache (table public.query_embeddings) keyed by normalized query.
+// Embeddings are user-agnostic so this is shared across all sessions.
+// On a hit we skip the OpenAI call entirely (~100-300 ms saved per request).
+
+function normalizeQueryForCache(q: string): string {
+  return q.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Parses Postgres "vector" output ("[0.1,0.2,...]") into number[].
+// supabase-js returns the vector column as a string by default.
+function parsePgVector(raw: unknown): number[] | null {
+  if (Array.isArray(raw)) return raw as number[];
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null;
+  const parts = trimmed.slice(1, -1).split(',');
+  const out = new Array<number>(parts.length);
+  for (let i = 0; i < parts.length; i++) {
+    const n = Number(parts[i]);
+    if (!Number.isFinite(n)) return null;
+    out[i] = n;
+  }
+  return out;
+}
+
+async function embedTextCached(
+  query: string,
+  openaiKey: string,
+  admin: ReturnType<typeof createClient>,
+): Promise<{ embedding: number[]; cacheHit: boolean }> {
+  const key = normalizeQueryForCache(query);
+
+  // 1. Try cache.
+  try {
+    const { data } = await admin
+      .from('query_embeddings')
+      .select('embedding')
+      .eq('query_text', key)
+      .maybeSingle();
+    const cached = parsePgVector((data as { embedding?: unknown } | null)?.embedding);
+    if (cached) {
+      // Fire-and-forget hit-counter bump.
+      admin.rpc('touch_query_embedding', { p_query_text: key }).then(() => {});
+      return { embedding: cached, cacheHit: true };
+    }
+  } catch {
+    // Cache lookup failure is non-fatal — fall through to live embed.
+  }
+
+  // 2. Live embed + write-through.
+  const embedding = await embedTextOpenAI(query, openaiKey);
+  // Write-through is fire-and-forget: a write failure shouldn't block search.
+  admin
+    .from('query_embeddings')
+    .insert({ query_text: key, embedding: toPgVector(embedding) })
+    .then(() => {});
+  return { embedding, cacheHit: false };
+}
+
 // ── TwelveLabs: text→video embedding (Marengo 3.0, 512-dim, visual lane only) ────
 
 async function embedTextTwelveLabs(text: string, twelveLabsKey: string): Promise<number[]> {
@@ -247,6 +307,8 @@ Deno.serve(async (req: Request) => {
   //   Anthropic round-trip from blocking the whole search pipeline.
   // • TwelveLabs (512-dim visual lane) is now kicked off at the same time as
   //   Claude and OpenAI instead of serially after them, saving ~300–600 ms.
+  // • The raw text embedding is read from query_embeddings cache when present
+  //   (~5-10 ms) so popular queries skip the OpenAI round-trip entirely.
   const planWithTimeout = anthropicKey
     ? Promise.race([
         buildQueryPlan(query, anthropicKey),
@@ -258,8 +320,8 @@ Deno.serve(async (req: Request) => {
 
   const [planResult, rawEmbedResult, visualResult] = await Promise.allSettled([
     planWithTimeout,
-    openaiKey    ? embedTextOpenAI(query, openaiKey)              : Promise.reject(new Error('no OPENAI_API_KEY')),
-    twelveLabsKey ? embedTextTwelveLabs(query, twelveLabsKey)     : Promise.reject(new Error('no TWELVELABS_API_KEY')),
+    openaiKey    ? embedTextCached(query, openaiKey, admin)        : Promise.reject(new Error('no OPENAI_API_KEY')),
+    twelveLabsKey ? embedTextTwelveLabs(query, twelveLabsKey)      : Promise.reject(new Error('no TWELVELABS_API_KEY')),
   ]);
 
   const queryPlan: QueryPlan = planResult.status === 'fulfilled'
@@ -267,7 +329,10 @@ Deno.serve(async (req: Request) => {
     : heuristicQueryPlan(query);
 
   const canEmbed = rawEmbedResult.status === 'fulfilled';
-  const rawEmbedding = canEmbed ? rawEmbedResult.value : null;
+  const rawEmbedding = canEmbed ? rawEmbedResult.value.embedding : null;
+  if (canEmbed && rawEmbedResult.value.cacheHit) {
+    console.log(`[nl-search] embedding cache hit for "${normalizeQueryForCache(query)}"`);
+  }
 
   // ── Step 2b: embed rewrites (best-effort, parallel) ──────────────────────
   let rewriteEmbeddings: number[][] = [];

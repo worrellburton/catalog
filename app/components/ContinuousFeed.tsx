@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchLiveAds, getLiveAds, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -101,6 +101,7 @@ export default function ContinuousFeed({
   // While the user is typing (or nl-search is in flight), committedQuery stays
   // at the last resolved value so the grid doesn't jump on every keystroke.
   // For short queries (< 3 chars, no semantic call) we commit immediately.
+  // Tier-1 (catalog_tags) hits also commit immediately — see tagMatchedCreatives.
   const [committedQuery, setCommittedQuery] = useState('');
   const wasLoadingRef = useRef(false);
 
@@ -234,6 +235,94 @@ export default function ContinuousFeed({
     return () => { cancelled = true; };
   }, []);
 
+  // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
+  // When the user types a query that matches an existing catalog (e.g.
+  // "shoes", "chairs"), render those results synchronously and commit the
+  // query immediately so the grid reflows without waiting on nl-search.
+  //
+  // Three lookup tiers (cheapest → most expensive):
+  //   0. Session LRU (Map<query, ProductAd[]>)         ~0 ms,  no network
+  //   1. In-memory liveCreatives (already loaded)      ~0 ms,  no network
+  //   2. DB catalog_tag query (getCreativesByCatalogTag) ~10 ms, one round-trip
+  //
+  // Misses fall through to the existing nl-search semantic path, which keeps
+  // its current loading/sourcing UX.
+  const tagCacheRef = useRef<Map<string, ProductAd[]>>(new Map());
+  const TAG_LRU_MAX = 50;
+  const [tagMatchedCreatives, setTagMatchedCreatives] = useState<ProductAd[]>([]);
+  const tagQueryRef = useRef<string>('');
+
+  useEffect(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) {
+      tagQueryRef.current = '';
+      setTagMatchedCreatives([]);
+      return;
+    }
+
+    // 0. Session LRU
+    const cached = tagCacheRef.current.get(q);
+    if (cached) {
+      tagQueryRef.current = q;
+      setTagMatchedCreatives(cached);
+      setCommittedQuery(searchQuery);
+      return;
+    }
+
+    // 1. In-memory match against already-loaded liveCreatives.
+    const inMemory = liveCreatives.filter(c => creativeMatchesCatalogQuery(c, q));
+    if (inMemory.length > 0) {
+      tagQueryRef.current = q;
+      setTagMatchedCreatives(inMemory);
+      setCommittedQuery(searchQuery);
+      // Top up from DB asynchronously — the in-memory pool is the elite
+      // subset, so the full catalog usually has more rows behind it.
+      let cancelled = false;
+      getCreativesByCatalogTag(q).then(rows => {
+        if (cancelled || tagQueryRef.current !== q) return;
+        if (rows.length > inMemory.length) {
+          setTagMatchedCreatives(rows);
+          tagCacheRef.current.set(q, rows);
+          // LRU eviction — Map preserves insertion order, so the oldest
+          // entry is the first key.
+          if (tagCacheRef.current.size > TAG_LRU_MAX) {
+            const oldest = tagCacheRef.current.keys().next().value;
+            if (oldest !== undefined) tagCacheRef.current.delete(oldest);
+          }
+        } else {
+          tagCacheRef.current.set(q, inMemory);
+        }
+      }).catch(() => {});
+      return () => { cancelled = true; };
+    }
+
+    // 2. DB lookup — only when we haven't already committed via in-memory.
+    let cancelled = false;
+    (async () => {
+      const rows = await getCreativesByCatalogTag(q);
+      if (cancelled || searchQuery.trim().toLowerCase() !== q) return;
+      if (rows.length > 0) {
+        tagQueryRef.current = q;
+        tagCacheRef.current.set(q, rows);
+        if (tagCacheRef.current.size > TAG_LRU_MAX) {
+          const oldest = tagCacheRef.current.keys().next().value;
+          if (oldest !== undefined) tagCacheRef.current.delete(oldest);
+        }
+        setTagMatchedCreatives(rows);
+        setCommittedQuery(searchQuery);
+      } else {
+        // Cold miss for the tag path — clear so we don't show stale results
+        // while the semantic path resolves.
+        if (tagQueryRef.current === q) {
+          // No-op: keep prior tag matches if the query is still in flight.
+        }
+        tagQueryRef.current = q;
+        setTagMatchedCreatives([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchQuery, liveCreatives]);
+
   // Map semantic creatives (returned directly by nl-search) into ProductAd
   // shape for CreativeCard rendering. nl-search now indexes product_creative
   // directly via search_creatives_hybrid, so each result row already carries
@@ -350,6 +439,34 @@ export default function ContinuousFeed({
     }
     return out;
   }, [semanticCreatives, filteredCreatives]);
+
+  // ── Final creative list: tier-1 (catalog_tags) results render first ──────
+  // When the user's query matches a known catalog, those creatives appear at
+  // the top synchronously. Semantic + elite results follow, deduped by id and
+  // by product_id so the same product never stacks.
+  const renderedCreatives = useMemo<ProductAd[]>(() => {
+    const q = committedQuery.trim().toLowerCase();
+    const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
+    if (tagMatch.length === 0) return semanticallyOrderedCreatives;
+
+    const seen = new Set<string>();
+    const seenProducts = new Set<string>();
+    const out: ProductAd[] = [];
+    for (const c of tagMatch) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      if (c.product_id) seenProducts.add(c.product_id);
+      out.push(c);
+    }
+    for (const c of semanticallyOrderedCreatives) {
+      if (seen.has(c.id)) continue;
+      if (c.product_id && seenProducts.has(c.product_id)) continue;
+      seen.add(c.id);
+      if (c.product_id) seenProducts.add(c.product_id);
+      out.push(c);
+    }
+    return out;
+  }, [tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
@@ -497,16 +614,18 @@ export default function ContinuousFeed({
     !semantic.loading &&
     !semanticPending &&
     trimmedQuery.length > 0 &&
-    semanticallyOrderedCreatives.length === 0 &&
+    renderedCreatives.length === 0 &&
     semanticallyOrderedLooks.length === 0;
 
   // While semantic search is loading (only for long-enough queries), show the
   // sourcing state immediately so the user sees feedback during the round-trip.
+  // Tier-1 (catalog_tags) hits suppress the sourcing screen — if we already
+  // have results to render, don't flash a loading state.
   const showSourcingState =
     !showEmptyState &&
     (semanticActive || semanticPending) &&
     (semantic.loading || semanticPending) &&
-    semanticallyOrderedCreatives.length === 0 &&
+    renderedCreatives.length === 0 &&
     filteredLooks.length === 0;
 
   if (showEmptyState || showSourcingState) {
@@ -534,7 +653,7 @@ export default function ContinuousFeed({
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
               onOpenCreativeProduct={handleOpenCreativeProduct}
-              creatives={segment.isInitial ? semanticallyOrderedCreatives : undefined}
+              creatives={segment.isInitial ? renderedCreatives : undefined}
               creativesLoading={segment.isInitial ? creativesLoading : false}
               canDeleteCreative={canDeleteCreative}
               onDeleteCreative={handleDeleteCreative}

@@ -174,6 +174,116 @@ export function invalidateLiveAds(): void {
   liveAdsFetchedAt = 0;
 }
 
+// ── Tier-1 catalog fast path ────────────────────────────────────────────
+// Maps a user query (e.g. "shoes", "pants") to the canonical product.type
+// values present in the DB. catalog_tags is too sparsely populated to be
+// useful as the primary signal — `products.type` is the normalized column
+// (Top, Pants, Sneakers, Boots, Dress, etc.) actually filled by the scraper.
+//
+// Keys are pre-normalized (lowercase, trimmed). Values match the casing of
+// the `type` column exactly. Add new entries here as new catalog terms appear.
+const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
+  // Footwear
+  shoes:        ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
+  sneakers:     ['Sneakers'],
+  boots:        ['Boots'],
+  sandals:      ['Sandals'],
+  heels:        ['Heels'],
+  loafers:      ['Loafers'],
+  flats:        ['Flats'],
+  // Tops
+  tops:         ['Top'],
+  top:          ['Top'],
+  shirts:       ['Top'],
+  shirt:        ['Top'],
+  tshirts:      ['Top'],
+  't-shirts':   ['Top'],
+  blouses:      ['Top'],
+  sweaters:     ['Top'],
+  hoodies:      ['Top'],
+  // Bottoms
+  pants:        ['Pants'],
+  trousers:     ['Pants'],
+  jeans:        ['Pants'],
+  shorts:       ['Shorts'],
+  skirts:       ['Skirt'],
+  skirt:        ['Skirt'],
+  // Dresses
+  dresses:      ['Dress'],
+  dress:        ['Dress'],
+  // Outerwear
+  jackets:      ['Jacket'],
+  jacket:       ['Jacket'],
+  coats:        ['Coat'],
+  coat:         ['Coat'],
+  // Accessories
+  hats:         ['Hat'],
+  hat:          ['Hat'],
+  bags:         ['Bag'],
+  bag:          ['Bag'],
+  scarves:      ['Scarf'],
+  scarf:        ['Scarf'],
+  socks:        ['Socks'],
+  // Activewear / others
+  activewear:   ['Activewear'],
+  underwear:    ['Underwear'],
+  swimwear:     ['Swimwear'],
+  loungewear:   ['Loungewear'],
+};
+
+export function resolveCatalogTypes(query: string): string[] | null {
+  const key = query.trim().toLowerCase();
+  if (!key) return null;
+  return CATALOG_TYPE_SYNONYMS[key] || null;
+}
+
+// Used by the in-memory tier-1 filter in ContinuousFeed.
+export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boolean {
+  const types = resolveCatalogTypes(query);
+  if (!types) return false;
+  const t = (ad.product as { type?: string | null } | null | undefined)?.type;
+  if (!t) return false;
+  return types.includes(t);
+}
+
+// Returns live creatives whose product.type matches the synonym set for the
+// given query. Used by the consumer feed to render existing catalogs
+// synchronously without waiting on the nl-search semantic pipeline.
+//
+// Mirrors getLiveAds() filters (status=live, video present, product is_active,
+// gender filter) so results drop into the same grid render path. is_elite is
+// NOT required here — when a user explicitly asks for "shoes" we want every
+// available creative for that catalog, not just the curated default-grid set.
+export async function getCreativesByCatalogTag(query: string): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  const types = resolveCatalogTypes(query);
+  if (!types || types.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('product_creative')
+    .select(`
+      *,
+      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+    `)
+    .eq('status', 'live')
+    .not('video_url', 'is', null)
+    .in('product.type', types)
+    .order('boosted_until', { ascending: false, nullsFirst: false })
+    .order('created_at',     { ascending: false })
+    .limit(60);
+
+  if (error) {
+    console.warn('[getCreativesByCatalogTag] query error:', error.message);
+    return [];
+  }
+  const rows = (data || []) as ProductAd[];
+  return rows.filter(ad => {
+    const active = (ad.product as { is_active?: boolean } | null | undefined)?.is_active;
+    if (active === false) return false;
+    return passesGenderFilter(ad.product as { gender?: string | null } | null);
+  });
+}
+
 export async function boostAd(id: string, hours = 24): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
