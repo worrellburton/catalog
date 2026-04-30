@@ -668,7 +668,7 @@ export default function ContinuousFeed({
               title={segment.title}
               isInitial={segment.isInitial}
               layoutMode={layoutMode}
-              searchMode={segment.isInitial && semantic.creatives.length > 0}
+              searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0)}
               onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
             />
           );
