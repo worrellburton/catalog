@@ -598,3 +598,77 @@
 .trail-admin-menu-btn--danger:hover {
   background: rgba(252, 165, 165, 0.10);
 }
+
+/* ===== Feed Search Overlay Loader ===== */
+/* Sticky progress bar at the top of the feed — appears while a search
+   refresh is in-flight. Previous content stays visible underneath. */
+.feed-search-loader {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 100;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+}
+
+.feed-search-loader-bar {
+  height: 100%;
+  width: 40%;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 0 2px 2px 0;
+  animation: feedLoaderSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes feedLoaderSlide {
+  0%   { transform: translateX(-110%); }
+  60%  { transform: translateX(280%); }
+  100% { transform: translateX(280%); }
+}
+
+/* ===== Feed Content Fade-in ===== */
+/* Applied to the content wrapper when search resolves, creating a smooth
+   transition from stale results to fresh results. */
+.feed-content-fadein {
+  animation: feedContentFadeIn 0.35s ease forwards;
+}
+
+@keyframes feedContentFadeIn {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+
+/* ===== No-results Toast ===== */
+.feed-no-results-toast {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 90px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 30, 30, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 20px;
+  white-space: nowrap;
+  z-index: 500;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  animation: feedToastIn 0.2s ease forwards;
+}
+
+@keyframes feedToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.light-mode .feed-no-results-toast {
+  background: rgba(240, 240, 240, 0.95);
+  color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(0, 0, 0, 0.08);
+}
