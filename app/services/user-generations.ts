@@ -32,6 +32,9 @@ export interface UserGeneration {
   crop_y: number;
   created_at: string;
   completed_at: string | null;
+  /** Fal queue request_id. Surfaced on the failed-generation UI so we
+   *  can grep edge-function logs for the exact webhook payload. */
+  fal_request_id?: string | null;
   /** Claude-generated 2-4 word name for the look (e.g. "Linen Sunset").
    *  Populated by the name-look edge function fire-and-forget after a
    *  generation is created. Null until that round trip completes; the

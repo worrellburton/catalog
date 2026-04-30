@@ -1245,9 +1245,7 @@ export default function GeneratePage() {
               <GenerationProgress generation={generation} />
             )}
             {generation?.status === 'failed' && (
-              <div className="gen-error">
-                Generation failed: {generation.error || 'Unknown error'}
-              </div>
+              <GenerationErrorBox generation={generation} pickedCount={picked.length} faceCount={slots.filter(Boolean).length} />
             )}
             {generation?.status === 'done' && generation.video_url && (
               <div className="gen-build gen-build-done">
@@ -1459,6 +1457,124 @@ const BUILD_PHASES = [
   'Color grading',
   'Final pass',
 ];
+
+// Friendly summary for known Fal/Seedance failure shapes. Returns a
+// short headline (rendered as the red banner) and a hint that helps the
+// user fix it themselves where possible. Falls back to a generic
+// "generation failed" if we don't recognize the pattern.
+function summarizeGenerationError(raw: string): { headline: string; hint: string | null } {
+  const text = (raw || '').toLowerCase();
+  if (text.includes('partner_validation_failed')) {
+    return {
+      headline: 'The video provider rejected this look.',
+      hint: 'This usually clears up if you re-upload the photo (try a different one) or pick fewer products. The error details below help us debug it.',
+    };
+  }
+  if (text.includes('heic')) {
+    return {
+      headline: 'Photo format not supported.',
+      hint: 'Please re-upload as JPEG or PNG.',
+    };
+  }
+  if (text.includes('all reference photos failed')) {
+    return {
+      headline: 'Reference photos couldn’t be loaded.',
+      hint: 'Re-upload your face photo and try again.',
+    };
+  }
+  if (text.includes('fal_key')) {
+    return {
+      headline: 'Server config error.',
+      hint: 'The Fal API key is missing on the server. Contact support.',
+    };
+  }
+  return { headline: 'Something went wrong while generating this look.', hint: null };
+}
+
+function GenerationErrorBox({
+  generation,
+  pickedCount,
+  faceCount,
+}: {
+  generation: UserGeneration;
+  pickedCount: number;
+  faceCount: number;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { headline, hint } = summarizeGenerationError(generation.error || '');
+
+  const diagnostics = {
+    generation_id: generation.id,
+    fal_request_id: generation.fal_request_id || null,
+    veo_model: generation.veo_model || null,
+    style: generation.style,
+    height_label: generation.height_label,
+    age_label: generation.age_label,
+    duration_seconds: generation.duration_seconds,
+    face_photos: faceCount,
+    products_picked: pickedCount,
+    created_at: generation.created_at,
+    completed_at: generation.completed_at,
+    error: generation.error || 'Unknown',
+    user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+  };
+
+  const copyText = Object.entries(diagnostics)
+    .map(([k, v]) => `${k}: ${v ?? '-'}`)
+    .join('\n');
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(copyText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      // Fallback: legacy execCommand path. Older iOS Safari in the
+      // shell webview sometimes blocks clipboard.writeText without a
+      // user-gesture marker even though we are inside one.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = copyText;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2200);
+      } catch { /* give up silently */ }
+    }
+  };
+
+  return (
+    <div className="gen-error" role="alert">
+      <div className="gen-error-summary">{headline}</div>
+      {hint && <div>{hint}</div>}
+      <div className="gen-error-actions">
+        <button type="button" className="gen-error-btn" onClick={() => setShowDetails(s => !s)}>
+          {showDetails ? 'Hide details' : 'Show details'}
+        </button>
+        <button type="button" className="gen-error-btn" onClick={handleCopy}>
+          {copied ? 'Copied' : 'Copy details'}
+        </button>
+      </div>
+      {showDetails && (
+        <div className="gen-error-details">
+          <dl>
+            {Object.entries(diagnostics).map(([k, v]) => (
+              <span key={k}>
+                <dt>{k}</dt>
+                <dd>{String(v ?? '-')}</dd>
+              </span>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function GenerationProgress({ generation }: { generation: UserGeneration }) {
   // Tick four times a second so the border-progress + phase rotation

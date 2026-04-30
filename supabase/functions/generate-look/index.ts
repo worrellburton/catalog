@@ -344,6 +344,19 @@ Deno.serve(async (req: Request) => {
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
+  // Log the exact payload being sent so when the async webhook fires
+  // back partner_validation_failed minutes later we can correlate the
+  // failure to the inputs we shipped. The /generate-look HTTP call has
+  // already returned 200 by then so this is the only paper trail.
+  console.log('[generate-look] submitting gen=', generationId, JSON.stringify({
+    prompt: taggedPrompt,
+    image_urls: referenceUrls,
+    duration: durationSeconds,
+    style: gen.style,
+    height: gen.height_label,
+    age: gen.age_label,
+    model: gen.model,
+  }).slice(0, 1500));
   const { request_id, model_slug, error, fellBack } = await submitFal(
     taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl,
   );
