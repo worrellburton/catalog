@@ -505,6 +505,19 @@ export default function GeneratePage() {
   // first empty slot.
   const uploadFileIntoSlot = async (file: File, targetSlot: number | null) => {
     if (!user?.id) return;
+    // Fal/Seedance can't decode HEIC, and Safari/iOS file pickers will
+    // hand back a HEIC even when our accept list excludes it. Reject up
+    // front so the user converts to JPEG/PNG before the upload, rather
+    // than discovering it after the generation 422s.
+    const nameLower = file.name.toLowerCase();
+    const isHeic = file.type === 'image/heic'
+      || file.type === 'image/heif'
+      || nameLower.endsWith('.heic')
+      || nameLower.endsWith('.heif');
+    if (isHeic) {
+      setUploadError('HEIC photos aren’t supported. Please use JPEG, PNG, or WebP.');
+      return;
+    }
     setUploading(true);
     setUploadError(null);
     const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
@@ -782,7 +795,7 @@ export default function GeneratePage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic"
+                accept="image/jpeg,image/png,image/webp"
                 hidden
                 onChange={onFileInput}
               />

@@ -210,6 +210,19 @@ Deno.serve(async (req: Request) => {
   // image of reasonable size. Drop products that fail rather than
   // killing the whole job — face photos are required so we surface a
   // hard error if any of those bounce.
+  //
+  // HEIC/HEIF is rejected explicitly: Fal/Seedance can't decode it and
+  // returns partner_validation_failed for the whole job. iPhones default
+  // to HEIC, so legacy uploads in the bucket from before the client-side
+  // guard landed will hit this branch.
+  function isHeicUrl(url: string, contentType: string): boolean {
+    if (contentType === 'image/heic' || contentType === 'image/heif') return true;
+    try {
+      const path = new URL(url).pathname.toLowerCase();
+      return path.endsWith('.heic') || path.endsWith('.heif');
+    } catch { return false; }
+  }
+
   async function isImageUrlOk(url: string): Promise<boolean> {
     if (isHostBlocked(url)) return false;
     try {
@@ -217,6 +230,7 @@ Deno.serve(async (req: Request) => {
       if (!r.ok) return false;
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (ct && !ct.startsWith('image/')) return false;
+      if (isHeicUrl(url, ct)) return false;
       const len = Number(r.headers.get('content-length') || '0');
       if (len > 30 * 1024 * 1024) return false; // Fal cap is 30 MB per image
       return true;
@@ -228,12 +242,16 @@ Deno.serve(async (req: Request) => {
   const faceChecks = await Promise.all(facesUsed.map(isImageUrlOk));
   const badFaceCount = faceChecks.filter(ok => !ok).length;
   if (badFaceCount === facesUsed.length) {
+    const allHeic = facesUsed.every(u => isHeicUrl(u, ''));
+    const message = allHeic
+      ? 'Your photo is in HEIC format, which we can’t use. Please re-upload as JPEG or PNG.'
+      : 'All reference photos failed to load — please re-upload.';
     await admin.from('user_generations').update({
       status: 'failed',
-      error: 'All reference photos failed to load — please re-upload.',
+      error: message,
       completed_at: new Date().toISOString(),
     }).eq('id', generationId);
-    return jsonRes({ error: 'All face photos unreachable' }, 400);
+    return jsonRes({ error: message }, 400);
   }
   const goodFaces = facesUsed.filter((_, i) => faceChecks[i]);
 
