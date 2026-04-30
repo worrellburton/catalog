@@ -700,62 +700,36 @@
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — sit immediately above the bottom-bar input
-   when search is open. Single horizontal-scroll pill row on mobile
-   (and tight single-line on desktop) so the user's eye never has to
-   leave the input to scan. Replaces the previous full-screen
-   auto-scrolling vertical list which sat far above the input and
-   read as ambient text rather than a tap target. */
+/* Search suggestions — full-width vertical editorial column on
+   both mobile and desktop. Anchored above the BottomBar input
+   (which is itself pinned above the iOS keyboard via the live
+   --ios-bottom-chrome variable BottomBar writes to :root). */
 .search-suggestions {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  /* Sit ~12 px above the bar — bar is at safe-area + 20px on mobile,
-     bar is roughly 48 px tall, so 80 px clearance keeps the pills
-     riding right above the input. */
-  bottom: calc(env(safe-area-inset-bottom) + 80px);
-  width: min(720px, calc(100vw - 24px));
-  /* Clip the translating track so pills disappear off the edges
-     under the gradient mask instead of bleeding past the container. */
+  left: 0;
+  right: 0;
+  /* Top anchored at viewport top, bottom anchored just above the
+     bar so the column always fills the available space cleanly,
+     even as the iOS keyboard slides in/out. The bottom value is
+     recomputed on every visualViewport change. */
+  top: 0;
+  bottom: max(
+    calc(env(safe-area-inset-bottom) + 88px),
+    calc(var(--ios-bottom-chrome, 0px) + 88px)
+  );
+  width: 100%;
   overflow: hidden;
-  border-radius: 999px;
   z-index: 101;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transform-origin: bottom center;
-  transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
-}
-
-@media (min-width: 769px) {
-  /* Desktop: restore the original full-height vertical column of
-     auto-scrolling suggestions. Sits above the bottom bar, centered
-     across the whole viewport, large editorial typography, vertical
-     fade mask. The pill-row treatment was a mobile compaction —
-     desktop has the room for the original layout. */
-  .search-suggestions {
-    left: 0;
-    transform: none;
-    width: 100%;
-    bottom: 140px;
-    top: 0;
-    border-radius: 0;
-    overflow: hidden;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 75%, transparent 100%);
-  }
-}
-
-@media (max-width: 768px) {
-  .search-suggestions {
-    /* Anchor relative to the iOS chrome so pinned URL bar / iOS
-       keyboard don't cover them. --ios-bottom-chrome is the live
-       value BottomBar's useEffect writes onto :root. */
-    bottom: max(
-      calc(env(safe-area-inset-bottom) + 88px),
-      calc(var(--ios-bottom-chrome, 0px) + 88px)
-    );
-  }
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  /* Vertical fade so suggestions appear / disappear at the top and
+     bottom of the column rather than popping. The bottom edge is the
+     critical one — it has to land just above the input bar so there's
+     no awkward seam between the column and the input. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 80%, transparent 100%);
 }
 
 .search-suggestions.visible {
@@ -763,95 +737,45 @@
   visibility: visible;
 }
 
-/* The clipping container holds the glass + the gradient mask. The
-   inner track translates horizontally inside it via the JS rAF loop;
-   the doubled suggestions array makes the loop read as continuous. */
-.search-suggestions {
-  /* Adds a horizontal fade on the left/right edges so pills entering
-     and leaving the loop don't pop visually. */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-}
-
+/* Vertical track — the JS rAF loop translates this on Y. The doubled
+   suggestions array makes the loop read as continuous. */
 .search-suggestions-track {
-  display: inline-flex;
-  flex-direction: row;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  /* The whole row is being translated by JS — let it overflow off the
-     edges of the clipping container instead of trying to scroll. */
-  white-space: nowrap;
+  gap: 6px;
+  padding: 40px 20px;
   will-change: transform;
-  /* Faint glass strip behind the pills so they read as a unit. */
-  background: rgba(20, 20, 20, 0.62);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-@media (min-width: 769px) {
-  /* Desktop track: vertical column, no glass pill, no boundary. The
-     parent .search-suggestions provides the fade mask. */
-  .search-suggestions-track {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 40px 20px;
-    white-space: normal;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-  }
-}
-
+/* Editorial suggestion list — large quiet text that brightens on
+   hover, no pill chrome. Matches the desktop treatment so mobile
+   gets the same lookup feel. Font caps a bit smaller below 480px so
+   long phrases like "minimalist wardrobe" don't overflow. */
 .search-suggestion {
-  flex-shrink: 0;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  cursor: pointer;
+  padding: 10px 24px;
+  border-radius: 20px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.6;
   white-space: nowrap;
+  cursor: pointer;
   pointer-events: auto;
   font-family: inherit;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.18s ease;
+  transition: color 0.15s ease, transform 0.18s ease;
 }
 
 .search-suggestion:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 @media (min-width: 769px) {
-  /* Desktop suggestions: editorial vertical list. Big quiet text that
-     brightens on hover. No pill chrome — the suggestion IS just the
-     word. Matches the original full-page treatment before mobile got
-     the horizontal pill compaction. */
   .search-suggestion {
-    padding: 10px 24px;
-    border-radius: 20px;
-    background: transparent;
-    border: 0;
-    color: rgba(255, 255, 255, 0.35);
     font-size: 28px;
-    font-weight: 600;
     line-height: 1.8;
-    white-space: nowrap;
-  }
-  .search-suggestion:hover {
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
   }
 }
 

@@ -74,11 +74,11 @@ function BottomBar({
     return [...shuffled, ...shuffled];
   }, []);
 
-  // Auto-scroll. Mobile renders the suggestions as a horizontal pill
-  // row above the bar — translate X. Desktop restores the original
-  // full-height vertical column — translate Y. Direction is chosen on
-  // mount via matchMedia and re-checked on resize so a window resize
-  // across the breakpoint flips smoothly.
+  // Auto-scroll. Always vertical (translate Y) — both mobile and
+  // desktop render the suggestions as an editorial vertical column
+  // now. The horizontal pill row mode is gone; mobile users were
+  // getting stuck on the search overlay because the vertical feed
+  // peek was hidden under the row.
   useEffect(() => {
     if (!searchOpen || !trackRef.current) {
       if (scrollRAF.current) {
@@ -88,30 +88,18 @@ function BottomBar({
       return;
     }
     const track = trackRef.current;
-    let isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
     const SPEED = 0.4;
     let offset = scrollY.current;
-    const onResize = () => {
-      isMobile = window.matchMedia('(max-width: 768px)').matches;
-      // Reset offset on breakpoint flip so we don't carry an X offset
-      // into a Y layout (or vice-versa).
-      offset = 0;
-      track.style.transform = '';
-    };
-    window.addEventListener('resize', onResize);
     function tick() {
       offset += SPEED;
-      const half = isMobile ? track.scrollWidth / 2 : track.scrollHeight / 2;
+      const half = track.scrollHeight / 2;
       if (half > 0 && offset >= half) offset -= half;
-      track.style.transform = isMobile
-        ? `translateX(-${offset}px)`
-        : `translateY(-${offset}px)`;
+      track.style.transform = `translateY(-${offset}px)`;
       scrollY.current = offset;
       scrollRAF.current = requestAnimationFrame(tick);
     }
     scrollRAF.current = requestAnimationFrame(tick);
     return () => {
-      window.removeEventListener('resize', onResize);
       if (scrollRAF.current) {
         cancelAnimationFrame(scrollRAF.current);
         scrollRAF.current = null;
