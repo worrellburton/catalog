@@ -20,6 +20,7 @@ import UserMenu from '~/components/UserMenu';
 // browser cache by the time the user actually opens an overlay.
 const importLandingPage = () => import('~/components/LandingPage');
 const importCreatorPage = () => import('~/components/CreatorPage');
+const importBrandPage = () => import('~/components/BrandPage');
 const importBookmarksPage = () => import('~/components/BookmarksPage');
 const importProductPage = () => import('~/components/ProductPage');
 const importLookOverlay = () => import('~/components/LookOverlay');
@@ -28,6 +29,7 @@ const importMyLooks = () => import('~/components/MyLooks');
 
 const LandingPage = lazy(importLandingPage);
 const CreatorPage = lazy(importCreatorPage);
+const BrandPage = lazy(importBrandPage);
 const BookmarksPage = lazy(importBookmarksPage);
 const ProductPage = lazy(importProductPage);
 const LookOverlay = lazy(importLookOverlay);
@@ -194,6 +196,7 @@ export default function Home() {
   const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
+  const [brandFilter, setBrandFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -463,6 +466,19 @@ export default function Home() {
 
   const handleCloseCreator = useCallback(() => {
     setCreatorFilter(null);
+  }, []);
+
+  // Brand catalog overlay. Opening from a product detail or look
+  // overlay clears the selected product / look so the BrandPage
+  // becomes the foreground; closing it surfaces the previous layer
+  // again unchanged because we never unmounted the underlying state.
+  const handleOpenBrand = useCallback((brandName: string) => {
+    if (!brandName) return;
+    setBrandFilter(brandName);
+  }, []);
+
+  const handleCloseBrand = useCallback(() => {
+    setBrandFilter(null);
   }, []);
 
   // In-app browser state. Carries the optional product context so the
@@ -856,6 +872,16 @@ export default function Home() {
                 onOpenProduct={handleOpenProduct}
                 onOpenBrowser={handleOpenBrowser}
                 onCreateCatalog={handleCreateCatalog}
+              />
+            </Suspense>
+          )}
+
+          {brandFilter && (
+            <Suspense fallback={null}>
+              <BrandPage
+                brandName={brandFilter}
+                onClose={handleCloseBrand}
+                onOpenProduct={handleOpenCreative}
               />
             </Suspense>
           )}
