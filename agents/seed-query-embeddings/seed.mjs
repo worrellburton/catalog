@@ -28,7 +28,7 @@ if (!SUPABASE_URL || !SERVICE_KEY || !OPENAI_KEY || !ANTHROPIC_KEY) {
   process.exit(1);
 }
 
-const CONCURRENCY = 6;
+const CONCURRENCY = 3;
 
 const CANONICAL_TYPES = [
   'Top', 'Jacket', 'Pants', 'Shorts', 'Skirt', 'Dress', 'Coat',
@@ -281,13 +281,21 @@ async function processOne(raw, stats) {
       needExpansion ? expandWithHaiku(raw) : Promise.resolve(null),
     ]);
 
-    const row = { query_text: key };
-    if (vec) row.embedding = toPgVector(vec);
-    if (expansion) row.expansion = expansion;
-
-    const { error } = await admin
-      .from('query_embeddings')
-      .upsert(row, { onConflict: 'query_text' });
+    let error;
+    if (needEmbed && needExpansion) {
+      // New row — full upsert
+      ({ error } = await admin.from('query_embeddings')
+        .upsert({ query_text: key, embedding: toPgVector(vec), expansion }, { onConflict: 'query_text' }));
+    } else if (needExpansion && !needEmbed) {
+      // Row exists with embedding — only write expansion to avoid NOT NULL violation
+      ({ error } = await admin.from('query_embeddings')
+        .update({ expansion })
+        .eq('query_text', key));
+    } else if (needEmbed && !needExpansion) {
+      // Row exists with expansion — only write embedding
+      ({ error } = await admin.from('query_embeddings')
+        .upsert({ query_text: key, embedding: toPgVector(vec) }, { onConflict: 'query_text' }));
+    }
     if (error) throw error;
 
     if (needEmbed && needExpansion) { stats.full++; process.stdout.write('+'); }
@@ -296,7 +304,8 @@ async function processOne(raw, stats) {
   } catch (err) {
     stats.failed++;
     process.stdout.write('x');
-    console.error(`\n  ${key}: ${err instanceof Error ? err.message : String(err)}`);
+    const msg = err instanceof Error ? err.message : (err?.message ?? JSON.stringify(err));
+    console.error(`\n  ${key}: ${msg}`);
   }
 }
 
