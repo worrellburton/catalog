@@ -27,6 +27,8 @@ interface ProductPageProps {
   onOpenProduct?: (product: Product) => void;
   onOpenCreator?: (name: string) => void;
   onOpenCreative?: (creative: ProductAd) => void;
+  /** Tap on the brand label opens the brand catalog page. */
+  onOpenBrand?: (brandName: string) => void;
   creative?: ProductPageCreative;
   /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
    *  "More like this" video rail below the hero. */
@@ -249,6 +251,7 @@ export default function ProductPage({
   onOpenLook,
   onOpenBrowser,
   onOpenCreative,
+  onOpenBrand,
   creative,
   similarCreatives,
   brandCreatives,
@@ -363,7 +366,19 @@ export default function ProductPage({
 
           <section className="pd-info">
           <div className="pd-info-inner">
-            {product.brand && <div className="pd-brand">{product.brand}</div>}
+            {product.brand && (
+              onOpenBrand
+                ? (
+                  <button
+                    type="button"
+                    className="pd-brand brand-link"
+                    onClick={() => onOpenBrand(product.brand!)}
+                  >
+                    {product.brand}
+                  </button>
+                )
+                : <div className="pd-brand">{product.brand}</div>
+            )}
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
 

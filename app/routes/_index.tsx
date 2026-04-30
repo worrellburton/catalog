@@ -914,6 +914,7 @@ export default function Home() {
                 onOpenProduct={handleOpenProduct}
                 onOpenCreator={handleOpenCreator}
                 onOpenCreative={handleOpenCreative}
+                onOpenBrand={handleOpenBrand}
                 creative={
                   selectedCreative?.video_url
                     ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
