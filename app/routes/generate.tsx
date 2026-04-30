@@ -512,29 +512,55 @@ export default function GeneratePage() {
       : slots.indexOf(null);
     if (slotForProgress >= 0) setUploadProgress({ slot: slotForProgress, pct: 0 });
 
-    // Fal/Seedance can't decode HEIC and the whole job 422s if we ship
-    // one. iPhones default to HEIC, so transcode to JPEG in the browser
-    // before upload. heic2any is lazy-loaded so we only pay the ~50KB
-    // cost when a HEIC actually shows up.
+    // Fal/Seedance partner-validates every reference image and rejects
+    // anything outside plain 8-bit sRGB JPEG/PNG. The two failure modes
+    // we hit in practice are iPhone HEIC (Bytedance can't decode it) and
+    // iPhone HDR screenshots saved as 16-bit-per-channel PNG. Both kill
+    // the whole job with 422 partner_validation_failed.
+    //
+    // Solution: pipe every upload through createImageBitmap → canvas →
+    // toBlob('image/jpeg'). HEIC gets pre-decoded with heic2any (lazy-
+    // loaded). The canvas pass normalizes bit depth, color profile,
+    // EXIF rotation, and any alpha channel so what reaches storage is
+    // always a standard sRGB 8-bit baseline JPEG.
     const nameLower = file.name.toLowerCase();
     const isHeic = file.type === 'image/heic'
       || file.type === 'image/heif'
       || nameLower.endsWith('.heic')
       || nameLower.endsWith('.heif');
-    let fileToUpload = file;
-    if (isHeic) {
-      try {
+    let fileToUpload: File;
+    try {
+      let source: Blob = file;
+      if (isHeic) {
         const { default: heic2any } = await import('heic2any');
-        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
-        const blob = Array.isArray(converted) ? converted[0] : converted;
-        const baseName = file.name.replace(/\.(heic|heif)$/i, '');
-        fileToUpload = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
-      } catch (err) {
-        setUploading(false);
-        setUploadProgress(null);
-        setUploadError(err instanceof Error ? `Couldn’t convert HEIC: ${err.message}` : 'Couldn’t convert HEIC photo. Please pick a JPEG or PNG.');
-        return;
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+        source = Array.isArray(converted) ? converted[0] : converted;
       }
+      const bitmap = await createImageBitmap(source, { imageOrientation: 'from-image' });
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context unavailable');
+        // Flatten any alpha channel onto white so transparent PNGs don't
+        // produce a JPEG with black artifacts.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bitmap, 0, 0);
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.92);
+        });
+        const baseName = file.name.replace(/\.[^.]+$/, '') || 'photo';
+        fileToUpload = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      } finally {
+        bitmap.close();
+      }
+    } catch (err) {
+      setUploading(false);
+      setUploadProgress(null);
+      setUploadError(err instanceof Error ? `Couldn’t process photo: ${err.message}` : 'Couldn’t process this photo. Please try a different one.');
+      return;
     }
 
     const { data, error } = await uploadUserPhoto(fileToUpload, user.id, (pct) => {
