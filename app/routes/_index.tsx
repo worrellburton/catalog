@@ -67,8 +67,7 @@ function prefetchOverlayChunks() {
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
-import { hasStoredSupabaseSession } from '~/services/auth';
+import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
@@ -243,31 +242,16 @@ export default function Home() {
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
 
-  // Computed once at mount. Two signals tell us "don't show the
-  // password gate, the user is (probably) about to be signed in":
-  //
-  //   1. oauthInFlight — the URL shows we just landed from a Supabase
-  //      OAuth redirect (#access_token=…, ?code=…). We need to wait for
-  //      supabase-js to exchange the token before we know who they are.
-  //
-  //   2. resumeFromStoredSession — localStorage already has a Supabase
-  //      session token. getCurrentUser() will resolve them in <100ms;
-  //      flashing the password gate during that race made cold loads
-  //      feel jenky.
-  //
-  // While either is true we render a branded splash (the same one
-  // first-time visitors see on entry), not a spinner — the user
-  // perceives "the app is loading," not "I'm being authenticated
-  // again." Once auth resolves, the auto-route effect flips the view
-  // to 'app' and the splash unmounts.
-  const oauthInFlight = useRef(isOAuthReturn()).current;
-  const resumeFromStoredSession = useRef(hasStoredSupabaseSession()).current;
-
-  // Two-stage splash unmount: while auth is resolving we render the
-  // splash; once resolved (authLoading flips false) we keep rendering
-  // it for one extra animation tick with .leaving = true so it fades
-  // out instead of hard-cutting to the gate / app underneath.
-  const showAuthSplash = view === 'locked' && authLoading && (oauthInFlight || resumeFromStoredSession);
+  // Branded splash logic. Show the splash whenever we're in the
+  // 'locked' view AND either:
+  //   - auth is still resolving (initial bootstrap, OAuth code exchange,
+  //     or session restore from localStorage), OR
+  //   - auth has resolved with a user but the auto-route effect hasn't
+  //     yet flipped view to 'app' / 'waitlisted' (the waitlist-status
+  //     check is async and we don't want a blank screen during it).
+  // This keeps the password gate from ever flashing for users who are
+  // about to be signed in, and gives every cold start a unified splash.
+  const showAuthSplash = view === 'locked' && (authLoading || !!user);
   const [splashLeaving, setSplashLeaving] = useState(false);
   const [splashMounted, setSplashMounted] = useState(showAuthSplash);
   useEffect(() => {
@@ -337,8 +321,11 @@ export default function Home() {
     if (authLoading) return;
     if (!user) return;
     if (view !== 'locked') return;
-    // Clean OAuth hash fragment from URL
-    if (window.location.hash.includes('access_token')) {
+    // Clean OAuth artifacts from URL once sign-in is confirmed
+    if (
+      window.location.hash.includes('access_token') ||
+      window.location.search.includes('code=')
+    ) {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
@@ -371,8 +358,12 @@ export default function Home() {
 
   // Sync hash when view changes
   useEffect(() => {
-    // Don't clobber Supabase OAuth return hash — let the client parse it first.
+    // Don't clobber Supabase OAuth return URL — let the client parse it
+    // first. Both implicit (#access_token=…) and PKCE (?code=…) flows
+    // depend on the URL staying intact until supabase-js's async
+    // exchange completes.
     if (window.location.hash.includes('access_token')) return;
+    if (window.location.search.includes('code=')) return;
 
     let hash = '';
     if (view === 'app') hash = 'app';
@@ -761,7 +752,7 @@ export default function Home() {
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !showAuthSplash && <PasswordGate />}
+      {view === 'locked' && !authLoading && !user && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
