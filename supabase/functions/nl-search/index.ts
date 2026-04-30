@@ -1,33 +1,50 @@
 // nl-search — Natural-language search orchestrator (creative-first).
 //
-// Pipeline:
-//   1. QueryPlan via Claude Haiku            — classify intent, generate rewrites, extract constraints
-//   2. Embed query + rewrites                — OpenAI text-embedding-3-small (1536-dim, text lanes), parallel
-//      └─ plus TwelveLabs Marengo 3.0 (512-dim) for the visual creative lane
-//   3. Hybrid retrieval                      — search_creatives_hybrid (text + BM25) and search_creatives_visual
-//   4. RRF fusion                            — merge all retrieval sets into one ranked list
-//   5. Outfit-intent guard                   — strip accessory/underwear false positives from outfit/look queries
-//   6. Dedupe by product_id                  — prevent one product stacking the grid
-//   7. Log query                             — log_search_query RPC, return cold_miss flag
+// Two-branch pipeline:
 //
-// Request body:
-//   { query: string, k?: number, gender?: string, session_id?: string, user_id?: string }
+//   ┌────────────────────────────────────────────────────────────────────┐
+//   │ analyzeQuery(query) → { kind: 'typed' | 'pairing' | 'vibe', ... }  │
+//   └────────────────────────────────────────────────────────────────────┘
+//                                  │
+//          ┌───────────────────────┴───────────────────────┐
+//          ▼                                               ▼
+//  ┌──────────────────────┐                   ┌─────────────────────────┐
+//  │ FAST (typed/pairing) │                   │ SLOW (vibe fallback)    │
+//  │  • Cached OpenAI emb │                   │  • Claude QueryPlan     │
+//  │  • ONE hybrid RPC    │                   │  • OpenAI emb + rewrites│
+//  │    with filter_types │                   │  • TwelveLabs Marengo   │
+//  │  • Skip Claude/Marengo│                  │  • search_creatives_*   │
+//  │  • Skip rewrites      │                  │  • RRF fuse all sets    │
+//  │  • ~80–250ms          │                  │  • ~700–1500ms          │
+//  └──────────────────────┘                   └─────────────────────────┘
 //
-// Response:
-//   { ok: true, results: SearchResult[], query_plan: QueryPlan, cold_miss: boolean, query_id: string }
+// The fast branch fires for ~95% of queries ("shoes", "white sneakers",
+// "summer dress", "what to wear with jeans") and guarantees results stay
+// inside the resolved catalog type set — no LMNT drinks for "shoes".
+//
+// The slow branch is the original Claude+OpenAI+TwelveLabs pipeline, kept
+// for genuine aesthetic queries ("quiet luxury", "Y2K", "coastal grandmother")
+// where catalog-noun matching can't help.
 //
 // Required secrets:
-//   ANTHROPIC_API_KEY   — Claude Haiku (QueryPlan generation)
-//   OPENAI_API_KEY     — text-embedding-3-small (1536-dim, text lanes)
-//   TWELVELABS_API_KEY — Marengo 3.0 (512-dim, visual creative lane only)
+//   ANTHROPIC_API_KEY   — Claude Haiku (vibe-branch QueryPlan)
+//   OPENAI_API_KEY      — text-embedding-3-small (1536-dim, both branches)
+//   TWELVELABS_API_KEY  — Marengo 3.0 (512-dim, vibe branch only)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { analyzeQuery, bm25TextFor } from './query-analyzer.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
 };
+
+// Hard timeouts for the vibe branch — Marengo cold starts and Claude API
+// tail latency can stall multi-second responses, and they're tiebreakers
+// at best. Better to fall back to the OpenAI+BM25 lanes than block.
+const TWELVELABS_TIMEOUT_MS = 600;
+const CLAUDE_TIMEOUT_MS = 700;
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -46,7 +63,10 @@ interface QueryPlan {
   rewrites: string[];
   constraints: { gender?: string; occasion?: string; price_band?: string };
   result_shape: ResultSurface[];
-  anchor_name?: string;   // for outfit_pairing: what is the anchor item ("white jeans")
+  anchor_name?: string;
+  // Set so consumers + logs can see which branch produced the results.
+  branch?: 'typed' | 'pairing' | 'vibe';
+  resolved_types?: string[];
 }
 
 interface CreativeRow {
@@ -74,7 +94,7 @@ interface CreativeRow {
 
 type SearchResult = CreativeRow & { score: number };
 
-// ── Claude: QueryPlan generation ─────────────────────────────────────────────
+// ── Claude: QueryPlan generation (vibe branch only) ──────────────────────────
 
 async function buildQueryPlan(query: string, anthropicKey: string): Promise<QueryPlan> {
   const prompt = `You are a fashion search query planner. Analyze the user's query and output a JSON QueryPlan.
@@ -83,16 +103,10 @@ Query: "${query}"
 
 Output a JSON object with these exact fields:
 - "intent": one of ["outfit_pairing","occasion_lookup","product_find","vibe_browse","lookalike","ambiguous"]
-  • outfit_pairing   = "what to wear with X", "what goes with Y"
-  • occasion_lookup  = "red carpet", "beach wedding", "job interview outfit"
-  • product_find     = looking for a specific product type ("white sneakers", "linen trousers")
-  • vibe_browse      = aesthetic/mood browsing ("quiet luxury", "Y2K", "coastal grandmother")
-  • lookalike        = "similar to X", "like the dress Taylor wore at..."
-  • ambiguous        = unclear
 - "rewrites": array of 2 alternative phrasings of the same query that would help a search engine find the right items. Be specific and concrete.
 - "constraints": object with optional keys: "gender" (men|women|unisex), "occasion" (string), "price_band" (budget|mid|luxury)
-- "result_shape": ordered array of surfaces to fill. Looks = outfit videos, products = individual items. Example: ["looks","products"] or ["products","looks"]
-- "anchor_name": ONLY if intent=outfit_pairing, the specific item being styled (e.g. "white jeans", "leather trench coat"). Otherwise omit.
+- "result_shape": ordered array of surfaces to fill. Example: ["looks","products"] or ["products","looks"]
+- "anchor_name": ONLY if intent=outfit_pairing.
 
 Respond with ONLY the JSON object.`;
 
@@ -117,7 +131,6 @@ Respond with ONLY the JSON object.`;
   const cleaned = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
 
   const plan = JSON.parse(cleaned) as QueryPlan;
-  // Ensure required fields have sensible defaults
   plan.intent       = plan.intent       ?? 'ambiguous';
   plan.rewrites     = plan.rewrites     ?? [];
   plan.constraints  = plan.constraints  ?? {};
@@ -125,7 +138,6 @@ Respond with ONLY the JSON object.`;
   return plan;
 }
 
-// Fallback when Claude is unavailable: simple heuristic plan
 function heuristicQueryPlan(query: string): QueryPlan {
   const q = query.toLowerCase();
   const isPairing = /\b(wear with|goes with|pair with|match with|style with)\b/.test(q);
@@ -159,16 +171,11 @@ async function embedTextOpenAI(text: string, openaiKey: string): Promise<number[
 }
 
 // ── Query-embedding cache ────────────────────────────────────────────────────
-// Persistent cache (table public.query_embeddings) keyed by normalized query.
-// Embeddings are user-agnostic so this is shared across all sessions.
-// On a hit we skip the OpenAI call entirely (~100-300 ms saved per request).
 
 function normalizeQueryForCache(q: string): string {
   return q.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-// Parses Postgres "vector" output ("[0.1,0.2,...]") into number[].
-// supabase-js returns the vector column as a string by default.
 function parsePgVector(raw: unknown): number[] | null {
   if (Array.isArray(raw)) return raw as number[];
   if (typeof raw !== 'string') return null;
@@ -191,7 +198,6 @@ async function embedTextCached(
 ): Promise<{ embedding: number[]; cacheHit: boolean }> {
   const key = normalizeQueryForCache(query);
 
-  // 1. Try cache.
   try {
     const { data } = await admin
       .from('query_embeddings')
@@ -200,7 +206,6 @@ async function embedTextCached(
       .maybeSingle();
     const cached = parsePgVector((data as { embedding?: unknown } | null)?.embedding);
     if (cached) {
-      // Fire-and-forget hit-counter bump.
       admin.rpc('touch_query_embedding', { p_query_text: key }).then(() => {});
       return { embedding: cached, cacheHit: true };
     }
@@ -208,9 +213,7 @@ async function embedTextCached(
     // Cache lookup failure is non-fatal — fall through to live embed.
   }
 
-  // 2. Live embed + write-through.
   const embedding = await embedTextOpenAI(query, openaiKey);
-  // Write-through is fire-and-forget: a write failure shouldn't block search.
   admin
     .from('query_embeddings')
     .insert({ query_text: key, embedding: toPgVector(embedding) })
@@ -218,7 +221,7 @@ async function embedTextCached(
   return { embedding, cacheHit: false };
 }
 
-// ── TwelveLabs: text→video embedding (Marengo 3.0, 512-dim, visual lane only) ────
+// ── TwelveLabs: text→video embedding (vibe branch only) ─────────────────────
 
 async function embedTextTwelveLabs(text: string, twelveLabsKey: string): Promise<number[]> {
   const res = await fetch('https://api.twelvelabs.io/v1.3/embed-v2', {
@@ -241,9 +244,15 @@ function toPgVector(v: number[]): string {
   return '[' + v.join(',') + ']';
 }
 
+function normaliseHybridRows(rows: Array<Record<string, unknown>>): SearchResult[] {
+  return rows.map(r => ({
+    ...r,
+    entity_type: 'creative' as const,
+    score: 0,
+  })) as unknown as SearchResult[];
+}
+
 // ── RRF fusion across multiple retrieval sets ─────────────────────────────────
-// Each set is an array of results with a .rrf_score (from the DB) and an .id.
-// We sum 1/(60+rank) across sets where a given id appears, producing a fused score.
 
 function rrfFuse(
   sets: Array<Array<SearchResult>>,
@@ -253,7 +262,7 @@ function rrfFuse(
 
   for (const set of sets) {
     set.forEach((item, idx) => {
-      const rank = idx + 1; // 1-based
+      const rank = idx + 1;
       const rrf  = 1.0 / (60 + rank);
       const prev = scoreMap.get(item.id);
       if (prev) {
@@ -289,8 +298,6 @@ Deno.serve(async (req: Request) => {
 
   const { query, session_id, user_id } = body;
   const k = Math.min(Math.max(body.k ?? 24, 5), 60);
-  // Pagination: caller passes the IDs already shown so the DB can return
-  // truly fresh results instead of forcing a client-side dedupe of overlap.
   const excludeIds = Array.isArray(body.exclude_ids)
     ? body.exclude_ids.filter((s): s is string => typeof s === 'string').slice(0, 500)
     : [];
@@ -298,35 +305,143 @@ Deno.serve(async (req: Request) => {
   if (!query?.trim()) return jsonRes({ ok: false, error: 'query required' }, 400);
 
   const admin = createClient(supabaseUrl, serviceKey);
+  const analysis = analyzeQuery(query);
+  const gender = body.gender ?? null;
 
-  // ── Step 1+2+TwelveLabs (all parallel): QueryPlan + raw embed + visual embed ─
+  // ─────────────────────────────────────────────────────────────────────────
+  // FAST BRANCH — typed or pairing query.
   //
-  // Performance notes:
-  // • Claude Haiku gets a 700 ms hard cap — if it hasn't replied by then we
-  //   fall back to the heuristic plan immediately.  This prevents a cold-start
-  //   Anthropic round-trip from blocking the whole search pipeline.
-  // • TwelveLabs (512-dim visual lane) is now kicked off at the same time as
-  //   Claude and OpenAI instead of serially after them, saving ~300–600 ms.
-  // • The raw text embedding is read from query_embeddings cache when present
-  //   (~5-10 ms) so popular queries skip the OpenAI round-trip entirely.
+  //   • analyzer resolved the catalog type set
+  //   • dense lane: cached OpenAI embedding (~5–10 ms hit, ~150 ms miss)
+  //   • BM25 lane: stripped query (catalog noun removed) so within-type
+  //     ranking is driven by modifiers ("white", "summer", brand names…)
+  //   • single hybrid RPC enforces filter_types — results CANNOT bleed
+  //     into other categories
+  //
+  // No Claude, no Marengo, no rewrites — typically 80–250 ms total.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (analysis.kind === 'typed' || analysis.kind === 'pairing') {
+    const filterTypes = analysis.kind === 'typed' ? analysis.types : analysis.pair_types;
+    const bm25Text = bm25TextFor(analysis, query);
+
+    let embedding: number[] | null = null;
+    let cacheHit = false;
+    if (openaiKey) {
+      try {
+        const r = await embedTextCached(query, openaiKey, admin);
+        embedding = r.embedding;
+        cacheHit = r.cacheHit;
+      } catch (err) {
+        console.warn('[nl-search] fast-branch embed failed, BM25-only fallback:', err);
+      }
+    }
+
+    // If embedding is unavailable we still issue the RPC with a zero vector
+    // so the BM25 lane carries the full ranking. Type filter + BM25 alone
+    // produces useful category-browse results.
+    const queryEmbedding = embedding ?? new Array(1536).fill(0);
+
+    const res = await admin.rpc('search_creatives_hybrid', {
+      query_embedding: toPgVector(queryEmbedding),
+      query_text:      bm25Text,
+      k,
+      filter_gender:   gender,
+      filter_types:    filterTypes,
+      require_elite:   false,
+      exclude_ids:     excludeIds,
+    });
+
+    if (res.error) {
+      console.error('[nl-search] fast-branch RPC error:', res.error);
+      return jsonRes({ ok: false, error: 'search_failed', detail: res.error.message }, 500);
+    }
+
+    const rows = (res.data ?? []) as Array<Record<string, unknown>>;
+    const fusedCreatives = normaliseHybridRows(rows);
+
+    // The DB ranks per-creative; we still dedupe by product_id so a single
+    // product with multiple live creatives doesn't stack the grid.
+    const seenProductIds = new Set<string>();
+    const dedupedResults: SearchResult[] = [];
+    for (const c of fusedCreatives) {
+      if (c.product_id && seenProductIds.has(c.product_id)) continue;
+      if (c.product_id) seenProductIds.add(c.product_id);
+      dedupedResults.push({ ...c, score: c.rrf_score ?? 0 });
+    }
+
+    const queryPlan: QueryPlan = {
+      intent: analysis.kind === 'pairing' ? 'outfit_pairing' : 'product_find',
+      rewrites: [],
+      constraints: { gender: gender ?? undefined },
+      result_shape: ['products', 'looks'],
+      anchor_name: analysis.kind === 'pairing' ? analysis.anchor : undefined,
+      branch: analysis.kind,
+      resolved_types: filterTypes,
+    };
+
+    const topScore = dedupedResults[0]?.score ?? null;
+    const resultCount = dedupedResults.length;
+
+    const { data: logData } = await admin.rpc('log_search_query', {
+      p_raw_query:    query,
+      p_result_count: resultCount,
+      p_top_score:    topScore,
+      p_query_plan:   queryPlan as unknown as Record<string, unknown>,
+      p_user_id:      user_id ?? null,
+      p_session_id:   session_id ?? null,
+    });
+
+    return jsonRes({
+      ok: true,
+      results: dedupedResults,
+      query_plan: queryPlan,
+      cold_miss: resultCount < 5,
+      query_id: logData ?? null,
+      meta: {
+        result_count: resultCount,
+        top_score:    topScore,
+        branch:       analysis.kind,
+        resolved_types: filterTypes,
+        bm25_text:    bm25Text,
+        embedding_cache_hit: cacheHit,
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SLOW BRANCH — vibe / aesthetic query (no catalog noun detected).
+  //
+  // Original Claude+OpenAI+TwelveLabs pipeline with hard timeouts.
+  // ─────────────────────────────────────────────────────────────────────────
+
   const planWithTimeout = anthropicKey
     ? Promise.race([
         buildQueryPlan(query, anthropicKey),
         new Promise<QueryPlan>(resolve =>
-          setTimeout(() => resolve(heuristicQueryPlan(query)), 700)
+          setTimeout(() => resolve(heuristicQueryPlan(query)), CLAUDE_TIMEOUT_MS)
         ),
       ])
     : Promise.resolve(heuristicQueryPlan(query));
 
+  const visualWithTimeout: Promise<number[] | null> = twelveLabsKey
+    ? Promise.race([
+        embedTextTwelveLabs(query, twelveLabsKey),
+        new Promise<number[] | null>(resolve =>
+          setTimeout(() => resolve(null), TWELVELABS_TIMEOUT_MS)
+        ),
+      ])
+    : Promise.resolve(null);
+
   const [planResult, rawEmbedResult, visualResult] = await Promise.allSettled([
     planWithTimeout,
     openaiKey    ? embedTextCached(query, openaiKey, admin)        : Promise.reject(new Error('no OPENAI_API_KEY')),
-    twelveLabsKey ? embedTextTwelveLabs(query, twelveLabsKey)      : Promise.reject(new Error('no TWELVELABS_API_KEY')),
+    visualWithTimeout,
   ]);
 
   const queryPlan: QueryPlan = planResult.status === 'fulfilled'
     ? planResult.value
     : heuristicQueryPlan(query);
+  queryPlan.branch = 'vibe';
 
   const canEmbed = rawEmbedResult.status === 'fulfilled';
   const rawEmbedding = canEmbed ? rawEmbedResult.value.embedding : null;
@@ -334,7 +449,6 @@ Deno.serve(async (req: Request) => {
     console.log(`[nl-search] embedding cache hit for "${normalizeQueryForCache(query)}"`);
   }
 
-  // ── Step 2b: embed rewrites (best-effort, parallel) ──────────────────────
   let rewriteEmbeddings: number[][] = [];
   if (canEmbed && openaiKey && queryPlan.rewrites.length > 0) {
     const rewriteResults = await Promise.allSettled(
@@ -345,7 +459,6 @@ Deno.serve(async (req: Request) => {
       .map(r => r.value);
   }
 
-  // Visual embedding resolved in parallel above (phase 1).
   const visualEmbedding: number[] | null =
     visualResult.status === 'fulfilled' ? visualResult.value : null;
 
@@ -354,14 +467,8 @@ Deno.serve(async (req: Request) => {
     ...rewriteEmbeddings,
   ];
 
-  // ── Step 3: Hybrid retrieval over CREATIVES (parallel across embeddings) ──
-  // The consumer feed only renders creatives, so we query product_creative
-  // directly via search_creatives_hybrid. Each creative carries its joined
-  // product fields in the result row, so the client doesn't need to hydrate
-  // through products → look_products → product_creative.
+  const vibeGender = queryPlan.constraints.gender ?? gender ?? null;
   const creativeSets: SearchResult[][] = [];
-
-  const gender = queryPlan.constraints.gender ?? body.gender ?? null;
 
   if (allEmbeddings.length > 0) {
     const retrievalCalls = allEmbeddings.map(emb =>
@@ -369,22 +476,19 @@ Deno.serve(async (req: Request) => {
         query_embedding: toPgVector(emb),
         query_text:      query,
         k,
-        filter_gender:   gender,
-        filter_type:     null,
+        filter_gender:   vibeGender,
+        filter_types:    null,
         require_elite:   false,
         exclude_ids:     excludeIds,
       })
     );
 
-    // Visual lane: 512-dim TwelveLabs embedding against product_creative.embedding.
-    // The visual RPC returns a product-shaped row, so we normalise it into
-    // CreativeRow shape before fusion so RRF treats every set on equal footing.
     if (visualEmbedding) {
       retrievalCalls.push(
         admin.rpc('search_creatives_visual', {
           query_embedding: toPgVector(visualEmbedding),
           k:               Math.ceil(k * 0.5),
-          filter_gender:   gender,
+          filter_gender:   vibeGender,
         })
       );
     }
@@ -397,7 +501,6 @@ Deno.serve(async (req: Request) => {
 
       const isVisualLane = visualEmbedding != null && i === retrievalCalls.length - 1;
       if (isVisualLane) {
-        // visual RPC row → normalise into CreativeRow shape
         const normalised: SearchResult[] = rows.map(r => ({
           id:                r.creative_id as string,
           entity_type:       'creative' as const,
@@ -423,47 +526,28 @@ Deno.serve(async (req: Request) => {
         }));
         creativeSets.push(normalised);
       } else {
-        // text-lane: the RPC result has all CreativeRow fields EXCEPT entity_type
-        // (Postgres doesn't emit a literal column for it). Inject it so the
-        // client-side type guard `r.entity_type === 'creative'` works.
-        const normalised = (rows as Array<Record<string, unknown>>).map(r => ({
-          ...r,
-          entity_type: 'creative' as const,
-          score: 0,
-        })) as unknown as SearchResult[];
-        creativeSets.push(normalised);
+        creativeSets.push(normaliseHybridRows(rows));
       }
     });
   } else {
-    // No embeddings → BM25-only fallback via the hybrid RPC with a zero vector.
     const zeroVec = toPgVector(new Array(1536).fill(0));
     const res = await admin.rpc('search_creatives_hybrid', {
       query_embedding: zeroVec,
       query_text:      query,
       k,
-      filter_gender:   gender,
-      filter_type:     null,
+      filter_gender:   vibeGender,
+      filter_types:    null,
       require_elite:   false,
       exclude_ids:     excludeIds,
     });
     if (res.data?.length) {
-      const normalised = (res.data as Array<Record<string, unknown>>).map(r => ({
-        ...r,
-        entity_type: 'creative' as const,
-        score: 0,
-      })) as unknown as SearchResult[];
-      creativeSets.push(normalised);
+      creativeSets.push(normaliseHybridRows(res.data as Array<Record<string, unknown>>));
     }
   }
 
-  // ── Step 4: RRF fusion across all creative sets ──────────────────────────
   let fusedCreatives = rrfFuse(creativeSets, k);
 
-  // ── Step 4b: Outfit-intent guard ────────────────────────────────────────
-  // When the user is shopping for an outfit/look/vibe, accessories and
-  // underwear are almost never the headline answer — they're sub-pieces.
-  // Strip them unless the query explicitly asks for them, otherwise a
-  // bra concept_doc that mentions "summer" can outrank actual summer dresses.
+  // Outfit-intent guard preserved from the original pipeline.
   const intent = queryPlan.intent;
   const isOutfitIntent = (intent === 'occasion_lookup' || intent === 'vibe_browse' || intent === 'outfit_pairing')
     && /\b(outfit|look|fit|wear|style|ensemble|set)\b/i.test(query);
@@ -478,8 +562,6 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── Step 5: Dedupe by product_id so one product can't dominate the grid ──
-  // (a product with multiple live creatives would otherwise stack).
   const seenProductIds = new Set<string>();
   const dedupedResults: SearchResult[] = [];
   for (const c of fusedCreatives) {
@@ -488,7 +570,6 @@ Deno.serve(async (req: Request) => {
     dedupedResults.push(c);
   }
 
-  // ── Step 6: Log query ─────────────────────────────────────────────────────
   const topScore = dedupedResults[0]?.score ?? null;
   const resultCount = dedupedResults.length;
 
@@ -505,7 +586,6 @@ Deno.serve(async (req: Request) => {
     queryId = logData ?? null;
   }
 
-  // Cold miss: very few results or very low score → backfill agent will pick up
   const coldMiss = resultCount < 5 || topScore === null || topScore < 0.020;
 
   return jsonRes({
@@ -517,6 +597,7 @@ Deno.serve(async (req: Request) => {
     meta: {
       result_count: resultCount,
       top_score:    topScore,
+      branch:       'vibe',
       embeddings_used: allEmbeddings.length,
       rewrites_used:   rewriteEmbeddings.length,
       visual_lane:     visualEmbedding != null,
