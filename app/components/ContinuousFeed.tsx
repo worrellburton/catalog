@@ -177,14 +177,14 @@ export default function ContinuousFeed({
   const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
   // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
-  // We still run semantic in the background to broaden coverage, but we
-  // suppress the pending/loading UX so the UI stays instant.
+  // We still run semantic in the background so Haiku-driven expansion can
+  // broaden / refine results, but we suppress the pending/loading UX so
+  // the UI stays instant for these common queries.
   const tier1Eligible = !!resolveCatalogTypes(searchQuery);
-  // Skip nl-search entirely for tier-1 catalog queries — the in-memory +
-  // DB tag fast-path already returns the full type-constrained result set
-  // in <50ms, so paying for an OpenAI embed + edge-function round-trip
-  // (often 5-10s on cold starts) just to re-rank the same rows is waste.
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: !tier1Eligible });
+  // Always run nl-search so Haiku gets to expand every query against the
+  // canonical product.type set. Cache hits are ~80ms; misses ~400ms with
+  // Haiku+embed running in parallel. Tier-1 still wins the first paint.
+  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the
