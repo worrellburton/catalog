@@ -59,25 +59,27 @@ const AGENDA_30: Phase[] = [
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Shopping for fashion online is broken in two directions: shoppers can\'t see clothes on bodies that look like theirs, and creators can\'t monetize their taste without becoming full-time content producers."',
+        '"Amazon won the search-bar era. Prime won the convenience era. The next era belongs to whoever wins AI-native discovery — and the incumbent is structurally unable to ship it. Online retail discovery is broken: shoppers can\'t see products in context, and the people with actual taste have no way to monetize curation without grinding out content full-time."',
       hitThese: [
-        'Shopper side: PDP photos are aspirational, sizing-blind, and one-shot. Returns rate hits 30–40% for fashion DTC.',
-        'Creator side: even creators with 100k followers earn pennies per affiliate click — the creator-commerce stack is built for influencers, not curators.',
-        'Brand side: paid social CAC is climbing every quarter. Shopify + Meta is no longer enough.',
-        'Why now: AI video lets a creator generate a personalized try-on look in <60s. That was impossible 18 months ago.',
+        'Amazon framing: a $1.6T retail giant built on a 1995 mental model — type a keyword, scroll a list, read reviews. AI-native shoppers reject this UX.',
+        'Shopper side: product images are aspirational, sizing-blind, decontextualized. Across every category — apparel, beauty, home, gear — shoppers want to see the product on someone like them, in context.',
+        'Curator side: people with taste (across all retail verticals, not just fashion) earn pennies per affiliate click. The creator-commerce stack is built for the top 1% of influencers, not the long tail of curators.',
+        'Brand side: Amazon\'s search ads and Meta\'s paid social are both saturated. Brands need a new top-of-funnel that arrives with intent.',
+        'Why now: AI video + multi-modal embeddings let us generate personalized product-in-context content per-user, per-product. That was impossible 18 months ago.',
       ],
       ifAsked: [
         {
           q: 'Isn\'t this just TikTok Shop?',
-          a: 'TikTok Shop is a checkout layer on top of entertainment content. Catalog is a curated discovery surface — looks are organized, shoppable, and tied back to creator identity, not algorithmic firehose.',
+          a: 'TikTok Shop is a checkout layer on entertainment content — algorithmic firehose, no curation, no cross-brand discovery. Catalog is a structured catalog: products are organized, shoppable, and tied to identity (creator + shopper), not vibes.',
         },
         {
-          q: 'Why hasn\'t Pinterest done this?',
-          a: 'Pinterest indexes other people\'s images. We generate them on demand against a real product catalog — the look is shoppable end-to-end with attribution back to the creator who curated it.',
+          q: 'Why hasn\'t Amazon or Pinterest done this?',
+          a: 'Amazon\'s incentive is to keep you in their funnel — they won\'t generate cross-brand creator content that links out to Shopify stores. Pinterest indexes other people\'s images; they don\'t generate them, and they can\'t close the loop to checkout. Both are structurally locked out of the wedge.',
         },
       ],
       watchOutFor: [
-        'Don\'t present the problem as "we\'re building tools for creators". Present it as a shopper outcome — investors fund consumer demand, not vendor pain.',
+        'Don\'t pitch this as a fashion company. The wedge is fashion; the surface is all retail. Investors fund category-defining outcomes, not vertical SaaS.',
+        'Don\'t present the problem as "we\'re building tools for creators". Present it as a shopper outcome — investors fund consumer demand.',
       ],
     },
   },
@@ -124,12 +126,13 @@ const AGENDA_30: Phase[] = [
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Let me anchor this in numbers. US apparel e-comm is [~$200B]. Creator-attributed commerce is the fastest-growing slice — projected to hit [$X] by [year]."',
+        '"US retail e-commerce is $1.1T and growing 8% per year. Amazon owns ~38% of it on a 30-year-old UX. The AI-native discovery layer for the rest of retail is the next $100B+ company."',
       hitThese: [
-        'TAM: global fashion e-comm — north of $1T.',
-        'SAM: creator-attributed fashion commerce in US/EN markets.',
-        'SOM 3 years out: 1–2% of SAM with our current category lock and brand integrations.',
-        'Comparables: LTK ($2B GMV), ShopMy ($300M+ raised), Whatnot ($5B valuation) — different surfaces, same thesis.',
+        'TAM: global retail e-commerce — $6T+ and rising.',
+        'SAM: US/EN AI-native discoverable retail — apparel, beauty, home, gear, accessories. ~$400B.',
+        'SOM 3 years out: 0.5–1% of SAM with our current wedge (fashion-led) plus category expansion to beauty + home.',
+        'Wedge → expansion: fashion is where AI-generated try-on content has the cleanest unit economics. Same pipeline ports to beauty (try-on with face), home (place-in-room), gear (lifestyle context).',
+        'Comparables: Amazon at IPO ($438M), Pinterest at IPO ($13B), Shopify at IPO ($1.3B). All three were "obvious in hindsight" verticals built on a UX shift.',
       ],
       numbersToKnow: [
         '[Live MAU on catalog.shop]',
@@ -139,7 +142,7 @@ const AGENDA_30: Phase[] = [
       ],
       watchOutFor: [
         'Don\'t use bottom-up TAM and top-down TAM in the same breath. Pick one, defend it.',
-        'Don\'t cite a $1T market without saying what wedge of it you can capture.',
+        'Don\'t pitch only fashion. Lead with retail; explain fashion as the wedge.',
       ],
     },
   },
@@ -219,21 +222,26 @@ const AGENDA_30: Phase[] = [
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Three lanes are converging on this. Creator-commerce platforms (LTK, ShopMy), AI try-on tools (Doji, Veesual), and social commerce (TikTok Shop). None of them have all three pieces."',
+        '"Four incumbents on the map — Amazon, Shopify, TikTok Shop, and the LTK/ShopMy creator-commerce stack. Each is structurally locked out of cross-brand AI-native discovery for one of three reasons."',
       hitThese: [
-        'LTK / ShopMy — link-in-bio for influencers. Don\'t generate content; rely on creators producing it manually.',
-        'AI try-on (Doji, Veesual) — single-product try-on widgets sold to brands. No discovery, no creator layer.',
-        'TikTok Shop — entertainment-first, algorithmic, hard to organize a curated catalog around.',
-        'Our moat: the only stack that combines AI video generation + creator catalogs + cross-brand similarity (Marengo embeddings + pgvector).',
+        'Amazon — owns the search-bar era. Their entire economic model depends on shoppers staying inside Amazon. They will NOT build a surface that sends traffic to Shopify stores. Innovator\'s dilemma in the cleanest possible form.',
+        'Shopify — their incentive is to keep brands inside their walled gardens. A cross-brand discovery surface is anti-Shopify by design (pro-shopper, which is why brands opt in to ours).',
+        'TikTok Shop — entertainment-first, algorithmic firehose. Can\'t organize a structured, curated catalog around personal taste.',
+        'LTK / ShopMy / similar — link-in-bio for the top 1% of influencers. Don\'t generate content; locked into fashion + beauty; no AI tooling.',
+        'Our moat: the only stack that combines AI video generation (Seedance via Fal) + creator-curated catalogs + cross-brand similarity (Marengo embeddings + pgvector) + Shopify partner integrations. Each piece is ~6 months of engineering on its own; the glue is the moat.',
       ],
       ifAsked: [
         {
+          q: 'What stops Amazon from building this?',
+          a: 'Amazon\'s revenue model depends on shoppers staying inside Amazon. Cross-brand discovery that links out to Shopify stores is structurally hostile to their P&L. They\'re Blockbuster in 2007 — they see the shift, but they can\'t ship it without cannibalizing.',
+        },
+        {
           q: 'What stops Shopify from building this?',
-          a: 'Shopify\'s incentive is to keep brands inside their walls. A cross-brand discovery surface that sends shoppers between competing stores is anti-Shopify by design — but pro-shopper, which is why brands opt in.',
+          a: 'Same dilemma in reverse. Shopify\'s value-prop to merchants is "your store, your customer". A discovery layer that pools shoppers across competing stores breaks that promise. Brands integrate with us BECAUSE Shopify won\'t.',
         },
         {
           q: 'What about Meta / Instagram?',
-          a: 'Meta\'s shopping graph is dead. They retired Instagram Shop tabs in 2023. The vacuum is exactly what created our window.',
+          a: 'Meta retired Instagram Shop in 2023. The vacuum is exactly what created our window — a top-of-funnel for retail that isn\'t locked into Amazon\'s walled garden or Meta\'s ad model.',
         },
       ],
     },
@@ -299,8 +307,8 @@ const AGENDA_30: Phase[] = [
       ],
       ifAsked: [
         {
-          q: 'How does this become a $10B outcome?',
-          a: 'Cross-brand discovery + creator monetization is the wedge. Once shoppers default to Catalog for fashion discovery, we own the top of the funnel for a $1T category. Comparable: Pinterest at IPO.',
+          q: 'How does this become a $10B+ outcome?',
+          a: 'AI-native discovery is the next Amazon. We own the top of the funnel for a $1T+ retail category — starting with fashion as the wedge, expanding to beauty, home, and gear as the same pipeline ports. Pinterest IPO\'d at $13B with weaker monetization and a single category. Amazon at IPO was $438M.',
         },
         {
           q: 'What keeps you up at night?',
@@ -369,17 +377,22 @@ const AGENDA_60: Phase[] = [
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Three customer archetypes feel this pain. The shopper, the creator, and the brand. Let me walk through each — with a real quote from someone we\'ve interviewed."',
+        '"Online retail is run on a 1995 mental model — search bar, list of results, photos shot in a studio. Three archetypes feel this hardest. Let me walk through each."',
       hitThese: [
-        'Shopper (Gen Z / millennial, mobile-first): "I want to see clothes on someone who looks like me, on a real body, in motion." Today: PDP photos + reviews — broken.',
-        'Creator (sub-100k niche taste): "I have great taste but I can\'t make money from it without becoming a content machine." LTK is built for the top 1%; the long tail is unmonetized.',
-        'Brand: "Paid social CAC is $80 and rising. Affiliate is broken. We need shoppers who arrive with intent."',
-        'The hidden bridge: AI video lets a creator publish 50 looks/week without filming any of them — the unit economics flip.',
+        'Shopper (Gen Z / millennial, mobile-first): across categories — apparel, beauty, home, gear — they want to see the product on someone like them, in their context, before buying. Static PDP photos + reviews are a 30-year-old solution.',
+        'Curator (sub-100k niche taste, across verticals): "I have great taste — in clothes, in skincare, in home goods — but the only way to monetize it today is to grind out content full-time on Instagram or TikTok." The creator-commerce stack (LTK, ShopMy) is fashion-only and built for the top 1%.',
+        'Brand (DTC across categories): "Amazon ads are saturated. Meta CAC is climbing every quarter. We need a top-of-funnel that arrives with intent, not impressions."',
+        'The bridge: AI video + multi-modal embeddings let a curator publish 50+ pieces of personalized product-in-context content per week without filming anything. The unit economics of content production flip overnight.',
+        'Why fashion first: highest content-to-revenue ratio (a single try-on video → multiple SKU clickouts), cleanest AI generation pipeline. Same architecture ports to beauty (face try-on), home (place-in-room), gear (lifestyle context).',
       ],
       ifAsked: [
         {
           q: 'Who exactly is the customer?',
-          a: 'Two-sided: the shopper is the consumer-facing customer (free, ad/affiliate-monetized), the brand is the paying customer (subscription + ads). The creator is the supply-side participant — payouts, not payments.',
+          a: 'Two-sided: shoppers are the consumer-facing customer (free, ad/affiliate-monetized), brands are the paying customer (subscription + ads). Creators are the supply-side participant — revshare, not payments. Same model that worked for YouTube and TikTok.',
+        },
+        {
+          q: 'Why not start with all categories at once?',
+          a: 'Wedge discipline. Fashion is where the AI generation pipeline gives us the cleanest unit economics today. Once we own that surface, we extend the same multi-modal stack to beauty, home, and gear.',
         },
       ],
     },
@@ -435,12 +448,14 @@ const AGENDA_60: Phase[] = [
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Two ways to size this — bottom-up from our funnel, top-down from category benchmarks. They converge."',
+        '"US retail e-commerce is $1.1T. Amazon owns 38% on a 30-year-old UX. The AI-native discovery layer for the rest of retail is the next $100B+ company. Two sizings — bottom-up from our funnel, top-down from category benchmarks — converge on the same wedge."',
       hitThese: [
+        'TAM: $6T global retail e-commerce. $1.1T US. Growing 8% YoY post-pandemic.',
+        'SAM (3 years out): AI-native discoverable retail in US/EN — apparel, beauty, home, gear, accessories. ~$400B addressable.',
         'Bottom-up: [N] target shoppers × [X sessions/yr] × [$Y AOV] × [Z% take rate] = $[A] revenue at saturation.',
-        'Top-down: $200B US apparel e-comm × 5% creator-attributed = $10B SAM. 1% capture = $100M ARR.',
-        'Comparables: LTK = $2B GMV through-flow, ShopMy raised at $400M post on $80M run-rate, Whatnot at $5B on live commerce.',
-        'Trajectory: every prior creator-commerce wave (Polyvore → Pinterest → LTK) added ~10x to the addressable spend. AI video is the next 10x.',
+        'Top-down: $400B SAM × 1% capture = $4B GMV through-flow → $400M ARR at our take rate. Pinterest IPO\'d at $13B on less.',
+        'Wedge → expansion: fashion (now) → beauty (year 2) → home (year 2-3) → gear (year 3+). Same AI pipeline, same creator + brand network.',
+        'Comparables: Amazon at IPO ($438M), Pinterest at IPO ($13B), Shopify at IPO ($1.3B). LTK at $2B GMV is a good unit-economics benchmark for the fashion wedge alone.',
       ],
       numbersToKnow: [
         '[Live MAU]',
@@ -451,7 +466,7 @@ const AGENDA_60: Phase[] = [
       ],
       watchOutFor: [
         'Top-down sizing alone gets you laughed out. Always cross-check bottom-up.',
-        'If sizing involves "all of fashion" plus "all of beauty" plus "all of home" — narrow. One vertical, defended.',
+        'Lead with retail, defend with fashion as the wedge. Don\'t flip the order — investors hear "fashion company" and price down.',
       ],
     },
   },
@@ -537,22 +552,26 @@ const AGENDA_60: Phase[] = [
     minutes: 4,
     cheatsheet: {
       openWith:
-        '"Four moats, each compounding on the others."',
+        '"Four moats, each compounding on the others. The structural one is bigger than any of them: every incumbent in retail is locked out of the wedge by their own business model."',
       hitThese: [
-        '1. Generation pipeline. Seedance prompts + role-tagged products + Marengo embeddings — proprietary glue that\'s ~6 months of engineering to replicate.',
-        '2. Brand network. Shopify partner integration with [N] live brands. Each new brand gives shoppers more inventory; each shopper gives brands more clickouts.',
-        '3. Creator network. [N] active creators with published looks, with revshare baked into our payout pipeline.',
-        '4. Data flywheel. Every clickout, every saved product, every generation feeds Marengo + pgvector embeddings → better recs → more clickouts.',
-        'Threats addressed: Shopify won\'t build cross-brand discovery (cannibalizes their walls). Pinterest can\'t generate. TikTok Shop is entertainment-first. The lane is open.',
+        '1. Generation pipeline. Seedance prompts + role-tagged products + Marengo embeddings + pgvector + Fal queue + webhook orchestration. Proprietary glue, ~6 months of engineering to replicate.',
+        '2. Brand network. Shopify partner integration with [N] live brands across [M] categories. Each new brand gives shoppers more cross-brand inventory; each shopper gives brands more clickouts.',
+        '3. Creator network. [N] active curators with published catalogs, revshare baked into our payouts pipeline. Defensible because creators don\'t want to maintain catalogs in N places — once we\'re the home, switching cost is high.',
+        '4. Data flywheel. Every clickout, save, and generation feeds Marengo + pgvector embeddings → better recommendations → more clickouts. Compounds quarterly.',
+        'Structural moat: Amazon won\'t cannibalize their P&L by sending shoppers to Shopify stores. Shopify won\'t cannibalize merchants by pooling shoppers across stores. Meta retired Instagram Shop. The lane is structurally open and the incumbents can\'t close it without breaking their core business.',
       ],
       ifAsked: [
         {
+          q: 'What if Amazon ships an AI shopping experience?',
+          a: 'They\'ll ship it for Amazon products only — strengthening their walled garden, not opening it to Shopify stores. Our shoppers come to us BECAUSE they want cross-brand. Different product, different intent.',
+        },
+        {
           q: 'What if Shopify acquires Doji or builds AI try-on?',
-          a: 'They\'ll build it for individual brand stores. We\'re the layer ABOVE that — cross-brand discovery. Different surface, different shopper intent.',
+          a: 'For individual stores. We\'re the layer ABOVE — cross-brand discovery and curation. Their solution makes individual product pages better; ours owns the top of the funnel before the shopper picks a brand.',
         },
         {
           q: 'What if Meta brings shopping back?',
-          a: 'They retired Instagram Shop in 2023. Even if they restart, they won\'t out-curate a creator-led catalog. Our relationship with creators IS the moat.',
+          a: 'They\'ve tried twice and failed. Even if they restart, they won\'t out-curate a creator-led catalog tied to identity. The trust + revshare + AI generation flywheel is hard to clone with ad money.',
         },
       ],
     },
@@ -608,8 +627,8 @@ const AGENDA_60: Phase[] = [
           a: 'Series A in [N] months, $[X]M at $[Y]M post. Triggers are: [WAU target], [revenue target], [N] paying brands.',
         },
         {
-          q: 'How do you become a $10B company?',
-          a: 'Cross-brand discovery + creator monetization owns the top of the funnel for a $1T fashion category. Pinterest IPO\'d at $13B with weaker monetization. Our wedge ends at the same place, with better unit economics from day one.',
+          q: 'How do you become a $10B+ company?',
+          a: 'AI-native discovery is the next Amazon. We start with fashion (cleanest unit economics for AI generation), expand to beauty, home, and gear on the same pipeline, and end up owning the top of the funnel for a $1T+ retail category. Amazon at IPO was $438M; Pinterest at IPO was $13B with weaker monetization in a single vertical. The window is the next 24 months before incumbents wake up.',
         },
         {
           q: 'What\'s your biggest risk?',
