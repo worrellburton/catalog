@@ -79,7 +79,7 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchLiveAds, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -211,6 +211,10 @@ export default function Home() {
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
   const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
+  // Popular-product fallback for the "More like this" feed. Populated
+  // once on mount; used when find_similar_creatives returns nothing for
+  // a given seed (e.g. cold-start product with no embedding yet).
+  const [popularFallback, setPopularFallback] = useState<ProductAd[]>([]);
   // Tracks the look the user was viewing when they opened a product, so
   // pressing back on the product returns to that look instead of the feed.
   const [productOpenedFromLook, setProductOpenedFromLook] = useState<Look | null>(null);
@@ -681,6 +685,21 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Popular fallback — fetch the live-ads roster once so the "More like
+  // this" feed can fill from it whenever the similar-by-embedding
+  // lookup returns nothing for the active product.
+  useEffect(() => {
+    let cancelled = false;
+    prefetchLiveAds()
+      .then(rows => {
+        if (cancelled) return;
+        primeTrailAssets(rows.slice(0, 32));
+        setPopularFallback(rows);
+      })
+      .catch(() => { /* leave fallback empty rather than throw */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Curated subset for the "You might also like" grid. Drops legacy seed
   // rows whose video field is a bare filename (e.g. "guy.mp4" / "girl2.mp4"
   // from migration 002 — those assets aren't deployed and render as empty
@@ -1123,6 +1142,7 @@ export default function Home() {
                 }
                 similarCreatives={similarCreatives ?? undefined}
                 brandCreatives={brandCreatives ?? undefined}
+                popularFallback={popularFallback}
                 lookCreatives={lookFeedTiles}
                 bookmarks={bookmarks}
                 navKey={productNavCount}

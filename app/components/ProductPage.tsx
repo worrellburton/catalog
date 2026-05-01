@@ -36,6 +36,10 @@ interface ProductPageProps {
   /** Other live creatives from the same brand. Rendered as the
    *  "More from <brand>" rail in the desktop info column. */
   brandCreatives?: ProductAd[];
+  /** Popular live creatives — used to fill the "More like this" grid
+   *  when find_similar_creatives returns nothing for the active product
+   *  (cold-start, missing embedding, etc.). */
+  popularFallback?: ProductAd[];
   /** Editorial fashion looks (Look[]) — drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
@@ -302,6 +306,7 @@ export default function ProductPage({
   creative,
   similarCreatives,
   brandCreatives,
+  popularFallback,
   lookCreatives,
   bookmarks,
   navKey = 0,
@@ -309,25 +314,33 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
-  // "More like this" rail. Filter out items from the same brand so this
-  // surface is purely cross-brand discovery, then cap at 16 items so the
-  // grid is at most 4 rows on desktop (4 cols), 5 rows on tablet (3 cols),
-  // 8 rows on mobile (2 cols).
-  const crossBrandSimilar = useMemo(() => {
-    if (!similarCreatives || similarCreatives.length === 0) return [];
+  // "More like this" rail. Filter to cross-brand only and cap at 16 so
+  // the grid is at most 4 rows on desktop (4 cols), 5 on tablet (3 cols),
+  // 8 on mobile (2 cols). When find_similar_creatives returns nothing
+  // for the seed (cold-start product, missing embedding), fall back to
+  // popularFallback so the section is never blank.
+  const moreLikeThis = useMemo(() => {
     const ownBrand = (product.brand || '').trim().toLowerCase();
-    const seenProductIds = new Set<string>();
-    const out: ProductAd[] = [];
-    for (const c of similarCreatives) {
-      const otherBrand = (c.product?.brand || '').trim().toLowerCase();
-      if (ownBrand && otherBrand === ownBrand) continue;
-      if (seenProductIds.has(c.product_id)) continue;
-      seenProductIds.add(c.product_id);
-      out.push(c);
-      if (out.length >= 16) break;
-    }
-    return out;
-  }, [similarCreatives, product.brand]);
+    const ownProductId = (product as Product & { id?: string }).id || '';
+    const pickFrom = (rows: ProductAd[] | undefined): ProductAd[] => {
+      if (!rows || rows.length === 0) return [];
+      const seenProductIds = new Set<string>();
+      const out: ProductAd[] = [];
+      for (const c of rows) {
+        const otherBrand = (c.product?.brand || '').trim().toLowerCase();
+        if (ownBrand && otherBrand === ownBrand) continue;
+        if (ownProductId && c.product_id === ownProductId) continue;
+        if (seenProductIds.has(c.product_id)) continue;
+        seenProductIds.add(c.product_id);
+        out.push(c);
+        if (out.length >= 16) break;
+      }
+      return out;
+    };
+    const fromSimilar = pickFrom(similarCreatives);
+    if (fromSimilar.length > 0) return fromSimilar;
+    return pickFrom(popularFallback);
+  }, [similarCreatives, popularFallback, product.brand, (product as Product & { id?: string }).id]);
   // Shop dropdown — collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -563,13 +576,13 @@ export default function ProductPage({
         </section>
         </div>
 
-        {crossBrandSimilar.length > 0 && (
+        {moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
-              {crossBrandSimilar.map(c => (
+              {moreLikeThis.map(c => (
                 <CreativeCard
                   key={c.id}
                   creative={c}
