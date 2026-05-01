@@ -19,17 +19,6 @@ import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from '.
  * works. Only fires when no other input has focus.
  */
 
-type SpeechRecognitionLike = {
-  start(): void;
-  stop(): void;
-  onresult: ((e: { results: { 0: { 0: { transcript: string } } } }) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((e: unknown) => void) | null;
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-};
-
 const PLACEHOLDER_HINTS = [
   'Make a catalog for anything',
   'Try "omg shoes"',
@@ -46,10 +35,22 @@ export default function TypeAnywhere() {
   const [text, setText] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  // Stable hint per mount — rotating per keystroke would feel jittery.
-  const hintRef = useRef(PLACEHOLDER_HINTS[Math.floor(Math.random() * PLACEHOLDER_HINTS.length)]);
+  // Rotating placeholder. Picks a different hint every ~3s while
+  // the input is empty so the bar feels alive and shoppers see a
+  // wider menu of "things to type" without being told. Pauses while
+  // the user is typing or has typed text (hints disappear once
+  // they've started — no point distracting them).
+  const [hintIndex, setHintIndex] = useState(() => Math.floor(Math.random() * PLACEHOLDER_HINTS.length));
+  const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (text) return;
+    const id = window.setInterval(() => {
+      setHintIndex(i => (i + 1) % PLACEHOLDER_HINTS.length);
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [text]);
 
   // Suppress on admin routes — admins are typing into form fields
   // constantly and a fixed bar would clutter the UI.
@@ -106,45 +107,6 @@ export default function TypeAnywhere() {
     setFiltersOpen(false);
   }, [location.pathname]);
 
-  const onMic = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    // Web Speech API lives behind two vendor-prefixed names; some
-    // browsers (Firefox) don't ship it at all. Bail quietly when
-    // unavailable rather than throwing into a click handler.
-    const Ctor = (window as unknown as {
-      SpeechRecognition?: new () => SpeechRecognitionLike;
-      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-    }).SpeechRecognition ?? (window as unknown as {
-      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-    }).webkitSpeechRecognition;
-    if (!Ctor) return;
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const rec = new Ctor();
-    rec.lang = 'en-US';
-    rec.interimResults = false;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const transcript = e.results[0][0].transcript;
-      setText(transcript);
-      // Auto-submit on a clean voice transcript.
-      submit(transcript);
-    };
-    rec.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-    rec.onerror = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-    recognitionRef.current = rec;
-    setListening(true);
-    try { rec.start(); } catch { setListening(false); }
-  }, [listening, submit]);
-
   const handleFilterApply = useCallback(() => {
     // Filters drive the catalog name on the home grid. Sync the
     // resulting catalog name as a query so _index.tsx can apply it.
@@ -163,20 +125,6 @@ export default function TypeAnywhere() {
     <>
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
         <div className="ai-bar">
-          <button
-            type="button"
-            className="ai-bar-icon-btn"
-            aria-label="Add"
-            onClick={() => {
-              // Placeholder for future image / file attachment. For
-              // now it's a hook for users — a tooltip + visual
-              // affordance — without changing behavior.
-              inputRef.current?.focus();
-            }}
-            title="Add (coming soon)"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </button>
           <button
             type="button"
             className={`ai-bar-icon-btn ${hasActiveFilters(activeFilters) ? 'is-active' : ''}`}
@@ -200,7 +148,7 @@ export default function TypeAnywhere() {
             data-form-type="other"
             name="ai-bar-search"
             className="ai-bar-input"
-            placeholder={hintRef.current}
+            placeholder={text ? '' : rotatingHint}
             value={text}
             onChange={(e) => setText(e.target.value.slice(0, 80))}
             onKeyDown={(e) => {
@@ -213,14 +161,6 @@ export default function TypeAnywhere() {
               }
             }}
           />
-          <button
-            type="button"
-            className={`ai-bar-icon-btn ${listening ? 'is-listening' : ''}`}
-            aria-label={listening ? 'Stop voice input' : 'Voice input'}
-            onClick={onMic}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-          </button>
           <button
             type="button"
             className="ai-bar-send"
