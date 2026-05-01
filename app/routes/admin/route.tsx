@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
   { to: '/admin/branding', label: 'Branding', icon: 'M4 7h16M4 12h10M4 17h16' },
   { to: '/admin/ui', label: 'UI', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
+  { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
 ];
 
 interface SearchItem {
@@ -70,6 +71,10 @@ const allSearchItems: SearchItem[] = [
   { label: 'Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
+  { label: 'Fundraising', type: 'Page', to: '/admin/fundraising' },
+  { label: 'Pitch', type: 'Page', to: '/admin/fundraising?section=pitch' },
+  { label: '30 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=30' },
+  { label: '60 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=60' },
   { label: 'UI', type: 'Page', to: '/admin/ui' },
   { label: 'Brand', type: 'Page', to: '/admin/ui/brand' },
   { label: 'Search bar', type: 'Page', to: '/admin/ui/search-bar' },

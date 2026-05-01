@@ -3218,3 +3218,238 @@ html.admin-on-dark-canvas .admin-topbar,
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.4;
 }
+
+/* ============================================================
+   Fundraising — pitch agenda phase tracker
+   ============================================================ */
+
+.fr-tracker {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.fr-tracker-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+@media (min-width: 880px) {
+  .fr-tracker-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.fr-tracker-progress {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fr-tracker-progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.fr-tracker-progress-meta {
+  font-weight: 400;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.fr-tracker-bar-track {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.fr-tracker-bar-fill {
+  height: 100%;
+  background: #111827;
+  border-radius: 999px;
+  transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.fr-tracker-clock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.fr-tracker-time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: -0.02em;
+  min-width: 88px;
+  text-align: right;
+}
+
+.fr-tracker-time.over {
+  color: #dc2626;
+}
+
+.fr-tracker-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fr-phase-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fr-phase {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 220ms ease;
+}
+
+.fr-phase:last-child { border-bottom: 0; }
+
+.fr-phase.is-upcoming { opacity: 0.55; }
+.fr-phase.is-done { background: #fafbfc; }
+.fr-phase.is-active {
+  background: #fff8e6;
+  opacity: 1;
+}
+
+.fr-phase-marker {
+  display: flex;
+  justify-content: center;
+}
+
+.fr-phase-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fr-phase.is-active .fr-phase-num {
+  background: #111827;
+  color: #fff;
+}
+.fr-phase.is-done .fr-phase-num {
+  background: #16a34a;
+  color: #fff;
+}
+
+.fr-phase-body {
+  min-width: 0;
+}
+
+.fr-phase-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.fr-phase-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.fr-phase-minutes {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.fr-phase.is-active .fr-phase-minutes {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.fr-phase-desc {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.fr-phase-active-meta {
+  margin-top: 8px;
+}
+
+.fr-phase-time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fde68a;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.fr-phase-time.over {
+  color: #fff;
+  background: #dc2626;
+}
+
+.fr-tracker-done {
+  padding: 18px 24px;
+  background: #ecfdf5;
+  border-top: 1px solid #d1fae5;
+  font-size: 13px;
+  font-weight: 500;
+  color: #065f46;
+}
+
+.admin-dark .fr-tracker {
+  background: #18181b;
+  border-color: #27272a;
+}
+.admin-dark .fr-tracker-bar {
+  background: #0f0f10;
+  border-color: #27272a;
+}
+.admin-dark .fr-tracker-progress-label { color: #f4f4f5; }
+.admin-dark .fr-tracker-progress-meta { color: #a1a1aa; }
+.admin-dark .fr-tracker-bar-track { background: #27272a; }
+.admin-dark .fr-tracker-bar-fill { background: #f4f4f5; }
+.admin-dark .fr-tracker-time { color: #f4f4f5; }
+.admin-dark .fr-phase { border-color: #27272a; }
+.admin-dark .fr-phase.is-done { background: #131316; }
+.admin-dark .fr-phase.is-active { background: rgba(250, 204, 21, 0.08); }
+.admin-dark .fr-phase-num { background: #27272a; color: #d4d4d8; }
+.admin-dark .fr-phase.is-active .fr-phase-num { background: #f4f4f5; color: #18181b; }
+.admin-dark .fr-phase-title { color: #f4f4f5; }
+.admin-dark .fr-phase-minutes { background: #27272a; color: #a1a1aa; }
+.admin-dark .fr-phase-desc { color: #a1a1aa; }
+.admin-dark .fr-tracker-done {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
