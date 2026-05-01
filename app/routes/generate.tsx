@@ -21,6 +21,7 @@ import {
   saveUserSlots,
   updateGenerationCrop,
   uploadUserPhoto,
+  checkFacePhoto,
   type UserUpload,
   type UserGeneration,
   type GenerationProductDetail,
@@ -196,12 +197,69 @@ export default function GeneratePage() {
   // upload.onprogress event.
   const [uploadProgress, setUploadProgress] = useState<{ slot: number; pct: number } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Combined Fal/ByteDance photo pre-validation. We submit ALL filled
+  // slots together because ByteDance's `partner_validation_failed`
+  // safety filter only fires for multi-image submissions — single-image
+  // checks always pass and miss the real failure mode. All filled slots
+  // share the same state from the most recent combo check.
+  //   idle → checking (edge function running) → ok | blocked
+  const [slotChecks, setSlotChecks] = useState<('idle' | 'checking' | 'ok' | 'blocked')[]>(['idle', 'idle', 'idle']);
+  // The reason returned by the last failing combo check, used to show a
+  // human-readable banner. Only set when at least one slot is 'blocked'.
+  const [photoCheckReason, setPhotoCheckReason] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pickedUploadIds = useMemo(
     () => slots.filter((x): x is string => !!x),
     [slots],
   );
+
+  // Combo photo pre-validation. Whenever the filled slot set changes,
+  // debounce 600ms then submit ALL filled slots together to Fal. The
+  // edge function polls until ByteDance's safety filter responds (~10s
+  // for a rejection, 15s timeout for a likely-pass). Skip the check for
+  // a single filled slot — single-image submissions almost always pass
+  // and would just produce false-positive green checkmarks.
+  const filledPublicUrls = useMemo(
+    () => pickedUploadIds
+      .map(id => existingUploads.find(u => u.id === id)?.public_url)
+      .filter((u): u is string => !!u),
+    [pickedUploadIds, existingUploads],
+  );
+  const filledKey = filledPublicUrls.join('|');
+  useEffect(() => {
+    if (!user?.id) return;
+    if (filledPublicUrls.length === 0) {
+      setSlotChecks(['idle', 'idle', 'idle']);
+      setPhotoCheckReason(null);
+      return;
+    }
+    // Mark every filled slot as 'checking' immediately for visual feedback.
+    setSlotChecks(prev => {
+      const next = [...prev];
+      slots.forEach((id, i) => { next[i] = id ? 'checking' : 'idle'; });
+      return next;
+    });
+    setPhotoCheckReason(null);
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await checkFacePhoto(filledPublicUrls, user.id);
+      if (cancelled) return;
+      setSlotChecks(prev => {
+        const next = [...prev];
+        slots.forEach((id, i) => {
+          next[i] = id ? (result.ok ? 'ok' : 'blocked') : 'idle';
+        });
+        return next;
+      });
+      setPhotoCheckReason(result.ok ? null : (result.reason ?? 'blocked'));
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // We deliberately key off filledKey + slot count so we don't re-run
+    // when the user just reorders existingUploads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filledKey, user?.id]);
 
   // Past generations — rendered in phase 7 as the "Your looks" grid. We poll
   // pending/generating rows here so the grid promotes itself to done/failed
@@ -267,6 +325,9 @@ export default function GeneratePage() {
   // Phase 12 — submit + poll
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Shown on the photos step when the user's last look failed, so they know
+  // to retry rather than being dumped directly on the error result frame.
+  const [failedLastLookBanner, setFailedLastLookBanner] = useState<string | null>(null);
   const [generation, setGeneration] = useState<UserGeneration | null>(null);
   // Products + reference uploads tied to the currently-viewed generation.
   // Hydrated whenever we land on the result step so the look surfaces the
@@ -331,6 +392,13 @@ export default function GeneratePage() {
       if (cancelled) return;
       setGenerations(rows);
       setLoadingList(false);
+      // Phase B step 5: if the most-recent generation failed, stay on photos
+      // and show a dismissible banner rather than auto-landing on the error result.
+      const latest = rows[0];
+      if (latest?.status === 'failed') {
+        setFailedLastLookBanner('Your last look failed — let\'s try again.');
+        // step starts at 'photos' already, so no setStep needed.
+      }
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -492,6 +560,11 @@ export default function GeneratePage() {
       next[slotIndex] = null;
       return next;
     });
+    setSlotChecks(prev => {
+      const next = [...prev];
+      next[slotIndex] = 'idle';
+      return next;
+    });
   };
 
   // Slots currently rendering a "drag is hovering me" outline. We
@@ -610,6 +683,11 @@ export default function GeneratePage() {
       if (idx >= 0) next[idx] = data.id;
       return next;
     });
+    // The combo-validation effect below picks up the slot change and
+    // re-runs the multi-photo check. We don't validate per-photo here
+    // because ByteDance's `partner_validation_failed` filter only fires
+    // when 2–3 face references are submitted together — single-image
+    // checks always pass and don't catch the real failure mode.
   };
 
   const onSlotDrop = (slotIndex: number, e: React.DragEvent) => {
@@ -860,6 +938,20 @@ export default function GeneratePage() {
       <main className="gen-main">
         {step === 'photos' && (
           <section className="gen-step gen-step-photos">
+            {/* Failed-last-look banner — dismissible */}
+            {failedLastLookBanner && (
+              <div className="gen-failed-banner" role="alert">
+                <span>{failedLastLookBanner}</span>
+                <button
+                  type="button"
+                  className="gen-failed-banner-close"
+                  aria-label="Dismiss"
+                  onClick={() => setFailedLastLookBanner(null)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {/* Compact input form: title + slots + height + age + Create
                 look button. Capped at ~1/3 of the viewport height so the
                 "Your looks" grid below can dominate the screen. */}
@@ -880,10 +972,11 @@ export default function GeneratePage() {
                 const isUploadingHere = uploadProgress?.slot === i;
                 const pctHere = isUploadingHere ? Math.round(uploadProgress!.pct * 100) : 0;
                 const isDragging = dragSlots.has(i);
+                const checkState = slotChecks[i];
                 return (
                   <div
                     key={i}
-                    className={`gen-slot${upload ? ' is-filled' : ''}${isUploadingHere ? ' is-uploading' : ''}${isDragging ? ' is-dragover' : ''}`}
+                    className={`gen-slot${upload ? ' is-filled' : ''}${isUploadingHere ? ' is-uploading' : ''}${isDragging ? ' is-dragover' : ''}${checkState === 'blocked' ? ' is-check-blocked' : ''}`}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'copy';
@@ -903,6 +996,19 @@ export default function GeneratePage() {
                     {upload ? (
                       <>
                         <img src={upload.public_url} alt={`Reference ${i + 1}`} />
+                        {checkState === 'checking' && (
+                          <div className="gen-slot-check gen-slot-check--checking" aria-label="Checking photo…" />
+                        )}
+                        {checkState === 'ok' && (
+                          <div className="gen-slot-check gen-slot-check--ok" aria-label="Photo accepted" />
+                        )}
+                        {checkState === 'blocked' && (
+                          <div
+                            className="gen-slot-check gen-slot-check--blocked"
+                            title="This photo may be rejected — try a different selfie"
+                            aria-label="Photo may be blocked"
+                          />
+                        )}
                         <button
                           type="button"
                           className="gen-slot-clear"
@@ -942,6 +1048,17 @@ export default function GeneratePage() {
             </div>
 
             {uploadError && <div className="gen-error">{uploadError}</div>}
+            {!uploadError && photoCheckReason && slotChecks.some(c => c === 'blocked') && (
+              <div className="gen-photo-warn">
+                {photoCheckReason === 'partner_validation_failed'
+                  ? '⚠ ByteDance’s safety filter rejected this photo set. Try replacing one with a different selfie, or use a single photo instead of all three.'
+                  : photoCheckReason === 'content_policy_violation'
+                    ? '⚠ One of these photos was flagged by the content policy. Try a different selfie.'
+                    : photoCheckReason === 'no_face_detected'
+                      ? '⚠ No face detected in one of these photos. Use a clear front-facing selfie.'
+                      : '⚠ These photos may be rejected by the video provider. Try replacing one or use a different selfie.'}
+              </div>
+            )}
 
               <div className="gen-photos-meta">
                 <label className="gen-photos-meta-field">
@@ -1196,7 +1313,7 @@ export default function GeneratePage() {
                 type="button"
                 className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
                 onClick={() => setModel('pro')}
-                title="Pro: higher quality, longer wait, can run 10-second outputs (falls back to Fast if Fal can't route Pro)"
+                title="Pro is in preview — currently runs at Fast quality (5-second clips) while Pro is being rolled out."
               >
                 Pro
               </button>
@@ -1204,6 +1321,9 @@ export default function GeneratePage() {
 
             {model === 'pro' && (
               <>
+                <div className="gen-pro-preview-note">
+                  Pro is in preview — your look will run at Fast quality (5-second clip) while Pro is being rolled out.
+                </div>
                 <div className="gen-sectionlabel">Clip length</div>
                 <div className="gen-lengthgrid">
                   {[5, 10].map(sec => (
@@ -1460,21 +1580,55 @@ const BUILD_PHASES = [
 
 // Friendly summary for known Fal/Seedance failure shapes. Returns a
 // short headline (rendered as the red banner) and a hint that helps the
-// user fix it themselves where possible. Falls back to a generic
-// "generation failed" if we don't recognize the pattern.
-function summarizeGenerationError(raw: string): { headline: string; hint: string | null } {
+// user fix it themselves where possible. Prefers structured error_code
+// (set by fal-webhook); falls back to substring matching on the legacy
+// raw error string for older rows.
+function summarizeGenerationError(
+  raw: string,
+  code?: string | null,
+): { headline: string; hint: string | null } {
+  // Prefer structured code — fal-webhook now classifies every failure.
+  switch (code) {
+    case 'content_policy':
+      return {
+        headline: 'The video provider blocked this look.',
+        hint: 'Most often this is a recognisable celebrity or public figure in the photo — try a different selfie. Other triggers: photos of minors, brand logos prominently in frame, or NSFW content.',
+      };
+    case 'no_face_detected':
+      return {
+        headline: 'No face detected in the reference photo.',
+        hint: 'Try a clearer, front-facing selfie with good lighting.',
+      };
+    case 'invalid_image':
+      return {
+        headline: 'A reference photo couldn’t be read.',
+        hint: 'Re-upload as JPEG or PNG.',
+      };
+    case 'timeout':
+      return { headline: 'The video provider timed out.', hint: 'Please try again.' };
+    case 'rate_limit':
+      return { headline: 'Rate limit hit.', hint: 'Try again in a minute.' };
+    case 'face_rehost_failed':
+      return {
+        headline: 'Reference photos couldn’t be loaded.',
+        hint: 'Re-upload your face photo and try again.',
+      };
+    case 'fal_submit_error':
+      return {
+        headline: 'The video provider rejected the request.',
+        hint: 'See details below — usually fixed by re-uploading the photo or picking fewer products.',
+      };
+  }
+  // Legacy fallback for rows from before error_code existed.
   const text = (raw || '').toLowerCase();
-  if (text.includes('partner_validation_failed')) {
+  if (text.includes('partner_validation_failed') || text.includes('content_policy')) {
     return {
-      headline: 'The video provider rejected this look.',
-      hint: 'This usually clears up if you re-upload the photo (try a different one) or pick fewer products. The error details below help us debug it.',
+      headline: 'The video provider blocked this look.',
+      hint: 'Most often this is a recognisable celebrity in the photo — try a different selfie. Other triggers: minors, brand logos in frame, or NSFW content.',
     };
   }
   if (text.includes('heic')) {
-    return {
-      headline: 'Photo format not supported.',
-      hint: 'Please re-upload as JPEG or PNG.',
-    };
+    return { headline: 'Photo format not supported.', hint: 'Please re-upload as JPEG or PNG.' };
   }
   if (text.includes('all reference photos failed')) {
     return {
@@ -1483,10 +1637,7 @@ function summarizeGenerationError(raw: string): { headline: string; hint: string
     };
   }
   if (text.includes('fal_key')) {
-    return {
-      headline: 'Server config error.',
-      hint: 'The Fal API key is missing on the server. Contact support.',
-    };
+    return { headline: 'Server config error.', hint: 'The Fal API key is missing on the server. Contact support.' };
   }
   return { headline: 'Something went wrong while generating this look.', hint: null };
 }
@@ -1502,12 +1653,14 @@ function GenerationErrorBox({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { headline, hint } = summarizeGenerationError(generation.error || '');
+  const { headline, hint } = summarizeGenerationError(generation.error || '', generation.error_code);
 
   const diagnostics = {
     generation_id: generation.id,
     fal_request_id: generation.fal_request_id || null,
     veo_model: generation.veo_model || null,
+    error_code: generation.error_code || null,
+    error_raw: generation.error_raw || null,
     style: generation.style,
     height_label: generation.height_label,
     age_label: generation.age_label,
@@ -1854,36 +2007,38 @@ function LookCard({
 
   return (
     <div className="gen-lookcard">
-      <button type="button" className="gen-lookcard-media" onClick={onOpen}>
-        {isDone && generation.video_url ? (
-          <video
-            src={generation.video_url}
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            style={cropTransformStyle(generation)}
-          />
-        ) : (
-          <div className={`gen-lookcard-placeholder${isFailed ? ' is-failed' : ''}`}>
-            {isBusy && (
-              <>
-                <div className="gen-lookcard-busy is-busy" aria-hidden="true" />
-                <div className="gen-lookcard-pulse" aria-hidden="true" />
-                <svg className="gen-lookcard-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
-                  <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
-                  <rect className="gen-build-fill" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} strokeDasharray={`${pct} 100`} />
-                </svg>
-                <span className="gen-vision">Vision</span>
-                <span className="gen-lookcard-phase">{BUILD_PHASES[phaseIdx]}</span>
-                <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
-              </>
-            )}
-            {isFailed && <span>Failed</span>}
-          </div>
-        )}
-        {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
+      <div className="gen-lookcard-media-wrap" style={{ position: 'relative' }}>
+        <button type="button" className="gen-lookcard-media" onClick={onOpen}>
+          {isDone && generation.video_url ? (
+            <video
+              src={generation.video_url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              style={cropTransformStyle(generation)}
+            />
+          ) : (
+            <div className={`gen-lookcard-placeholder${isFailed ? ' is-failed' : ''}`}>
+              {isBusy && (
+                <>
+                  <div className="gen-lookcard-busy is-busy" aria-hidden="true" />
+                  <div className="gen-lookcard-pulse" aria-hidden="true" />
+                  <svg className="gen-lookcard-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
+                    <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
+                    <rect className="gen-build-fill" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} strokeDasharray={`${pct} 100`} />
+                  </svg>
+                  <span className="gen-vision">Vision</span>
+                  <span className="gen-lookcard-phase">{BUILD_PHASES[phaseIdx]}</span>
+                  <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
+                </>
+              )}
+              {isFailed && <span>Failed</span>}
+            </div>
+          )}
+          {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
+        </button>
         <button
           type="button"
           className="gen-lookcard-delete"
@@ -1894,7 +2049,7 @@ function LookCard({
           aria-label="Delete look"
           title="Delete look"
         >×</button>
-      </button>
+      </div>
       <div className="gen-lookcard-foot">
         <span className="gen-lookcard-label">{generation.display_name || style?.label || generation.style}</span>
         <button

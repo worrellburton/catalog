@@ -64,6 +64,32 @@ function extractError(body: FalCallback): string {
   return parts.join(' — ').slice(0, 800);
 }
 
+// Map raw Fal/ByteDance error strings to a structured (error_code,
+// user-facing message) pair. The error_code is what the UI keys off
+// of to render an actionable hint instead of a wall of JSON.
+function classifyError(raw: string): { code: string; message: string } {
+  const r = raw.toLowerCase();
+  if (r.includes('partner_validation_failed') || r.includes('content_policy') || r.includes('moderation')) {
+    return {
+      code: 'content_policy',
+      message: 'The video provider blocked this look. The most common reason is a recognisable celebrity or public figure in the photo — try a different selfie. Other triggers: minors, brand logos prominently in frame, or NSFW content.',
+    };
+  }
+  if (r.includes('face') && (r.includes('not detected') || r.includes('no face'))) {
+    return { code: 'no_face_detected', message: 'No face detected in the reference photo. Try a clearer, front-facing selfie.' };
+  }
+  if (r.includes('image') && (r.includes('invalid') || r.includes('unsupported') || r.includes('format'))) {
+    return { code: 'invalid_image', message: 'One of the reference photos couldn\u2019t be read by the video provider. Try re-uploading a JPEG.' };
+  }
+  if (r.includes('timeout') || r.includes('timed out')) {
+    return { code: 'timeout', message: 'The video provider timed out. Please try again.' };
+  }
+  if (r.includes('rate') && r.includes('limit')) {
+    return { code: 'rate_limit', message: 'The video provider is rate-limited. Please try again in a minute.' };
+  }
+  return { code: 'fal_error', message: 'Generation failed. Please try again or pick different photos / products.' };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (req.method !== 'POST') return jsonRes({ error: 'Use POST' }, 405);
@@ -103,15 +129,22 @@ Deno.serve(async (req: Request) => {
   const ok = body.status === 'OK';
   const videoUrl = body.payload?.video?.url || body.payload?.videos?.[0]?.url || null;
 
-  const update = ok && videoUrl
-    ? { status: 'done', video_url: videoUrl, error: null, completed_at: new Date().toISOString() }
-    : { status: 'failed', error: extractError(body), completed_at: new Date().toISOString() };
-  if (!(ok && videoUrl)) {
-    // Print the entire Fal payload to logs once so we have something
-    // to grep when a 422 / model-side error comes through. Truncated
-    // to keep the log reasonable.
+  let update: Record<string, unknown>;
+  if (ok && videoUrl) {
+    update = { status: 'done', video_url: videoUrl, error: null, error_code: null, completed_at: new Date().toISOString() };
+  } else {
+    const rawError = extractError(body);
+    const { code, message } = classifyError(rawError);
+    update = {
+      status: 'failed',
+      error: message,           // user-facing, friendly
+      error_code: code,         // machine-readable
+      error_raw: rawError,      // full Fal/ByteDance text for debugging
+      completed_at: new Date().toISOString(),
+    };
+    // Print the entire Fal payload to logs once so we have something to grep.
     try {
-      console.error('[fal-webhook] non-OK callback for request_id=', requestId, JSON.stringify(body).slice(0, 1500));
+      console.error('[fal-webhook] non-OK callback for request_id=', requestId, 'code=', code, JSON.stringify(body).slice(0, 1500));
     } catch { /* noop */ }
   }
 
@@ -121,5 +154,28 @@ Deno.serve(async (req: Request) => {
     .eq('id', gen.id);
 
   if (updateErr) return jsonRes({ error: updateErr.message }, 500);
+
+  // Record the raw Fal callback in generation_events so "Show details"
+  // can surface a timeline instead of just a single error string.
+  try {
+    await admin.from('generation_events')
+      .insert({
+        generation_id: gen.id,
+        event: 'fal_webhook',
+        payload: {
+          status: update.status,
+          fal_status: body.status,
+          request_id: requestId,
+          video_url: update.video_url ?? null,
+          error: update.error ?? null,
+          error_code: update.error_code ?? null,
+          error_raw: update.error_raw ?? null,
+          fal_body: body,
+        },
+      });
+  } catch (e) {
+    console.warn('[fal-webhook] logEvent failed', e);
+  }
+
   return jsonRes({ acknowledged: true, generation_id: gen.id, status: update.status });
 });

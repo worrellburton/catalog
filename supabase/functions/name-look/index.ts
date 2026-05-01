@@ -152,7 +152,10 @@ Deno.serve(async (req: Request) => {
   const prompt = buildPrompt(ctx);
   const name = await callClaude(prompt);
   if (!name) {
-    return jsonRes({ success: false, error: 'Claude returned no name' }, 502);
+    // Naming is decorative — never 4xx the client. Leave display_name null
+    // so the LookCard falls back to the style preset, and return 200.
+    console.warn('[name-look] Claude returned no name for', generationId);
+    return jsonRes({ success: true, name: null, skipped: true });
   }
 
   const { error: updErr } = await client

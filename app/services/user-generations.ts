@@ -40,6 +40,13 @@ export interface UserGeneration {
    *  generation is created. Null until that round trip completes; the
    *  LookCard falls back to the style preset label in the meantime. */
   display_name: string | null;
+  /** Machine-readable failure category (set by fal-webhook). e.g.
+   *  'content_policy', 'no_face_detected', 'invalid_image'. UI keys off
+   *  this to render an actionable hint. */
+  error_code?: string | null;
+  /** Full raw error string from Fal/ByteDance, kept for the Show details
+   *  panel so we can debug exotic failures. */
+  error_raw?: string | null;
 }
 
 export interface GenerationProduct {
@@ -436,6 +443,53 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
 }
 
 /**
+ * Pre-validate one or more reference photos against Fal/ByteDance
+ * before starting a generation. Submits the image set as a minimal
+ * Seedance job and polls the queue until ByteDance's safety filter
+ * either approves it (status COMPLETED with a video) or rejects it
+ * (status COMPLETED with `detail[]`).
+ *
+ * Important: ByteDance's `partner_validation_failed` filter only fires
+ * for multi-image (2–3 photo) submissions — single-image checks
+ * almost always pass even when the real multi-photo generation will
+ * fail. Always pass the full set of currently-filled slots.
+ *
+ * Fails open: if the edge function can't be reached, returns ok=true
+ * so a network hiccup doesn't block the user from submitting.
+ *
+ * Reasons returned when ok=false:
+ *   partner_validation_failed  — ByteDance "real likeness" safety filter
+ *   content_policy_violation   — NSFW / disallowed content
+ *   no_face_detected
+ *   blocked                    — generic Fal rejection
+ *   network_error              — couldn't reach edge function
+ */
+export async function checkFacePhoto(
+  imageUrls: string[],
+  userId: string,
+): Promise<{ ok: boolean; reason: string | null; detail: string | null }> {
+  if (!supabase) return { ok: true, reason: null, detail: null };
+  if (!imageUrls.length) return { ok: true, reason: null, detail: null };
+  try {
+    const { data, error } = await supabase.functions.invoke('check-face-photo', {
+      body: { image_urls: imageUrls, user_id: userId },
+    });
+    if (error) {
+      console.error('[checkFacePhoto] invoke error', error.message);
+      return { ok: true, reason: null, detail: null }; // fail open
+    }
+    return {
+      ok: data?.ok ?? true,
+      reason: data?.reason ?? null,
+      detail: data?.detail ?? null,
+    };
+  } catch (err) {
+    console.error('[checkFacePhoto] unexpected error', err);
+    return { ok: true, reason: null, detail: null }; // fail open
+  }
+}
+
+/**
  * Delete one of the user's reference photos. Removes the storage object
  * (best-effort — bucket cleanup is non-blocking) and the row, which
  * cascades into any user_generation_uploads entries that referenced it.
@@ -463,12 +517,24 @@ export async function deleteUserUpload(
 export async function nameLookForGeneration(generationId: string): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.functions.invoke('name-look', {
+    const { error } = await supabase.functions.invoke('name-look', {
       body: { generation_id: generationId },
     });
+    if (error) {
+      console.warn('[name-look] invoke error:', error);
+      // Log to generation_events so the timeline shows the naming failure.
+      try {
+        await supabase.from('generation_events')
+          .insert({ generation_id: generationId, event: 'name_look_fail', payload: { error: String(error) } });
+      } catch { /* best-effort, never throw */ }
+    }
   } catch (err) {
     // Naming is decorative — never block the user on it.
-    console.warn('[name-look] invoke failed:', err);
+    console.warn('[name-look] invoke exception:', err);
+    try {
+      await supabase.from('generation_events')
+        .insert({ generation_id: generationId, event: 'name_look_fail', payload: { error: String(err) } });
+    } catch { /* best-effort */ }
   }
 }
 
@@ -623,12 +689,14 @@ export async function createGeneration(
   }
 
   // Fire-and-forget: kick the generate-look edge function so the poller
-  // doesn't have to wait for a cron to pick the pending row up. We ignore
-  // the promise — the row is already persisted and polling handles the
-  // terminal state regardless of whether invoke resolves cleanly.
+  // doesn't have to wait for a cron to pick the pending row up. The
+  // function is idempotent — if the pg_net trigger already fired it
+  // returns { success: true, already: <status> } rather than an error.
   supabase.functions.invoke('generate-look', {
     body: { generation_id: gen.id },
-  }).catch(err => console.error('[createGeneration] invoke failed:', err));
+  }).then(({ error }) => {
+    if (error) console.warn('[createGeneration] invoke error:', error);
+  }).catch(err => console.warn('[createGeneration] invoke exception:', err));
 
   return { data: gen as UserGeneration, error: null };
 }
