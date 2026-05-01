@@ -77,6 +77,50 @@
   pointer-events: none;
 }
 
+/* Mobile: bottom-sheet behavior. Slides up from below on open, drag
+   down at the top of the scroll to dismiss (handled in JS). Rounded
+   top corners + a small grab handle sell the affordance. */
+@media (max-width: 959px) {
+  .product-page-overlay {
+    opacity: 1;
+    transform: translateY(100%);
+    transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+  }
+  .product-page-overlay--in {
+    transform: translateY(0);
+  }
+  .product-page-overlay--out {
+    transform: translateY(100%);
+    pointer-events: none;
+  }
+  /* While the user's finger is on screen, suppress the transition so
+     the panel tracks 1:1 with the drag. JS toggles this class. */
+  .product-page-overlay.is-dragging {
+    transition: none;
+  }
+  .product-page {
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    overflow: hidden auto;
+  }
+  /* Subtle grab handle pinned to the top of the sheet. Painted via a
+     pseudo-element so the existing markup doesn't need to change. */
+  .product-page::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.4);
+    z-index: 6;
+    pointer-events: none;
+  }
+}
+
 .product-page {
   width: 100%;
   height: 100%;

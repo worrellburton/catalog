@@ -379,6 +379,67 @@ export default function ProductPage({
     setTimeout(onClose, 320);
   }, [onClose]);
 
+  // Mobile drag-to-dismiss. Listens on the scroller; only engages while
+  // scrollTop is at the top so users can scroll content normally without
+  // accidentally dismissing. A pull > 96px or fast flick triggers close.
+  // No-op on desktop. Passive listeners — never preventDefault — so the
+  // Flutter shell's gesture handlers stay intact.
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ startY: number; startTime: number; active: boolean }>({
+    startY: 0, startTime: 0, active: false,
+  });
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const scroller = scrollerRef.current;
+    if (!overlay || !scroller) return;
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(min-width: 960px)').matches) return;
+
+    const onStart = (e: TouchEvent) => {
+      if (scroller.scrollTop > 0) return;
+      dragRef.current = {
+        startY: e.touches[0].clientY,
+        startTime: performance.now(),
+        active: true,
+      };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!dragRef.current.active) return;
+      const dy = e.touches[0].clientY - dragRef.current.startY;
+      if (dy <= 0) {
+        // Dragging up — release control so native scroll resumes.
+        overlay.style.transform = '';
+        overlay.classList.remove('is-dragging');
+        dragRef.current.active = false;
+        return;
+      }
+      overlay.classList.add('is-dragging');
+      overlay.style.transform = `translateY(${dy}px)`;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!dragRef.current.active) return;
+      const endY = e.changedTouches[0].clientY;
+      const dy = endY - dragRef.current.startY;
+      const dt = performance.now() - dragRef.current.startTime;
+      const velocity = dt > 0 ? dy / dt : 0; // px/ms
+      overlay.classList.remove('is-dragging');
+      overlay.style.transform = '';
+      dragRef.current.active = false;
+      if (dy > 96 || velocity > 0.6) handleClose();
+    };
+
+    scroller.addEventListener('touchstart', onStart, { passive: true });
+    scroller.addEventListener('touchmove', onMove, { passive: true });
+    scroller.addEventListener('touchend', onEnd, { passive: true });
+    scroller.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      scroller.removeEventListener('touchstart', onStart);
+      scroller.removeEventListener('touchmove', onMove);
+      scroller.removeEventListener('touchend', onEnd);
+      scroller.removeEventListener('touchcancel', onEnd);
+    };
+  }, [handleClose]);
+
   useEscapeKey(handleClose);
 
   const isSaved = bookmarks.isProductBookmarked(product);
@@ -409,6 +470,7 @@ export default function ProductPage({
 
   return (
     <div
+      ref={overlayRef}
       className={`product-page-overlay${mounted && !isAnimatingOut ? ' product-page-overlay--in' : ''}${isAnimatingOut ? ' product-page-overlay--out' : ''}`}
       role="dialog"
       aria-modal="true"
