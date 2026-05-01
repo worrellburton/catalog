@@ -1560,6 +1560,11 @@ function GenerationErrorBox({
           {copied ? 'Copied' : 'Copy details'}
         </button>
       </div>
+      {/* Build stamp so a stale-cache device is obvious at a glance.
+          If this string isn't present, you're running an older bundle
+          and a hard reload (or App swipe-up + relaunch in the Flutter
+          shell) will pick up the new code. */}
+      <div className="gen-error-build">build: error-ui v2</div>
       {showDetails && (
         <div className="gen-error-details">
           <dl>

@@ -79,7 +79,6 @@ async function tryFal(
   );
   if (!submit.ok) {
     const text = await submit.text();
-    console.error('[generate-look] Fal submit rejected', submit.status, text);
     return { status: submit.status, request_id: null, error: `${submit.status} ${text.slice(0, 400)}` };
   }
   const submitData = await submit.json() as { request_id?: string };
@@ -211,38 +210,6 @@ Deno.serve(async (req: Request) => {
   // image of reasonable size. Drop products that fail rather than
   // killing the whole job — face photos are required so we surface a
   // hard error if any of those bounce.
-  //
-  // HEIC/HEIF is rejected explicitly: Fal/Seedance can't decode it and
-  // returns partner_validation_failed for the whole job. iPhones default
-  // to HEIC, so legacy uploads in the bucket from before the client-side
-  // guard landed will hit this branch.
-  function isHeicUrl(url: string, contentType: string): boolean {
-    if (contentType === 'image/heic' || contentType === 'image/heif') return true;
-    try {
-      const path = new URL(url).pathname.toLowerCase();
-      return path.endsWith('.heic') || path.endsWith('.heif');
-    } catch { return false; }
-  }
-
-  // 16-bit-per-channel PNGs (iPhone HDR screenshots saved at 1179×2556
-  // are the canonical case) also trigger partner_validation_failed. Sniff
-  // the IHDR chunk: 8-byte PNG signature + 4-byte length + 4-byte type
-  // ("IHDR") + 4-byte width + 4-byte height puts bit-depth at offset 24.
-  // Anything > 8 we reject.
-  async function isPng16Bit(url: string): Promise<boolean> {
-    try {
-      const r = await fetch(url, { headers: { Range: 'bytes=0-32' } });
-      if (!r.ok) return false;
-      const buf = new Uint8Array(await r.arrayBuffer());
-      if (buf.length < 25) return false;
-      const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-      if (!isPng) return false;
-      return buf[24] > 8;
-    } catch {
-      return false;
-    }
-  }
-
   async function isImageUrlOk(url: string): Promise<boolean> {
     if (isHostBlocked(url)) return false;
     try {
@@ -250,10 +217,8 @@ Deno.serve(async (req: Request) => {
       if (!r.ok) return false;
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (ct && !ct.startsWith('image/')) return false;
-      if (isHeicUrl(url, ct)) return false;
       const len = Number(r.headers.get('content-length') || '0');
       if (len > 30 * 1024 * 1024) return false; // Fal cap is 30 MB per image
-      if (ct === 'image/png' && await isPng16Bit(url)) return false;
       return true;
     } catch {
       return false;
@@ -263,16 +228,12 @@ Deno.serve(async (req: Request) => {
   const faceChecks = await Promise.all(facesUsed.map(isImageUrlOk));
   const badFaceCount = faceChecks.filter(ok => !ok).length;
   if (badFaceCount === facesUsed.length) {
-    const allHeic = facesUsed.every(u => isHeicUrl(u, ''));
-    const message = allHeic
-      ? 'Your photo is in HEIC format, which we can’t use. Please re-upload as JPEG or PNG.'
-      : 'All reference photos failed to load — please re-upload.';
     await admin.from('user_generations').update({
       status: 'failed',
-      error: message,
+      error: 'All reference photos failed to load — please re-upload.',
       completed_at: new Date().toISOString(),
     }).eq('id', generationId);
-    return jsonRes({ error: message }, 400);
+    return jsonRes({ error: 'All face photos unreachable' }, 400);
   }
   const goodFaces = facesUsed.filter((_, i) => faceChecks[i]);
 
@@ -297,12 +258,8 @@ Deno.serve(async (req: Request) => {
   // so Seedance composes the subject in the right range rather than
   // guessing from the face photo alone.
   const faceTags = goodFaces.map((_, i) => `@Image${i + 1}`).join(' and ');
-  // Drop brand + product names from the per-reference clauses for the
-  // same reason buildGenerationPrompt drops them on the client side:
-  // Bytedance/Seedance partner_validation_failed fires on prompts that
-  // mention specific commercial brands or trademarked product titles.
   const productClauses = productsUsed.map((p, i) =>
-    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1})`,
+    `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`,
   );
   const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
@@ -312,31 +269,28 @@ Deno.serve(async (req: Request) => {
   // route reference-to-video through /fast (Pro doesn't ship for
   // this variant), so clamp to 5.
   const durationSeconds = 5;
-  // Strip parenthetical brand/name annotations from any client-supplied
-  // prompt. Older client builds shipped patterns like "hat (Alo Yoga
-  // Velvet Off-Duty Cap - Black)" — Seedance rejects those. The new
-  // client only emits role tags, but until every shopper has the new
-  // bundle this regex is the safety belt.
-  function stripBrandAnnotations(p: string): string {
-    return p.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-  }
-  const rawClientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
-    ? stripBrandAnnotations(gen.prompt)
+  // Prefer the rich prompt the client built (carries framing,
+  // commercial cinematography, brand camera language) — the original
+  // tagged-prompt fallback below is only used if the client didn't
+  // ship one. Either way we replace any "5-second" string with the
+  // actual duration so the model is told the right clip length.
+  const clientPrompt = (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0)
+    ? gen.prompt
     : null;
   const fallbackPrompt = [
     `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.`,
     heightClause,
     ageClause,
     productClauses.length > 0
-      ? `Dress them in: ${productClauses.join(', ')}. Match the colors and silhouette of each reference garment.`
+      ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
       : 'Dress them in the provided products.',
     `Natural full-body motion, ${durationSeconds}-second portrait clip${styleSuffix}.`,
   ].filter(Boolean).join(' ');
   // Always re-prepend the @ImageN binding lines so Seedance binds
   // each reference photo to its tag even when the client supplied
   // a fully-formed prompt without them.
-  const taggedPrompt = rawClientPrompt
-    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${rawClientPrompt}`
+  const taggedPrompt = clientPrompt
+    ? `Use the person from ${faceTags} as the subject — preserve their face, hair, and skin tone exactly.${productClauses.length > 0 ? ` References: ${productClauses.join(', ')}.` : ''} ${clientPrompt}`
     : fallbackPrompt;
 
   // Webhook: Fal POSTs the result to /functions/v1/fal-webhook when
@@ -344,19 +298,6 @@ Deno.serve(async (req: Request) => {
   // status. Lock the row as generating *only after* Fal accepts the
   // submit so we don't strand it if the submit itself fails.
   const webhookUrl = `${supabaseUrl}/functions/v1/fal-webhook`;
-  // Log the exact payload being sent so when the async webhook fires
-  // back partner_validation_failed minutes later we can correlate the
-  // failure to the inputs we shipped. The /generate-look HTTP call has
-  // already returned 200 by then so this is the only paper trail.
-  console.log('[generate-look] submitting gen=', generationId, JSON.stringify({
-    prompt: taggedPrompt,
-    image_urls: referenceUrls,
-    duration: durationSeconds,
-    style: gen.style,
-    height: gen.height_label,
-    age: gen.age_label,
-    model: gen.model,
-  }).slice(0, 1500));
   const { request_id, model_slug, error, fellBack } = await submitFal(
     taggedPrompt, referenceUrls, wantsPro, durationSeconds, falKey, webhookUrl,
   );

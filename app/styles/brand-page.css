@@ -1,0 +1,164 @@
+/* Brand catalog page.
+   Mirrors CreatorPage's structure but on the consumer dark theme so
+   the visual continuity from the main feed is preserved. Mounted as
+   a full-screen overlay (z-index above the feed and the AI bar). */
+
+.brand-page {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  color: #fff;
+  z-index: 150;
+  overflow-y: auto;
+  padding: var(--header-height) 16px 120px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.light-mode .brand-page {
+  background: #fff;
+  color: #111;
+}
+
+.brand-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  margin: 8px 0 16px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.brand-back:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.light-mode .brand-back { color: rgba(0, 0, 0, 0.5); }
+.light-mode .brand-back:hover { color: #111; background: rgba(0, 0, 0, 0.04); }
+
+/* Hero — editorial brand title with eyebrow + count. */
+.brand-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 0 32px;
+}
+
+.brand-hero-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.light-mode .brand-hero-eyebrow { color: rgba(0, 0, 0, 0.45); }
+
+.brand-hero-name {
+  font-family: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
+  font-size: clamp(40px, 7vw, 72px);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 6px 0 12px;
+  color: inherit;
+  word-break: break-word;
+}
+
+.brand-hero-meta {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.light-mode .brand-hero-meta { color: rgba(0, 0, 0, 0.5); }
+
+/* Grid — 3 columns on desktop, 2 on mobile. Same gap as the consumer
+   feed so visually it reads as a continuation. */
+.brand-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .brand-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .brand-page {
+    padding: 12px 12px 100px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .brand-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.brand-grid .look-card {
+  aspect-ratio: 9 / 16;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Loading skeleton — soft pulsing tiles matching the grid cells. */
+.brand-grid.is-loading .brand-grid-skeleton {
+  aspect-ratio: 9 / 16;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  animation: brand-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.light-mode .brand-grid.is-loading .brand-grid-skeleton {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+@keyframes brand-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.brand-empty {
+  text-align: center;
+  padding: 64px 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+.light-mode .brand-empty { color: rgba(0, 0, 0, 0.5); }
+
+/* Brand-text affordance everywhere a brand string is rendered as a
+   tappable link. Subtle until hovered/tapped. */
+.brand-link {
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.brand-link:hover,
+.brand-link:focus-visible {
+  opacity: 0.7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: currentColor;
+}
+
+/* Hide on the Flutter shell? No — the shell can navigate to brand
+   pages just like any other. Keep visible. */

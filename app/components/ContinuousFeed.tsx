@@ -29,6 +29,7 @@ interface ContinuousFeedProps {
   onOpenBrowser: (url: string, title: string) => void;
   onOpenProduct?: (product: Product) => void;
   onOpenCreative?: (creative: ProductAd) => void;
+  onOpenBrand?: (brandName: string) => void;
   onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
   /** Called with true when nl-search is in-flight, false when resolved. */
@@ -91,6 +92,7 @@ export default function ContinuousFeed({
   onOpenBrowser,
   onOpenProduct,
   onOpenCreative,
+  onOpenBrand,
   onCreateCatalog,
   bookmarks,
   onSearchLoadingChange,
@@ -718,6 +720,7 @@ export default function ContinuousFeed({
                 onOpenCreator={onOpenCreator}
                 onOpenBrowser={onOpenBrowser}
                 onOpenProduct={onOpenProduct}
+                onOpenBrand={onOpenBrand}
                 onCreateCatalog={onCreateCatalog}
                 bookmarks={bookmarks}
               />

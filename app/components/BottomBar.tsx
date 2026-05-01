@@ -74,11 +74,11 @@ function BottomBar({
     return [...shuffled, ...shuffled];
   }, []);
 
-  // Auto-scroll. Mobile renders the suggestions as a horizontal pill
-  // row above the bar — translate X. Desktop restores the original
-  // full-height vertical column — translate Y. Direction is chosen on
-  // mount via matchMedia and re-checked on resize so a window resize
-  // across the breakpoint flips smoothly.
+  // Auto-scroll. Always vertical (translate Y) — both mobile and
+  // desktop render the suggestions as an editorial vertical column
+  // now. The horizontal pill row mode is gone; mobile users were
+  // getting stuck on the search overlay because the vertical feed
+  // peek was hidden under the row.
   useEffect(() => {
     if (!searchOpen || !trackRef.current) {
       if (scrollRAF.current) {
@@ -88,30 +88,18 @@ function BottomBar({
       return;
     }
     const track = trackRef.current;
-    let isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
     const SPEED = 0.4;
     let offset = scrollY.current;
-    const onResize = () => {
-      isMobile = window.matchMedia('(max-width: 768px)').matches;
-      // Reset offset on breakpoint flip so we don't carry an X offset
-      // into a Y layout (or vice-versa).
-      offset = 0;
-      track.style.transform = '';
-    };
-    window.addEventListener('resize', onResize);
     function tick() {
       offset += SPEED;
-      const half = isMobile ? track.scrollWidth / 2 : track.scrollHeight / 2;
+      const half = track.scrollHeight / 2;
       if (half > 0 && offset >= half) offset -= half;
-      track.style.transform = isMobile
-        ? `translateX(-${offset}px)`
-        : `translateY(-${offset}px)`;
+      track.style.transform = `translateY(-${offset}px)`;
       scrollY.current = offset;
       scrollRAF.current = requestAnimationFrame(tick);
     }
     scrollRAF.current = requestAnimationFrame(tick);
     return () => {
-      window.removeEventListener('resize', onResize);
       if (scrollRAF.current) {
         cancelAnimationFrame(scrollRAF.current);
         scrollRAF.current = null;
@@ -145,6 +133,36 @@ function BottomBar({
     setLocalSearch(val);
     emitSearch(val.trim().toLowerCase());
   }, [emitSearch]);
+
+  // Listen for the 'catalog:close-search' event _index.tsx fires
+  // when the Catalog logo is tapped. The logo handler can't reach
+  // into BottomBar's local searchOpen / filtersOpen state directly,
+  // so the event is the cheapest cross-component bridge.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onClose = () => {
+      setSearchOpen(false);
+      setFiltersOpen(false);
+      setLocalSearch('');
+      searchInputRef.current?.blur();
+    };
+    window.addEventListener('catalog:close-search', onClose);
+    return () => window.removeEventListener('catalog:close-search', onClose);
+  }, []);
+
+  // Shared submit path for both the Enter keydown and the in-app
+  // send button. Mobile users on iOS often miss that the keyboard's
+  // "Search" key is the submit; an explicit button removes the
+  // ambiguity.
+  const submitSearch = useCallback(() => {
+    const q = localSearch.trim();
+    if (q) {
+      if (onSelectSuggestion) onSelectSuggestion(q);
+      else onSearchChange(q.toLowerCase());
+    }
+    closeSearch();
+    searchInputRef.current?.blur();
+  }, [localSearch, onSelectSuggestion, onSearchChange, closeSearch]);
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
@@ -248,18 +266,8 @@ function BottomBar({
             onFocus={openSearch}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                // iOS Safari fires Enter on the keyboard's "search"
-                // / "go" key. Push the trimmed query through the
-                // suggestion handler so the catalog name updates,
-                // then close + blur to dismiss the keyboard.
                 e.preventDefault();
-                const q = localSearch.trim();
-                if (q) {
-                  if (onSelectSuggestion) onSelectSuggestion(q);
-                  else onSearchChange(q.toLowerCase());
-                }
-                closeSearch();
-                searchInputRef.current?.blur();
+                submitSearch();
               } else if (e.key === 'Escape') {
                 closeSearch();
                 searchInputRef.current?.blur();
@@ -280,14 +288,30 @@ function BottomBar({
                 </svg>
               </span>
             ) : (
-              <button
-                type="button"
-                className="bottom-search-clear"
-                onClick={() => { setLocalSearch(''); emitSearch(''); }}
-                aria-label="Clear search"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="bottom-search-clear"
+                  onClick={() => { setLocalSearch(''); emitSearch(''); searchInputRef.current?.focus(); }}
+                  aria-label="Clear search"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+                {/* In-app submit. iOS keyboards expose a "Search" key
+                    when enterKeyHint="search" but most users don't
+                    realize that's the submit affordance, especially
+                    if they typed via voice or pasted. An explicit
+                    button removes the ambiguity. */}
+                <button
+                  type="button"
+                  className="bottom-search-submit"
+                  onMouseDown={(e) => e.preventDefault() /* don't blur the input before we read its value */}
+                  onClick={submitSearch}
+                  aria-label="Search"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              </>
             )
           )}
         </div>

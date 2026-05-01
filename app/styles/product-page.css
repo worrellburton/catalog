@@ -288,7 +288,51 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
+  /* When rendered as a <button> (the .brand-link variant) the
+     button's UA defaults try to center the text and the flex parent
+     would stretch it full-width. Pin both. The pill chrome below
+     hugs the content thanks to align-self: flex-start. */
+  text-align: left;
+  align-self: flex-start;
+}
+
+/* Pill chrome only when the brand label is the clickable
+   brand-link button. Visually distinguishes the tappable brand
+   from a static label and matches the rounded pills used elsewhere
+   in the consumer UI. The .brand-link class earlier resets padding
+   to 0; this rule is more specific so it wins. */
+.pd-brand.brand-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pd-brand.brand-link:hover,
+.pd-brand.brand-link:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  /* The .brand-link's underline-on-hover would clash with the
+     pill chrome — suppress it. The pill itself is the affordance. */
+  text-decoration: none;
+  opacity: 1;
+}
+
+.light-mode .pd-brand.brand-link {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .pd-brand.brand-link:hover,
+.light-mode .pd-brand.brand-link:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.16);
+  color: #111;
 }
 
 /* Brand-logo variant — gated upstream by the brandLogosOn toggle.
