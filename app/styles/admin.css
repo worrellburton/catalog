@@ -3510,3 +3510,256 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-settings-status--ok  { color: #16a34a; }
 .admin-settings-status--err { color: #dc2626; }
+
+/* ============================================================
+   Content / Unpublished — Model expansion: pipeline node diagram
+   ============================================================ */
+
+.admin-model-panel {
+  padding: 20px 24px 24px;
+  background: #fafbfc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.admin-model-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-model-panel-meta {
+  font-size: 11px;
+  color: #6b7280;
+}
+.admin-model-panel-meta code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.admin-model-flow {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-model-flow-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.admin-model-node {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: start;
+  width: 168px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: border-color 220ms ease, background 220ms ease;
+}
+
+.admin-model-node-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-model-node-body { min-width: 0; }
+
+.admin-model-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.admin-model-node-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+  text-transform: capitalize;
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+
+.admin-model-node-detail {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.admin-model-node--done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.admin-model-node--done .admin-model-node-num {
+  background: #16a34a;
+  color: #fff;
+}
+
+.admin-model-node--active {
+  border-color: #fde68a;
+  background: #fffbeb;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+.admin-model-node--active .admin-model-node-num {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.admin-model-node--pending {
+  opacity: 0.7;
+}
+
+.admin-model-node--failed {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+.admin-model-node--failed .admin-model-node-num {
+  background: #dc2626;
+  color: #fff;
+}
+
+.admin-model-arrow {
+  color: #9ca3af;
+  flex: 0 0 auto;
+}
+
+.admin-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-model-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.admin-model-card-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.admin-model-card-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+.admin-model-card-sub {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.admin-model-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.admin-model-prompt {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.admin-model-prompt-body {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #1f2937;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.admin-model-output,
+.admin-model-error {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+
+.admin-model-link {
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-all;
+}
+.admin-model-link:hover { text-decoration: underline; }
+
+.admin-model-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+.admin-model-error .admin-model-card-label { color: #991b1b; }
+.admin-model-error-body {
+  color: #7f1d1d;
+  background: #fff;
+  border-color: #fecaca;
+}
+
+/* Dark-mode parity. */
+.admin-dark .admin-model-panel { background: #0f0f10; border-color: #27272a; }
+.admin-dark .admin-model-node { background: #18181b; border-color: #27272a; }
+.admin-dark .admin-model-node-label { color: #f4f4f5; }
+.admin-dark .admin-model-node-sub { color: #d4d4d8; }
+.admin-dark .admin-model-node-detail { color: #71717a; }
+.admin-dark .admin-model-node-num { background: #27272a; color: #d4d4d8; }
+.admin-dark .admin-model-node--done { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); }
+.admin-dark .admin-model-node--active { background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.35); }
+.admin-dark .admin-model-node--failed { background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.35); }
+.admin-dark .admin-model-arrow { color: #52525b; }
+.admin-dark .admin-model-card,
+.admin-dark .admin-model-prompt,
+.admin-dark .admin-model-output,
+.admin-dark .admin-model-error { background: #18181b; border-color: #27272a; }
+.admin-dark .admin-model-card-label { color: #a1a1aa; }
+.admin-dark .admin-model-card-value { color: #f4f4f5; }
+.admin-dark .admin-model-card-sub { color: #a1a1aa; }
+.admin-dark .admin-model-prompt-body { background: #0f0f10; border-color: #27272a; color: #e4e4e7; }
+.admin-dark .admin-model-error { background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.3); }
+.admin-dark .admin-model-error-body { background: #0f0f10; border-color: #3f1d1d; color: #fca5a5; }
+.admin-dark .admin-model-panel-meta code { background: rgba(255, 255, 255, 0.05); }
