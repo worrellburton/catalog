@@ -38,6 +38,14 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     setVideoSlot(node);
   }, [setVideoSlot]);
 
+  // Static poster URL — used as a fallback layer behind the video so
+  // the card always shows a real image even before video frames decode
+  // (and even if the video URL is broken or absent entirely).
+  const posterUrl = creative.thumbnail_url
+    || creative.product?.image_url
+    || (creative.product?.images && creative.product.images[0])
+    || '';
+
   // Fire the impression ping once, the first time the card crosses into the
   // shared observer's pre-mount band. Visibility itself is tracked by
   // useInViewport — we just need a one-shot side effect here.
@@ -182,6 +190,21 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
+        {/* Static poster: thumbnail_url is the creative's own poster
+            (when set); product image is the universal fallback. Sits
+            behind the video slot so the card is never an empty black
+            box even before frames decode. */}
+        {posterUrl && (
+          <img
+            className="card-poster"
+            src={posterUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } as React.CSSProperties}
+          />
+        )}
         {/* TrailVideoHost slot — the host appendChild's the shared <video>
             element here, then moves it to the ProductPage hero on tap. The
             DOM node survives the move so playback continues unbroken; the
@@ -190,7 +213,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
           ref={setSlot}
           className="card-video-slot"
           data-trail-id={creative.id}
-          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
+          style={{ position: 'absolute', inset: 0, zIndex: 2 } as React.CSSProperties}
         />
         <div className="card-gradient" />
 
