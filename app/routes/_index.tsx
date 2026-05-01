@@ -670,6 +670,25 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Curated subset for the "You might also like" grid. Drops legacy seed
+  // rows whose video field is a bare filename (e.g. "guy.mp4" / "girl2.mp4"
+  // from migration 002 — those assets aren't deployed and render as empty
+  // black tiles named "Look 02"/"Look 06"/etc.) and dedupes by video URL so
+  // the same clip can't show up multiple times in a row.
+  const lookFeedTiles = useMemo<Look[]>(() => {
+    const seen = new Set<string>();
+    const out: Look[] = [];
+    for (const l of liveLooks) {
+      const video = l.video || '';
+      if (!/^https?:\/\//i.test(video)) continue;
+      if (seen.has(video)) continue;
+      seen.add(video);
+      out.push(l);
+      if (out.length >= 12) break;
+    }
+    return out;
+  }, [liveLooks]);
+
   const handleCreateCatalog = useCallback((query: string) => {
     setSelectedProduct(null);
     setSelectedLook(null);
@@ -1078,7 +1097,7 @@ export default function Home() {
                 }
                 similarCreatives={similarCreatives ?? undefined}
                 brandCreatives={brandCreatives ?? undefined}
-                lookCreatives={liveLooks.slice(0, 12)}
+                lookCreatives={lookFeedTiles}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
               />

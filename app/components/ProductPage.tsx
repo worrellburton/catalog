@@ -3,7 +3,7 @@ import { Product, Look, creators as staticCreators } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
-import { lookTrailId } from '~/utils/trailIds';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
@@ -213,9 +213,11 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
   // Same trailId LookCard / LookOverlay use, so a tap from this grid morphs
   // straight into the look hero with the shared <video> element.
   const trailId = lookTrailId(look.id);
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
   const setVideoSlot = useTrailVideo(
     inViewport ? trailId : undefined,
-    inViewport ? (look.video || undefined) : undefined,
+    inViewport ? (videoUrl || undefined) : undefined,
   );
   const setSlot = useCallback((node: HTMLDivElement | null) => {
     wrapRef.current = node;
@@ -233,13 +235,38 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
     return () => obs.disconnect();
   }, []);
 
+  // Resolve creator identity in priority order:
+  //   1. Static creators map (real handles like @lilywittman/@garrett)
+  //   2. Profile fallback baked into the look row (orphan looks created
+  //      via the user-generation flow — see services/looks.ts)
+  //   3. Raw handle string, but only if it's not the synthetic `user:UUID`
+  //      key — that one's a placeholder, not something to show users.
+  const creatorEntry = staticCreators[look.creator];
+  const displayName = creatorEntry?.displayName
+    || look.creatorDisplayName
+    || (look.creator?.startsWith('user:') ? '' : look.creator)
+    || '';
+  const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
+
   return (
     <button type="button" className="pd-look-tile" onClick={() => onOpen(look)}>
       <div ref={setSlot} className="pd-look-tile-video" data-trail-id={trailId} />
 
       <div className="pd-look-tile-meta">
         <span className="pd-look-tile-title">{look.title}</span>
-        {look.creator && <span className="pd-look-tile-creator">{look.creator}</span>}
+        {(avatarUrl || displayName) && (
+          <span className="pd-look-tile-creator">
+            {avatarUrl && (
+              <img
+                className="pd-look-tile-avatar"
+                src={avatarUrl}
+                alt=""
+                loading="lazy"
+              />
+            )}
+            {displayName && <span>{displayName}</span>}
+          </span>
+        )}
       </div>
     </button>
   );
