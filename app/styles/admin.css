@@ -3453,3 +3453,60 @@ html.admin-on-dark-canvas .admin-topbar,
   border-color: rgba(16, 185, 129, 0.2);
   color: #6ee7b7;
 }
+
+/* ── Admin Settings page ─────────────────────────────────────────────────── */
+.admin-settings-section {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 600px;
+  margin-bottom: 24px;
+}
+.admin-settings-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 6px;
+}
+.admin-settings-desc {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+.admin-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.admin-settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-settings-select {
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #111;
+  background: #fafafa;
+  cursor: pointer;
+  width: 100%;
+}
+.admin-settings-select:disabled { opacity: 0.5; }
+.admin-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-settings-status {
+  font-size: 13px;
+  font-weight: 500;
+}
+.admin-settings-status--ok  { color: #16a34a; }
+.admin-settings-status--err { color: #dc2626; }

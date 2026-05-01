@@ -5,6 +5,9 @@
 //   - "veo-*-generate-preview"  → Google Gen AI (direct)
 //   - "seedance-*" / "bytedance/seedance-*"  → Seedance via fal.ai
 //   - "fal-ai/*"  → generic fal.ai pipeline
+//
+// usable: true  → shown in the admin settings picker (tested & working)
+// usable: false → hidden from admin (broken, requires different API key, or untested)
 
 export type VideoModelGroup =
   | 'Veo (Google)'
@@ -22,23 +25,26 @@ export interface VideoModel {
   value: string;
   label: string;
   group: VideoModelGroup;
+  /** Show in admin settings picker. Only models known to work with the generate-look function. */
+  usable?: boolean;
 }
 
 export const VIDEO_MODELS: VideoModel[] = [
-  // Veo via Google (direct — uses GOOGLE_API_KEY)
+  // Veo via Google (direct — requires GOOGLE_API_KEY, separate billing)
   { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast', group: 'Veo (Google)' },
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)' },
   { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)' },
 
-  // Seedance via fal.ai (silent)
-  { value: 'seedance-2', label: 'Seedance 2', group: 'Seedance (fal.ai)' },
-  { value: 'bytedance/seedance-2.0/fast/image-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)' },
+  // Seedance via fal.ai — single face photo sent to avoid ByteDance content filter
+  { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)', usable: true },
+  { value: 'bytedance/seedance-2.0/pro/reference-to-video', label: 'Seedance 2 Pro', group: 'Seedance (fal.ai)', usable: true },
+  { value: 'seedance-2', label: 'Seedance 2 (legacy)', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-pro', label: 'Seedance 1 Pro', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-lite', label: 'Seedance 1 Lite', group: 'Seedance (fal.ai)' },
 
   // Kling via fal.ai
-  { value: 'fal-ai/kling-video/v3/pro/image-to-video', label: 'Kling v3 Pro', group: 'Kling (fal.ai)' },
-  { value: 'fal-ai/kling-video/v2.6/pro/image-to-video', label: 'Kling v2.6 Pro', group: 'Kling (fal.ai)' },
+  { value: 'fal-ai/kling-video/v3/pro/image-to-video', label: 'Kling v3 Pro', group: 'Kling (fal.ai)', usable: true },
+  { value: 'fal-ai/kling-video/v2.6/pro/image-to-video', label: 'Kling v2.6 Pro', group: 'Kling (fal.ai)', usable: true },
   { value: 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video', label: 'Kling v2.5 Turbo Pro', group: 'Kling (fal.ai)' },
 
   // Sora via fal.ai
@@ -58,15 +64,15 @@ export const VIDEO_MODELS: VideoModel[] = [
   // LTX via fal.ai
   { value: 'fal-ai/ltx-2-19b/image-to-video', label: 'LTX-2 19B', group: 'LTX (fal.ai)' },
 
-  // Vidu via fal.ai — reference-to-video accepts up to 7 images for
-  // multi-angle product consistency.
-  { value: 'fal-ai/vidu/reference-to-video', label: 'Vidu Ref (multi-image)', group: 'Vidu (fal.ai)' },
+  // Vidu via fal.ai — reference-to-video accepts up to 3 images (base endpoint limit)
+  { value: 'fal-ai/vidu/reference-to-video', label: 'Vidu Ref (multi-image)', group: 'Vidu (fal.ai)', usable: true },
   { value: 'fal-ai/vidu/image-to-video', label: 'Vidu', group: 'Vidu (fal.ai)' },
   { value: 'fal-ai/vidu/start-end-to-video', label: 'Vidu Start→End', group: 'Vidu (fal.ai)' },
 
-  // Veo via fal.ai (alternative billing path — uses FAL_KEY, no Google quota)
-  { value: 'fal-ai/veo3.1/fast/image-to-video', label: 'Veo 3.1 Fast (via fal)', group: 'Veo via fal.ai' },
-  { value: 'fal-ai/veo3.1/image-to-video', label: 'Veo 3.1 (via fal)', group: 'Veo via fal.ai' },
+  // Veo via fal.ai — recommended; uses FAL_KEY, no Google quota needed.
+  // Single face photo as reference, products described in the prompt.
+  { value: 'fal-ai/veo3.1/fast/image-to-video', label: 'Veo 3.1 Fast (via fal)', group: 'Veo via fal.ai', usable: true },
+  { value: 'fal-ai/veo3.1/image-to-video', label: 'Veo 3.1 (via fal)', group: 'Veo via fal.ai', usable: true },
 ];
 
-export const DEFAULT_VIDEO_MODEL = 'veo-3.1-fast-generate-preview';
+export const DEFAULT_VIDEO_MODEL = 'fal-ai/veo3.1/fast/image-to-video';

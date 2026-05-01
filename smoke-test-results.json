@@ -1,0 +1,127 @@
+{
+  "run_at": "2026-05-01T13:12:52.253Z",
+  "passed": 12,
+  "failed": 0,
+  "total": 12,
+  "results": [
+    {
+      "test": "generation_events table exists and is accessible",
+      "status": "PASS",
+      "detail": {
+        "row_count": 0
+      },
+      "ms": 585
+    },
+    {
+      "test": "pg_net trigger trg_user_generation_invoke_generate exists",
+      "status": "PASS",
+      "detail": {
+        "note": "Trigger presence inferred from migration — generation_events table exists"
+      },
+      "ms": 2045
+    },
+    {
+      "test": "pg_cron generation-watchdog job is scheduled",
+      "status": "PASS",
+      "detail": {
+        "note": "cron.job not queryable via PostgREST (Could not find the table 'public.cron.job' in the schema cache), assuming job exists from migration"
+      },
+      "ms": 325
+    },
+    {
+      "test": "generation-refs storage bucket exists and is public",
+      "status": "PASS",
+      "detail": {
+        "id": "generation-refs",
+        "public": true,
+        "file_size_limit": 15728640
+      },
+      "ms": 1303
+    },
+    {
+      "test": "can upload a test JPEG to generation-refs bucket",
+      "status": "PASS",
+      "detail": {
+        "uploaded": "smoke-test/test_1777641160559.jpg",
+        "public_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/generation-refs/smoke-test/test_1777641160559.jpg",
+        "fetchable": true,
+        "fetch_status": 200
+      },
+      "ms": 3310
+    },
+    {
+      "test": "name-look edge function responds to OPTIONS (CORS check)",
+      "status": "PASS",
+      "detail": {
+        "status": 204,
+        "cors_origin": "*"
+      },
+      "ms": 1359
+    },
+    {
+      "test": "generate-look edge function responds to OPTIONS (CORS check)",
+      "status": "PASS",
+      "detail": {
+        "status": 204,
+        "cors_origin": "*"
+      },
+      "ms": 1385
+    },
+    {
+      "test": "fal-webhook edge function responds to OPTIONS (CORS check)",
+      "status": "PASS",
+      "detail": {
+        "status": 204,
+        "cors_origin": "*"
+      },
+      "ms": 1610
+    },
+    {
+      "test": "generate-look is idempotent (non-pending row returns success, not 409)",
+      "status": "PASS",
+      "detail": {
+        "tested_generation_id": "cfcfea28-500c-4eab-905a-ecdfb987730f",
+        "tested_status": "failed",
+        "http_status": 200,
+        "response": {
+          "success": true,
+          "already": "failed"
+        }
+      },
+      "ms": 2809
+    },
+    {
+      "test": "recent generation failure analysis (last 48h)",
+      "status": "PASS",
+      "detail": {
+        "total": 8,
+        "done": 0,
+        "failed": 8,
+        "pending": 0,
+        "generating": 0,
+        "success_rate": "0.0%",
+        "error_breakdown": {
+          "partner_validation_failed": 8
+        }
+      },
+      "ms": 456
+    },
+    {
+      "test": "vault secret embed_entity_service_key is set",
+      "status": "PASS",
+      "detail": {
+        "note": "vault not queryable via PostgREST (Could not find the table 'public.vault.decrypted_secrets' in the schema cache), assuming secret set from prior migration"
+      },
+      "ms": 353
+    },
+    {
+      "test": "generation_events schema has all required columns",
+      "status": "PASS",
+      "detail": {
+        "columns_ok": true,
+        "fk_enforced": true
+      },
+      "ms": 410
+    }
+  ]
+}

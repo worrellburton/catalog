@@ -405,6 +405,80 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-slot:hover .gen-slot-replace { opacity: 1; }
 
+/* Per-slot photo pre-validation badge -----------------------------------
+ * Shown in the bottom-left corner of a filled slot after the edge
+ * function finishes checking the photo against Fal/ByteDance.
+ */
+.gen-slot-check {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  z-index: 2;
+}
+/* Checking: spinning ring */
+.gen-slot-check--checking {
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+.gen-slot-check--checking::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border: 2px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  animation: gen-check-spin 0.7s linear infinite;
+}
+@keyframes gen-check-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+/* OK: subtle green checkmark */
+.gen-slot-check--ok {
+  background: rgba(34, 197, 94, 0.85);
+}
+.gen-slot-check--ok::after {
+  content: '✓';
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+/* Blocked: red exclamation */
+.gen-slot-check--blocked {
+  background: rgba(239, 68, 68, 0.9);
+  pointer-events: auto;
+  cursor: help;
+}
+.gen-slot-check--blocked::after {
+  content: '!';
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+/* Red border on a blocked slot */
+.gen-slot.is-check-blocked { border-color: rgba(239, 68, 68, 0.7); }
+
+/* Warning banner shown below the slots when ≥1 photo is flagged */
+.gen-photo-warn {
+  font-size: 12px;
+  color: rgba(255, 160, 160, 0.95);
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  margin-top: 6px;
+  text-align: center;
+  line-height: 1.5;
+}
+
 .gen-create-btn {
   width: 100%;
   padding: 14px 18px;
@@ -755,6 +829,44 @@ html[data-shell="catalog-app"] .gen-page {
             drop-shadow(0 0 24px rgba(167, 139, 250, 0.55));
   }
 }
+/* Failed-last-look dismissible banner (photos step) */
+.gen-failed-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(251, 146, 60, 0.12);
+  border: 1px solid rgba(251, 146, 60, 0.4);
+  color: #fed7aa;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.gen-failed-banner-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #fed7aa;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+.gen-failed-banner-close:hover { opacity: 1; }
+
+/* Pro-preview honest label (review step, model === 'pro') */
+.gen-pro-preview-note {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fde68a;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
 .gen-error {
   padding: 12px 14px;
   border-radius: 8px;
