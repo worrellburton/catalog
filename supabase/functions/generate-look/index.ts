@@ -225,7 +225,13 @@ async function submitToVidu(
 }
 
 // Veo via fal.ai — single reference image (face photo), products described in
-// prompt text only. Veo does not accept `resolution`; duration uses a number.
+// prompt text only. Veo only accepts duration as '4s', '6s', or '8s'.
+function snapVeoDuration(seconds: number): string {
+  if (seconds <= 5) return '4s';
+  if (seconds <= 7) return '6s';
+  return '8s';
+}
+
 async function submitToVeoFal(
   modelSlug: string,
   prompt: string,
@@ -237,7 +243,7 @@ async function submitToVeoFal(
   const requestBody: Record<string, unknown> = {
     prompt,
     image_url: faceImageUrl,
-    duration: durationSeconds,
+    duration: snapVeoDuration(durationSeconds),
     aspect_ratio: '9:16',
   };
   return falPost(`${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`, requestBody, falKey);
@@ -578,28 +584,39 @@ async function handleRequest(req: Request): Promise<Response> {
 
   let taggedPrompt: string;
   if (isVeo) {
-    // Veo via fal: photorealistic image-to-video. Products described in text
-    // (no visual reference images for clothing). Optimise for Veo's cinematic
-    // strengths: human motion quality, fashion editorial look, natural lighting.
-    const physDesc = [gen.height_label, gen.age_label ? `looks ${gen.age_label}` : ''].filter(Boolean).join(', ');
-    const wearingDesc = productClauses.length > 0
-      ? `Outfit: ${productClauses.join(', ')}.`
-      : '';
-    const styleNote = gen.style === 'commercial'
-      ? 'Confident commercial pose, clean studio lighting, brand editorial energy.'
-      : gen.style
-        ? `${String(gen.style).charAt(0).toUpperCase() + String(gen.style).slice(1)} vibe — natural outdoor or minimal studio setting.`
-        : 'Natural setting, relaxed editorial mood.';
+    // Veo image-to-video: input image is the first frame. To keep the person's
+    // face/identity, we anchor it explicitly. Products are described as what the
+    // person IS wearing so Veo renders them as part of the existing outfit rather
+    // than hallucinating a new character.
     if (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0) {
-      // User custom prompt — still give it a clean Veo context prefix.
-      taggedPrompt = [gen.prompt, wearingDesc].filter(Boolean).join(' ');
-    } else {
+      // Custom prompt: just pass it through with any product context appended.
+      const wearingLine = productClauses.length > 0 ? ` Wearing: ${productClauses.join(', ')}.` : '';
+      taggedPrompt = gen.prompt + wearingLine;
+    } else if (productClauses.length > 0) {
+      // Products selected: anchor face, describe outfit, add motion.
+      const motionNote = gen.style === 'commercial'
+        ? 'They shift into a confident pose — slow, deliberate brand energy.'
+        : gen.style === 'editorial'
+          ? 'They turn slightly and glance away — editorial stillness with one fluid motion.'
+          : 'They make a slow natural movement — subtle head turn or gentle weight shift.';
       taggedPrompt = [
-        `Fashion lookbook portrait video of the person in the reference photo${physDesc ? ` (${physDesc})` : ''}.`,
-        wearingDesc,
-        styleNote,
-        `Photorealistic, magazine-quality. Smooth natural motion — subtle walk or confident pose shift. Soft directional light, shallow depth of field, gentle camera drift. Crisp clothing details. ${durationSeconds}-second cinematic 9:16 portrait.`,
-      ].filter(Boolean).join(' ');
+        `Keep the exact face, hair, and physical appearance of the person shown in the input image — same identity, do not change who they are.`,
+        `They are wearing: ${productClauses.join(', ')}.`,
+        motionNote,
+        `Photorealistic, smooth cinematic motion. Soft directional light, shallow depth of field, gentle camera drift. Magazine-quality 9:16 portrait.`,
+      ].join(' ');
+    } else {
+      // No products: pure animation of the photo as-is.
+      const motionNote = gen.style === 'commercial'
+        ? 'The subject shifts into a confident brand pose, slow deliberate movement.'
+        : gen.style === 'editorial'
+          ? 'The subject turns slightly and glances away, editorial stillness with one fluid motion.'
+          : 'The subject makes a slow natural movement — subtle head turn or gentle body shift.';
+      taggedPrompt = [
+        `Animate this photo into a short cinematic video. Keep the person, outfit, and setting exactly as shown — do not change their appearance or clothing.`,
+        motionNote,
+        `Smooth, photorealistic motion. Soft directional light, shallow depth of field, gentle camera drift. Magazine-quality fashion editorial. 9:16 portrait.`,
+      ].join(' ');
     }
   } else if (typeof gen.prompt === 'string' && gen.prompt.trim().length > 0) {
     // User wrote their own prompt — prepend only the @Image tags so the model
@@ -662,15 +679,8 @@ async function handleRequest(req: Request): Promise<Response> {
       original_error: submitResult.error,
       original_raw_status: submitResult.raw_status,
     });
-    // Build a minimal Veo-compatible prompt (products described as text).
-    const fallbackWearingDesc = productEntries.length > 0
-      ? `Outfit: ${productEntries.map(p => `${p.label} (${p.role.toLowerCase()})`).join(', ')}.`
-      : '';
-    const fallbackPrompt = [
-      `Fashion lookbook portrait video of the person in the reference photo.`,
-      fallbackWearingDesc,
-      `Photorealistic, magazine-quality. Smooth natural motion — subtle walk or confident pose shift. Soft directional light, shallow depth of field. ${durationSeconds}-second cinematic 9:16 portrait.`,
-    ].filter(Boolean).join(' ');
+    // Build a minimal Veo-compatible prompt — animate the first frame, don't describe a new character.
+    const fallbackPrompt = `Animate this photo into a short cinematic video. Keep the person, outfit, and setting exactly as shown in the image — do not change their appearance or clothing. Smooth, photorealistic motion. Soft directional light, shallow depth of field. Magazine-quality fashion editorial. 9:16 portrait.`;
     submitResult = await submitToVeoFal(FALLBACK_VEO_SLUG, fallbackPrompt, goodFaceUrls[0], durationSeconds, falKey, webhookUrl);
     if (!submitResult.error && submitResult.request_id) {
       effectiveModelSlug = FALLBACK_VEO_SLUG;
