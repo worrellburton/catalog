@@ -44,17 +44,47 @@ const CORS_HEADERS = {
 const HAIKU_TIMEOUT_MS      = 600;
 const TWELVELABS_TIMEOUT_MS = 600;
 
-// Canonical product.type values present in the catalog. Sourced from the
-// live `select distinct type from products` — keep in sync as new types
-// land. Haiku is constrained to choose only from this set so it can't
-// invent labels that don't filter to anything.
-const CANONICAL_TYPES = [
-  'Top', 'Jacket', 'Pants', 'Shorts', 'Skirt', 'Dress', 'Coat',
-  'Underwear', 'Activewear', 'Loungewear', 'Swimwear',
-  'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules',
-  'Hat', 'Bag', 'Scarf', 'Socks',
-  'Fragrance', 'Skincare', 'Book', 'Yoga',
-] as const;
+// ── Dynamic type vocabulary ──────────────────────────────────────────────────
+//
+// The catalog evolves: phones, books, drinks etc. land alongside the original
+// fashion taxonomy. We read the live `distinct type` from products at edge
+// cold start, cache it for 5 minutes, and hand the live list to Haiku per
+// request. New product types added by admin become searchable within the TTL
+// with no edge redeploy.
+//
+// Cached at module scope — survives across requests in the same isolate.
+
+const TYPES_TTL_MS = 5 * 60 * 1000;
+let typesCache: { types: string[]; fetchedAt: number } | null = null;
+
+async function getCanonicalTypes(
+  admin: ReturnType<typeof createClient>,
+): Promise<string[]> {
+  const now = Date.now();
+  if (typesCache && now - typesCache.fetchedAt < TYPES_TTL_MS) {
+    return typesCache.types;
+  }
+  try {
+    const { data, error } = await admin
+      .from('products')
+      .select('type')
+      .eq('is_active', true)
+      .not('type', 'is', null);
+    if (error) throw error;
+    const set = new Set<string>();
+    for (const row of (data ?? []) as Array<{ type: string | null }>) {
+      if (row.type) set.add(row.type);
+    }
+    const types = Array.from(set).sort();
+    typesCache = { types, fetchedAt: now };
+    return types;
+  } catch (err) {
+    console.warn('[nl-search] getCanonicalTypes failed:', err);
+    // Reuse stale cache if we have one; otherwise empty (Haiku still runs but
+    // returns vibe intent which is the safer fallback than guessing a type).
+    return typesCache?.types ?? [];
+  }
+}
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -106,26 +136,30 @@ type SearchResult = CreativeRow & { score: number };
 
 // ── Claude Haiku: query expansion ────────────────────────────────────────────
 
-async function expandQueryWithHaiku(query: string, anthropicKey: string): Promise<QueryExpansion> {
-  const typeList = CANONICAL_TYPES.join(', ');
-  const prompt = `You are a fashion catalog search planner. The catalog has these exact product types:
-${typeList}
+async function expandQueryWithHaiku(
+  query: string,
+  anthropicKey: string,
+  canonicalTypes: string[],
+): Promise<QueryExpansion> {
+  const typeList = canonicalTypes.join(', ');
+  const prompt = `You are a product catalog search planner. The catalog has these exact product types (the only valid values for "types", "anchor_type", and "pair_types"):
+[${typeList}]
 
 User query: "${query}"
 
-Decide intent and return ONLY a JSON object with these exact fields:
-- "intent": "browse" if the user is shopping a category | "pairing" if they want what to wear with something they have | "vibe" if it's an abstract aesthetic / mood with no specific category
-- "types": array of product types from the list above. For broad terms include ALL adjacent types (e.g. "pants" → ["Pants","Shorts","Activewear"], "shoes" → ["Sneakers","Boots","Sandals","Heels","Loafers","Flats","Mules"]). For specific terms narrow it (e.g. "jeans" → ["Pants"], "loafers" → ["Loafers"]). Empty array when intent is "pairing" or "vibe".
-- "anchor_type": for intent=pairing only, the type of the anchor item (e.g. "white sneakers" → "Sneakers"). null otherwise.
-- "pair_types": for intent=pairing only, the complementary types to surface (NOT the anchor). E.g. anchor=Sneakers → ["Top","Pants","Shorts","Hat"]. null otherwise.
-- "keywords": the query stripped of the category noun, used for in-category ranking. E.g. "white sneakers" → "white", "summer dress for wedding" → "summer wedding". Keep as a short phrase.
+Return ONLY a JSON object with these exact fields:
+- "intent": "browse" (shopping a category — most queries), "pairing" ("what to wear with X" / "pair with X"), or "vibe" (abstract aesthetic / mood with NO specific category in the list above).
+- "types": array of product types drawn ONLY from the list above. Include EVERY type that could plausibly satisfy the query — broad queries get broad sets (a generic noun should pull all sibling categories), specific queries get narrow sets (a specific noun should pull only its exact match). If NO type in the list above plausibly matches the query, return [] and set intent to "vibe". Empty array when intent is "pairing" or "vibe".
+- "anchor_type": for intent=pairing only, the catalog type of the anchor item the user already has. Must be a value from the list above, or null.
+- "pair_types": for intent=pairing only, the complementary catalog types from the list above to surface (NOT the anchor type). null otherwise.
+- "keywords": the query stripped of the category noun, used for in-category text ranking. Short phrase. For pure-category queries ("shoes") this is empty.
 
-Examples:
-"pants"                          → {"intent":"browse","types":["Pants","Shorts","Activewear"],"anchor_type":null,"pair_types":null,"keywords":""}
-"jeans"                          → {"intent":"browse","types":["Pants"],"anchor_type":null,"pair_types":null,"keywords":"jeans"}
-"white sneakers"                 → {"intent":"browse","types":["Sneakers"],"anchor_type":null,"pair_types":null,"keywords":"white"}
-"what to wear with white sneakers" → {"intent":"pairing","types":[],"anchor_type":"Sneakers","pair_types":["Top","Pants","Shorts","Hat"],"keywords":"white"}
-"quiet luxury"                   → {"intent":"vibe","types":[],"anchor_type":null,"pair_types":null,"keywords":"quiet luxury"}
+Hard rules:
+• NEVER invent a type that's not in the list above.
+• NEVER force-fit unrelated queries — if the user asks for "phone" and no phone-like type exists, return types=[] intent="vibe".
+• Umbrella / generic shopper terms MAP to every subcategory in the list above. Examples: "shoes" → every footwear type present (e.g. Sneakers, Boots, Sandals, Heels, Loafers if any exist); "tops" → every top-style type present; "outerwear" → Jacket, Coat; "fragrance"/"perfume" → Fragrance; "beauty" → Skincare, Fragrance; "jewelry"/"accessories" → Hat, Bag, Scarf, Socks (whichever apply). Pick whichever apply from the list — never invent.
+• Specific terms get narrow sets: "jeans" → Pants only; "loafers" → Loafers only IF that type exists, else types=[] intent="vibe".
+• When in doubt between narrow and broad: prefer broader. Missing a relevant category is worse than including an adjacent one.
 
 Respond with ONLY the JSON object, no prose, no markdown.`;
 
@@ -149,9 +183,9 @@ Respond with ONLY the JSON object, no prose, no markdown.`;
   const cleaned = text.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
   const raw = JSON.parse(cleaned) as Partial<QueryExpansion>;
 
-  // Defensive normalisation: clamp Haiku's output to the canonical set so a
+  // Defensive normalisation: clamp Haiku's output to the live type set so a
   // hallucinated type can't be passed to the SQL filter.
-  const allowed = new Set<string>(CANONICAL_TYPES);
+  const allowed = new Set<string>(canonicalTypes);
   const intent: Intent = raw.intent === 'pairing' || raw.intent === 'vibe' ? raw.intent : 'browse';
   const types = (raw.types ?? []).filter(t => allowed.has(t));
   const pair_types = (raw.pair_types ?? []).filter(t => allowed.has(t));
@@ -167,10 +201,10 @@ Respond with ONLY the JSON object, no prose, no markdown.`;
 }
 
 /** Static-analyzer → expansion. Used as a hard-timeout fallback. */
-function expansionFromStatic(query: string): QueryExpansion {
-  const a = analyzeQuery(query);
+function expansionFromStatic(query: string, canonicalTypes: string[]): QueryExpansion {
+  const a = analyzeQuery(query, canonicalTypes);
   if (a.kind === 'pairing') {
-    return { intent: 'pairing', types: [], anchor_type: null, pair_types: a.pair_types, keywords: a.keywords.join(' ') };
+    return { intent: 'pairing', types: [], anchor_type: a.anchor_type, pair_types: a.pair_types, keywords: a.keywords.join(' ') };
   }
   if (a.kind === 'typed') {
     return { intent: 'browse', types: a.types, anchor_type: null, pair_types: null, keywords: a.keywords.join(' ') };
@@ -337,8 +371,14 @@ Deno.serve(async (req: Request) => {
   const gender = body.gender ?? null;
   const cacheKey = normalizeQueryForCache(query);
 
-  // ── Step 1: cache lookup ──────────────────────────────────────────────────
-  const cache = await readCache(admin, cacheKey);
+  // ── Step 1: cache lookup + canonical-types fetch in parallel ────────────────
+  // getCanonicalTypes hits the DB once per edge instance per 5-min window;
+  // pairing it with the cache lookup hides its cost on cache hits and
+  // overlaps with the lookup on cache misses.
+  const [cache, canonicalTypes] = await Promise.all([
+    readCache(admin, cacheKey),
+    getCanonicalTypes(admin),
+  ]);
 
   // ── Step 2: in parallel, fill the gaps (embedding + Haiku expansion) ─────
   const needEmbed     = !cache.embedding && !!openaiKey;
@@ -357,15 +397,15 @@ Deno.serve(async (req: Request) => {
     ? Promise.resolve(cache.expansion)
     : needExpansion && anthropicKey
       ? Promise.race([
-          expandQueryWithHaiku(query, anthropicKey).catch(err => {
+          expandQueryWithHaiku(query, anthropicKey, canonicalTypes).catch(err => {
             console.warn('[nl-search] haiku expand failed:', err);
-            return expansionFromStatic(query);
+            return expansionFromStatic(query, canonicalTypes);
           }),
           new Promise<QueryExpansion>(resolve =>
-            setTimeout(() => resolve(expansionFromStatic(query)), HAIKU_TIMEOUT_MS)
+            setTimeout(() => resolve(expansionFromStatic(query, canonicalTypes)), HAIKU_TIMEOUT_MS)
           ),
         ])
-      : Promise.resolve(expansionFromStatic(query));
+      : Promise.resolve(expansionFromStatic(query, canonicalTypes));
 
   const [embedding, expansion] = await Promise.all([embedTask, expansionTask]);
 
