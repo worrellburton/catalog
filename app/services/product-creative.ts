@@ -606,6 +606,12 @@ export async function getCreativesByBrand(
   // Pull a margin over `limit` so the gender post-filter doesn't
   // leave the rail short. We still cap the returned slice to `limit`.
   const fetchLimit = shopperGender === 'unknown' ? limit : Math.min(limit * 2, 48);
+  // Match the brand case-insensitively + ignore stray whitespace so a
+  // product carrying "Alo Yoga" still resolves rows tagged "alo yoga"
+  // or "ALO YOGA". ilike with no wildcards is an exact case-insensitive
+  // match — safer than ilike '%brand%' which would over-match (e.g.
+  // "Alo Yoga" would match "Alo Yoga Athletic").
+  const normalizedBrand = brand.trim();
   let query = supabase
     .from('product_creative')
     .select(`
@@ -613,7 +619,7 @@ export async function getCreativesByBrand(
       product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags, gender)
     `)
     .eq('status', 'live')
-    .eq('product.brand', brand)
+    .ilike('product.brand', normalizedBrand)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })

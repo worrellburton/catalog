@@ -169,8 +169,10 @@ function dummySavedBy(productKey: string): SavedByDummy {
   return { count, avatars };
 }
 
-/** Compact video tile for the brand strip — small, no overlay info,
- *  keeps the trail going on tap by reusing the shared <video> element. */
+/** Compact video tile for the brand strip — small, shows a product image
+ *  poster + brand/name caption so the tile is never blank, then swaps in
+ *  the video once frames are decoded. Tap reuses the shared <video>
+ *  element via the trail host so playback continues without remount. */
 function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c: ProductAd) => void }) {
   const [loaded, setLoaded] = useState(false);
   const slotRef = useRef<HTMLDivElement | null>(null);
@@ -192,6 +194,17 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       ['playing', 'canplay', 'loadeddata'].forEach(e => video.removeEventListener(e, handler));
     };
   }, [creative.id]);
+
+  // Poster + caption fallback so the tile is meaningful before (and even
+  // if) the video frames arrive. thumbnail_url is the creative's own
+  // poster (when set); product image is the universal fallback.
+  const posterUrl = creative.thumbnail_url
+    || creative.product?.image_url
+    || (creative.product?.images && creative.product.images[0])
+    || '';
+  const productName = creative.product?.name || '';
+  const productBrand = creative.product?.brand || '';
+
   return (
     <button
       type="button"
@@ -200,7 +213,21 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
       onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
     >
+      {posterUrl && (
+        <img
+          className="pd-brand-tile-poster"
+          src={posterUrl}
+          alt={productName}
+          loading="lazy"
+        />
+      )}
       <div ref={setRef} className="pd-brand-tile-slot" data-trail-id={creative.id} />
+      {(productName || productBrand) && (
+        <div className="pd-brand-tile-caption">
+          {productBrand && <span className="pd-brand-tile-brand">{productBrand}</span>}
+          {productName && <span className="pd-brand-tile-name">{productName}</span>}
+        </div>
+      )}
     </button>
   );
 }

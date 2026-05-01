@@ -560,6 +560,58 @@
 }
 .pd-brand-tile.loaded video { opacity: 1; }
 
+/* Poster sits behind the video slot so the tile is never blank — even
+   if the video is slow to decode, broken, or missing. Once the video
+   reports playing/canplay we cross-fade it on top via .loaded video. */
+.pd-brand-tile-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  z-index: 0;
+}
+.pd-brand-tile-slot { z-index: 1; }
+
+/* Caption: brand + product name pinned to the bottom with a soft
+   gradient so text stays readable over both light product images and
+   dark video frames. */
+.pd-brand-tile-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 18px 8px 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0) 100%);
+  color: #fff;
+  text-align: left;
+  pointer-events: none;
+}
+.pd-brand-tile-brand {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pd-brand-tile-name {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 @media (min-width: 768px) {
   .pd-brand-tile { width: 132px; height: 176px; }
 }
