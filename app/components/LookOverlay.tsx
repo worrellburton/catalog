@@ -41,7 +41,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
 
-  const creatorData = creators[look.creator];
+  // Resolve creator identity in priority order so orphan looks (created
+  // via the user-generation flow with no creator_handle) render the
+  // publishing user's profile name + avatar instead of the synthetic
+  // `user:UUID` key. See services/looks.ts for where the fallback fields
+  // are populated.
+  const staticCreator = creators[look.creator];
+  const isSyntheticCreator = !!look.creator && look.creator.startsWith('user:');
+  const creatorData = staticCreator
+    ? staticCreator
+    : (look.creatorDisplayName || look.creatorAvatar)
+      ? { displayName: look.creatorDisplayName || '', avatar: look.creatorAvatar || '', name: look.creator }
+      : undefined;
+  const showHandle = !isSyntheticCreator && !!look.creator;
+
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const trailId = lookTrailId(look.id);
   const heroVideoUrl = normalizeLookVideoUrl(look.video, basePath);
@@ -217,10 +230,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               className="look-creator-row"
               onClick={() => { handleClose(); onOpenCreator(look.creator); }}
             >
-              <img className="detail-creator-avatar" src={creatorData?.avatar || ''} alt={look.creator} />
+              <img className="detail-creator-avatar" src={creatorData?.avatar || ''} alt={creatorData?.displayName || ''} />
               <div className="look-creator-text">
-                <span className="detail-creator-name">{creatorData?.displayName || look.creator}</span>
-                <span className="look-creator-handle">@{look.creator}</span>
+                <span className="detail-creator-name">
+                  {creatorData?.displayName || (showHandle ? look.creator : 'Creator')}
+                </span>
+                {showHandle && <span className="look-creator-handle">{look.creator.startsWith('@') ? look.creator : `@${look.creator}`}</span>}
               </div>
             </div>
 
@@ -283,10 +298,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               {activeTab === 'creator' && (
                 <div className="look-creator-about">
                   <div className="look-creator-about-header">
-                    <img className="look-creator-about-avatar" src={creatorData?.avatar || ''} alt={look.creator} />
+                    <img className="look-creator-about-avatar" src={creatorData?.avatar || ''} alt={creatorData?.displayName || ''} />
                     <div>
-                      <div className="look-creator-about-name">{creatorData?.displayName || look.creator}</div>
-                      <div className="look-creator-about-handle">@{look.creator}</div>
+                      <div className="look-creator-about-name">
+                        {creatorData?.displayName || (showHandle ? look.creator : 'Creator')}
+                      </div>
+                      {showHandle && (
+                        <div className="look-creator-about-handle">
+                          {look.creator.startsWith('@') ? look.creator : `@${look.creator}`}
+                        </div>
+                      )}
                     </div>
                   </div>
                   {creatorData?.bio && (

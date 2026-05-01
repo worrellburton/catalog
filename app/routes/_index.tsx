@@ -79,7 +79,7 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -210,7 +210,6 @@ export default function Home() {
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
-  const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
   // Editorial looks pulled from looks_creative; fed into the "You might also
   // like" grid on ProductPage. Loaded once at mount and reused.
   const [liveLooks, setLiveLooks] = useState<Look[]>([]);
@@ -476,7 +475,6 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
-    setBrandCreatives(null);
     setSelectedLook(look);
   }, []);
 
@@ -588,19 +586,9 @@ export default function Home() {
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
-    setBrandCreatives(null);
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
-      // Same data the creative-trail uses to fill the "More from
-      // this brand" rail — without this, products opened from a
-      // Look, search, or recents see an empty strip.
-      prefetchCreativesByBrand(product.brand, null, 12)
-        .then(rows => {
-          primeTrailAssets(rows);
-          setBrandCreatives(rows);
-        })
-        .catch(() => { /* leave strip empty rather than throw */ });
     }
   }, [fetchSimilarProducts, pushRecent]);
 
@@ -643,9 +631,6 @@ export default function Home() {
       creative.product.id || null,
     );
     const similarP = prefetchSimilarCreatives(creative.id, 18);
-    const brandP = creative.product.brand
-      ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
-      : Promise.resolve([] as ProductAd[]);
 
     // Overwrite when data arrives. No intermediate null state — old rail
     // content stays put through the morph and gets replaced atomically.
@@ -653,11 +638,6 @@ export default function Home() {
       primeTrailAssets(rows);
       setSimilarCreatives(rows);
     }).catch(() => { /* keep rail empty rather than throw */ });
-
-    brandP.then(rows => {
-      primeTrailAssets(rows);
-      setBrandCreatives(rows);
-    }).catch(() => { /* keep brand strip empty rather than throw */ });
 
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
   }, [fetchSimilarProducts, pushRecent]);
@@ -765,7 +745,6 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
-    setBrandCreatives(null);
     // Pop the /p/<slug> URL when the user closes the modal so the
     // address bar matches what's visible. We use replaceState so the
     // browser history doesn't grow with every open/close cycle.
@@ -1096,7 +1075,6 @@ export default function Home() {
                     : undefined
                 }
                 similarCreatives={similarCreatives ?? undefined}
-                brandCreatives={brandCreatives ?? undefined}
                 lookCreatives={lookFeedTiles}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
