@@ -33,6 +33,9 @@ interface ProductPageProps {
   /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
    *  "More like this" video rail below the hero. */
   similarCreatives?: ProductAd[];
+  /** Other live creatives from the same brand. Rendered as the
+   *  "More from <brand>" rail in the desktop info column. */
+  brandCreatives?: ProductAd[];
   /** Editorial fashion looks (Look[]) — drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
@@ -166,6 +169,63 @@ function dummySavedBy(productKey: string): SavedByDummy {
   return { count, avatars };
 }
 
+/** Compact video tile for the brand strip — small, shows a product image
+ *  poster + brand/name caption so the tile is never blank, then swaps in
+ *  the video once frames are decoded. Tap reuses the shared <video>
+ *  element via the trail host so playback continues without remount. */
+function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c: ProductAd) => void }) {
+  const [loaded, setLoaded] = useState(false);
+  const slotRef = useRef<HTMLDivElement | null>(null);
+  const setSlot = useTrailVideo(creative.id, creative.video_url ?? undefined);
+  const setRef = useCallback((node: HTMLDivElement | null) => {
+    slotRef.current = node;
+    setSlot(node);
+  }, [setSlot]);
+  useEffect(() => {
+    const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
+    if (!video) return;
+    if (video.readyState >= 2) { setLoaded(true); return; }
+    const handler = () => setLoaded(true);
+    ['playing', 'canplay', 'loadeddata'].forEach(e => video.addEventListener(e, handler, { once: true }));
+    const t = setTimeout(() => setLoaded(true), 6000);
+    return () => {
+      clearTimeout(t);
+      ['playing', 'canplay', 'loadeddata'].forEach(e => video.removeEventListener(e, handler));
+    };
+  }, [creative.id]);
+
+  const posterUrl = creative.thumbnail_url
+    || creative.product?.image_url
+    || (creative.product?.images && creative.product.images[0])
+    || '';
+  const productName = creative.product?.name || '';
+
+  return (
+    <button
+      type="button"
+      className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
+      onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
+      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
+      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
+    >
+      {posterUrl && (
+        <img
+          className="pd-brand-tile-poster"
+          src={posterUrl}
+          alt={productName}
+          loading="lazy"
+        />
+      )}
+      <div ref={setRef} className="pd-brand-tile-slot" data-trail-id={creative.id} />
+      {productName && (
+        <div className="pd-brand-tile-caption">
+          <span className="pd-brand-tile-name">{productName}</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
 /** Look-creative tile for the "You might also like" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video. */
 function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
@@ -241,6 +301,7 @@ export default function ProductPage({
   onOpenBrand,
   creative,
   similarCreatives,
+  brandCreatives,
   lookCreatives,
   bookmarks,
   navKey = 0,
@@ -482,6 +543,22 @@ export default function ProductPage({
               </div>
             )}
 
+            {/* "More from <brand>" rail — fills the negative space below
+                the Shop drawer in the info column with same-brand-mate
+                creatives. Cross-brand discovery happens below in the
+                "More like this" feed. */}
+            {brandCreatives && brandCreatives.length > 0 && onOpenCreative && (
+              <section className="pd-info-brand-rail" aria-label={`More from ${product.brand || 'this brand'}`}>
+                <h2 className="pd-info-brand-rail-title">
+                  More from {product.brand || 'this brand'}
+                </h2>
+                <div className="pd-info-brand-rail-grid">
+                  {brandCreatives.slice(0, 6).map(c => (
+                    <BrandStripTile key={c.id} creative={c} onOpen={onOpenCreative} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
         </div>

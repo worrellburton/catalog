@@ -79,7 +79,7 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, setShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -210,6 +210,10 @@ export default function Home() {
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
+  const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
+  // Tracks the look the user was viewing when they opened a product, so
+  // pressing back on the product returns to that look instead of the feed.
+  const [productOpenedFromLook, setProductOpenedFromLook] = useState<Look | null>(null);
   // Editorial looks pulled from looks_creative; fed into the "You might also
   // like" grid on ProductPage. Loaded once at mount and reused.
   const [liveLooks, setLiveLooks] = useState<Look[]>([]);
@@ -475,6 +479,11 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
+    setBrandCreatives(null);
+    // The user is committing to this new look — drop any stale "go
+    // back to the previous look on close" so opening a product from
+    // here doesn't bounce them somewhere unexpected.
+    setProductOpenedFromLook(null);
     setSelectedLook(look);
   }, []);
 
@@ -581,16 +590,29 @@ export default function Home() {
   const handleOpenProduct = useCallback(async (product: Product) => {
     pushRecent(product);
     setProductNavCount(c => c + 1);
+    // Remember the look the user came from (if any) so the back button
+    // on ProductPage returns to that look instead of the empty feed.
+    setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
     setSelectedCreative(null);
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
+    setBrandCreatives(null);
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
+      // Same data the brand rail uses to fill "More from <Brand>" —
+      // without this, products opened from a Look, search, or recents
+      // see an empty rail.
+      prefetchCreativesByBrand(product.brand, null, 12)
+        .then(rows => {
+          primeTrailAssets(rows);
+          setBrandCreatives(rows);
+        })
+        .catch(() => { /* leave rail empty rather than throw */ });
     }
-  }, [fetchSimilarProducts, pushRecent]);
+  }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
@@ -612,6 +634,7 @@ export default function Home() {
     };
     pushRecent(mapped);
     setProductNavCount(c => c + 1);
+    setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
@@ -631,6 +654,9 @@ export default function Home() {
       creative.product.id || null,
     );
     const similarP = prefetchSimilarCreatives(creative.id, 18);
+    const brandP = creative.product.brand
+      ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
+      : Promise.resolve([] as ProductAd[]);
 
     // Overwrite when data arrives. No intermediate null state — old rail
     // content stays put through the morph and gets replaced atomically.
@@ -639,8 +665,13 @@ export default function Home() {
       setSimilarCreatives(rows);
     }).catch(() => { /* keep rail empty rather than throw */ });
 
+    brandP.then(rows => {
+      primeTrailAssets(rows);
+      setBrandCreatives(rows);
+    }).catch(() => { /* keep brand rail empty rather than throw */ });
+
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
-  }, [fetchSimilarProducts, pushRecent]);
+  }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   // Editorial looks for the "You might also like" grid on ProductPage. One
   // fetch per session; reused across every overlay open.
@@ -656,13 +687,23 @@ export default function Home() {
   // black tiles named "Look 02"/"Look 06"/etc.) and dedupes by video URL so
   // the same clip can't show up multiple times in a row.
   const lookFeedTiles = useMemo<Look[]>(() => {
-    const seen = new Set<string>();
+    // Skip stub seed rows whose video field is a bare filename. Then
+    // dedupe by look identity (uuid/id) and by (creator + video) so a
+    // single creator who uploaded the same video to multiple look rows
+    // doesn't fill the rail. Different creators using the same video
+    // stay distinct, so creator labels never get swapped.
+    const seenIds = new Set<string>();
+    const seenCreatorVideo = new Set<string>();
     const out: Look[] = [];
     for (const l of liveLooks) {
       const video = l.video || '';
       if (!/^https?:\/\//i.test(video)) continue;
-      if (seen.has(video)) continue;
-      seen.add(video);
+      const idKey = String(l.uuid || l.id);
+      if (seenIds.has(idKey)) continue;
+      const creatorVideoKey = `${l.creator}|${video}`;
+      if (seenCreatorVideo.has(creatorVideoKey)) continue;
+      seenIds.add(idKey);
+      seenCreatorVideo.add(creatorVideoKey);
       out.push(l);
       if (out.length >= 12) break;
     }
@@ -745,13 +786,19 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
-    // Pop the /p/<slug> URL when the user closes the modal so the
-    // address bar matches what's visible. We use replaceState so the
-    // browser history doesn't grow with every open/close cycle.
+    setBrandCreatives(null);
+    // If the product was opened from a look, restore that look so the
+    // back button feels like back-navigation. Otherwise fall through to
+    // the feed and pop /p/<slug> from the URL.
+    if (productOpenedFromLook) {
+      setSelectedLook(productOpenedFromLook);
+      setProductOpenedFromLook(null);
+      return;
+    }
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/p/')) {
       window.history.replaceState({}, '', '/');
     }
-  }, []);
+  }, [productOpenedFromLook]);
 
   // Sync handlers — push the canonical share URL whenever a modal
   // opens via in-app interaction. We use replaceState (not navigate)
@@ -1075,6 +1122,7 @@ export default function Home() {
                     : undefined
                 }
                 similarCreatives={similarCreatives ?? undefined}
+                brandCreatives={brandCreatives ?? undefined}
                 lookCreatives={lookFeedTiles}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
