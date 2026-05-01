@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { prefetchLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -225,10 +225,17 @@ export default function ContinuousFeed({
   // the feed can render placeholder tiles in creative slots until the fetch
   // resolves — otherwise the grid renders pure looks for a beat and the
   // same two faces fill the first screen.
-  const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>([]);
-  const [creativesLoading, setCreativesLoading] = useState(true);
+  // Stale-while-revalidate first paint: if there's a localStorage snapshot
+  // from a prior visit, hydrate state with it synchronously so the feed
+  // renders in the first React commit instead of after the network round
+  // trip. Network revalidation kicks off in parallel and overwrites state
+  // when it lands.
+  const initialCached = useMemo(() => getCachedLiveAds(), []);
+  const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
+  const [creativesLoading, setCreativesLoading] = useState(!initialCached);
   useEffect(() => {
     let cancelled = false;
+    if (initialCached) primeTrailAssets(initialCached);
     // prefetchLiveAds returns the cached Promise primed by LandingPage if the
     // user came in through the marketing flow; otherwise it kicks off a fresh
     // fetch. Either way we also prime asset caches (idempotent) so direct
@@ -246,7 +253,7 @@ export default function ContinuousFeed({
         if (!cancelled) setCreativesLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [initialCached]);
 
   // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
   // When the user types a query that matches an existing catalog (e.g.

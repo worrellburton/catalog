@@ -10,9 +10,13 @@ interface CreativeCardProps {
   onOpenProduct?: (creative: ProductAd) => void;
   canDelete?: boolean;
   onDelete?: (id: string) => void;
+  /** Above-the-fold cards. Tells the browser to fetch the poster image
+   *  eagerly with high priority so the first paint of real content
+   *  beats the network round-trip for off-screen assets. */
+  priority?: boolean;
 }
 
-const CreativeCard = memo(function CreativeCard({ creative, className = 'look-card', onOpenProduct, canDelete, onDelete }: CreativeCardProps) {
+const CreativeCard = memo(function CreativeCard({ creative, className = 'look-card', onOpenProduct, canDelete, onDelete, priority = false }: CreativeCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -199,8 +203,11 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             className="card-poster"
             src={posterUrl}
             alt=""
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
             decoding="async"
+            // fetchpriority isn't in React's stock HTMLImageElement type
+            // yet, so spread it via a literal attr.
+            {...(priority ? { fetchpriority: 'high' as const } : {})}
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } as React.CSSProperties}
           />

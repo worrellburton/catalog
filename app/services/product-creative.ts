@@ -152,10 +152,56 @@ export async function getLiveAds(): Promise<ProductAd[]> {
 // already-resolved Promise — effectively instant.
 //
 // Stale-while-revalidate: invalidate() clears the cache so the next caller
-// kicks off a fresh fetch (used after admin actions).
+// kicks off a fresh fetch (used after admin actions). Also seeded from
+// localStorage on module init so a returning visitor sees their last feed
+// instantly, then we revalidate in the background.
 let liveAdsPromise: Promise<ProductAd[]> | null = null;
 let liveAdsFetchedAt = 0;
 const LIVE_ADS_TTL_MS = 60_000;
+const LIVE_ADS_LS_KEY = 'catalog:live-ads-cache';
+const LIVE_ADS_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Seed the in-memory promise from localStorage on import so the feed
+// hydrates instantly on return visits. Skipped on SSR / initial pageload
+// without window. The background fetch in prefetchLiveAds() always runs
+// to keep data fresh.
+function readLiveAdsFromStorage(): ProductAd[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(LIVE_ADS_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt: number; rows: ProductAd[] };
+    if (!parsed || typeof parsed.savedAt !== 'number' || !Array.isArray(parsed.rows)) return null;
+    if (Date.now() - parsed.savedAt > LIVE_ADS_LS_MAX_AGE_MS) return null;
+    return parsed.rows;
+  } catch {
+    return null;
+  }
+}
+
+function writeLiveAdsToStorage(rows: ProductAd[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // Cap the persisted list to keep localStorage under quota — the cache
+    // is purely a perceived-perf affordance; the network fetch always
+    // returns the full set within a beat.
+    const capped = rows.slice(0, 60);
+    window.localStorage.setItem(
+      LIVE_ADS_LS_KEY,
+      JSON.stringify({ savedAt: Date.now(), rows: capped }),
+    );
+  } catch {
+    /* quota exceeded — feed still works, just no fast-path next time */
+  }
+}
+
+// Synchronous fast-path for first paint. Returns the last successful
+// feed from localStorage (capped at 60 rows, 7-day TTL) so consumers
+// can render an instant feed before the network fetch resolves. Pair
+// with prefetchLiveAds() for the revalidate side of SWR.
+export function getCachedLiveAds(): ProductAd[] | null {
+  return readLiveAdsFromStorage();
+}
 
 export function prefetchLiveAds(): Promise<ProductAd[]> {
   const now = Date.now();
@@ -163,7 +209,10 @@ export function prefetchLiveAds(): Promise<ProductAd[]> {
     return liveAdsPromise;
   }
   liveAdsFetchedAt = now;
-  liveAdsPromise = getLiveAds();
+  liveAdsPromise = getLiveAds().then(rows => {
+    if (rows.length > 0) writeLiveAdsToStorage(rows);
+    return rows;
+  });
   // If the fetch errors out, drop the cache so the next call retries.
   liveAdsPromise.catch(() => { liveAdsPromise = null; });
   return liveAdsPromise;
@@ -172,6 +221,9 @@ export function prefetchLiveAds(): Promise<ProductAd[]> {
 export function invalidateLiveAds(): void {
   liveAdsPromise = null;
   liveAdsFetchedAt = 0;
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.removeItem(LIVE_ADS_LS_KEY); } catch { /* ignore */ }
+  }
 }
 
 // ── Tier-1 catalog fast path ────────────────────────────────────────────

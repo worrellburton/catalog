@@ -220,16 +220,16 @@
   inset: 0;
   background: linear-gradient(
     105deg,
-    #131313 0%,
-    #131313 32%,
-    #1f1f1f 42%,
-    #2a2a2a 46%,
-    #1f1f1f 50%,
-    #131313 60%,
-    #131313 100%
+    #161616 0%,
+    #161616 28%,
+    #262626 40%,
+    #383838 46%,
+    #262626 52%,
+    #161616 64%,
+    #161616 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite, shimmerPulse 3s ease-in-out infinite;
+  animation: shimmer 1.6s ease-in-out infinite, shimmerPulse 2.4s ease-in-out infinite;
   z-index: 0;
   pointer-events: none;
   transition: opacity 0.6s ease;
@@ -391,3 +391,45 @@
 .look-card:nth-child(4n+3) .card-shimmer { animation-delay: 0.6s, 0.8s; }
 .look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s, 1.2s; }
 
+
+/* Skeleton scaffold inside placeholder cards. Mirrors the brand /
+   name / price block real CreativeCards render in the bottom-left,
+   so the loading state reads as "content coming", not "broken". */
+.creative-placeholder .card-skeleton {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.creative-placeholder .card-skeleton-bar {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerBar 1.6s ease-in-out infinite;
+}
+
+.creative-placeholder .card-skeleton-bar--brand { width: 32%; height: 8px; }
+.creative-placeholder .card-skeleton-bar--name  { width: 78%; }
+.creative-placeholder .card-skeleton-bar--price { width: 24%; height: 8px; }
+
+@keyframes shimmerBar {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creative-placeholder .card-skeleton-bar { animation: none; }
+}

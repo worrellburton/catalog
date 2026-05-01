@@ -221,6 +221,15 @@ function FeedSection({
               <div key={item.key} className="look-card promo-card creative-placeholder" aria-hidden="true">
                 <div className="card-inner">
                   <div className="card-shimmer" />
+                  {/* Skeleton scaffold so the placeholder reads as
+                      "content coming" instead of an empty rectangle.
+                      Mirrors the brand / name / price block real cards
+                      render in their bottom-left corner. */}
+                  <div className="card-skeleton">
+                    <span className="card-skeleton-bar card-skeleton-bar--brand" />
+                    <span className="card-skeleton-bar card-skeleton-bar--name" />
+                    <span className="card-skeleton-bar card-skeleton-bar--price" />
+                  </div>
                 </div>
               </div>
             );
@@ -234,6 +243,7 @@ function FeedSection({
                 onOpenProduct={onOpenCreativeProduct}
                 canDelete={canDeleteCreative}
                 onDelete={onDeleteCreative}
+                priority={idx < 6}
               />
             );
           }
