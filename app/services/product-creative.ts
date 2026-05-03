@@ -17,6 +17,14 @@ export function setShopperGender(g: ShopperGender) {
   similarCache.clear();
 }
 
+// Gender-scoped suffix for the localStorage live-ads cache key. Without
+// this, a male user's cached feed would surface for a female user on
+// next visit (and vice versa). Unknown stays on the bare key so logged-
+// out users still benefit from a recent shared cache.
+function genderCacheSuffix(): string {
+  return shopperGender === 'unknown' ? '' : `:${shopperGender}`;
+}
+
 /** Returns the genders we should accept for the current shopper. */
 function visibleGenders(): Array<'male' | 'female' | 'unisex'> | null {
   if (shopperGender === 'male') return ['male', 'unisex'];
@@ -168,7 +176,7 @@ const LIVE_ADS_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 function readLiveAdsFromStorage(): ProductAd[] | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(LIVE_ADS_LS_KEY);
+    const raw = window.localStorage.getItem(LIVE_ADS_LS_KEY + genderCacheSuffix());
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { savedAt: number; rows: ProductAd[] };
     if (!parsed || typeof parsed.savedAt !== 'number' || !Array.isArray(parsed.rows)) return null;
@@ -187,7 +195,7 @@ function writeLiveAdsToStorage(rows: ProductAd[]): void {
     // returns the full set within a beat.
     const capped = rows.slice(0, 60);
     window.localStorage.setItem(
-      LIVE_ADS_LS_KEY,
+      LIVE_ADS_LS_KEY + genderCacheSuffix(),
       JSON.stringify({ savedAt: Date.now(), rows: capped }),
     );
   } catch {
@@ -222,7 +230,13 @@ export function invalidateLiveAds(): void {
   liveAdsPromise = null;
   liveAdsFetchedAt = 0;
   if (typeof window !== 'undefined') {
-    try { window.localStorage.removeItem(LIVE_ADS_LS_KEY); } catch { /* ignore */ }
+    // Drop both the gender-scoped variant for the current shopper AND
+    // the bare key, so an admin invalidation clears every cached view.
+    try {
+      for (const suffix of ['', ':male', ':female']) {
+        window.localStorage.removeItem(LIVE_ADS_LS_KEY + suffix);
+      }
+    } catch { /* ignore */ }
   }
 }
 

@@ -135,17 +135,64 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
 
   const manager = useMemo<TrailVideoManager>(() => ({ attach }), [attach]);
 
-  // Visibility hook: pause everything when the tab hides.
+  // Visibility + gesture playback recovery. Three sources of frozen-frame
+  // bugs we have to handle:
+  //   1. Tab hidden → browsers pause every video. We want them paused
+  //      while hidden but resumed when the tab returns.
+  //   2. iOS / Chrome autoplay policy can reject the initial play() — the
+  //      first frame is decoded so the card LOOKS rendered, but it never
+  //      animates. The first user gesture (tap, scroll, key) unblocks
+  //      autoplay, so we use that as a chance to retry.
+  //   3. Network stalls / decoder hiccups can leave a video paused mid-
+  //      playback. A 3 s heartbeat re-issues play() on any in-slot video
+  //      that's currently paused — cheap insurance.
+  //
+  // "In-slot" means the video is parented to a real card slot, not the
+  // off-screen pool. We only resume those — pool-parked videos should
+  // stay paused until they're attached to a slot again.
   useEffect(() => {
-    const onHide = () => {
-      if (document.hidden) {
-        for (const { el } of elementsRef.current.values()) {
-          try { el.pause(); } catch {}
-        }
+    const offscreen = poolRef.current;
+    const isInSlot = (el: HTMLVideoElement) =>
+      el.parentElement && el.parentElement !== offscreen;
+
+    const resumeInSlot = () => {
+      for (const { el } of elementsRef.current.values()) {
+        if (!isInSlot(el)) continue;
+        if (!el.paused) continue;
+        void el.play().catch(() => { /* ignore — next tick will retry */ });
       }
     };
-    document.addEventListener('visibilitychange', onHide);
-    return () => document.removeEventListener('visibilitychange', onHide);
+    const pauseAll = () => {
+      for (const { el } of elementsRef.current.values()) {
+        try { el.pause(); } catch { /* ignore */ }
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) pauseAll();
+      else resumeInSlot();
+    };
+
+    // First-gesture unblock for browsers that gate autoplay until the
+    // user interacts with the page. Listeners are once: true so we don't
+    // burn CPU after the unblock.
+    const onFirstGesture = () => resumeInSlot();
+
+    // Heartbeat: every 3 s, kick any in-slot video that has stalled.
+    const heartbeat = window.setInterval(resumeInSlot, 3000);
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
+    window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
+    window.addEventListener('keydown', onFirstGesture, { once: true });
+
+    return () => {
+      window.clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pointerdown', onFirstGesture);
+      window.removeEventListener('touchstart', onFirstGesture);
+      window.removeEventListener('keydown', onFirstGesture);
+    };
   }, []);
 
   return (
