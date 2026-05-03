@@ -8,6 +8,23 @@ import { supabase } from '~/utils/supabase';
 // catalog from someone we can't tag.
 type ShopperGender = 'male' | 'female' | 'unknown';
 let shopperGender: ShopperGender = 'unknown';
+
+// Pub/sub for gender changes. Consumers (ContinuousFeed, etc.) need to
+// re-fetch when the gender resolves AFTER they've already pulled a
+// cached unfiltered feed. Without this, a male user sees a mixed feed
+// because module-load prefetchLiveAds() fired before auth resolved.
+type GenderChangeListener = (g: ShopperGender) => void;
+const genderListeners = new Set<GenderChangeListener>();
+
+export function subscribeToShopperGender(cb: GenderChangeListener): () => void {
+  genderListeners.add(cb);
+  return () => { genderListeners.delete(cb); };
+}
+
+export function getShopperGender(): ShopperGender {
+  return shopperGender;
+}
+
 export function setShopperGender(g: ShopperGender) {
   if (g === shopperGender) return;
   shopperGender = g;
@@ -15,6 +32,11 @@ export function setShopperGender(g: ShopperGender) {
   liveAdsPromise = null;
   brandCache.clear();
   similarCache.clear();
+  // Notify subscribers so they can re-pull. Wrap each call in try/catch
+  // so a single bad listener doesn't break the rest.
+  for (const cb of genderListeners) {
+    try { cb(g); } catch { /* ignore */ }
+  }
 }
 
 // Gender-scoped suffix for the localStorage live-ads cache key. Without

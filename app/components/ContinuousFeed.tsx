@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -236,23 +236,34 @@ export default function ContinuousFeed({
   useEffect(() => {
     let cancelled = false;
     if (initialCached) primeTrailAssets(initialCached);
-    // prefetchLiveAds returns the cached Promise primed by LandingPage if the
-    // user came in through the marketing flow; otherwise it kicks off a fresh
-    // fetch. Either way we also prime asset caches (idempotent) so direct
-    // deep-links don't pay the shimmer-to-pop cost.
-    prefetchLiveAds()
-      .then(data => {
-        if (cancelled) return;
-        setLiveCreatives(data);
-        primeTrailAssets(data);
-      })
-      .catch(err => {
-        console.error('[ContinuousFeed] fetching creative failed:', err);
-      })
-      .finally(() => {
-        if (!cancelled) setCreativesLoading(false);
-      });
-    return () => { cancelled = true; };
+
+    const refetch = () => {
+      // Gender-aware re-fetch. Called once on mount and again whenever
+      // setShopperGender fires — without this, a male/female user sees
+      // the unfiltered cached feed forever because module-load
+      // prefetchLiveAds() ran with shopperGender='unknown' before auth
+      // resolved. setShopperGender invalidates liveAdsPromise so this
+      // call always hits a fresh fetch with the current scope.
+      prefetchLiveAds()
+        .then(data => {
+          if (cancelled) return;
+          setLiveCreatives(data);
+          primeTrailAssets(data);
+        })
+        .catch(err => {
+          console.error('[ContinuousFeed] fetching creative failed:', err);
+        })
+        .finally(() => {
+          if (!cancelled) setCreativesLoading(false);
+        });
+    };
+
+    refetch();
+    const unsubscribe = subscribeToShopperGender(refetch);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [initialCached]);
 
   // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
