@@ -187,8 +187,14 @@ function getRandomCatalogName(query?: string): string {
 export default function Home() {
   const [view, setView] = useState<AppView>('locked');
   // First-visit splash: if the user has never been to catalog on this device,
-  // show a branded splash for ~2s before surfacing the gate / landing. The
-  // flag is written once and never revisited so repeat visitors skip it.
+  // show a branded splash before surfacing the gate / landing. The flag is
+  // written once and never revisited so repeat visitors skip it.
+  //
+  // Splash timing is data-aware: we hold for at least 800ms (so the brand
+  // moment doesn't flash by) and at most 2500ms (so a slow network never
+  // hangs the user). In between, we dismiss as soon as the feed data lands
+  // — so by the time the splash drops, the cards render with real content
+  // already in cache.
   const [firstVisit, setFirstVisit] = useState(() => {
     try {
       return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
@@ -197,8 +203,61 @@ export default function Home() {
   useEffect(() => {
     if (!firstVisit) return;
     try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
-    const t = setTimeout(() => setFirstVisit(false), 1900);
-    return () => clearTimeout(t);
+
+    const SPLASH_MIN_MS = 800;
+    const SPLASH_MAX_MS = 2500;
+    const startedAt = Date.now();
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      setFirstVisit(false);
+    };
+
+    // Race the feed fetch + the min floor; whoever wins LAST triggers
+    // dismiss (so we don't dismiss before either is ready). Then a
+    // hard ceiling timer guarantees we never hang past max.
+    const ceiling = window.setTimeout(dismiss, SPLASH_MAX_MS);
+    let feedReady = false;
+    let floorReached = false;
+    const tryDismiss = () => {
+      if (feedReady && floorReached) dismiss();
+    };
+    const floor = window.setTimeout(() => { floorReached = true; tryDismiss(); }, SPLASH_MIN_MS);
+    prefetchLiveAds()
+      .then(rows => {
+        // Pre-warm posters from the FRESH list while the splash is still
+        // up so they're in browser cache by the time the feed renders.
+        for (const ad of rows.slice(0, 6)) {
+          const url = ad.thumbnail_url
+            || ad.product?.image_url
+            || (ad.product?.images && ad.product.images[0])
+            || '';
+          if (!url) continue;
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = url;
+        }
+      })
+      .catch(() => { /* let the ceiling handle it */ })
+      .finally(() => {
+        const elapsed = Date.now() - startedAt;
+        // If the network beat the floor, mark ready and let the floor
+        // trigger dismiss; if it beat the ceiling but missed the floor,
+        // still wait for the floor for the brand moment.
+        feedReady = true;
+        if (elapsed >= SPLASH_MIN_MS) {
+          floorReached = true;
+          dismiss();
+        } else {
+          tryDismiss();
+        }
+      });
+
+    return () => {
+      window.clearTimeout(ceiling);
+      window.clearTimeout(floor);
+    };
   }, [firstVisit]);
   const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays

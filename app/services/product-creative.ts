@@ -226,6 +226,33 @@ export function invalidateLiveAds(): void {
   }
 }
 
+// Fire the feed fetch the moment this module parses — runs in parallel
+// with the React tree mounting, so by the time _index.tsx's splash
+// timer is ticking the network round-trip is already on the wire. Same
+// pattern services/looks.ts uses. Browser-only; no-op on SSR.
+if (typeof window !== 'undefined') {
+  void prefetchLiveAds().catch(() => { /* surfaced on real caller */ });
+  // Pre-warm poster images for the first batch of cached creatives so
+  // they're in browser cache by the time React mounts. Decoupled from
+  // the network promise above — this hits localStorage synchronously,
+  // no extra round-trip.
+  const cached = readLiveAdsFromStorage();
+  if (cached) {
+    for (const ad of cached.slice(0, 6)) {
+      const url = ad.thumbnail_url
+        || ad.product?.image_url
+        || (ad.product?.images && ad.product.images[0])
+        || '';
+      if (!url) continue;
+      // new Image() forces the browser to start the fetch immediately;
+      // when the real <img> mounts later it resolves from cache.
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
+  }
+}
+
 // ── Tier-1 catalog fast path ────────────────────────────────────────────
 // Maps a user query (e.g. "shoes", "pants") to the canonical product.type
 // values present in the DB. catalog_tags is too sparsely populated to be
