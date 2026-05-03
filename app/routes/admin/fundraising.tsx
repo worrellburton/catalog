@@ -35,16 +35,15 @@ const AGENDA_30: Phase[] = [
   {
     title: 'Welcome & the one idea',
     description:
-      'State the thesis upfront in one sentence. Catalog is the AI for searching retail. The fundraise starts a flywheel that grows the company on its own.',
+      'State the thesis upfront in one sentence. Catalog is the AI for searching retail.',
     minutes: 1,
     cheatsheet: {
       openWith:
-        '"Thanks for making time. The one idea I want to leave you with: Catalog is the AI for searching retail. We\'re replacing the keyword search bar with a fluid discovery experience that\'s built on a flywheel — and the entire ask of this round is to START that flywheel. Once it spins, the company grows on its own. Everything else in the next 25 minutes is evidence for that one sentence."',
+        '"Thanks for making time. The one idea I want to leave you with: Catalog is the AI for searching retail. We replace the keyword search bar with a fluid generative discovery experience — shoppers see themselves wearing the product before they buy. Everything else in the next 25 minutes is evidence for that one sentence."',
       hitThese: [
         'Lock in the positioning in the first 30 seconds: "AI for searching retail" — the same way Google was the AI for documents and Perplexity is the AI for answers, Catalog is the AI for finding what to buy.',
-        'Frame the ask as activation, not maintenance. Investors fund flywheels they can light, not treadmills they have to keep pushing.',
         'Confirm who else is on the call and their role.',
-        'Set the agenda: problem (search is broken) → demo (fluid discovery) → traction (flywheel starting) → ask (capital that lights it). 7 min for Q&A.',
+        'Set the agenda: problem (search is broken) → demo (fluid discovery) → traction → ask. 7 min for Q&A.',
       ],
       watchOutFor: [
         'Don\'t small-talk past 60 seconds. The one-line thesis is the thing they\'ll repeat to their partner — say it cleanly.',
@@ -53,18 +52,18 @@ const AGENDA_30: Phase[] = [
     },
   },
   {
-    title: 'The problem: search is broken, no one has a flywheel',
+    title: 'The problem: retail search is broken',
     description:
-      'Retail search is 1995 tech. Discovery is friction. No retail platform has a real flywheel — every shopper costs the same to acquire as the last one.',
+      'Retail search is 1995 tech. Shoppers describe what they want in their head, fail to translate it into keywords, and bounce.',
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Two facts. One: retail search hasn\'t meaningfully changed since 1995 — keywords, lists, filters. Two: no retail platform has a real flywheel. Amazon, Shopify, TikTok Shop, LTK — every one of them pays linear CAC for every new shopper. Catalog fixes both at once: AI replaces the search bar, and that AI experience IS the flywheel input."',
+        '"Retail search hasn\'t meaningfully changed since 1995 — keywords, lists, filters. Shoppers describe what they want in their head (\'a black tank that drapes\'), translate it into clumsy keywords (\'black sleeveless top\'), then sift results that ignore body, context, and taste. The translation step is where most shoppers fail or bounce."',
       hitThese: [
-        'Search is broken: shoppers describe what they want in their head ("a black tank that drapes"), then translate it into clumsy keywords ("black sleeveless top"), then sort through results that ignore body, context, and taste. The translation step is where every shopper fails or bounces.',
-        'No flywheel: Amazon = linear funnel, no compounding. Shopify = stores in isolation. TikTok Shop = rented algorithm distribution. LTK = creator content scales linearly with creator hours. Every existing model pays for the next shopper out-of-pocket.',
-        'The unlock: AI generation lets shoppers SEE themselves in the product before they buy — search becomes generation. And every generation is shareable, so each shopper produces content that brings the next shopper in. Search and growth become the same motion.',
-        'Why now: AI video at <$0.50/generation only landed in 2025. The flywheel\'s primitive — cheap personalized try-on — was structurally impossible 18 months ago.',
+        'The keyword-to-product translation step loses 40-60% of shopping intent before checkout. Filters and reviews are lipstick on a 30-year-old UX.',
+        'PDP photos are aspirational, sizing-blind, decontextualized. Shoppers have to imagine themselves wearing the product — the cost of that guesswork is fashion-DTC return rates of 30-40%.',
+        'AI generation replaces search → list → guess with: pick a product, see yourself wearing it in 30 seconds, decide. The generation IS the search result.',
+        'Why now: AI video at <$0.50/generation only landed in 2025. The primitive that makes this possible was structurally absent 18 months ago.',
       ],
       ifAsked: [
         {
@@ -84,23 +83,20 @@ const AGENDA_30: Phase[] = [
   {
     title: 'Demo: extremely fluid discovery',
     description:
-      'Show search-as-generation. Land on the feed, do a try-on, share the result, watch a return shopper arrive. Four moves; the flywheel turning live.',
+      'Show search-as-generation. Land on the feed, do a try-on live, watch the AI render the result. That moment is the entire pitch.',
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Let me show you what fluid discovery actually feels like. Four moves — discovery, try-on, share, return shopper — about a minute each."',
+        '"Let me show you what fluid discovery actually feels like. Three moves — about 90 seconds each."',
       hitThese: [
-        'MOVE 1 (discovery, ~60s) — open catalog.shop. No search bar in the user\'s face. Cross-brand mix loads instantly (rag & bone, ALO, Levi\'s). Tap a card → morph into the look detail → tap a product → retailer drawer opens with Bloomingdale\'s, Amazon, Nordstrom side-by-side, "Lowest" badge automatic.',
-        'MOVE 2 (try-on, ~3 min — THE DEFINING MOMENT) — open /generate. Upload a face photo. Pick 2 products. Submit. ~30 seconds later: an AI video of THE INVESTOR wearing the products. This is what "AI for searching" looks like in practice — they didn\'t type a keyword, they SAW the answer.',
-        'MOVE 3 (share, ~60s) — share sheet on the generated look. Watermark + deep link to catalog.shop/l/<slug>. Native share to TikTok / IG / X. Say: "Every share is a shopper acquisition we paid zero CAC for. K-factor today is [X] and rising."',
-        'MOVE 4 (return shopper, ~60s) — paste a share-link in a private browser. Same shoppable experience, no login wall, retailer drawer + cross-brand "More like this". The new shopper enters the loop.',
-        'Pause after move 4: "That was one full turn of the flywheel — search replaced by generation, distribution replaced by sharing, CAC replaced by content. We didn\'t pay for anything in that loop."',
+        'MOVE 1 (~90s) — discovery without a search bar. Open catalog.shop. Cross-brand mix loads instantly (rag & bone, ALO, Levi\'s). Tap a card → morph into the look detail → tap a product → retailer drawer with Bloomingdale\'s, Amazon, Nordstrom side-by-side, "Lowest" badge automatic. Note: no keyword box in their face. Discovery is the feed itself.',
+        'MOVE 2 (~3 min — THE DEFINING MOMENT) — open /generate. Upload a face photo. Pick 2 products. Submit. ~30 seconds later: an AI video of THE INVESTOR wearing the products. They didn\'t type a keyword, they SAW the answer. This is what "AI for searching" looks like in practice.',
+        'MOVE 3 (~60s) — show the share sheet. Watermark + deep link to catalog.shop/l/<slug>. Native share to TikTok / IG / X. Mention briefly that every share is content that pulls in another shopper at zero CAC — but don\'t belabor it; that\'s for the Ask later.',
       ],
       showInApp: [
         'catalog.shop feed (cross-brand mix front and center)',
         '/generate end-to-end — let the investor watch the AI video render live',
         'Share sheet on the generated look (watermark + deep link visible)',
-        'Cold-open of a share-link in a private browser to prove the loop closes',
       ],
       ifAsked: [
         {
@@ -108,12 +104,12 @@ const AGENDA_30: Phase[] = [
           a: 'Bytedance Seedance via Fal queue. Lite for fast (~30s, <$0.50), Pro for premium (~90s). Prompt assembled from style preset + product role-tags + height + age band. Cost is falling every quarter.',
         },
         {
-          q: 'What\'s the share rate today?',
-          a: '[X%] of generated try-ons get shared externally. Each share drives [Y] new sessions. K-factor: [X% × Y]. Trending up week-over-week.',
+          q: 'Why no search bar by default?',
+          a: 'There IS one for power users. But the default discovery surface is generative, not query-based — typing keywords is the friction we\'re removing. The search bar becomes a fallback, not the front door.',
         },
         {
-          q: 'Why no search bar?',
-          a: 'There IS one for power users. But the default discovery surface is generative, not query-based — because typing keywords is the friction we\'re removing. The search bar becomes a fallback, not the front door.',
+          q: 'Where does the product data come from?',
+          a: 'Three pipelines: Shopify partner integration for connected brands, Modal-hosted crawlers for direct imports, admin curation for editorial.',
         },
       ],
       watchOutFor: [
@@ -134,7 +130,7 @@ const AGENDA_30: Phase[] = [
         'TAM: global retail e-commerce — $6T+. US: $1.1T, growing 8% YoY.',
         'SAM: AI-native discoverable retail in US/EN — apparel, beauty, home, gear. ~$400B.',
         'SOM 3 years out: 0.5–1% of SAM with the fashion wedge plus category expansion.',
-        'Wedge → expansion: fashion (now, cleanest AI generation economics) → beauty (face try-on, year 2) → home (place-in-room, year 2-3) → gear (lifestyle context, year 3+). Same flywheel, same pipeline.',
+        'Wedge → expansion: fashion (now, cleanest AI generation economics) → beauty (face try-on, year 2) → home (place-in-room, year 2-3) → gear (lifestyle context, year 3+).',
         'Comparables: Amazon at IPO ($438M), Pinterest at IPO ($13B), Shopify at IPO ($1.3B), Google at IPO ($23B). Every category-defining company looked obvious in hindsight.',
       ],
       numbersToKnow: [
@@ -150,95 +146,100 @@ const AGENDA_30: Phase[] = [
     },
   },
   {
-    title: 'Traction: the flywheel starting to spin',
+    title: 'Traction: the product is working',
     description:
-      'Six metrics, each one a face of the flywheel. The signal is they all move together — and K-factor is the line that matters.',
+      'WAU, retention, GMV through-flow, brand pull. Five numbers that show generation-as-search is the right surface.',
     minutes: 4,
     cheatsheet: {
       openWith:
-        '"Six metrics. The signal isn\'t any single number — it\'s that they all move together, because they\'re sides of the same loop. K-factor is the line that matters: when it crosses 1, growth becomes self-sustaining and we don\'t need to pay for shoppers anymore."',
+        '"Five numbers — engagement, retention, supply, demand, revenue. The trend is what matters, not any single value."',
       hitThese: [
-        '1. WAU shoppers — current + W/W growth + source split (organic / share-driven / paid). Show share-driven as a growing % of total.',
-        '2. Try-ons generated per week — and the per-WAU rate. THIS is the engagement signal that tells you AI-search is the right surface.',
-        '3. Share rate — % of generated try-ons that get shared externally. The single most important number on this slide.',
-        '4. K-factor — new sessions per share. Show the trend; mark the date if you\'ve crossed K=1. THIS is when the flywheel becomes self-sustaining.',
-        '5. Retention W4 / W8 / W12 — generation-flow users retain at 2-3x baseline (they have a personalized artifact + the share loop pulls them back).',
-        '6. Brand + creator pull — # new Shopify integrations and # new creators per month. They come AFTER share traffic crosses [Y%] — proof the flywheel pulls supply, not the other way around.',
+        '1. WAU shoppers — current value, W/W growth, source split (organic / referral / paid).',
+        '2. Try-ons generated per week + per-WAU rate. The engagement signal that tells you AI-search is the right surface.',
+        '3. Cohort retention W4 / W8 / W12 — generation-flow users retain at 2-3x baseline because each session creates a personal artifact.',
+        '4. Clickout volume → confirmed orders (where Shopify webhook is wired). Conversion %.',
+        '5. Supply: # connected brands, # creators publishing per month, brand MRR.',
+        'Highlight any inflection: "we shipped [feature] in week [X], retention jumped from [Y] to [Z]" — that\'s the slide investors remember.',
       ],
       numbersToKnow: [
         '[WAU last 4 weeks, W/W %]',
-        '[% of WAU from share-driven traffic]',
         '[Try-ons / week per WAU]',
-        '[Share rate %]',
-        '[K-factor (current + 4-week trend)]',
         '[W4/W8/W12 retention — generation-flow vs baseline]',
+        '[Confirmed Shopify-attributed GMV]',
         '[New brand integrations + creators / month]',
+        '[Brand MRR]',
       ],
       ifAsked: [
         {
           q: 'What\'s your CAC?',
-          a: 'Blended [$X] today — paid CAC to seed the loop. Marginal CAC on share-driven shoppers is approaching zero. When K crosses 1 sustainably, blended CAC follows it down to near-zero.',
+          a: 'Blended [$X] today. We\'re paying paid CAC to seed the user base while organic share traffic ramps — that\'s the structural unlock the round funds.',
         },
         {
-          q: 'How do you know the flywheel is real, not vanity?',
-          a: 'Three signals: (1) K-factor trending up week-over-week, (2) organic share traffic is now [Y%] of WAU, (3) brand-integration rate accelerated AFTER share traffic crossed [Z%] — they\'re pulling us in, not us chasing them.',
+          q: 'How sticky is week-1 retention?',
+          a: '[X%] for generation-flow users — 2-3x baseline. They have a personalized artifact + the try-on UX makes coming back trivial.',
         },
       ],
       watchOutFor: [
         'Don\'t cherry-pick the best week. Show the full trend.',
-        'If K is below 1 today, own it: "we\'re seeding the loop. Crosses 1 at [X] WAU per our model. Here\'s how we get there."',
+        'If a metric is down, address it head-on with the cause and the fix.',
       ],
     },
   },
   {
-    title: 'Business model: monetizes at every flywheel input',
+    title: 'Business model',
     description:
-      'Three revenue streams, each layered on a different face of the flywheel. As the loop spins, every stream compounds.',
+      'Three revenue streams — affiliate today, brand subscription this year, ad inventory next.',
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Three revenue streams, each riding on a different face of the flywheel. As the loop spins faster, every stream compounds — without any new product work."',
+        '"Three revenue streams, layered chronologically. Affiliate is live today. Brand subscription went live in [month]. In-feed ads are the 2026 unlock."',
       hitThese: [
-        'Affiliate (live): [X%] take rate via FlexOffers / Skimlinks. Each share-driven clickout pays.',
-        'Brand subscription (live): tiered SaaS for connected Shopify partners. Brands pay because the flywheel creates organic clickouts they can\'t buy elsewhere.',
-        'In-feed product ads (2026): boosted product_creative slots. Pricing scales with WAU; WAU scales with the flywheel.',
-        'Per-try-on contribution: cost ~$0.50 (Seedance Lite). Output: [N] product views, [M] clickouts, $[X] affiliate revenue, plus the share-driven shopper acquisition. Each try-on is contribution-positive on day one.',
+        'Affiliate (live): [X%] take rate via FlexOffers / Skimlinks. Pure margin after creator payout.',
+        'Brand subscription (live): tiered SaaS for connected Shopify partners. $[X] starter / $[Y] pro / $[Z] enterprise.',
+        'In-feed product ads (2026): boosted product_creative slots, capped at ~10% of feed inventory.',
+        'Walk a $100 checkout through: $[X] to brand, $[Y] to Catalog (affiliate), $[Z] to creator. Per-try-on contribution: cost ~$0.50, output [N] product views + [M] clickouts + $[X] affiliate revenue. Contribution-positive on day one.',
       ],
       numbersToKnow: [
         '[Current blended take rate]',
         '[# paying brand partners + MRR]',
-        '[Avg revenue per try-on shared]',
+        '[Avg revenue per try-on]',
+        '[Creator payout share]',
       ],
       ifAsked: [
         {
           q: 'Why not own checkout?',
-          a: 'Owning checkout breaks the flywheel\'s brand-pull side. Brands integrate BECAUSE we send them traffic. The day we own checkout is the day brands churn.',
+          a: 'Brands integrate BECAUSE we send them traffic — they own CRM, fulfillment, returns. The day we own checkout is the day brands churn.',
         },
-      ],
-      watchOutFor: [
-        'Don\'t describe the business as "we\'ll figure out monetization later". The flywheel monetizes at every input.',
+        {
+          q: 'What\'s the contribution margin per try-on?',
+          a: 'Cost ~$0.50 (Seedance Lite). Output: [N] product views, [M] clickouts, $[X] affiliate revenue. Positive on day one.',
+        },
       ],
     },
   },
   {
     title: 'Competitive: who\'s structurally locked out',
     description:
-      'Amazon, Shopify, TikTok Shop, and creator-commerce stacks each can\'t build this flywheel — for structural reasons specific to their P&L.',
+      'Amazon, Shopify, TikTok Shop, LTK each can\'t ship this — for structural reasons specific to their P&L, not lack of capability.',
     minutes: 2,
     cheatsheet: {
       openWith:
-        '"Four incumbents on the map. Each is structurally locked out of AI-for-searching cross-brand discovery — for reasons specific to their business model, not for lack of capability."',
+        '"Four incumbents on the map. Each is structurally locked out of cross-brand AI-native discovery — for reasons specific to their business model, not lack of capability."',
       hitThese: [
         'Amazon — P&L depends on shoppers staying inside Amazon. Will not generate cross-brand content that links out to Shopify stores. Innovator\'s dilemma in its purest form.',
         'Shopify — value-prop is "your store, your customer". A discovery layer that pools shoppers across competing stores breaks that promise. Brands integrate with us BECAUSE Shopify won\'t.',
         'TikTok Shop — entertainment-first, algorithmic firehose. Can\'t organize a structured catalog around personal taste.',
         'LTK / ShopMy — link-in-bio for the top 1% of influencers. Don\'t generate; locked into fashion + beauty; no AI tooling.',
-        'Our moat: the only stack that combines AI generation (Seedance via Fal) + creator-curated catalogs + cross-brand similarity (Marengo embeddings + pgvector) + Shopify partner integrations. ~6 months of engineering per piece. The glue is the moat.',
+        'Our moat: AI generation (Seedance via Fal) + creator-curated catalogs + cross-brand similarity (Marengo embeddings + pgvector) + Shopify partner integrations. ~6 months of engineering per piece — the glue is the moat.',
       ],
       ifAsked: [
         {
           q: 'What stops Amazon from shipping AI search?',
-          a: 'They\'ll ship it for Amazon products only — strengthening their walled garden. Our shoppers come BECAUSE they want cross-brand. Different product, different intent. Amazon can\'t ship cross-brand without breaking their P&L.',
+          a: 'They\'ll ship it for Amazon products only — strengthening their walled garden. Our shoppers come BECAUSE they want cross-brand. Amazon can\'t ship cross-brand without breaking their P&L.',
+        },
+        {
+          q: 'What about Meta / Instagram?',
+          a: 'Meta retired Instagram Shop in 2023. The vacuum is what created our window — a top-of-funnel for retail that isn\'t locked into Amazon\'s walled garden or Meta\'s ad model.',
         },
       ],
     },
@@ -252,7 +253,7 @@ const AGENDA_30: Phase[] = [
       openWith:
         '"Two co-founders. [Name] previously [shipped X at Y]. I previously [shipped X at Y]. Both technical, both have shipped consumer-scale products before."',
       hitThese: [
-        'Founder #1: domain edge — the unfair advantage they bring to one face of the flywheel.',
+        'Founder #1: domain edge — the unfair advantage they bring.',
         'Founder #2: complementary skill — the wedge they cover.',
         'Key hire #1 (if any): why this person joined.',
         'Advisors: only name-drop ones who would actually take an investor reference call.',
@@ -265,22 +266,24 @@ const AGENDA_30: Phase[] = [
   {
     title: 'The ask: capital to start the flywheel',
     description:
-      'We\'re not raising to grow the company. We\'re raising to start the flywheel. Once it spins, growth is self-sustaining.',
+      'Now the framing changes. The product is built. The objective of this round is ONE thing — start the flywheel that grows the company on its own.',
     minutes: 3,
     cheatsheet: {
       openWith:
-        '"Raising $[X] on a [valuation] cap. [$Y] already committed. Be clear on what we\'re raising for: we\'re NOT funding ongoing growth. We\'re funding ACTIVATION. Get K above 1 and the company grows on its own — every shopper brings the next one in. This round is the spark; the flywheel is the engine."',
+        '"Raising $[X] on a [valuation] cap. [$Y] already committed. Here\'s the framing that matters — and it\'s the first time I\'m saying this word in the meeting on purpose: the entire objective of this round is to START THE FLYWHEEL. Every try-on we generate is shareable content. Every share brings in a new shopper at zero CAC. Right now we\'re paying CAC to seed the loop. Once the share-loop K-factor crosses 1, the company grows on its own — every shopper brings in the next one. This round is the spark; after that, the company is fundamentally different."',
       hitThese: [
+        'This is the ONLY phase where flywheel is the headline. Build to it; don\'t bury the framing.',
+        'The mechanism in one breath: AI try-on creates content → share creates acquisition → new shopper enters → does their own try-on → loop. Each turn lowers the marginal cost of the next.',
         'Round size + valuation + structure.',
         'Existing commitments — names if permitted.',
-        'Use of funds, mapped to flywheel inputs:',
+        'Use of funds, mapped to flywheel activation:',
         '  — [X%] paid acquisition seed → fuel for the share loop',
-        '  — [Y%] AI compute scale (Seedance / Fal) → drives cost-per-try-on down',
-        '  — [Z%] brand-partnerships team → closes the brand-pull face',
+        '  — [Y%] AI compute scale (Seedance / Fal) → drives cost-per-try-on down so we can subsidize more',
+        '  — [Z%] brand-partnerships team → closes the brand-pull side',
         '  — [W%] creator acquisition + payouts',
         '  — [V%] engineering on share UX (directly raises K)',
         '  — [U%] runway buffer',
-        'Headline milestone for the next raise: K > 1 sustained for [N] consecutive weeks. Once that\'s true, the next round is fundamentally different — we\'re raising to scale a self-spinning flywheel, not to push it.',
+        'Headline milestone for the next raise: K > 1 sustained for [N] consecutive weeks. After that, we\'re raising to SCALE a self-spinning flywheel — fundamentally different ask.',
       ],
       numbersToKnow: [
         '[Current burn / month]',
@@ -295,37 +298,40 @@ const AGENDA_30: Phase[] = [
     },
   },
   {
-    title: 'Q&A: every answer ladders to the flywheel',
+    title: 'Q&A and next steps',
     description:
-      'Open the floor. Capture every question. Every answer ties back to: AI for searching → flywheel input → self-sustaining growth.',
+      'Open the floor. Capture every question. End with a concrete ask: data room, follow-up call, or partner intro.',
     minutes: 7,
     cheatsheet: {
       openWith:
         '"Open to questions. What\'s on your mind?"',
       hitThese: [
         'Write down every question. Even ones you answer well — they\'re tells about the firm\'s thesis.',
-        'Every answer should connect to one of three things: AI for searching, the flywheel, or the self-sustaining growth thesis. If you can\'t connect a question, it\'s a signal you\'re losing the room.',
+        'If a question is hard, say "great question, here\'s how we think about it" — never "I don\'t know" without a follow-up.',
         'Ask THEM questions: "What would you need to see to move forward?" "Who else at the firm should I meet?"',
         'Close with a concrete next step. Data room link, follow-up call on date, partner intro.',
       ],
       ifAsked: [
         {
           q: 'How does this become a $10B+ outcome?',
-          a: 'AI-native discovery + a self-spinning flywheel = the next Amazon. Amazon\'s flywheel didn\'t even include user-generated distribution; ours does. Comparables at IPO: Amazon ($438M), Pinterest ($13B), Shopify ($1.3B). All flywheel businesses. All underestimated at IPO.',
+          a: 'AI-native discovery owns the top of the funnel for $1T+ of retail — same trajectory Google ran for the open web. Once the share-loop activates, growth is self-sustaining at near-zero marginal CAC. Comparables at IPO: Amazon ($438M), Pinterest ($13B), Shopify ($1.3B).',
         },
         {
           q: 'What\'s the single biggest risk?',
-          a: 'Share rate. If users don\'t share their try-ons, K stays below 1 and we\'re another paid-acquisition company. Mitigation: [N] tested share-UX variants, current share rate [X%], roadmap to push it to [Y%] via [specific lever].',
+          a: 'Share rate on generated try-ons. If users don\'t share, the flywheel doesn\'t activate and we\'re another paid-acquisition company. Mitigation: [N] tested share-UX variants, current share rate [X%], roadmap to push it to [Y%] via [specific lever].',
         },
         {
           q: 'What if AI generation gets commoditized?',
-          a: 'Hope so — every cost reduction makes the flywheel cheaper to spin. The moat isn\'t the model; it\'s the loop the model enables.',
+          a: 'Hope so — every cost reduction makes our economics better. The moat isn\'t the model; it\'s the catalog + creator + brand stack the model plugs into.',
+        },
+        {
+          q: 'What keeps you up at night?',
+          a: 'Pick ONE real risk and how you\'re mitigating it. Don\'t deflect.',
         },
       ],
       watchOutFor: [
         'Don\'t end without a concrete next step. "We\'ll be in touch" = dead.',
-        'Send the recap email within 4 hours.',
-        'If a question doesn\'t map to AI-for-searching / flywheel / self-sustaining-growth, you\'re drifting. Bring it back.',
+        'Send the recap email within 4 hours — questions, answers, asks, next steps.',
       ],
     },
   },
@@ -335,17 +341,18 @@ const AGENDA_60: Phase[] = [
   {
     title: 'Welcome & the one idea',
     description:
-      'Lock in the thesis in the first 60 seconds: Catalog is the AI for searching retail. The fundraise starts a flywheel that grows the company on its own.',
+      'Lock in the thesis in the first 60 seconds: Catalog is the AI for searching retail.',
     minutes: 3,
     cheatsheet: {
       openWith:
-        '"Great to meet. The single sentence I want you walking out of this room repeating to your partner: Catalog is the AI for searching retail, and this round starts a flywheel that grows the company on its own. The next hour is evidence for that one sentence."',
+        '"Great to meet. The single sentence I want you walking out of this room repeating to your partner: Catalog is the AI for searching retail. The next hour is evidence for that one sentence — and at the end I\'ll tell you exactly what this round funds."',
       hitThese: [
-        'State the one-line thesis in the first 30 seconds. Don\'t bury it in the deck.',
-        'Three threads run through the whole hour: (1) AI for searching — search becomes generation. (2) Extremely fluid discovery — the UX leap. (3) Self-sustaining flywheel — what the round funds.',
+        'State the one-line positioning in the first 30 seconds. Don\'t bury it in the deck.',
+        'Two threads run through the whole hour: (1) AI for searching — search becomes generation. (2) Extremely fluid discovery — the UX leap.',
+        '(The third thread — the flywheel and what the round funds — is the Ask payoff. Don\'t name it yet.)',
         'Reference one specific investment or post the partner has put out.',
         'Confirm everyone on the call. Note titles + who looks engaged.',
-        'Set the arc: "Founder story → why retail search is broken → demo (fluid discovery + flywheel turning) → traction (flywheel starting to spin) → ask (capital that lights it). 12 min for Q&A."',
+        'Set the arc: "Founder story → why retail search is broken → demo (fluid discovery) → traction → ask. 12 min for Q&A."',
       ],
       watchOutFor: [
         'Don\'t reference a portfolio investment generically. Have one specific point ready.',
@@ -354,62 +361,61 @@ const AGENDA_60: Phase[] = [
     },
   },
   {
-    title: 'Founder story: why we can activate this flywheel',
+    title: 'Founder story & why now',
     description:
-      'The unfair advantage that lets US in particular spin the flywheel — and why the 18-month window is real.',
+      'The unfair advantage that lets US ship this — and why the 18-month window is real.',
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Two threads converged. [Co-founder] spent [X years] doing [thing]. I spent [Y years] doing [thing]. The wedge between those is the only place this flywheel actually activates — the rare combination of consumer growth instincts + AI-content engineering + brand relationships."',
+        '"Two threads converged. [Co-founder] spent [X years] doing [thing]. I spent [Y years] doing [thing]. The wedge between those is the rare combination this product needs — consumer growth instincts + AI-content engineering + brand relationships."',
       hitThese: [
-        'The personal moment: when you saw the flywheel\'s missing primitive (AI try-on at <$1) become possible.',
-        'Unfair advantage: why YOU can spin each side. Consumer growth chops for the share-loop side. Engineering for the AI generation side. Brand-network side from prior work.',
-        'Why now: AI video at <$0.50/generation only landed in 2025. The flywheel\'s share-side input was structurally impossible 18 months ago.',
-        'Why not earlier: Polyvore, Wanelo, ShopStyle all lacked the AI generation primitive. They had the catalog idea but no flywheel input — every piece of content was hand-made.',
-        'Why not later: 18 months before incumbents (Amazon AI shopping, TikTok Shop, Pinterest AI) try to spin their own flywheels — and most will fail because their P&L blocks them.',
+        'The personal moment: when you saw cheap AI try-on become real and realized the search-bar UX was about to die.',
+        'Unfair advantage: why YOU specifically. Consumer growth chops, engineering depth on AI generation, brand-network from prior work.',
+        'Why now: AI video at <$0.50/generation only landed in 2025. The primitive that makes generation-as-search possible was structurally absent 18 months ago.',
+        'Why not earlier: Polyvore, Wanelo, ShopStyle all tried curated catalogs without an AI generation primitive — every piece of content cost human time, didn\'t compound.',
+        'Why not later: 18-month window before Amazon AI shopping, TikTok Shop, Pinterest AI try (and mostly fail because their P&L blocks them).',
       ],
       ifAsked: [
         {
           q: 'How long have you been working on this?',
-          a: '[N months]. We\'ve been building the flywheel infrastructure deliberately — every system (try-on pipeline, share UX, brand integrations, creator payouts) is one face of the loop.',
+          a: '[N months]. We\'ve been building the infrastructure deliberately — try-on pipeline, share UX, brand integrations, creator payouts. Every piece is a building block for the round\'s objective.',
         },
         {
           q: 'What did you learn from prior failed attempts in this space?',
-          a: 'They tried to build a curated catalog WITHOUT a flywheel input. Without AI generation, every piece of content cost human time — that doesn\'t compound. We waited for the primitive to land, then built the loop on top.',
+          a: 'They tried curated catalogs without AI generation — content production didn\'t scale. We waited for the primitive to land, then built on top.',
         },
       ],
       watchOutFor: [
-        'Don\'t make the founder story long. Investors want one signal: would you bet years of your life on this? Show conviction in the flywheel thesis.',
+        'Don\'t make the founder story long. Investors want one signal: would you bet years of your life on this? Show conviction.',
       ],
     },
   },
   {
-    title: 'The problem: search is broken, no one has a flywheel',
+    title: 'The problem: retail search is broken',
     description:
-      'Two facts: retail search is 1995 tech, and no retail platform has a real flywheel. Catalog fixes both with the same primitive: AI generation as the search interface.',
+      'Retail search is 1995 tech. The keyword-to-product translation step is where most shoppers fail or bounce. AI generation makes that step disappear.',
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Two facts that nobody is naming together. Fact one: retail search hasn\'t meaningfully changed since 1995 — keywords, lists, filters. Fact two: no retail platform has a flywheel — Amazon, Shopify, TikTok Shop, LTK all pay linear CAC for every new shopper. Catalog fixes both at once: AI generation replaces the search bar, AND that AI experience IS the flywheel input. Search and growth become the same motion."',
+        '"Retail search hasn\'t meaningfully changed since 1995 — keywords, lists, filters, reviews. Shoppers describe what they want in their head (\'a black tank that drapes\'), translate it into clumsy keywords (\'black sleeveless top\'), then sift results that ignore body, context, and taste. The translation step is the friction — and where most shoppers bounce."',
       hitThese: [
-        'Search is broken. Shoppers describe what they want in their head ("a black tank that drapes"), translate it into clumsy keywords ("black sleeveless top"), then sift results that ignore body, context, and taste. The translation step is the friction. Most shoppers fail or bounce.',
-        'No flywheel — survey the field:',
-        '  • Amazon — linear funnel: keyword → list → reviews → buy. Every shopper costs the same as the last.',
-        '  • Shopify — sells stores; no shared discovery surface.',
-        '  • TikTok Shop — distribution rented from a third-party algorithm. Stop spending, stop growing.',
-        '  • LTK / ShopMy — creator content scales linearly with creator labor.',
-        '  • Pinterest — closest thing ever shipped, but no AI generation, no shoppable closure. Stalled at $13B.',
-        'Our unlock: AI generation lets shoppers SEE themselves wearing the product before buying — search becomes generation. And every generation is shareable, so each shopper produces content that brings the next shopper in. Discovery and growth become the same motion.',
-        'The missing primitive (AI try-on at <$0.50) became possible in 2025. The window before incumbents notice: ~24 months. The fundraise is to start the flywheel inside that window.',
+        'The search-bar UX has barely evolved in 30 years across every retail platform — Amazon, Shopify stores, Walmart, Target.',
+        'PDP photos are aspirational, sizing-blind, decontextualized. Shoppers have to imagine themselves wearing the product. Fashion-DTC return rates of 30-40% are the cost of that guesswork.',
+        'AI generation replaces search → list → guess with: pick a product, see yourself wearing it in 30 seconds, decide. Generation IS the search result.',
+        'Shopper, brand, and creator all benefit:',
+        '  • Shoppers see themselves in the product before buying.',
+        '  • Brands stop renting attention from Meta and Amazon ads — they get top-of-funnel traffic from shoppers who arrive with intent.',
+        '  • Creators with taste — across all retail verticals — finally have a way to monetize curation without grinding out content full-time.',
+        'Why now: AI video at <$0.50/generation only landed in 2025. Structurally absent 18 months ago. Window before incumbents react: ~24 months.',
       ],
       ifAsked: [
         {
           q: 'Who exactly is the customer?',
-          a: 'Two-sided. Shoppers are consumer-facing (free, ad/affiliate monetized). Brands are paying (subscription + ads). Creators are supply-side (revshare). Same shape as YouTube — except the flywheel ALSO uses shoppers as content producers.',
+          a: 'Two-sided. Shoppers are consumer-facing (free, ad/affiliate monetized). Brands are paying (subscription + ads). Creators are supply-side (revshare). Same shape as YouTube.',
         },
         {
           q: 'Isn\'t Amazon\'s Rufus this?',
-          a: 'Rufus is a chatbot bolted onto Amazon\'s 1995 funnel. The result is still a list of products you scroll. We replace the result page entirely — the answer to "what should I wear" isn\'t a list, it\'s a 30-second video of you wearing it.',
+          a: 'Rufus is a chatbot bolted onto Amazon\'s 1995 funnel — the result is still a list of products you scroll. We replace the result page entirely. The answer to "what should I wear" isn\'t a list, it\'s a 30-second video of you wearing it.',
         },
         {
           q: 'Why hasn\'t Google or Perplexity built this?',
@@ -417,7 +423,7 @@ const AGENDA_60: Phase[] = [
         },
         {
           q: 'Why fashion first?',
-          a: 'Cleanest AI generation economics today. Highest content-to-revenue ratio. The flywheel mechanics port unchanged to beauty, home, and gear.',
+          a: 'Cleanest AI generation economics today. Highest content-to-revenue ratio. The same pipeline ports unchanged to beauty, home, and gear.',
         },
       ],
     },
@@ -425,18 +431,18 @@ const AGENDA_60: Phase[] = [
   {
     title: 'Live demo: extremely fluid discovery',
     description:
-      'Show what AI-for-searching feels like — and watch the flywheel turn live. Four moves: discover, try-on, share, return shopper.',
+      'Show what AI-for-searching feels like end-to-end. Four moves: discover, try-on, share, return shopper. Let the AI generation render live.',
     minutes: 10,
     cheatsheet: {
       openWith:
-        '"I\'m going to show you what fluid discovery feels like — and the flywheel turning live in the same demo. Four moves. Then I\'ll hand you the keyboard."',
+        '"I\'m going to show you what fluid discovery feels like, end to end. Four moves. Then I\'ll hand you the keyboard."',
       hitThese: [
         'MOVE 1 (discovery, ~90s) — feed on catalog.shop. Cross-brand mix (rag & bone, ALO, Levi\'s, etc). Tap a look → morph into LookOverlay → tap a product → retailer drawer with Bloomingdale\'s, Amazon, Nordstrom comparison + "Lowest" badge. Hit back → look restores.',
         'MOVE 2 (try-on, ~3 min — THE WOW MOMENT) — open /generate. Upload a face photo (use a generic one, not the investor\'s). Pick 2 products. Submit. While it renders (~30s on Lite), narrate the pipeline: prompt assembly → Fal queue → webhook callback → published look. Show the result. The investor watches a personalized try-on materialize live.',
         'MOVE 3 (share, ~90s) — open the share sheet on the generated look. Show: watermark, deep link to catalog.shop/l/<slug>, native share to TikTok / IG / X. Say: "Every share is a free shopper acquisition. K-factor is [X] today."',
         'MOVE 4 (return shopper, ~90s) — paste a share-link in a fresh browser. Show: same shoppable experience, no login wall, retailer drawer + cross-brand "More like this" feed. The new shopper is now in the loop.',
         'MOVE 5 (admin, only if technical partner) — admin/content → Unpublished → click Model on a row → pipeline node diagram. Shows the engineering depth.',
-        'Pause and say: "That was one full flywheel turn — and we paid zero CAC for the new shopper. This is what we\'re activating."',
+        'Pause and say: "Discovery, try-on, share, return shopper — and we paid zero CAC for that last user. Hold onto that. I\'ll come back to what this means at the Ask."',
       ],
       showInApp: [
         'catalog.shop feed (cross-brand mix)',
@@ -500,23 +506,23 @@ const AGENDA_60: Phase[] = [
     },
   },
   {
-    title: 'Traction: every face of the flywheel turning',
+    title: 'Traction: the product is working',
     description:
-      'Eight metrics — one per flywheel input/output. Show how they reinforce each other; call out the K-factor inflection.',
+      'Eight metrics. Engagement, retention, supply, demand, revenue. The signal is how they reinforce each other; call out the share-rate inflection.',
     minutes: 8,
     cheatsheet: {
       openWith:
-        '"I\'m going to walk you through eight metrics. Each one is one face of the flywheel. The signal isn\'t any single number — it\'s how they move TOGETHER."',
+        '"I\'m going to walk you through eight metrics. The signal isn\'t any single number — it\'s how they reinforce each other. The most important line on the page is share rate; that\'s the one I want you to remember."',
       hitThese: [
         '1. WAU shoppers — current + W/W growth + source split (organic / share-driven / paid). Show share-driven as a growing % of total.',
-        '2. Try-ons generated per week — the flywheel input metric. Per-WAU rate is the engagement signal.',
+        '2. Try-ons generated per week — the engagement signal that says AI-search is the right surface. Per-WAU rate.',
         '3. Share rate — % of generated try-ons that get shared externally. THE single most important number on this slide.',
         '4. K-factor — new sessions per shared try-on. Show the trend; mark the date if you\'ve crossed K=1.',
         '5. Cohort retention W4 / W8 / W12 — call out: generation-flow users retain at 2-3x baseline because they have a personalized artifact.',
         '6. Brand pull — new Shopify integrations / month. Note the acceleration curve (brands come AFTER share traffic crosses [Y%]).',
         '7. Creator pull — new curators publishing / month. They come for the distribution the share loop creates.',
         '8. GMV + MRR — conversion of all the above into revenue. Should compound at the same rate as the loop spins.',
-        'Inflection slide: "We shipped [the share UX revamp] in week [X]. K went from [Y] to [Z]. Brand-integration rate doubled the next month. That\'s the flywheel waking up."',
+        'Inflection slide: "We shipped [the share UX revamp] in week [X]. Share rate went from [Y%] to [Z%]. Brand-integration rate doubled the next month."',
       ],
       numbersToKnow: [
         '[WAU last 4 weeks, W/W %]',
@@ -550,17 +556,17 @@ const AGENDA_60: Phase[] = [
     },
   },
   {
-    title: 'Business model: the flywheel monetizes at every input',
+    title: 'Business model & unit economics',
     description:
-      'Three revenue streams, each layered on a different face of the flywheel. As the loop spins, every stream compounds.',
+      'Three revenue streams: affiliate today, brand subscription this year, in-feed ads next. CAC, LTV, payback, contribution margin.',
     minutes: 5,
     cheatsheet: {
       openWith:
-        '"Three revenue streams. Each one rides on a different face of the flywheel — so they all grow as the loop spins."',
+        '"Three revenue streams, layered chronologically. Affiliate is live. Brand subscription went live in [month]. In-feed ads are the 2026 unlock."',
       hitThese: [
-        'AFFILIATE (rides on share-driven traffic): [X%] take rate via FlexOffers / Skimlinks. Each share-loop clickout pays. Live today.',
-        'BRAND SUBSCRIPTION (rides on the brand-pull side): tiered SaaS — $[X] starter / $[Y] pro / $[Z] enterprise. Brands pay because the flywheel creates organic clickouts they can\'t buy elsewhere. Live.',
-        'IN-FEED ADS (rides on WAU growth): boosted product_creative inventory, capped at ~10% of feed. Pricing scales with WAU; WAU scales with the flywheel. 2026 unlock.',
+        'AFFILIATE (live): [X%] take rate via FlexOffers / Skimlinks. Each clickout pays.',
+        'BRAND SUBSCRIPTION (live): tiered SaaS for connected Shopify partners. $[X] starter / $[Y] pro / $[Z] enterprise. Brands pay because we send organic clickouts they can\'t buy elsewhere.',
+        'IN-FEED ADS (2026): boosted product_creative inventory, capped at ~10% of feed. Pricing scales with WAU.',
         'Unit walk-through: shopper opens app → does a try-on (cost: $0.50) → shares it → 1.[X] new shoppers come in → they generate clickouts at $[Y] each. Per-try-on contribution is [$Z]. Compounds.',
         'Long-run unit economics: AS K-factor rises, blended CAC trends to zero. LTV rises with retention. The unit-economic curve is exponential, not linear.',
         'CAC: blended $[X] today (paid to seed the loop). Marginal CAC on share-driven shoppers: ~$0. Payback: [N] months and shrinking each quarter.',
@@ -580,7 +586,7 @@ const AGENDA_60: Phase[] = [
         },
         {
           q: 'When do you become marketplace?',
-          a: 'Never. Marketplace = we own checkout = brands churn = brand-pull face of the flywheel breaks. The economic geometry of the loop depends on us NOT owning checkout.',
+          a: 'Never. Marketplace = we own checkout = brands churn. Brands integrate BECAUSE we send them traffic; the day we own checkout is the day they leave.',
         },
         {
           q: 'What\'s the contribution margin on a single generated try-on?',
@@ -592,7 +598,7 @@ const AGENDA_60: Phase[] = [
   {
     title: 'Competitive moat',
     description:
-      'Data flywheel, creator network, brand integrations, AI tooling. Why each compounds. Address obvious threats head-on.',
+      'Generation pipeline, brand network, creator network, data moat. Why each compounds. Address obvious threats head-on.',
     minutes: 4,
     cheatsheet: {
       openWith:
@@ -601,7 +607,7 @@ const AGENDA_60: Phase[] = [
         '1. Generation pipeline. Seedance prompts + role-tagged products + Marengo embeddings + pgvector + Fal queue + webhook orchestration. Proprietary glue, ~6 months of engineering to replicate.',
         '2. Brand network. Shopify partner integration with [N] live brands across [M] categories. Each new brand gives shoppers more cross-brand inventory; each shopper gives brands more clickouts.',
         '3. Creator network. [N] active curators with published catalogs, revshare baked into our payouts pipeline. Defensible because creators don\'t want to maintain catalogs in N places — once we\'re the home, switching cost is high.',
-        '4. Data flywheel. Every clickout, save, and generation feeds Marengo + pgvector embeddings → better recommendations → more clickouts. Compounds quarterly.',
+        '4. Data moat. Every clickout, save, and generation feeds Marengo + pgvector embeddings → better recommendations → more clickouts. Compounds quarterly.',
         'Structural moat: Amazon won\'t cannibalize their P&L by sending shoppers to Shopify stores. Shopify won\'t cannibalize merchants by pooling shoppers across stores. Meta retired Instagram Shop. The lane is structurally open and the incumbents can\'t close it without breaking their core business.',
       ],
       ifAsked: [
@@ -615,7 +621,7 @@ const AGENDA_60: Phase[] = [
         },
         {
           q: 'What if Meta brings shopping back?',
-          a: 'They\'ve tried twice and failed. Even if they restart, they won\'t out-curate a creator-led catalog tied to identity. The trust + revshare + AI generation flywheel is hard to clone with ad money.',
+          a: 'They\'ve tried twice and failed. Even if they restart, they won\'t out-curate a creator-led catalog tied to identity. The trust + revshare + AI generation stack is hard to clone with ad money.',
         },
       ],
     },
@@ -641,13 +647,13 @@ const AGENDA_60: Phase[] = [
     },
   },
   {
-    title: 'Ask: capital to start the flywheel',
+    title: 'The ask: capital to start the flywheel',
     description:
-      'We\'re not raising to grow the company. We\'re raising to start the flywheel. Once it spins, growth is self-sustaining and the next round funds something fundamentally different.',
+      'Now the framing changes. The product is built. The objective of this round is ONE thing — start the flywheel that grows the company on its own.',
     minutes: 12,
     cheatsheet: {
       openWith:
-        '"Raising $[X] on a [valuation] cap. [$Y] already committed. The framing matters: we are NOT raising to fund growth. We\'re raising to START the flywheel. Get K above 1 and the company grows on its own — every shopper brings the next one in. After that, capital scales the spin instead of pushing it. This round is the spark; the flywheel is the engine."',
+        '"Raising $[X] on a [valuation] cap. [$Y] already committed. Here\'s the framing that matters — and it\'s the first time I\'m using this word in the meeting on purpose. The entire objective of this round is to START THE FLYWHEEL. Every AI try-on we generate is a shareable artifact. Every share brings in a new shopper at zero CAC. Right now we\'re paying CAC to seed the loop. Once the share-loop K-factor crosses 1, the company grows on its own — every shopper brings in the next one. This round is the spark. After that, the company is fundamentally different — we\'re scaling a self-spinning engine, not pushing one."',
       hitThese: [
         'Round size + valuation + structure (priced / SAFE / convertible).',
         'Existing commitments — names if permitted, otherwise the dollar amount.',
@@ -664,7 +670,7 @@ const AGENDA_60: Phase[] = [
         '  3. [N] paying brand partners + $[Z]K MRR',
         '  4. Cost per generation < $[Y]',
         '  5. [Revenue runrate]',
-        '  6. Beauty vertical launched — flywheel ports to next category',
+        '  6. Beauty vertical launched — same generation pipeline, next category',
       ],
       numbersToKnow: [
         '[Current burn / month]',
@@ -680,19 +686,19 @@ const AGENDA_60: Phase[] = [
         },
         {
           q: 'What does the next round look like?',
-          a: 'Series A in [N] months at $[X]M raise. The trigger isn\'t revenue — it\'s K > 1 sustained. Once the flywheel is self-spinning, every additional dollar buys exponentially more.',
+          a: 'Series A in [N] months at $[X]M raise. The trigger isn\'t revenue — it\'s K > 1 sustained. Once the loop is self-spinning, every additional dollar buys exponentially more.',
         },
         {
           q: 'How do you become a $10B+ company?',
-          a: 'Self-spinning flywheel + AI-native discovery for $1T+ retail. Amazon\'s flywheel didn\'t even include user-generated distribution; ours does. Comparables: Amazon at IPO ($438M), Pinterest at IPO ($13B), Shopify at IPO ($1.3B). All flywheel businesses, all underestimated at IPO.',
+          a: 'AI-native discovery owns the top of the funnel for $1T+ of retail — same trajectory Google ran for the open web. Once the share-loop activates, growth is self-sustaining at near-zero marginal CAC. Comparables at IPO: Amazon ($438M), Pinterest ($13B), Shopify ($1.3B), Google ($23B). All underestimated at IPO.',
         },
         {
-          q: 'What\'s the single biggest risk to the flywheel?',
+          q: 'What\'s the single biggest risk?',
           a: 'Share rate. If users don\'t share, K stays below 1 and we\'re another paid-acquisition company. Mitigation: [N] tested share-UX variants, current share rate is [X%], roadmap to push it to [Y%] via [specific lever — incentivized shares, watermark optimization, native-first share format, etc.].',
         },
         {
           q: 'What if AI generation gets commoditized?',
-          a: 'Hope so — every cost reduction makes the flywheel cheaper to spin. The moat isn\'t the model; it\'s the loop the model enables.',
+          a: 'Hope so — every cost reduction makes our economics better. The moat isn\'t the model; it\'s the catalog + creator + brand stack the model plugs into.',
         },
         {
           q: 'What keeps you up at night?',
@@ -702,7 +708,7 @@ const AGENDA_60: Phase[] = [
       watchOutFor: [
         'Never end without a concrete next step. "We\'ll be in touch" = dead. Push for: data room, partner intro, follow-up scheduled before you hang up.',
         'Send the recap email within 4 hours: questions, answers, asks, decided next steps. This single discipline closes more rounds than any deck slide.',
-        'Every Q&A answer should ladder back to the flywheel. If you can\'t connect a question to the loop, you\'re losing the room.',
+        'For Q&A on this phase, the framing is settled — flywheel = the round\'s objective, AI for searching = the product. Don\'t over-thread either.',
       ],
     },
   },
