@@ -5,11 +5,18 @@ import { useEffect, useMemo, useState } from 'react';
 // so the chart doesn't lie about a hockey-stick — admins can dial each
 // number up to model upside scenarios.
 interface Assumptions {
-  /** Monthly Active Users at month 1. The chart scales this by mauGrowth
-   *  month-over-month for the rest of the 16-month horizon. */
+  /** Monthly Active Users at month 1. */
   mauStart: number;
-  /** Monthly compounding growth rate on MAU (e.g. 0.20 = 20% MoM). */
-  mauGrowth: number;
+  /** Starting MoM MAU growth rate (e.g. 0.40 = 40%). Realistic hypergrowth
+   *  is achievable in months 1–6 of a consumer launch but very few teams
+   *  sustain it forever, so we taper toward mauGrowthEnd over the 16-month
+   *  horizon to keep the curve honest. */
+  mauGrowthStart: number;
+  /** Steady-state MoM MAU growth rate the model lands on by the final
+   *  month. Interpolated linearly from mauGrowthStart across MONTHS-1
+   *  steps. Set equal to mauGrowthStart for the old "flat compound"
+   *  behaviour. */
+  mauGrowthEnd: number;
   /** Average order value in dollars on a converted product. */
   avgCostPerSale: number;
   /** Affiliate commission rate (e.g. 0.10 = 10% of order value). */
@@ -17,7 +24,7 @@ interface Assumptions {
   /** Average session length in minutes. Used as a sanity-check input;
    *  the revenue formula uses impressions per session directly. */
   sessionTimeMinutes: number;
-  /** Average ad/product impressions per session. */
+  /** Average product impressions per session. */
   avgImpressionsPerSession: number;
   /** Conversion rate per impression on a product (e.g. 0.01 = 1%). */
   productConversion: number;
@@ -27,7 +34,8 @@ interface Assumptions {
 
 const DEFAULTS: Assumptions = {
   mauStart: 5_000,
-  mauGrowth: 0.18,
+  mauGrowthStart: 0.40,    // hot early growth
+  mauGrowthEnd:   0.10,    // realistic steady state by month 16
   avgCostPerSale: 85,
   avgAffiliateCommission: 0.10,
   sessionTimeMinutes: 4.5,
@@ -36,16 +44,33 @@ const DEFAULTS: Assumptions = {
   sessionsPerUserPerMonth: 8,
 };
 
-const STORAGE_KEY = 'catalog:projections:assumptions:v1';
+const STORAGE_KEY = 'catalog:projections:assumptions:v2';
 const MONTHS = 16;
 
 function readStored(): Assumptions {
   if (typeof window === 'undefined') return DEFAULTS;
   try {
+    // v2 read.
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw);
-    return { ...DEFAULTS, ...parsed };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULTS, ...parsed };
+    }
+    // v1 migration — the old shape stored a single `mauGrowth`. Map it
+    // into the new start/end pair (flat curve) so admins keep their
+    // tuning when the new build first loads.
+    const legacyRaw = window.localStorage.getItem('catalog:projections:assumptions:v1');
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw) as { mauGrowth?: number } & Partial<Assumptions>;
+      const flat = typeof legacy.mauGrowth === 'number' ? legacy.mauGrowth : DEFAULTS.mauGrowthStart;
+      return {
+        ...DEFAULTS,
+        ...legacy,
+        mauGrowthStart: flat,
+        mauGrowthEnd: flat,
+      };
+    }
+    return DEFAULTS;
   } catch {
     return DEFAULTS;
   }
@@ -60,10 +85,19 @@ function readStored(): Assumptions {
 //   × avgCostPerSale
 //   × avgAffiliateCommission
 //
-// MAU compounds at mauGrowth month-over-month. We return the full
-// breakdown so the hover tooltip can show every layer of the funnel.
+// MAU compounds month-over-month using a tapered growth rate that
+// starts at mauGrowthStart and lands on mauGrowthEnd by the final
+// month. Linear interpolation across the (MONTHS-1) growth transitions
+// — month 1 → 2 uses mauGrowthStart, month 15 → 16 uses mauGrowthEnd,
+// every step in between is a straight-line blend. This is a far more
+// honest model than a single flat MoM rate compounded for 16 months,
+// because it captures the obvious reality that a consumer app's
+// growth rate decays as the addressable audience saturates.
 interface MonthBreakdown {
   monthIndex: number;
+  /** Effective MoM growth rate applied to land at this month's MAU
+   *  from the previous month. Month 0 has no transition, so it's 0. */
+  mauGrowthApplied: number;
   mau: number;
   sessions: number;
   impressions: number;
@@ -72,14 +106,32 @@ interface MonthBreakdown {
   revenue: number;
 }
 
-function projectMonth(a: Assumptions, monthIndex: number): MonthBreakdown {
-  const mau = a.mauStart * Math.pow(1 + a.mauGrowth, monthIndex);
-  const sessions = mau * a.sessionsPerUserPerMonth;
-  const impressions = sessions * a.avgImpressionsPerSession;
-  const sales = impressions * a.productConversion;
-  const gmv = sales * a.avgCostPerSale;
-  const revenue = gmv * a.avgAffiliateCommission;
-  return { monthIndex, mau, sessions, impressions, sales, gmv, revenue };
+function growthRateAtTransition(a: Assumptions, transitionIndex: number): number {
+  // transitionIndex 0 takes month 0 → month 1. The last transition
+  // index is MONTHS - 2 (taking month 14 → month 15 in 0-indexed terms).
+  const lastIdx = Math.max(1, MONTHS - 2);
+  const t = Math.min(1, Math.max(0, transitionIndex / lastIdx));
+  return a.mauGrowthStart + (a.mauGrowthEnd - a.mauGrowthStart) * t;
+}
+
+function buildSeries(a: Assumptions): MonthBreakdown[] {
+  const out: MonthBreakdown[] = [];
+  let mau = a.mauStart;
+  for (let i = 0; i < MONTHS; i++) {
+    let appliedGrowth = 0;
+    if (i > 0) {
+      // The growth rate that took month (i-1) → month i.
+      appliedGrowth = growthRateAtTransition(a, i - 1);
+      mau = mau * (1 + appliedGrowth);
+    }
+    const sessions = mau * a.sessionsPerUserPerMonth;
+    const impressions = sessions * a.avgImpressionsPerSession;
+    const sales = impressions * a.productConversion;
+    const gmv = sales * a.avgCostPerSale;
+    const revenue = gmv * a.avgAffiliateCommission;
+    out.push({ monthIndex: i, mauGrowthApplied: appliedGrowth, mau, sessions, impressions, sales, gmv, revenue });
+  }
+  return out;
 }
 
 const monthLabel = (i: number): string => {
@@ -118,14 +170,15 @@ interface FieldDef {
 }
 
 const FIELDS: FieldDef[] = [
-  { key: 'mauStart',                 label: 'MAU (month 1)',          hint: 'Monthly active users at start',    format: 'integer',  step: 100,    min: 0 },
-  { key: 'mauGrowth',                label: 'MAU growth (MoM)',       hint: 'Compounding month-over-month',     format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
-  { key: 'avgCostPerSale',           label: 'Avg cost per sale',      hint: 'Average order value',              format: 'currency', step: 5,      min: 0 },
-  { key: 'avgAffiliateCommission',   label: 'Avg affiliate commission', hint: 'Take rate per sale',             format: 'percent',  step: 0.005,  min: 0, max: 0.5 },
-  { key: 'sessionTimeMinutes',       label: 'Session time (min)',     hint: 'Average session length',           format: 'number',   step: 0.5,    min: 0 },
-  { key: 'avgImpressionsPerSession', label: 'Impressions / session',  hint: 'Product views per session',        format: 'integer',  step: 1,      min: 0 },
-  { key: 'productConversion',        label: 'Product conversion',     hint: 'Sale per impression',              format: 'percent',  step: 0.001,  min: 0, max: 0.5 },
-  { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',   hint: 'Avg sessions per MAU per month',   format: 'number',   step: 0.5,    min: 0 },
+  { key: 'mauStart',                 label: 'MAU (month 1)',          hint: 'Monthly active users at start',         format: 'integer',  step: 100,    min: 0 },
+  { key: 'mauGrowthStart',           label: 'MAU growth (early)',     hint: 'MoM in the first month',                format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
+  { key: 'mauGrowthEnd',             label: 'MAU growth (late)',      hint: 'MoM in the final month — model tapers', format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
+  { key: 'avgCostPerSale',           label: 'Avg cost per sale',      hint: 'Average order value',                   format: 'currency', step: 5,      min: 0 },
+  { key: 'avgAffiliateCommission',   label: 'Avg affiliate commission', hint: 'Take rate per sale',                  format: 'percent',  step: 0.005,  min: 0, max: 0.5 },
+  { key: 'sessionTimeMinutes',       label: 'Session time (min)',     hint: 'Average session length',                format: 'number',   step: 0.5,    min: 0 },
+  { key: 'avgImpressionsPerSession', label: 'Impressions / session',  hint: 'Product views per session',             format: 'integer',  step: 1,      min: 0 },
+  { key: 'productConversion',        label: 'Product conversion',     hint: 'Sale per impression',                   format: 'percent',  step: 0.001,  min: 0, max: 0.5 },
+  { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',   hint: 'Avg sessions per MAU per month',        format: 'number',   step: 0.5,    min: 0 },
 ];
 
 function AssumptionCard({
@@ -422,9 +475,7 @@ export default function AdminProjections() {
     } catch { /* quota — chart still works in-memory */ }
   }, [a]);
 
-  const series = useMemo<MonthBreakdown[]>(() => {
-    return Array.from({ length: MONTHS }, (_, i) => projectMonth(a, i));
-  }, [a]);
+  const series = useMemo<MonthBreakdown[]>(() => buildSeries(a), [a]);
 
   const summary = useMemo(() => summarize(series), [series]);
 
@@ -492,11 +543,13 @@ export default function AdminProjections() {
       <p className="proj-formula" aria-label="Revenue formula">
         <strong>Revenue</strong> = MAU × sessions/user × impressions/session × conversion × avg sale × commission
         &nbsp;·&nbsp;
-        <span>MAU compounds at <strong>{fmtPercent(a.mauGrowth)}</strong> MoM</span>
+        <span>
+          MAU growth tapers <strong>{fmtPercent(a.mauGrowthStart)}</strong> → <strong>{fmtPercent(a.mauGrowthEnd)}</strong> MoM
+        </span>
         &nbsp;·&nbsp;
         <span>Month 1 MAU: <strong>{fmtNumber(a.mauStart)}</strong></span>
         &nbsp;·&nbsp;
-        <span>Month {MONTHS} MAU: <strong>{fmtNumber(a.mauStart * Math.pow(1 + a.mauGrowth, MONTHS - 1))}</strong></span>
+        <span>Month {MONTHS} MAU: <strong>{fmtNumber(series[series.length - 1]?.mau ?? a.mauStart)}</strong></span>
       </p>
     </div>
   );
