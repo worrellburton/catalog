@@ -525,6 +525,28 @@ export default function AdminUsers() {
     }
   }, [allUsers, showToast]);
 
+  // Super-admin toggle — flips the primary role between 'super_admin'
+  // and 'admin'. Off lands on 'admin' (not the original role) because
+  // the toggle is only surfaced on the Admins / Super Admins tabs, so
+  // 'admin' is the right neighbouring tier.
+  const handleSuperAdminToggle = useCallback(async (userId: string, next: boolean) => {
+    const target = allUsers.find(u => u.id === userId);
+    if (!target) return;
+    const newRole: UserRole = next ? 'super_admin' : 'admin';
+    const prevRole = target.role;
+    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    const { error } = await updateUserRole(userId, newRole);
+    if (error) {
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: prevRole } : u));
+      showToast(`Failed to change role: ${error}`, 'warning');
+      return;
+    }
+    showToast(
+      next ? `${target.name} is now a super admin` : `${target.name} is no longer a super admin`,
+      'success',
+    );
+  }, [allUsers, showToast]);
+
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creators);
   const adminTable = useSortableTable(admins);
@@ -546,6 +568,7 @@ export default function AdminUsers() {
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Super" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Gender" sortKey="gender" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
@@ -578,6 +601,16 @@ export default function AdminUsers() {
                       type="checkbox"
                       checked={u.isAdmin}
                       onChange={(e) => handleAdminToggle(u.id, e.target.checked)}
+                    />
+                    <span className="admin-toggle-track" />
+                  </label>
+                </td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <label className="admin-toggle" title={u.role === 'super_admin' ? 'Revoke super admin' : 'Make super admin'}>
+                    <input
+                      type="checkbox"
+                      checked={u.role === 'super_admin'}
+                      onChange={(e) => handleSuperAdminToggle(u.id, e.target.checked)}
                     />
                     <span className="admin-toggle-track" />
                   </label>
