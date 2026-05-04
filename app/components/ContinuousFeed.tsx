@@ -4,6 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
+import EmptyCatalogState from './EmptyCatalogState';
 import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
@@ -779,6 +780,18 @@ export default function ContinuousFeed({
       ? semanticallyOrderedLooks
       : (semanticallyOrderedLooks.length > 0 ? semanticallyOrderedLooks : staleLooks);
 
+  // When a search has fully resolved with zero results, show the persistent
+  // EmptyCatalogState (with the "I want this catalog" demand-signal CTA)
+  // instead of leaving the grid blank and relying on the 3-second toast.
+  const showEmptyState =
+    searchResolved &&
+    !isSearching &&
+    displayCreatives.length === 0 &&
+    displayLooks.length === 0 &&
+    trimmedQuery.length > 0;
+  // Title-case the query so "hair care" reads as "Hair Care" in the headline.
+  const emptyCatalogName = trimmedQuery.replace(/\b\w/g, c => c.toUpperCase());
+
   return (
     <div className="continuous-feed" id="grid-viewport">
       {/* Top overlay loader — appears above existing content during search. */}
@@ -787,11 +800,14 @@ export default function ContinuousFeed({
           <div className="feed-search-loader-bar" />
         </div>
       )}
-      {/* No-results toast */}
-      {toastMsg && (
+      {/* No-results toast — suppressed when the persistent empty state is shown. */}
+      {toastMsg && !showEmptyState && (
         <div className="feed-no-results-toast" role="status">{toastMsg}</div>
       )}
-      <div key={feedContentKey} className={feedContentKey > 0 ? 'feed-content-fadein' : undefined}>
+      {showEmptyState && (
+        <EmptyCatalogState catalogName={emptyCatalogName} />
+      )}
+      <div key={feedContentKey} className={feedContentKey > 0 ? 'feed-content-fadein' : undefined} hidden={showEmptyState}>
         {state.segments.map((segment, idx) => {
           if (segment.type === 'feed') {
             return (
