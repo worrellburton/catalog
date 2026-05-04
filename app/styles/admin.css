@@ -3950,20 +3950,31 @@ html.admin-on-dark-canvas .admin-topbar,
 
 /* ── Projections ─────────────────────────────────────────────────────── */
 
-/* All assumption inputs live in one card. Auto-fit grid so the cards
-   wrap to a second row when the viewport can't fit them all in one —
-   no horizontal scroll, no clipped labels. The container has
-   overflow:hidden so right/bottom borders on edge cells clip cleanly
-   against the rounded outer frame instead of dangling stubs. */
+/* Two explicit rows for the assumption strip:
+     Row 1 (top):    MAU (month 1) + growth-early + growth-late — the
+                     three knobs that drive every other number on the
+                     page, so we give each one a third of the width.
+     Row 2 (bottom): every other input, six cards across.
+   The 6-column grid + span-2 on the first three rows makes that
+   layout exact at any width. On narrow viewports we collapse to a
+   single column so the labels don't squish.
+   Container has overflow:hidden so right/bottom borders on edge cells
+   clip cleanly against the rounded outer frame instead of dangling
+   stubs. */
 .proj-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   margin: 20px 0 24px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.proj-cards > .proj-card:nth-child(-n+3) { grid-column: span 2; }
+@media (max-width: 720px) {
+  .proj-cards { grid-template-columns: 1fr; }
+  .proj-cards > .proj-card:nth-child(-n+3) { grid-column: span 1; }
 }
 
 .proj-card {
