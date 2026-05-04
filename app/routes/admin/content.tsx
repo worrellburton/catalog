@@ -1268,6 +1268,13 @@ export default function AdminContent() {
   }, [brandDomains]);
 
   const [crawledProducts, setCrawledProducts] = useState<CrawledProduct[]>([]);
+  // Tracks whether the initial Supabase products fetch is still in
+  // flight. Used by the Products tab to render a loading skeleton
+  // instead of the bundled-in-app/data/looks.ts seed fallback, which
+  // surfaces 8 stale demo rows (Zara/Windsor/Diesel/etc.) before the
+  // real DB data lands. The seed merge still drives the Looks tab and
+  // creator counts; we just don't paint it as if it were the catalog.
+  const [productsLoading, setProductsLoading] = useState(true);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
@@ -1347,13 +1354,14 @@ export default function AdminContent() {
 
   useEffect(() => {
     const loadCrawled = async () => {
-      if (!supabase) return;
+      if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
         .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
+        setProductsLoading(false);
         return;
       }
       const rows = (data || []).map((p) => ({
@@ -1361,6 +1369,7 @@ export default function AdminContent() {
         is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
       })) as CrawledProduct[];
       setCrawledProducts(rows);
+      setProductsLoading(false);
     };
     loadCrawled();
     loadAdProductIds();
@@ -2445,7 +2454,39 @@ export default function AdminContent() {
         </div>
       )}
 
-      {activeTab === 'products' && (
+      {activeTab === 'products' && productsLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 14,
+            padding: '80px 16px',
+            color: '#64748b',
+          }}
+        >
+          <style>{`
+            @keyframes admin-products-spin { to { transform: rotate(360deg); } }
+          `}</style>
+          <div
+            aria-hidden
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: '2.5px solid #e5e7eb',
+              borderTopColor: '#0f172a',
+              animation: 'admin-products-spin 0.9s linear infinite',
+            }}
+          />
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Loading products…</div>
+          <div style={{ fontSize: 12 }}>Pulling the latest from Supabase.</div>
+        </div>
+      )}
+      {activeTab === 'products' && !productsLoading && (
         <>
           <div className="admin-tabs" style={{ marginBottom: 12 }}>
             <button
