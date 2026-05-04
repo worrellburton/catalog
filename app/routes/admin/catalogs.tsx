@@ -213,7 +213,7 @@ export default function AdminCatalogs() {
         productCount: (r.look_products || []).length,
       }));
 
-      // The `all` catalog is a superset view — if multiple looks share the
+      // The `all` catalog is a superset view - if multiple looks share the
       // same primary creative video they'd render as visual dupes, so collapse
       // to the first occurrence per video. Other catalogs keep every row.
       const looks = isAll
@@ -327,10 +327,10 @@ export default function AdminCatalogs() {
     id: `featured-${i}`,
     name,
     source: 'featured',
-    createdAt: '—',
+    createdAt: ' - ',
   }));
 
-  // The 'all' row is a synthesized entry — it represents the aggregate view
+  // The 'all' row is a synthesized entry - it represents the aggregate view
   // of every live look/product/creative. Keep it at the top of the list even
   // if the user cleared localStorage, and filter it out of `custom` so the
   // remove (×) button can't drop it.
@@ -338,7 +338,7 @@ export default function AdminCatalogs() {
     id: 'synthetic-all',
     name: 'all',
     source: 'custom',
-    createdAt: '—',
+    createdAt: ' - ',
   };
   const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
@@ -403,7 +403,7 @@ export default function AdminCatalogs() {
     if (!assembleCatalog || !supabase) return;
     const tagged = products.filter(p => (p.catalog_tags || []).includes(assembleCatalog.name));
     if (tagged.length < 3) {
-      setAssembleError(`Not enough products tagged with "${assembleCatalog.name}" — need at least 3.`);
+      setAssembleError(`Not enough products tagged with "${assembleCatalog.name}" - need at least 3.`);
       return;
     }
     setAssembling(true);
@@ -472,7 +472,7 @@ export default function AdminCatalogs() {
         );
       }
 
-      // Kick off Veo video generation — use the hero (first) product as the
+      // Kick off Veo video generation - use the hero (first) product as the
       // anchor and feed Claude's assembly_prompt directly so Veo renders the
       // scene Claude imagined.
       const heroProductId = assembleResult.productIds[0];
@@ -488,7 +488,7 @@ export default function AdminCatalogs() {
         });
       }
 
-      showToast(`Look "${assembleResult.title}" saved — video queued for generation`);
+      showToast(`Look "${assembleResult.title}" saved - video queued for generation`);
       setAssembleCatalog(null);
       setAssembleResult(null);
     } catch (err) {
@@ -528,7 +528,7 @@ export default function AdminCatalogs() {
     setBrainstormProgress(null);
   }, []);
 
-  // Add Products modal — pick existing products from the DB and tag them
+  // Add Products modal - pick existing products from the DB and tag them
   // onto a catalog. Persisted by pushing the catalog name into each
   // product's catalog_tags array (same shape the dropdown filter reads).
   const [addProductsCatalog, setAddProductsCatalog] = useState<Catalog | null>(null);
@@ -638,14 +638,14 @@ export default function AdminCatalogs() {
         console.error('[add-products] update errors:', errored.map(r => r.error));
       }
       if (blocked.length > 0) {
-        console.warn('[add-products] no rows updated for', blocked.length, 'products — RLS may be blocking writes on public.products');
+        console.warn('[add-products] no rows updated for', blocked.length, 'products - RLS may be blocking writes on public.products');
       }
 
       if (succeeded === 0) {
         showToast(
           errored.length > 0
             ? `Update failed: ${errored[0].error?.message || 'unknown error'}`
-            : `No products were written — check RLS policies on public.products (admin needs UPDATE).`,
+            : `No products were written - check RLS policies on public.products (admin needs UPDATE).`,
         );
       } else if (succeeded < results.length) {
         showToast(`Added ${succeeded} of ${results.length} products to ${name} (${results.length - succeeded} blocked).`);
@@ -902,7 +902,7 @@ export default function AdminCatalogs() {
                     <Link
                       to={`/admin/catalogs/${c.name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`}
                       style={{ color: '#111', textDecoration: 'none' }}
-                      title="Open detail page — view attached looks + product palette, run auto-assign"
+                      title="Open detail page - view attached looks + product palette, run auto-assign"
                     >
                       {c.name}
                     </Link>
@@ -935,11 +935,11 @@ export default function AdminCatalogs() {
                       {productCount}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
+                    <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
                 <td style={{ fontSize: 12, color: '#888' }}>
-                  {c.createdAt === '—' ? '—' : new Date(c.createdAt).toLocaleDateString()}
+                  {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
@@ -1042,7 +1042,7 @@ export default function AdminCatalogs() {
         </div>
       )}
 
-      {/* Add Products modal — pick from existing library */}
+      {/* Add Products modal - pick from existing library */}
       {addProductsCatalog && (
         <AddProductsModal
           catalog={addProductsCatalog}
@@ -1494,7 +1494,7 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
     <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
-          The <strong>all</strong> catalog pulls every live look, rendered creative, and product — no duplicates, every entry shown in its entirety. Drag any tile to reorder.
+          The <strong>all</strong> catalog pulls every live look, rendered creative, and product - no duplicates, every entry shown in its entirety. Drag any tile to reorder.
         </div>
       )}
 
@@ -1540,8 +1540,8 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
               <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
             )}
             <div style={{ padding: 6 }}>
-              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || ' - '}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || ' - '}</div>
             </div>
           </div>
         ))}
@@ -1663,7 +1663,7 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
           {look.title || `Look #${look.legacyId ?? ''}`}
         </div>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {look.creatorHandle ? `@${look.creatorHandle}` : '—'} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
+          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
         </div>
       </div>
     </div>
@@ -1705,7 +1705,7 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
           {label}
         </div>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {creative.productBrand || '—'}
+          {creative.productBrand || ' - '}
         </div>
       </div>
     </div>
@@ -1821,8 +1821,8 @@ function AddProductsModal({
                       <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
                     )}
                     <div style={{ padding: 8 }}>
-                      <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || '—'}</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+                      <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || ' - '}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || ' - '}</div>
                     </div>
                     {isTagged && (
                       <span style={{

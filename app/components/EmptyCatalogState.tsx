@@ -1,4 +1,4 @@
-// EmptyCatalogState — shown when a search/filter yields zero creatives.
+// EmptyCatalogState - shown when a search/filter yields zero creatives.
 // Recycles the same WebGL particle background from the sign-in screen so
 // the moment reads as deliberate ("there's a vibe here") rather than
 // broken. Below the headline sits a single CTA that lets shoppers signal
@@ -16,7 +16,7 @@ interface EmptyCatalogStateProps {
    *  server-side in request_catalog(). */
   catalogName: string;
   /** When true, shows a "sourcing" message instead of the normal demand-signal
-   *  copy — used when the semantic search returned a cold miss and the backfill
+   *  copy - used when the semantic search returned a cold miss and the backfill
    *  agent is queued to fetch products for this query. */
   isSourcing?: boolean;
 }
@@ -31,7 +31,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
   const [pulse, setPulse] = useState(false);
   const pulseTimeout = useRef<number | null>(null);
 
-  // Ticks the visual pulse when count changes — fires whether the change
+  // Ticks the visual pulse when count changes - fires whether the change
   // came from this client (optimistic) or from a realtime broadcast.
   const triggerPulse = useCallback(() => {
     setPulse(true);
@@ -80,7 +80,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
   const handleRequest = useCallback(async () => {
     if (pressed || !supabase) return;
     setPressed(true);
-    // Optimistic — realtime will reconcile if drift happens.
+    // Optimistic - realtime will reconcile if drift happens.
     setCount(c => (c ?? 0) + 1);
     triggerPulse();
     const { data, error } = await supabase.rpc('request_catalog', { slug });
@@ -108,7 +108,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
               We're finding <em>{catalogName}</em> for you.
             </h2>
             <p className="empty-catalog-subhead">
-              Our agents are pulling looks and products. Check back shortly — this catalog is being built.
+              Our agents are pulling looks and products. Check back shortly - this catalog is being built.
             </p>
             <div className="empty-catalog-sourcing-indicator" aria-live="polite">
               <span className="sourcing-dot" /><span className="sourcing-dot" /><span className="sourcing-dot" />
@@ -131,7 +131,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
               disabled={pressed}
               aria-pressed={pressed}
             >
-              {pressed ? 'Got it — we hear you' : 'I want this catalog'}
+              {pressed ? 'Got it - we hear you' : 'I want this catalog'}
             </button>
 
             <div className={`empty-catalog-counter ${pulse ? 'pulse' : ''}`} aria-live="polite">

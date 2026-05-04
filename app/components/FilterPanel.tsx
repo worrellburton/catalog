@@ -247,7 +247,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
         </div>
 
-        {/* Location — dropdown */}
+        {/* Location - dropdown */}
         <div className="filter-section">
           <div className="filter-section-label">Location</div>
           <div className="filter-dropdown" ref={locationRef}>
@@ -282,7 +282,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
         </div>
 
-        {/* Price Range — selectable price point buttons */}
+        {/* Price Range - selectable price point buttons */}
         <div className="filter-section">
           <div className="filter-section-label">Price Range</div>
           <div className="filter-price-points">

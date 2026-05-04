@@ -16,7 +16,7 @@ interface BrandPageProps {
  *
  * Same drill-down discovery pattern as the consumer feed: a grid of
  * CreativeCards filtered to a single brand. Tapping a card opens the
- * existing ProductPage modal — closing it returns to the brand page.
+ * existing ProductPage modal - closing it returns to the brand page.
  *
  * Data is loaded live from product_creative joined to products on
  * brand. The CreatorPage equivalent uses static seed data (legacy);
@@ -30,7 +30,7 @@ export default function BrandPage({ brandName, onClose, onOpenProduct }: BrandPa
   useEscapeKey(onClose);
 
   // Load all live creatives for this brand. Using a high cap rather
-  // than paginating — most brands have well under 200 ads, and a
+  // than paginating - most brands have well under 200 ads, and a
   // single fetch keeps the grid scrolling free of pagination jank.
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +56,7 @@ export default function BrandPage({ brandName, onClose, onOpenProduct }: BrandPa
 
   const productCount = useMemo(() => {
     if (!creatives) return null;
-    // Dedupe by product_id — a product may have multiple creatives.
+    // Dedupe by product_id - a product may have multiple creatives.
     const seen = new Set<string>();
     for (const c of creatives) {
       if (c.product_id) seen.add(c.product_id);
@@ -74,7 +74,7 @@ export default function BrandPage({ brandName, onClose, onOpenProduct }: BrandPa
         Back
       </button>
 
-      {/* Hero — brand name + count, mirrors the editorial Catalog
+      {/* Hero - brand name + count, mirrors the editorial Catalog
           header treatment. */}
       <div className="brand-hero">
         <span className="brand-hero-eyebrow">Catalog</span>
@@ -88,7 +88,7 @@ export default function BrandPage({ brandName, onClose, onOpenProduct }: BrandPa
         </p>
       </div>
 
-      {/* Grid — same CreativeCard the main feed uses so the visual
+      {/* Grid - same CreativeCard the main feed uses so the visual
           language is identical (lazy video, hover, tap to open). */}
       {loading && (
         <div className="brand-grid is-loading" aria-hidden="true">

@@ -49,14 +49,14 @@ export default function AdminLooks() {
       return;
     }
     if (!UUID_RE.test(publishParam)) {
-      // Numeric / non-UUID — assume it's a static look id and expand
+      // Numeric / non-UUID - assume it's a static look id and expand
       // that row instead of opening the publish dialog.
       const numeric = Number(publishParam);
       if (!Number.isNaN(numeric)) setExpandedId(numeric);
       return;
     }
     if (!supabase) {
-      setDraftError('Supabase not configured — can’t load the unpublished look.');
+      setDraftError('Supabase not configured - can’t load the unpublished look.');
       return;
     }
     let cancelled = false;
@@ -104,8 +104,8 @@ export default function AdminLooks() {
         .filter(r => !!r.products)
         .map(r => ({
           id: r.products!.id,
-          name: r.products!.name || '—',
-          brand: r.products!.brand || '—',
+          name: r.products!.name || ' - ',
+          brand: r.products!.brand || ' - ',
           price: r.products!.price,
           image_url: r.products!.image_url,
           role_tag: r.role_tag,
@@ -352,7 +352,7 @@ export default function AdminLooks() {
                         <li key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
                           {p.image_url && <img src={p.image_url} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />}
                           <span style={{ fontWeight: 500 }}>{p.brand}</span>
-                          <span style={{ color: '#888' }}>—</span>
+                          <span style={{ color: '#888' }}> - </span>
                           <span>{p.name}</span>
                         </li>
                       ))}

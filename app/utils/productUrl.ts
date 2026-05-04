@@ -1,6 +1,6 @@
 /**
  * Cheap heuristic that decides whether a URL looks like a single
- * product detail page (PDP) — vs. a search results page, category
+ * product detail page (PDP) - vs. a search results page, category
  * listing, homepage, or other non-product page.
  *
  * Used to reject URLs at insert time so the scraper agent never
@@ -34,7 +34,7 @@ export function nonProductUrlReason(rawUrl: string): string | null {
   // Bare/root paths are almost always homepages.
   if (path === '' || path === '/') return 'site homepage';
 
-  // Common non-product path prefixes — explicit list of "this is a
+  // Common non-product path prefixes - explicit list of "this is a
   // listing/help page" markers we can detect from the URL alone.
   const badPrefixes = [
     '/search',

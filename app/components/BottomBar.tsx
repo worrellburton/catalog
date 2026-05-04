@@ -13,7 +13,7 @@ interface BottomBarProps {
   onSelectSuggestion?: (query: string) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
-  /** True while nl-search is resolving — shows a spinner in the input. */
+  /** True while nl-search is resolving - shows a spinner in the input. */
   searchLoading?: boolean;
 }
 
@@ -30,7 +30,7 @@ function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
-  // onSearchChange fires on every keystroke — no debounce here.
+  // onSearchChange fires on every keystroke - no debounce here.
   // The feed itself only commits once nl-search resolves, so the spinner
   // appears immediately and the grid stays frozen until results are ready.
   const emitSearch = onSearchChange;
@@ -74,7 +74,7 @@ function BottomBar({
     return [...shuffled, ...shuffled];
   }, []);
 
-  // Auto-scroll. Always vertical (translate Y) — both mobile and
+  // Auto-scroll. Always vertical (translate Y) - both mobile and
   // desktop render the suggestions as an editorial vertical column
   // now. The horizontal pill row mode is gone; mobile users were
   // getting stuck on the search overlay because the vertical feed
@@ -229,7 +229,7 @@ function BottomBar({
       )}
 
       <div className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
-        {/* The bottom centered control is always an input — no more
+        {/* The bottom centered control is always an input - no more
             click-to-open. Default empty state shows the placeholder, which
             doubles as a CTA inviting shoppers to coin a brand-new catalog.
             The home feed (featured creatives) is what shows when the input
@@ -252,7 +252,7 @@ function BottomBar({
             spellCheck={false}
             autoComplete="off"
             // 1Password / Bitwarden / Chrome each respect a different
-            // signal — set them all so the browser doesn't pop its
+            // signal - set them all so the browser doesn't pop its
             // history dropdown over our suggestion popover.
             data-1p-ignore
             data-lpignore="true"
@@ -330,6 +330,6 @@ function BottomBar({
   );
 }
 
-// Memoized — _index.tsx renders this on every state tick; without memo,
+// Memoized - _index.tsx renders this on every state tick; without memo,
 // every keystroke / overlay open re-rendered the whole search bar.
 export default memo(BottomBar);

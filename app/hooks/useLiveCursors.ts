@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 
 // Real-time cursor collaboration for admin pages. Uses Supabase Realtime's
-// Broadcast API — lightweight and fits inside our anon-key budget, no table
+// Broadcast API - lightweight and fits inside our anon-key budget, no table
 // required. Each admin shares x/y (viewport-relative) plus a stable display
 // name and color; we rate-limit outbound updates to ~30ms.
 
@@ -68,7 +68,7 @@ export function useLiveCursors({
     const color = colorFor(id);
 
     // Defer Realtime channel setup past first paint. Opening a WebSocket on
-    // mount used to block the admin route's first interactive frame — and
+    // mount used to block the admin route's first interactive frame - and
     // most admin sessions don't have a second user collaborating anyway.
     // Wait until the browser is idle (or 600 ms tops) before subscribing.
     let cleanup: (() => void) | null = null;

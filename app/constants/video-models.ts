@@ -30,12 +30,12 @@ export interface VideoModel {
 }
 
 export const VIDEO_MODELS: VideoModel[] = [
-  // Veo via Google (direct — requires GOOGLE_API_KEY, separate billing)
+  // Veo via Google (direct - requires GOOGLE_API_KEY, separate billing)
   { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast', group: 'Veo (Google)' },
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)' },
   { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)' },
 
-  // Seedance via fal.ai — single face photo sent to avoid ByteDance content filter
+  // Seedance via fal.ai - single face photo sent to avoid ByteDance content filter
   { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)', usable: true },
   { value: 'bytedance/seedance-2.0/pro/reference-to-video', label: 'Seedance 2 Pro', group: 'Seedance (fal.ai)', usable: true },
   { value: 'seedance-2', label: 'Seedance 2 (legacy)', group: 'Seedance (fal.ai)' },
@@ -64,12 +64,12 @@ export const VIDEO_MODELS: VideoModel[] = [
   // LTX via fal.ai
   { value: 'fal-ai/ltx-2-19b/image-to-video', label: 'LTX-2 19B', group: 'LTX (fal.ai)' },
 
-  // Vidu via fal.ai — reference-to-video accepts up to 3 images (base endpoint limit)
+  // Vidu via fal.ai - reference-to-video accepts up to 3 images (base endpoint limit)
   { value: 'fal-ai/vidu/reference-to-video', label: 'Vidu Ref (multi-image)', group: 'Vidu (fal.ai)', usable: true },
   { value: 'fal-ai/vidu/image-to-video', label: 'Vidu', group: 'Vidu (fal.ai)' },
   { value: 'fal-ai/vidu/start-end-to-video', label: 'Vidu Start→End', group: 'Vidu (fal.ai)' },
 
-  // Veo via fal.ai — recommended; uses FAL_KEY, no Google quota needed.
+  // Veo via fal.ai - recommended; uses FAL_KEY, no Google quota needed.
   // Single face photo as reference, products described in the prompt.
   { value: 'fal-ai/veo3.1/fast/image-to-video', label: 'Veo 3.1 Fast (via fal)', group: 'Veo via fal.ai', usable: true },
   { value: 'fal-ai/veo3.1/image-to-video', label: 'Veo 3.1 (via fal)', group: 'Veo via fal.ai', usable: true },

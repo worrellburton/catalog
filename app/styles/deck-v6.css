@@ -1,5 +1,5 @@
-/* Deck V6: App preview — phone mockup */
-/* Intro slide — floating SVG icons */
+/* Deck V6: App preview - phone mockup */
+/* Intro slide - floating SVG icons */
 .deck-slide-intro {
   position: relative;
   overflow: hidden;
@@ -42,7 +42,7 @@
   color: rgba(0, 0, 0, 0.05);
 }
 
-/* Deck intro split layout — text left, animated catalog right */
+/* Deck intro split layout - text left, animated catalog right */
 .deck-slide-intro-split {
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@
   justify-content: center;
 }
 
-/* Catalog Evolution — old catalog to new phone */
+/* Catalog Evolution - old catalog to new phone */
 .catalog-evolution {
   display: flex;
   align-items: center;
@@ -199,7 +199,7 @@
   50% { opacity: 1; transform: scale(1.1); }
 }
 
-/* New catalog — phone mockup */
+/* New catalog - phone mockup */
 .evo-phone {
   width: 160px;
   height: 280px;
@@ -308,7 +308,7 @@
   border-radius: 4px;
 }
 
-/* Cover — sits on top */
+/* Cover - sits on top */
 .flip-catalog-cover {
   position: absolute;
   top: 0;
@@ -346,7 +346,7 @@
   margin-top: 8px;
 }
 
-/* Flip animations — staggered page flips */
+/* Flip animations - staggered page flips */
 @keyframes flipCover {
   0%, 8% { transform: rotateY(0deg); }
   15%, 85% { transform: rotateY(-180deg); }
@@ -453,7 +453,7 @@
   }
 }
 
-/* Animated step icons — gentle pulse */
+/* Animated step icons - gentle pulse */
 .deck-anim-icon {
   animation: stepIconPulse 3s ease-in-out infinite;
 }
@@ -466,7 +466,7 @@
   50% { transform: scale(1.1); opacity: 0.7; }
 }
 
-/* Insight slide — video grid background */
+/* Insight slide - video grid background */
 .deck-slide-insight {
   position: relative;
   overflow: hidden;

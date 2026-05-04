@@ -60,14 +60,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const heroVideoUrl = normalizeLookVideoUrl(look.video, basePath);
 
   // Take ownership of the same shared <video> element the originating
-  // LookCard was playing. appendChild moves the DOM node — currentTime,
+  // LookCard was playing. appendChild moves the DOM node - currentTime,
   // decoded frames, and audio context all survive, so the morph from card
   // → hero never reloads or shows a black gap.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
 
   // Each look gets exactly one card in the feed (no cycling/duplication).
   // Two cards sharing a look.id would also share the layoutId for the
-  // trail morph — Framer Motion picks the latest-mounted as canonical and
+  // trail morph - Framer Motion picks the latest-mounted as canonical and
   // the other goes blank. Dedup by id and cap at 30.
   const feedLooks = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
@@ -151,7 +151,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         <div className="look-hero-section">
           {/* ── LEFT: Media area (60%) ── */}
           <div className="look-media-col">
-            {/* Back button — top-left of the screen */}
+            {/* Back button - top-left of the screen */}
             <button className="look-back-btn" onClick={handleClose} aria-label="Back">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
@@ -161,7 +161,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Centered video with overlays */}
             <div className="look-media-centered">
               <div className="look-media">
-                {/* Shared video slot — TrailVideoHost moves the running
+                {/* Shared video slot - TrailVideoHost moves the running
                     <video> from the originating LookCard into this
                     element on tap, so playback continues unbroken across
                     the navigation. */}
@@ -207,7 +207,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <span className="look-drag-pill" />
             </div>
 
-            {/* Bookmark — top-right of panel */}
+            {/* Bookmark - top-right of panel */}
             <div className="look-info-topbar">
               <button className="look-back-btn-mobile" onClick={handleClose} aria-label="Back">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

@@ -67,27 +67,27 @@
     margin: 0;
   }
 
-  /* Editorial layout — slightly larger gaps */
+  /* Editorial layout - slightly larger gaps */
   .layout-editorial .feed-section-grid {
     gap: 4px;
   }
 
-  /* Mosaic layout — tighter gaps */
+  /* Mosaic layout - tighter gaps */
   .layout-mosaic .feed-section-grid {
     gap: 1px;
   }
 
-  /* Spotlight layout — larger gaps for emphasis */
+  /* Spotlight layout - larger gaps for emphasis */
   .layout-spotlight .feed-section-grid {
     gap: 6px;
   }
 
-  /* Featured card — spans 2 columns */
+  /* Featured card - spans 2 columns */
   .look-card-featured {
     grid-column: span 2;
   }
 
-  /* Wide card — spans 2 columns */
+  /* Wide card - spans 2 columns */
   .look-card-wide {
     grid-column: span 2;
   }
@@ -111,7 +111,7 @@
   background: rgba(0, 0, 0, 0.01);
 }
 
-/* Video wrapper — full bleed, big card */
+/* Video wrapper - full bleed, big card */
 .inline-look-video-wrap {
   position: relative;
   width: 100%;
@@ -171,7 +171,7 @@
   cursor: pointer;
 }
 
-/* Body — creator, title, description, products */
+/* Body - creator, title, description, products */
 .inline-look-body {
   padding: 16px 24px 28px;
 }
@@ -506,7 +506,7 @@
 
 /* Admin-only delete button on creative cards. The component only mounts
    when canDelete=true (super-admins), so when present it should always
-   be visible — admins shouldn't have to hunt for the affordance. */
+   be visible - admins shouldn't have to hunt for the affordance. */
 .creative-delete-btn {
   position: absolute;
   top: 8px;
@@ -547,7 +547,7 @@
   }
 }
 
-/* Long-press / right-click admin menu — appears at the cursor or
+/* Long-press / right-click admin menu - appears at the cursor or
    touch point when a super-admin holds a card. Uses fixed positioning
    so it lands precisely where the user pressed; styled to match the
    in-app browser / overlay chrome. */
@@ -600,7 +600,7 @@
 }
 
 /* ===== Feed Search Overlay Loader ===== */
-/* Sticky progress bar at the top of the feed — appears while a search
+/* Sticky progress bar at the top of the feed - appears while a search
    refresh is in-flight. Previous content stays visible underneath. */
 .feed-search-loader {
   position: sticky;

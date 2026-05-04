@@ -287,12 +287,12 @@ const networks: AffiliateNetwork[] = [
       prerequisites: [
         'Approved LTK creator account (invite-only / application required)',
         'Active social presence with established following',
-        'No public API — links are generated manually through the LTK app',
+        'No public API - links are generated manually through the LTK app',
       ],
       howToGet: [
         'Apply at shopltk.com/creator',
         'Once approved, generate product links via the LTK Creator app',
-        'Links must be placed manually — integration is link-level only',
+        'Links must be placed manually - integration is link-level only',
       ],
     },
   },

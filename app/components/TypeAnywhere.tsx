@@ -7,14 +7,14 @@ import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from '.
  * Bottom-anchored, centered, capped width. Replaces the older
  * "type anywhere to search" centered hint pattern with a visible
  * input that mirrors a Gemini / ChatGPT chat bar:
- *   [+]  [filters]  [—— text input ——]  [mic]  [send]
+ *   [+]  [filters]  [ -  -  text input  -  - ]  [mic]  [send]
  *
  * Mounted in root.tsx so it works on every page. Hitting Enter (or
  * the send button) navigates back to / with ?q=<query> applied to
  * the home grid. Mobile (≤768px) uses the BottomBar pill instead;
  * this component hides itself there via CSS.
  *
- * The keyboard "type anywhere" capture is preserved — typing
+ * The keyboard "type anywhere" capture is preserved - typing
  * anywhere on the page focuses the bar so the muscle memory still
  * works. Only fires when no other input has focus.
  */
@@ -39,7 +39,7 @@ export default function TypeAnywhere() {
   // the input is empty so the bar feels alive and shoppers see a
   // wider menu of "things to type" without being told. Pauses while
   // the user is typing or has typed text (hints disappear once
-  // they've started — no point distracting them).
+  // they've started - no point distracting them).
   const [hintIndex, setHintIndex] = useState(() => Math.floor(Math.random() * PLACEHOLDER_HINTS.length));
   const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
 
@@ -52,10 +52,10 @@ export default function TypeAnywhere() {
     return () => window.clearInterval(id);
   }, [text]);
 
-  // Suppress on admin routes — admins are typing into form fields
+  // Suppress on admin routes - admins are typing into form fields
   // constantly and a fixed bar would clutter the UI.
   const onAdmin = location.pathname.startsWith('/admin');
-  // Suppress on /generate too — that flow owns its own input layer.
+  // Suppress on /generate too - that flow owns its own input layer.
   const onGenerate = location.pathname.startsWith('/generate');
   const hidden = onAdmin || onGenerate;
 
@@ -85,7 +85,7 @@ export default function TypeAnywhere() {
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Single printable character — letter, digit, space, punctuation.
+      // Single printable character - letter, digit, space, punctuation.
       if (e.key.length === 1) {
         e.preventDefault();
         inputRef.current?.focus();

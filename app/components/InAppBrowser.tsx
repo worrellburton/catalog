@@ -1,11 +1,11 @@
-// InAppBrowser — slide-up overlay that frames a third-party retailer URL in
+// InAppBrowser - slide-up overlay that frames a third-party retailer URL in
 // an iframe, with persistent header chrome (back, save-product chip,
 // open-in-real-browser fallback). Replaces the previous window.open path so
 // shoppers stay inside the catalog while exploring.
 //
 // Iframe caveats: most retailers block embedding via X-Frame-Options or
 // CSP frame-ancestors. We can't tell from JS exactly when that fires, but
-// we *can* watch for the iframe never firing 'load' — that's our signal to
+// we *can* watch for the iframe never firing 'load' - that's our signal to
 // surface a "this site won't load here" fallback with a one-tap escape to
 // a real browser tab. Brand sites on Shopify (the common case) typically
 // embed fine.
@@ -71,7 +71,7 @@ export default function InAppBrowser({ url, title, product, isSaved, onToggleSav
     isAnimatingOut ? 'in-app-browser--out' : '',
   ].filter(Boolean).join(' ');
 
-  // Try to extract a hostname for the title bar — fall back to the title
+  // Try to extract a hostname for the title bar - fall back to the title
   // prop the caller gave us.
   let hostname = '';
   try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch { /* invalid url */ }
@@ -116,7 +116,7 @@ export default function InAppBrowser({ url, title, product, isSaved, onToggleSav
         {blocked ? (
           <div className="iab-blocked">
             <p className="iab-blocked-headline">This site doesn't allow in-app browsing.</p>
-            <p className="iab-blocked-sub">Open it in a new tab — your trail stays right here when you come back.</p>
+            <p className="iab-blocked-sub">Open it in a new tab - your trail stays right here when you come back.</p>
             <button className="iab-blocked-cta" onClick={escapeToTab}>
               Open {hostname || 'site'}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

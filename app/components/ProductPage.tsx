@@ -7,7 +7,7 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 
 interface ProductPageCreative {
-  /** The product_creative.id — used to resolve the shared <video> element
+  /** The product_creative.id - used to resolve the shared <video> element
    *  from TrailVideoHost so the morph reuses the card's playing instance. */
   id?: string;
   videoUrl: string;
@@ -36,11 +36,11 @@ interface ProductPageProps {
   /** Other live creatives from the same brand. Rendered as the
    *  "More from <brand>" rail in the desktop info column. */
   brandCreatives?: ProductAd[];
-  /** Popular live creatives — used to fill the "More like this" grid
+  /** Popular live creatives - used to fill the "More like this" grid
    *  when find_similar_creatives returns nothing for the active product
    *  (cold-start, missing embedding, etc.). */
   popularFallback?: ProductAd[];
-  /** Editorial fashion looks (Look[]) — drives the "You might also like"
+  /** Editorial fashion looks (Look[]) - drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
   bookmarks: BookmarksInterface;
@@ -108,7 +108,7 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
     // product so the chip still works.
     const fallbackUrl = product.url
       || `https://www.google.com/search?q=${encodeURIComponent(`${product.brand || ''} ${product.name || ''}`.trim() + ' buy')}`;
-    return [{ retailer: product.brand || 'Brand site', url: fallbackUrl, price: '—', priceCents: 0, badge: 'official' }];
+    return [{ retailer: product.brand || 'Brand site', url: fallbackUrl, price: ' - ', priceCents: 0, badge: 'official' }];
   }
   const seed = hashString(`${product.brand}|${product.name}`);
   // Three deterministic alts pulled from the rotating pool.
@@ -130,7 +130,7 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
 
   for (let i = 0; i < altCount; i++) {
     const r = ALT_RETAILERS[(offset + i) % ALT_RETAILERS.length];
-    // Per-retailer jitter so prices are believably varied — clamp to ±15%.
+    // Per-retailer jitter so prices are believably varied - clamp to ±15%.
     const jitterSeed = hashString(`${product.brand}|${product.name}|${r.name}`);
     const jitter = ((jitterSeed % 200) / 1000) - 0.10; // -0.10 .. +0.10
     const factor = 1 + r.bias + jitter;
@@ -156,7 +156,7 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
   return offers;
 }
 
-// Brand-logo experiment removed — Brandfetch's results were inconsistent
+// Brand-logo experiment removed - Brandfetch's results were inconsistent
 // (white squares for opaque-bg logos, wrong-brand fallbacks for products
 // scraped from Google Shopping). Brand text is the reliable indicator.
 
@@ -173,7 +173,7 @@ function dummySavedBy(productKey: string): SavedByDummy {
   return { count, avatars };
 }
 
-/** Compact video tile for the brand strip — small, shows a product image
+/** Compact video tile for the brand strip - small, shows a product image
  *  poster + brand/name caption so the tile is never blank, then swaps in
  *  the video once frames are decoded. Tap reuses the shared <video>
  *  element via the trail host so playback continues without remount. */
@@ -263,9 +263,9 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
   // Resolve creator identity in priority order:
   //   1. Static creators map (real handles like @lilywittman/@garrett)
   //   2. Profile fallback baked into the look row (orphan looks created
-  //      via the user-generation flow — see services/looks.ts)
+  //      via the user-generation flow - see services/looks.ts)
   //   3. Raw handle string, but only if it's not the synthetic `user:UUID`
-  //      key — that one's a placeholder, not something to show users.
+  //      key - that one's a placeholder, not something to show users.
   const creatorEntry = staticCreators[look.creator];
   const displayName = creatorEntry?.displayName
     || look.creatorDisplayName
@@ -341,7 +341,7 @@ export default function ProductPage({
     if (fromSimilar.length > 0) return fromSimilar;
     return pickFrom(popularFallback);
   }, [similarCreatives, popularFallback, product.brand, (product as Product & { id?: string }).id]);
-  // Shop dropdown — collapsed by default on mobile so the action row
+  // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
   // comparison is the highest-value content there.
@@ -364,7 +364,7 @@ export default function ProductPage({
   }, []);
 
   // Reset scroll to top on every product navigation. useLayoutEffect runs
-  // synchronously after DOM updates but BEFORE paint — combined with
+  // synchronously after DOM updates but BEFORE paint - combined with
   // `behavior: 'instant'`, the snap-to-top happens between renders so
   // the user never sees the new content briefly scrolled to the old
   // tap position. The dep is the parent's nav counter (not brand+name)
@@ -382,7 +382,7 @@ export default function ProductPage({
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
   // scrollTop is at the top so users can scroll content normally without
   // accidentally dismissing. A pull > 96px or fast flick triggers close.
-  // No-op on desktop. Passive listeners — never preventDefault — so the
+  // No-op on desktop. Passive listeners - never preventDefault - so the
   // Flutter shell's gesture handlers stay intact.
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startY: number; startTime: number; active: boolean }>({
@@ -407,7 +407,7 @@ export default function ProductPage({
       if (!dragRef.current.active) return;
       const dy = e.touches[0].clientY - dragRef.current.startY;
       if (dy <= 0) {
-        // Dragging up — release control so native scroll resumes.
+        // Dragging up - release control so native scroll resumes.
         overlay.style.transform = '';
         overlay.classList.remove('is-dragging');
         dragRef.current.active = false;
@@ -455,7 +455,7 @@ export default function ProductPage({
     [product.brand, product.name],
   );
 
-  // Retailer chips — brand site + 3 synthetic alts (same pool every time so
+  // Retailer chips - brand site + 3 synthetic alts (same pool every time so
   // prices are consistent across re-renders). Cheapest gets a lowest /
   // discount badge.
   const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
@@ -464,7 +464,7 @@ export default function ProductPage({
 
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
-  // hero slot — appendChild preserves currentTime + decoded frames, so there
+  // hero slot - appendChild preserves currentTime + decoded frames, so there
   // is no reload, no black flash, no audio gap.
   const setHeroSlot = useTrailVideo(creative?.id, creative?.videoUrl);
 
@@ -524,7 +524,7 @@ export default function ProductPage({
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
 
-            {/* Saved-by social-proof row. Dummy data today — wired to
+            {/* Saved-by social-proof row. Dummy data today - wired to
                 bookmark-based save counts when the product_saves table ships. */}
             {savedBy.avatars.length > 0 && (
               <div className="pd-saved-by" aria-label={`Saved by ${savedBy.count} shoppers`}>
@@ -597,7 +597,7 @@ export default function ProductPage({
                       className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
                       onClick={() => {
                         setShowRetailers(false);
-                        onOpenBrowser(offer.url, `${offer.retailer} — ${product.name}`, product);
+                        onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
                       }}
                       role="listitem"
                     >
@@ -618,7 +618,7 @@ export default function ProductPage({
               </div>
             )}
 
-            {/* "More from <brand>" rail — fills the negative space below
+            {/* "More from <brand>" rail - fills the negative space below
                 the Shop drawer in the info column with same-brand-mate
                 creatives. Cross-brand discovery happens below in the
                 "More like this" feed. */}

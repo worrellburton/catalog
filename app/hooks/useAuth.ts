@@ -3,7 +3,7 @@ import { getCurrentUser, onAuthStateChange, signOut, type AuthUser } from '~/ser
 
 // Singleton auth store. The previous implementation had each component spin
 // up its own getCurrentUser() promise and its own onAuthStateChange
-// subscription — fine with a handful of consumers, but the consumer feed
+// subscription - fine with a handful of consumers, but the consumer feed
 // renders 50–200 LookCard/CreativeCard tiles that each call useAuth(),
 // which meant 50–200 redundant auth checks on every mount. This module
 // runs the bootstrap once and lets every caller subscribe to the same
@@ -19,7 +19,7 @@ const listeners = new Set<() => void>();
 let bootstrapped = false;
 
 function setState(next: AuthState) {
-  // Bail if nothing changed — prevents re-renders when auth ticks but the
+  // Bail if nothing changed - prevents re-renders when auth ticks but the
   // user identity is stable (common during token refresh).
   if (state.user === next.user && state.loading === next.loading) return;
   state = next;
@@ -42,7 +42,7 @@ function bootstrap() {
   bootstrapped = true;
 
   // OAuth-return guard: if we landed from a Supabase OAuth redirect, the
-  // SIGNED_IN event will arrive shortly — don't flip loading=false off the
+  // SIGNED_IN event will arrive shortly - don't flip loading=false off the
   // initial getSession() call or the password gate flashes for a tick.
   const fromOAuth = isOAuthReturn();
 

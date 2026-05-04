@@ -1,4 +1,4 @@
-// Brand font catalog — the typefaces an admin can pick from on the
+// Brand font catalog - the typefaces an admin can pick from on the
 // /admin/branding page. The chosen variant id is persisted in localStorage
 // (see useBrandLogo) and read by CatalogLogo so the wordmark renders the
 // admin's pick everywhere it appears (header, password gate, landing).
@@ -11,7 +11,7 @@ export interface BrandVariant {
   label: string;
   /** CSS font-family value. Empty for 'original'. */
   fontFamily: string;
-  /** Full Google Fonts CSS URL — null for the original SVG. */
+  /** Full Google Fonts CSS URL - null for the original SVG. */
   googleFontUrl?: string;
   /** Visual tweaks per face so each variant reads at its best at logo scale. */
   weight?: number;
@@ -24,7 +24,7 @@ const G = (family: string, params: string) =>
   `https://fonts.googleapis.com/css2?family=${family}${params ? '&' + params : ''}&display=swap`;
 
 export const BRAND_VARIANTS: BrandVariant[] = [
-  // The first slot is always the canonical SVG mark — gives admins a clean
+  // The first slot is always the canonical SVG mark - gives admins a clean
   // "revert to default" choice with the same identity they were on before.
   { id: 'original', label: 'Original', fontFamily: '' },
 

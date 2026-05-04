@@ -239,7 +239,7 @@ export default function AdminAiModels() {
                     </div>
                   </td>
                   <td style={{ textTransform: 'capitalize' }}>{m.gender.replace('_', '-')}</td>
-                  <td>{m.age_range || '—'}</td>
+                  <td>{m.age_range || ' - '}</td>
                   <td style={{ textTransform: 'capitalize' }}>{m.default_style.replace(/_/g, ' ')}</td>
                   <td>{m.looks_count}</td>
                   <td>{m.followers_count}</td>
@@ -296,7 +296,7 @@ export default function AdminAiModels() {
                       placeholder="aria-rose"
                       disabled={!!editingId}
                     />
-                    <span className="admin-form-hint">Used as @handle — cannot be changed after creation</span>
+                    <span className="admin-form-hint">Used as @handle - cannot be changed after creation</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div className="admin-form-group">
@@ -316,7 +316,7 @@ export default function AdminAiModels() {
                         onChange={e => setForm(prev => ({ ...prev, age_range: e.target.value || undefined }))}
                         style={selectStyle}
                       >
-                        <option value="">—</option>
+                        <option value=""> - </option>
                         {AGE_RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </div>

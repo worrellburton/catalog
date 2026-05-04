@@ -29,7 +29,7 @@ import {
 import { getUserGender, type UserGender } from '~/services/genders';
 
 /* -----------------------------------------------------------
-   Generate flow — shopper-facing, multi-step wizard.
+   Generate flow - shopper-facing, multi-step wizard.
    Steps 1–5 cover Photos → Products → Height → Style → Review;
    submit kicks off a generate_look edge function and polls the
    user_generations row until status hits done|failed.
@@ -105,7 +105,7 @@ const typicalSecondsFor = (durationSeconds?: number | null) =>
 
 type Step = 'photos' | 'products' | 'about' | 'style' | 'review' | 'result';
 
-// Age presets keep the picker compact — Seedance just needs a phrase
+// Age presets keep the picker compact - Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
 const AGE_PRESETS: { label: string }[] = [
   { label: 'late teens' },
@@ -132,7 +132,7 @@ const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Je
 
 // User-facing category buckets for the products picker. Each row in the
 // product picker maps to one of these. `tags: null` is the Objects
-// bucket — anything roleTagFromName() couldn't classify falls in here
+// bucket - anything roleTagFromName() couldn't classify falls in here
 // so the catalog is never hidden from the picker.
 const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
   { label: 'Hat', tags: ['Hat'] },
@@ -185,7 +185,7 @@ export default function GeneratePage() {
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>('photos');
 
-  // Photos — fixed 3-slot layout. `slots[i]` is either an upload id (filled)
+  // Photos - fixed 3-slot layout. `slots[i]` is either an upload id (filled)
   // or null (empty). We derive an ordered upload-id list from this for the
   // rest of the wizard + submit payload.
   const [existingUploads, setExistingUploads] = useState<UserUpload[]>([]);
@@ -199,7 +199,7 @@ export default function GeneratePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Combined Fal/ByteDance photo pre-validation. We submit ALL filled
   // slots together because ByteDance's `partner_validation_failed`
-  // safety filter only fires for multi-image submissions — single-image
+  // safety filter only fires for multi-image submissions - single-image
   // checks always pass and miss the real failure mode. All filled slots
   // share the same state from the most recent combo check.
   //   idle → checking (edge function running) → ok | blocked
@@ -218,7 +218,7 @@ export default function GeneratePage() {
   // debounce 600ms then submit ALL filled slots together to Fal. The
   // edge function polls until ByteDance's safety filter responds (~10s
   // for a rejection, 15s timeout for a likely-pass). Skip the check for
-  // a single filled slot — single-image submissions almost always pass
+  // a single filled slot - single-image submissions almost always pass
   // and would just produce false-positive green checkmarks.
   const filledPublicUrls = useMemo(
     () => pickedUploadIds
@@ -261,13 +261,13 @@ export default function GeneratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filledKey, user?.id]);
 
-  // Past generations — rendered in phase 7 as the "Your looks" grid. We poll
+  // Past generations - rendered in phase 7 as the "Your looks" grid. We poll
   // pending/generating rows here so the grid promotes itself to done/failed
   // without a page refresh.
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
-  // Phase 8 — products
+  // Phase 8 - products
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PickedProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -298,7 +298,7 @@ export default function GeneratePage() {
   }, [productResults, categoryQueries]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
-  // Phase 9/10 — height + style
+  // Phase 9/10 - height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
@@ -322,7 +322,7 @@ export default function GeneratePage() {
     getUserGender(user.id).then(setUserGender);
   }, [user?.id]);
 
-  // Phase 12 — submit + poll
+  // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Shown on the photos step when the user's last look failed, so they know
@@ -383,7 +383,7 @@ export default function GeneratePage() {
     saveUserSlots(user.id, slots);
   }, [user?.id, slots]);
 
-  // Initial load of past generations — Phase 7 renders them as cards.
+  // Initial load of past generations - Phase 7 renders them as cards.
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -396,7 +396,7 @@ export default function GeneratePage() {
       // and show a dismissible banner rather than auto-landing on the error result.
       const latest = rows[0];
       if (latest?.status === 'failed') {
-        setFailedLastLookBanner('Your last look failed — let\'s try again.');
+        setFailedLastLookBanner('Your last look failed - let\'s try again.');
         // step starts at 'photos' already, so no setStep needed.
       }
     });
@@ -420,7 +420,7 @@ export default function GeneratePage() {
     return () => window.clearInterval(handle);
   }, [generations]);
 
-  // Phase 8 — search products in the library. Pulls the same active
+  // Phase 8 - search products in the library. Pulls the same active
   // product set the consumer feed uses.
   useEffect(() => {
     if (step !== 'products' || !supabase) return;
@@ -462,7 +462,7 @@ export default function GeneratePage() {
     return () => { cancelled = true; window.clearTimeout(handle); };
   }, [step, productQuery, userGender]);
 
-  // Phase 17 — poll the generation row every 2.5s until it lands on a
+  // Phase 17 - poll the generation row every 2.5s until it lands on a
   // terminal status, so the Result view replaces the spinner as soon as
   // the edge function finishes.
   useEffect(() => {
@@ -474,7 +474,7 @@ export default function GeneratePage() {
     return () => window.clearInterval(id);
   }, [generation]);
 
-  // Tapping an existing upload toggles its membership in the slots — drops
+  // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
   const onPickExistingUpload = (id: string) => {
     setSlots(prev => {
@@ -492,7 +492,7 @@ export default function GeneratePage() {
     });
   };
 
-  // Place a specific upload into a specific slot — used by the picker
+  // Place a specific upload into a specific slot - used by the picker
   // modal so the choice always lands in the slot the user tapped, even
   // if it was already filled.
   const placeUploadInSlot = (slotIndex: number, uploadId: string) => {
@@ -529,7 +529,7 @@ export default function GeneratePage() {
   // into this slot (instead of the first empty slot).
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
 
-  // Crop tool — modal state. Lives on the result step; opens when the
+  // Crop tool - modal state. Lives on the result step; opens when the
   // user taps the Crop button. Saving writes back through
   // updateGenerationCrop() and the in-memory generation gets updated
   // optimistically so the result video re-renders with the new crop
@@ -572,7 +572,7 @@ export default function GeneratePage() {
   // children, and using counter math gets ugly.
   const [dragSlots, setDragSlots] = useState<Set<number>>(new Set());
 
-  // Shared core upload pipeline — used by both the file picker
+  // Shared core upload pipeline - used by both the file picker
   // (`onFileInput`) and the slot drop handler. `targetSlot` is the
   // slot the upload should land in; pass `null` to fall back to the
   // first empty slot.
@@ -686,7 +686,7 @@ export default function GeneratePage() {
     // The combo-validation effect below picks up the slot change and
     // re-runs the multi-photo check. We don't validate per-photo here
     // because ByteDance's `partner_validation_failed` filter only fires
-    // when 2–3 face references are submitted together — single-image
+    // when 2–3 face references are submitted together - single-image
     // checks always pass and don't catch the real failure mode.
   };
 
@@ -758,7 +758,7 @@ export default function GeneratePage() {
   }, [limitWarning]);
   useEffect(() => {
     // Any change to picked while the warning is up means the user
-    // resolved the situation — drop the toast immediately.
+    // resolved the situation - drop the toast immediately.
     if (limitWarning) setLimitWarning(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picked.length]);
@@ -873,12 +873,12 @@ export default function GeneratePage() {
     }
     setGeneration(data);
     // Fire-and-forget Claude name generation. Doesn't block the user
-    // from advancing to the result screen — the name lands on the row
+    // from advancing to the result screen - the name lands on the row
     // asynchronously and shows up in "Your looks" once it does.
     void nameLookForGeneration(data.id);
     // Prepend the new row to the in-memory list so it shows up in
     // "Your looks" the moment the shopper hits Back from the result
-    // screen — no page refresh needed. The list-polling effect will
+    // screen - no page refresh needed. The list-polling effect will
     // promote it through generating -> done|failed in place.
     setGenerations(prev => [data, ...prev.filter(g => g.id !== data.id)]);
     setStep('result');
@@ -917,7 +917,7 @@ export default function GeneratePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         </button>
-        {/* Photos step gets a "Try this on" headline — the actual primary
+        {/* Photos step gets a "Try this on" headline - the actual primary
             verb the page does. Products is dense and gets the back-only
             header. Other secondary steps fall back to the original
             "Generate" framing. */}
@@ -938,7 +938,7 @@ export default function GeneratePage() {
       <main className="gen-main">
         {step === 'photos' && (
           <section className="gen-step gen-step-photos">
-            {/* Failed-last-look banner — dismissible */}
+            {/* Failed-last-look banner - dismissible */}
             {failedLastLookBanner && (
               <div className="gen-failed-banner" role="alert">
                 <span>{failedLastLookBanner}</span>
@@ -986,7 +986,7 @@ export default function GeneratePage() {
                       setDragSlots(prev => new Set(prev).add(i));
                     }}
                     onDragLeave={(e) => {
-                      // Ignore enter/leave bubbling between children — only
+                      // Ignore enter/leave bubbling between children - only
                       // clear the highlight when we actually leave the slot.
                       if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                       setDragSlots(prev => { const next = new Set(prev); next.delete(i); return next; });
@@ -1005,7 +1005,7 @@ export default function GeneratePage() {
                         {checkState === 'blocked' && (
                           <div
                             className="gen-slot-check gen-slot-check--blocked"
-                            title="This photo may be rejected — try a different selfie"
+                            title="This photo may be rejected - try a different selfie"
                             aria-label="Photo may be blocked"
                           />
                         )}
@@ -1094,7 +1094,7 @@ export default function GeneratePage() {
 
             </div>
 
-            {/* Create look CTA — fixed to the bottom of the viewport
+            {/* Create look CTA - fixed to the bottom of the viewport
                 across the photos step (same anchor pattern the gen-dock
                 uses on later steps). Always reachable without scrolling
                 even when the user has many "Your looks" cards below. */}
@@ -1109,7 +1109,7 @@ export default function GeneratePage() {
               </button>
             </div>
 
-            {/* Make a new look CTA — sits above the Your Looks grid as
+            {/* Make a new look CTA - sits above the Your Looks grid as
                 a quick path to start a fresh generation. Scrolls back to
                 the top of the photos step so the user lands on the
                 upload slots and can begin a new look. */}
@@ -1172,7 +1172,7 @@ export default function GeneratePage() {
                 read as one cohesive control surface. */}
 
             {/* Six horizontal-scroll rows. Each row is one of CATEGORY_GROUPS
-                — Hat / Top / Bottoms / Shoes / Accessories / Objects.
+                - Hat / Top / Bottoms / Shoes / Accessories / Objects.
                 Empty rows are still rendered so the layout is predictable
                 across catalog states; they show a quiet empty hint. */}
             {productsLoading && productResults.length === 0 ? (
@@ -1209,7 +1209,7 @@ export default function GeneratePage() {
                               className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
                               data-gen-card-id={p.id}
                               onClick={() => togglePick(p)}
-                              /* No disabled state — a tap on a 6th card
+                              /* No disabled state - a tap on a 6th card
                                  surfaces the limit toast instead of
                                  silently doing nothing. */
                             >
@@ -1313,7 +1313,7 @@ export default function GeneratePage() {
                 type="button"
                 className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
                 onClick={() => setModel('pro')}
-                title="Pro is in preview — currently runs at Fast quality (5-second clips) while Pro is being rolled out."
+                title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
               >
                 Pro
               </button>
@@ -1322,7 +1322,7 @@ export default function GeneratePage() {
             {model === 'pro' && (
               <>
                 <div className="gen-pro-preview-note">
-                  Pro is in preview — your look will run at Fast quality (5-second clip) while Pro is being rolled out.
+                  Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
                 </div>
                 <div className="gen-sectionlabel">Clip length</div>
                 <div className="gen-lengthgrid">
@@ -1398,7 +1398,7 @@ export default function GeneratePage() {
                       <div className="gen-result-product-text">
                         {p.role_tag && <span className="gen-result-product-role">{p.role_tag}</span>}
                         <span className="gen-result-product-name">
-                          {[p.product?.brand, p.product?.name].filter(Boolean).join(' — ') || 'Product'}
+                          {[p.product?.brand, p.product?.name].filter(Boolean).join(' - ') || 'Product'}
                         </span>
                         {p.product?.price && <span className="gen-result-product-price">{p.product.price}</span>}
                       </div>
@@ -1496,7 +1496,7 @@ export default function GeneratePage() {
         )}
       </main>
 
-      {/* Unified bottom dock — single horizontal row that combines the
+      {/* Unified bottom dock - single horizontal row that combines the
           picked-products strip (when applicable) with the Back/Next
           action buttons. Step progress rail removed at the user's
           request; the section heading on the page already tells you
@@ -1560,8 +1560,8 @@ function goPrev(current: Step, set: (s: Step) => void) {
   if (i > 0) set(STEP_ORDER[i - 1]);
 }
 
-// Ten labelled phases the build pass flows through. They're cosmetic —
-// Fal doesn't expose stage progress — but the gradual reveal builds
+// Ten labelled phases the build pass flows through. They're cosmetic  - 
+// Fal doesn't expose stage progress - but the gradual reveal builds
 // anticipation and gives the wait a sense of motion. Each phase owns
 // 10% of the typical budget; we mark prior phases as done as we cross
 // the boundary into the next one.
@@ -1587,12 +1587,12 @@ function summarizeGenerationError(
   raw: string,
   code?: string | null,
 ): { headline: string; hint: string | null } {
-  // Prefer structured code — fal-webhook now classifies every failure.
+  // Prefer structured code - fal-webhook now classifies every failure.
   switch (code) {
     case 'content_policy':
       return {
         headline: 'The video provider blocked this look.',
-        hint: 'Most often this is a recognisable celebrity or public figure in the photo — try a different selfie. Other triggers: photos of minors, brand logos prominently in frame, or NSFW content.',
+        hint: 'Most often this is a recognisable celebrity or public figure in the photo - try a different selfie. Other triggers: photos of minors, brand logos prominently in frame, or NSFW content.',
       };
     case 'no_face_detected':
       return {
@@ -1616,7 +1616,7 @@ function summarizeGenerationError(
     case 'fal_submit_error':
       return {
         headline: 'The video provider rejected the request.',
-        hint: 'See details below — usually fixed by re-uploading the photo or picking fewer products.',
+        hint: 'See details below - usually fixed by re-uploading the photo or picking fewer products.',
       };
   }
   // Legacy fallback for rows from before error_code existed.
@@ -1624,7 +1624,7 @@ function summarizeGenerationError(
   if (text.includes('partner_validation_failed') || text.includes('content_policy')) {
     return {
       headline: 'The video provider blocked this look.',
-      hint: 'Most often this is a recognisable celebrity in the photo — try a different selfie. Other triggers: minors, brand logos in frame, or NSFW content.',
+      hint: 'Most often this is a recognisable celebrity in the photo - try a different selfie. Other triggers: minors, brand logos in frame, or NSFW content.',
     };
   }
   if (text.includes('heic')) {
@@ -1754,7 +1754,7 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
     : linearPct;
   const pct = Math.min(99.5, Math.max(2, overflowPct));
 
-  // Phase index — 0..9. We pace it slightly behind raw % so the
+  // Phase index - 0..9. We pace it slightly behind raw % so the
   // current label feels like it's still working when the bar is at
   // its boundary, instead of jumping ahead instantly.
   const phaseIdx = Math.min(
@@ -1776,7 +1776,7 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
-        aria-label={`Generating — ${activePhase}`}
+        aria-label={`Generating - ${activePhase}`}
       >
         {/* Border progress: stroke a single rect along its perimeter
             using `pathLength="100"` so the dasharray maps cleanly to
@@ -1836,7 +1836,7 @@ function cropTransformStyle(
 interface Crop { scale: number; x: number; y: number }
 
 /**
- * CropModal — drag to pan + slider to zoom. Output stays 9:16 (the
+ * CropModal - drag to pan + slider to zoom. Output stays 9:16 (the
  * source video aspect). Save writes scale/x/y on the row; we don't
  * re-encode the video so the change is instant.
  */
@@ -1863,7 +1863,7 @@ function CropModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Clamp pan whenever scale changes — at scale=1 there's no slack
+  // Clamp pan whenever scale changes - at scale=1 there's no slack
   // to pan into, so we snap x/y back to 0.
   useEffect(() => {
     if (scale <= 1) {
@@ -2121,7 +2121,7 @@ function UploadPickerModal({
         </button>
 
         {uploads.length === 0 ? (
-          <div className="gen-empty">No uploads yet — tap above to add one.</div>
+          <div className="gen-empty">No uploads yet - tap above to add one.</div>
         ) : (
           <div className="gen-modal-grid">
             {uploads.map(u => {
@@ -2169,7 +2169,7 @@ function StepRail({
   ageLabel: string;
   style: string;
   /** When true, the rail is being rendered as a row inside the unified
-   *  gen-dock — drop the fixed positioning + glass background since
+   *  gen-dock - drop the fixed positioning + glass background since
    *  the dock supplies both. */
   embedded?: boolean;
 }) {

@@ -1,5 +1,5 @@
 /* Desktop AI-style search bar. Bottom-anchored, capped width.
-   Mobile (≤768px) uses the BottomBar pill — this whole layer is
+   Mobile (≤768px) uses the BottomBar pill - this whole layer is
    suppressed there to avoid double-search UI. */
 .ai-bar-wrap {
   position: fixed;
@@ -71,7 +71,7 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Mic listening — soft red pulse so users see the recording state. */
+/* Mic listening - soft red pulse so users see the recording state. */
 .ai-bar-icon-btn.is-listening {
   background: rgba(244, 63, 94, 0.18);
   color: #fca5a5;
@@ -134,7 +134,7 @@
   cursor: default;
 }
 
-/* Light mode — softer glass + dark icon set. */
+/* Light mode - softer glass + dark icon set. */
 .light-mode .ai-bar {
   background: rgba(255, 255, 255, 0.78);
   border-color: rgba(0, 0, 0, 0.08);
@@ -179,11 +179,11 @@
   color: rgba(0, 0, 0, 0.4);
 }
 
-/* Mobile — hard hide, BottomBar takes over. */
+/* Mobile - hard hide, BottomBar takes over. */
 @media (max-width: 768px) {
   .ai-bar-wrap { display: none !important; }
 }
 
-/* Flutter shell — hide on the native webview. The shell has its
+/* Flutter shell - hide on the native webview. The shell has its
    own bottom UI and we don't want to stack our bar on top of it. */
 html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }

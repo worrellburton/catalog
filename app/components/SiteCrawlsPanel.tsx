@@ -15,7 +15,7 @@ import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import { isStuck } from '~/utils/aiBudget';
 
 // Typical wall-clock for a full-site sitemap crawl. Past 2x this we
-// flag the job as stuck and surface a manual rerun button — the Modal
+// flag the job as stuck and surface a manual rerun button - the Modal
 // trigger is fire-and-forget so jobs occasionally never start.
 const ESTIMATED_SITE_CRAWL_SECONDS = 600;
 
@@ -55,7 +55,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
   const now = Date.now();
   const diff = now - d.getTime();
@@ -123,7 +123,7 @@ function AddCrawlModal({
           </div>
           <p className="admin-form-hint" style={{ marginTop: 4 }}>
             The crawler auto-detects collections, categories and products from
-            the site’s sitemap and navigation — no page limit needed.
+            the site’s sitemap and navigation - no page limit needed.
           </p>
           {error && <div className="admin-form-error">{error}</div>}
         </div>
@@ -180,7 +180,7 @@ function DiscoveredUrlsPanel({
           <div>
             <h3>Discovered URLs</h3>
             <p style={{ fontSize: 12, color: '#888', margin: '4px 0 0' }}>
-              {job.site_name || job.site_url} — {count} URLs
+              {job.site_name || job.site_url} - {count} URLs
             </p>
           </div>
           <button className="admin-modal-close" onClick={onClose}>×</button>
@@ -788,7 +788,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontWeight: 500 }}>{job.site_name || '—'}</span>
+                        <span style={{ fontWeight: 500 }}>{job.site_name || ' - '}</span>
                         <a
                           href={job.site_url}
                           target="_blank"
@@ -826,14 +826,14 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                           {job.total_urls}
                         </span>
                       ) : (
-                        <span className="admin-cell-muted">—</span>
+                        <span className="admin-cell-muted"> - </span>
                       )}
                     </td>
                     <td>
                       {job.scraped_urls > 0 ? (
                         <span>{job.scraped_urls} / {job.total_urls}</span>
                       ) : (
-                        <span className="admin-cell-muted">—</span>
+                        <span className="admin-cell-muted"> - </span>
                       )}
                     </td>
                     <td className="admin-cell-muted">{timeAgo(job.created_at)}</td>
@@ -847,10 +847,10 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                           : `${Math.floor(duration / 60)}m ${duration % 60}s`
                         : isActive
                           ? '...'
-                          : '—'}
+                          : ' - '}
                     </td>
                     <td className="admin-cell-muted">
-                      {job.scraped_urls > 0 ? `$${totalCost.toFixed(2)}` : '—'}
+                      {job.scraped_urls > 0 ? `$${totalCost.toFixed(2)}` : ' - '}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>

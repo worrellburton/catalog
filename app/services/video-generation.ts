@@ -83,7 +83,7 @@ export async function deleteGeneratedVideo(id: string): Promise<{ error: string 
   return { error: null };
 }
 
-// See setAdElite — same idea, but for generated_videos (look creatives).
+// See setAdElite - same idea, but for generated_videos (look creatives).
 export async function setGeneratedVideoElite(
   id: string,
   productId: string | null,

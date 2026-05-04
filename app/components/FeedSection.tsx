@@ -43,7 +43,7 @@ const LAYOUT_CONFIGS = [
 const DEFAULT_BATCH = 12;
 const SUB_BATCH = 6;
 
-// (Math.random shuffle removed — seeded shuffle below means the same
+// (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
 // avoid identity churn on unrelated re-renders.)
 
@@ -78,7 +78,7 @@ function FeedSection({
 
   // Pick a tile size variant deterministically from (layoutMode, index).
   // layoutMode steps the seed so the Remix button visibly rearranges the
-  // mosaic (different cells become featured/wide/tall). Desktop only — mobile
+  // mosaic (different cells become featured/wide/tall). Desktop only - mobile
   // keeps the uniform 3:4 grid.
   const getCardClass = useCallback((globalIndex: number) => {
     const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
@@ -94,7 +94,7 @@ function FeedSection({
   // Build the pool by treating looks + creatives as one combined deck.
   // Each cycle emits every unique item once (shuffled); when the deck
   // runs out we re-shuffle and start another cycle. This guarantees
-  // that nothing — neither a look nor a creative — repeats until every
+  // that nothing - neither a look nor a creative - repeats until every
   // other unique item in the library has been shown.
   //
   // While creatives are still being fetched we instead interleave
@@ -114,7 +114,7 @@ function FeedSection({
     const targetCells = isInitial ? 200 : 50;
 
     if (isInitial && creativesLoading) {
-      // First paint while elite creatives are still loading — render *only*
+      // First paint while elite creatives are still loading - render *only*
       // shimmer placeholders. The static look pool used to leak in here; now
       // it stays off-screen until the real feed resolves.
       const items: PoolItem[] = [];
@@ -124,7 +124,7 @@ function FeedSection({
       return items;
     }
 
-    // Initial segment is elite-creative-only — no static looks mixed in.
+    // Initial segment is elite-creative-only - no static looks mixed in.
     // Secondary "More like this" segments (isInitial=false) still pull from
     // their look set since that's where look-driven discovery lives.
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
@@ -151,7 +151,7 @@ function FeedSection({
     let displayIndex = 0;
 
     // Empty deck (e.g. no elite creatives flagged yet on the initial segment)
-    // — leave the grid empty rather than falling back to looks.
+    // - leave the grid empty rather than falling back to looks.
     if (deck.length === 0) return items;
 
     // In search mode: render each creative exactly once (no cycling).
@@ -190,7 +190,7 @@ function FeedSection({
       ([entry]) => {
         if (entry.isIntersecting) {
           if (visibleCount >= pool.length && searchMode && onLoadMore) {
-            // We've shown all current results — ask the parent for more.
+            // We've shown all current results - ask the parent for more.
             onLoadMore();
           } else {
             setVisibleCount(prev => Math.min(prev + batch, pool.length));
@@ -264,7 +264,7 @@ function FeedSection({
   );
 }
 
-// Memoized — ContinuousFeed re-renders on every search keystroke, but each
+// Memoized - ContinuousFeed re-renders on every search keystroke, but each
 // FeedSection only depends on its own props. With memo + stable callbacks
 // from the parent, sections skip re-render entirely when the user types.
 export default memo(FeedSection);

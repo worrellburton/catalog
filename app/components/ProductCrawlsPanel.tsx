@@ -18,7 +18,7 @@ const STATUS_STYLES: Record<string, { color: string; background: string; label: 
 };
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
   const now = Date.now();
   const diff = now - d.getTime();
@@ -128,7 +128,7 @@ export default function ProductCrawlsPanel() {
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  // Tracks when each row was last retried — used as startedAt so the
+  // Tracks when each row was last retried - used as startedAt so the
   // JobProgress timer counts from the retry click, not from created_at.
   const [retriedAt, setRetriedAt] = useState<Record<string, string>>({});
   const [clearingBadUrls, setClearingBadUrls] = useState(false);
@@ -154,7 +154,7 @@ export default function ProductCrawlsPanel() {
     }
   }, [statusFilter, search, page]);
 
-  // Silent background refresh — no loading spinner, only updates existing rows.
+  // Silent background refresh - no loading spinner, only updates existing rows.
   // Used by the auto-poll loop so status changes appear without a full reload.
   const refreshSilent = useCallback(async () => {
     try {
@@ -167,7 +167,7 @@ export default function ProductCrawlsPanel() {
       setRows(data);
       setTotal(count);
     } catch {
-      // ignore — next tick will retry
+      // ignore - next tick will retry
     }
   }, [statusFilter, search, page]);
 
@@ -429,7 +429,7 @@ export default function ProductCrawlsPanel() {
                       })()}
                     </td>
                     <td style={{ fontWeight: 500, maxWidth: 220 }}>
-                      {r.name || <span style={{ color: '#9ca3af' }}>—</span>}
+                      {r.name || <span style={{ color: '#9ca3af' }}> - </span>}
                       {r.scrape_error && <ErrorTooltip error={r.scrape_error} />}
 
                     </td>
@@ -445,11 +445,11 @@ export default function ProductCrawlsPanel() {
                           {r.url.replace(/^https?:\/\//, '')}
                         </a>
                       ) : (
-                        <span style={{ color: '#d1d5db' }}>—</span>
+                        <span style={{ color: '#d1d5db' }}> - </span>
                       )}
                     </td>
-                    <td className="admin-cell-muted">{r.brand || '—'}</td>
-                    <td className="admin-cell-muted">{r.price || '—'}</td>
+                    <td className="admin-cell-muted">{r.brand || ' - '}</td>
+                    <td className="admin-cell-muted">{r.price || ' - '}</td>
                     <td><StatusBadge status={r.scrape_status} createdAt={r.created_at} startedAt={retriedAt[r.id] ?? r.scraped_at} onRerun={() => handleRetry(r.id)} rerunning={retrying === r.id} /></td>
                     <td className="admin-cell-muted">{timeAgo(r.scraped_at)}</td>
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>

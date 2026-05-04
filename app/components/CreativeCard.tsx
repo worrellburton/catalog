@@ -28,7 +28,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   const longPressFired = useRef(false);
 
   // Declarative <video> element. Previously we used TrailVideoHost which
-  // imperatively appendChild'd a shared video element into the slot —
+  // imperatively appendChild'd a shared video element into the slot  - 
   // good for surviving the click-into-detail handoff, bad for autoplay
   // because attributes set on a JS-created element after src can leave
   // it flagged in a "pending unmuted decode" state and reject autoplay.
@@ -41,7 +41,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // and on every visibility change, so a paused element gets a kick
   // even if the autoplay policy initially blocked.
 
-  // Static poster URL — used as a fallback layer behind the video so
+  // Static poster URL - used as a fallback layer behind the video so
   // the card always shows a real image even before video frames decode
   // (and even if the video URL is broken or absent entirely).
   const posterUrl = creative.thumbnail_url
@@ -51,7 +51,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
 
   // Fire the impression ping once, the first time the card crosses into the
   // shared observer's pre-mount band. Visibility itself is tracked by
-  // useInViewport — we just need a one-shot side effect here.
+  // useInViewport - we just need a one-shot side effect here.
   useEffect(() => {
     if (inViewport && !impressionTracked.current) {
       impressionTracked.current = true;
@@ -60,7 +60,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   }, [inViewport, creative.id]);
 
   // Mark "loaded" once the video has frames. Also force play() at the
-  // metadata + first-frame milestones — that's the moment Chrome's
+  // metadata + first-frame milestones - that's the moment Chrome's
   // muted-autoplay heuristic actually evaluates.
   useEffect(() => {
     const v = videoRef.current;
@@ -120,13 +120,13 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
 
   // Hover/touch-start = "user is signaling intent" → kick off the similarity
   // query for this creative now, so by the time they actually tap it (or
-  // hover for >100ms), the rail is already loading. Idempotent — multiple
+  // hover for >100ms), the rail is already loading. Idempotent - multiple
   // hovers coalesce onto one cached promise.
   const handlePrefetch = useCallback(() => {
     if (creative.id) prefetchSimilarCreatives(creative.id, 18);
   }, [creative.id]);
 
-  // Long-press handler — super-admin-only. On touch devices a 500ms hold
+  // Long-press handler - super-admin-only. On touch devices a 500ms hold
   // pops a small confirm-delete menu. Mouse equivalent is right-click
   // (handled separately via onContextMenu). Either path requires the user
   // to confirm before destruction lands.
@@ -214,7 +214,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } as React.CSSProperties}
           />
         )}
-        {/* Declarative <video> — every autoplay-relevant attribute is
+        {/* Declarative <video> - every autoplay-relevant attribute is
             present on the element from creation, which is what every
             browser's autoplay heuristic actually inspects. JS-property
             equivalents (.muted, .autoplay) sometimes don't satisfy the

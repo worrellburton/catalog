@@ -1,5 +1,5 @@
 /* iOS Safari pass:
-   • backdrop-filter on the under-layer's filter is heavy on older iPhones —
+   • backdrop-filter on the under-layer's filter is heavy on older iPhones  - 
      the conservative scale+blur values below keep the GPU layer cheap.
    • will-change is set transiently via the .has-overlay class so the
      browser hoists the right elements without keeping them on a layer
@@ -12,7 +12,7 @@
 }
 
 /* Trail depth: while an overlay is open, the under-layer recedes very
-   slightly (1.5% scale, 4px blur). Restraint matters — anything more reads
+   slightly (1.5% scale, 4px blur). Restraint matters - anything more reads
    as a modal/dialog instead of a focus shift.
    The transform is applied to a container the overlay sits on top of (the
    feed + header live inside .app-root, the overlay portals over). The
@@ -40,7 +40,7 @@
   pointer-events: none;
 }
 
-/* Default (overlay not open): instant readiness — no idle filter cost. */
+/* Default (overlay not open): instant readiness - no idle filter cost. */
 .app-root > header,
 .app-root > .feed-container,
 .app-root > .continuous-feed,
@@ -53,11 +53,11 @@
   transform-origin: 50% 30%;
 }
 
-/* Product detail page — full-height scroller with a video/image hero
+/* Product detail page - full-height scroller with a video/image hero
    followed by a feed of similar products.
    The hero box itself morphs from its grid card via Framer Motion's
    layoutId, so the overlay's own entrance is a quick opacity fade instead
-   of a slide — that way the user reads "the card grew" rather than "a new
+   of a slide - that way the user reads "the card grew" rather than "a new
    page came in", which is much more subtle. */
 .product-page-overlay {
   position: fixed;
@@ -209,7 +209,7 @@
     height: 100vh;
     width: 100%;
   }
-  /* Image hero: contain so the entire product is visible — never crop
+  /* Image hero: contain so the entire product is visible - never crop
      a body part or the brand logo at the top of the asset. */
   .pd-split .pd-hero .pd-hero-media {
     object-fit: contain;
@@ -243,7 +243,7 @@
   }
 }
 
-/* Rail variant of "More from this brand" — desktop-only, 2-up grid
+/* Rail variant of "More from this brand" - desktop-only, 2-up grid
    that fills the negative space below the Shop drawer. Hidden on
    mobile because the full-width strip below the hero is already there. */
 .pd-info-brand-rail {
@@ -362,7 +362,7 @@
   border-color: rgba(255, 255, 255, 0.2);
   color: #fff;
   /* The .brand-link's underline-on-hover would clash with the
-     pill chrome — suppress it. The pill itself is the affordance. */
+     pill chrome - suppress it. The pill itself is the affordance. */
   text-decoration: none;
   opacity: 1;
 }
@@ -379,7 +379,7 @@
   color: #111;
 }
 
-/* Brand-logo variant — gated upstream by the brandLogosOn toggle.
+/* Brand-logo variant - gated upstream by the brandLogosOn toggle.
    We CSS-mask a solid-color box with the logo's alpha channel so we get
    a clean white glyph on dark mode (and black on light mode), regardless
    of whether the source image has a transparent or opaque background.
@@ -480,7 +480,7 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* "More like this" — vector-similarity creative video rail. Renders below the
+/* "More like this" - vector-similarity creative video rail. Renders below the
    info card when the seed has a TwelveLabs Marengo embedding. Reuses the main
    feed's two-column card grid so it visually blends with the home page. */
 .pd-similar-feed {
@@ -495,7 +495,7 @@
   gap: 12px;
 }
 
-/* Trail rail entry — each card rises and fades in, staggered by ~40ms,
+/* Trail rail entry - each card rises and fades in, staggered by ~40ms,
    so the row reads as a wave settling into place rather than a single
    pop. The hero morph (Framer layoutId) finishes at 360ms; cap the rail
    stagger so the longest delay still lands by ~720ms. */
@@ -527,7 +527,7 @@
 .pd-similar-grid > *:nth-child(10) { --trail-rail-i: 9; }
 .pd-similar-grid > *:nth-child(11) { --trail-rail-i: 10; }
 .pd-similar-grid > *:nth-child(12) { --trail-rail-i: 11; }
-/* Beyond 12, all share the longest delay — they're below the fold anyway. */
+/* Beyond 12, all share the longest delay - they're below the fold anyway. */
 .pd-similar-grid > *:nth-child(n+13) { --trail-rail-i: 12; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -547,7 +547,7 @@
   }
 }
 
-/* "More from this brand" — horizontal snap-scroll strip of small video
+/* "More from this brand" - horizontal snap-scroll strip of small video
    tiles. Each tile is a brand-mate creative; tap continues the trail. */
 .pd-brand-strip-section {
   padding: 8px 24px 0;
@@ -582,7 +582,7 @@
   transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Shimmer skeleton — shows while the video hasn't decoded frames yet
+/* Shimmer skeleton - shows while the video hasn't decoded frames yet
    AND no poster image is available, so the tile is never just a flat
    black square. The .loaded modifier (set when the video reports
    playing/canplay) hides the shimmer via opacity. */
@@ -636,7 +636,7 @@
 }
 .pd-brand-tile.loaded video { opacity: 1; }
 
-/* Poster sits behind the video slot so the tile is never blank — even
+/* Poster sits behind the video slot so the tile is never blank - even
    if the video is slow to decode, broken, or missing. Once the video
    reports playing/canplay we cross-fade it on top via .loaded video. */
 .pd-brand-tile-poster {
@@ -692,7 +692,7 @@
   .pd-brand-tile { width: 132px; height: 176px; }
 }
 
-/* "You might also like" — editorial look creatives in a real grid. */
+/* "You might also like" - editorial look creatives in a real grid. */
 .pd-look-feed {
   padding: 32px 24px 56px;
   max-width: 1280px;
@@ -790,7 +790,7 @@
 .pd-saved-count { letter-spacing: 0.01em; }
 .pd-saved-count strong { color: #fff; font-weight: 600; }
 
-/* Shop button — sits next to Save. Tap toggles the retailer drawer. */
+/* Shop button - sits next to Save. Tap toggles the retailer drawer. */
 .pd-shop-btn {
   display: inline-flex;
   align-items: center;
@@ -816,7 +816,7 @@
   transform: rotate(180deg);
 }
 
-/* Retailer drawer — collapsed by default, expands beneath the action row.
+/* Retailer drawer - collapsed by default, expands beneath the action row.
    Uses grid-template-rows 0fr → 1fr for a smooth height animation that
    doesn't require knowing the content height in advance. */
 .pd-retailers-drawer {
@@ -834,7 +834,7 @@
   min-height: 0;
 }
 
-/* Retailer comparison strip — list of pill-shaped buttons, one per
+/* Retailer comparison strip - list of pill-shaped buttons, one per
    retailer. Each one shows the retailer name + that retailer's price + a
    badge (Official / Lowest / Discount %). Tap opens the in-app browser at
    that retailer's product page. Stacked vertically so prices line up. */
@@ -915,7 +915,7 @@
   flex-shrink: 0;
 }
 
-/* Bookmark button — outline default, fills on save. Same chip shape as the
+/* Bookmark button - outline default, fills on save. Same chip shape as the
    retailer rows for visual consistency. */
 .pd-bookmark-btn {
   display: inline-flex;

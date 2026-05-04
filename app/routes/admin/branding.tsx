@@ -1,7 +1,7 @@
 // Admin → Branding. Lets an admin pick the typeface for the Catalog
 // wordmark. The choice persists in localStorage (useBrandLogo) and the
-// CatalogLogo component reads from it everywhere it renders — header,
-// password gate, landing — so a single click here re-skins the brand
+// CatalogLogo component reads from it everywhere it renders - header,
+// password gate, landing - so a single click here re-skins the brand
 // across the app immediately.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -10,7 +10,7 @@ import { BRAND_VARIANTS, ensureBrandFont, getVariant, type BrandVariant } from '
 import { useInViewport } from '~/hooks/useInViewport';
 import CatalogLogo from '~/components/CatalogLogo';
 
-/** Render a single variant preview WITHOUT reading from useBrandLogo —
+/** Render a single variant preview WITHOUT reading from useBrandLogo  - 
  *  this is the catalog of choices, so each tile has to render its own
  *  variant, not whatever's currently active globally. The font for
  *  this variant only loads once the tile crosses into the viewport
@@ -62,7 +62,7 @@ export default function AdminBranding() {
     if (active.googleFontUrl) ensureBrandFont(active.googleFontUrl);
   }, [active.googleFontUrl]);
 
-  // Same dark-canvas guard as /admin/ui — keeps the sticky topbar black
+  // Same dark-canvas guard as /admin/ui - keeps the sticky topbar black
   // while this page is mounted, regardless of :has() support.
   useEffect(() => {
     document.documentElement.classList.add('admin-on-dark-canvas');
@@ -76,7 +76,7 @@ export default function AdminBranding() {
           <h1>Branding</h1>
           <p className="admin-branding-sub">
             Pick a typeface for the <strong>Catalog</strong> wordmark. Applies
-            everywhere it renders — header, sign-in, landing — the moment you
+            everywhere it renders - header, sign-in, landing - the moment you
             tap Set.
           </p>
         </div>

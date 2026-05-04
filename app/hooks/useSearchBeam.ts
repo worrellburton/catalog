@@ -1,4 +1,4 @@
-// useSearchBeam — single source of truth for which animated beam
+// useSearchBeam - single source of truth for which animated beam
 // variant the bottom-bar renders. Persists to localStorage so the
 // choice survives reloads, and listens for cross-tab changes so an
 // admin picking a variant in one tab updates every other tab's

@@ -97,7 +97,7 @@ function StatusBadge({
 // ─── Time helpers ────────────────────────────────────────────────────
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
   if (diff < 60_000) return 'just now';
@@ -107,7 +107,7 @@ function timeAgo(iso: string | null): string {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   return new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
@@ -268,7 +268,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
     { label: 'Live', value: String(liveCount) },
     { label: 'Impressions', value: totalImpressions.toLocaleString() },
     { label: 'Clicks', value: totalClicks.toLocaleString() },
-    { label: 'CTR', value: totalImpressions > 0 ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%` : '—' },
+    { label: 'CTR', value: totalImpressions > 0 ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%` : ' - ' },
     { label: 'Total Cost', value: `$${totalCost.toFixed(2)}` },
   ];
 
@@ -391,7 +391,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                       className="admin-clickable-row"
                       onClick={() => setExpandedId(prev => prev === ad.id ? null : ad.id)}
                     >
-                      {/* Video thumbnail — autoplays muted; hover pops a larger preview */}
+                      {/* Video thumbnail - autoplays muted; hover pops a larger preview */}
                       <td>
                         {ad.video_url ? (
                           <div
@@ -429,7 +429,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
 
                       {/* Brand */}
                       <td style={{ fontSize: 13 }}>
-                        {ad.product?.brand || <span className="admin-cell-muted">—</span>}
+                        {ad.product?.brand || <span className="admin-cell-muted"> - </span>}
                       </td>
 
                       {/* Product */}
@@ -515,7 +515,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                                   <span style={{ color: '#888' }}>Style</span>
                                   <span style={{ textTransform: 'capitalize' }}>{ad.style.replace(/_/g, ' ')}</span>
                                   <span style={{ color: '#888' }}>Model</span>
-                                  <span>{ad.model || '—'}</span>
+                                  <span>{ad.model || ' - '}</span>
                                   <span style={{ color: '#888' }}>Duration</span>
                                   <span>{ad.duration_seconds}s</span>
                                   <span style={{ color: '#888' }}>Aspect Ratio</span>
@@ -523,7 +523,7 @@ export default function AdminProductAds({ embedded = false }: { embedded?: boole
                                   <span style={{ color: '#888' }}>Resolution</span>
                                   <span>{ad.resolution}</span>
                                   <span style={{ color: '#888' }}>Cost</span>
-                                  <span>{ad.cost_usd ? `$${ad.cost_usd.toFixed(2)}` : '—'}</span>
+                                  <span>{ad.cost_usd ? `$${ad.cost_usd.toFixed(2)}` : ' - '}</span>
                                   <span style={{ color: '#888' }}>Created</span>
                                   <span>{formatDate(ad.created_at)}</span>
                                   <span style={{ color: '#888' }}>Completed</span>

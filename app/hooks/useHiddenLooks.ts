@@ -10,7 +10,7 @@ const productListeners = new Set<Listener>();
 const notify = (set: Set<Listener>) => set.forEach(l => l());
 
 // Singleton in-flight caches. Both hooks fire from ContinuousFeed and
-// GridView at minimum — without sharing, a fresh consumer mount issues
+// GridView at minimum - without sharing, a fresh consumer mount issues
 // 3 Supabase round-trips (admin_hidden_looks, admin_hidden_products,
 // products?is_active=eq.false) for each component. Pooling collapses
 // those into one fetch each, regardless of how many components ask.
@@ -28,7 +28,7 @@ async function fetchHiddenLookIds(): Promise<Set<number>> {
 
 async function fetchHiddenProductKeys(): Promise<Set<string>> {
   if (!supabase) return new Set();
-  // Run both queries in parallel — they're independent.
+  // Run both queries in parallel - they're independent.
   const [hiddenRes, inactiveRes] = await Promise.all([
     supabase.from('admin_hidden_products').select('brand, name'),
     supabase.from('products').select('brand, name').eq('is_active', false),
@@ -103,7 +103,7 @@ export async function hideLookId(id: number): Promise<void> {
   writeLocalLookIds(current);
   notify(lookListeners);
   if (supabase) {
-    // Best-effort cloud persist. Ignore "table missing" errors — localStorage
+    // Best-effort cloud persist. Ignore "table missing" errors - localStorage
     // already made the hide stick for this browser.
     await supabase.from('admin_hidden_looks').upsert({ look_id: id }, { onConflict: 'look_id' });
   }
@@ -134,7 +134,7 @@ export function useHiddenLooks(): Set<number> {
         ids.forEach(id => merged.add(id));
         return merged;
       });
-    }).catch(() => { /* offline / RLS — keep localStorage view */ });
+    }).catch(() => { /* offline / RLS - keep localStorage view */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -164,7 +164,7 @@ export function useHiddenProductKeys(): Set<string> {
         keys.forEach(k => merged.add(k));
         return merged;
       });
-    }).catch(() => { /* offline — keep localStorage view */ });
+    }).catch(() => { /* offline - keep localStorage view */ });
     return () => { cancelled = true; };
   }, []);
 

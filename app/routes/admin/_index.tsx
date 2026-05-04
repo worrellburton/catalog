@@ -85,7 +85,7 @@ export default function AdminHome() {
       .map(r => ({
         id: r.id,
         productName: r.product?.name || 'Unnamed',
-        brand: r.product?.brand || '—',
+        brand: r.product?.brand || ' - ',
         image: r.product?.image_url || null,
         impressions: r.impressions || 0,
         clicks: r.clicks || 0,
@@ -108,7 +108,7 @@ export default function AdminHome() {
     setBoostingId(null);
   };
 
-  // Local data counts — single source of truth
+  // Local data counts - single source of truth
   const creatorsCount = Object.keys(creators).length;
   const looksCount = looks.length;
 

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 //   │ ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░ │
 //   └──────────────────────────────────┘
 // When elapsed exceeds `estimatedSeconds * stuckMultiplier` we flip
-// into a "stuck" state and surface a manual rerun button — the Modal
+// into a "stuck" state and surface a manual rerun button - the Modal
 // trigger is a fire-and-forget POST so jobs occasionally never start.
 
 export type JobPhase = 'queued' | 'active' | 'stuck';
@@ -18,7 +18,7 @@ interface JobProgressProps {
   status: string;
   /** Timestamp work began. Falls back to createdAt when null. */
   startedAt?: string | null;
-  /** Insert/queue time — used when the row hasn't started yet. */
+  /** Insert/queue time - used when the row hasn't started yet. */
   createdAt: string;
   /** Typical wall-clock duration in seconds. */
   estimatedSeconds: number;
@@ -29,7 +29,7 @@ interface JobProgressProps {
   /** If provided, a rerun button appears once the job is stuck. */
   onRerun?: () => void;
   rerunning?: boolean;
-  /** Optional extra label suffix, e.g. " — sitemap" */
+  /** Optional extra label suffix, e.g. " - sitemap" */
   detail?: string;
 }
 

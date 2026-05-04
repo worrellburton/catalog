@@ -146,7 +146,7 @@ export default function AdminCatalogDetail() {
             {looks.map(l => (
               <tr key={`${l.legacyId}-${l.title}`}>
                 <td style={{ textAlign: 'left' }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#888', marginRight: 8 }}>#{l.legacyId ?? '—'}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#888', marginRight: 8 }}>#{l.legacyId ?? ' - '}</span>
                   {l.title}
                 </td>
                 <td style={{ fontSize: 12, color: '#555' }}>{l.productCount}</td>
@@ -172,7 +172,7 @@ export default function AdminCatalogDetail() {
           <tbody>
             {products.length === 0 && (
               <tr><td colSpan={6} style={{ textAlign: 'center', padding: 16, color: '#888' }}>
-                Empty palette — try “Auto-assign products”.
+                Empty palette - try “Auto-assign products”.
               </td></tr>
             )}
             {products.map(p => (
@@ -186,8 +186,8 @@ export default function AdminCatalogDetail() {
                   </div>
                 </td>
                 <td style={{ fontSize: 12, color: '#555' }}>{p.brand}</td>
-                <td style={{ fontSize: 12, color: '#555' }}>{p.price ?? '—'}</td>
-                <td style={{ fontSize: 12, color: '#666' }}>{p.matchScore != null ? p.matchScore.toFixed(3) : '—'}</td>
+                <td style={{ fontSize: 12, color: '#555' }}>{p.price ?? ' - '}</td>
+                <td style={{ fontSize: 12, color: '#666' }}>{p.matchScore != null ? p.matchScore.toFixed(3) : ' - '}</td>
                 <td>
                   <span style={{
                     padding: '2px 8px',

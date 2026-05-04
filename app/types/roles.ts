@@ -1,4 +1,4 @@
-// 'super_admin' sits above 'admin' — used to gate destructive actions on
+// 'super_admin' sits above 'admin' - used to gate destructive actions on
 // public surfaces (e.g. deleting a product creative directly from the
 // consumer feed). Admin pages remain reachable by both 'admin' and
 // 'super_admin'; only super-admin-gated UI checks the stricter tier.

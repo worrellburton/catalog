@@ -184,7 +184,7 @@ function GenAiPanel({
                     <td style={{ textAlign: 'left', fontWeight: 600 }}>{row.label}</td>
                     <td style={{ textAlign: 'right' }}>{row.count}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(row.spend)}</td>
-                    <td style={{ textAlign: 'right', color: '#64748b' }}>{rate ? `$${rate.toFixed(2)}` : '—'}</td>
+                    <td style={{ textAlign: 'right', color: '#64748b' }}>{rate ? `$${rate.toFixed(2)}` : ' - '}</td>
                     <td style={{ textAlign: 'left', fontSize: 11, color: '#64748b' }}>
                       {Object.entries(row.status).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s}:${n}`).join(' · ')}
                     </td>

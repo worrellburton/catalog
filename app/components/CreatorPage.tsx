@@ -69,7 +69,7 @@ export default function CreatorPage({ creatorName, onClose, onOpenLook, onOpenPr
         Back
       </button>
 
-      {/* Hero — centered profile */}
+      {/* Hero - centered profile */}
       <div className="creator-hero">
         <img
           className="creator-hero-avatar"

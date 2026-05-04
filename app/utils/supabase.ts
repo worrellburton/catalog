@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Public Supabase credentials — anon key is designed to be exposed in client bundles.
+// Public Supabase credentials - anon key is designed to be exposed in client bundles.
 // RLS enforces access control.
 const DEFAULT_SUPABASE_URL = 'https://vtarjrnqvcqbhoclvcur.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =

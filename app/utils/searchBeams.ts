@@ -1,4 +1,4 @@
-// Search-bar beam variants — picked by the admin in /admin/ui/search-bar
+// Search-bar beam variants - picked by the admin in /admin/ui/search-bar
 // and applied site-wide as a class on the bottom-bar pill. Each variant
 // owns its own pseudo-element animation (see app/styles/bottom-bar.css).
 

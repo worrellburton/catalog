@@ -15,7 +15,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
   // Prime the trail: fetch the live creative list and warm asset caches while
   // the visitor reads the marketing page. By the time they tap "Continue with
   // Google" and land on the feed, the data + first frames are already in
-  // memory — no spinner, no shimmer-to-pop, no black gap.
+  // memory - no spinner, no shimmer-to-pop, no black gap.
   useEffect(() => {
     let cancelled = false;
     prefetchHomeFeed().then(rows => {

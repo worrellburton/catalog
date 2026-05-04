@@ -131,7 +131,7 @@ export default function AdminUserDetail() {
     (async () => {
       let prof: ProfileRow | null = null;
 
-      // 1) UUID slug — direct id lookup, no ambiguity.
+      // 1) UUID slug - direct id lookup, no ambiguity.
       if (UUID_RE.test(decoded)) {
         const { data } = await supabase
           .from('profiles')
@@ -193,7 +193,7 @@ export default function AdminUserDetail() {
     return () => { cancelled = true; };
   }, [decoded]);
 
-  // Header info — prefer real profile data over the URL slug. Fall
+  // Header info - prefer real profile data over the URL slug. Fall
   // back to the slug + creator data for legacy creator links.
   const displayName = profile?.full_name || creator?.displayName || decoded;
   const avatarUrl = profile?.avatar_url || creator?.avatar || null;
@@ -347,7 +347,7 @@ export default function AdminUserDetail() {
                     )}
                   </div>
                 )}
-                <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || '—'}</div>
+                <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || ' - '}</div>
                 <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
                 {g.status === 'failed' && g.error && (
                   <div

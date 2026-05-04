@@ -1,4 +1,4 @@
-// /admin/ui — overview cards. Each card is a deep link into a sub-
+// /admin/ui - overview cards. Each card is a deep link into a sub-
 // surface (brand / search-bar). The actual config lives in those
 // subroutes; this index just orients the admin.
 
@@ -20,7 +20,7 @@ const SECTIONS: Array<{ to: string; label: string; blurb: string; icon: JSX.Elem
   {
     to: '/admin/ui/search-bar',
     label: 'Search bar',
-    blurb: 'Animated border beam for the bottom search pill. Five variants — pick one or turn off.',
+    blurb: 'Animated border beam for the bottom search pill. Five variants - pick one or turn off.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="7" />

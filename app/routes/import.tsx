@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 
-/* /import — Pull an existing storefront into Catalog.
+/* /import - Pull an existing storefront into Catalog.
  *
  * Sources are selected via ?source=shopmy|ltk|amazon. Each source
  * gets its own copy and accepted-format hint, but they share the
@@ -28,7 +28,7 @@ const SOURCES: Record<Source, SourceMeta> = {
     urlPlaceholder: 'https://shop.my/yourname',
     fileHint: 'CSV or JSON · up to 25 MB',
     accept: '.csv,.json,application/json,text/csv',
-    intro: 'Bring your shop.my storefront over in one click. Drop your export below or paste your storefront URL — we’ll pull every product, image, and link straight in.',
+    intro: 'Bring your shop.my storefront over in one click. Drop your export below or paste your storefront URL - we’ll pull every product, image, and link straight in.',
   },
   ltk: {
     id: 'ltk',
@@ -203,7 +203,7 @@ function ImportForSource({ meta, onSwitchSource }: { meta: SourceMeta; onSwitchS
           </div>
           <h2>Got it.</h2>
           <p>
-            Your import is queued. We’ll email you when it’s done — usually
+            Your import is queued. We’ll email you when it’s done - usually
             under a minute for a few hundred products, longer for full
             storefronts.
           </p>
@@ -218,7 +218,7 @@ function ImportForSource({ meta, onSwitchSource }: { meta: SourceMeta; onSwitchS
         </li>
         <li>
           <strong>What happens to duplicates?</strong>
-          <span>If a product already exists in your catalog we skip it — same brand + name + URL counts as a match.</span>
+          <span>If a product already exists in your catalog we skip it - same brand + name + URL counts as a match.</span>
         </li>
         <li>
           <strong>Will my links still earn?</strong>

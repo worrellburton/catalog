@@ -54,7 +54,7 @@ export default function AdminAppearance() {
 
       <div className="admin-appearance-section" style={{ marginBottom: 24 }}>
         <h3 className="admin-appearance-section-title">Font Family</h3>
-        <p className="admin-appearance-section-desc">Choose a font for the entire platform — changes apply instantly</p>
+        <p className="admin-appearance-section-desc">Choose a font for the entire platform - changes apply instantly</p>
         <div className="admin-font-grid">
           {fonts.map(f => (
             <button

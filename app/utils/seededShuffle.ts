@@ -3,7 +3,7 @@
 // Why we need a seeded shuffle in the consumer feed:
 // FeedSection and GridView's pool memos used Math.random(), so the same
 // useMemo with the same dep values would produce a different array every
-// time. That defeats React's referential-equality optimizations — the
+// time. That defeats React's referential-equality optimizations - the
 // pool's identity changes, so every downstream consumer (memoized cards,
 // derived layouts) re-renders even when nothing semantically changed.
 //

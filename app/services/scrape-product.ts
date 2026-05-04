@@ -1,7 +1,7 @@
 import { supabase } from '~/utils/supabase';
 import { nonProductUrlReason } from '~/utils/productUrl';
 
-// Modal scraper endpoint — called on retry/add so products don't wait for
+// Modal scraper endpoint - called on retry/add so products don't wait for
 // the 8am UTC daily cron. Gracefully no-ops if the env var isn't set.
 const MODAL_SCRAPER_URL = import.meta.env.VITE_MODAL_SCRAPER_URL || '';
 
@@ -14,7 +14,7 @@ async function _triggerScrape(productId: string, url: string): Promise<void> {
       body: JSON.stringify({ product_id: productId, url }),
     });
   } catch {
-    // Non-fatal — the daily cron will pick it up
+    // Non-fatal - the daily cron will pick it up
   }
 }
 
@@ -214,7 +214,7 @@ export async function reconcileStuckScrapes(staleAfterMinutes = 20): Promise<num
     stale_after_minutes: staleAfterMinutes,
   });
   if (error) {
-    // RPC may not exist yet (migration not applied) — fall back to a
+    // RPC may not exist yet (migration not applied) - fall back to a
     // best-effort client-side update so the panel still self-heals.
     const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000).toISOString();
     const { count } = await supabase

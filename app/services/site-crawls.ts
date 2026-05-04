@@ -215,7 +215,7 @@ const MODAL_PROFILE_CRAWLER_URL = import.meta.env.VITE_MODAL_PROFILE_CRAWLER_URL
 
 export async function triggerCrawl(jobId: string, siteUrl: string): Promise<boolean> {
   if (!MODAL_CRAWLER_URL) {
-    console.warn('VITE_MODAL_CRAWLER_URL not set — crawl not triggered');
+    console.warn('VITE_MODAL_CRAWLER_URL not set - crawl not triggered');
     return false;
   }
 
@@ -241,7 +241,7 @@ export async function triggerProfileCrawl(
   profileName?: string,
 ): Promise<boolean> {
   if (!MODAL_PROFILE_CRAWLER_URL) {
-    console.warn('VITE_MODAL_PROFILE_CRAWLER_URL not set — profile crawl not triggered');
+    console.warn('VITE_MODAL_PROFILE_CRAWLER_URL not set - profile crawl not triggered');
     return false;
   }
 

@@ -86,7 +86,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
           dangerouslySetInnerHTML={{ __html: `
 (function(){
   if(typeof document==='undefined')return;
-  // Block pinch (gesturestart/change/end) — Safari-specific events.
+  // Block pinch (gesturestart/change/end) - Safari-specific events.
   ['gesturestart','gesturechange','gestureend'].forEach(function(evt){
     document.addEventListener(evt,function(e){e.preventDefault();},{passive:false});
   });
@@ -104,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
             two families actually referenced in the stylesheets. The other
             eight families this request used to pull (Plus Jakarta, Outfit,
             Space Grotesk, Sora, Manrope, Poppins, Nunito Sans, Figtree)
-            were never selected by any selector — they were dead bytes on
+            were never selected by any selector - they were dead bytes on
             every page load. Brand-logo fonts are loaded on demand by
             ensureBrandFont() in app/utils/brandFonts.ts when an admin picks
             one, so they don't belong in the global preload either. */}

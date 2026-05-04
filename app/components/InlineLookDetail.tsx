@@ -67,7 +67,7 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
   return (
     <div className="inline-look-detail" ref={containerRef}>
-      {/* Video section — full width popout card */}
+      {/* Video section - full width popout card */}
       <div className="inline-look-video-wrap">
         <video
           ref={videoRef}

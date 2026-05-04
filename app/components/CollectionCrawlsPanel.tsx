@@ -163,7 +163,7 @@ export default function CollectionCrawlsPanel() {
                   <td style={{ fontWeight: 500 }}>{r.collection_name}</td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span>{r.job.site_name || '—'}</span>
+                      <span>{r.job.site_name || ' - '}</span>
                       <a href={r.job.site_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#888', textDecoration: 'none' }}>
                         {r.job.site_url}
                       </a>

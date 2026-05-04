@@ -50,7 +50,7 @@ export async function joinWaitlist(user: AuthUser): Promise<WaitlistStatus | nul
     provider: user.email ? 'google' : null,
   });
 
-  // Row may already exist (duplicate sign-in race) — that's fine, just re-fetch.
+  // Row may already exist (duplicate sign-in race) - that's fine, just re-fetch.
   if (insertError && insertError.code !== '23505') {
     console.error('Failed to join waitlist', insertError);
     return null;

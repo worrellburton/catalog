@@ -17,7 +17,7 @@ export interface ModelPricing {
 }
 
 export const VIDEO_MODEL_PRICING: ModelPricing[] = [
-  // Veo via Google (direct — GOOGLE_API_KEY)
+  // Veo via Google (direct - GOOGLE_API_KEY)
   { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast', group: 'Veo (Google)', provider: 'google', costUsd: 0.10 },
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)', provider: 'google', costUsd: 0.40 },
   { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)', provider: 'google', costUsd: 0.05 },
@@ -50,7 +50,7 @@ export const VIDEO_MODEL_PRICING: ModelPricing[] = [
   // LTX
   { value: 'fal-ai/ltx-2-19b/image-to-video', label: 'LTX-2 19B', group: 'LTX (fal.ai)', provider: 'fal', costUsd: 0.15 },
 
-  // Vidu — multi-image reference model is the headline feature
+  // Vidu - multi-image reference model is the headline feature
   { value: 'fal-ai/vidu/reference-to-video', label: 'Vidu Ref (multi-image)', group: 'Vidu (fal.ai)', provider: 'fal', costUsd: 0.20, multiImage: true, notes: 'Accepts up to 3 reference images (fal.ai cap)' },
   { value: 'fal-ai/vidu/image-to-video', label: 'Vidu', group: 'Vidu (fal.ai)', provider: 'fal', costUsd: 0.15 },
   { value: 'fal-ai/vidu/start-end-to-video', label: 'Vidu Start→End', group: 'Vidu (fal.ai)', provider: 'fal', costUsd: 0.20 },

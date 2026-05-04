@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 
 // Status of each external API the platform talks to. Claude can't read
-// Supabase secrets from the browser, so this registry is hand-maintained —
+// Supabase secrets from the browser, so this registry is hand-maintained  - 
 // when a new provider is wired up add an entry here so the admin can see
 // where the key lives, what it powers, and how to manage it.
 
@@ -82,7 +82,7 @@ const PROVIDERS: ApiProvider[] = [
     category: 'ai',
     scope: 'worker',
     secretKey: 'VIDU_API_KEY',
-    envName: 'Modal worker env (optional — currently routed via fal.ai)',
+    envName: 'Modal worker env (optional - currently routed via fal.ai)',
     status: 'not-configured',
     purpose: 'Direct Vidu API for multi-image reference-to-video (lower margin than via fal)',
     usedBy: [],
@@ -291,7 +291,7 @@ export default function AdminApis() {
                   <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>{p.purpose}</td>
                   <td style={{ textAlign: 'left', fontSize: 11, color: '#64748b' }}>
                     {p.usedBy.length === 0 ? (
-                      <em style={{ color: '#94a3b8' }}>—</em>
+                      <em style={{ color: '#94a3b8' }}> - </em>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {p.usedBy.map(u => <span key={u}>{u}</span>)}

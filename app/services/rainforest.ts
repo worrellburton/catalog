@@ -48,13 +48,13 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
   if (!product.name || !product.url) {
     throw new Error('Amazon product is missing a name or URL');
   }
-  // Require a usable image — without one, downstream image-to-video generation
+  // Require a usable image - without one, downstream image-to-video generation
   // fails with "Field required, loc: ['body', 'image_url']" at fal.ai.
   const imageUrl = product.image_url
     ?? product.images.find(u => typeof u === 'string' && u.trim().length > 0)
     ?? null;
   if (!imageUrl) {
-    throw new Error('Amazon product is missing an image — skipping ingest');
+    throw new Error('Amazon product is missing an image - skipping ingest');
   }
   const payload = {
     name: product.name,
@@ -93,7 +93,7 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
   return { id: inserted.id };
 }
 
-// Batch ingest — used by the search-mode multi-select flow.
+// Batch ingest - used by the search-mode multi-select flow.
 export async function ingestRainforestProducts(products: RainforestProduct[]): Promise<{ inserted: number; failed: number }> {
   let inserted = 0;
   let failed = 0;
