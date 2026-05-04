@@ -2444,13 +2444,13 @@ export default function AdminContent() {
             bottom: 24,
             transform: 'translateX(-50%)',
             zIndex: 9999,
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '12px 18px',
-            background: 'rgba(20, 20, 22, 0.96)',
+            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '10px 16px',
+            background: 'rgba(18, 18, 20, 0.97)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
             color: '#fff',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid rgba(255, 255, 255, 0.10)',
             borderRadius: 999,
             boxShadow: '0 18px 50px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25)',
             animation: 'admin-bulk-bar-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both',
@@ -2463,23 +2463,56 @@ export default function AdminContent() {
                 from { transform: translate(-50%, 24px); opacity: 0; }
                 to   { transform: translate(-50%, 0);    opacity: 1; }
               }
+              .bulk-pill {
+                font-size: 12px; font-weight: 600; line-height: 1;
+                padding: 7px 12px; border-radius: 999px; cursor: pointer;
+                font-family: inherit;
+                background: rgba(255,255,255,0.08);
+                color: #fff;
+                border: 1px solid transparent;
+                transition: background 140ms ease, border-color 140ms ease;
+                white-space: nowrap;
+              }
+              .bulk-pill:hover { background: rgba(255,255,255,0.16); }
+              .bulk-pill:focus-visible { outline: none; border-color: rgba(255,255,255,0.55); }
+              .bulk-pill--primary { background: #fff; color: #111; }
+              .bulk-pill--primary:hover { background: #e5e5e5; }
+              .bulk-pill--ghost { background: transparent; color: rgba(255,255,255,0.75); }
+              .bulk-pill--ghost:hover { background: rgba(255,255,255,0.10); color: #fff; }
+              .bulk-pill--danger { color: #fca5a5; }
+              .bulk-pill--danger:hover { background: rgba(220,38,38,0.22); color: #fff; }
+              .bulk-pill--on { background: rgba(34,197,94,0.20); color: #86efac; }
+              .bulk-pill--on:hover { background: rgba(34,197,94,0.30); color: #fff; }
+              .bulk-pill--off { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+              .bulk-pill--off:hover { background: rgba(148,163,184,0.30); color: #fff; }
+              .bulk-pill--men { background: rgba(59,130,246,0.20); color: #93c5fd; }
+              .bulk-pill--men:hover { background: rgba(59,130,246,0.30); color: #fff; }
+              .bulk-pill--women { background: rgba(236,72,153,0.20); color: #f9a8d4; }
+              .bulk-pill--women:hover { background: rgba(236,72,153,0.30); color: #fff; }
+              .bulk-pill--unisex { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+              .bulk-pill--unisex:hover { background: rgba(148,163,184,0.30); color: #fff; }
+              .bulk-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.12); }
+              .bulk-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.50); }
+              .bulk-group { display: inline-flex; align-items: center; gap: 6px; }
             `}</style>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
+
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
               {selectedProductKeys.size} selected
             </span>
             <button
-              className="admin-btn admin-btn-secondary"
-              style={{ fontSize: 12, padding: '4px 10px' }}
+              className="bulk-pill bulk-pill--ghost"
               onClick={() => { setSelectedProductKeys(new Set()); setLastSelectedIndex(null); }}
             >
               Clear
             </button>
+
+            <span className="bulk-divider" />
+
             <button
-              className="admin-btn admin-btn-primary"
-              style={{ fontSize: 12, padding: '4px 10px' }}
+              className="bulk-pill bulk-pill--primary"
               onClick={() => {
                 // Resolve to the subset with real cloud ids — only those can
-                // drive the ad-generation pipeline.
+                // drive the generation pipeline.
                 const selectedIds: { id: string; name: string }[] = [];
                 for (const k of selectedProductKeys) {
                   const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === k);
@@ -2492,13 +2525,12 @@ export default function AdminContent() {
                 setBatchPicker({ items: selectedIds });
               }}
             >
-              Generate selected
+              Generate
             </button>
             <button
-              className="admin-btn admin-btn-secondary"
-              style={{ fontSize: 12, padding: '4px 10px', color: '#dc2626' }}
+              className="bulk-pill bulk-pill--danger"
               onClick={async () => {
-                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}? This will also remove any generated ads.`)) return;
+                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}? This will also remove any generated creatives.`)) return;
                 // Resolve IDs for real cloud deletes; anything without an id
                 // falls back to the admin_hidden_products table.
                 const selected = [...selectedProductKeys];
@@ -2509,7 +2541,6 @@ export default function AdminContent() {
                   if (match?.id) idsToDelete.push(match.id);
                   else if (match) rowsToHide.push({ brand: match.brand, name: match.name });
                 }
-                // Optimistic hide + persist so UI updates even if cloud is slow.
                 setDeletedProductKeys(prev => {
                   const next = new Set(prev);
                   for (const k of selectedProductKeys) next.add(k);
@@ -2535,33 +2566,39 @@ export default function AdminContent() {
                 setLastSelectedIndex(null);
               }}
             >
-              Delete selected
+              Delete
             </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              style={{ fontSize: 12, padding: '4px 10px', color: '#16a34a' }}
-              onClick={async () => {
-                await bulkSetActive(true);
-                showToast(`Showing ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'} on the feed`);
-              }}
-            >
-              Show on feed
-            </button>
-            <button
-              className="admin-btn admin-btn-secondary"
-              style={{ fontSize: 12, padding: '4px 10px', color: '#cbd5e1' }}
-              onClick={async () => {
-                await bulkSetActive(false);
-                showToast(`Hid ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'} from the feed`);
-              }}
-            >
-              Hide from feed
-            </button>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginLeft: 4 }}>Set gender:</span>
-            <div style={{ display: 'inline-flex', gap: 4 }}>
+
+            <span className="bulk-divider" />
+
+            <span className="bulk-group">
+              <span className="bulk-label">Home</span>
               <button
-                className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#93c5fd' }}
+                className="bulk-pill bulk-pill--on"
+                onClick={async () => {
+                  await bulkSetActive(true);
+                  showToast(`Home on for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                }}
+              >
+                On
+              </button>
+              <button
+                className="bulk-pill bulk-pill--off"
+                onClick={async () => {
+                  await bulkSetActive(false);
+                  showToast(`Home off for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                }}
+              >
+                Off
+              </button>
+            </span>
+
+            <span className="bulk-divider" />
+
+            <span className="bulk-group">
+              <span className="bulk-label">Gender</span>
+              <button
+                className="bulk-pill bulk-pill--men"
                 onClick={async () => {
                   const n = await bulkSetGender('male');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Men's`);
@@ -2570,8 +2607,7 @@ export default function AdminContent() {
                 Men's
               </button>
               <button
-                className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#f9a8d4' }}
+                className="bulk-pill bulk-pill--women"
                 onClick={async () => {
                   const n = await bulkSetGender('female');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Women's`);
@@ -2580,8 +2616,7 @@ export default function AdminContent() {
                 Women's
               </button>
               <button
-                className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#cbd5e1' }}
+                className="bulk-pill bulk-pill--unisex"
                 onClick={async () => {
                   const n = await bulkSetGender('unisex');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Unisex`);
@@ -2589,7 +2624,7 @@ export default function AdminContent() {
               >
                 Unisex
               </button>
-            </div>
+            </span>
           </div>
         )}
         <div className="admin-table-wrap">
