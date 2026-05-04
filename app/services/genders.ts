@@ -133,6 +133,27 @@ export function inferProductGenderFromName(name: string | null | undefined): Pro
   return null;
 }
 
+// Type-column → gender. Only the truly gendered categories appear here;
+// every other type (shoes, jacket, sweater, etc.) is treated as unisex
+// in the fallback below.
+const FEMALE_TYPES = new Set<string>([
+  'dress', 'gown', 'skirt', 'blouse', 'bra', 'lingerie', 'leggings',
+  'jumpsuit', 'romper', 'bikini', 'swimsuit', 'heels', 'pumps', 'wedge',
+  'wedges', 'maternity',
+]);
+const MALE_TYPES = new Set<string>([
+  'tie', 'bowtie', 'tuxedo', 'suit', 'boxers', 'briefs',
+]);
+
+export function inferProductGenderFromType(type: string | null | undefined): ProductGender {
+  if (!type) return null;
+  const t = type.trim().toLowerCase();
+  if (!t) return null;
+  if (FEMALE_TYPES.has(t)) return 'female';
+  if (MALE_TYPES.has(t)) return 'male';
+  return null;
+}
+
 export interface AuditCounts {
   scanned: number;
   updated: number;
@@ -159,14 +180,63 @@ export async function auditAllUserGenders(): Promise<AuditCounts> {
   return result;
 }
 
+/**
+ * Walk every product and write a gender to any row that doesn't have
+ * one yet. Uses the strongest signal first, then falls back through
+ * weaker ones so an "Untagged" filter ends up empty after a single
+ * audit pass:
+ *   1. Explicit gender tokens in the product name ("Men's", "Women's").
+ *   2. The type column ("dress" → female, "tie" → male).
+ *   3. Brand history — if the brand's other rows skew strongly to one
+ *      gender, inherit that.
+ *   4. Final fallback — 'unisex' so the column is never left blank.
+ *
+ * Existing values are preserved unless the strongest signal (name)
+ * disagrees, in which case the name wins (the admin explicitly typed
+ * "Men's"/"Women's" — that's authoritative).
+ */
 export async function auditAllProductGenders(): Promise<AuditCounts> {
   const result: AuditCounts = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
   if (!supabase) return result;
-  const { data } = await supabase.from('products').select('id, name, gender');
-  for (const row of data || []) {
+  const { data } = await supabase.from('products').select('id, name, brand, type, gender');
+  const rows = data || [];
+
+  // Pre-compute per-brand gender histograms so we can vote on rows that
+  // have no name/type signal. Only count rows that are already tagged;
+  // unknowns can't vote for themselves.
+  const brandHist = new Map<string, { male: number; female: number; unisex: number }>();
+  for (const r of rows) {
+    const brand = (r.brand as string | null)?.trim().toLowerCase();
+    const g = r.gender as ProductGender;
+    if (!brand || !g) continue;
+    const h = brandHist.get(brand) ?? { male: 0, female: 0, unisex: 0 };
+    if (g === 'male' || g === 'female' || g === 'unisex') h[g]++;
+    brandHist.set(brand, h);
+  }
+
+  const brandGuess = (brand: string | null | undefined): ProductGender => {
+    const key = brand?.trim().toLowerCase();
+    if (!key) return null;
+    const h = brandHist.get(key);
+    if (!h) return null;
+    const total = h.male + h.female + h.unisex;
+    if (total < 3) return null; // not enough signal to vote
+    // Need a clear majority (>= 60 %) before we let the brand drive a
+    // single product's gender. Otherwise fall through to 'unisex'.
+    if (h.female / total >= 0.6) return 'female';
+    if (h.male / total >= 0.6) return 'male';
+    if (h.unisex / total >= 0.6) return 'unisex';
+    return null;
+  };
+
+  for (const row of rows) {
     result.scanned++;
-    const inferred = inferProductGenderFromName(row.name);
-    if (inferred === null) { result.skipped++; continue; }
+    const fromName = inferProductGenderFromName(row.name);
+    const fromType = inferProductGenderFromType(row.type as string | null);
+    const fromBrand = brandGuess(row.brand as string | null);
+    const inferred: ProductGender =
+      fromName ?? fromType ?? fromBrand ?? 'unisex';
+
     if (row.gender === inferred) { result.skipped++; continue; }
     const { error } = await supabase
       .from('products')
