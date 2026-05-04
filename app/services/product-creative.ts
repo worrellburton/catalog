@@ -143,120 +143,44 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 export async function getHomeFeed(): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Visibility contract: every product whose Home toggle is on appears
-  // on the consumer feed. Period. We used to require a status='live'
-  // creative + video_url, but that left admins flipping Home on for
-  // products that had no creative yet — they'd update the admin row
-  // and nothing would show up on the consumer surface, which made the
-  // toggle feel broken.
+  // Strict video-only contract:
+  //   1. status='live' on the creative + a real video_url
+  //   2. The product's Home toggle is on (products.is_active=true)
+  //   3. The product has a type set — untyped rows are usually scrape
+  //      detritus (e.g. a Dune book cover, a houseplant) that don't
+  //      belong on a fashion grid.
+  //   4. The shopper-gender filter (post-fetch).
+  // is_elite sorts after boost so admin-flagged "really nice" creatives
+  // lead the grid without being a hard gate.
   //
-  // New flow:
-  //   1. Pull every active, typed product (the Home / type gates).
-  //   2. In parallel, pull every status='live' creative with a video.
-  //   3. Join them client-side: each product gets its newest live
-  //      creative (or none). Products without a creative still render
-  //      — they fall back to the static product image; CreativeCard
-  //      already handles a null video_url gracefully.
-  //   4. Sort: boosted creatives first, then elite-flagged, then
-  //      products with creatives, then product-only rows. Newest
-  //      created_at within each tier.
-  //   5. Apply the shopper-gender filter (post-fetch).
-  const [productsRes, creativesRes] = await Promise.all([
-    supabase
-      .from('products')
-      .select('id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender, created_at')
-      .eq('is_active', true)
-      .not('type', 'is', null),
-    supabase
-      .from('product_creative')
-      .select('id, product_id, video_url, thumbnail_url, status, is_elite, boosted_until, created_at')
-      .eq('status', 'live')
-      .not('video_url', 'is', null),
-  ]);
-
-  if (productsRes.error) {
-    console.error('[getHomeFeed] products query error:', productsRes.error.message);
+  // We tried briefly surfacing products without creatives (rendering
+  // their static product image), but the consumer feed is a video
+  // catalog — static photos look broken alongside the auto-playing
+  // tiles. So products without a status='live' creative are excluded,
+  // even when Home is on. The admin Content page's "Show without
+  // creative" tab surfaces those rows so they can have creatives
+  // generated.
+  const { data, error } = await supabase
+    .from('product_creative')
+    .select(`
+      *,
+      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+    `)
+    .eq('status', 'live')
+    .eq('product.is_active', true)
+    .not('product.type', 'is', null)
+    .not('video_url', 'is', null)
+    .order('boosted_until', { ascending: false, nullsFirst: false })
+    .order('is_elite',      { ascending: false, nullsFirst: false })
+    .order('created_at',    { ascending: false });
+  if (error) {
+    console.error('[getHomeFeed] query error:', error.message);
     return [];
   }
-  if (creativesRes.error) {
-    console.warn('[getHomeFeed] creatives query error (continuing without):', creativesRes.error.message);
-  }
-
-  // Pick the newest live creative per product. If a product has multiple
-  // live creatives, the most recently created one wins.
-  const newestCreativeByProduct = new Map<string, {
-    id: string;
-    product_id: string;
-    video_url: string | null;
-    thumbnail_url: string | null;
-    status: string | null;
-    is_elite: boolean | null;
-    boosted_until: string | null;
-    created_at: string | null;
-  }>();
-  for (const c of (creativesRes.data || []) as Array<{
-    id: string; product_id: string; video_url: string | null; thumbnail_url: string | null;
-    status: string | null; is_elite: boolean | null; boosted_until: string | null; created_at: string | null;
-  }>) {
-    const prev = newestCreativeByProduct.get(c.product_id);
-    if (!prev || (c.created_at ?? '') > (prev.created_at ?? '')) {
-      newestCreativeByProduct.set(c.product_id, c);
-    }
-  }
-
-  // Synthesize ProductAd rows. For products without a live creative we
-  // mint a synthetic id ("product:<uuid>") so consumer call sites that
-  // key on creative.id still get a stable identifier. The ad id never
-  // hits the DB — it's purely a render-time handle.
-  const products = (productsRes.data || []) as Array<{
-    id: string; name: string | null; brand: string | null; price: string | null;
-    image_url: string | null; images: string[] | null; url: string | null; type: string | null;
-    catalog_tags: string[] | null; is_active: boolean | null; is_elite: boolean | null;
-    gender: string | null; created_at: string | null;
-  }>;
-
-  const rows: ProductAd[] = products.map(p => {
-    const c = newestCreativeByProduct.get(p.id);
-    return {
-      id: c?.id ?? `product:${p.id}`,
-      product_id: p.id,
-      look_id: null,
-      title: null,
-      description: null,
-      video_url: c?.video_url ?? null,
-      thumbnail_url: c?.thumbnail_url ?? null,
-      affiliate_url: null,
-      is_elite: !!c?.is_elite,
-      boosted_until: c?.boosted_until ?? null,
-      // Mirror the embedded shape getCreativesByCatalogTag etc. produce.
-      product: p as unknown as ProductAd['product'],
-      // Carry the join-state forward so the sort can prefer creatived rows.
-      _hasCreative: !!c,
-      _createdAt: c?.created_at ?? p.created_at ?? null,
-    } as ProductAd & { _hasCreative: boolean; _createdAt: string | null };
-  });
-
-  // Sort: boosted (live boost still active) → elite → has-creative →
-  // newest first (creative created_at when present, else product
-  // created_at). The internal _hasCreative / _createdAt fields are
-  // stripped before return so consumers never see them.
-  const now = Date.now();
-  rows.sort((a, b) => {
-    const aBoost = a.boosted_until && new Date(a.boosted_until).getTime() > now ? 1 : 0;
-    const bBoost = b.boosted_until && new Date(b.boosted_until).getTime() > now ? 1 : 0;
-    if (aBoost !== bBoost) return bBoost - aBoost;
-    if (!!b.is_elite !== !!a.is_elite) return (b.is_elite ? 1 : 0) - (a.is_elite ? 1 : 0);
-    const aHas = (a as ProductAd & { _hasCreative: boolean })._hasCreative ? 1 : 0;
-    const bHas = (b as ProductAd & { _hasCreative: boolean })._hasCreative ? 1 : 0;
-    if (aHas !== bHas) return bHas - aHas;
-    const aT = (a as ProductAd & { _createdAt: string | null })._createdAt ?? '';
-    const bT = (b as ProductAd & { _createdAt: string | null })._createdAt ?? '';
-    return bT.localeCompare(aT);
-  });
-
-  return rows
-    .filter(ad => passesGenderFilter(ad.product as { gender?: string | null } | null))
-    .map(({ _hasCreative, _createdAt, ...rest }: ProductAd & { _hasCreative?: boolean; _createdAt?: string | null }) => rest as ProductAd);
+  const rows = (data || []) as ProductAd[];
+  return rows.filter(ad =>
+    passesGenderFilter(ad.product as { gender?: string | null } | null),
+  );
 }
 
 // ── Home-feed prefetch ──────────────────────────────────────────────────
@@ -280,7 +204,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
 // mass admin Home-toggle flip).
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v3';
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v4';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -357,6 +281,7 @@ export function invalidateHomeFeed(): void {
         'catalog:live-ads-cache',         // pre-rename
         'catalog:home-feed-cache',        // v1
         'catalog:home-feed-cache:v2',     // v2 (creative-only contract)
+        'catalog:home-feed-cache:v3',     // v3 (briefly included product-only rows)
         HOME_FEED_LS_KEY,                 // current
       ];
       for (const base of legacyBases) {
