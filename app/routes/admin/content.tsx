@@ -1986,7 +1986,7 @@ export default function AdminContent() {
             title="Curated looks shown on the public feed"
           >
             Published
-            <span className="admin-tab-badge">{looks.length}</span>
+            <span className="admin-tab-badge">{lookRows.length}</span>
           </button>
           <button
             className={`admin-tab ${looksFilter === 'unpublished' ? 'active' : ''}`}
