@@ -4082,6 +4082,78 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .proj-formula strong { color: #0f172a; }
 
+/* Hover tooltip — rendered inside an SVG foreignObject so we get full
+   HTML / flexbox control. */
+.proj-tooltip {
+  width: 240px;
+  padding: 12px 14px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-family: inherit;
+  pointer-events: none;
+}
+.proj-tooltip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+.proj-tooltip-month {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.proj-tooltip-revenue {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.proj-tooltip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.proj-tooltip-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.proj-tooltip-row-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+.proj-tooltip-row-current {
+  color: #fff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.proj-tooltip-row-delta {
+  font-weight: 600;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.proj-tooltip-row-delta.positive {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+}
+.proj-tooltip-row-delta.negative {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
 /* Dark-mode mirrors */
 .admin-dark .proj-card {
   background: #18181b;
