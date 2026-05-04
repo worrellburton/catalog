@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import CatalogLogo from './CatalogLogo';
-import { prefetchLiveAds } from '~/services/product-creative';
+import { prefetchHomeFeed } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 
 interface LandingPageProps {
@@ -18,7 +18,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
   // memory — no spinner, no shimmer-to-pop, no black gap.
   useEffect(() => {
     let cancelled = false;
-    prefetchLiveAds().then(rows => {
+    prefetchHomeFeed().then(rows => {
       if (cancelled) return;
       primeTrailAssets(rows);
     }).catch(() => { /* offline / no-op */ });

@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -242,7 +242,7 @@ export default function ContinuousFeed({
   // renders in the first React commit instead of after the network round
   // trip. Network revalidation kicks off in parallel and overwrites state
   // when it lands.
-  const initialCached = useMemo(() => getCachedLiveAds(), []);
+  const initialCached = useMemo(() => getCachedHomeFeed(), []);
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
   const [creativesLoading, setCreativesLoading] = useState(!initialCached);
   useEffect(() => {
@@ -253,10 +253,10 @@ export default function ContinuousFeed({
       // Gender-aware re-fetch. Called once on mount and again whenever
       // setShopperGender fires — without this, a male/female user sees
       // the unfiltered cached feed forever because module-load
-      // prefetchLiveAds() ran with shopperGender='unknown' before auth
-      // resolved. setShopperGender invalidates liveAdsPromise so this
+      // prefetchHomeFeed() ran with shopperGender='unknown' before auth
+      // resolved. setShopperGender invalidates homeFeedPromise so this
       // call always hits a fresh fetch with the current scope.
-      prefetchLiveAds()
+      prefetchHomeFeed()
         .then(data => {
           if (cancelled) return;
           setLiveCreatives(data);
@@ -660,7 +660,7 @@ export default function ContinuousFeed({
       if (error) {
         console.error('[ContinuousFeed] deleteProductAd failed:', error);
         alert(`Could not delete creative: ${error}`);
-        getLiveAds().then(setLiveCreatives).catch(() => {});
+        getHomeFeed().then(setLiveCreatives).catch(() => {});
       }
       return;
     }
@@ -668,7 +668,7 @@ export default function ContinuousFeed({
     if (error) {
       console.error('[ContinuousFeed] deleteProduct failed:', error);
       alert(`Could not delete product: ${error}`);
-      getLiveAds().then(setLiveCreatives).catch(() => {});
+      getHomeFeed().then(setLiveCreatives).catch(() => {});
     }
   }, [liveCreatives]);
 

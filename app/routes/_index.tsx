@@ -79,7 +79,7 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { catalogNames } from '~/data/catalogNames';
 import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchLiveAds, setShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -224,7 +224,7 @@ export default function Home() {
       if (feedReady && floorReached) dismiss();
     };
     const floor = window.setTimeout(() => { floorReached = true; tryDismiss(); }, SPLASH_MIN_MS);
-    prefetchLiveAds()
+    prefetchHomeFeed()
       .then(rows => {
         // Pre-warm posters from the FRESH list while the splash is still
         // up so they're in browser cache by the time the feed renders.
@@ -755,7 +755,7 @@ export default function Home() {
   // lookup returns nothing for the active product.
   useEffect(() => {
     let cancelled = false;
-    prefetchLiveAds()
+    prefetchHomeFeed()
       .then(rows => {
         if (cancelled) return;
         primeTrailAssets(rows.slice(0, 32));
