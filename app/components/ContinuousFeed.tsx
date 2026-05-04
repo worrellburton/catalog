@@ -413,6 +413,12 @@ export default function ContinuousFeed({
   // directly via search_creatives_hybrid, so each result row already carries
   // the joined product fields — no client-side hydration through
   // products/look_products needed.
+  //
+  // NOTE: we intentionally do NOT merge filteredCreatives into
+  // semanticallyOrderedCreatives when nl-search returns results. filteredCreatives
+  // uses a substring catalog_tags match (e.g. "tennis shoes" → matches "shoes")
+  // which is much broader than nl-search's canonical type filter, causing
+  // unrelated products (skirts, dresses) to appear after the correct results land.
   const semanticCreatives = useMemo<ProductAd[]>(() => {
     if (!semantic.creatives.length) return [];
     return semantic.creatives.map(c => ({
@@ -500,25 +506,18 @@ export default function ContinuousFeed({
     return matches;
   }, [liveCreatives, committedQuery, searchQuery]);
 
-  // When the semantic lane returned product hits, surface them at the top of
-  // the creative grid in rank order, then dedupe the rest of filteredCreatives
-  // so the same product can't appear twice. Falls through to filteredCreatives
-  // unchanged when there are no semantic product matches.
+  // When the semantic lane returned product hits, use ONLY those results.
+  // Do NOT append filteredCreatives: it uses a substring catalog_tags match
+  // (e.g. a product tagged "tennis shoes" matches a "shoes" search), which
+  // is broader than nl-search's canonical product.type filter and causes
+  // unrelated items to appear a few seconds after the correct results land.
+  // Falls through to filteredCreatives only when nl-search returned nothing.
   const semanticallyOrderedCreatives = useMemo<ProductAd[]>(() => {
     if (semanticCreatives.length === 0) return filteredCreatives;
     const seen = new Set<string>();
     const out: ProductAd[] = [];
     for (const c of semanticCreatives) {
       if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      out.push(c);
-    }
-    for (const c of filteredCreatives) {
-      if (seen.has(c.id)) continue;
-      // Also dedupe by product_id so we don't show two videos for the same
-      // product (semantic hit + elite rotation entry for the same product).
-      const productId = c.product_id;
-      if (productId && out.some(x => x.product_id === productId)) continue;
       seen.add(c.id);
       out.push(c);
     }
