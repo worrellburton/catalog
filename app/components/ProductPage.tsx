@@ -233,32 +233,50 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
 /** Look-creative tile for the "You might also like" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video. */
 function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLButtonElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inViewport, setInViewport] = useState(false);
-  // Same trailId LookCard / LookOverlay use, so a tap from this grid morphs
-  // straight into the look hero with the shared <video> element.
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const videoUrl = normalizeLookVideoUrl(look.video, basePath);
-  const setVideoSlot = useTrailVideo(
-    inViewport ? trailId : undefined,
-    inViewport ? (videoUrl || undefined) : undefined,
-  );
-  const setSlot = useCallback((node: HTMLDivElement | null) => {
-    wrapRef.current = node;
-    setVideoSlot(node);
-  }, [setVideoSlot]);
 
   useEffect(() => {
     const node = wrapRef.current;
     if (!node) return;
     const obs = new IntersectionObserver(
       es => es.forEach(e => setInViewport(e.isIntersecting)),
-      { rootMargin: '200px' },
+      { rootMargin: '400px' },
     );
     obs.observe(node);
     return () => obs.disconnect();
   }, []);
+
+  // Belt-and-suspenders: force play() once frames decode + on every
+  // visibility return. Mobile Safari pauses videos on tab background
+  // and the muted-autoplay flag can fail to evaluate when the element
+  // is JS-created with src set after attributes; rendering the <video>
+  // declaratively (every attribute on the element from creation) plus
+  // these retries makes muted autoplay actually fire on mobile.
+  useEffect(() => {
+    if (!inViewport) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const kick = () => { if (v.paused) void v.play().catch(() => {}); };
+    if (v.readyState >= 2) kick();
+    v.addEventListener('loadeddata', kick);
+    v.addEventListener('canplay', kick);
+    const onVis = () => { if (!document.hidden) kick(); };
+    document.addEventListener('visibilitychange', onVis);
+    const interval = window.setInterval(kick, 1000);
+    const stopAt = window.setTimeout(() => window.clearInterval(interval), 8000);
+    return () => {
+      v.removeEventListener('loadeddata', kick);
+      v.removeEventListener('canplay', kick);
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(interval);
+      window.clearTimeout(stopAt);
+    };
+  }, [inViewport, videoUrl]);
 
   // Resolve creator identity in priority order:
   //   1. Static creators map (real handles like @lilywittman/@garrett)
@@ -274,8 +292,24 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
   const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
 
   return (
-    <button type="button" className="pd-look-tile" onClick={() => onOpen(look)}>
-      <div ref={setSlot} className="pd-look-tile-video" data-trail-id={trailId} />
+    <button type="button" className="pd-look-tile" onClick={() => onOpen(look)} ref={wrapRef}>
+      {videoUrl && inViewport && (
+        <video
+          ref={videoRef}
+          className="pd-look-tile-video"
+          data-trail-id={trailId}
+          src={videoUrl}
+          muted
+          autoPlay
+          loop
+          playsInline
+          preload="auto"
+          crossOrigin="anonymous"
+        />
+      )}
+      {(!videoUrl || !inViewport) && (
+        <div className="pd-look-tile-video" data-trail-id={trailId} />
+      )}
 
       <div className="pd-look-tile-meta">
         {(avatarUrl || displayName) && (
