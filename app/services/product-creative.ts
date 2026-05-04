@@ -193,7 +193,12 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
 let homeFeedPromise: Promise<ProductAd[]> | null = null;
 let homeFeedFetchedAt = 0;
 const HOME_FEED_TTL_MS = 60_000;
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache';
+// Versioned key — bumping this number invalidates every existing
+// localStorage cache the next time a consumer hits the page. Bump it
+// whenever the feed-shape contract changes or whenever stale caches
+// start surfacing content that should have been pulled (e.g. after a
+// mass admin Home-toggle flip).
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v2';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -245,7 +250,12 @@ export function prefetchHomeFeed(): Promise<ProductAd[]> {
   }
   homeFeedFetchedAt = now;
   homeFeedPromise = getHomeFeed().then(rows => {
-    if (rows.length > 0) writeHomeFeedToStorage(rows);
+    // Always overwrite the cache, even when the fresh fetch is empty.
+    // Otherwise an admin who turns every Home toggle off ends up with
+    // a stale cache that keeps hydrating the consumer feed forever —
+    // the empty fetch was treated as "skip the write" and the old
+    // rows stuck around on every reload.
+    writeHomeFeedToStorage(rows);
     return rows;
   });
   // If the fetch errors out, drop the cache so the next call retries.
@@ -257,11 +267,19 @@ export function invalidateHomeFeed(): void {
   homeFeedPromise = null;
   homeFeedFetchedAt = 0;
   if (typeof window !== 'undefined') {
-    // Drop both the gender-scoped variant for the current shopper AND
-    // the bare key, so an admin invalidation clears every cached view.
+    // Drop every gender-scoped variant for both the current and any
+    // historical key versions, so an admin invalidation clears every
+    // cached view regardless of which build wrote it.
     try {
-      for (const suffix of ['', ':male', ':female']) {
-        window.localStorage.removeItem(HOME_FEED_LS_KEY + suffix);
+      const legacyBases = [
+        'catalog:live-ads-cache',     // pre-rename
+        'catalog:home-feed-cache',    // v1
+        HOME_FEED_LS_KEY,             // current
+      ];
+      for (const base of legacyBases) {
+        for (const suffix of ['', ':male', ':female']) {
+          window.localStorage.removeItem(base + suffix);
+        }
       }
     } catch { /* ignore */ }
   }
