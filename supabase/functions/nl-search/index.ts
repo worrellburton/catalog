@@ -53,7 +53,7 @@ const TWELVELABS_TIMEOUT_MS = 600;
 // only treated as a hit when both versions match AND expires_at is in the
 // future. Default TTL is 30 days from write.
 const EMBED_V        = 1;
-const EXPANSION_V    = 1;
+const EXPANSION_V    = 2;  // bumped: expire stale bad-example cache entries
 // Daily cache refresh: keeps repeat searches under <1s but ensures users
 // see freshly-ingested products without waiting 30 days for cache rollover.
 const CACHE_TTL_DAYS = 1;
@@ -98,14 +98,67 @@ const CANONICAL_TYPES_FALLBACK: string[] = [
   'Underwear', 'Activewear', 'Loungewear', 'Swimwear',
   'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules',
   'Hat', 'Bag', 'Scarf', 'Socks',
-  'Fragrance', 'Skincare', 'Book', 'Yoga',
+  'Fragrance', 'Skincare', 'Haircare', 'Makeup', 'Decor', 'Book', 'Yoga',
 ];
+
+// Taxonomy: dynamic Haiku examples loaded from product_taxonomy table.
+// Refreshed every 5 min alongside canonical types.  Fails gracefully
+// when the table doesn't exist yet (pre-migration).
+interface TaxonomyRow { type: string; category: string | null; synonyms: string[] | null; keywords: string | null; }
+let TAXONOMY_CACHE: { examples: string; loaded_at: number } | null = null;
+
+async function loadTaxonomyExamples(admin: ReturnType<typeof createClient>): Promise<string> {
+  const now = Date.now();
+  if (TAXONOMY_CACHE && now - TAXONOMY_CACHE.loaded_at < CANONICAL_TYPES_TTL_MS) {
+    return TAXONOMY_CACHE.examples;
+  }
+  try {
+    const { data, error } = await admin
+      .from('product_taxonomy')
+      .select('type, category, synonyms, keywords')
+      .not('synonyms', 'is', null);
+    if (error) throw error;
+    const rows = (data ?? []) as TaxonomyRow[];
+    // Build one few-shot example per type using its first synonym as the
+    // "user typed" query — teaches Haiku that synonym → canonical type.
+    const lines = rows
+      .filter(r => r.synonyms && r.synonyms.length > 0)
+      .map(r => {
+        const syn = r.synonyms![0];
+        const kw  = r.keywords ?? '';
+        return `"${syn}" → {"intent":"browse","types":["${r.type}"],"anchor_type":null,"pair_types":null,"keywords":"${kw}"}`;
+      });
+    const examples = lines.join('\n');
+    TAXONOMY_CACHE = { examples, loaded_at: now };
+    return examples;
+  } catch {
+    // Table may not exist yet — return last cached value or empty string.
+    return TAXONOMY_CACHE?.examples ?? '';
+  }
+}
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
+}
+
+// ── Fashion gate for visual (TwelveLabs Marengo) lane ────────────────────────
+// Marengo is trained on fashion imagery — it helps for outfit/pairing/vibe
+// queries but actively hurts for non-fashion categories (candles, toothbrush,
+// skincare) by pulling visually similar but semantically wrong results.
+const FASHION_TYPES = new Set([
+  'Top', 'Jacket', 'Pants', 'Shorts', 'Skirt', 'Dress', 'Coat',
+  'Activewear', 'Loungewear', 'Underwear', 'Swimwear',
+  'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules',
+  'Hat', 'Bag', 'Scarf', 'Socks',
+]);
+
+function isFashionQuery(intent: 'browse' | 'pairing' | 'vibe', types: string[] | null): boolean {
+  if (intent === 'vibe' || intent === 'pairing') return true;
+  if (!types || types.length === 0) return false;
+  return types.some(t => FASHION_TYPES.has(t));
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -152,8 +205,14 @@ type SearchResult = CreativeRow & { score: number };
 
 // ── Claude Haiku: query expansion ────────────────────────────────────────────
 
-async function expandQueryWithHaiku(query: string, anthropicKey: string, canonicalTypes: string[]): Promise<QueryExpansion> {
+async function expandQueryWithHaiku(
+  query: string,
+  anthropicKey: string,
+  canonicalTypes: string[],
+  taxonomyExamples = '',
+): Promise<QueryExpansion> {
   const typeList = canonicalTypes.join(', ');
+  const dynamicExamples = taxonomyExamples ? `\n${taxonomyExamples}` : '';
   const prompt = `You are a multi-category catalog search planner. The catalog spans fashion AND non-fashion (beauty, home, tech, lifestyle). It contains these exact product types:
 ${typeList}
 
@@ -161,18 +220,21 @@ User query: "${query}"
 
 Decide intent and return ONLY a JSON object with these exact fields:
 - "intent": "browse" if the user is shopping a category | "pairing" if they want what to wear with something they have | "vibe" if it's an abstract aesthetic / mood with no specific category
-- "types": array of product types from the list above. Pick the closest matches — may include non-fashion types (e.g. "hair cream" → ["Hair Cream"], "candles" → ["Candle"], "perfume" → ["Fragrance"]). For broad fashion terms include adjacent types (e.g. "pants" → ["Pants","Shorts","Activewear"], "shoes" → ["Sneakers","Boots","Sandals","Heels","Loafers","Flats","Mules"]). For specific terms narrow it. Empty array when intent is "pairing" or "vibe".
+- "types": array of product types from the list above. Pick the closest canonical type — use "Haircare" for hair products, "Decor" for candles/home decor, "Fragrance" for perfume/cologne. For broad fashion terms include adjacent types (e.g. "pants" → ["Pants","Shorts","Activewear"], "shoes" → ["Sneakers","Boots","Sandals","Heels","Loafers","Flats","Mules"]). For specific terms narrow it. Empty array when intent is "pairing" or "vibe". If nothing matches, return empty array.
 - "anchor_type": for intent=pairing only, the type of the anchor item. null otherwise.
 - "pair_types": for intent=pairing only, the complementary types to surface (NOT the anchor). null otherwise.
 - "keywords": the query stripped of the category noun, used for in-category ranking. Keep as a short phrase.
 
 Examples:
 "pants"                          → {"intent":"browse","types":["Pants","Shorts","Activewear"],"anchor_type":null,"pair_types":null,"keywords":""}
-"hair cream"                     → {"intent":"browse","types":["Hair Cream"],"anchor_type":null,"pair_types":null,"keywords":""}
-"candles"                        → {"intent":"browse","types":["Candle"],"anchor_type":null,"pair_types":null,"keywords":""}
+"hair cream"                     → {"intent":"browse","types":["Haircare"],"anchor_type":null,"pair_types":null,"keywords":""}
+"candles"                        → {"intent":"browse","types":["Decor"],"anchor_type":null,"pair_types":null,"keywords":""}
+"toothbrush"                     → {"intent":"browse","types":[],"anchor_type":null,"pair_types":null,"keywords":"toothbrush"}
 "white sneakers"                 → {"intent":"browse","types":["Sneakers"],"anchor_type":null,"pair_types":null,"keywords":"white"}
 "what to wear with white sneakers" → {"intent":"pairing","types":[],"anchor_type":"Sneakers","pair_types":["Top","Pants","Shorts","Hat"],"keywords":"white"}
-"quiet luxury"                   → {"intent":"vibe","types":[],"anchor_type":null,"pair_types":null,"keywords":"quiet luxury"}
+"white jeans combination"        → {"intent":"pairing","types":[],"anchor_type":"Pants","pair_types":["Top","Jacket","Sneakers"],"keywords":"white jeans"}
+"party dress red"                → {"intent":"browse","types":["Dress"],"anchor_type":null,"pair_types":null,"keywords":"red"}
+"quiet luxury"                   → {"intent":"vibe","types":[],"anchor_type":null,"pair_types":null,"keywords":"quiet luxury"}${dynamicExamples}
 
 IMPORTANT: only choose types that appear in the list above. If no listed type matches the query, return an empty types array and let dense+BM25 retrieval handle it.
 
@@ -393,8 +455,11 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(supabaseUrl, serviceKey);
   const gender = body.gender ?? null;
   const cacheKey = normalizeQueryForCache(query);
-  // Load canonical types from the DB view (cached in module scope, refreshed every 5 min).
-  const canonicalTypes = await loadCanonicalTypes(admin);
+  // Load canonical types and taxonomy examples in parallel (both cached in module scope).
+  const [canonicalTypes, taxonomyExamples] = await Promise.all([
+    loadCanonicalTypes(admin),
+    loadTaxonomyExamples(admin),
+  ]);
   // ── Step 1: cache lookup ──────────────────────────────────────────────────
   const cache = await readCache(admin, cacheKey);
 
@@ -420,7 +485,7 @@ Deno.serve(async (req: Request) => {
     ? Promise.resolve({ ...cache.expansion, _source: 'haiku' })
     : needExpansion && anthropicKey
       ? Promise.race([
-          expandQueryWithHaiku(query, anthropicKey, canonicalTypes)
+          expandQueryWithHaiku(query, anthropicKey, canonicalTypes, taxonomyExamples)
             .then(e => ({ ...e, _source: 'haiku' as const }))
             .catch(err => {
               console.warn('[nl-search] haiku expand failed:', err);
@@ -432,21 +497,25 @@ Deno.serve(async (req: Request) => {
         ])
       : Promise.resolve({ ...expansionFromStatic(query), _source: 'static' as const });
 
-  const [embedding, expansion] = await Promise.all([embedTask, expansionTask]);
+  // TwelveLabs Marengo: launched in parallel with embed+haiku so it adds
+  // zero net latency (Marengo ~200ms, well inside Haiku's 2500ms window).
+  // The result is gated below by isFashionQuery — non-fashion queries
+  // (candles, toothbrush, skincare) discard it to avoid visual drift.
+  const visualTask: Promise<number[] | null> = twelveLabsKey
+    ? Promise.race([
+        embedTextTwelveLabs(query, twelveLabsKey).catch(err => {
+          console.warn('[nl-search] marengo failed:', err);
+          return null;
+        }),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), TWELVELABS_TIMEOUT_MS)),
+      ])
+    : Promise.resolve(null);
 
-  // Visual lane (Marengo): only fire for vibe queries where dense+BM25
-  // alone struggle. Sequential after the parallel block because we need
-  // the resolved intent first — but the cost is paid only on vibes.
-  let visualEmbedding: number[] | null = null;
-  if (expansion.intent === 'vibe' && twelveLabsKey) {
-    visualEmbedding = await Promise.race([
-      embedTextTwelveLabs(query, twelveLabsKey).catch(err => {
-        console.warn('[nl-search] marengo failed:', err);
-        return null;
-      }),
-      new Promise<null>(resolve => setTimeout(() => resolve(null), TWELVELABS_TIMEOUT_MS)),
-    ]);
-  }
+  const [embedding, expansion, visualEmbeddingRaw] = await Promise.all([embedTask, expansionTask, visualTask]);
+
+  // Gate visual lane to fashion/outfit/vibe queries only.
+  const filterTypesForVisual = expansion.intent === 'pairing' ? expansion.pair_types : expansion.types;
+  const visualEmbedding = isFashionQuery(expansion.intent, filterTypesForVisual) ? visualEmbeddingRaw : null;
 
   // Backfill cache for next time (fire-and-forget upsert). Skip when the
   // expansion is the static fallback — caching it would lock the query
@@ -482,27 +551,31 @@ Deno.serve(async (req: Request) => {
     max_per_product:  MAX_PER_PRODUCT,
   });
 
+  // Pairing queries benefit from more visual candidates (we need the outfit
+  // items); vibe queries use a smaller slice so dense results dominate.
+  const visualK = expansion.intent === 'pairing' ? Math.ceil(k * 0.7) : Math.ceil(k * 0.5);
   const visualRpc = visualEmbedding
     ? admin.rpc('search_creatives_visual', {
         query_embedding: toPgVector(visualEmbedding),
-        k:               Math.ceil(k * 0.5),
+        k:               visualK,
         filter_gender:   gender,
       })
     : Promise.resolve({ data: [] as Array<Record<string, unknown>> });
 
   // Speculatively launch the products lane in parallel so warm requests
-  // don't pay a second sequential RPC round-trip. Most browse queries end
-  // up needing it anyway (creative pool starves for non-fashion). The
-  // result is consumed in Step 4b — discarded if the creative pool was
-  // already full of on-type matches.
-  const productsRpcSpeculative = admin.rpc('search_products_hybrid', {
-    query_embedding: toPgVector(queryEmbedding),
-    query_text:      bm25Text,
-    k,
-    filter_gender:   gender,
-    filter_types:    filterTypes,
-    exclude_ids:     [],
-  });
+  // don't pay a second sequential RPC round-trip. Guard: only fire when we
+  // have a real type scope — a null-filter speculative products search floods
+  // the queue with unfiltered results and poisons vibe/broad queries.
+  const productsRpcSpeculative = (filterTypes && filterTypes.length > 0)
+    ? admin.rpc('search_products_hybrid', {
+        query_embedding: toPgVector(queryEmbedding),
+        query_text:      bm25Text,
+        k,
+        filter_gender:   gender,
+        filter_types:    filterTypes,
+        exclude_ids:     [],
+      })
+    : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
 
   const [denseRes, visualRes] = await Promise.all([denseRpc, visualRpc]);
 
@@ -619,8 +692,12 @@ Deno.serve(async (req: Request) => {
       return Array.isArray(pRows) ? (pRows as Array<Record<string, unknown>>) : [];
     };
 
-    const appendRows = (rows: Array<Record<string, unknown>>) => {
+    const appendRows = (rows: Array<Record<string, unknown>>, bm25Only = false) => {
       for (const r of rows) {
+        // bm25Only mode: only accept rows that actually matched the text query.
+        // Prevents dense-only nearest-neighbours (visually similar but
+        // semantically wrong products) from polluting Pass 2 results.
+        if (bm25Only && r.bm25_rank == null) continue;
         const productId = r.product_id as string;
         if (!productId || seen.has(productId)) continue;
         seen.add(productId);
@@ -665,7 +742,9 @@ Deno.serve(async (req: Request) => {
       // have type=null, like "toothbrush").
       if (!filled && dedupedResults.length < k && filterTypes && filterTypes.length > 0) {
         const looseRows = await callProducts(null);
-        appendRows(looseRows);
+        // bm25Only=true: only keep rows that hit the text query — discards
+        // vector-only neighbours that happen to live near the wrong type.
+        appendRows(looseRows, true);
       }
     } catch (err) {
       console.warn('[nl-search] products fallback failed:', err);
