@@ -322,6 +322,36 @@ export default function ProductPage({
   const moreLikeThis = useMemo(() => {
     const ownBrand = (product.brand || '').trim().toLowerCase();
     const ownProductId = (product as Product & { id?: string }).id || '';
+    // Resolve the seed product's gender so we can scope the rail to
+    // matching items + unisex. The Product type doesn't carry gender,
+    // but popularFallback / similarCreatives rows do (joined from
+    // products.gender), so we look up the seed by id or brand+name and
+    // grab whatever lands. Falls back to undefined when the seed isn't
+    // in either list - in that case we don't gender-filter at all.
+    const findSeed = (rows: ProductAd[] | undefined): { gender?: string | null } | null => {
+      if (!rows) return null;
+      for (const c of rows) {
+        if (ownProductId && c.product_id === ownProductId) return c.product || null;
+        const cName = (c.product?.name || '').trim().toLowerCase();
+        const cBrand = (c.product?.brand || '').trim().toLowerCase();
+        if (cBrand === ownBrand && cName === (product.name || '').trim().toLowerCase()) {
+          return c.product || null;
+        }
+      }
+      return null;
+    };
+    const seedProduct = findSeed(similarCreatives) || findSeed(popularFallback);
+    const seedGender = (seedProduct?.gender || '').toLowerCase();
+    const genderMatches = (otherGender: string | null | undefined): boolean => {
+      // Seed is unknown - don't filter by gender.
+      if (!seedGender || seedGender === 'unisex') return true;
+      const g = (otherGender || '').toLowerCase();
+      // Match own gender + unisex. Untagged candidates pass too (we
+      // don't have enough info to exclude them).
+      if (!g) return true;
+      if (g === 'unisex') return true;
+      return g === seedGender;
+    };
     const pickFrom = (rows: ProductAd[] | undefined): ProductAd[] => {
       if (!rows || rows.length === 0) return [];
       const seenProductIds = new Set<string>();
@@ -331,6 +361,7 @@ export default function ProductPage({
         if (ownBrand && otherBrand === ownBrand) continue;
         if (ownProductId && c.product_id === ownProductId) continue;
         if (seenProductIds.has(c.product_id)) continue;
+        if (!genderMatches(c.product?.gender)) continue;
         seenProductIds.add(c.product_id);
         out.push(c);
         if (out.length >= 16) break;
@@ -340,7 +371,7 @@ export default function ProductPage({
     const fromSimilar = pickFrom(similarCreatives);
     if (fromSimilar.length > 0) return fromSimilar;
     return pickFrom(popularFallback);
-  }, [similarCreatives, popularFallback, product.brand, (product as Product & { id?: string }).id]);
+  }, [similarCreatives, popularFallback, product.brand, product.name, (product as Product & { id?: string }).id]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
