@@ -12,7 +12,7 @@ let shopperGender: ShopperGender = 'unknown';
 // Pub/sub for gender changes. Consumers (ContinuousFeed, etc.) need to
 // re-fetch when the gender resolves AFTER they've already pulled a
 // cached unfiltered feed. Without this, a male user sees a mixed feed
-// because module-load prefetchLiveAds() fired before auth resolved.
+// because module-load prefetchHomeFeed() fired before auth resolved.
 type GenderChangeListener = (g: ShopperGender) => void;
 const genderListeners = new Set<GenderChangeListener>();
 
@@ -29,7 +29,7 @@ export function setShopperGender(g: ShopperGender) {
   if (g === shopperGender) return;
   shopperGender = g;
   // Drop caches so the next callers re-fetch with the new scope.
-  liveAdsPromise = null;
+  homeFeedPromise = null;
   brandCache.clear();
   similarCache.clear();
   // Notify subscribers so they can re-pull. Wrap each call in try/catch
@@ -136,43 +136,38 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
   return (data || []) as ProductAd[];
 }
 
-export async function getLiveAds(): Promise<ProductAd[]> {
+export async function getHomeFeed(): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Only surface explicitly approved (status='live') creatives in the consumer feed.
-  // New creatives land at 'done' and must pass through the moderation queue first.
-  // Boosted ads (boosted_until > now) sort to the top.
-  // Also respect the product.is_active toggle — deactivating a product
-  // should immediately pull its creatives off the feed without requiring the
-  // admin to individually pause each one.
-  // is_elite gate: the consumer feed is now curated — only hand-picked
-  // creatives from the admin Creative view appear in the grid.
+  // Single visibility gate for the home feed: status='live' creative
+  // joined to a product whose Home toggle (products.is_active) is on.
+  // Plus the shopper-gender filter. The is_elite flag is no longer a
+  // gate — it's a quality signal we use to sort the nice creatives to
+  // the top of the grid so admins still get a curated-feeling default
+  // without having to manually flip every product.
+  // Boosted ads (boosted_until > now) sort first; then elite; then newest.
   const { data, error } = await supabase
     .from('product_creative')
     .select(`
       *,
-      product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
     `)
     .eq('status', 'live')
-    .eq('is_elite', true)
+    .eq('product.is_active', true)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false });
+    .order('is_elite',      { ascending: false, nullsFirst: false })
+    .order('created_at',    { ascending: false });
   if (error) {
-    console.error('[getLiveAds] query error:', error.message);
+    console.error('[getHomeFeed] query error:', error.message);
     return [];
   }
   const rows = (data || []) as ProductAd[];
-  return rows.filter(ad => {
-    // When the join returned a product row, it must be active. If the join
-    // was filtered out (product deleted), keep the ad — the client-side
-    // admin_hidden_products filter handles that case.
-    const active = (ad.product as { is_active?: boolean } | null | undefined)?.is_active;
-    if (active === false) return false;
-    return passesGenderFilter(ad.product as { gender?: string | null } | null);
-  });
+  return rows.filter(ad =>
+    passesGenderFilter(ad.product as { gender?: string | null } | null),
+  );
 }
 
-// ── Trail prefetch ────────────────────────────────────────────────────────
+// ── Home-feed prefetch ──────────────────────────────────────────────────
 // The landing screen primes this so the consumer feed is already in memory
 // (and its assets are warming) by the time the user signs in.
 //
@@ -185,31 +180,31 @@ export async function getLiveAds(): Promise<ProductAd[]> {
 // kicks off a fresh fetch (used after admin actions). Also seeded from
 // localStorage on module init so a returning visitor sees their last feed
 // instantly, then we revalidate in the background.
-let liveAdsPromise: Promise<ProductAd[]> | null = null;
-let liveAdsFetchedAt = 0;
-const LIVE_ADS_TTL_MS = 60_000;
-const LIVE_ADS_LS_KEY = 'catalog:live-ads-cache';
-const LIVE_ADS_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+let homeFeedPromise: Promise<ProductAd[]> | null = null;
+let homeFeedFetchedAt = 0;
+const HOME_FEED_TTL_MS = 60_000;
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache';
+const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
 // hydrates instantly on return visits. Skipped on SSR / initial pageload
-// without window. The background fetch in prefetchLiveAds() always runs
+// without window. The background fetch in prefetchHomeFeed() always runs
 // to keep data fresh.
-function readLiveAdsFromStorage(): ProductAd[] | null {
+function readHomeFeedFromStorage(): ProductAd[] | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(LIVE_ADS_LS_KEY + genderCacheSuffix());
+    const raw = window.localStorage.getItem(HOME_FEED_LS_KEY + genderCacheSuffix());
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { savedAt: number; rows: ProductAd[] };
     if (!parsed || typeof parsed.savedAt !== 'number' || !Array.isArray(parsed.rows)) return null;
-    if (Date.now() - parsed.savedAt > LIVE_ADS_LS_MAX_AGE_MS) return null;
+    if (Date.now() - parsed.savedAt > HOME_FEED_LS_MAX_AGE_MS) return null;
     return parsed.rows;
   } catch {
     return null;
   }
 }
 
-function writeLiveAdsToStorage(rows: ProductAd[]): void {
+function writeHomeFeedToStorage(rows: ProductAd[]): void {
   if (typeof window === 'undefined') return;
   try {
     // Cap the persisted list to keep localStorage under quota — the cache
@@ -217,7 +212,7 @@ function writeLiveAdsToStorage(rows: ProductAd[]): void {
     // returns the full set within a beat.
     const capped = rows.slice(0, 60);
     window.localStorage.setItem(
-      LIVE_ADS_LS_KEY + genderCacheSuffix(),
+      HOME_FEED_LS_KEY + genderCacheSuffix(),
       JSON.stringify({ savedAt: Date.now(), rows: capped }),
     );
   } catch {
@@ -228,35 +223,35 @@ function writeLiveAdsToStorage(rows: ProductAd[]): void {
 // Synchronous fast-path for first paint. Returns the last successful
 // feed from localStorage (capped at 60 rows, 7-day TTL) so consumers
 // can render an instant feed before the network fetch resolves. Pair
-// with prefetchLiveAds() for the revalidate side of SWR.
-export function getCachedLiveAds(): ProductAd[] | null {
-  return readLiveAdsFromStorage();
+// with prefetchHomeFeed() for the revalidate side of SWR.
+export function getCachedHomeFeed(): ProductAd[] | null {
+  return readHomeFeedFromStorage();
 }
 
-export function prefetchLiveAds(): Promise<ProductAd[]> {
+export function prefetchHomeFeed(): Promise<ProductAd[]> {
   const now = Date.now();
-  if (liveAdsPromise && (now - liveAdsFetchedAt) < LIVE_ADS_TTL_MS) {
-    return liveAdsPromise;
+  if (homeFeedPromise && (now - homeFeedFetchedAt) < HOME_FEED_TTL_MS) {
+    return homeFeedPromise;
   }
-  liveAdsFetchedAt = now;
-  liveAdsPromise = getLiveAds().then(rows => {
-    if (rows.length > 0) writeLiveAdsToStorage(rows);
+  homeFeedFetchedAt = now;
+  homeFeedPromise = getHomeFeed().then(rows => {
+    if (rows.length > 0) writeHomeFeedToStorage(rows);
     return rows;
   });
   // If the fetch errors out, drop the cache so the next call retries.
-  liveAdsPromise.catch(() => { liveAdsPromise = null; });
-  return liveAdsPromise;
+  homeFeedPromise.catch(() => { homeFeedPromise = null; });
+  return homeFeedPromise;
 }
 
-export function invalidateLiveAds(): void {
-  liveAdsPromise = null;
-  liveAdsFetchedAt = 0;
+export function invalidateHomeFeed(): void {
+  homeFeedPromise = null;
+  homeFeedFetchedAt = 0;
   if (typeof window !== 'undefined') {
     // Drop both the gender-scoped variant for the current shopper AND
     // the bare key, so an admin invalidation clears every cached view.
     try {
       for (const suffix of ['', ':male', ':female']) {
-        window.localStorage.removeItem(LIVE_ADS_LS_KEY + suffix);
+        window.localStorage.removeItem(HOME_FEED_LS_KEY + suffix);
       }
     } catch { /* ignore */ }
   }
@@ -267,7 +262,7 @@ export function invalidateLiveAds(): void {
 // timer is ticking the network round-trip is already on the wire. Same
 // pattern services/looks.ts uses. Browser-only; no-op on SSR.
 if (typeof window !== 'undefined') {
-  void prefetchLiveAds().catch(() => { /* surfaced on real caller */ });
+  void prefetchHomeFeed().catch(() => { /* surfaced on real caller */ });
   // Warm the brand index on idle so the sync resolver in ContinuousFeed
   // can short-circuit search the moment the user types a brand name.
   // Failures are silent — the async path still hydrates on first query.
@@ -281,7 +276,7 @@ if (typeof window !== 'undefined') {
   // they're in browser cache by the time React mounts. Decoupled from
   // the network promise above — this hits localStorage synchronously,
   // no extra round-trip.
-  const cached = readLiveAdsFromStorage();
+  const cached = readHomeFeedFromStorage();
   if (cached) {
     for (const ad of cached.slice(0, 6)) {
       const url = ad.thumbnail_url
@@ -414,7 +409,7 @@ export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boole
 // given query. Used by the consumer feed to render existing catalogs
 // synchronously without waiting on the nl-search semantic pipeline.
 //
-// Mirrors getLiveAds() filters (status=live, video present, product is_active,
+// Mirrors getHomeFeed() filters (status=live, video present, product is_active,
 // gender filter) so results drop into the same grid render path. is_elite is
 // NOT required here — when a user explicitly asks for "shoes" we want every
 // available creative for that catalog, not just the curated default-grid set.
