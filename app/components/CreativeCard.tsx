@@ -32,10 +32,16 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // remounts, so clicking a card hands the same DOM node — and its
   // currentTime / decoded frames — to the ProductPage hero. Result: no
   // reload, no first-frame black gap, even without an explicit morph.
-  const setVideoSlot = useTrailVideo(
-    inViewport ? creative.id : undefined,
-    inViewport ? creative.video_url ?? undefined : undefined,
-  );
+  //
+  // We attach immediately on mount instead of waiting for the
+  // IntersectionObserver. The observer fires async and on the first paint
+  // every card is technically "off-screen" — by the time it flips to true
+  // the browser has already settled into a paused state for the muted
+  // video, and on AI-gen creatives whose frame 0 IS the reference image
+  // the card looks indistinguishable from a static product photo. Pool
+  // size is capped (POOL_MAX=32) so eager attach is bounded; the observer
+  // still gates impression tracking and a few other side effects.
+  const setVideoSlot = useTrailVideo(creative.id, creative.video_url ?? undefined);
 
   const setSlot = useCallback((node: HTMLDivElement | null) => {
     slotRef.current = node;
