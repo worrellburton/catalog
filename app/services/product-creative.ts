@@ -268,6 +268,15 @@ export function invalidateLiveAds(): void {
 // pattern services/looks.ts uses. Browser-only; no-op on SSR.
 if (typeof window !== 'undefined') {
   void prefetchLiveAds().catch(() => { /* surfaced on real caller */ });
+  // Warm the brand index on idle so the sync resolver in ContinuousFeed
+  // can short-circuit search the moment the user types a brand name.
+  // Failures are silent — the async path still hydrates on first query.
+  const warm = () => { void ensureBrandIndex().catch(() => undefined); };
+  if (typeof (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback === 'function') {
+    (window as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(warm);
+  } else {
+    setTimeout(warm, 250);
+  }
   // Pre-warm poster images for the first batch of cached creatives so
   // they're in browser cache by the time React mounts. Decoupled from
   // the network promise above — this hits localStorage synchronously,
@@ -747,6 +756,79 @@ export async function getCreativesByBrand(
   }
   const rows = (data || []) as ProductAd[];
   return rows.filter(r => passesGenderFilter(r.product as { gender?: string | null } | null)).slice(0, limit);
+}
+
+// Brand fast-path for the search bar. When the user types an exact brand
+// name (case- and whitespace-insensitive — "James Perse", "james perse",
+// and "JAMES  PERSE" all match the same canonical brand), short-circuit
+// the semantic search pipeline and surface every live creative for that
+// brand instead.
+//
+// Backed by a one-shot in-memory index of distinct product.brand values,
+// hydrated lazily on first call. The list is small (low hundreds) so we
+// keep it for the session — brands churn slowly enough that a stale entry
+// is harmless: an exact-match miss just falls through to semantic search.
+let brandIndex: Map<string, string> | null = null;
+let brandIndexPromise: Promise<Map<string, string>> | null = null;
+
+function normalizeBrandKey(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function ensureBrandIndex(): Promise<Map<string, string>> {
+  if (brandIndex) return brandIndex;
+  if (brandIndexPromise) return brandIndexPromise;
+  if (!supabase) return new Map();
+  brandIndexPromise = (async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('brand')
+      .not('brand', 'is', null);
+    if (error) {
+      brandIndexPromise = null;
+      return new Map<string, string>();
+    }
+    const map = new Map<string, string>();
+    for (const row of (data || []) as Array<{ brand: string | null }>) {
+      if (!row.brand) continue;
+      const key = normalizeBrandKey(row.brand);
+      if (key && !map.has(key)) map.set(key, row.brand);
+    }
+    brandIndex = map;
+    return map;
+  })();
+  return brandIndexPromise;
+}
+
+/** Returns the canonical brand string when `query` is an exact-brand
+ *  search (case- and whitespace-insensitive), else null. */
+export async function resolveBrandFromQuery(query: string): Promise<string | null> {
+  const key = normalizeBrandKey(query);
+  if (!key) return null;
+  const index = await ensureBrandIndex();
+  return index.get(key) ?? null;
+}
+
+/** Synchronous variant — only resolves once the brand index has been
+ *  warmed by a prior call. Useful in render paths where we don't want to
+ *  await before rendering. Returns null on cold-start. */
+export function resolveBrandFromQuerySync(query: string): string | null {
+  if (!brandIndex) return null;
+  const key = normalizeBrandKey(query);
+  if (!key) return null;
+  return brandIndex.get(key) ?? null;
+}
+
+/** Search fast-path: if the query is an exact brand match, return every
+ *  live creative for that brand. Returns null when the query isn't a
+ *  brand — the caller falls through to the semantic pipeline. */
+export async function getCreativesByBrandQuery(
+  query: string,
+  limit = 60,
+): Promise<ProductAd[] | null> {
+  const brand = await resolveBrandFromQuery(query);
+  if (!brand) return null;
+  return getCreativesByBrand(brand, null, limit);
 }
 
 // Look up creatives (with playable video) for an arbitrary set of product

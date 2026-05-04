@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchLiveAds, getCachedLiveAds, getLiveAds, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -111,7 +111,11 @@ export default function ContinuousFeed({
   // immediately — we know nl-search is disabled for them and the tag
   // fast-path will populate results within ~10 ms.
   useEffect(() => {
-    if (searchQuery.trim().length < 3 || !!resolveCatalogTypes(searchQuery)) {
+    if (
+      searchQuery.trim().length < 3 ||
+      !!resolveCatalogTypes(searchQuery) ||
+      !!resolveBrandFromQuerySync(searchQuery)
+    ) {
       setCommittedQuery(searchQuery);
     }
   }, [searchQuery]);
@@ -282,6 +286,56 @@ export default function ContinuousFeed({
   const TAG_LRU_MAX = 50;
   const [tagMatchedCreatives, setTagMatchedCreatives] = useState<ProductAd[]>([]);
   const tagQueryRef = useRef<string>('');
+
+  // Brand fast-path. When the query is an exact brand name (case- and
+  // whitespace-insensitive), render only that brand's creatives and skip
+  // the semantic pipeline entirely — the user's intent is unambiguous.
+  const brandCacheRef = useRef<Map<string, ProductAd[]>>(new Map());
+  const BRAND_LRU_MAX = 50;
+  const [brandMatchedCreatives, setBrandMatchedCreatives] = useState<ProductAd[]>([]);
+  const brandQueryRef = useRef<string>('');
+
+  useEffect(() => {
+    const raw = searchQuery.trim();
+    if (!raw) {
+      brandQueryRef.current = '';
+      setBrandMatchedCreatives([]);
+      return;
+    }
+    const q = raw.toLowerCase();
+
+    const cached = brandCacheRef.current.get(q);
+    if (cached) {
+      brandQueryRef.current = q;
+      setBrandMatchedCreatives(cached);
+      setCommittedQuery(searchQuery);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const rows = await getCreativesByBrandQuery(raw);
+      if (cancelled || searchQuery.trim().toLowerCase() !== q) return;
+      if (rows && rows.length > 0) {
+        brandQueryRef.current = q;
+        brandCacheRef.current.set(q, rows);
+        if (brandCacheRef.current.size > BRAND_LRU_MAX) {
+          const oldest = brandCacheRef.current.keys().next().value;
+          if (oldest !== undefined) brandCacheRef.current.delete(oldest);
+        }
+        setBrandMatchedCreatives(rows);
+        setCommittedQuery(searchQuery);
+      } else if (brandQueryRef.current === q) {
+        // Query changed away from a previous brand match — clear.
+        brandQueryRef.current = '';
+        setBrandMatchedCreatives([]);
+      } else {
+        brandQueryRef.current = '';
+        setBrandMatchedCreatives([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchQuery]);
 
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -471,12 +525,27 @@ export default function ContinuousFeed({
     return out;
   }, [semanticCreatives, filteredCreatives]);
 
-  // ── Final creative list: tier-1 (catalog_tags) results render first ──────
-  // When the user's query matches a known catalog, those creatives appear at
-  // the top synchronously. Semantic + elite results follow, deduped by id and
-  // by product_id so the same product never stacks.
+  // ── Final creative list: brand fast-path > tier-1 catalog_tags > semantic ──
+  // When the user's query is an exact brand name, return only that brand's
+  // creatives — intent is unambiguous, blending with semantic would dilute
+  // the result. Otherwise tier-1 (catalog_tags) leads, with semantic + elite
+  // following, deduped by id and product_id.
   const renderedCreatives = useMemo<ProductAd[]>(() => {
     const q = committedQuery.trim().toLowerCase();
+    const brandMatch = q && brandQueryRef.current === q ? brandMatchedCreatives : [];
+    if (brandMatch.length > 0) {
+      const seen = new Set<string>();
+      const seenProducts = new Set<string>();
+      const out: ProductAd[] = [];
+      for (const c of brandMatch) {
+        if (seen.has(c.id)) continue;
+        if (c.product_id && seenProducts.has(c.product_id)) continue;
+        seen.add(c.id);
+        if (c.product_id) seenProducts.add(c.product_id);
+        out.push(c);
+      }
+      return out;
+    }
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
     if (tagMatch.length === 0) return semanticallyOrderedCreatives;
 
@@ -497,7 +566,7 @@ export default function ContinuousFeed({
       out.push(c);
     }
     return out;
-  }, [tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery]);
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
@@ -723,7 +792,7 @@ export default function ContinuousFeed({
                 title={segment.title}
                 isInitial={segment.isInitial}
                 layoutMode={layoutMode}
-                searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0)}
+                searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0 || brandMatchedCreatives.length > 0)}
                 onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
               />
             );
