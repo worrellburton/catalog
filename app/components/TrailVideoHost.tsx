@@ -117,7 +117,19 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // first — the previous slot loses it automatically without remount.
     container.appendChild(e.el);
     // Resume playback. Errors here are routine on iOS before user gesture.
-    void e.el.play().catch(() => {});
+    // If play() rejects (autoplay policy), nudge currentTime to ~0.5 s so
+    // the paused frame isn't frame 0 — for AI-gen videos that's the
+    // reference still image, which is indistinguishable from the static
+    // product photo and makes the card look frozen. A small seek forward
+    // is allowed without a gesture and gives us at least one visibly
+    // different frame to display until the user's first gesture lands.
+    void e.el.play().catch(() => {
+      try {
+        if (e.el.paused && e.el.currentTime < 0.05 && e.el.readyState >= 1) {
+          e.el.currentTime = 0.5;
+        }
+      } catch { /* readyState too low or seek not allowed — try again later */ }
+    });
 
     return () => {
       // Park back in the off-screen pool so currentTime survives if the
@@ -175,7 +187,11 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
 
     // First-gesture unblock for browsers that gate autoplay until the
     // user interacts with the page. Listeners are once: true so we don't
-    // burn CPU after the unblock.
+    // burn CPU after the unblock. We include scroll / wheel because the
+    // home grid is scroll-driven — a user can land on /catalog.shop,
+    // scroll the feed, never click anything, and without these the
+    // AI-gen video stays paused at frame 0 (which is the reference
+    // still image, indistinguishable from the static product photo).
     const onFirstGesture = () => resumeInSlot();
 
     // Heartbeat: every 3 s, kick any in-slot video that has stalled.
@@ -184,7 +200,9 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
     window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
-    window.addEventListener('keydown', onFirstGesture, { once: true });
+    window.addEventListener('keydown',     onFirstGesture, { once: true });
+    window.addEventListener('scroll',      onFirstGesture, { once: true, passive: true, capture: true });
+    window.addEventListener('wheel',       onFirstGesture, { once: true, passive: true });
 
     return () => {
       window.clearInterval(heartbeat);
@@ -192,6 +210,8 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       window.removeEventListener('pointerdown', onFirstGesture);
       window.removeEventListener('touchstart', onFirstGesture);
       window.removeEventListener('keydown', onFirstGesture);
+      window.removeEventListener('scroll', onFirstGesture, { capture: true } as EventListenerOptions);
+      window.removeEventListener('wheel', onFirstGesture);
     };
   }, []);
 
