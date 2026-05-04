@@ -294,6 +294,16 @@ export default function Home() {
   const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
     filterUserOverride.current = true;
     setActiveFilter(next);
+    // Also update the module-level shopperGender used by every
+    // product-creative query (home feed, brand strip, similar rail).
+    // Without this, flipping the Shopping-for toggle to Women only
+    // re-scoped the looks (small portion of the feed) — the much
+    // larger creative grid kept rendering whatever the profile's
+    // signup gender was set to. Mapping is straightforward:
+    //   'men'   → 'male'
+    //   'women' → 'female'
+    //   'all'   → 'unknown' (no filter)
+    setShopperGender(next === 'men' ? 'male' : next === 'women' ? 'female' : 'unknown');
   }, []);
   // Initial searchQuery comes from the URL ?q= param so a deep-linked
   // search (someone shares /catalog.shop/?q=shoes) lands in the right
