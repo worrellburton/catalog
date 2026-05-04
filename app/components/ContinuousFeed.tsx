@@ -429,7 +429,13 @@ export default function ContinuousFeed({
   // unrelated products (skirts, dresses) to appear after the correct results land.
   const semanticCreatives = useMemo<ProductAd[]>(() => {
     if (!semantic.creatives.length) return [];
-    return semantic.creatives.filter(c => !!c.video_url).map(c => ({
+    // NOTE: do NOT filter by video_url here — nl-search returns product
+    // fallback rows for cold categories (no live creative yet, but the product
+    // exists). CreativeCard renders these as image-only cards using the
+    // product image as the poster (see CreativeCard.tsx posterUrl). Filtering
+    // them out makes searches like "shoe"/"cream" appear empty even when
+    // matching products exist in the catalog.
+    return semantic.creatives.map(c => ({
       id:               c.id,
       product_id:       c.product_id,
       look_id:          null,
@@ -540,20 +546,16 @@ export default function ContinuousFeed({
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
     if (tagMatch.length === 0) return semanticallyOrderedCreatives;
 
+    // Tier-1 found typed products — return those exclusively.
+    // Appending semanticallyOrderedCreatives would inject off-type semantic
+    // drift (e.g. "shoes" dense-neighbours skirts/dresses) after the correct
+    // results land. When the user gave us a typed query and tier-1 matched it,
+    // we can satisfy their intent with exactly those results.
     const seen = new Set<string>();
-    const seenProducts = new Set<string>();
     const out: ProductAd[] = [];
     for (const c of tagMatch) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      if (c.product_id) seenProducts.add(c.product_id);
-      out.push(c);
-    }
-    for (const c of semanticallyOrderedCreatives) {
-      if (seen.has(c.id)) continue;
-      if (c.product_id && seenProducts.has(c.product_id)) continue;
-      seen.add(c.id);
-      if (c.product_id) seenProducts.add(c.product_id);
       out.push(c);
     }
     return out;
@@ -747,13 +749,21 @@ export default function ContinuousFeed({
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
-  // Show fresh data after load; stale data while loading; fall back to stale if fresh is empty.
+  // When a search has resolved (not in-flight), never fall back to stale
+  // content — show only the exact search results (may be empty → empty grid
+  // + toast). Stale content is only shown during the in-flight window so the
+  // grid doesn't flash white while nl-search loads.
+  const searchResolved = semanticActive && !isSearching;
   const displayCreatives = isSearching
     ? (staleCreatives.length > 0 ? staleCreatives : renderedCreatives)
-    : (renderedCreatives.length > 0 ? renderedCreatives : staleCreatives);
+    : searchResolved
+      ? renderedCreatives
+      : (renderedCreatives.length > 0 ? renderedCreatives : staleCreatives);
   const displayLooks = isSearching
     ? (staleLooks.length > 0 ? staleLooks : semanticallyOrderedLooks)
-    : (semanticallyOrderedLooks.length > 0 ? semanticallyOrderedLooks : staleLooks);
+    : searchResolved
+      ? semanticallyOrderedLooks
+      : (semanticallyOrderedLooks.length > 0 ? semanticallyOrderedLooks : staleLooks);
 
   return (
     <div className="continuous-feed" id="grid-viewport">

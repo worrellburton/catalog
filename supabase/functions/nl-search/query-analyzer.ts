@@ -121,6 +121,22 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   perfumes:     ['Fragrance'],
   cologne:      ['Fragrance'],
   skincare:     ['Skincare'],
+  // Haircare
+  haircare:        ['Haircare'],
+  shampoo:         ['Haircare'],
+  conditioner:     ['Haircare'],
+  'dry shampoo':   ['Haircare'],
+  'dandruff shampoo': ['Haircare'],
+  'hair cream':    ['Haircare'],
+  'hair clay':     ['Haircare'],
+  'hair pomade':   ['Haircare'],
+  pomade:          ['Haircare'],
+  cream:           ['Haircare', 'Skincare'],
+  // Decor / candles
+  candle:       ['Decor'],
+  candles:      ['Decor'],
+  diffuser:     ['Decor'],
+  'reed diffuser': ['Decor'],
   book:         ['Book'],
   books:        ['Book'],
 };

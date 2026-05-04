@@ -661,18 +661,36 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── Step 4a2: vibe queries — prefer BM25 hits over pure dense drift ───────
-  // When there's at least one BM25-matched product, restrict results to those
-  // rows — this prevents semantic drift (e.g. "toothbrush" returning tennis
-  // skirts via vector proximity in fashion embedding space). When no products
-  // have a BM25 match (true aesthetic queries like "coastal grandmother" or
-  // "Y2K aesthetic"), keep all dense results so the semantic lane still works.
-  if (expansion.intent === 'vibe' && dedupedResults.length > 0) {
+  // ── Step 4a2: BM25 relevance gate — prevent dense-only semantic drift ────
+  // When filterTypes is set, type_match already pruned junk (Step 4a).
+  // When filterTypes is null/empty (untyped query like "tooth brush", "candle"),
+  // dense-only neighbours in the fashion embedding space are meaningless —
+  // keep ONLY rows that hit the BM25 text query. If nothing has a BM25 hit
+  // the query is a cold miss: return empty rather than unrelated results.
+  // Exception: true aesthetic/vibe queries ("coastal grandmother", "Y2K") have
+  // no BM25 hits by design — we keep all dense results only when filterTypes
+  // is non-empty (type anchor confirms semantic intent).
+  const isUntypedQuery = !filterTypes || filterTypes.length === 0;
+  if (dedupedResults.length > 0) {
     const bm25Hits = dedupedResults.filter(r => r.bm25_rank != null);
-    if (bm25Hits.length > 0 && bm25Hits.length < dedupedResults.length) {
-      seen.clear();
-      for (const r of bm25Hits) if (r.product_id) seen.add(r.product_id);
-      dedupedResults = bm25Hits;
+    if (isUntypedQuery) {
+      // No type anchor — dense-only results are likely drift. Require BM25 hit.
+      if (bm25Hits.length === 0) {
+        // True cold miss: no text evidence in the index. Return nothing.
+        dedupedResults = [];
+      } else if (bm25Hits.length < dedupedResults.length) {
+        seen.clear();
+        for (const r of bm25Hits) if (r.product_id) seen.add(r.product_id);
+        dedupedResults = bm25Hits;
+      }
+    } else if (expansion.intent === 'vibe') {
+      // Vibe query with a type anchor: prefer BM25 but don't hard-require it
+      // (true aesthetic queries produce no BM25 signal and that's expected).
+      if (bm25Hits.length > 0 && bm25Hits.length < dedupedResults.length) {
+        seen.clear();
+        for (const r of bm25Hits) if (r.product_id) seen.add(r.product_id);
+        dedupedResults = bm25Hits;
+      }
     }
   }
 
@@ -747,19 +765,42 @@ Deno.serve(async (req: Request) => {
     };
 
     try {
-      // Pass 1: respect filter_types if Haiku gave us any.
+      // Pass 1 (untyped): bm25Only — only keep products that actually matched
+      // the text query. This prevents dense-only fashion neighbours (e.g. Alo
+      // leggings near "tooth brush") from being returned. If the product exists
+      // in the DB and its name/concept_doc contains the query term, it lands.
       const firstRows = await callProducts(filterTypes);
-      const filled = appendRows(firstRows);
+      const filledOrBm25Hit = appendRows(firstRows, isUntypedQuery /* bm25Only */);
+      const bm25ProductsFound = productsAppended; // track after Pass 1
 
       // Pass 2: if the type-filtered pass was empty AND we have a non-empty
       // query, retry with no type filter so BM25 can rescue terms that
       // Haiku mapped to the wrong canonical type (or types whose products
       // have type=null, like "toothbrush").
-      if (!filled && dedupedResults.length < k && filterTypes && filterTypes.length > 0) {
+      if (!filledOrBm25Hit && dedupedResults.length < k && filterTypes && filterTypes.length > 0) {
         const looseRows = await callProducts(null);
         // bm25Only=true: only keep rows that hit the text query — discards
         // vector-only neighbours that happen to live near the wrong type.
         appendRows(looseRows, true);
+      }
+
+      // Pass 3 (vibe cold-miss rescue): for untyped vibe queries where bm25Only
+      // found nothing (e.g. "cozy fall vibes", "athleisure"), retry the products
+      // RPC and keep ONLY rows that BM25-match the expanded query. We do NOT
+      // accept pure dense neighbours here — those drift hard for queries like
+      // "tooth brush" (dense returns dry shampoo, coffee grinders, etc. which
+      // is the exact "show wrong creatives" failure mode the relevance gate
+      // was added to prevent). Genuine vibe queries ("athleisure", "cozy fall
+      // vibes") still work because the LLM expansion seeds the BM25 query
+      // with style/material/scene tokens that match real product copy.
+      if (
+        isUntypedQuery &&
+        expansion.intent === 'vibe' &&
+        bm25ProductsFound === 0 &&
+        dedupedResults.length < k
+      ) {
+        const denseRows = await callProducts(null);
+        appendRows(denseRows, true /* bm25Only — no dense drift */);
       }
     } catch (err) {
       console.warn('[nl-search] products fallback failed:', err);
