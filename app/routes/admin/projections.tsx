@@ -315,7 +315,7 @@ function RevenueChart({ series }: ChartProps) {
           const isHover = hoverIdx === i;
           return (
             <g key={`pt-${i}`}>
-              <circle cx={x} cy={y} r={isHover ? 6 : 3.5} fill="#fff" stroke="#10b981" strokeWidth={isHover ? 3 : 2} />
+              <circle cx={x} cy={y} r={isHover ? 6 : 3.5} fill="#fff" stroke="#10b981" strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />
               <rect
                 x={x - 28} y={PAD_T} width={56} height={innerH}
                 fill="transparent"
@@ -345,8 +345,14 @@ function RevenueChart({ series }: ChartProps) {
           const rows = buildTooltipRows(i);
           return (
             <g>
-              <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + innerH} stroke="#10b981" strokeDasharray="2 3" />
-              <foreignObject x={tipX} y={tipY} width={TIP_W} height={TIP_H} style={{ overflow: 'visible' }}>
+              <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + innerH} stroke="#10b981" strokeDasharray="2 3" style={{ pointerEvents: 'none' }} />
+              <foreignObject
+                x={tipX}
+                y={tipY}
+                width={TIP_W}
+                height={TIP_H}
+                style={{ overflow: 'visible', pointerEvents: 'none' }}
+              >
                 <div className="proj-tooltip">
                   <div className="proj-tooltip-head">
                     <span className="proj-tooltip-month">{monthLabel(i)}</span>
