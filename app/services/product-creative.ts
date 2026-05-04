@@ -175,7 +175,23 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
     return [];
   }
   const rows = (data || []) as ProductAd[];
-  return rows.filter(ad =>
+  // Dedupe by product_id so the same product never appears twice in
+  // the same pass. Multiple status='live' creatives per product
+  // (admins iterating on copy / generation params) used to render as
+  // separate tiles, so a feed of 3 products with 2 live creatives
+  // each looked like a 6-tile grid with the same plant repeated.
+  // The query is already sorted by boost > elite > newest, so the
+  // first row per product is the strongest creative; we keep that
+  // and drop the rest.
+  const seen = new Set<string>();
+  const deduped: ProductAd[] = [];
+  for (const ad of rows) {
+    const key = ad.product_id || ad.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(ad);
+  }
+  return deduped.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );
 }
@@ -201,7 +217,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
 // mass admin Home-toggle flip).
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v5';
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v6';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -280,6 +296,7 @@ export function invalidateHomeFeed(): void {
         'catalog:home-feed-cache:v2',     // v2 (creative-only contract)
         'catalog:home-feed-cache:v3',     // v3 (briefly included product-only rows)
         'catalog:home-feed-cache:v4',     // v4 (type-required gate)
+        'catalog:home-feed-cache:v5',     // v5 (no per-product dedup)
         HOME_FEED_LS_KEY,                 // current
       ];
       for (const base of legacyBases) {
