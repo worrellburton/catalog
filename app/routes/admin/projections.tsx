@@ -60,15 +60,26 @@ function readStored(): Assumptions {
 //   × avgCostPerSale
 //   × avgAffiliateCommission
 //
-// MAU compounds at mauGrowth month-over-month.
-function projectMonth(a: Assumptions, monthIndex: number): number {
+// MAU compounds at mauGrowth month-over-month. We return the full
+// breakdown so the hover tooltip can show every layer of the funnel.
+interface MonthBreakdown {
+  monthIndex: number;
+  mau: number;
+  sessions: number;
+  impressions: number;
+  sales: number;
+  gmv: number;
+  revenue: number;
+}
+
+function projectMonth(a: Assumptions, monthIndex: number): MonthBreakdown {
   const mau = a.mauStart * Math.pow(1 + a.mauGrowth, monthIndex);
-  const monthlySessions = mau * a.sessionsPerUserPerMonth;
-  const monthlyImpressions = monthlySessions * a.avgImpressionsPerSession;
-  const monthlySales = monthlyImpressions * a.productConversion;
-  const monthlyGmv = monthlySales * a.avgCostPerSale;
-  const monthlyRevenue = monthlyGmv * a.avgAffiliateCommission;
-  return monthlyRevenue;
+  const sessions = mau * a.sessionsPerUserPerMonth;
+  const impressions = sessions * a.avgImpressionsPerSession;
+  const sales = impressions * a.productConversion;
+  const gmv = sales * a.avgCostPerSale;
+  const revenue = gmv * a.avgAffiliateCommission;
+  return { monthIndex, mau, sessions, impressions, sales, gmv, revenue };
 }
 
 const monthLabel = (i: number): string => {
@@ -174,60 +185,100 @@ function parseInputToNumber(raw: string, format: FieldDef['format']): number | n
 }
 
 // ── Phase 5/6: SVG chart ───────────────────────────────────────────────
+// Hover delivers a detailed breakdown — the chart is a fundraising prop,
+// so every tooltip needs to answer "what's this month's funnel made of"
+// in one glance.
 interface ChartProps {
-  series: number[]; // length === MONTHS
+  series: MonthBreakdown[]; // length === MONTHS
+}
+
+interface DeltaRow {
+  label: string;
+  current: string;
+  delta: string;
+  positive: boolean;
+}
+
+function pctChange(curr: number, prev: number | undefined): { text: string; positive: boolean } {
+  if (prev === undefined || prev === 0) return { text: '—', positive: true };
+  const pct = (curr - prev) / prev;
+  const sign = pct >= 0 ? '+' : '';
+  return { text: `${sign}${(pct * 100).toFixed(pct >= 1 ? 0 : 1)}%`, positive: pct >= 0 };
 }
 
 function RevenueChart({ series }: ChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  // Logical SVG canvas — 1200×420 with padding for axis labels.
+  // Logical SVG canvas — 1200×420 with padding for axis labels. Tooltip
+  // is rendered as a foreignObject so we can use real HTML/CSS inside.
   const W = 1200, H = 420;
   const PAD_L = 70, PAD_R = 24, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
+  const TIP_W = 240, TIP_H = 196;
 
-  const max = Math.max(1, ...series);
-  // Round Y axis ceiling up to a "nice" number so gridlines read cleanly.
+  const revenues = series.map(s => s.revenue);
+  const max = Math.max(1, ...revenues);
   const niceMax = niceCeiling(max);
 
   const xFor = (i: number) => PAD_L + (innerW * i) / (MONTHS - 1);
   const yFor = (v: number) => PAD_T + innerH - (innerH * v) / niceMax;
 
-  // Gridlines — 5 horizontal divisions.
   const gridSteps = [0, 0.25, 0.5, 0.75, 1];
 
-  // Smooth area path through the data points using monotonic cubic curves.
   const areaPath = useMemo(() => {
     if (series.length === 0) return '';
-    const points = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+    const points = series.map((s, i) => ({ x: xFor(i), y: yFor(s.revenue) }));
     let d = `M ${points[0].x} ${PAD_T + innerH} L ${points[0].x} ${points[0].y}`;
     for (let i = 1; i < points.length; i++) {
       const p0 = points[i - 1];
       const p1 = points[i];
       const cp1x = p0.x + (p1.x - p0.x) / 2;
-      const cp2x = cp1x;
-      d += ` C ${cp1x} ${p0.y}, ${cp2x} ${p1.y}, ${p1.x} ${p1.y}`;
+      d += ` C ${cp1x} ${p0.y}, ${cp1x} ${p1.y}, ${p1.x} ${p1.y}`;
     }
     d += ` L ${points[points.length - 1].x} ${PAD_T + innerH} Z`;
     return d;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [series.join('|'), niceMax]);
+  }, [series.map(s => s.revenue).join('|'), niceMax]);
 
   const linePath = useMemo(() => {
     if (series.length === 0) return '';
-    const points = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+    const points = series.map((s, i) => ({ x: xFor(i), y: yFor(s.revenue) }));
     let d = `M ${points[0].x} ${points[0].y}`;
     for (let i = 1; i < points.length; i++) {
       const p0 = points[i - 1];
       const p1 = points[i];
       const cp1x = p0.x + (p1.x - p0.x) / 2;
-      const cp2x = cp1x;
-      d += ` C ${cp1x} ${p0.y}, ${cp2x} ${p1.y}, ${p1.x} ${p1.y}`;
+      d += ` C ${cp1x} ${p0.y}, ${cp1x} ${p1.y}, ${p1.x} ${p1.y}`;
     }
     return d;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [series.join('|'), niceMax]);
+  }, [series.map(s => s.revenue).join('|'), niceMax]);
+
+  // Tooltip body — built outside the per-point loop so the rows stay
+  // tight. YoY only shows when the month has a same-month-prior-year
+  // counterpart in the series (months 13+), otherwise we fall back to MoM.
+  const buildTooltipRows = (idx: number): DeltaRow[] => {
+    const cur = series[idx];
+    const prevMonth = idx >= 1 ? series[idx - 1] : undefined;
+    const prevYear = idx >= 12 ? series[idx - 12] : undefined;
+
+    const mau = pctChange(cur.mau, prevMonth?.mau);
+    const rev = pctChange(cur.revenue, prevMonth?.revenue);
+    const yoyRev = prevYear ? pctChange(cur.revenue, prevYear.revenue) : null;
+
+    const rows: DeltaRow[] = [
+      { label: 'MAU',         current: fmtNumber(cur.mau),         delta: `${mau.text} MoM`, positive: mau.positive },
+      { label: 'Sessions',    current: fmtNumber(cur.sessions),    delta: `${cur.sessions >= 1_000_000 ? (cur.sessions / 1_000_000).toFixed(1) + 'M' : (cur.sessions / 1_000).toFixed(0) + 'K'}`, positive: true },
+      { label: 'Impressions', current: fmtNumber(cur.impressions), delta: `${(cur.impressions / 1_000_000).toFixed(2)}M`, positive: true },
+      { label: 'Sales',       current: fmtNumber(cur.sales),       delta: `GMV ${fmtCurrency(cur.gmv, { compact: true })}`, positive: true },
+      { label: 'Revenue',     current: fmtCurrency(cur.revenue),   delta: `${rev.text} MoM`, positive: rev.positive },
+    ];
+    if (yoyRev) {
+      rows.push({ label: 'YoY revenue', current: fmtCurrency(prevYear!.revenue), delta: `${yoyRev.text} YoY`, positive: yoyRev.positive });
+    }
+    return rows;
+  };
 
   return (
     <div className="proj-chart-wrap">
@@ -256,14 +307,15 @@ function RevenueChart({ series }: ChartProps) {
         <path d={areaPath} fill="url(#proj-grad)" />
         <path d={linePath} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
 
-        {/* Data points + hover hit-zones */}
-        {series.map((v, i) => {
+        {/* Data points + hover hit-zones (rendered first so the tooltip
+            below paints on top of every other point in the series). */}
+        {series.map((s, i) => {
           const x = xFor(i);
-          const y = yFor(v);
+          const y = yFor(s.revenue);
           const isHover = hoverIdx === i;
           return (
             <g key={`pt-${i}`}>
-              <circle cx={x} cy={y} r={isHover ? 5 : 3.5} fill="#fff" stroke="#10b981" strokeWidth="2" />
+              <circle cx={x} cy={y} r={isHover ? 6 : 3.5} fill="#fff" stroke="#10b981" strokeWidth={isHover ? 3 : 2} />
               <rect
                 x={x - 28} y={PAD_T} width={56} height={innerH}
                 fill="transparent"
@@ -271,7 +323,6 @@ function RevenueChart({ series }: ChartProps) {
                 onMouseLeave={() => setHoverIdx(prev => (prev === i ? null : prev))}
                 style={{ cursor: 'pointer' }}
               />
-              {/* X axis label */}
               <text
                 x={x} y={H - PAD_B + 18}
                 textAnchor="middle" fontSize="10" fill="#6b7280"
@@ -279,22 +330,42 @@ function RevenueChart({ series }: ChartProps) {
               >
                 {monthLabel(i)}
               </text>
-              {/* Hover tooltip */}
-              {isHover && (
-                <g>
-                  <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + innerH} stroke="#10b981" strokeDasharray="2 3" />
-                  <g transform={`translate(${Math.min(W - PAD_R - 140, Math.max(PAD_L, x - 70))}, ${Math.max(PAD_T, y - 64)})`}>
-                    <rect width="140" height="48" rx="8" fill="#0f172a" />
-                    <text x="12" y="20" fontSize="11" fill="#cbd5e1">{monthLabel(i)}</text>
-                    <text x="12" y="38" fontSize="14" fontWeight="700" fill="#fff">
-                      {fmtCurrency(v)}
-                    </text>
-                  </g>
-                </g>
-              )}
             </g>
           );
         })}
+
+        {/* Hover tooltip — rendered last so it stacks on top of every
+            other element. foreignObject lets us style with HTML/CSS. */}
+        {hoverIdx !== null && (() => {
+          const i = hoverIdx;
+          const x = xFor(i);
+          const y = yFor(series[i].revenue);
+          const tipX = Math.min(W - PAD_R - TIP_W, Math.max(PAD_L, x - TIP_W / 2));
+          const tipY = Math.max(PAD_T, y - TIP_H - 14);
+          const rows = buildTooltipRows(i);
+          return (
+            <g>
+              <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + innerH} stroke="#10b981" strokeDasharray="2 3" />
+              <foreignObject x={tipX} y={tipY} width={TIP_W} height={TIP_H} style={{ overflow: 'visible' }}>
+                <div className="proj-tooltip">
+                  <div className="proj-tooltip-head">
+                    <span className="proj-tooltip-month">{monthLabel(i)}</span>
+                    <span className="proj-tooltip-revenue">{fmtCurrency(series[i].revenue)}</span>
+                  </div>
+                  <div className="proj-tooltip-rows">
+                    {rows.map(r => (
+                      <div key={r.label} className="proj-tooltip-row">
+                        <span className="proj-tooltip-row-label">{r.label}</span>
+                        <span className="proj-tooltip-row-current">{r.current}</span>
+                        <span className={`proj-tooltip-row-delta ${r.positive ? 'positive' : 'negative'}`}>{r.delta}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </foreignObject>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -324,13 +395,12 @@ interface Summary {
   cagrEquivalent: number;
 }
 
-function summarize(series: number[]): Summary {
-  const total = series.reduce((acc, v) => acc + v, 0);
-  const finalMonth = series[series.length - 1] ?? 0;
+function summarize(series: MonthBreakdown[]): Summary {
+  const total = series.reduce((acc, s) => acc + s.revenue, 0);
+  const finalMonth = series[series.length - 1]?.revenue ?? 0;
   const finalRunRate = finalMonth * 12;
-  const first = series[0] ?? 0;
+  const first = series[0]?.revenue ?? 0;
   const months = series.length;
-  // Annualized growth from month 1 → month N. Months → years.
   const years = Math.max(1 / 12, (months - 1) / 12);
   const cagrEquivalent = first > 0 ? Math.pow(finalMonth / first, 1 / years) - 1 : 0;
   return { total, finalMonth, finalRunRate, cagrEquivalent };
@@ -346,7 +416,7 @@ export default function AdminProjections() {
     } catch { /* quota — chart still works in-memory */ }
   }, [a]);
 
-  const series = useMemo(() => {
+  const series = useMemo<MonthBreakdown[]>(() => {
     return Array.from({ length: MONTHS }, (_, i) => projectMonth(a, i));
   }, [a]);
 
