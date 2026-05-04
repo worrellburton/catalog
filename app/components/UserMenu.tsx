@@ -19,14 +19,14 @@ interface UserMenuProps {
   user?: UserMenuUser | null;
   onLogout?: () => void;
   onOpenDecks?: () => void;
-  // Graphical surfaces — each is optional so the menu degrades gracefully
+  // Graphical surfaces - each is optional so the menu degrades gracefully
   // for surfaces that don't pass them in.
   recentProducts?: Product[];
   savedLooks?: Look[];
   savedProducts?: Product[];
   onOpenLook?: (look: Look) => void;
   onOpenProduct?: (product: Product) => void;
-  // Catalog gender filter — wired through for the super-admin
+  // Catalog gender filter - wired through for the super-admin
   // "Shopping for" toggle. The page already auto-syncs activeFilter
   // from the profile gender, so when the toggle first renders it
   // reflects the admin's own setting.
@@ -144,7 +144,7 @@ function UserMenu({
               </>
             )}
 
-            {/* Try it on — primary CTA. Sits at the top so it's the first
+            {/* Try it on - primary CTA. Sits at the top so it's the first
                 thing a returning shopper sees. */}
             <button className="user-menu-cta" onClick={runItem(() => navigate('/generate'))}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -152,7 +152,7 @@ function UserMenu({
               <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
 
-            {/* Recently viewed — products tapped in the trail, newest first. */}
+            {/* Recently viewed - products tapped in the trail, newest first. */}
             {recents.length > 0 && onOpenProduct && (
               <div className="user-menu-section">
                 <div className="user-menu-section-title">Recently viewed</div>
@@ -328,7 +328,7 @@ function UserMenu({
   );
 }
 
-// Memoized — _index.tsx re-renders on every search keystroke and overlay
+// Memoized - _index.tsx re-renders on every search keystroke and overlay
 // open. Without memo + stable callbacks from the parent, the menu re-ran
 // its avatar / strip layout for every state change.
 export default memo(UserMenu);

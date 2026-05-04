@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 // ── Phase 2: assumptions data model ─────────────────────────────────────
 // Six knobs the user can tune live. Defaults are deliberately conservative
-// so the chart doesn't lie about a hockey-stick — admins can dial each
+// so the chart doesn't lie about a hockey-stick - admins can dial each
 // number up to model upside scenarios.
 interface Assumptions {
   /** Monthly Active Users at month 1. */
@@ -56,7 +56,7 @@ function readStored(): Assumptions {
       const parsed = JSON.parse(raw);
       return { ...DEFAULTS, ...parsed };
     }
-    // v1 migration — the old shape stored a single `mauGrowth`. Map it
+    // v1 migration - the old shape stored a single `mauGrowth`. Map it
     // into the new start/end pair (flat curve) so admins keep their
     // tuning when the new build first loads.
     const legacyRaw = window.localStorage.getItem('catalog:projections:assumptions:v1');
@@ -88,7 +88,7 @@ function readStored(): Assumptions {
 // MAU compounds month-over-month using a tapered growth rate that
 // starts at mauGrowthStart and lands on mauGrowthEnd by the final
 // month. Linear interpolation across the (MONTHS-1) growth transitions
-// — month 1 → 2 uses mauGrowthStart, month 15 → 16 uses mauGrowthEnd,
+// - month 1 → 2 uses mauGrowthStart, month 15 → 16 uses mauGrowthEnd,
 // every step in between is a straight-line blend. This is a far more
 // honest model than a single flat MoM rate compounded for 16 months,
 // because it captures the obvious reality that a consumer app's
@@ -172,7 +172,7 @@ interface FieldDef {
 const FIELDS: FieldDef[] = [
   { key: 'mauStart',                 label: 'MAU (month 1)',          hint: 'Monthly active users at start',         format: 'integer',  step: 100,    min: 0 },
   { key: 'mauGrowthStart',           label: 'MAU growth (early)',     hint: 'MoM in the first month',                format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
-  { key: 'mauGrowthEnd',             label: 'MAU growth (late)',      hint: 'MoM in the final month — model tapers', format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
+  { key: 'mauGrowthEnd',             label: 'MAU growth (late)',      hint: 'MoM in the final month - model tapers', format: 'percent',  step: 0.01,   min: -0.5, max: 1 },
   { key: 'avgCostPerSale',           label: 'Avg cost per sale',      hint: 'Average order value',                   format: 'currency', step: 5,      min: 0 },
   { key: 'avgAffiliateCommission',   label: 'Avg affiliate commission', hint: 'Take rate per sale',                  format: 'percent',  step: 0.005,  min: 0, max: 0.5 },
   { key: 'sessionTimeMinutes',       label: 'Session time (min)',     hint: 'Average session length',                format: 'number',   step: 0.5,    min: 0 },
@@ -238,7 +238,7 @@ function parseInputToNumber(raw: string, format: FieldDef['format']): number | n
 }
 
 // ── Phase 5/6: SVG chart ───────────────────────────────────────────────
-// Hover delivers a detailed breakdown — the chart is a fundraising prop,
+// Hover delivers a detailed breakdown - the chart is a fundraising prop,
 // so every tooltip needs to answer "what's this month's funnel made of"
 // in one glance.
 interface ChartProps {
@@ -253,7 +253,7 @@ interface DeltaRow {
 }
 
 function pctChange(curr: number, prev: number | undefined): { text: string; positive: boolean } {
-  if (prev === undefined || prev === 0) return { text: '—', positive: true };
+  if (prev === undefined || prev === 0) return { text: ' - ', positive: true };
   const pct = (curr - prev) / prev;
   const sign = pct >= 0 ? '+' : '';
   return { text: `${sign}${(pct * 100).toFixed(pct >= 1 ? 0 : 1)}%`, positive: pct >= 0 };
@@ -262,7 +262,7 @@ function pctChange(curr: number, prev: number | undefined): { text: string; posi
 function RevenueChart({ series }: ChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  // Logical SVG canvas — 1200×420 with padding for axis labels. Tooltip
+  // Logical SVG canvas - 1200×420 with padding for axis labels. Tooltip
   // is rendered as a foreignObject so we can use real HTML/CSS inside.
   const W = 1200, H = 420;
   const PAD_L = 70, PAD_R = 24, PAD_T = 24, PAD_B = 44;
@@ -308,7 +308,7 @@ function RevenueChart({ series }: ChartProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [series.map(s => s.revenue).join('|'), niceMax]);
 
-  // Tooltip body — built outside the per-point loop so the rows stay
+  // Tooltip body - built outside the per-point loop so the rows stay
   // tight. YoY only shows when the month has a same-month-prior-year
   // counterpart in the series (months 13+), otherwise we fall back to MoM.
   const buildTooltipRows = (idx: number): DeltaRow[] => {
@@ -387,7 +387,7 @@ function RevenueChart({ series }: ChartProps) {
           );
         })}
 
-        {/* Hover tooltip — rendered last so it stacks on top of every
+        {/* Hover tooltip - rendered last so it stacks on top of every
             other element. foreignObject lets us style with HTML/CSS. */}
         {hoverIdx !== null && (() => {
           const i = hoverIdx;
@@ -472,7 +472,7 @@ export default function AdminProjections() {
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(a));
-    } catch { /* quota — chart still works in-memory */ }
+    } catch { /* quota - chart still works in-memory */ }
   }, [a]);
 
   const series = useMemo<MonthBreakdown[]>(() => buildSeries(a), [a]);
@@ -488,7 +488,7 @@ export default function AdminProjections() {
       <div className="admin-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Projections</h1>
-          <p className="admin-page-subtitle">16-month revenue model — drag the assumptions to reshape the curve.</p>
+          <p className="admin-page-subtitle">16-month revenue model - drag the assumptions to reshape the curve.</p>
         </div>
         <button
           className="admin-btn admin-btn-secondary"
@@ -511,7 +511,7 @@ export default function AdminProjections() {
         ))}
       </div>
 
-      {/* Summary stats — sit between assumptions and chart so the eye can read
+      {/* Summary stats - sit between assumptions and chart so the eye can read
            "inputs → headline numbers → curve" top-down. */}
       <div className="proj-summary">
         <div className="proj-summary-card">
@@ -537,7 +537,7 @@ export default function AdminProjections() {
 
       <RevenueChart series={series} />
 
-      {/* Tiny legend / formula reminder — keeps the page honest about
+      {/* Tiny legend / formula reminder - keeps the page honest about
            where the numbers come from so anyone reviewing the chart can
            reconstruct it without reading the code. */}
       <p className="proj-formula" aria-label="Revenue formula">

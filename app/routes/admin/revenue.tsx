@@ -122,7 +122,7 @@ export default function AdminRevenue() {
         groups.set(key, {
           productId: a.product_id,
           productName: a.product?.name || 'Unnamed',
-          brand: a.product?.brand || '—',
+          brand: a.product?.brand || ' - ',
           style: a.style,
           variants: [],
         });
@@ -167,7 +167,7 @@ export default function AdminRevenue() {
           { label: 'Clicks', value: totals.clicks.toLocaleString() },
           { label: 'CTR', value: `${totals.ctr.toFixed(2)}%` },
           { label: 'Spend', value: `$${totals.cost.toFixed(2)}` },
-          { label: 'Cost per click', value: totals.cpc > 0 ? `$${totals.cpc.toFixed(3)}` : '—' },
+          { label: 'Cost per click', value: totals.cpc > 0 ? `$${totals.cpc.toFixed(3)}` : ' - ' },
         ].map(stat => (
           <div key={stat.label} style={{
             padding: 14, borderRadius: 10, border: '1px solid #e5e7eb', background: '#fff',
@@ -224,7 +224,7 @@ export default function AdminRevenue() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        {g.eligible ? 'Winner chosen' : `Collecting data — ${g.totalImpressions.toLocaleString()} impressions`}
+                        {g.eligible ? 'Winner chosen' : `Collecting data - ${g.totalImpressions.toLocaleString()} impressions`}
                       </div>
                       <div style={{ fontSize: 11, color: g.eligible ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>
                         {g.variants.length} variants
@@ -286,7 +286,7 @@ export default function AdminRevenue() {
                             <td>{(v.impressions || 0).toLocaleString()}</td>
                             <td>{(v.clicks || 0).toLocaleString()}</td>
                             <td style={{ fontWeight: 700, color: isWinner ? '#16a34a' : '#111' }}>
-                              {(v.impressions || 0) > 0 ? `${v.ctr.toFixed(2)}%` : '—'}
+                              {(v.impressions || 0) > 0 ? `${v.ctr.toFixed(2)}%` : ' - '}
                             </td>
                           </tr>
                         );
@@ -335,11 +335,11 @@ export default function AdminRevenue() {
                       fontWeight: 700,
                       color: b.ctr >= 4 ? '#16a34a' : b.ctr >= 2 ? '#ca8a04' : b.ctr > 0 ? '#64748b' : '#cbd5e1',
                     }}>
-                      {b.impressions > 0 ? `${b.ctr.toFixed(2)}%` : '—'}
+                      {b.impressions > 0 ? `${b.ctr.toFixed(2)}%` : ' - '}
                     </span>
                   </td>
                   <td>${b.cost.toFixed(2)}</td>
-                  <td>{b.cpc > 0 ? `$${b.cpc.toFixed(3)}` : '—'}</td>
+                  <td>{b.cpc > 0 ? `$${b.cpc.toFixed(3)}` : ' - '}</td>
                   <td>
                     <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
                       <div style={{

@@ -222,7 +222,7 @@ function OverviewTab() {
         // --- Recent Searches ---
         const recent: RecentSearch[] = recentData.map(r => ({
           id: r.id,
-          user: r.user_handle || '—',
+          user: r.user_handle || ' - ',
           term: r.query,
           time: formatRelativeTime(r.created_at),
           clicked: r.clicked,
@@ -291,7 +291,7 @@ function OverviewTab() {
                       <td className="admin-cell-muted">{i + 1}</td>
                       <td className="admin-cell-name">{s.term}</td>
                       <td>{s.count}</td>
-                      <td className="admin-cell-muted">—</td>
+                      <td className="admin-cell-muted"> - </td>
                     </tr>
                   ))}
                 </tbody>
@@ -583,7 +583,7 @@ function LiveActivityTab() {
                     <span style={{ color: '#111', fontWeight: 500 }}>{entry.user_handle}</span>
                   </Link>
                 ) : (
-                  <span style={{ color: '#999' }}>—</span>
+                  <span style={{ color: '#999' }}> - </span>
                 )}
               </span>
               <span style={{
@@ -761,7 +761,7 @@ function TrendsTab() {
           <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Terms with the most growth (last 7 days vs previous 7 days)</p>
           {risingTerms.length === 0 ? (
             <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>
-              {hasData ? 'No rising terms detected in this period' : 'No trend data yet — searches will be analyzed once enough data is collected.'}
+              {hasData ? 'No rising terms detected in this period' : 'No trend data yet - searches will be analyzed once enough data is collected.'}
             </p>
           ) : (
             <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
@@ -795,7 +795,7 @@ function TrendsTab() {
           <p style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>Terms with the largest drop-off (last 7 days vs previous 7 days)</p>
           {decliningTerms.length === 0 ? (
             <p style={{ fontSize: 12, color: '#888', padding: '20px 0', textAlign: 'center' }}>
-              {hasData ? 'No declining terms detected in this period' : 'No trend data yet — searches will be analyzed once enough data is collected.'}
+              {hasData ? 'No declining terms detected in this period' : 'No trend data yet - searches will be analyzed once enough data is collected.'}
             </p>
           ) : (
             <div className="admin-table-wrap" style={{ border: 'none', borderRadius: 0 }}>

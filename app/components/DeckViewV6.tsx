@@ -100,7 +100,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
       <div className="deck-slide">
         <span className="deck-label">Intro</span>
         <h2>Creator content is the new storefront.</h2>
-        <p>Catalog is the platform where every creator&apos;s taste becomes a shoppable experience. Discovery, monetization, and attribution happen in one place, not scattered across a dozen tools. AI powers the infrastructure — visual similarity, personalized recommendations, automated tagging — while creators provide the curation and trust that no algorithm can manufacture on its own.</p>
+        <p>Catalog is the platform where every creator&apos;s taste becomes a shoppable experience. Discovery, monetization, and attribution happen in one place, not scattered across a dozen tools. AI powers the infrastructure - visual similarity, personalized recommendations, automated tagging - while creators provide the curation and trust that no algorithm can manufacture on its own.</p>
       </div>
 
       {/* Slide 3: The Problem */}
@@ -145,7 +145,7 @@ const DeckViewV6: React.FC<DeckViewV6Props> = ({
         <div className="deck-insight-content">
           <span className="deck-label">The Insight</span>
           <h2>Human taste, amplified by AI.</h2>
-          <p>Creators drive purchases but can&apos;t capture the value. Nobody has built the platform that treats curation as the storefront itself — and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators provide the signal.</p>
+          <p>Creators drive purchases but can&apos;t capture the value. Nobody has built the platform that treats curation as the storefront itself - and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators provide the signal.</p>
         </div>
       </div>
 

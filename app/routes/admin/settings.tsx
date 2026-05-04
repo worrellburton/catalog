@@ -93,7 +93,7 @@ export default function AdminSettings() {
           )}
           {saveStatus === 'error' && (
             <span className="admin-settings-status admin-settings-status--err">
-              Save failed — check Supabase RLS policies
+              Save failed - check Supabase RLS policies
             </span>
           )}
         </div>

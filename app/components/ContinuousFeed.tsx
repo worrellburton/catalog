@@ -100,17 +100,17 @@ export default function ContinuousFeed({
   onSearchLoadingChange,
   searchTrigger = 0,
 }: ContinuousFeedProps) {
-  // ── Committed query — the feed only updates when nl-search resolves ─────
+  // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
   // at the last resolved value so the grid doesn't jump on every keystroke.
   // For short queries (< 3 chars, no semantic call) we commit immediately.
-  // Tier-1 (catalog_tags) hits also commit immediately — see tagMatchedCreatives.
+  // Tier-1 (catalog_tags) hits also commit immediately - see tagMatchedCreatives.
   const [committedQuery, setCommittedQuery] = useState('');
   const wasLoadingRef = useRef(false);
 
   // Short / empty queries: commit immediately (no semantic search fires).
   // Tier-1 eligible queries (catalog types like "shoes") also commit
-  // immediately — we know nl-search is disabled for them and the tag
+  // immediately - we know nl-search is disabled for them and the tag
   // fast-path will populate results within ~10 ms.
   useEffect(() => {
     if (
@@ -131,7 +131,7 @@ export default function ContinuousFeed({
   // a render pass filtering the seed dataset (and don't briefly leak its
   // 2-creator content into the "More like this" rails on slow networks).
   // The first segment is creative-only anyway, so an empty looks array
-  // costs nothing on first paint — sub-segments only matter after the
+  // costs nothing on first paint - sub-segments only matter after the
   // user taps a look, by which point Supabase has resolved.
   const [dbLooks, setDbLooks] = useState<Look[]>([]);
   useEffect(() => {
@@ -141,7 +141,7 @@ export default function ContinuousFeed({
         const fetched = await getLooks();
         if (!cancelled && fetched.length > 0) setDbLooks(fetched);
       } catch {
-        // Supabase unreachable — fall back to the static seed so sub-segments
+        // Supabase unreachable - fall back to the static seed so sub-segments
         // have *something* to draw similars from instead of an empty rail.
         if (!cancelled) setDbLooks(staticLooksFallback);
       }
@@ -169,7 +169,7 @@ export default function ContinuousFeed({
       const q = committedQuery.toLowerCase();
       // For searches >= 3 chars (semantic-eligible), suppress looks entirely.
       // The look text filter (title/description/product name .includes()) is
-      // too broad — a look with "tennis shoes" in its title or a skirt product
+      // too broad - a look with "tennis shoes" in its title or a skirt product
       // named "tennis skirt" would appear for a "shoes" search. The semantic
       // lane (renderedCreatives) already surfaces the right products; mixing
       // looks in via text match adds noise.
@@ -236,7 +236,7 @@ export default function ContinuousFeed({
 
   // Fetch live product creative from Supabase. We surface a loading flag so
   // the feed can render placeholder tiles in creative slots until the fetch
-  // resolves — otherwise the grid renders pure looks for a beat and the
+  // resolves - otherwise the grid renders pure looks for a beat and the
   // same two faces fill the first screen.
   // Stale-while-revalidate first paint: if there's a localStorage snapshot
   // from a prior visit, hydrate state with it synchronously so the feed
@@ -252,7 +252,7 @@ export default function ContinuousFeed({
 
     const refetch = () => {
       // Gender-aware re-fetch. Called once on mount and again whenever
-      // setShopperGender fires — without this, a male/female user sees
+      // setShopperGender fires - without this, a male/female user sees
       // the unfiltered cached feed forever because module-load
       // prefetchHomeFeed() ran with shopperGender='unknown' before auth
       // resolved. setShopperGender invalidates homeFeedPromise so this
@@ -298,7 +298,7 @@ export default function ContinuousFeed({
 
   // Brand fast-path. When the query is an exact brand name (case- and
   // whitespace-insensitive), render only that brand's creatives and skip
-  // the semantic pipeline entirely — the user's intent is unambiguous.
+  // the semantic pipeline entirely - the user's intent is unambiguous.
   const brandCacheRef = useRef<Map<string, ProductAd[]>>(new Map());
   const BRAND_LRU_MAX = 50;
   const [brandMatchedCreatives, setBrandMatchedCreatives] = useState<ProductAd[]>([]);
@@ -335,7 +335,7 @@ export default function ContinuousFeed({
         setBrandMatchedCreatives(rows);
         setCommittedQuery(searchQuery);
       } else if (brandQueryRef.current === q) {
-        // Query changed away from a previous brand match — clear.
+        // Query changed away from a previous brand match - clear.
         brandQueryRef.current = '';
         setBrandMatchedCreatives([]);
       } else {
@@ -369,7 +369,7 @@ export default function ContinuousFeed({
       tagQueryRef.current = q;
       setTagMatchedCreatives(inMemory);
       setCommittedQuery(searchQuery);
-      // Top up from DB asynchronously — the in-memory pool is the elite
+      // Top up from DB asynchronously - the in-memory pool is the elite
       // subset, so the full catalog usually has more rows behind it.
       let cancelled = false;
       getCreativesByCatalogTag(q).then(rows => {
@@ -377,7 +377,7 @@ export default function ContinuousFeed({
         if (rows.length > inMemory.length) {
           setTagMatchedCreatives(rows);
           tagCacheRef.current.set(q, rows);
-          // LRU eviction — Map preserves insertion order, so the oldest
+          // LRU eviction - Map preserves insertion order, so the oldest
           // entry is the first key.
           if (tagCacheRef.current.size > TAG_LRU_MAX) {
             const oldest = tagCacheRef.current.keys().next().value;
@@ -390,7 +390,7 @@ export default function ContinuousFeed({
       return () => { cancelled = true; };
     }
 
-    // 2. DB lookup — only when we haven't already committed via in-memory.
+    // 2. DB lookup - only when we haven't already committed via in-memory.
     let cancelled = false;
     (async () => {
       const rows = await getCreativesByCatalogTag(q);
@@ -405,7 +405,7 @@ export default function ContinuousFeed({
         setTagMatchedCreatives(rows);
         setCommittedQuery(searchQuery);
       } else {
-        // Cold miss for the tag path — clear so we don't show stale results
+        // Cold miss for the tag path - clear so we don't show stale results
         // while the semantic path resolves.
         if (tagQueryRef.current === q) {
           // No-op: keep prior tag matches if the query is still in flight.
@@ -420,7 +420,7 @@ export default function ContinuousFeed({
   // Map semantic creatives (returned directly by nl-search) into ProductAd
   // shape for CreativeCard rendering. nl-search now indexes product_creative
   // directly via search_creatives_hybrid, so each result row already carries
-  // the joined product fields — no client-side hydration through
+  // the joined product fields - no client-side hydration through
   // products/look_products needed.
   //
   // NOTE: we intentionally do NOT merge filteredCreatives into
@@ -444,7 +444,7 @@ export default function ContinuousFeed({
     // Creative-only feed: drop product-fallback rows that have no video.
     // nl-search returns image-only product rows for cold categories so the
     // grid isn't empty, but the consumer feed/search UI is meant to be a
-    // video-first lookbook — image cards break that contract. Cold queries
+    // video-first lookbook - image cards break that contract. Cold queries
     // simply return fewer (or zero) results until creatives are generated.
     return semantic.creatives
       .filter(c => !!c.video_url && matchesMaterial(c.product_name))
@@ -494,25 +494,25 @@ export default function ContinuousFeed({
   // Filter creatives by the current search.
   // When a search query is active (≥ 3 chars), return [] so the grid is driven
   // entirely by the semantic pipeline (tagMatchedCreatives + semanticCreatives).
-  // Text / substring matching on catalog_tags or product names is too noisy —
+  // Text / substring matching on catalog_tags or product names is too noisy  - 
   // e.g. a skirt tagged "tennis shoes" would match a "shoes" search. Returning
   // [] here forces the caller to rely on the ranker, not the keyword filter.
   // filteredCreatives is only used as-is for the default browse state (no query
   // or short prefix < 3 chars) where we display the full live pool.
   const filteredCreatives = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
-    // Live (uncommitted) query — used to suppress the elite fallback the
+    // Live (uncommitted) query - used to suppress the elite fallback the
     // moment the user starts typing a semantic-eligible query, so the grid
     // doesn't flash with unrelated creatives while nl-search is in flight.
     const liveQ = searchQuery.trim().toLowerCase();
     if (liveQ.length >= 3 && liveQ !== q) {
-      // Semantic search is pending — show nothing from the text/elite lane.
+      // Semantic search is pending - show nothing from the text/elite lane.
       // semanticallyOrderedCreatives + the sourcing state below take over.
       return [];
     }
     if (!q) return liveCreatives;
     // For any active search (≥ 3 chars), let tagMatch + semantic handle results.
-    // Never fall back to text/substring matching — it produces false positives.
+    // Never fall back to text/substring matching - it produces false positives.
     if (q.length >= 3) return [];
     return liveCreatives;
   }, [liveCreatives, committedQuery, searchQuery]);
@@ -537,7 +537,7 @@ export default function ContinuousFeed({
 
   // ── Final creative list: brand fast-path > tier-1 catalog_tags > semantic ──
   // When the user's query is an exact brand name, return only that brand's
-  // creatives — intent is unambiguous, blending with semantic would dilute
+  // creatives - intent is unambiguous, blending with semantic would dilute
   // the result. Otherwise tier-1 (catalog_tags) leads, with semantic + elite
   // following, deduped by id and product_id.
   const renderedCreatives = useMemo<ProductAd[]>(() => {
@@ -559,7 +559,7 @@ export default function ContinuousFeed({
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
     if (tagMatch.length === 0) return semanticallyOrderedCreatives;
 
-    // Tier-1 found typed products — return those exclusively.
+    // Tier-1 found typed products - return those exclusively.
     // Appending semanticallyOrderedCreatives would inject off-type semantic
     // drift (e.g. "shoes" dense-neighbours skirts/dresses) after the correct
     // results land. When the user gave us a typed query and tier-1 matched it,
@@ -603,7 +603,7 @@ export default function ContinuousFeed({
     return () => clearTimeout(timer);
   }, [committedQuery, semanticallyOrderedLooks.length, activeFilter, user]);
 
-  // Reset when filters/search/shuffle change — use committedQuery so the
+  // Reset when filters/search/shuffle change - use committedQuery so the
   // feed only resets after nl-search resolves, not on every keystroke.
   const prevFilterRef = useRef({ activeFilter, committedQuery, shuffleKey });
   useEffect(() => {
@@ -645,7 +645,7 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
-  // Delete-on-feed is destructive on a public surface — only super-admins
+  // Delete-on-feed is destructive on a public surface - only super-admins
   // see the trash affordance, and only when they've explicitly toggled
   // "Delete mode" on from the account menu. Off by default so a stray
   // tap on a public surface can't nuke a product.
@@ -654,14 +654,14 @@ export default function ContinuousFeed({
 
   const handleDeleteCreative = useCallback(async (id: string) => {
     // Super-admin long-press on the consumer feed deletes the underlying
-    // PRODUCT, not just the one creative — by the time someone gets to
+    // PRODUCT, not just the one creative - by the time someone gets to
     // the consumer surface to nuke a tile, they want it gone everywhere
     // (every creative that referenced this product disappears too).
     setLiveCreatives(prev => {
       const target = prev.find(c => c.id === id);
       const productId = target?.product?.id;
       if (!productId) {
-        // Creative has no product link — fall back to single-creative
+        // Creative has no product link - fall back to single-creative
         // delete so the tile still goes away.
         return prev.filter(c => c.id !== id);
       }
@@ -710,7 +710,7 @@ export default function ContinuousFeed({
   // ── Stale-while-refresh ──────────────────────────────────────────────────
   // Keep previous feed content visible at all times during a search refresh.
   // The loader bar appears above, content swaps with a fade when results land.
-  // Empty results never blank the feed — they show a transient toast instead.
+  // Empty results never blank the feed - they show a transient toast instead.
   const trimmedQuery = committedQuery.trim();
   const liveTrimmed = searchQuery.trim();
   const semanticActive = trimmedQuery.length >= 3;
@@ -739,7 +739,7 @@ export default function ContinuousFeed({
     if (!isSearching && semanticallyOrderedLooks.length > 0) setStaleLooks(semanticallyOrderedLooks);
   }, [semanticallyOrderedLooks, isSearching]);
 
-  // Toast state — fires when a search resolves with no results.
+  // Toast state - fires when a search resolves with no results.
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -765,7 +765,7 @@ export default function ContinuousFeed({
   }, []);
 
   // When a search has resolved (not in-flight), never fall back to stale
-  // content — show only the exact search results (may be empty → empty grid
+  // content - show only the exact search results (may be empty → empty grid
   // + toast). Stale content is only shown during the in-flight window so the
   // grid doesn't flash white while nl-search loads.
   const searchResolved = semanticActive && !isSearching;
@@ -794,13 +794,13 @@ export default function ContinuousFeed({
 
   return (
     <div className="continuous-feed" id="grid-viewport">
-      {/* Top overlay loader — appears above existing content during search. */}
+      {/* Top overlay loader - appears above existing content during search. */}
       {isSearching && (
         <div className="feed-search-loader" aria-hidden="true">
           <div className="feed-search-loader-bar" />
         </div>
       )}
-      {/* No-results toast — suppressed when the persistent empty state is shown. */}
+      {/* No-results toast - suppressed when the persistent empty state is shown. */}
       {toastMsg && !showEmptyState && (
         <div className="feed-no-results-toast" role="status">{toastMsg}</div>
       )}

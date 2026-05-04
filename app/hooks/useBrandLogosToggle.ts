@@ -1,4 +1,4 @@
-// useBrandLogosToggle — boolean preference for whether ProductPage shows
+// useBrandLogosToggle - boolean preference for whether ProductPage shows
 // Brandfetch wordmark logos in place of the brand text. Persisted to
 // localStorage and synced across tabs. Only consumed when the app is in
 // light mode; in dark mode the toggle is irrelevant (logos render best

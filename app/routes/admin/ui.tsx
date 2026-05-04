@@ -1,6 +1,6 @@
-// /admin/ui — UI customisation hub. Two subpages:
-//   /admin/ui/brand       — typeface for the Catalog wordmark.
-//   /admin/ui/search-bar  — animated beam variant for the bottom bar.
+// /admin/ui - UI customisation hub. Two subpages:
+//   /admin/ui/brand       - typeface for the Catalog wordmark.
+//   /admin/ui/search-bar  - animated beam variant for the bottom bar.
 //
 // The hub itself just renders the index card grid and the <Outlet />
 // for nested subroutes. Black background per the design brief, soft

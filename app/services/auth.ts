@@ -44,7 +44,7 @@ if (AUTH_DEBUG && typeof window !== 'undefined') {
  *  localStorage." Used at app boot to decide whether to render the
  *  password gate immediately (no session at all → gate) or render a
  *  splash while we wait for getCurrentUser to confirm (session present
- *  → splash, then app). Doesn't validate the session — it just looks
+ *  → splash, then app). Doesn't validate the session - it just looks
  *  for the well-known sb-{ref}-auth-token key supabase-js writes. */
 export function hasStoredSupabaseSession(): boolean {
   if (typeof localStorage === 'undefined') return false;
@@ -88,7 +88,7 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
 
   // Build a clean redirect target: protocol + host + pathname only.
   // window.location.href drags any query string (?q=…, ?code=…) and hash
-  // back through the OAuth round-trip — both racing the auth listener
+  // back through the OAuth round-trip - both racing the auth listener
   // (?q= re-fires the search effect before SIGNED_IN lands) and worse,
   // ?code= sticks around if the user retried after a failure, leaving a
   // stale OAuth code in the redirect URL that supabase-js refuses to
@@ -122,7 +122,7 @@ export async function signInWithGoogle(): Promise<{ error?: string }> {
 // for role/gender. Caching the resolved AuthUser for an hour means
 // returning visitors (and any client navigation that re-mounts the
 // auth singleton) skip that query entirely. Invalidated on every
-// onAuthStateChange tick — see below.
+// onAuthStateChange tick - see below.
 const AUTH_CACHE_KEY = 'auth_cache:user:v1';
 const AUTH_CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -160,7 +160,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   // Use getSession (local-storage read) instead of getUser (network call to
   // /user). The /user endpoint occasionally 500s when Supabase Auth can't
   // reach Postgres, which made the SPA think the user wasn't signed in and
-  // re-render the locked view — so users would click "Sign in with Google"
+  // re-render the locked view - so users would click "Sign in with Google"
   // 2-3 times. The PKCE code exchange already populated the session at this
   // point, so reading from storage is enough.
   const { data: { session } } = await supabase.auth.getSession();
@@ -170,7 +170,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 
-  // Fast path: same user as last visit, cache fresh — return without the
+  // Fast path: same user as last visit, cache fresh - return without the
   // profiles round trip.
   const cached = readAuthCache(session.user.id);
   if (cached) {
@@ -192,7 +192,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
     // First-load gender backfill: if the profile has a name but no
     // gender signal, infer once from the first name and persist.
-    // Idempotent — short-circuits as soon as the column has 'male' or
+    // Idempotent - short-circuits as soon as the column has 'male' or
     // 'female', so steady-state this is one extra column on the read
     // above and nothing else.
     if (profile && profile.gender !== 'male' && profile.gender !== 'female') {
@@ -226,7 +226,7 @@ export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
       callback(null);
       return;
     }
-    // Auth state ticked — purge the resolved-user cache so the next
+    // Auth state ticked - purge the resolved-user cache so the next
     // getCurrentUser() refetches role/gender. Most ticks (token refresh)
     // don't actually change anything user-visible, so the consumer's
     // useAuth singleton de-dupes via its own snapshot equality check.

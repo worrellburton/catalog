@@ -1,5 +1,5 @@
-/* Generate page — shopper-facing wizard.
-   Visual direction: Apple / Tesla — generous space, tight headlines,
+/* Generate page - shopper-facing wizard.
+   Visual direction: Apple / Tesla - generous space, tight headlines,
    single accent (gold), soft gradients, no decorative chrome. */
 
 .gen-page {
@@ -26,7 +26,7 @@ html[data-shell="catalog-app"] .gen-page {
   padding-top: var(--shell-sb, env(safe-area-inset-top, 44px));
 }
 
-/* Header bar — three-column on desktop (back / wordmark / sub),
+/* Header bar - three-column on desktop (back / wordmark / sub),
    stacked on mobile so the title sits above the back link cleanly. */
 .gen-head {
   display: grid;
@@ -93,7 +93,7 @@ html[data-shell="catalog-app"] .gen-page {
   margin: 0 auto;
 }
 
-/* Each step gets generous vertical air — feels like a single screen,
+/* Each step gets generous vertical air - feels like a single screen,
    not a page that scrolls forever, when the content is light. */
 .gen-step {
   padding: clamp(8px, 3vw, 32px) 0;
@@ -153,7 +153,7 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-picked { justify-content: center; }
 }
 
-/* Step dock — pinned to the bottom of the viewport with a liquid-glass
+/* Step dock - pinned to the bottom of the viewport with a liquid-glass
    material (translucent, blurred, faint inner highlight). Sits above the
    bottom safe-area inset so it doesn't collide with the iOS home bar. */
 .gen-rail {
@@ -167,7 +167,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 /* When the rail is rendered as a row inside the unified gen-dock,
-   it loses its fixed positioning and its own glass — the dock
+   it loses its fixed positioning and its own glass - the dock
    provides both. Keeps the same pill layout for the items. */
 .gen-rail.is-embedded {
   position: static;
@@ -769,7 +769,7 @@ html[data-shell="catalog-app"] .gen-page {
   font-size: 11px; color: rgba(255, 255, 255, 0.85);
 }
 
-/* .gen-foot is no longer used — Back/Next live inside the unified
+/* .gen-foot is no longer used - Back/Next live inside the unified
    gen-dock. Kept the .gen-btn-primary/.gen-btn-secondary classes
    below since the dock still uses them. */
 .gen-btn-primary, .gen-btn-secondary {
@@ -967,7 +967,7 @@ html[data-shell="catalog-app"] .gen-page {
   flex-wrap: wrap;
 }
 
-/* "Products in this look" — surfaces the picked product list under the
+/* "Products in this look" - surfaces the picked product list under the
    final video so the shopper can see the outfit it was assembled from. */
 .gen-result-products {
   max-width: 480px;
@@ -1035,7 +1035,7 @@ html[data-shell="catalog-app"] .gen-page {
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* "Your looks" grid — past generations, rendered at the bottom of the
+/* "Your looks" grid - past generations, rendered at the bottom of the
    Photos step. Cards are portrait 3:4 so the muted first frame reads
    like a poster and doesn't eat the page. */
 .gen-lookgrid {
@@ -1202,7 +1202,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-lookcard-delete:hover { background: rgba(244, 63, 94, 0.85); }
 
-/* Upload-picker modal — opens when the shopper taps an empty Photo
+/* Upload-picker modal - opens when the shopper taps an empty Photo
    slot and they already have uploads. Lets them re-use a face from
    history or delete one without going through the full thumb grid
    underneath. */
@@ -1344,7 +1344,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-modal-thumb-del:hover { background: rgba(244, 63, 94, 0.85); }
 
-/* Crop tool — opens from the result step. Reuses the modal chrome
+/* Crop tool - opens from the result step. Reuses the modal chrome
    (.gen-modal-backdrop + .gen-modal) and adds a 9:16 stage with
    pan-on-drag + a zoom slider. The crop is metadata only; we don't
    re-encode the video, so save is instant. */
@@ -1413,7 +1413,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   Build experience — replaces the flat progress bar on the result
+   Build experience - replaces the flat progress bar on the result
    step with a 9:16 framed card (the same shape as the eventual
    video) whose border traces the progress, plus a 10-phase list
    that lights up as the build moves through each stage. The card
@@ -1578,7 +1578,7 @@ html[data-shell="catalog-app"] .gen-page {
   }
 }
 
-/* Border-progress SVG — fills the frame, strokes a single rounded
+/* Border-progress SVG - fills the frame, strokes a single rounded
    rect along its perimeter. preserveAspectRatio="none" lets the
    stroke trace the 9:16 outline; vector-effect keeps the stroke
    weight constant regardless of scaling. */
@@ -1608,7 +1608,7 @@ html[data-shell="catalog-app"] .gen-page {
   transition: stroke-dasharray 0.6s ease;
 }
 
-/* Diagonal sweep — a translucent gradient that slides across the
+/* Diagonal sweep - a translucent gradient that slides across the
    frame on a loop, like the surface is being scanned. */
 .gen-build-shimmer {
   position: absolute;
@@ -1697,7 +1697,7 @@ html[data-shell="catalog-app"] .gen-page {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Done state — drop the breathing animation, scale the frame in
+/* Done state - drop the breathing animation, scale the frame in
    with a satisfying spring, and burst two expanding gold rings. */
 .gen-build-done .gen-build-frame {
   animation: gen-build-pop 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both;
@@ -1754,7 +1754,7 @@ html[data-shell="catalog-app"] .gen-page {
 /* ===== Horizontal-scroll category rows (products step) ===== */
 
 .gen-step-products {
-  /* Ditches the centered text alignment from gen-step on desktop —
+  /* Ditches the centered text alignment from gen-step on desktop  - 
      left-align matches the row layout cleaner. */
   text-align: left;
 }
@@ -1808,7 +1808,7 @@ html[data-shell="catalog-app"] .gen-page {
   overflow-y: hidden;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  /* Hide scrollbar — we have plenty of cards spilling off-screen as the
+  /* Hide scrollbar - we have plenty of cards spilling off-screen as the
      visual cue that the row scrolls. */
   scrollbar-width: none;
   padding: 4px 4px 12px;
@@ -1927,7 +1927,7 @@ html[data-shell="catalog-app"] .gen-page {
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* Picked-products strip — left side of the dock. Horizontal scroll
+/* Picked-products strip - left side of the dock. Horizontal scroll
    if more thumbnails than fit in the available width. */
 .gen-dock-picks-strip {
   flex: 1 1 auto;
@@ -1995,7 +1995,7 @@ html[data-shell="catalog-app"] .gen-page {
   transform: scale(1.08);
 }
 
-/* Action buttons — right side of the dock. */
+/* Action buttons - right side of the dock. */
 .gen-dock-actions {
   flex-shrink: 0;
   display: flex;
@@ -2010,7 +2010,7 @@ html[data-shell="catalog-app"] .gen-page {
 
 .gen-step-photos {
   /* The photos step lays out as a header form on top + Your Looks grid
-     below. No centered text alignment — the form is left-aligned so the
+     below. No centered text alignment - the form is left-aligned so the
      row of slots reads naturally. */
   text-align: left;
   padding-top: 8px;
@@ -2086,7 +2086,7 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fff;
   outline: none;
   cursor: pointer;
-  /* Custom chevron — built-in select arrow doesn't blend with the dark
+  /* Custom chevron - built-in select arrow doesn't blend with the dark
      theme on iOS Safari. */
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff99' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -2102,7 +2102,7 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fff;
 }
 
-/* Create look CTA — pinned to the bottom of the viewport on the
+/* Create look CTA - pinned to the bottom of the viewport on the
    photos step. Mirrors the gen-dock anchor pattern so the user
    always has a one-tap path to the next step regardless of how
    far they've scrolled into "Your looks". */
@@ -2161,7 +2161,7 @@ html[data-shell="catalog-app"] .gen-page {
   }
 }
 
-/* Become a creator CTA — sits above the "Your looks" grid on the
+/* Become a creator CTA - sits above the "Your looks" grid on the
    photos step. Pill-shaped row that reads as a navigation entry
    point, not a primary action. Subtle treatment so it doesn't
    compete with the Create look button above. */
@@ -2219,7 +2219,7 @@ html[data-shell="catalog-app"] .gen-page {
   margin-right: -2px;
 }
 
-/* Limit warning toast — surfaces when the user taps a 6th product
+/* Limit warning toast - surfaces when the user taps a 6th product
    on the picker. Sits just above the gen-dock, fades in/out. */
 .gen-limit-toast {
   position: fixed;

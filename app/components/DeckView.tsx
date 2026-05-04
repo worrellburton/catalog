@@ -112,12 +112,12 @@ const DeckView: React.FC<DeckViewProps> = ({
         <p className="deck-subtitle">Investor Deck V.5 for Alex and Dan</p>
       </div>
 
-      {/* Slide 2: Intro — Old Catalogs Meet AI */}
+      {/* Slide 2: Intro - Old Catalogs Meet AI */}
       <div className="deck-slide deck-slide-intro-split">
         <div className="deck-intro-left">
           <span className="deck-label">Intro</span>
           <h2>The catalog is back.</h2>
-          <p>For decades, catalogs were how America discovered what to buy. Sears, J.Crew, IKEA — pages you dog-eared, circled, tore out. It was curated, visual, personal. Then e-commerce killed the catalog and replaced it with search bars and infinite scroll.</p>
+          <p>For decades, catalogs were how America discovered what to buy. Sears, J.Crew, IKEA - pages you dog-eared, circled, tore out. It was curated, visual, personal. Then e-commerce killed the catalog and replaced it with search bars and infinite scroll.</p>
           <p>We&apos;re building the next generation. Where creators are the editors, video is the format, and AI makes every catalog personal. Same magic. New medium.</p>
         </div>
         <div className="deck-intro-right">

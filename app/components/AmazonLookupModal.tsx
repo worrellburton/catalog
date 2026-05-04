@@ -66,7 +66,7 @@ export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupM
         const found = await searchAmazonProducts(raw, 24);
         setResults(found);
         setMode('search');
-        // Preselect all — user de-selects what they don't want.
+        // Preselect all - user de-selects what they don't want.
         setSelected(new Set(found.map(p => p.url!).filter(Boolean)));
       }
     } catch (err) {
@@ -210,9 +210,9 @@ export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupM
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{product.name}</div>
                 <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                  {product.brand || '—'} {product.asin && <span style={{ fontFamily: 'monospace', marginLeft: 8, color: '#999' }}>{product.asin}</span>}
+                  {product.brand || ' - '} {product.asin && <span style={{ fontFamily: 'monospace', marginLeft: 8, color: '#999' }}>{product.asin}</span>}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 6 }}>{product.price || '—'}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 6 }}>{product.price || ' - '}</div>
                 {product.categories.length > 0 && (
                   <div style={{ fontSize: 11, color: '#888' }}>{product.categories.slice(0, 3).join(' › ')}</div>
                 )}
@@ -259,8 +259,8 @@ export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupM
                       <div style={{ fontSize: 11, fontWeight: 600, marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {p.name}
                       </div>
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{p.brand || '—'}</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginTop: 2 }}>{p.price || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{p.brand || ' - '}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginTop: 2 }}>{p.price || ' - '}</div>
                       {isSel && (
                         <div style={{ position: 'absolute', top: 6, right: 6, background: '#111', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
                           ✓

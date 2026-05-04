@@ -6,7 +6,7 @@ interface BaseProps {
   stuckCount: number;
   /** Async handler that actually retries each job. */
   onRerunAll: () => Promise<void>;
-  /** Optional label override — defaults to "Rerun all stuck (N)". */
+  /** Optional label override - defaults to "Rerun all stuck (N)". */
   label?: string;
 }
 
@@ -42,7 +42,7 @@ export default function RerunAllStuckButton(props: Props) {
       setBudgetInput(String(getAiBudget()));
       setOpen(true);
     } else {
-      // No balance check — just confirm + run.
+      // No balance check - just confirm + run.
       if (!window.confirm(`Rerun ${stuckCount} stuck job${stuckCount === 1 ? '' : 's'}?`)) return;
       setRunning(true);
       try {

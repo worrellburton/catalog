@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * run without a live network or Supabase credentials.
  *
  * Pure-logic helpers (URL construction, request shaping, response
- * normalization) are replicated inline — same pattern as looks.test.ts —
+ * normalization) are replicated inline - same pattern as looks.test.ts  - 
  * so they stay fast and deterministic.
  *
  * Embedding backend: TwelveLabs Marengo-retrieval-2.7 (1024-dim text)

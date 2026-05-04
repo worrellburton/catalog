@@ -4,7 +4,7 @@ import { supabase } from '~/utils/supabase';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
 
-/* /admin/publish/:id — promote a user-generated look into the curated
+/* /admin/publish/:id - promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
  * /admin/content?tab=looks (Unpublished tab) and the Published tab.
  * Full screen instead of a modal so the admin has space to review
@@ -53,7 +53,7 @@ export default function AdminPublishScreen() {
       return;
     }
     if (!supabase) {
-      setError('Supabase not configured — can’t load the unpublished look.');
+      setError('Supabase not configured - can’t load the unpublished look.');
       setLoading(false);
       return;
     }
@@ -102,8 +102,8 @@ export default function AdminPublishScreen() {
         .filter(r => !!r.products)
         .map(r => ({
           id: r.products!.id,
-          name: r.products!.name || '—',
-          brand: r.products!.brand || '—',
+          name: r.products!.name || ' - ',
+          brand: r.products!.brand || ' - ',
           price: r.products!.price,
           image_url: r.products!.image_url,
           role_tag: r.role_tag,
@@ -142,7 +142,7 @@ export default function AdminPublishScreen() {
         })
       ));
       // The Content/Looks list joins `looks_creative!inner` and only
-      // surfaces looks with status='live' — createLook writes draft
+      // surfaces looks with status='live' - createLook writes draft
       // and never inserts a creative row, so without these two
       // follow-ups the published look is silently dropped from the
       // Published tab.
@@ -341,7 +341,7 @@ export default function AdminPublishScreen() {
               className="admin-btn admin-btn-primary"
               onClick={submit}
               disabled={publishing || draft.status !== 'done'}
-              title={draft.status !== 'done' ? `Can’t publish — status is ${draft.status}` : undefined}
+              title={draft.status !== 'done' ? `Can’t publish - status is ${draft.status}` : undefined}
             >
               {publishing ? 'Publishing…' : 'Publish to catalog'}
             </button>

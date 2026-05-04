@@ -143,7 +143,7 @@
   z-index: 9999;
 }
 
-/* Graphical variant — wider so the thumbnail strips fit. The trigger sits
+/* Graphical variant - wider so the thumbnail strips fit. The trigger sits
    in the header-right; this anchor shifts the popout so its right edge
    aligns with the trigger instead of pinning to its left edge. */
 .user-menu-popout--graphical {
@@ -154,7 +154,7 @@
   padding: 8px;
 }
 
-/* Try-it-on CTA — primary action, sits at top of the menu. */
+/* Try-it-on CTA - primary action, sits at top of the menu. */
 .user-menu-cta {
   display: flex;
   align-items: center;
@@ -305,7 +305,7 @@
   margin: 4px 8px;
 }
 
-/* Import flyout — opens on hover (mouse) or focus-within (keyboard).
+/* Import flyout - opens on hover (mouse) or focus-within (keyboard).
    Slides out to the left of the user menu so it doesn't get clipped
    on the right edge of the viewport. Mobile / coarse pointers fall
    back to a click on the parent button (which routes to /import). */
@@ -379,7 +379,7 @@
 .light-mode .user-menu-flyout-item { color: #111; }
 .light-mode .user-menu-flyout-item:hover { background: rgba(0, 0, 0, 0.04); }
 
-/* Coarse pointers (touch) can't hover, so the flyout never opens —
+/* Coarse pointers (touch) can't hover, so the flyout never opens  - 
    the parent button still navigates to /import where the user picks
    the source from the page itself. */
 @media (hover: none) {
@@ -449,7 +449,7 @@
   background: #fff;
 }
 
-/* "Shopping for" segmented control — super-admin only. Same row
+/* "Shopping for" segmented control - super-admin only. Same row
    geometry as the .user-menu-item rows so it slots into the menu
    without breaking rhythm. */
 .user-menu-item--segmented {
@@ -497,7 +497,7 @@
   color: #fff;
 }
 
-/* Delete-mode toggle — danger tint when on so a super-admin can't
+/* Delete-mode toggle - danger tint when on so a super-admin can't
    miss that the consumer feed is now armed for destruction. */
 .user-menu-item--toggle.is-on {
   color: #fca5a5;

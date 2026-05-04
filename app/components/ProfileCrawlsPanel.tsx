@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
   if (diff < 60_000) return 'just now';
@@ -101,7 +101,7 @@ function AddProfileModal({
             <span className="admin-form-hint">
               A creator/curator profile or link-in-bio page (shopmy.us, ltk.app,
               linktree, Instagram bio link, Amazon storefront, etc.). The agent
-              extracts every product link on the page — across all linked-out brands.
+              extracts every product link on the page - across all linked-out brands.
             </span>
           </div>
           <div className="admin-form-group">
@@ -232,7 +232,7 @@ export default function ProfileCrawlsPanel() {
             <tbody>
               {jobs.map((j) => (
                 <tr key={j.id}>
-                  <td style={{ fontWeight: 500 }}>{j.site_name || '—'}</td>
+                  <td style={{ fontWeight: 500 }}>{j.site_name || ' - '}</td>
                   <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <a
                       href={j.site_url}

@@ -133,7 +133,7 @@ export default function LookForm({ look, onSaved, onCancel }: LookFormProps) {
           const res = await getLookDetail(savedLook.id);
           savedLook = res.data;
         } catch {
-          // Non-critical — parent will re-fetch list anyway
+          // Non-critical - parent will re-fetch list anyway
         }
       }
 

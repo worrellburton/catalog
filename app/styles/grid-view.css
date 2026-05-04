@@ -135,7 +135,7 @@
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
-  /* (content-visibility: auto removed — it suppressed paint of off-screen
+  /* (content-visibility: auto removed - it suppressed paint of off-screen
      cards on mobile, causing a visible black flash as cards scrolled in
      before the browser caught up with rendering. The 2-viewport video
      prefetch band in useInViewport handles "lazy" the right way: the
@@ -144,13 +144,13 @@
      already decoded.) */
 }
 
-/* Featured cards — 2x2 on desktop */
+/* Featured cards - 2x2 on desktop */
 .look-card-featured {
   grid-column: span 2;
   grid-row: span 2;
 }
 
-/* Wide cards — 2x1 on desktop, video zoomed to fill landscape */
+/* Wide cards - 2x1 on desktop, video zoomed to fill landscape */
 .look-card-wide {
   grid-column: span 2;
   aspect-ratio: 3 / 2;
@@ -163,7 +163,7 @@
   transform: scale(1.15);
 }
 
-/* Tall cards — 1x2 on desktop, lets a portrait video show more */
+/* Tall cards - 1x2 on desktop, lets a portrait video show more */
 .look-card-tall {
   grid-row: span 2;
   aspect-ratio: 3 / 8;
@@ -190,7 +190,7 @@
   }
 }
 
-/* On hover, darken siblings — desktop only */
+/* On hover, darken siblings - desktop only */
 @media (hover: hover) {
   #grid-container:hover .look-card {
     opacity: 0.5;
@@ -211,7 +211,7 @@
   position: relative;
 }
 
-/* Shimmer placeholder — shown until video loads. Visible regardless
+/* Shimmer placeholder - shown until video loads. Visible regardless
    of whether a poster image is present so the user never stares at a
    flat black box: a poster (if any) sits on top, but a brief shimmer
    sweep runs underneath as a continuous "loading" affordance. */

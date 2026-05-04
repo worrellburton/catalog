@@ -1,4 +1,4 @@
-// trailPrefetch — warm browser caches for the consumer feed before the user
+// trailPrefetch - warm browser caches for the consumer feed before the user
 // gets there. Two layers:
 //
 //   1. Posters (cheap, universally good): inject <link rel="preload" as="image">
@@ -8,7 +8,7 @@
 //      for the first 3 only when the connection looks healthy and the user
 //      hasn't enabled Save Data.
 //
-// Idempotent — calling twice with the same rows is a no-op.
+// Idempotent - calling twice with the same rows is a no-op.
 
 import type { ProductAd } from '~/services/product-creative';
 import { supabaseImage } from './supabaseImage';
@@ -33,7 +33,7 @@ interface NavigatorWithConnection extends Navigator {
 function networkLooksHealthy(): boolean {
   if (typeof navigator === 'undefined') return false;
   const conn = (navigator as NavigatorWithConnection).connection;
-  if (!conn) return true; // Browser doesn't expose Network Info — assume good.
+  if (!conn) return true; // Browser doesn't expose Network Info - assume good.
   if (conn.saveData) return false;
   if (conn.effectiveType && conn.effectiveType !== '4g') return false;
   return true;

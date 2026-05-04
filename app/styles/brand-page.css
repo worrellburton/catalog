@@ -44,7 +44,7 @@
 .light-mode .brand-back { color: rgba(0, 0, 0, 0.5); }
 .light-mode .brand-back:hover { color: #111; background: rgba(0, 0, 0, 0.04); }
 
-/* Hero — editorial brand title with eyebrow + count. */
+/* Hero - editorial brand title with eyebrow + count. */
 .brand-hero {
   display: flex;
   flex-direction: column;
@@ -82,7 +82,7 @@
 
 .light-mode .brand-hero-meta { color: rgba(0, 0, 0, 0.5); }
 
-/* Grid — 3 columns on desktop, 2 on mobile. Same gap as the consumer
+/* Grid - 3 columns on desktop, 2 on mobile. Same gap as the consumer
    feed so visually it reads as a continuation. */
 .brand-grid {
   display: grid;
@@ -112,7 +112,7 @@
   overflow: hidden;
 }
 
-/* Loading skeleton — soft pulsing tiles matching the grid cells. */
+/* Loading skeleton - soft pulsing tiles matching the grid cells. */
 .brand-grid.is-loading .brand-grid-skeleton {
   aspect-ratio: 9 / 16;
   border-radius: 14px;
@@ -160,5 +160,5 @@
   text-decoration-color: currentColor;
 }
 
-/* Hide on the Flutter shell? No — the shell can navigate to brand
+/* Hide on the Flutter shell? No - the shell can navigate to brand
    pages just like any other. Keep visible. */

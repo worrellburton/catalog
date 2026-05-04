@@ -1,4 +1,4 @@
-/* In-app browser — slide-up overlay that frames a third-party retailer
+/* In-app browser - slide-up overlay that frames a third-party retailer
    page in an iframe. Header carries close, save-product chip, and an
    "open in real browser" escape hatch. Body is the iframe (or a
    blocked-by-frame-ancestors fallback panel). */
@@ -89,7 +89,7 @@
   flex-shrink: 0;
 }
 
-/* Save chip — same yellow tint pattern as ProductPage's bookmark button */
+/* Save chip - same yellow tint pattern as ProductPage's bookmark button */
 .iab-save {
   display: inline-flex;
   align-items: center;

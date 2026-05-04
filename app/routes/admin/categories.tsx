@@ -177,7 +177,7 @@ export default function AdminCategories() {
         <div>
           <h1>Product Taxonomy</h1>
           <p className="admin-page-subtitle">
-            Synonym registry for search query expansion — teaches the AI which user terms map to canonical types.
+            Synonym registry for search query expansion - teaches the AI which user terms map to canonical types.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -425,14 +425,14 @@ function TaxonomyRow({ row, category, generating, onGenerate }: TaxonomyRowProps
             )}
           </div>
         ) : (
-          <span style={{ color: '#475569', fontSize: '0.8rem' }}>—</span>
+          <span style={{ color: '#475569', fontSize: '0.8rem' }}> - </span>
         )}
       </td>
       <td style={{ color: '#94a3b8', fontSize: '0.8rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {row.keywords || '—'}
+        {row.keywords || ' - '}
       </td>
       <td style={{ color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-        {genDate ?? '—'}
+        {genDate ?? ' - '}
       </td>
       <td>
         <button

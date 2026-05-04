@@ -1,4 +1,4 @@
-// useRecentProducts — tracks the last N products the shopper opened so the
+// useRecentProducts - tracks the last N products the shopper opened so the
 // user-menu can render thumbnail strips ("Recently viewed"). Persisted to
 // localStorage so it survives reloads / new sessions on the same device.
 //
@@ -53,7 +53,7 @@ export function useRecentProducts(): UseRecentProducts {
 
   const clearRecent = useCallback(() => persist([]), [persist]);
 
-  // Cross-tab sync: another tab may push a recent — mirror it here so the
+  // Cross-tab sync: another tab may push a recent - mirror it here so the
   // menu doesn't go stale when the user has the app open twice.
   useEffect(() => {
     if (typeof window === 'undefined') return;

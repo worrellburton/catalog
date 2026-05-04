@@ -55,12 +55,12 @@ export interface GenerationProduct {
   sort_order: number;
 }
 
-// Eight preset styles — the Generate page dropdown picks one of these; the
+// Eight preset styles - the Generate page dropdown picks one of these; the
 // prompt builder concatenates the label into the Seedance instruction.
 export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = [
   { value: 'street',      label: 'Street',      blurb: 'Urban candid, natural light, walking shot' },
   { value: 'editorial',   label: 'Editorial',   blurb: 'High-fashion studio, dramatic lighting' },
-  { value: 'commercial',  label: 'Commercial',  blurb: 'Branded ad starring you — house-style spot per the picked brand' },
+  { value: 'commercial',  label: 'Commercial',  blurb: 'Branded ad starring you - house-style spot per the picked brand' },
   { value: 'lifestyle',   label: 'Lifestyle',   blurb: 'Casual home / cafe setting, warm tones' },
   { value: 'studio',      label: 'Studio',      blurb: 'Clean seamless backdrop, product-focused' },
   { value: 'athletic',    label: 'Athletic',    blurb: 'Gym or outdoor training, dynamic motion' },
@@ -72,7 +72,7 @@ export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = 
 /**
  * House-style hint per brand. Used by the Commercial style preset so a
  * picked Nike product produces a kinetic Nike-style spot, a Gap pick
- * lands a sunlit family Gap spot, etc. Order matters — earlier
+ * lands a sunlit family Gap spot, etc. Order matters - earlier
  * patterns win, so put more specific brands first if any overlap.
  *
  * The tone string is dropped verbatim into the prompt, so phrase it
@@ -205,7 +205,7 @@ function detectBrandTones(
       if (!seen.has(hit.key)) seen.set(hit.key, { key: hit.key, tone: hit.tone, camera: hit.camera });
     } else {
       // Brand isn't in BRAND_COMMERCIAL_TONES. Fall back to a generic
-      // commercial template — do NOT inject the brand name into the
+      // commercial template - do NOT inject the brand name into the
       // prompt (Bytedance content moderation rejects naked brand
       // mentions and we don't have a curated visual language for this
       // brand anyway). Key the seen-map by brand so we still dedupe,
@@ -223,7 +223,7 @@ function detectBrandTones(
 }
 
 /**
- * Body-zone framing — derived from the picked role tags so the
+ * Body-zone framing - derived from the picked role tags so the
  * generated clip only shows the regions where the user actually
  * picked an item. A shopper who picked just a hat + sweatshirt
  * gets a portrait crop instead of Seedance inventing pants and
@@ -310,45 +310,45 @@ function computeFraming(
   const feet  = zones.has('feet');
   const hand  = zones.has('hand');
 
-  // Head-only — tight portrait. Crop tightly so Seedance can't invent
+  // Head-only - tight portrait. Crop tightly so Seedance can't invent
   // a torso or outfit underneath.
   if (head && !neck && !torso && !waist && !legs && !feet && !hand) {
     return 'Tight head-and-shoulders crop. Frame from above the head down to just below the collarbone. Do not render torso, waist, legs, or feet.';
   }
 
-  // Head + neck (no torso) — slightly looser portrait so a necklace
+  // Head + neck (no torso) - slightly looser portrait so a necklace
   // or scarf reads.
   if ((head || neck) && !torso && !waist && !legs && !feet) {
     return 'Tight portrait crop from above the head to mid-chest. Do not render torso below the chest, waist, legs, or feet.';
   }
 
-  // Torso (with or without head) and nothing below — half-body crop.
+  // Torso (with or without head) and nothing below - half-body crop.
   if (torso && !waist && !legs && !feet) {
     return 'Half-body portrait crop, top of head to just below the chest. Do not render waist, legs, or feet.';
   }
 
-  // Includes the waist zone but no legs/feet — mid-shot.
+  // Includes the waist zone but no legs/feet - mid-shot.
   if ((torso || head) && waist && !legs && !feet) {
     return 'Mid-shot crop, top of head to just below the waist. Do not render legs or feet.';
   }
 
-  // Has legs but no shoes — knees crop, omit feet so Seedance does
+  // Has legs but no shoes - knees crop, omit feet so Seedance does
   // not invent footwear that was not picked.
   if (legs && !feet) {
     return 'Three-quarter crop from top of head to just above the ankles. Do not render feet or footwear.';
   }
 
-  // Has shoes but no legs/torso — feet/ankle crop.
+  // Has shoes but no legs/torso - feet/ankle crop.
   if (feet && !legs && !torso && !head) {
     return 'Feet-and-ankles crop. Hero the shoes; face is optional and should not dominate.';
   }
 
-  // Hand-carry items only (e.g. just a bag) — hand/forearm crop.
+  // Hand-carry items only (e.g. just a bag) - hand/forearm crop.
   if (hand && !head && !torso && !legs && !feet) {
     return 'Hand-and-forearm crop showing how the item is carried. Face is optional.';
   }
 
-  // Anything spanning torso through feet — full body.
+  // Anything spanning torso through feet - full body.
   return 'Frame as a centered full-body shot, head to toe.';
 }
 
@@ -358,7 +358,7 @@ function computeFraming(
  * first folder) keeps each shopper siloed.
  *
  * When `onProgress` is provided, we POST directly to the Storage REST API
- * via XHR — `fetch()` (which supabase-js uses internally) doesn't expose
+ * via XHR - `fetch()` (which supabase-js uses internally) doesn't expose
  * request-upload progress in any browser today. The XHR path uses the
  * exact same Authorization + apikey headers supabase-js attaches, so RLS
  * still applies. Without `onProgress` we fall back to supabase-js so we
@@ -450,7 +450,7 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
  * (status COMPLETED with `detail[]`).
  *
  * Important: ByteDance's `partner_validation_failed` filter only fires
- * for multi-image (2–3 photo) submissions — single-image checks
+ * for multi-image (2–3 photo) submissions - single-image checks
  * almost always pass even when the real multi-photo generation will
  * fail. Always pass the full set of currently-filled slots.
  *
@@ -458,11 +458,11 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
  * so a network hiccup doesn't block the user from submitting.
  *
  * Reasons returned when ok=false:
- *   partner_validation_failed  — ByteDance "real likeness" safety filter
- *   content_policy_violation   — NSFW / disallowed content
+ *   partner_validation_failed  - ByteDance "real likeness" safety filter
+ *   content_policy_violation   - NSFW / disallowed content
  *   no_face_detected
- *   blocked                    — generic Fal rejection
- *   network_error              — couldn't reach edge function
+ *   blocked                    - generic Fal rejection
+ *   network_error              - couldn't reach edge function
  */
 export async function checkFacePhoto(
   imageUrls: string[],
@@ -491,7 +491,7 @@ export async function checkFacePhoto(
 
 /**
  * Delete one of the user's reference photos. Removes the storage object
- * (best-effort — bucket cleanup is non-blocking) and the row, which
+ * (best-effort - bucket cleanup is non-blocking) and the row, which
  * cascades into any user_generation_uploads entries that referenced it.
  */
 export async function deleteUserUpload(
@@ -506,7 +506,7 @@ export async function deleteUserUpload(
 }
 
 /**
- * Fire the name-look edge function for a generation. Best-effort —
+ * Fire the name-look edge function for a generation. Best-effort  - 
  * returns silently on any failure (network, missing key, Claude rate
  * limit). The generation's display_name stays null and the LookCard
  * falls back to the style preset label.
@@ -529,7 +529,7 @@ export async function nameLookForGeneration(generationId: string): Promise<void>
       } catch { /* best-effort, never throw */ }
     }
   } catch (err) {
-    // Naming is decorative — never block the user on it.
+    // Naming is decorative - never block the user on it.
     console.warn('[name-look] invoke exception:', err);
     try {
       await supabase.from('generation_events')
@@ -636,7 +636,7 @@ export interface CreateGenerationInput {
 
 /**
  * Persist a single Generate submission. Writes the parent row + both pivot
- * tables in sequence — wrapped in try/rollback so the edge function never
+ * tables in sequence - wrapped in try/rollback so the edge function never
  * sees a half-built job. Status starts at 'pending'; the generate-look
  * edge function promotes it through generating → done|failed.
  */
@@ -690,7 +690,7 @@ export async function createGeneration(
 
   // Fire-and-forget: kick the generate-look edge function so the poller
   // doesn't have to wait for a cron to pick the pending row up. The
-  // function is idempotent — if the pg_net trigger already fired it
+  // function is idempotent - if the pg_net trigger already fired it
   // returns { success: true, already: <status> } rather than an error.
   supabase.functions.invoke('generate-look', {
     body: { generation_id: gen.id },
@@ -790,7 +790,7 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
 }
 
 /**
- * Build the Seedance reference-to-video prompt. Kept deliberately short —
+ * Build the Seedance reference-to-video prompt. Kept deliberately short  - 
  * Seedance 2 Fast's reference endpoint is fed the face + product photos as
  * visual references, so the text only needs to tell it *what to do*:
  * preserve the face, set the height, place the products on the subject.
@@ -809,7 +809,7 @@ export function buildGenerationPrompt(opts: {
   durationSeconds?: number;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
-  // Strip brand + product names from the prompt — Bytedance/Seedance's
+  // Strip brand + product names from the prompt - Bytedance/Seedance's
   // partner_validation_failed filter rejects prompts that name specific
   // commercial brands or trademarked product titles. Only the role tag
   // (hat, jacket, sneakers, etc.) is kept so the model knows which slot
@@ -834,26 +834,26 @@ export function buildGenerationPrompt(opts: {
     // pacing, camera moves), but Bytedance's partner_validation_failed
     // filter rejects prompts that name commercial brands verbatim. So
     // we keep the tone+camera *descriptors* and drop every brand-name
-    // label. The visual cues do the actual work in the model — the
+    // label. The visual cues do the actual work in the model - the
     // brand key was only a human-readable navigator in the template.
     if (tones.length === 0) {
-      castLine = 'Cast them as the lead in a polished branded commercial — hero pacing, clean grade, on-brand palette.';
+      castLine = 'Cast them as the lead in a polished branded commercial - hero pacing, clean grade, on-brand palette.';
       cameraLine = 'Cinematography: bold dolly-in, low-angle hero framing, single rack focus to a product detail, motion-blur transition that reads as a cut.';
     } else if (tones.length === 1) {
-      castLine = `Cast them as the lead in a polished commercial spot — ${tones[0].tone}.`;
+      castLine = `Cast them as the lead in a polished commercial spot - ${tones[0].tone}.`;
       cameraLine = `Cinematography: ${tones[0].camera}.`;
     } else {
       const blendedTone = tones.map(t => t.tone).join('; meshing ');
       const blendedCamera = tones.map(t => t.camera).join(' / ');
-      castLine = `Cast them as the lead in a polished crossover commercial — meshing ${blendedTone}. Frame it as a cohesive house-style spot.`;
-      cameraLine = `Cinematography blends multiple house languages — ${blendedCamera}.`;
+      castLine = `Cast them as the lead in a polished crossover commercial - meshing ${blendedTone}. Frame it as a cohesive house-style spot.`;
+      cameraLine = `Cinematography blends multiple house languages - ${blendedCamera}.`;
     }
     // Three-beat structure inside the single Seedance clip so it
     // reads as a commercial, not a static fit-cam. Seedance can't do
     // real edit cuts in one render, but aggressive composition shifts
     // + motion-blur transitions fake the look of cuts well.
     const beatLine = seconds >= 10
-      ? 'Structure across the clip in 4 beats: (1) hero entrance — wide composed frame, subject walks/turns into shot; (2) push-in close-up at ~25% — face / detail moment; (3) action beat at ~55% — wardrobe interaction (zip pull, hand-in-pocket, head turn) with a motion-blur transition that reads as a cut; (4) hero stance + product reveal in the final third with a clean rack focus.'
+      ? 'Structure across the clip in 4 beats: (1) hero entrance - wide composed frame, subject walks/turns into shot; (2) push-in close-up at ~25% - face / detail moment; (3) action beat at ~55% - wardrobe interaction (zip pull, hand-in-pocket, head turn) with a motion-blur transition that reads as a cut; (4) hero stance + product reveal in the final third with a clean rack focus.'
       : 'Structure across the clip in 3 beats: (1) hero entrance in the first ~30%; (2) action / wardrobe interaction with a motion-blur transition that reads as a cut around the midpoint; (3) close-up product or expression hero in the final third.';
     return [
       `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,

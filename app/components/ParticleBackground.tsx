@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-// Vanilla WebGL particle drift — no dependencies. Renders a soft cloud of
+// Vanilla WebGL particle drift - no dependencies. Renders a soft cloud of
 // glowing points with additive blending and slow noise-driven motion. Sized
 // so it reads as ambient texture, not a focal effect. Auto-pauses when the
 // tab is hidden and honours prefers-reduced-motion (renders one static frame).
@@ -13,7 +13,7 @@ const VS = /* glsl */ `
   uniform   vec2  uViewport;
   varying   float vAlpha;
 
-  // Cheap pseudo-noise from a hash — enough texture for drift.
+  // Cheap pseudo-noise from a hash - enough texture for drift.
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
 
   void main() {
@@ -43,7 +43,7 @@ const FS = /* glsl */ `
   varying float vAlpha;
 
   void main() {
-    // Soft circular falloff — gl_PointCoord is the [0,1] sprite coord.
+    // Soft circular falloff - gl_PointCoord is the [0,1] sprite coord.
     vec2  d   = gl_PointCoord - 0.5;
     float r   = dot(d, d) * 4.0;
     float a   = exp(-r * 3.5) * vAlpha;
@@ -74,7 +74,7 @@ export default function ParticleBackground() {
     if (!canvas) return;
 
     const gl = canvas.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: false });
-    if (!gl) return; // Older device — gate keeps working without the bg.
+    if (!gl) return; // Older device - gate keeps working without the bg.
 
     const vs = compile(gl, gl.VERTEX_SHADER, VS);
     const fs = compile(gl, gl.FRAGMENT_SHADER, FS);

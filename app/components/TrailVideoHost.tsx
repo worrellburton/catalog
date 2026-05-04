@@ -1,4 +1,4 @@
-// TrailVideoHost — a single HTMLVideoElement per creative id, owned by the
+// TrailVideoHost - a single HTMLVideoElement per creative id, owned by the
 // app root and shuttled between slots (grid card → overlay hero → trail rail).
 //
 // Why this exists
@@ -7,7 +7,7 @@
 // (e.g. card → ProductPage hero). That tears down the media pipeline: source
 // re-fetch, decode reset, first-frame black gap. The only way to keep the
 // pixels alive across a layout change is to keep the *DOM element* alive and
-// move it with appendChild — browsers preserve currentTime and decoder state
+// move it with appendChild - browsers preserve currentTime and decoder state
 // across appendChild within the same document.
 //
 // Pattern
@@ -33,7 +33,7 @@ import {
   type ReactNode,
 } from 'react';
 
-// Pool cap. We size for "2 viewports of cards stay alive at once" — at
+// Pool cap. We size for "2 viewports of cards stay alive at once" - at
 // ~6 cards per mobile viewport that's 12 cards. 32 gives enough headroom
 // for search results (up to 48 items per page) so videos beyond row 3
 // don't lose their buffered frames. Videos that exit the 2-viewport band
@@ -52,7 +52,7 @@ const TrailVideoContext = createContext<TrailVideoManager | null>(null);
 interface PoolEntry {
   el: HTMLVideoElement;
   src: string;
-  /** Monotonically incrementing access counter — used for LRU eviction. */
+  /** Monotonically incrementing access counter - used for LRU eviction. */
   lastUsed: number;
 }
 
@@ -66,7 +66,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     if (pool.size <= POOL_MAX) return;
     // Sort by lastUsed ascending; drop until we're back under cap. We only
     // evict elements currently parked in the off-screen pool (still attached
-    // to their slot? skip — they're in use).
+    // to their slot? skip - they're in use).
     const offscreen = poolRef.current;
     if (!offscreen) return;
     const candidates = [...pool.entries()]
@@ -85,7 +85,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     let entry = pool.get(id);
 
     if (entry && entry.src !== src) {
-      // Same id, new source — replace. Rare (worker re-render of a creative).
+      // Same id, new source - replace. Rare (worker re-render of a creative).
       try { entry.el.pause(); } catch {}
       entry.el.src = src;
       entry.src = src;
@@ -106,7 +106,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       el.setAttribute('autoplay', '');
       el.setAttribute('playsinline', '');
       // 'auto' so the video buffers fully while the card sits in the
-      // 2-viewport prep band — by the time the user actually scrolls to
+      // 2-viewport prep band - by the time the user actually scrolls to
       // it, frames are already decoded and playback starts instantly.
       // Bandwidth-heavy on mobile, but bounded by POOL_MAX (32) so worst
       // case is ~32 buffered videos at any moment.
@@ -130,11 +130,11 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     e.lastUsed = ++tickRef.current;
 
     // Move into the slot. appendChild on an already-parented node detaches
-    // first — the previous slot loses it automatically without remount.
+    // first - the previous slot loses it automatically without remount.
     container.appendChild(e.el);
     // Resume playback. Errors here are routine on iOS before user gesture.
     // If play() rejects (autoplay policy), nudge currentTime to ~0.5 s so
-    // the paused frame isn't frame 0 — for AI-gen videos that's the
+    // the paused frame isn't frame 0 - for AI-gen videos that's the
     // reference still image, which is indistinguishable from the static
     // product photo and makes the card look frozen. A small seek forward
     // is allowed without a gesture and gives us at least one visibly
@@ -144,7 +144,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
         if (e.el.paused && e.el.currentTime < 0.05 && e.el.readyState >= 1) {
           e.el.currentTime = 0.5;
         }
-      } catch { /* readyState too low or seek not allowed — try again later */ }
+      } catch { /* readyState too low or seek not allowed - try again later */ }
     });
 
     return () => {
@@ -167,16 +167,16 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   // bugs we have to handle:
   //   1. Tab hidden → browsers pause every video. We want them paused
   //      while hidden but resumed when the tab returns.
-  //   2. iOS / Chrome autoplay policy can reject the initial play() — the
+  //   2. iOS / Chrome autoplay policy can reject the initial play() - the
   //      first frame is decoded so the card LOOKS rendered, but it never
   //      animates. The first user gesture (tap, scroll, key) unblocks
   //      autoplay, so we use that as a chance to retry.
   //   3. Network stalls / decoder hiccups can leave a video paused mid-
   //      playback. A 3 s heartbeat re-issues play() on any in-slot video
-  //      that's currently paused — cheap insurance.
+  //      that's currently paused - cheap insurance.
   //
   // "In-slot" means the video is parented to a real card slot, not the
-  // off-screen pool. We only resume those — pool-parked videos should
+  // off-screen pool. We only resume those - pool-parked videos should
   // stay paused until they're attached to a slot again.
   useEffect(() => {
     const offscreen = poolRef.current;
@@ -187,7 +187,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       for (const { el } of elementsRef.current.values()) {
         if (!isInSlot(el)) continue;
         if (!el.paused) continue;
-        void el.play().catch(() => { /* ignore — next tick will retry */ });
+        void el.play().catch(() => { /* ignore - next tick will retry */ });
       }
     };
     const pauseAll = () => {
@@ -204,7 +204,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // First-gesture unblock for browsers that gate autoplay until the
     // user interacts with the page. Listeners are once: true so we don't
     // burn CPU after the unblock. We include scroll / wheel because the
-    // home grid is scroll-driven — a user can land on /catalog.shop,
+    // home grid is scroll-driven - a user can land on /catalog.shop,
     // scroll the feed, never click anything, and without these the
     // AI-gen video stays paused at frame 0 (which is the reference
     // still image, indistinguishable from the static product photo).
@@ -212,7 +212,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
 
     // Heartbeat: every 1 s, kick any in-slot video that has stalled. A
     // tighter interval matters most in the first few seconds after the
-    // grid mounts — that's when the muted-autoplay flag is being
+    // grid mounts - that's when the muted-autoplay flag is being
     // evaluated and a play() retry can flip a paused element into
     // playing without the user touching anything.
     const heartbeat = window.setInterval(resumeInSlot, 1000);

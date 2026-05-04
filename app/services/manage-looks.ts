@@ -87,7 +87,7 @@ interface PaginatedResponse<T> {
 }
 
 // ============================================
-// API helpers — edge function for writes only
+// API helpers - edge function for writes only
 // ============================================
 
 function getEdgeFunctionUrl(path: string): string {
@@ -127,7 +127,7 @@ async function getCurrentUserId(): Promise<string> {
 }
 
 // ============================================
-// Look CRUD — reads use direct Supabase, writes use edge function
+// Look CRUD - reads use direct Supabase, writes use edge function
 // ============================================
 
 export async function getMyLooks(params?: { status?: LookStatus; page?: number; limit?: number }): Promise<PaginatedResponse<ManagedLook[]>> {

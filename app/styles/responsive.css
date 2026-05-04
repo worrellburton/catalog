@@ -1,6 +1,6 @@
 /* Responsive */
 @media (max-width: 768px) {
-  /* Hotspots — smaller on mobile */
+  /* Hotspots - smaller on mobile */
   .hotspot-dot {
     width: 10px;
     height: 10px;
@@ -31,7 +31,7 @@
     font-size: 11px;
   }
 
-  /* Look overlay — fullscreen bottom-sheet on mobile */
+  /* Look overlay - fullscreen bottom-sheet on mobile */
   .look-overlay {
     flex-direction: column;
     background: rgba(0, 0, 0, 0.5);
@@ -43,12 +43,12 @@
     min-height: auto;
   }
 
-  /* Back button on media side — hidden on mobile */
+  /* Back button on media side - hidden on mobile */
   .look-back-btn {
     display: none;
   }
 
-  /* Mobile back button in info panel — shown */
+  /* Mobile back button in info panel - shown */
   .look-back-btn-mobile {
     display: flex;
   }
@@ -127,7 +127,7 @@
     font-size: 13px;
   }
 
-  /* Creator page — mobile adjustments */
+  /* Creator page - mobile adjustments */
   .creator-page {
     padding-top: 60px;
     padding-left: 16px;
@@ -212,7 +212,7 @@
     left: -20px;
   }
 
-  /* Card catalog hover button — always visible on mobile (no hover) */
+  /* Card catalog hover button - always visible on mobile (no hover) */
   .look-card .card-catalog-btn {
     opacity: 1;
     transform: scale(1);
@@ -291,7 +291,7 @@
     height: 230px;
   }
 
-  /* Deck intro split — stack on mobile */
+  /* Deck intro split - stack on mobile */
   .deck-slide-intro-split .deck-intro-left p {
     font-size: 14px;
   }

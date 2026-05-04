@@ -39,7 +39,7 @@ interface SupabaseLook {
 
 async function fetchLooksFromSupabase(): Promise<Look[]> {
   if (!supabase) return staticLooks;
-  // Join the primary creative for each look — looks_creative supersedes the
+  // Join the primary creative for each look - looks_creative supersedes the
   // old looks.video_path column. !inner drops looks that have no creative
   // row (matches the previous "must have video_path" guard).
   const { data, error } = await supabase
@@ -86,13 +86,13 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   });
 
   // For looks without a creator_handle (user-published looks created
-  // via the manage-looks edge fn — handle is null because the fn
+  // via the manage-looks edge fn - handle is null because the fn
   // doesn't accept it), pull the publisher's profile so the admin
   // table + consumer-facing surfaces have a name + avatar to render.
   //
   // Two sources for the right user_id, in order of trust:
   //  1. Older rows where manage-looks wrote user_id = admin's auth.uid()
-  //     — those rows carry "Promoted from generation <uuid>" in their
+  //     - those rows carry "Promoted from generation <uuid>" in their
   //     description. We resolve the generation's actual user_id from
   //     user_generations and use *that* for the profile lookup so the
   //     creator column reads as the creator (not the admin).
@@ -204,12 +204,12 @@ async function fetchSearchSuggestionsFromSupabase(): Promise<string[]> {
 }
 
 // ============================================
-// Public API — returns static or Supabase data
+// Public API - returns static or Supabase data
 // ============================================
 
 // Session-level promise cache. The consumer feed mounts ContinuousFeed,
 // _index.tsx (for ProductPage's editorial grid), and CreatorPage in parallel
-// — each used to fire its own Supabase round-trip for the same dataset.
+// - each used to fire its own Supabase round-trip for the same dataset.
 // Sharing the in-flight promise collapses those into one network call and
 // keeps re-mounts (bookmarks → main, overlay open → close) free.
 let looksPromise: Promise<Look[]> | null = null;
@@ -260,7 +260,7 @@ export function invalidateLooksCache() {
 // Effectively gives us a Remix clientLoader benefit without needing to
 // thread useLoaderData through every component that wants the data.
 //
-// Guarded to browser context only — tests and SSR paths skip it.
+// Guarded to browser context only - tests and SSR paths skip it.
 if (typeof window !== 'undefined' && USE_SUPABASE) {
   // Fire-and-forget; populates the singleton promises. Component callers
   // .then() on the same promises and get the result whenever the network
