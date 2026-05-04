@@ -70,6 +70,98 @@ AD_PROMPT_TEMPLATES = {
     ),
 }
 
+# ─── Object templates ────────────────────────────────────────────────────
+# Non-apparel inventory (books, electronics, home goods, beauty, decor,
+# accessories that aren't worn) renders poorly with the apparel templates
+# because those imply a person walking with the product. Sending "a model
+# walks toward camera" with a book reference image produces a static-on-
+# table shot — the model has no idea what to do.
+#
+# These templates focus on the OBJECT itself: tactile camera movement
+# (slow dolly, hand reaching in, surface light sweep), no person required,
+# product-centric framing. Same style keys so the existing style picker
+# UI keeps working; we just swap the template family based on the
+# detected product type.
+OBJECT_AD_PROMPT_TEMPLATES = {
+    "studio_clean": (
+        "Cinematic product reveal of {product_desc}. "
+        "{image_context}"
+        "Clean seamless backdrop, soft top-down key light with gentle rim light. "
+        "Slow dolly-in toward the product, then a controlled 180-degree orbit "
+        "around it. Crisp focus on the product surface, subtle floor reflection, "
+        "premium commercial feel. No people in frame."
+    ),
+    "editorial_runway": (
+        "Editorial still-life of {product_desc}. "
+        "{image_context}"
+        "Moody chiaroscuro lighting, single hard key from the side, deep blacks. "
+        "Camera glides slowly across the product on a smooth slider, revealing "
+        "texture and form one detail at a time. Cinematic anamorphic feel, "
+        "shallow depth of field. No people in frame."
+    ),
+    "street_style": (
+        "Vibrant lifestyle still of {product_desc} resting on a textured surface "
+        "(wood grain, brushed concrete, or natural fabric). "
+        "{image_context}"
+        "Natural daylight, soft shadows. Camera arcs around the product with "
+        "subtle parallax. Warm color palette, real-world feel. No people in frame."
+    ),
+    "lifestyle_context": (
+        "Aspirational still-life of {product_desc} placed in a beautiful real-world "
+        "setting — a tasteful interior, sunlit shelf, or curated tabletop. "
+        "{image_context}"
+        "Warm golden hour light through a window, soft bokeh background. "
+        "Camera dollies in slowly, then the product is gently picked up by an "
+        "off-frame hand and rotated to reveal another angle. Tactile, "
+        "lifestyle-magazine commercial feel."
+    ),
+}
+
+# Product types that should use the OBJECT templates instead of the
+# apparel templates. Anything not listed defaults to the apparel set.
+OBJECT_PRODUCT_TYPES = {
+    "book", "books",
+    "electronic", "electronics", "tech", "gadget",
+    "home", "homedecor", "decor", "furniture",
+    "kitchen", "kitchenware",
+    "beauty", "skincare", "fragrance", "perfume", "cosmetic", "cosmetics",
+    "candle", "candles",
+    "toy", "toys", "puzzle", "puzzles",
+    "stationery", "paper",
+    "pet", "pets", "petsupply",
+    "wellness", "supplement", "supplements",
+    "accessory_object", "art", "artwork", "print", "prints",
+    "food", "snack", "snacks", "drink", "drinks", "beverage", "beverages",
+    "other",
+}
+
+
+def _is_object_product(product: dict) -> bool:
+    """Return True when the product should use OBJECT templates instead of
+    the apparel-centric AD templates. Detection priority:
+      1. The explicit `type` column on the product row (set by Type Audit).
+         Falls into OBJECT_PRODUCT_TYPES → object.
+      2. Cheap keyword check on name + brand for unmistakable signals like
+         "book", "lego", "candle", "pillow" when type is missing.
+    Apparel signals (shoe / shirt / dress / etc.) keep the existing
+    templates so we don't regress fashion generation quality."""
+    raw_type = (product.get("type") or "").strip().lower()
+    if raw_type:
+        if raw_type in OBJECT_PRODUCT_TYPES:
+            return True
+        # Anything we recognise as apparel is definitely not an object.
+        return False
+    # Fallback — type column is missing, sniff the name/brand.
+    haystack = f"{product.get('name') or ''} {product.get('brand') or ''}".lower()
+    object_signals = (
+        "book", "novel", "audiobook", "lego", "puzzle",
+        "candle", "diffuser", "fragrance", "perfume", "cologne",
+        "pillow", "mug", "vase", "lamp", "rug",
+        "kindle", "ipad", "iphone", "macbook", "headphone", "earbud",
+        "supplement", "vitamin", "tea", "coffee bean", "snack",
+    )
+    return any(sig in haystack for sig in object_signals)
+
 # Variation hints injected per image index for creative diversity
 IMAGE_VARIATION_HINTS = [
     "Focus on the product's front view and key details. ",
@@ -332,7 +424,15 @@ def generate_ad_video(ad_id: str) -> dict:
         # Build prompt with image context
         product_desc = _summarise_product(product)
         image_context = _build_image_context(all_images, len(images_data), len(all_images))
-        template = AD_PROMPT_TEMPLATES.get(style, AD_PROMPT_TEMPLATES["studio_clean"])
+        # Pick template family based on whether the product is apparel
+        # (worn on a person → AD_PROMPT_TEMPLATES) or an object (book,
+        # electronics, home goods → OBJECT_AD_PROMPT_TEMPLATES). Without
+        # this branch, books / candles / LEGO sets get the "model walks
+        # toward camera" prompt and the result is a static product photo
+        # because the image-conditioning model can't reconcile "walks
+        # toward camera" with a book reference image.
+        template_family = OBJECT_AD_PROMPT_TEMPLATES if _is_object_product(product) else AD_PROMPT_TEMPLATES
+        template = template_family.get(style, template_family["studio_clean"])
         raw_prompt = template.format(
             product_desc=product_desc,
             image_context=image_context,
