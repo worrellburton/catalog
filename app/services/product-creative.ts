@@ -406,6 +406,15 @@ export function resolveCatalogTypes(query: string): string[] | null {
   return CATALOG_TYPE_SYNONYMS[key] || null;
 }
 
+// Returns the material keywords (lowercased) that a product name MUST contain
+// for the given query to keep it. Returns null when the query is not a
+// material query — caller should not apply any name filter in that case.
+export function resolveMaterialKeywords(query: string): string[] | null {
+  const key = query.trim().toLowerCase();
+  if (!key) return null;
+  return CATALOG_KEYWORD_FILTER[key] || null;
+}
+
 // Used by the in-memory tier-1 filter in ContinuousFeed.
 export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boolean {
   const types = resolveCatalogTypes(query);
