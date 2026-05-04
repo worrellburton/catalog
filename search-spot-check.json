@@ -1,0 +1,1190 @@
+{
+  "shoes": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Sneakers",
+      "Boots",
+      "Sandals",
+      "Heels",
+      "Loafers",
+      "Flats",
+      "Mules"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 2,
+    "results": [
+      {
+        "name": "Women's Tracksmith Eliot Runner Bering Sea/Ivory / 10 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner White/Navy / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Wine/Ivory / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Navy/White / 8.5 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Ivory/Ivory / 11 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Men B GRADE Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 7
+      },
+      {
+        "name": "ALO Runner - Gravel",
+        "brand": "Alo Yoga",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 9
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Brown Rice/Petrified Oak / 11 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 14
+      },
+      {
+        "name": "ALO Runner - Seashell Blue",
+        "brand": "Alo Yoga",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 15
+      },
+      {
+        "name": "Retro Runner Sneakers",
+        "brand": "rag & bone",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 19
+      }
+    ]
+  },
+  "shoe": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Sneakers",
+      "Boots",
+      "Sandals",
+      "Heels",
+      "Loafers",
+      "Flats",
+      "Mules"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 2,
+    "results": [
+      {
+        "name": "Women's Tracksmith Eliot Runner Bering Sea/Ivory / 10 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner White/Navy / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Wine/Ivory / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Navy/White / 8.5 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Ivory/Ivory / 11 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Men B GRADE Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 9
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Brown Rice/Petrified Oak / 11 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 14
+      },
+      {
+        "name": "ALO Runner - Seashell Blue",
+        "brand": "Alo Yoga",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 15
+      },
+      {
+        "name": "Men's Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 17
+      },
+      {
+        "name": "Retro Runner Sneakers",
+        "brand": "rag & bone",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 19
+      }
+    ]
+  },
+  "sneakers": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Sneakers"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 2,
+    "results": [
+      {
+        "name": "Retro Runner Sneakers",
+        "brand": "rag & bone",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 1
+      },
+      {
+        "name": "ALO Runner - Gravel",
+        "brand": "Alo Yoga",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 2
+      },
+      {
+        "name": "Men's Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Bering Sea/Ivory / 10 / US Women",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Tracksmith Women's Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Women's Tracksmith Eliot Runner Navy/White",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner White/Navy / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "ALO Runner - Seashell Blue",
+        "brand": "Alo Yoga",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Navy/White / 8.5 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 10
+      },
+      {
+        "name": "Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 12
+      },
+      {
+        "name": "B GRADE Tracksmith Eliot Runner Wine/Ivory / 7 / US Men",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": false,
+        "bm25_rank": 14
+      },
+      {
+        "name": "Men B GRADE Tracksmith Eliot Runner",
+        "brand": "Tracksmith",
+        "type": "Sneakers",
+        "has_video": true,
+        "bm25_rank": 17
+      }
+    ]
+  },
+  "tooth brush": {
+    "intent": "vibe_browse",
+    "resolved_types": null,
+    "cold_miss": true,
+    "count": 0,
+    "with_video": 0,
+    "results": []
+  },
+  "toothbrush": {
+    "intent": "vibe_browse",
+    "resolved_types": null,
+    "cold_miss": true,
+    "count": 1,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "Colgate Harry Potter Kids Battery Toothbrush Multipack, Extra Soft Kids Vibrating Toothbrush, AA Batteries Included, 4 Pack, for Witches and Wizards Ages 3 and Older, Lay Flat Design",
+        "brand": "Colgate",
+        "type": null,
+        "has_video": true,
+        "bm25_rank": 1
+      }
+    ]
+  },
+  "denim": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Pants",
+      "Jacket"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 4,
+    "results": [
+      {
+        "name": "Sterling & Stitch Women's Cotton Pieced Denim Jacket",
+        "brand": "Sterling & Stitch",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 2
+      },
+      {
+        "name": "Cropped Game Time Full Zip Jacket - Black",
+        "brand": "ALO",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 2
+      },
+      {
+        "name": "Motivate Full-Zip Track Jacket - Spruce Green/White",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "Faux Fur Foxy Jacket - Ivory",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Performance On-The-Go Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Dreamscape Cargo Wide Leg Pant - Black",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Veronica Beard Women's Miller Dickey Jacket",
+        "brand": "Veronica Beard",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": null
+      },
+      {
+        "name": "Derrick Down-Filled Jacket",
+        "brand": "rag & bone",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Dreamscape Cargo Wide Leg Pant - Taupe",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Abercrombie & Fitch Women's Vegan Leather Utility Jacket",
+        "brand": "Abercrombie & Fitch",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": null
+      },
+      {
+        "name": "Breezy Wide Leg Pant (Long) - Navy",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Alpha Industries Women's MA-1 Bomber Jacket",
+        "brand": "Alpha Industries",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "jeans": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Pants"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "Dreamscape Cargo Wide Leg Pant - Black",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Dreamscape Cargo Wide Leg Pant - Taupe",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Breezy Wide Leg Pant (Long) - Navy",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Breezy Wide Leg Pant (Long) - White",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Sway Bootcut Sweatpant - Smoky Quartz",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Edition Sueded Straight Leg Pant - Black",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Make Waves Sweatpant - Charcoal Green Tonal",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Co-Op Pant (Long) - Steel Grey",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Make Waves Sweatpant - Charcoal Green Tonal",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Make Waves Sweatpant - Limestone Tonal",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "High-Waist Origin Wide Leg Track Pant - Navy/Black",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Alo Accolade Straight Leg Sweatpant",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": true,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "hair cream": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Haircare"
+    ],
+    "cold_miss": false,
+    "count": 9,
+    "with_video": 0,
+    "results": [
+      {
+        "name": "Shine Conditioner",
+        "brand": "Alo",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "American Crew Men's Hair Fiber, Like Hair Gel with High Hold & Low Shine, 3 oz",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "American Crew Men's Hair Matte Clay (OLD VERSION), Like Hair Gel with Medium/High Hold, 3 Oz (Pack of 1)",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Mini Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Head & Shoulders Classic Clean Dandruff Shampoo 13.5 Oz",
+        "brand": "Head & Shoulders",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Shine Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Clean Shine Shampoo",
+        "brand": "Alo Yoga",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "OUAI Detox Shampoo",
+        "brand": "OUAI",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "cream": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Haircare",
+      "Skincare"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "STANLEY Quencher H2.0 Tumbler with Handle and Straw 40 oz | Flowstate 3-Position Lid | Cup Holder Compatible for Travel | Insulated Stainless Steel Cup | BPA-Free | Cream 2.0",
+        "brand": "STANLEY",
+        "type": "Glassware",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "Courchevel Cashmere Beanie - Frosted Pink",
+        "brand": "Alo Yoga",
+        "type": "Hat",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "American Crew Men's Hair Fiber, Like Hair Gel with High Hold & Low Shine, 3 oz",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Clean Shine Shampoo",
+        "brand": "Alo Yoga",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Head & Shoulders Classic Clean Dandruff Shampoo 13.5 Oz",
+        "brand": "Head & Shoulders",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "American Crew Men's Hair Matte Clay (OLD VERSION), Like Hair Gel with Medium/High Hold, 3 Oz (Pack of 1)",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Shine Conditioner",
+        "brand": "Alo",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Mini Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Shine Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "OUAI Detox Shampoo",
+        "brand": "OUAI",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "Supergoop Beach Day Set Sunscreen",
+        "brand": "Supergoop!",
+        "type": "Skincare",
+        "has_video": true,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "shampoo": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Haircare"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "OUAI Detox Shampoo",
+        "brand": "OUAI",
+        "type": "Haircare",
+        "has_video": true,
+        "bm25_rank": 1
+      },
+      {
+        "name": "Mini Dry Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "Clean Shine Shampoo",
+        "brand": "Alo Yoga",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Head & Shoulders Classic Clean Dandruff Shampoo 13.5 Oz",
+        "brand": "Head & Shoulders",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Shine Shampoo",
+        "brand": "ALO",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "Velvet Off-Duty Cap - Black",
+        "brand": "Alo Yoga",
+        "type": "Hat",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Velvet Off-Duty Cap - Navy",
+        "brand": "Alo Yoga",
+        "type": "Hat",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "Velvet Off-Duty Cap - Winter Frost",
+        "brand": "ALO",
+        "type": "Hat",
+        "has_video": false,
+        "bm25_rank": 9
+      },
+      {
+        "name": "Shine Conditioner",
+        "brand": "Alo",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "American Crew Men's Hair Fiber, Like Hair Gel with High Hold & Low Shine, 3 oz",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      },
+      {
+        "name": "American Crew Men's Hair Matte Clay (OLD VERSION), Like Hair Gel with Medium/High Hold, 3 Oz (Pack of 1)",
+        "brand": "Amazon",
+        "type": "Haircare",
+        "has_video": false,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "candles": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Decor"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 0,
+    "results": [
+      {
+        "name": "Scented Candles Set | Men Candle Set, Scented Candles for Home, Gifts for Men Aromatherapy Gift Set - 4 Pack Manly Gifts for Dad Fathers Day, Soy Candle of Leather/Smoke & Vanilla/Oak/Lavender",
+        "brand": "Auelife",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "AOOVOO Coconut Vanilla Candles - 9 oz Scented Candles, Aromatherapy Candle, Soy Candle for Home Scented",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 2
+      },
+      {
+        "name": "WoodWick Evening Bonfire Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "WoodWick Evening Bonfire Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Bath & Body Works 3-Wick Candle, Mahogany Coconut Candle, Strong Throw, Long-Lasting Burn Up to 45 Hours, Exclusively Fragranced Soy Wax Blend, 14.5 oz - 2 Pack",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "WoodWick Warm Woods Trilogy Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Trilogy Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "WoodWick Lavender & Cedar Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "WoodWick Warm Wool Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "WoodWick Fireside Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 9
+      },
+      {
+        "name": "Chesapeake Bay Candle Scented Candle Peace + Tranquility (cashmere jasmine) 3-Wick Coffee Table Jar",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 10
+      },
+      {
+        "name": "WoodWick Candescent Coast Holiday Candle Gifts for Women and Men, 9.7 oz Precious Metals Collection with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 11
+      },
+      {
+        "name": "DUMOS Arched Full Length Mirror with Stand 64\"x21\" Floor Standing Aluminum Frame for Bedroom Body Hanging Leaning Modern Simple Home Decor Shatter-proorf Nano Glass Wall Living Room Cloakroom Black",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "candle": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Decor"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 0,
+    "results": [
+      {
+        "name": "Scented Candles Set | Men Candle Set, Scented Candles for Home, Gifts for Men Aromatherapy Gift Set - 4 Pack Manly Gifts for Dad Fathers Day, Soy Candle of Leather/Smoke & Vanilla/Oak/Lavender",
+        "brand": "Auelife",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 1
+      },
+      {
+        "name": "AOOVOO Coconut Vanilla Candles - 9 oz Scented Candles, Aromatherapy Candle, Soy Candle for Home Scented",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 2
+      },
+      {
+        "name": "WoodWick Evening Bonfire Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 3
+      },
+      {
+        "name": "WoodWick Evening Bonfire Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Bath & Body Works 3-Wick Candle, Mahogany Coconut Candle, Strong Throw, Long-Lasting Burn Up to 45 Hours, Exclusively Fragranced Soy Wax Blend, 14.5 oz - 2 Pack",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "WoodWick Warm Woods Trilogy Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Trilogy Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "WoodWick Lavender & Cedar Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "WoodWick Warm Wool Holiday Candle Gifts for Women and Men, 16 oz Ellipse Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "WoodWick Fireside Holiday Candle Gifts for Women and Men, 9.7 oz Medium Hourglass Candle with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 9
+      },
+      {
+        "name": "Chesapeake Bay Candle Scented Candle Peace + Tranquility (cashmere jasmine) 3-Wick Coffee Table Jar",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 10
+      },
+      {
+        "name": "WoodWick Candescent Coast Holiday Candle Gifts for Women and Men, 9.7 oz Precious Metals Collection with Crackling Wick",
+        "brand": "WoodWick",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": 11
+      },
+      {
+        "name": "DUMOS Arched Full Length Mirror with Stand 64\"x21\" Floor Standing Aluminum Frame for Bedroom Body Hanging Leaning Modern Simple Home Decor Shatter-proorf Nano Glass Wall Living Room Cloakroom Black",
+        "brand": "Amazon",
+        "type": "Decor",
+        "has_video": false,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "perfume": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Fragrance"
+    ],
+    "cold_miss": true,
+    "count": 2,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "PHLUR Vanilla Skin Body & Hair Fragrance Mist",
+        "brand": "PHLUR",
+        "type": "Fragrance",
+        "has_video": true,
+        "bm25_rank": 1
+      },
+      {
+        "name": "BASED Hair Clay for Men, Premium Hair Clay with Strong Hold, Texturizing Finish, & Low Shine, Hair Styling for Medium, Thick, Straight, or Wavy Hair, Santal Sandalwood Fragrance (3oz Pack of 1)",
+        "brand": "Amazon",
+        "type": "Fragrance",
+        "has_video": false,
+        "bm25_rank": null
+      }
+    ]
+  },
+  "jacket": {
+    "intent": "product_find",
+    "resolved_types": [
+      "Jacket"
+    ],
+    "cold_miss": false,
+    "count": 12,
+    "with_video": 5,
+    "results": [
+      {
+        "name": "Alpha Shell Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 2
+      },
+      {
+        "name": "Derrick Down-Filled Jacket",
+        "brand": "rag & bone",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 2
+      },
+      {
+        "name": "Alpha Industries Women's MA-1 Bomber Jacket",
+        "brand": "Alpha Industries",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 3
+      },
+      {
+        "name": "Sterling & Stitch Women's Cotton Pieced Denim Jacket",
+        "brand": "Sterling & Stitch",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Edition Sueded Jacket - Navy",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Performance On-The-Go Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Abercrombie & Fitch Women's Vegan Leather Utility Jacket",
+        "brand": "Abercrombie & Fitch",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 6
+      },
+      {
+        "name": "Game Time Ripstop Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 6
+      },
+      {
+        "name": "Stretch Woven Notable Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Veronica Beard Women's Miller Dickey Jacket",
+        "brand": "Veronica Beard",
+        "type": "Jacket",
+        "has_video": true,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Stretch Woven Notable Jacket - Anthracite",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "Edition Sueded Jacket - Navy",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 10
+      }
+    ]
+  },
+  "athleisure": {
+    "intent": "vibe_browse",
+    "resolved_types": null,
+    "cold_miss": true,
+    "count": 12,
+    "with_video": 1,
+    "results": [
+      {
+        "name": "Accolade 1/4 Zip Pullover - Navy",
+        "brand": "Alo Yoga",
+        "type": null,
+        "has_video": true,
+        "bm25_rank": 1
+      },
+      {
+        "name": "Chill Hoodie - Athletic Heather Grey",
+        "brand": "Alo Yoga",
+        "type": "Top",
+        "has_video": false,
+        "bm25_rank": 8
+      },
+      {
+        "name": "Co-Op Pant (Long) - Charcoal Green",
+        "brand": "Alo Yoga",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": 4
+      },
+      {
+        "name": "Polar Fleece Wintry Mix Skirt - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 7
+      },
+      {
+        "name": "Cropped Game Time Full Zip Jacket - White",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 23
+      },
+      {
+        "name": "Triumph Restore Sweatpant - Grey Triblend",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": 10
+      },
+      {
+        "name": "Washed Alosoft High-Waist Sunray Legging - Cool Grey Wash",
+        "brand": "ALO",
+        "type": "Activewear",
+        "has_video": false,
+        "bm25_rank": 18
+      },
+      {
+        "name": "Chill Hoodie - Navy",
+        "brand": "Alo Yoga",
+        "type": "Top",
+        "has_video": false,
+        "bm25_rank": 38
+      },
+      {
+        "name": "Airlift Mesh High-Waist Just Right Capri - Black",
+        "brand": "Alo Yoga",
+        "type": null,
+        "has_video": false,
+        "bm25_rank": 21
+      },
+      {
+        "name": "Serenity Wide Leg Sweatpant - Ivory",
+        "brand": "ALO",
+        "type": "Pants",
+        "has_video": false,
+        "bm25_rank": 5
+      },
+      {
+        "name": "Performance On-The-Go Jacket - Steel Grey",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 42
+      },
+      {
+        "name": "Performance On-The-Go Jacket - Black",
+        "brand": "Alo Yoga",
+        "type": "Jacket",
+        "has_video": false,
+        "bm25_rank": 39
+      }
+    ]
+  },
+  "cozy fall vibes": {
+    "intent": "vibe_browse",
+    "resolved_types": null,
+    "cold_miss": true,
+    "count": 0,
+    "with_video": 0,
+    "results": []
+  }
+}
