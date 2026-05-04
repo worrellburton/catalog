@@ -154,11 +154,17 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
         >
           <img
             className="card-creator-avatar"
-            src={creatorData?.avatar || ''}
-            alt={look.creator}
+            src={creatorData?.avatar || look.creatorAvatar || ''}
+            alt={creatorData?.displayName || look.creatorDisplayName || ''}
           />
           <span className="card-creator-name">
-            {creatorData?.displayName || look.creator}
+            {/* Prefer the static-seed display name, then the look-level
+                fallback emitted by user-published flows. If neither is
+                set and the handle is a raw user:<uuid>, hide it - the
+                uuid is noise in the UI. */}
+            {creatorData?.displayName
+              || look.creatorDisplayName
+              || (look.creator?.startsWith('user:') ? '' : look.creator)}
           </span>
         </div>
       </div>

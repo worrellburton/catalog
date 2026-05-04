@@ -601,6 +601,16 @@ export default function Home() {
     setCatalogName('all');
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('catalog:close-search'));
+      // Push the URL bar back to "/" so clicking the logo from a
+      // deep-linked surface (/l/<look-slug>, /p/<product-slug>,
+      // /b/<brand-slug>, or /?q=<search>) cleanly resets to the
+      // catalog root. Bypasses a full page reload - we already
+      // reset every layer of state above, so a silent pushState
+      // is enough to keep the URL bar honest.
+      const target = '/';
+      if (window.location.pathname !== target || window.location.search) {
+        window.history.pushState({}, '', target);
+      }
       // Scroll to top of the feed so the user lands at the start
       // of the grid, not wherever they were last reading.
       window.scrollTo({ top: 0, behavior: 'smooth' });
