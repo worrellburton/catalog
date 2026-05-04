@@ -41,20 +41,65 @@ const CORS_HEADERS = {
 
 // Hard upper bounds on the parallel fill-ins. Anything slower falls back
 // to the static analyzer / no visual lane so the request never stalls.
-const HAIKU_TIMEOUT_MS      = 600;
+// Haiku typically responds in 800-1500ms; 600ms was timing out >90% of
+// requests and writing degraded `intent=vibe` rows to the query cache,
+// which then poisoned every subsequent request for the same query.
+const HAIKU_TIMEOUT_MS      = 2500;
 const TWELVELABS_TIMEOUT_MS = 600;
 
-// Canonical product.type values present in the catalog. Sourced from the
-// live `select distinct type from products` — keep in sync as new types
-// land. Haiku is constrained to choose only from this set so it can't
-// invent labels that don't filter to anything.
-const CANONICAL_TYPES = [
+// Cache invalidation knobs. Bump either constant to expire all cached
+// query_embeddings rows that were generated under the old version. The DB
+// holds embedding_v / expansion_v columns alongside expires_at; rows are
+// only treated as a hit when both versions match AND expires_at is in the
+// future. Default TTL is 30 days from write.
+const EMBED_V        = 1;
+const EXPANSION_V    = 1;
+// Daily cache refresh: keeps repeat searches under <1s but ensures users
+// see freshly-ingested products without waiting 30 days for cache rollover.
+const CACHE_TTL_DAYS = 1;
+
+// When the creative pool returns < this many results, fan out to the
+// products lane so we don't ship a near-empty grid back to the user.
+const MIN_RESULTS_THRESHOLD = 8;
+const MAX_PER_PRODUCT       = 2;
+
+// Canonical product.type values are loaded from the product_types_canonical
+// view at boot and refreshed every 5 minutes. The hard-coded list this
+// replaced was fashion-only and silently dropped Haiku's correct picks for
+// non-fashion categories (Fragrance, Hair Cream, Candle, …).
+let CANONICAL_TYPES_CACHE: { types: string[]; loaded_at: number } | null = null;
+const CANONICAL_TYPES_TTL_MS = 5 * 60 * 1000;
+
+async function loadCanonicalTypes(admin: ReturnType<typeof createClient>): Promise<string[]> {
+  const now = Date.now();
+  if (CANONICAL_TYPES_CACHE && now - CANONICAL_TYPES_CACHE.loaded_at < CANONICAL_TYPES_TTL_MS) {
+    return CANONICAL_TYPES_CACHE.types;
+  }
+  try {
+    const { data, error } = await admin
+      .from('product_types_canonical')
+      .select('type');
+    if (error) throw error;
+    const types = (data ?? [])
+      .map((r: Record<string, unknown>) => r.type)
+      .filter((t: unknown): t is string => typeof t === 'string' && t.length > 0);
+    if (types.length === 0) throw new Error('empty canonical types');
+    CANONICAL_TYPES_CACHE = { types, loaded_at: now };
+    return types;
+  } catch (err) {
+    console.warn('[nl-search] loadCanonicalTypes failed, using last cache or fallback:', err);
+    return CANONICAL_TYPES_CACHE?.types ?? CANONICAL_TYPES_FALLBACK;
+  }
+}
+
+// Last-resort fallback if the view query fails on a cold instance.
+const CANONICAL_TYPES_FALLBACK: string[] = [
   'Top', 'Jacket', 'Pants', 'Shorts', 'Skirt', 'Dress', 'Coat',
   'Underwear', 'Activewear', 'Loungewear', 'Swimwear',
   'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules',
   'Hat', 'Bag', 'Scarf', 'Socks',
   'Fragrance', 'Skincare', 'Book', 'Yoga',
-] as const;
+];
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -100,32 +145,36 @@ interface CreativeRow {
   rrf_score: number;
   dense_rank: number | null;
   bm25_rank:  number | null;
+  type_match?: boolean | null;
 }
 
 type SearchResult = CreativeRow & { score: number };
 
 // ── Claude Haiku: query expansion ────────────────────────────────────────────
 
-async function expandQueryWithHaiku(query: string, anthropicKey: string): Promise<QueryExpansion> {
-  const typeList = CANONICAL_TYPES.join(', ');
-  const prompt = `You are a fashion catalog search planner. The catalog has these exact product types:
+async function expandQueryWithHaiku(query: string, anthropicKey: string, canonicalTypes: string[]): Promise<QueryExpansion> {
+  const typeList = canonicalTypes.join(', ');
+  const prompt = `You are a multi-category catalog search planner. The catalog spans fashion AND non-fashion (beauty, home, tech, lifestyle). It contains these exact product types:
 ${typeList}
 
 User query: "${query}"
 
 Decide intent and return ONLY a JSON object with these exact fields:
 - "intent": "browse" if the user is shopping a category | "pairing" if they want what to wear with something they have | "vibe" if it's an abstract aesthetic / mood with no specific category
-- "types": array of product types from the list above. For broad terms include ALL adjacent types (e.g. "pants" → ["Pants","Shorts","Activewear"], "shoes" → ["Sneakers","Boots","Sandals","Heels","Loafers","Flats","Mules"]). For specific terms narrow it (e.g. "jeans" → ["Pants"], "loafers" → ["Loafers"]). Empty array when intent is "pairing" or "vibe".
-- "anchor_type": for intent=pairing only, the type of the anchor item (e.g. "white sneakers" → "Sneakers"). null otherwise.
-- "pair_types": for intent=pairing only, the complementary types to surface (NOT the anchor). E.g. anchor=Sneakers → ["Top","Pants","Shorts","Hat"]. null otherwise.
-- "keywords": the query stripped of the category noun, used for in-category ranking. E.g. "white sneakers" → "white", "summer dress for wedding" → "summer wedding". Keep as a short phrase.
+- "types": array of product types from the list above. Pick the closest matches — may include non-fashion types (e.g. "hair cream" → ["Hair Cream"], "candles" → ["Candle"], "perfume" → ["Fragrance"]). For broad fashion terms include adjacent types (e.g. "pants" → ["Pants","Shorts","Activewear"], "shoes" → ["Sneakers","Boots","Sandals","Heels","Loafers","Flats","Mules"]). For specific terms narrow it. Empty array when intent is "pairing" or "vibe".
+- "anchor_type": for intent=pairing only, the type of the anchor item. null otherwise.
+- "pair_types": for intent=pairing only, the complementary types to surface (NOT the anchor). null otherwise.
+- "keywords": the query stripped of the category noun, used for in-category ranking. Keep as a short phrase.
 
 Examples:
 "pants"                          → {"intent":"browse","types":["Pants","Shorts","Activewear"],"anchor_type":null,"pair_types":null,"keywords":""}
-"jeans"                          → {"intent":"browse","types":["Pants"],"anchor_type":null,"pair_types":null,"keywords":"jeans"}
+"hair cream"                     → {"intent":"browse","types":["Hair Cream"],"anchor_type":null,"pair_types":null,"keywords":""}
+"candles"                        → {"intent":"browse","types":["Candle"],"anchor_type":null,"pair_types":null,"keywords":""}
 "white sneakers"                 → {"intent":"browse","types":["Sneakers"],"anchor_type":null,"pair_types":null,"keywords":"white"}
 "what to wear with white sneakers" → {"intent":"pairing","types":[],"anchor_type":"Sneakers","pair_types":["Top","Pants","Shorts","Hat"],"keywords":"white"}
 "quiet luxury"                   → {"intent":"vibe","types":[],"anchor_type":null,"pair_types":null,"keywords":"quiet luxury"}
+
+IMPORTANT: only choose types that appear in the list above. If no listed type matches the query, return an empty types array and let dense+BM25 retrieval handle it.
 
 Respond with ONLY the JSON object, no prose, no markdown.`;
 
@@ -151,7 +200,7 @@ Respond with ONLY the JSON object, no prose, no markdown.`;
 
   // Defensive normalisation: clamp Haiku's output to the canonical set so a
   // hallucinated type can't be passed to the SQL filter.
-  const allowed = new Set<string>(CANONICAL_TYPES);
+  const allowed = new Set<string>(canonicalTypes);
   const intent: Intent = raw.intent === 'pairing' || raw.intent === 'vibe' ? raw.intent : 'browse';
   const types = (raw.types ?? []).filter(t => allowed.has(t));
   const pair_types = (raw.pair_types ?? []).filter(t => allowed.has(t));
@@ -249,15 +298,22 @@ async function readCache(
   try {
     const { data } = await admin
       .from('query_embeddings')
-      .select('embedding, expansion')
+      .select('embedding, expansion, embedding_v, expansion_v, expires_at')
       .eq('query_text', key)
       .maybeSingle();
     if (!data) return { embedding: null, expansion: null };
-    const row = data as { embedding?: unknown; expansion?: unknown };
-    return {
-      embedding: parsePgVector(row.embedding),
-      expansion: (row.expansion as QueryExpansion | null) ?? null,
+    const row = data as {
+      embedding?: unknown;
+      expansion?: unknown;
+      embedding_v?: number | null;
+      expansion_v?: number | null;
+      expires_at?: string | null;
     };
+    const expired = row.expires_at ? new Date(row.expires_at).getTime() < Date.now() : false;
+    if (expired) return { embedding: null, expansion: null };
+    const embedding = (row.embedding_v ?? 0) === EMBED_V ? parsePgVector(row.embedding) : null;
+    const expansion = (row.expansion_v ?? 0) === EXPANSION_V ? ((row.expansion as QueryExpansion | null) ?? null) : null;
+    return { embedding, expansion };
   } catch {
     return { embedding: null, expansion: null };
   }
@@ -270,11 +326,12 @@ async function writeCache(
   expansion: QueryExpansion | null,
 ): Promise<void> {
   if (!embedding && !expansion) return;
-  const row: Record<string, unknown> = { query_text: key };
-  if (embedding) row.embedding = toPgVector(embedding);
-  if (expansion) row.expansion = expansion;
-  // Upsert so we can backfill expansion on rows cached before migration 064
-  // (and vice-versa).
+  const expiresAt = new Date(Date.now() + CACHE_TTL_DAYS * 86400 * 1000).toISOString();
+  const row: Record<string, unknown> = { query_text: key, expires_at: expiresAt };
+  if (embedding) { row.embedding = toPgVector(embedding); row.embedding_v = EMBED_V; }
+  if (expansion) { row.expansion = expansion;             row.expansion_v = EXPANSION_V; }
+  // Upsert so a query whose embedding came back first can later attach its
+  // expansion (and vice-versa) without overwriting the other column.
   admin
     .from('query_embeddings')
     .upsert(row, { onConflict: 'query_text' })
@@ -336,7 +393,8 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(supabaseUrl, serviceKey);
   const gender = body.gender ?? null;
   const cacheKey = normalizeQueryForCache(query);
-
+  // Load canonical types from the DB view (cached in module scope, refreshed every 5 min).
+  const canonicalTypes = await loadCanonicalTypes(admin);
   // ── Step 1: cache lookup ──────────────────────────────────────────────────
   const cache = await readCache(admin, cacheKey);
 
@@ -353,19 +411,26 @@ Deno.serve(async (req: Request) => {
         })
       : Promise.resolve(null);
 
-  const expansionTask: Promise<QueryExpansion> = cache.expansion
-    ? Promise.resolve(cache.expansion)
+  // Tagged so we can avoid caching low-quality static fallbacks. Only the
+  // real Haiku branch tags `_source:'haiku'` — timeouts and errors fall
+  // through to the static analyzer and stay uncached so the next request
+  // can retry the LLM.
+  type TaggedExpansion = QueryExpansion & { _source: 'haiku' | 'static' };
+  const expansionTask: Promise<TaggedExpansion> = cache.expansion
+    ? Promise.resolve({ ...cache.expansion, _source: 'haiku' })
     : needExpansion && anthropicKey
       ? Promise.race([
-          expandQueryWithHaiku(query, anthropicKey).catch(err => {
-            console.warn('[nl-search] haiku expand failed:', err);
-            return expansionFromStatic(query);
-          }),
-          new Promise<QueryExpansion>(resolve =>
-            setTimeout(() => resolve(expansionFromStatic(query)), HAIKU_TIMEOUT_MS)
+          expandQueryWithHaiku(query, anthropicKey, canonicalTypes)
+            .then(e => ({ ...e, _source: 'haiku' as const }))
+            .catch(err => {
+              console.warn('[nl-search] haiku expand failed:', err);
+              return { ...expansionFromStatic(query), _source: 'static' as const };
+            }),
+          new Promise<TaggedExpansion>(resolve =>
+            setTimeout(() => resolve({ ...expansionFromStatic(query), _source: 'static' as const }), HAIKU_TIMEOUT_MS)
           ),
         ])
-      : Promise.resolve(expansionFromStatic(query));
+      : Promise.resolve({ ...expansionFromStatic(query), _source: 'static' as const });
 
   const [embedding, expansion] = await Promise.all([embedTask, expansionTask]);
 
@@ -383,9 +448,12 @@ Deno.serve(async (req: Request) => {
     ]);
   }
 
-  // Backfill cache for next time (fire-and-forget upsert).
-  if ((needEmbed && embedding) || (needExpansion && expansion)) {
-    writeCache(admin, cacheKey, embedding, expansion);
+  // Backfill cache for next time (fire-and-forget upsert). Skip when the
+  // expansion is the static fallback — caching it would lock the query
+  // into degraded results for CACHE_TTL_DAYS.
+  const cacheableExpansion = expansion._source === 'haiku' ? expansion : null;
+  if ((needEmbed && embedding) || (needExpansion && cacheableExpansion)) {
+    writeCache(admin, cacheKey, embedding, cacheableExpansion);
   }
 
   // ── Step 3: choose filter_types from expansion ───────────────────────────
@@ -403,13 +471,15 @@ Deno.serve(async (req: Request) => {
   // ── Step 4: hybrid SQL retrieval ─────────────────────────────────────────
   const queryEmbedding = embedding ?? new Array(1536).fill(0);
   const denseRpc = admin.rpc('search_creatives_hybrid', {
-    query_embedding: toPgVector(queryEmbedding),
-    query_text:      bm25Text,
+    query_embedding:  toPgVector(queryEmbedding),
+    query_text:       bm25Text,
     k,
-    filter_gender:   gender,
-    filter_types:    filterTypes,
-    require_elite:   false,
-    exclude_ids:     excludeIds,
+    filter_gender:    gender,
+    filter_types:     filterTypes,
+    require_elite:    false,
+    exclude_ids:      excludeIds,
+    min_results:      MIN_RESULTS_THRESHOLD,
+    max_per_product:  MAX_PER_PRODUCT,
   });
 
   const visualRpc = visualEmbedding
@@ -419,6 +489,20 @@ Deno.serve(async (req: Request) => {
         filter_gender:   gender,
       })
     : Promise.resolve({ data: [] as Array<Record<string, unknown>> });
+
+  // Speculatively launch the products lane in parallel so warm requests
+  // don't pay a second sequential RPC round-trip. Most browse queries end
+  // up needing it anyway (creative pool starves for non-fashion). The
+  // result is consumed in Step 4b — discarded if the creative pool was
+  // already full of on-type matches.
+  const productsRpcSpeculative = admin.rpc('search_products_hybrid', {
+    query_embedding: toPgVector(queryEmbedding),
+    query_text:      bm25Text,
+    k,
+    filter_gender:   gender,
+    filter_types:    filterTypes,
+    exclude_ids:     [],
+  });
 
   const [denseRes, visualRes] = await Promise.all([denseRpc, visualRpc]);
 
@@ -478,11 +562,142 @@ Deno.serve(async (req: Request) => {
   // Dedupe by product so a single product with multiple creatives doesn't
   // stack the grid.
   const seen = new Set<string>();
-  const dedupedResults: SearchResult[] = [];
+  let dedupedResults: SearchResult[] = [];
   for (const c of fused) {
     if (c.product_id && seen.has(c.product_id)) continue;
     if (c.product_id) seen.add(c.product_id);
     dedupedResults.push(c);
+  }
+
+  // ── Step 4a: prune off-type pad when filter_types is set ────────────────
+  // search_creatives_hybrid soft-relaxes the type filter when the strict
+  // pool is below min_results; the relaxed rows arrive tagged
+  // `type_match=false`. Those padding rows are usually unrelated junk
+  // (e.g. a tee for a "candles" search). Drop them up front and let the
+  // products lane fill the gap with on-type matches.
+  let prunedOffType = 0;
+  if (filterTypes && filterTypes.length > 0) {
+    const onType = dedupedResults.filter(r => r.type_match === true);
+    if (onType.length < dedupedResults.length) {
+      prunedOffType = dedupedResults.length - onType.length;
+      // Reset `seen` to just the on-type product ids so the products
+      // fallback doesn't re-skip the freshly pruned ones.
+      seen.clear();
+      for (const r of onType) if (r.product_id) seen.add(r.product_id);
+      dedupedResults = onType;
+    }
+  }
+
+  // ── Step 4b: products fallback when creative pool is starved ────────────
+  // The creative index excludes products that have no live video; for cold
+  // (e.g. brand-new) categories the user would otherwise see an empty grid.
+  // Two-pass strategy: first try the products lane respecting filter_types,
+  // and if that returns nothing usable (e.g. "toothbrush" mapped to
+  // ["Haircare"] but the actual toothbrush rows have type=null), retry
+  // without the type filter so dense+BM25 can find them by name/description.
+  let productsAppended = 0;
+  let productsFallbackPasses = 0;
+  if (dedupedResults.length < k) {
+    const callProducts = async (types: string[] | null): Promise<Array<Record<string, unknown>>> => {
+      productsFallbackPasses++;
+      // Pass 1 reuses the speculative RPC fired in Step 4 (same args).
+      const rpcPromise = (types === filterTypes && productsFallbackPasses === 1)
+        ? productsRpcSpeculative
+        : admin.rpc('search_products_hybrid', {
+            query_embedding: toPgVector(queryEmbedding),
+            query_text:      bm25Text,
+            k,
+            filter_gender:   gender,
+            filter_types:    types,
+            exclude_ids:     [],
+          });
+      const { data: pRows, error: pErr } = await rpcPromise;
+      if (pErr) {
+        console.warn('[nl-search] products fallback rpc error:', pErr);
+        return [];
+      }
+      return Array.isArray(pRows) ? (pRows as Array<Record<string, unknown>>) : [];
+    };
+
+    const appendRows = (rows: Array<Record<string, unknown>>) => {
+      for (const r of rows) {
+        const productId = r.product_id as string;
+        if (!productId || seen.has(productId)) continue;
+        seen.add(productId);
+        const row: SearchResult = {
+          id:                productId,
+          entity_type:       'creative' as const,
+          product_id:        productId,
+          video_url:         null,
+          thumbnail_url:     null,
+          affiliate_url:     null,
+          duration_seconds:  null,
+          is_elite:          null,
+          product_name:      (r.product_name as string) ?? null,
+          product_brand:     (r.product_brand as string) ?? null,
+          product_price:     (r.product_price as string) ?? null,
+          product_image_url: (r.product_image_url as string) ?? null,
+          product_url:       (r.product_url as string) ?? null,
+          product_gender:    (r.product_gender as string) ?? null,
+          product_type:      (r.product_type as string) ?? null,
+          concept_doc:       (r.concept_doc as string) ?? null,
+          concept_facets:    (r.concept_facets as Record<string, unknown>) ?? null,
+          rrf_score:         (r.rrf_score as number) ?? 0,
+          dense_rank:        (r.dense_rank as number) ?? null,
+          bm25_rank:         (r.bm25_rank as number) ?? null,
+          score:             (r.rrf_score as number) ?? 0,
+        };
+        dedupedResults.push(row);
+        productsAppended++;
+        if (dedupedResults.length >= k) return true;
+      }
+      return false;
+    };
+
+    try {
+      // Pass 1: respect filter_types if Haiku gave us any.
+      const firstRows = await callProducts(filterTypes);
+      const filled = appendRows(firstRows);
+
+      // Pass 2: if the type-filtered pass was empty AND we have a non-empty
+      // query, retry with no type filter so BM25 can rescue terms that
+      // Haiku mapped to the wrong canonical type (or types whose products
+      // have type=null, like "toothbrush").
+      if (!filled && dedupedResults.length < k && filterTypes && filterTypes.length > 0) {
+        const looseRows = await callProducts(null);
+        appendRows(looseRows);
+      }
+    } catch (err) {
+      console.warn('[nl-search] products fallback failed:', err);
+    }
+  } else {
+    // Creative pool was already full \u2014 silently drain the speculative
+    // products RPC so its promise rejection (if any) doesn't bubble up.
+    Promise.resolve(productsRpcSpeculative).catch(() => {});
+  }
+
+  // ── Step 4c: BM25-aware re-rank when products lane contributed ──────────
+  // When filter_types is set and only a sparse creative lane survived
+  // (e.g. "candles" → one Decor creative for a mirror, products lane fills
+  // with seven actual candles), the appended products should outrank the
+  // creative if they actually hit the BM25 query and the creative didn't.
+  // Otherwise unrelated-but-on-type creatives keep grabbing pole position.
+  if (filterTypes && productsAppended > 0) {
+    const bm25Score = (r: SearchResult): number => {
+      // Lower bm25_rank = better. Treat null as "no BM25 hit".
+      return r.bm25_rank == null ? Number.POSITIVE_INFINITY : r.bm25_rank;
+    };
+    dedupedResults.sort((a, b) => {
+      const ba = bm25Score(a);
+      const bb = bm25Score(b);
+      // Anyone with a real BM25 hit wins over no-hit rows.
+      const aHit = Number.isFinite(ba) ? 1 : 0;
+      const bHit = Number.isFinite(bb) ? 1 : 0;
+      if (aHit !== bHit) return bHit - aHit;
+      if (aHit && ba !== bb) return ba - bb;
+      // Tie-break by RRF / dense score.
+      return (b.rrf_score ?? 0) - (a.rrf_score ?? 0);
+    });
   }
 
   const topScore = dedupedResults[0]?.score ?? null;
@@ -502,21 +717,26 @@ Deno.serve(async (req: Request) => {
     branch:         expansion.intent,
   };
 
-  const { data: logData } = await admin.rpc('log_search_query', {
-    p_raw_query:    query,
-    p_result_count: resultCount,
-    p_top_score:    topScore,
-    p_query_plan:   queryPlan as unknown as Record<string, unknown>,
-    p_user_id:      user_id ?? null,
-    p_session_id:   session_id ?? null,
-  });
+  // Fire-and-forget the analytics write so it doesn't add ~150-300ms to
+  // the response. The query_id was previously surfaced for click attribution
+  // — clients can now derive it server-side from raw_query + session_id.
+  admin
+    .rpc('log_search_query', {
+      p_raw_query:    query,
+      p_result_count: resultCount,
+      p_top_score:    topScore,
+      p_query_plan:   queryPlan as unknown as Record<string, unknown>,
+      p_user_id:      user_id ?? null,
+      p_session_id:   session_id ?? null,
+    })
+    .then(() => {});
 
   return jsonRes({
     ok: true,
     results: dedupedResults,
     query_plan: queryPlan,
     cold_miss: resultCount < 5 || topScore === null || (expansion.intent === 'vibe' && topScore < 0.020),
-    query_id: logData ?? null,
+    query_id: null,
     meta: {
       result_count:    resultCount,
       top_score:       topScore,
@@ -527,6 +747,18 @@ Deno.serve(async (req: Request) => {
       embedding_cache_hit: !!cache.embedding,
       expansion_cache_hit: !!cache.expansion,
       visual_lane:     visualEmbedding != null,
+      products_appended: productsAppended,
+      products_fallback_passes: productsFallbackPasses,
+      pruned_off_type:   prunedOffType,
+      canonical_types_count: canonicalTypes.length,
+      expansion: {
+        intent:      expansion.intent,
+        types:       expansion.types,
+        anchor_type: expansion.anchor_type,
+        pair_types:  expansion.pair_types,
+        keywords:    expansion.keywords,
+        source:      expansion._source,
+      },
     },
   });
 });

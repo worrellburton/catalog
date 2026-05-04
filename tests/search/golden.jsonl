@@ -1,0 +1,51 @@
+{"query": "candles", "expect_category": ["Decor"], "expect_name_includes": ["candle"], "intent": "browse"}
+{"query": "scented candle", "expect_category": ["Decor"], "expect_name_includes": ["candle","diffuser"], "intent": "browse"}
+{"query": "hair cream", "expect_category": ["Haircare"], "expect_name_includes": ["hair","clay","shampoo","conditioner","fiber","pomade"], "intent": "browse"}
+{"query": "hair clay", "expect_category": ["Haircare"], "expect_name_includes": ["clay","pomade","fiber"], "intent": "browse"}
+{"query": "shampoo", "expect_category": ["Haircare"], "expect_name_includes": ["shampoo"], "intent": "browse"}
+{"query": "dry shampoo", "expect_category": ["Haircare"], "expect_name_includes": ["dry shampoo","shampoo"], "intent": "browse"}
+{"query": "conditioner", "expect_category": ["Haircare"], "expect_name_includes": ["conditioner","shampoo"], "intent": "browse"}
+{"query": "dandruff shampoo", "expect_category": ["Haircare"], "expect_name_includes": ["dandruff","shampoo"], "intent": "browse"}
+{"query": "hair pomade", "expect_category": ["Haircare"], "expect_name_includes": ["pomade","clay","hair"], "intent": "browse"}
+{"query": "toothbrush", "expect_category": [], "expect_name_includes": ["toothbrush"], "intent": "browse"}
+{"query": "perfume", "expect_category": ["Fragrance"], "expect_name_includes": ["fragrance","perfume","mist","scent"], "intent": "browse"}
+{"query": "fragrance mist", "expect_category": ["Fragrance"], "expect_name_includes": ["fragrance","mist","scent"], "intent": "browse"}
+{"query": "lip balm", "expect_category": [], "expect_name_includes": ["lip","balm","mask"], "intent": "browse"}
+{"query": "lip mask", "expect_category": [], "expect_name_includes": ["lip","mask"], "intent": "browse"}
+{"query": "sunscreen", "expect_category": [], "expect_name_includes": ["sunscreen","supergoop","spf"], "intent": "browse"}
+{"query": "reed diffuser", "expect_category": [], "expect_name_includes": ["diffuser","reed"], "intent": "browse"}
+{"query": "sneakers", "expect_category": ["Sneakers"], "expect_name_includes": ["sneaker","runner","shoe"], "intent": "browse"}
+{"query": "running shoes", "expect_category": ["Sneakers"], "expect_name_includes": ["runner","sneaker","shoe","running"], "intent": "browse"}
+{"query": "leggings", "expect_category": ["Activewear","Pants"], "expect_name_includes": ["legging","airlift","pant"], "intent": "browse"}
+{"query": "yoga pants", "expect_category": ["Activewear","Pants"], "expect_name_includes": ["legging","yoga","pant","airlift"], "intent": "browse"}
+{"query": "tennis skirt", "expect_category": ["Skirt"], "expect_name_includes": ["tennis","skirt"], "intent": "browse"}
+{"query": "tennis dress", "expect_category": ["Dress"], "expect_name_includes": ["tennis","dress"], "intent": "browse"}
+{"query": "skirts", "expect_category": ["Skirt"], "expect_name_includes": ["skirt"], "intent": "browse"}
+{"query": "dresses", "expect_category": ["Dress"], "expect_name_includes": ["dress"], "intent": "browse"}
+{"query": "mini dress", "expect_category": ["Dress"], "expect_name_includes": ["dress","mini"], "intent": "browse"}
+{"query": "shorts", "expect_category": ["Shorts"], "expect_name_includes": ["short"], "intent": "browse"}
+{"query": "biker shorts", "expect_category": ["Shorts"], "expect_name_includes": ["short","biker"], "intent": "browse"}
+{"query": "sports bra", "expect_category": ["Underwear"], "expect_name_includes": ["bra"], "intent": "browse"}
+{"query": "bra", "expect_category": ["Underwear"], "expect_name_includes": ["bra"], "intent": "browse"}
+{"query": "boxers", "expect_category": ["Underwear"], "expect_name_includes": ["boxer"], "intent": "browse"}
+{"query": "hoodie", "expect_category": ["Top","Activewear"], "expect_name_includes": ["hoodie","pullover","zip"], "intent": "browse"}
+{"query": "sweater", "expect_category": ["Top"], "expect_name_includes": ["sweater","cardigan","pullover","knit"], "intent": "browse"}
+{"query": "cardigan", "expect_category": ["Jacket","Top"], "expect_name_includes": ["cardigan"], "intent": "browse"}
+{"query": "blazer", "expect_category": ["Jacket"], "expect_name_includes": ["blazer","jacket"], "intent": "browse"}
+{"query": "leather jacket", "expect_category": ["Jacket"], "expect_name_includes": ["jacket","leather","bomber"], "intent": "browse"}
+{"query": "puffer jacket", "expect_category": ["Jacket"], "expect_name_includes": ["puffer","jacket"], "intent": "browse"}
+{"query": "tank top", "expect_category": ["Top","Underwear"], "expect_name_includes": ["tank","top"], "intent": "browse"}
+{"query": "polo shirt", "expect_category": ["Top"], "expect_name_includes": ["polo"], "intent": "browse"}
+{"query": "tshirt", "expect_category": ["Top"], "expect_name_includes": ["tee","t-shirt","shirt","top"], "intent": "browse"}
+{"query": "wide leg pants", "expect_category": ["Pants"], "expect_name_includes": ["wide leg","pant","track"], "intent": "browse"}
+{"query": "cargo pants", "expect_category": ["Pants"], "expect_name_includes": ["cargo","pant"], "intent": "browse"}
+{"query": "beanie", "expect_category": ["Hat"], "expect_name_includes": ["beanie","hat","cap"], "intent": "browse"}
+{"query": "cap hat", "expect_category": ["Hat"], "expect_name_includes": ["cap","hat","beanie"], "intent": "browse"}
+{"query": "alo yoga leggings", "expect_category": ["Activewear","Pants"], "expect_name_includes": ["legging","airlift","alo"], "intent": "browse"}
+{"query": "alo bra", "expect_category": ["Underwear"], "expect_name_includes": ["bra","alo"], "intent": "browse"}
+{"query": "what to wear with sneakers", "expect_category": ["Pants","Top","Skirt","Dress","Activewear","Shorts"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "what goes with a tennis skirt", "expect_category": ["Top","Underwear","Activewear"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "outfits with leggings", "expect_category": ["Top","Jacket","Activewear"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "cozy fall vibes", "expect_category": ["Top","Jacket","Pants"], "expect_name_includes": [], "intent": "vibe"}
+{"query": "athleisure", "expect_category": ["Activewear","Top","Pants","Underwear","Shorts"], "expect_name_includes": [], "intent": "vibe"}
+{"query": "minimalist neutral", "expect_category": [], "expect_name_includes": [], "intent": "vibe"}

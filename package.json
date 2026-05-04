@@ -9,7 +9,9 @@
     "start": "remix-serve ./build/server/index.js",
     "lint": "npx eslint . --ext .ts,.tsx",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval:search": "node tests/search/run-golden.mjs",
+    "eval:search:warm": "node tests/search/run-golden.mjs --warm"
   },
   "dependencies": {
     "@remix-run/node": "^2.17.4",

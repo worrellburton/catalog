@@ -129,6 +129,18 @@ Deno.serve(async (req: Request) => {
   const errors: Array<{ query: string; reason: string }> = [];
 
   for (const miss of prioritised) {
+    // T1.4: emit one row per processed miss into search_backfill_attempts
+    // so we can audit cron runs in the dashboard. Without this we have no
+    // visibility into why a healthy cron run still leaves backfill_status
+    // = 'none' on every miss.
+    const attemptStart = Date.now();
+    let brainstormedCount = 0;
+    let brainstormedQueries: string[] = [];
+    let searchCalls = 0;
+    let productsInsertedEst = 0;
+    const attemptErrors: Array<{ query: string; reason: string }> = [];
+    let outcome: 'done' | 'skipped' | 'error' = 'done';
+
     // Mark as queued immediately to prevent re-processing in concurrent runs
     if (!dry_run) {
       await admin
@@ -148,6 +160,7 @@ Deno.serve(async (req: Request) => {
       // ── Step 1: Brainstorm specific product search queries ───────────────
       if (dry_run) {
         processed++;
+        outcome = 'done';
         continue;
       }
 
@@ -157,10 +170,12 @@ Deno.serve(async (req: Request) => {
         { catalog: catalogLabel, count: 6, gender }
       ) as { queries?: string[]; error?: string };
 
-      const searchQueries: string[] = brainstormRes.queries ?? [];
+      brainstormedQueries = brainstormRes.queries ?? [];
+      brainstormedCount = brainstormedQueries.length;
 
-      if (!searchQueries.length) {
+      if (!brainstormedQueries.length) {
         skipped++;
+        outcome = 'skipped';
         // Revert queued status — nothing useful to search for
         await admin
           .from('search_queries')
@@ -173,18 +188,26 @@ Deno.serve(async (req: Request) => {
       // Fire product-search calls in parallel, up to 3 at a time to avoid
       // overwhelming SerpAPI quota.
       const batchSize = 3;
-      for (let i = 0; i < Math.min(searchQueries.length, 6); i += batchSize) {
-        const batch = searchQueries.slice(i, i + batchSize);
+      const queriesToRun = brainstormedQueries.slice(0, 6);
+      for (let i = 0; i < queriesToRun.length; i += batchSize) {
+        const batch = queriesToRun.slice(i, i + batchSize);
         await Promise.all(
-          batch.map(q =>
-            invokeFunction(supabaseUrl, serviceKey, 'product-search', {
-              query: q,
-              gender: gender ?? 'unisex',
-              ingest: true,  // product-search writes directly to products table when ingest=true
-            }).catch(err => {
+          batch.map(async (q) => {
+            searchCalls++;
+            try {
+              const res = await invokeFunction(supabaseUrl, serviceKey, 'product-search', {
+                query: q,
+                gender: gender ?? 'unisex',
+                ingest: true,  // product-search writes directly to products table when ingest=true
+              }) as { count?: number; products?: unknown[] };
+              const inserted = (res?.count as number | undefined)
+                ?? (Array.isArray(res?.products) ? res.products.length : 0);
+              productsInsertedEst += Number(inserted) || 0;
+            } catch (err) {
+              attemptErrors.push({ query: q, reason: String(err) });
               errors.push({ query: q, reason: String(err) });
-            })
-          )
+            }
+          })
         );
       }
 
@@ -195,14 +218,33 @@ Deno.serve(async (req: Request) => {
         .eq('id', miss.id);
 
       processed++;
+      outcome = 'done';
     } catch (err) {
+      attemptErrors.push({ query: miss.raw_query, reason: String(err) });
       errors.push({ query: miss.raw_query, reason: String(err) });
+      outcome = 'error';
       // Reset to 'none' so it's retried next run
       if (!dry_run) {
         await admin
           .from('search_queries')
           .update({ backfill_status: 'none' })
           .eq('id', miss.id);
+      }
+    } finally {
+      if (!dry_run) {
+        // Record the attempt regardless of outcome — this is how we audit cron.
+        await admin.from('search_backfill_attempts').insert({
+          search_query_id:    miss.id,
+          raw_query:          miss.raw_query,
+          catalog_label:      catalogLabel,
+          brainstormed_count: brainstormedCount,
+          brainstormed:       brainstormedQueries,
+          search_calls:       searchCalls,
+          products_inserted:  productsInsertedEst,
+          errors:             attemptErrors.length ? attemptErrors : null,
+          duration_ms:        Date.now() - attemptStart,
+          outcome,
+        }).then(() => {});
       }
     }
   }
