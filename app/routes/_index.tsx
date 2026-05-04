@@ -295,9 +295,29 @@ export default function Home() {
     filterUserOverride.current = true;
     setActiveFilter(next);
   }, []);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Initial searchQuery comes from the URL ?q= param so a deep-linked
+  // search (someone shares /catalog.shop/?q=shoes) lands in the right
+  // state on first paint. Subsequent commits push history entries — see
+  // the debounced syncSearchToUrl effect below — so the back button
+  // walks the user through their search history.
+  const initialUrlQuery = (() => {
+    if (typeof window === 'undefined') return '';
+    try { return new URLSearchParams(window.location.search).get('q') ?? ''; }
+    catch { return ''; }
+  })();
+  const [searchQuery, setSearchQuery] = useState(initialUrlQuery);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchTrigger, setSearchTrigger] = useState(0);
+  // searchTrigger is bumped on Enter / suggestion-click for an immediate
+  // commit (bypassing the debounce inside ContinuousFeed). The
+  // initial-mount value is non-zero when the URL already has ?q=, so
+  // the feed knows to fire the search on first render rather than wait
+  // for typing.
+  const [searchTrigger, setSearchTrigger] = useState(initialUrlQuery ? 1 : 0);
+  // Set when we're applying a popstate-driven URL change so the
+  // outgoing-URL-push effect doesn't echo it back as a new history
+  // entry. Without this every back-button press would push a forward
+  // entry on top of the one we just came from.
+  const isApplyingUrlChange = useRef(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
   }, []);
@@ -356,6 +376,54 @@ export default function Home() {
       });
     }
   }, [catalogName]);
+
+  // ── URL ↔ search state sync ─────────────────────────────────────────────
+  // Two-way binding between the ?q= URL param and searchQuery so each
+  // committed search is its own history entry and the back button walks
+  // the user through their search history.
+  //
+  // Push direction: debounce searchQuery by 350 ms so we don't blow the
+  // history stack on every keystroke. Only push when the URL would
+  // actually change, so a re-typed identical query doesn't add a
+  // redundant entry. The `isApplyingUrlChange` ref guards against echo
+  // when the change came from popstate.
+  //
+  // Pop direction: listen for popstate and read ?q=. When it differs
+  // from the current state, set isApplyingUrlChange before updating
+  // state so the push-effect's diff check skips the rebound.
+  useEffect(() => {
+    if (isApplyingUrlChange.current) {
+      isApplyingUrlChange.current = false;
+      return;
+    }
+    const t = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      const current = url.searchParams.get('q') ?? '';
+      const next = searchQuery;
+      if (current === next) return;
+      if (next) url.searchParams.set('q', next);
+      else      url.searchParams.delete('q');
+      window.history.pushState({ q: next }, '', url.toString());
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const onPop = () => {
+      try {
+        const q = new URLSearchParams(window.location.search).get('q') ?? '';
+        if (q !== searchQuery) {
+          isApplyingUrlChange.current = true;
+          setSearchQuery(q);
+          // Bump trigger so the feed re-runs the search rather than
+          // waiting for the user to type.
+          setSearchTrigger(t => t + 1);
+        }
+      } catch { /* malformed URL — ignore */ }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [searchQuery]);
 
   // Auto-scope the feed by the shopper's profile gender so a guy lands
   // on men + unisex looks, a girl on women + unisex. Manual taps on the
