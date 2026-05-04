@@ -502,8 +502,8 @@
   padding-top: 8px;
 }
 
-/* Math table — unified comparison */
-/* Math comparison table — uses native <table> for bulletproof layout */
+/* Math table - unified comparison */
+/* Math comparison table - uses native <table> for bulletproof layout */
 .math-tbl {
   margin-top: 32px;
   max-width: 880px;
@@ -534,7 +534,7 @@
   letter-spacing: 0.06em;
 }
 
-/* V.9 math table — column subtitles distinguish sales fee vs ad spend */
+/* V.9 math table - column subtitles distinguish sales fee vs ad spend */
 .deck-v9-math-tbl thead th {
   vertical-align: top;
 }
@@ -572,7 +572,7 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* V.1 math table — budget category pill highlights the accounting line item */
+/* V.1 math table - budget category pill highlights the accounting line item */
 .deck-view-v1 .deck-v1-math-budget {
   display: inline-block;
   font-size: 9.5px;
@@ -740,7 +740,7 @@
   }
 }
 
-/* Legacy guaranteed ring — kept for backward compat */
+/* Legacy guaranteed ring - kept for backward compat */
 .guaranteed-ring {
   width: 18px;
   height: 18px;
@@ -1168,7 +1168,7 @@
 }
 
 /* ============================================= */
-/* Deck V.8 — persistent video grid background   */
+/* Deck V.8 - persistent video grid background   */
 /* ============================================= */
 
 .deck-view-v8 .deck-v8-bg {
@@ -1538,7 +1538,7 @@
   max-width: 880px;
 }
 
-/* Scenario field — styled callout under the title */
+/* Scenario field - styled callout under the title */
 .deck-scenario {
   margin-top: 4px;
   margin-bottom: 36px;
@@ -1662,7 +1662,7 @@
   position: relative;
 }
 
-/* Spinning ring wrapper — sits behind the static nodes */
+/* Spinning ring wrapper - sits behind the static nodes */
 .deck-view-v8 .flywheel-center::before,
 .deck-view-v8 .flywheel-center::after {
   content: '';
@@ -1702,7 +1702,7 @@
   animation: v8FlywheelPulse 4s ease-in-out infinite 2.4s;
 }
 
-/* Nodes — repositioned for 340px ring */
+/* Nodes - repositioned for 340px ring */
 .deck-view-v8 .flywheel-node {
   width: 44px;
   height: 44px;
@@ -1732,7 +1732,7 @@
   transition: color 0.4s ease, text-shadow 0.4s ease;
 }
 
-/* Override base flywheel num color — shared base class is green */
+/* Override base flywheel num color - shared base class is green */
 .deck-view-v8 .fl-num {
   background: rgba(245, 197, 66, 0.14);
   color: #fde082;
@@ -1777,7 +1777,7 @@
 .deck-view-v8 .deck-slide.visible .flywheel-node:nth-child(5) { animation-delay: 2.4s; }
 .deck-view-v8 .deck-slide.visible .flywheel-node:nth-child(6) { animation-delay: 3.2s; }
 
-/* List items on the left — hover interaction */
+/* List items on the left - hover interaction */
 .deck-view-v8 .flywheel-label-item {
   cursor: pointer;
   padding: 8px 10px;
@@ -2208,7 +2208,7 @@
 }
 
 /* =============================================================
-   V.9 Problem / Solution slides — role label first, X next to pain
+   V.9 Problem / Solution slides - role label first, X next to pain
    ============================================================= */
 
 .deck-view-v9 .deck-v9-problem-item {
@@ -3032,7 +3032,7 @@
 }
 
 /* =============================================================
-   V.8 Traction phone marquee — horizontal infinite scroll
+   V.8 Traction phone marquee - horizontal infinite scroll
    ============================================================= */
 
 .deck-view-v8 .deck-v8-phone-marquee {
@@ -3076,7 +3076,7 @@
   to { transform: translateX(-50%); }
 }
 
-/* Uniform phone sizing — override any inherited phone-side / center / float */
+/* Uniform phone sizing - override any inherited phone-side / center / float */
 .deck-view-v8 .deck-v8-marquee-phone.deck-app-frame {
   width: 180px;
   height: 360px;
@@ -3137,7 +3137,7 @@
   }
 }
 
-/* Wrapper no longer fades — individual phones handle the elegant L→R reveal */
+/* Wrapper no longer fades - individual phones handle the elegant L→R reveal */
 .deck-view-v8 .deck-slide .deck-v8-phone-marquee {
   opacity: 1;
   transform: translateY(0);
@@ -3178,7 +3178,7 @@
   stroke-dashoffset: 0;
 }
 
-/* Staggered reveal of broken icon per card — matches the card delay */
+/* Staggered reveal of broken icon per card - matches the card delay */
 .deck-view-v8 .deck-slide.visible .deck-v8-problem-item:nth-child(1) .deck-v8-broken-icon .broken-circle { transition-delay: 1.5s; }
 .deck-view-v8 .deck-slide.visible .deck-v8-problem-item:nth-child(1) .deck-v8-broken-icon .broken-x-1 { transition-delay: 2.3s; }
 .deck-view-v8 .deck-slide.visible .deck-v8-problem-item:nth-child(1) .deck-v8-broken-icon .broken-x-2 { transition-delay: 2.55s; }
@@ -3223,7 +3223,7 @@
 }
 
 /* =============================================================
-   V.8 Three-Sided Value (wins) — reuses problem layout, green checkmark icon
+   V.8 Three-Sided Value (wins) - reuses problem layout, green checkmark icon
    ============================================================= */
 
 .deck-v8-win-icon {
@@ -3345,21 +3345,21 @@
   filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.45));
 }
 
-/* Circle circumference ≈ 53.4 (r=8.5) — slow, unified draw across every row */
+/* Circle circumference ≈ 53.4 (r=8.5) - slow, unified draw across every row */
 .deck-view-v8 .math-icon .math-icon-circle {
   stroke-dasharray: 54;
   stroke-dashoffset: 54;
   transition: stroke-dashoffset 1.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Check polyline length ≈ 11 — slow stroke matched perfectly with X */
+/* Check polyline length ≈ 11 - slow stroke matched perfectly with X */
 .deck-view-v8 .math-check-icon .math-icon-stroke {
   stroke-dasharray: 12;
   stroke-dashoffset: 12;
   transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* X lines length ≈ 8 each — matched duration and easing to check */
+/* X lines length ≈ 8 each - matched duration and easing to check */
 .deck-view-v8 .math-x-icon .math-icon-stroke {
   stroke-dasharray: 8.5;
   stroke-dashoffset: 8.5;
@@ -3374,11 +3374,11 @@
   stroke-dashoffset: 0;
 }
 
-/* All rows animate together (no per-row stagger) — slow and synchronised */
+/* All rows animate together (no per-row stagger) - slow and synchronised */
 .deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody .math-icon-circle { transition-delay: 0.9s; }
 .deck-view-v8 .deck-slide.visible .deck-v8-math-tbl tbody .math-icon-stroke { transition-delay: 2.3s; }
 
-/* Gentle pulse after draw-in — matched timing/intensity so check and X pulse in perfect sync */
+/* Gentle pulse after draw-in - matched timing/intensity so check and X pulse in perfect sync */
 @keyframes v8MathCheckPulse {
   0%, 100% { filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.4)); }
   50% { filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.75)); }
@@ -3420,7 +3420,7 @@
 }
 
 /* =============================================================
-   V.8 Flywheel: bidirectional hover — node hover highlights label
+   V.8 Flywheel: bidirectional hover - node hover highlights label
    ============================================================= */
 
 .deck-view-v8 .deck-slide-flywheel-split[data-active-step] .flywheel-label-item {
@@ -3472,7 +3472,7 @@
 }
 
 /* =============================================================
-   V.8 Why Now slide — 4 icon-driven point cards
+   V.8 Why Now slide - 4 icon-driven point cards
    ============================================================= */
 
 .deck-view-v8 .deck-v8-whynow {
@@ -3704,7 +3704,7 @@
   margin-left: 2px;
 }
 
-/* Growth / CAGR chips — glowing "on fire" effect */
+/* Growth / CAGR chips - glowing "on fire" effect */
 .deck-view-v8 .deck-v8-market-growth {
   color: #fff;
   background: linear-gradient(135deg, rgba(251, 146, 60, 0.18), rgba(239, 68, 68, 0.24));
@@ -3749,7 +3749,7 @@
 }
 
 /* =============================================================
-   V.8 Ask slide — flowing lines from raise into 3 priorities
+   V.8 Ask slide - flowing lines from raise into 3 priorities
    ============================================================= */
 
 .deck-view-v8 .deck-v8-ask {
@@ -3776,7 +3776,7 @@
   gap: 0;
 }
 
-/* Raise summary card — single elegant capsule */
+/* Raise summary card - single elegant capsule */
 .deck-view-v8 .deck-v8-ask-raise {
   position: relative;
   z-index: 2;
@@ -3881,7 +3881,7 @@
   line-height: 1.4;
 }
 
-/* Flow lines SVG layer — connects raise down into priorities */
+/* Flow lines SVG layer - connects raise down into priorities */
 .deck-view-v8 .deck-v8-ask-flow {
   position: relative;
   z-index: 1;
@@ -3922,7 +3922,7 @@
   }
 }
 
-/* Priorities row — 3 cards */
+/* Priorities row - 3 cards */
 .deck-view-v8 .deck-v8-ask-priorities {
   position: relative;
   z-index: 2;
@@ -4102,7 +4102,7 @@
 }
 
 /* =============================================================
-   V.8 Ask flow — normalized path animation using pathLength
+   V.8 Ask flow - normalized path animation using pathLength
    ============================================================= */
 
 .deck-view-v8 .deck-v8-ask-flow-path {
@@ -4566,9 +4566,9 @@
 .light-mode .deck-view-v1 .deck-v1-dream-sub { color: rgba(0, 0, 0, 0.5); }
 
 /* ===========================================================
-   V.1 Flywheel slide — smooth sliding track between Seed & Wheel
+   V.1 Flywheel slide - smooth sliding track between Seed & Wheel
    =========================================================== */
-/* Flywheel slide — conditional rendering with slide-in animation */
+/* Flywheel slide - conditional rendering with slide-in animation */
 .deck-view-v1 .deck-v1-flywheel-slide {
   padding: clamp(60px, 7vh, 100px) clamp(72px, 8vw, 140px) !important;
 }
@@ -4597,7 +4597,7 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* Arrow nav button — natural flex child */
+/* Arrow nav button - natural flex child */
 .deck-view-v1 .deck-v1-flywheel-nav {
   flex-shrink: 0;
   align-self: center;
@@ -4813,7 +4813,7 @@
 .light-mode .deck-view-v1 .deck-v1-seed-back:hover { color: #1a1a1a; }
 
 /* ===========================================================
-   V.1 Technology slide — two-column layout, text left, phone right
+   V.1 Technology slide - two-column layout, text left, phone right
    =========================================================== */
 .deck-view-v1 .deck-v9-tech {
   display: flex !important;
@@ -4865,7 +4865,7 @@
   .deck-view-v1 .deck-v9-tech-left h2 { font-size: clamp(28px, 3.4vw, 44px); }
 }
 
-/* V.1 Tech stage — 1 seed at top spawning 5 neighbors via animated rays */
+/* V.1 Tech stage - 1 seed at top spawning 5 neighbors via animated rays */
 .deck-view-v1 .deck-v1-tech-stage {
   position: relative;
   width: min(600px, 100%);
@@ -4949,7 +4949,7 @@
 
 
 /* ===========================================================
-   V.1 Payouts slide — four revenue streams for creators
+   V.1 Payouts slide - four revenue streams for creators
    =========================================================== */
 .deck-view-v1 .deck-v1-payouts {
   padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px);
@@ -4978,13 +4978,13 @@
   max-width: 22ch;
 }
 
-/* Payouts: two-column body — avatar left, vertical card stack right */
+/* Payouts: two-column body - avatar left, vertical card stack right */
 .deck-view-v1 .deck-v1-payouts-header {
   display: flex;
   flex-direction: column;
 }
 
-/* Radial payouts layout — creator dead center, 4 glass cards in corners */
+/* Radial payouts layout - creator dead center, 4 glass cards in corners */
 .deck-view-v1 .deck-v1-payouts-radial {
   position: relative;
   display: grid;
@@ -5035,7 +5035,7 @@
   to { stroke-dashoffset: -24; }
 }
 
-/* Glass payout cards — same language as Ask slide glass container */
+/* Glass payout cards - same language as Ask slide glass container */
 .deck-view-v1 .deck-v1-payouts-card {
   position: relative;
   max-width: clamp(280px, 28vw, 380px);
@@ -5199,7 +5199,7 @@
 }
 
 /* ===========================================================
-   V.1 Roadmap slide — parallel tracks + draggable/resizable bars
+   V.1 Roadmap slide - parallel tracks + draggable/resizable bars
    =========================================================== */
 .deck-view-v1 .deck-v1-roadmap-bar-draggable {
   cursor: grab;
@@ -5286,7 +5286,7 @@
   border-bottom-color: rgba(0, 0, 0, 0.08);
 }
 
-/* V.1 Traction — compact for laptop screens */
+/* V.1 Traction - compact for laptop screens */
 .deck-view-v1 .deck-v8-traction {
   padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px) !important;
   gap: clamp(12px, 1.5vh, 20px);
@@ -5315,7 +5315,7 @@
   font-size: 10.5px;
 }
 
-/* V.1 Roadmap — compact for laptop screens */
+/* V.1 Roadmap - compact for laptop screens */
 .deck-view-v1 .deck-v8-roadmap {
   padding: clamp(32px, 5vh, 72px) clamp(32px, 5vw, 80px);
 }
@@ -5351,7 +5351,7 @@
   border-radius: 999px;
 }
 
-/* V1 Math slide — tighter for laptop screens */
+/* V1 Math slide - tighter for laptop screens */
 .deck-view-v1 .deck-v8-math {
   padding: clamp(24px, 4vh, 56px) clamp(24px, 4vw, 64px);
 }
@@ -5407,7 +5407,7 @@
   height: clamp(14px, 1.4vw, 18px);
 }
 
-/* V1 Payouts split layout — list on left, creator icon on right */
+/* V1 Payouts split layout - list on left, creator icon on right */
 .deck-view-v1 .deck-v1-payouts-split {
   flex-direction: row;
   align-items: center;
@@ -5507,7 +5507,7 @@
 
 
 /* ============================================================
-   Math slide — phased progressive reveal (deck v1.1)
+   Math slide - phased progressive reveal (deck v1.1)
    ============================================================ */
 
 .deck-v1-math-phased .deck-v8-math-inner {
@@ -5817,7 +5817,7 @@
 }
 
 /* ============================================================
-   Math slide — single-view static layout (one slide, no phases)
+   Math slide - single-view static layout (one slide, no phases)
    ============================================================ */
 
 .math-phases-static {

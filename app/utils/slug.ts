@@ -5,7 +5,7 @@
  *   /l/<kebab-of-creator-and-title>-<8-char-uuid-prefix>
  *   /b/<kebab-of-brand>
  *
- * The kebab portion is purely for humans — the lookup happens via
+ * The kebab portion is purely for humans - the lookup happens via
  * the trailing 8-char UUID prefix (which is unique enough at our
  * scale). For brands, the slug *is* the brand (no UUID needed; brand
  * is already a unique string column).

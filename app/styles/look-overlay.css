@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════
-   LOOK OVERLAY — fullscreen 60/40 split
+   LOOK OVERLAY - fullscreen 60/40 split
    ═══════════════════════════════════════════ */
 
 /* Full-screen container.
    Entrance was a translateY slide; we now lean on the TrailMorph layoutId
    to do the focal motion (the hero box morphs from the originating
-   LookCard) and the overlay itself just opacity-fades in over 280ms — same
+   LookCard) and the overlay itself just opacity-fades in over 280ms - same
    timing as ProductPage so the two surfaces feel like one app. */
 .look-overlay {
   position: fixed;
@@ -38,7 +38,7 @@
   overflow: hidden;
 }
 
-/* Back button — positioned top-left on the media side */
+/* Back button - positioned top-left on the media side */
 .look-back-btn {
   position: absolute;
   top: 20px;
@@ -102,7 +102,7 @@
   border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Drag strip — mobile only */
+/* Drag strip - mobile only */
 .look-drag-strip {
   display: none;
   justify-content: center;
@@ -391,7 +391,7 @@
   border-radius: 3px;
 }
 
-/* Hero section: the split — slightly shorter than viewport so feed peeks */
+/* Hero section: the split - slightly shorter than viewport so feed peeks */
 .look-hero-section {
   display: flex;
   flex-direction: row;
@@ -455,7 +455,7 @@
   transition: top 0.08s linear, left 0.08s linear;
 }
 
-/* Organic drift paths — each dot follows a different figure-8 / oval */
+/* Organic drift paths - each dot follows a different figure-8 / oval */
 @keyframes hotspotDrift1 {
   0%, 100% { margin-top: 0; margin-left: 0; }
   25% { margin-top: -6px; margin-left: 4px; }

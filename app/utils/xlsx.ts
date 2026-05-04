@@ -1,5 +1,5 @@
 // Minimal browser-side XLSX writer. Produces a real Office Open XML
-// SpreadsheetML (.xlsx) Blob without any dependencies — Excel, Numbers,
+// SpreadsheetML (.xlsx) Blob without any dependencies - Excel, Numbers,
 // Google Sheets all open the output natively.
 //
 // Only what's needed for a single-sheet workbook with text + number cells

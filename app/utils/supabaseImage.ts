@@ -10,7 +10,7 @@
 // upload could easily be 2000+ px and 2 MB. Cuts bytes-on-the-wire by 5–20x
 // without any visible quality loss at the displayed size.
 //
-// Non-Supabase URLs (Unsplash, brand sites) pass through unchanged — those
+// Non-Supabase URLs (Unsplash, brand sites) pass through unchanged - those
 // hosts have their own resize APIs (Unsplash uses ?w=200) but we only need
 // to handle our own.
 
@@ -21,7 +21,7 @@ interface ResizeOptions {
   height?: number;
   quality?: number;
   resize?: 'cover' | 'contain' | 'fill';
-  /** Output format. Defaults to 'webp' — supported in Chrome 32+,
+  /** Output format. Defaults to 'webp' - supported in Chrome 32+,
    *  Edge 18+, Firefox 65+, and Safari 14+ (≥97% global support).
    *  Pass 'origin' to keep the original encoding (e.g. when delivering
    *  a transparent PNG that needs alpha). */
@@ -43,7 +43,7 @@ export function supabaseImage(url: string | null | undefined, opts: ResizeOption
   if (opts.resize) params.set('resize', opts.resize);
   // WebP at quality 70 is typically 25–35% smaller than the equivalent
   // JPEG with no perceptible difference at thumbnail sizes. Stacks on
-  // top of the resize savings — a 2 MB original card becomes ~20 KB
+  // top of the resize savings - a 2 MB original card becomes ~20 KB
   // instead of ~30 KB.
   params.set('format', opts.format ?? 'webp');
 

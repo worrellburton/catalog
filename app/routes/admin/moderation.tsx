@@ -60,7 +60,7 @@ export default function AdminModeration() {
     }
   }, [queue, focusIdx, busyId, showToast]);
 
-  // Regenerate modal — lets the admin tweak the prompt before kicking off a
+  // Regenerate modal - lets the admin tweak the prompt before kicking off a
   // new video. Shown when the user clicks the regenerate button or hits ↑.
   const [regenPrompt, setRegenPrompt] = useState<{ adId: string; prompt: string | null; extra: string } | null>(null);
 
@@ -178,9 +178,9 @@ export default function AdminModeration() {
           color: lastAction.action === 'approved' ? '#047857' : '#b91c1c',
           fontSize: 12, fontWeight: 600,
         }}>
-          {lastAction.action === 'approved' && '✓ Approved — now live in the feed'}
-          {lastAction.action === 'rejected' && '✕ Rejected — paused and hidden from feed'}
-          {lastAction.action === 'regenerated' && '↻ Regenerating — new video queued'}
+          {lastAction.action === 'approved' && '✓ Approved - now live in the feed'}
+          {lastAction.action === 'rejected' && '✕ Rejected - paused and hidden from feed'}
+          {lastAction.action === 'regenerated' && '↻ Regenerating - new video queued'}
           {lastAction.action === 'deleted' && '🗑 Deleted'}
         </div>
       )}
@@ -252,7 +252,7 @@ export default function AdminModeration() {
                   </div>
                 </div>
 
-                {/* Product photo (larger) — links to product page */}
+                {/* Product photo (larger) - links to product page */}
                 {ad.product?.image_url && (() => {
                   const productHref = ad.affiliate_url || ad.product?.url || null;
                   const wrapperStyle = {
@@ -286,10 +286,10 @@ export default function AdminModeration() {
                   return <div style={wrapperStyle}>{img}</div>;
                 })()}
 
-                {/* Product info — name links to product page */}
+                {/* Product info - name links to product page */}
                 <div style={{ padding: '10px 12px', borderBottom: '1px solid #f5f5f5' }}>
                   <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {ad.product?.brand || '—'}
+                    {ad.product?.brand || ' - '}
                   </div>
                   {(() => {
                     const productHref = ad.affiliate_url || ad.product?.url || null;

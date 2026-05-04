@@ -4,7 +4,7 @@ import { supabase } from '~/utils/supabase';
 // once after auth resolves so every product-creative query (brand
 // strip, similar rail, live ads) can scope to male+unisex / female+
 // unisex without each caller threading the gender prop through.
-// 'unknown' (the default) disables filtering — we never hide the
+// 'unknown' (the default) disables filtering - we never hide the
 // catalog from someone we can't tag.
 type ShopperGender = 'male' | 'female' | 'unknown';
 let shopperGender: ShopperGender = 'unknown';
@@ -56,7 +56,7 @@ function visibleGenders(): Array<'male' | 'female' | 'unisex'> | null {
 
 /** Post-filter products by the shopper's gender. Untagged products
  *  (gender is null) only pass when the shopper themselves has no
- *  gender set — once we know the shopper is male/female we hide
+ *  gender set - once we know the shopper is male/female we hide
  *  unscoped rows so the feed doesn't surface random off-domain
  *  inventory ("Dune", houseplants, pet beds, etc.) that nobody
  *  bothered to tag. The Gender Audit on /admin/content fills the
@@ -145,12 +145,12 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Visibility contract:
   //   1. status='live' on the creative + a real video_url (must have
-  //      something to play — the consumer feed is a video grid).
+  //      something to play - the consumer feed is a video grid).
   //   2. The product's Home toggle is on (products.is_active=true).
   //   3. The shopper-gender filter (post-fetch).
   //
   // Note: we do NOT gate on product.type. The Home toggle is the
-  // admin's explicit "yes, show this" — if a product is flipped on,
+  // admin's explicit "yes, show this" - if a product is flipped on,
   // we trust them, even when the type column hasn't been audited.
   // The risk is occasionally surfacing non-fashion items (the Dune
   // book, a houseplant) that sneaked through the scrape, but admins
@@ -203,7 +203,7 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
 // We cache the in-flight Promise itself, not the resolved value, so multiple
 // concurrent callers (LandingPage + ContinuousFeed mount races) coalesce onto
 // a single network request. After it resolves, every caller awaits the same
-// already-resolved Promise — effectively instant.
+// already-resolved Promise - effectively instant.
 //
 // Stale-while-revalidate: invalidate() clears the cache so the next caller
 // kicks off a fresh fetch (used after admin actions). Also seeded from
@@ -212,7 +212,7 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
 let homeFeedPromise: Promise<ProductAd[]> | null = null;
 let homeFeedFetchedAt = 0;
 const HOME_FEED_TTL_MS = 60_000;
-// Versioned key — bumping this number invalidates every existing
+// Versioned key - bumping this number invalidates every existing
 // localStorage cache the next time a consumer hits the page. Bump it
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
@@ -241,7 +241,7 @@ function readHomeFeedFromStorage(): ProductAd[] | null {
 function writeHomeFeedToStorage(rows: ProductAd[]): void {
   if (typeof window === 'undefined') return;
   try {
-    // Cap the persisted list to keep localStorage under quota — the cache
+    // Cap the persisted list to keep localStorage under quota - the cache
     // is purely a perceived-perf affordance; the network fetch always
     // returns the full set within a beat.
     const capped = rows.slice(0, 60);
@@ -250,7 +250,7 @@ function writeHomeFeedToStorage(rows: ProductAd[]): void {
       JSON.stringify({ savedAt: Date.now(), rows: capped }),
     );
   } catch {
-    /* quota exceeded — feed still works, just no fast-path next time */
+    /* quota exceeded - feed still works, just no fast-path next time */
   }
 }
 
@@ -271,7 +271,7 @@ export function prefetchHomeFeed(): Promise<ProductAd[]> {
   homeFeedPromise = getHomeFeed().then(rows => {
     // Always overwrite the cache, even when the fresh fetch is empty.
     // Otherwise an admin who turns every Home toggle off ends up with
-    // a stale cache that keeps hydrating the consumer feed forever —
+    // a stale cache that keeps hydrating the consumer feed forever  - 
     // the empty fetch was treated as "skip the write" and the old
     // rows stuck around on every reload.
     writeHomeFeedToStorage(rows);
@@ -308,7 +308,7 @@ export function invalidateHomeFeed(): void {
   }
 }
 
-// Fire the feed fetch the moment this module parses — runs in parallel
+// Fire the feed fetch the moment this module parses - runs in parallel
 // with the React tree mounting, so by the time _index.tsx's splash
 // timer is ticking the network round-trip is already on the wire. Same
 // pattern services/looks.ts uses. Browser-only; no-op on SSR.
@@ -316,7 +316,7 @@ if (typeof window !== 'undefined') {
   void prefetchHomeFeed().catch(() => { /* surfaced on real caller */ });
   // Warm the brand index on idle so the sync resolver in ContinuousFeed
   // can short-circuit search the moment the user types a brand name.
-  // Failures are silent — the async path still hydrates on first query.
+  // Failures are silent - the async path still hydrates on first query.
   const warm = () => { void ensureBrandIndex().catch(() => undefined); };
   if (typeof (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback === 'function') {
     (window as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(warm);
@@ -325,7 +325,7 @@ if (typeof window !== 'undefined') {
   }
   // Pre-warm poster images for the first batch of cached creatives so
   // they're in browser cache by the time React mounts. Decoupled from
-  // the network promise above — this hits localStorage synchronously,
+  // the network promise above - this hits localStorage synchronously,
   // no extra round-trip.
   const cached = readHomeFeedFromStorage();
   if (cached) {
@@ -347,7 +347,7 @@ if (typeof window !== 'undefined') {
 // ── Tier-1 catalog fast path ────────────────────────────────────────────
 // Maps a user query (e.g. "shoes", "pants") to the canonical product.type
 // values present in the DB. catalog_tags is too sparsely populated to be
-// useful as the primary signal — `products.type` is the normalized column
+// useful as the primary signal - `products.type` is the normalized column
 // (Top, Pants, Sneakers, Boots, Dress, etc.) actually filled by the scraper.
 //
 // Keys are pre-normalized (lowercase, trimmed). Values match the casing of
@@ -381,7 +381,7 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   blouses:      ['Top'],
   sweaters:     ['Top'],
   hoodies:      ['Top'],
-  // Bottoms — "pants" is a generic term in shopper speech: yoga pants and
+  // Bottoms - "pants" is a generic term in shopper speech: yoga pants and
   // leggings get tagged Activewear, athletic shorts get tagged Shorts. Map
   // the generic term to the full bottom-wear set so users see the breadth
   // they expect. Specific terms (jeans, trousers) stay narrow.
@@ -426,7 +426,7 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
 };
 
 // For material-based queries (e.g. "denim", "leather") the type-only filter
-// is too broad — it returns all pants and all jackets regardless of material.
+// is too broad - it returns all pants and all jackets regardless of material.
 // This map narrows the DB results to products whose name contains the keyword.
 // Keys must match the normalised (lowercase, trimmed) query keys in
 // CATALOG_TYPE_SYNONYMS above.
@@ -449,7 +449,7 @@ export function resolveCatalogTypes(query: string): string[] | null {
 
 // Returns the material keywords (lowercased) that a product name MUST contain
 // for the given query to keep it. Returns null when the query is not a
-// material query — caller should not apply any name filter in that case.
+// material query - caller should not apply any name filter in that case.
 export function resolveMaterialKeywords(query: string): string[] | null {
   const key = query.trim().toLowerCase();
   if (!key) return null;
@@ -471,7 +471,7 @@ export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boole
 //
 // Mirrors getHomeFeed() filters (status=live, video present, product is_active,
 // gender filter) so results drop into the same grid render path. is_elite is
-// NOT required here — when a user explicitly asks for "shoes" we want every
+// NOT required here - when a user explicitly asks for "shoes" we want every
 // available creative for that catalog, not just the curated default-grid set.
 export async function getCreativesByCatalogTag(query: string): Promise<ProductAd[]> {
   if (!supabase) return [];
@@ -503,7 +503,7 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     if (active === false) return false;
     if (!passesGenderFilter(ad.product as { gender?: string | null } | null)) return false;
     // For material queries (denim, leather, wool, …) only keep products whose
-    // name actually contains the material keyword — prevents returning all
+    // name actually contains the material keyword - prevents returning all
     // Pants/Jackets when the user searched "denim".
     if (keywords) {
       const name = ((ad.product as { name?: string | null } | null)?.name ?? '').toLowerCase();
@@ -582,7 +582,7 @@ export async function createBatchAds(
 
   // Count currently in-flight jobs so we only start up to CONCURRENCY_LIMIT
   // and queue the rest. Backend worker promotes 'queued' → 'pending' as slots
-  // free up (see promoteQueuedAds below — called from the client poll loop).
+  // free up (see promoteQueuedAds below - called from the client poll loop).
   const { count: activeCount } = await supabase
     .from('product_creative')
     .select('id', { count: 'exact', head: true })
@@ -720,7 +720,7 @@ export async function deleteProductAd(id: string): Promise<{ error: string | nul
  *  feed's super-admin long-press uses to nuke a product end-to-end. */
 export async function deleteProduct(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
-  // Defensive cleanup first — explicitly drop every creative referencing
+  // Defensive cleanup first - explicitly drop every creative referencing
   // this product so we never end up with orphan rows even if the FK
   // cascade isn't set up on a given env.
   await supabase.from('product_creative').delete().eq('product_id', id);
@@ -825,7 +825,7 @@ export async function getCreativesByBrand(
   // Match the brand case-insensitively + ignore stray whitespace so a
   // product carrying "Alo Yoga" still resolves rows tagged "alo yoga"
   // or "ALO YOGA". ilike with no wildcards is an exact case-insensitive
-  // match — safer than ilike '%brand%' which would over-match (e.g.
+  // match - safer than ilike '%brand%' which would over-match (e.g.
   // "Alo Yoga" would match "Alo Yoga Athletic").
   const normalizedBrand = brand.trim();
   let query = supabase
@@ -851,14 +851,14 @@ export async function getCreativesByBrand(
 }
 
 // Brand fast-path for the search bar. When the user types an exact brand
-// name (case- and whitespace-insensitive — "James Perse", "james perse",
+// name (case- and whitespace-insensitive - "James Perse", "james perse",
 // and "JAMES  PERSE" all match the same canonical brand), short-circuit
 // the semantic search pipeline and surface every live creative for that
 // brand instead.
 //
 // Backed by a one-shot in-memory index of distinct product.brand values,
 // hydrated lazily on first call. The list is small (low hundreds) so we
-// keep it for the session — brands churn slowly enough that a stale entry
+// keep it for the session - brands churn slowly enough that a stale entry
 // is harmless: an exact-match miss just falls through to semantic search.
 let brandIndex: Map<string, string> | null = null;
 let brandIndexPromise: Promise<Map<string, string>> | null = null;
@@ -901,7 +901,7 @@ export async function resolveBrandFromQuery(query: string): Promise<string | nul
   return index.get(key) ?? null;
 }
 
-/** Synchronous variant — only resolves once the brand index has been
+/** Synchronous variant - only resolves once the brand index has been
  *  warmed by a prior call. Useful in render paths where we don't want to
  *  await before rendering. Returns null on cold-start. */
 export function resolveBrandFromQuerySync(query: string): string | null {
@@ -913,7 +913,7 @@ export function resolveBrandFromQuerySync(query: string): string | null {
 
 /** Search fast-path: if the query is an exact brand match, return every
  *  live creative for that brand. Returns null when the query isn't a
- *  brand — the caller falls through to the semantic pipeline. */
+ *  brand - the caller falls through to the semantic pipeline. */
 export async function getCreativesByBrandQuery(
   query: string,
   limit = 60,
@@ -926,7 +926,7 @@ export async function getCreativesByBrandQuery(
 // Look up creatives (with playable video) for an arbitrary set of product
 // UUIDs. Used by the consumer feed to surface video ads for products that
 // nl-search returned but which aren't in the curated `is_elite` rotation.
-// Falls back gracefully — products with no creative simply drop out.
+// Falls back gracefully - products with no creative simply drop out.
 //
 // Results are returned in the same order as `productIds` (rank-preserving)
 // so the caller can prepend them to the feed without re-sorting. When a
@@ -1021,11 +1021,11 @@ export function prefetchCreativesByBrand(
   return p;
 }
 
-// Per-seed promise cache — coalesces hover + tap into one network round-trip.
+// Per-seed promise cache - coalesces hover + tap into one network round-trip.
 // Keyed by `${seedId}|${k}` so different rail sizes don't collide.
 const similarCache = new Map<string, Promise<ProductAd[]>>();
 
-/** Idempotent prefetch — call from hover, tap, anywhere. Returns the same
+/** Idempotent prefetch - call from hover, tap, anywhere. Returns the same
  *  cached promise on subsequent calls so consumers can `await` and get an
  *  instant resolve once the first call has finished. */
 export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
@@ -1040,7 +1040,7 @@ export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<Produc
 }
 
 // Returns the K visually-nearest creatives to the seed, deduped by product.
-// Backed by find_similar_creatives() — uses Marengo 3.0 cosine distance when
+// Backed by find_similar_creatives() - uses Marengo 3.0 cosine distance when
 // the seed has an embedding, otherwise falls back to same-brand → newest.
 export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
   if (!supabase) return [];
@@ -1116,14 +1116,14 @@ export async function getSimilarCreatives(seedId: string, k = 12): Promise<Produ
 
 // Impression batching. The consumer feed mounts ~50 CreativeCards at once
 // and each fires its own impression RPC the moment the card enters the
-// pre-viewport band — that's 50 individual Supabase requests inside the
+// pre-viewport band - that's 50 individual Supabase requests inside the
 // first 1–2 s of page load, fighting for the same connection pool as the
 // looks fetch and the videos. Coalescing into one flush per ~1 s window
 // dedupes scroll-spam (a card flickering across the IO threshold during
 // fast scroll) and gives the browser breathing room.
 //
-// We still fire N RPCs per flush — Supabase doesn't currently expose a
-// bulk-increment endpoint — but they're issued in parallel from a single
+// We still fire N RPCs per flush - Supabase doesn't currently expose a
+// bulk-increment endpoint - but they're issued in parallel from a single
 // idle tick instead of staggered across the first second of the session.
 
 const impressionQueue = new Map<string, number>();
@@ -1144,7 +1144,7 @@ function flushImpressions() {
 
 export function trackAdImpression(id: string): void {
   if (!supabase) return;
-  // First time we see this id in the current window — queue it. Repeat
+  // First time we see this id in the current window - queue it. Repeat
   // sightings within the same window are no-ops.
   if (impressionQueue.has(id)) return;
   impressionQueue.set(id, Date.now());
@@ -1155,7 +1155,7 @@ export function trackAdImpression(id: string): void {
 
 // Best-effort flush on tab close so impressions queued in the last <1 s
 // don't get lost. sendBeacon is the only API that survives unload, but
-// it requires a fixed URL — fall back to a synchronous fetch if not
+// it requires a fixed URL - fall back to a synchronous fetch if not
 // available. We just trigger the same flush; the rpc calls fire-and-
 // forget anyway.
 if (typeof window !== 'undefined') {

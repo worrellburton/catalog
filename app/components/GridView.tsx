@@ -183,7 +183,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
 
   // Infinite pool = shuffle the full admin look set, lay it down, repeat.
   // Seeded so the same (filteredLooks, shuffleKey) pair always produces
-  // the same arrangement — useMemo's referential identity stays stable
+  // the same arrangement - useMemo's referential identity stays stable
   // across re-renders that don't actually change the inputs.
   const infinitePool = useMemo(() => {
     if (filteredLooks.length === 0) return [];

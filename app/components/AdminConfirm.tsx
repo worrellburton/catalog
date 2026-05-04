@@ -31,7 +31,7 @@ const AdminConfirmContext = createContext<ContextValue | null>(null);
 export function useAdminConfirm(): ContextValue {
   const ctx = useContext(AdminConfirmContext);
   if (!ctx) {
-    // Provider missing — fall back to the native confirm so the
+    // Provider missing - fall back to the native confirm so the
     // caller still gets a result. Logged once so it's debuggable.
     if (typeof window !== 'undefined') {
       console.warn('[useAdminConfirm] No <AdminConfirmProvider> in tree, falling back to window.confirm.');

@@ -1,4 +1,4 @@
-// /admin/ui/brand — typeface picker for the Catalog wordmark. Renders
+// /admin/ui/brand - typeface picker for the Catalog wordmark. Renders
 // inside the /admin/ui shell which provides the page header + tab nav,
 // so this view is just the variant grid + a footer reset row.
 

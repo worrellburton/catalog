@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 // Super-admin "delete mode". When on, the consumer feed shows a trash
 // icon over every creative tile so a super-admin can nuke products
-// directly from the public surface. Off by default — toggled from the
+// directly from the public surface. Off by default - toggled from the
 // account menu and persisted to localStorage so it survives reloads.
 
 const STORAGE_KEY = 'admin:deleteMode';
@@ -39,7 +39,7 @@ export function useDeleteMode(): [boolean, (on: boolean) => void] {
     return () => { listeners.delete(listener); };
   }, []);
 
-  // Cross-tab sync — flipping the toggle in one tab updates every other
+  // Cross-tab sync - flipping the toggle in one tab updates every other
   // tab on the same origin too.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {

@@ -187,13 +187,13 @@ export async function auditAllUserGenders(): Promise<AuditCounts> {
  * audit pass:
  *   1. Explicit gender tokens in the product name ("Men's", "Women's").
  *   2. The type column ("dress" → female, "tie" → male).
- *   3. Brand history — if the brand's other rows skew strongly to one
+ *   3. Brand history - if the brand's other rows skew strongly to one
  *      gender, inherit that.
- *   4. Final fallback — 'unisex' so the column is never left blank.
+ *   4. Final fallback - 'unisex' so the column is never left blank.
  *
  * Existing values are preserved unless the strongest signal (name)
  * disagrees, in which case the name wins (the admin explicitly typed
- * "Men's"/"Women's" — that's authoritative).
+ * "Men's"/"Women's" - that's authoritative).
  */
 export async function auditAllProductGenders(): Promise<AuditCounts> {
   const result: AuditCounts = { scanned: 0, updated: 0, skipped: 0, errors: 0 };

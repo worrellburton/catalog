@@ -1,9 +1,9 @@
-// /admin/ui/search-bar — animated beam variant picker for the bottom
+// /admin/ui/search-bar - animated beam variant picker for the bottom
 // search pill. Each tile renders a live preview of the bar with that
 // variant active, plus a Set / Active button.
 //
 // Picking a variant immediately writes to localStorage (via
-// useSearchBeam) and broadcasts to every tab — the consumer feed's
+// useSearchBeam) and broadcasts to every tab - the consumer feed's
 // BottomBar reads the same hook and re-renders with the new beam class.
 
 import { useMemo } from 'react';
@@ -27,7 +27,7 @@ export default function AdminUiSearchBar() {
       <p className="admin-ui-section-blurb">
         Each tile shows a live preview of the bottom search pill with
         that variant running. Tap <strong>Set</strong> and the bar
-        reskins everywhere instantly — including this very tab.
+        reskins everywhere instantly - including this very tab.
       </p>
 
       <div className="admin-ui-beam-grid">

@@ -64,7 +64,7 @@ interface SemanticSearchState {
 // ── Replicated pure helpers from the hook ────────────────────────────────────
 
 /**
- * Mirrors getSessionId() — stable within a storage scope.
+ * Mirrors getSessionId() - stable within a storage scope.
  * Uses a provided storage adapter so tests don't touch real localStorage.
  */
 function getSessionId(storage: Record<string, string>): string {
@@ -158,7 +158,7 @@ describe('getSessionId', () => {
     const store2: Record<string, string> = {};
     const id1 = getSessionId(store1);
     const id2 = getSessionId(store2);
-    // These are random — they should not collide (test is probabilistic but
+    // These are random - they should not collide (test is probabilistic but
     // collision probability is ~1 in 10^12)
     expect(id1).not.toBe(id2);
   });
@@ -194,7 +194,7 @@ describe('shouldFireSearch (MIN_QUERY_LENGTH gate)', () => {
   });
 
   it('trims whitespace before checking length', () => {
-    // Two spaces + one char = length 1 after trim — below threshold
+    // Two spaces + one char = length 1 after trim - below threshold
     expect(shouldFireSearch('  a')).toBe(false);
     expect(shouldFireSearch('  ab ')).toBe(false);
     expect(shouldFireSearch('  abc ')).toBe(true);
@@ -350,7 +350,7 @@ describe('DEBOUNCE_MS', () => {
 });
 
 // ── Tests: AbortController integration ───────────────────────────────────────
-describe('AbortController — stale request cancellation', () => {
+describe('AbortController - stale request cancellation', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 

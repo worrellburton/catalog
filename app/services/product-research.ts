@@ -8,7 +8,7 @@ export interface ResearchedProduct {
   image_urls: string[]; // multiple thumbnails pulled for this product
   url: string;
   gender: ProductGender;
-  thumbnailScore: number; // 0-100 — suitability for AI video generation
+  thumbnailScore: number; // 0-100 - suitability for AI video generation
   reason: string;
 }
 
@@ -209,7 +209,7 @@ async function searchLive(query: string): Promise<LiveSearchResult> {
       return { products: [], error: msg };
     }
     if (!Array.isArray(data.products)) {
-      return { products: [], error: 'Bad payload — no products array' };
+      return { products: [], error: 'Bad payload - no products array' };
     }
     return { products: data.products as LiveProduct[], error: null };
   } catch (err) {
@@ -236,7 +236,7 @@ function seedSearch(q: string): ResearchedProduct[] {
 }
 
 export interface ResearchOptions {
-  liveOnly?: boolean; // when true, skip seed DB fallback — only real Google Shopping results
+  liveOnly?: boolean; // when true, skip seed DB fallback - only real Google Shopping results
 }
 
 export interface ResearchResult {
@@ -294,7 +294,7 @@ export interface BrainstormProgress {
 }
 
 // Deterministic fallback used when the catalog-brainstorm edge function isn't
-// deployed or the Claude call fails — keeps the Suggest Products flow usable.
+// deployed or the Claude call fails - keeps the Suggest Products flow usable.
 function heuristicQueries(catalog: string, count: number): string[] {
   const c = catalog.trim().toLowerCase();
   const base = [
@@ -321,7 +321,7 @@ async function brainstormQueries(catalog: string, count: number): Promise<{ quer
       body: { catalog, count },
     });
     if (error) {
-      // Edge function missing or errored — fall back to heuristic queries so
+      // Edge function missing or errored - fall back to heuristic queries so
       // the user can still run the product search.
       console.warn('[catalog-brainstorm] edge function failed, using heuristic:', error.message);
       return { queries: heuristicQueries(catalog, count), error: null };

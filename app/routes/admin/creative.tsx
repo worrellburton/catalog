@@ -4,7 +4,7 @@ import { getProductAds, deleteProductAd, setAdElite, type ProductAd } from '~/se
 
 // One tile's video. Plays only while the tile is on-screen so we aren't
 // running 170 decoders simultaneously. We keep the src bound so metadata
-// stays loaded and tile heights don't jump on scroll — just pause / resume.
+// stays loaded and tile heights don't jump on scroll - just pause / resume.
 const VideoTile = memo(function VideoTile({ src, muted }: { src: string; muted: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -187,7 +187,7 @@ export default function AdminCreative() {
 
   const toggleElite = async (v: GalleryVideo) => {
     const next = !v.is_elite;
-    // Optimistic update — the marquee redraws every frame, so waiting on the
+    // Optimistic update - the marquee redraws every frame, so waiting on the
     // round-trip makes the button feel laggy when clicking through a batch.
     setVideos(prev => prev.map(x =>
       x.id === v.id && x.source === v.source ? { ...x, is_elite: next } : x
@@ -286,7 +286,7 @@ export default function AdminCreative() {
     setMarquee(null);
     setIsDragging(false);
     if (!wasDragging) {
-      // Treat as click — find the tile clicked and toggle
+      // Treat as click - find the tile clicked and toggle
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tile-key]');
       if (el) {
         const k = el.getAttribute('data-tile-key');
@@ -515,7 +515,7 @@ export default function AdminCreative() {
                         background: 'rgba(22,163,74,0.95)',
                         color: '#fff',
                       }}
-                      title={`Winner — ${(v.ctr || 0).toFixed(2)}% CTR over ${(v.impressions || 0).toLocaleString()} impressions`}
+                      title={`Winner - ${(v.ctr || 0).toFixed(2)}% CTR over ${(v.impressions || 0).toLocaleString()} impressions`}
                     >
                       🏆 Winner
                     </div>
@@ -566,7 +566,7 @@ export default function AdminCreative() {
                 >
                   {v.is_elite ? '★ Elite' : 'Elite'}
                 </button>
-                {/* Per-tile delete — stages just this one into the existing
+                {/* Per-tile delete - stages just this one into the existing
                     delete-confirm modal so we reuse the same guardrail as
                     bulk delete and don't hard-delete on first click. */}
                 <button
@@ -673,7 +673,7 @@ export default function AdminCreative() {
         </div>
       )}
 
-      {/* Bottom zoom slider — controls column count for the masonry layout.
+      {/* Bottom zoom slider - controls column count for the masonry layout.
           Higher = more columns = smaller tiles = see more at once. */}
       {filtered.length > 0 && (
         <div
@@ -757,7 +757,7 @@ export default function AdminCreative() {
               >
                 !
               </div>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>Warning — hard delete</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>Warning - hard delete</h2>
             </div>
             <p style={{ margin: '0 0 6px', fontSize: 13, color: '#444', lineHeight: 1.5 }}>
               This will <strong>permanently delete {selected.size} video{selected.size === 1 ? '' : 's'}</strong> from the database and storage.

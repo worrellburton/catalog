@@ -1,4 +1,4 @@
-// brandLogos — Brandfetch CDN URL builder + product → domain inference.
+// brandLogos - Brandfetch CDN URL builder + product → domain inference.
 //
 // The CDN takes a registered-domain (e.g. "apple.com") and serves a
 // best-fit logo automatically:
@@ -13,7 +13,7 @@
 const BRANDFETCH_CLIENT_ID = '1id3n10pdBTarCHI0db';
 
 /** Strip a hostname down to its registered domain (drops www/m/store/etc).
- *  Conservative — keeps everything past the second-to-last dot, which
+ *  Conservative - keeps everything past the second-to-last dot, which
  *  works for most fashion retailers. Co.uk-style two-part TLDs become
  *  three-part keep, which Brandfetch handles. */
 function rootDomain(host: string): string {
@@ -40,7 +40,7 @@ function guessDomainFromBrand(brand: string | null | undefined): string | null {
 
 /** Returns a Brandfetch logo URL for a product, or null if we can't infer
  *  a domain. The optional `theme` param asks the CDN for a logo variant
- *  designed for that surface — 'dark' returns a light-glyph version that
+ *  designed for that surface - 'dark' returns a light-glyph version that
  *  reads on dark backgrounds, 'light' returns the canonical dark glyphs.
  *
  *  Brand-name-derived domain is preferred over the product URL because
@@ -58,7 +58,7 @@ export function brandLogoUrlFor(opts: { brand?: string | null; url?: string | nu
   const params = new URLSearchParams();
   params.set('c', BRANDFETCH_CLIENT_ID);
   if (opts.theme) params.set('theme', opts.theme);
-  // fallback=lettermark — if Brandfetch has no logo for the domain, it
+  // fallback=lettermark - if Brandfetch has no logo for the domain, it
   // returns a clean stylized text mark instead of a 404 / Google G.
   params.set('fallback', 'lettermark');
   return `https://cdn.brandfetch.io/domain/${encodeURIComponent(domain)}?${params.toString()}`;

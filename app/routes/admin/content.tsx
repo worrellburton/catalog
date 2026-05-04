@@ -44,9 +44,9 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function formatDateAdded(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return ' - ';
   return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
@@ -214,7 +214,7 @@ interface UnpublishedLook {
   error: string | null;
   created_at: string;
   // Pipeline-detail columns surfaced when the user clicks the Model
-  // cell on a row in the Unpublished table — see the model-details
+  // cell on a row in the Unpublished table - see the model-details
   // expansion row in the render below.
   prompt: string | null;
   height_cm: number | null;
@@ -231,11 +231,11 @@ interface UnpublishedLook {
 // Defers attaching the <video> until the row scrolls into the
 // viewport. Without this, the Unpublished tab stamps ~14 cross-
 // origin Supabase video sources into the DOM at once and the
-// browser stalls under the concurrent decoder/network load —
+// browser stalls under the concurrent decoder/network load  - 
 // which is what was making the thumbnails slow to paint and the
 // admin tab feel sluggish.
 //
-// Once a row's video has been mounted, we never tear it down — the
+// Once a row's video has been mounted, we never tear it down - the
 // observer self-disconnects on first sight, so scrolling away and
 // back is instant (no re-fetch). The wrapper also keeps the
 // <video> mounted across hidden-tab toggles since the parent
@@ -280,14 +280,14 @@ function LazyThumb({ url }: { url: string }) {
   );
 }
 
-// Renders the per-row "Model" expansion in the Unpublished table —
+// Renders the per-row "Model" expansion in the Unpublished table  - 
 // shows the pipeline as a simple node diagram + the prompt + the
 // parameters that were sent to the model. Read-only; admins use it to
 // debug a generation without leaving the page.
 function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
   const modelLabel = gen.model
     ? gen.model === 'pro' ? 'Pro (Seedance Pro)' : 'Fast (Seedance Lite)'
-    : '—';
+    : ' - ';
   const modelTier = gen.veo_model || (gen.model === 'pro' ? 'bytedance/seedance/v1/pro' : gen.model === 'fast' ? 'bytedance/seedance/v1/lite' : null);
 
   type NodeStatus = 'done' | 'active' | 'pending' | 'failed';
@@ -318,7 +318,7 @@ function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
     {
       label: 'Products',
       sub: `${gen.product_count} item${gen.product_count === 1 ? '' : 's'}`,
-      detail: 'user_generation_products — role-tagged for prompt slotting',
+      detail: 'user_generation_products - role-tagged for prompt slotting',
     },
     {
       label: 'Prompt',
@@ -333,12 +333,12 @@ function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
     {
       label: 'Video',
       sub: gen.video_url ? 'Stored' : 'Pending',
-      detail: gen.storage_path || (gen.video_url ? 'Hosted on Fal CDN' : '—'),
+      detail: gen.storage_path || (gen.video_url ? 'Hosted on Fal CDN' : ' - '),
     },
     {
       label: 'Status',
       sub: status,
-      detail: gen.completed_at ? new Date(gen.completed_at).toLocaleString() : '—',
+      detail: gen.completed_at ? new Date(gen.completed_at).toLocaleString() : ' - ',
     },
   ];
 
@@ -385,23 +385,23 @@ function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
         <div className="admin-model-card">
           <div className="admin-model-card-label">Height</div>
           <div className="admin-model-card-value">
-            {gen.height_label || (gen.height_cm ? `${gen.height_cm} cm` : '—')}
+            {gen.height_label || (gen.height_cm ? `${gen.height_cm} cm` : ' - ')}
           </div>
         </div>
         <div className="admin-model-card">
           <div className="admin-model-card-label">Age band</div>
-          <div className="admin-model-card-value">{gen.age_label || '—'}</div>
+          <div className="admin-model-card-value">{gen.age_label || ' - '}</div>
         </div>
         <div className="admin-model-card">
           <div className="admin-model-card-label">Fal request id</div>
           <div className="admin-model-card-value admin-model-mono">
-            {gen.fal_request_id || '—'}
+            {gen.fal_request_id || ' - '}
           </div>
         </div>
         <div className="admin-model-card">
           <div className="admin-model-card-label">Completed at</div>
           <div className="admin-model-card-value">
-            {gen.completed_at ? new Date(gen.completed_at).toLocaleString() : '—'}
+            {gen.completed_at ? new Date(gen.completed_at).toLocaleString() : ' - '}
           </div>
         </div>
       </div>
@@ -409,7 +409,7 @@ function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
       <div className="admin-model-prompt">
         <div className="admin-model-card-label">Prompt sent to {modelLabel}</div>
         <pre className="admin-model-prompt-body">
-          {gen.prompt || '— no prompt recorded —'}
+          {gen.prompt || ' -  no prompt recorded  - '}
         </pre>
       </div>
 
@@ -501,7 +501,7 @@ export default function AdminContent() {
 
   // User-generated looks (the Unpublished sub-tab). Loaded once on mount so
   // the badge count is accurate even on the Published view. Admin RLS on
-  // user_generations was added in migration 044 — without that this query
+  // user_generations was added in migration 044 - without that this query
   // returns zero rows for non-owner sessions.
   const [unpublished, setUnpublished] = useState<UnpublishedLook[]>([]);
   const [unpublishedLoading, setUnpublishedLoading] = useState(true);
@@ -583,7 +583,7 @@ export default function AdminContent() {
   );
 
   // Bottom-center publish toast. Stays up ~3.2s and fades. The
-  // unpublished-row Publish button drives this — single-shot so we
+  // unpublished-row Publish button drives this - single-shot so we
   // don't need a queue.
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
   const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
@@ -595,7 +595,7 @@ export default function AdminContent() {
     publishTimerRef.current = window.setTimeout(() => setPublishMsg(null), 3200);
   }, []);
 
-  // Expanded-row state for the Unpublished looks table — fetches the
+  // Expanded-row state for the Unpublished looks table - fetches the
   // generation's products on demand so the initial list query stays
   // cheap. Cached after the first fetch so re-expanding is instant.
   interface UnpublishedProduct {
@@ -643,8 +643,8 @@ export default function AdminContent() {
         .filter(r => !!r.products)
         .map(r => ({
           id: r.products!.id,
-          name: r.products!.name || '—',
-          brand: r.products!.brand || '—',
+          name: r.products!.name || ' - ',
+          brand: r.products!.brand || ' - ',
           price: r.products!.price,
           image_url: r.products!.image_url,
           role_tag: r.role_tag,
@@ -695,8 +695,8 @@ export default function AdminContent() {
           .filter(r => !!r.products)
           .map(r => ({
             id: r.products!.id,
-            name: r.products!.name || '—',
-            brand: r.products!.brand || '—',
+            name: r.products!.name || ' - ',
+            brand: r.products!.brand || ' - ',
             price: r.products!.price,
             image_url: r.products!.image_url,
             role_tag: r.role_tag,
@@ -716,7 +716,7 @@ export default function AdminContent() {
           console.warn('[publish-inline] addProductToLook failed:', err);
         })
       ));
-      // Same two follow-ups as the dedicated screen — without these
+      // Same two follow-ups as the dedicated screen - without these
       // the new row never appears in the Published list.
       const followUps: Promise<unknown>[] = [];
       if (supabase && g.video_url) {
@@ -776,7 +776,7 @@ export default function AdminContent() {
   const [selectedProductKeys, setSelectedProductKeys] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
-  // In-flight generation jobs per product — tracks individual ad rows so we
+  // In-flight generation jobs per product - tracks individual ad rows so we
   // can show an accurate progress bar bound to the ad statuses in Supabase.
   interface GenJob {
     adIds: string[];
@@ -800,7 +800,7 @@ export default function AdminContent() {
     return () => document.removeEventListener('keydown', keyHandler);
   }, [openCreativeRow]);
 
-  // Tags is now an inline expanded row like Links — close only via the button
+  // Tags is now an inline expanded row like Links - close only via the button
   // or Escape.
   useEffect(() => {
     if (!openTagsRow) return;
@@ -824,7 +824,7 @@ export default function AdminContent() {
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
 
-  // Add Products dropdown — opens a menu with three sources (Google
+  // Add Products dropdown - opens a menu with three sources (Google
   // Shopping → existing research modal, Amazon → Rainforest lookup,
   // Brand Website → URL paste).
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -840,7 +840,7 @@ export default function AdminContent() {
     return () => document.removeEventListener('mousedown', handler);
   }, [addMenuOpen]);
 
-  // Add via Brand Website — small modal with a URL input that hits the
+  // Add via Brand Website - small modal with a URL input that hits the
   // shared scrape-product service.
   const [showBrandUrl, setShowBrandUrl] = useState(false);
   const [brandUrlInput, setBrandUrlInput] = useState('');
@@ -921,7 +921,7 @@ export default function AdminContent() {
       .or(`last_refreshed_at.is.null,last_refreshed_at.lt.${sevenDaysAgo}`)
       .limit(50);
     if (!stale || stale.length === 0) {
-      showToast('No stale products — everything checked in the last 7 days');
+      showToast('No stale products - everything checked in the last 7 days');
       return;
     }
     setRefreshing(true);
@@ -964,7 +964,7 @@ export default function AdminContent() {
         }));
         setRefreshProgress({ done: i + batch.length, total: stale.length });
       }
-      showToast(`Refreshed ${stale.length} — ${priceChanges} price changes, ${oos} out of stock`);
+      showToast(`Refreshed ${stale.length} - ${priceChanges} price changes, ${oos} out of stock`);
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
@@ -1093,7 +1093,7 @@ export default function AdminContent() {
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
   // localStorage keys act as a durable fallback when the Supabase
-  // admin_hidden_* migrations haven't been applied — otherwise deletes would
+  // admin_hidden_* migrations haven't been applied - otherwise deletes would
   // vanish on page refresh and look "undone" to the admin.
   const LOCAL_LOOKS_KEY = 'admin:hiddenLookIds';
   const LOCAL_PRODUCTS_KEY = 'admin:hiddenProductKeys';
@@ -1113,7 +1113,7 @@ export default function AdminContent() {
   const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => readLocalSet<string>(LOCAL_PRODUCTS_KEY));
 
   // Merge Supabase hidden sets on top of the local fallback. If the remote
-  // table is missing or errors, the local set still wins — deletions stick.
+  // table is missing or errors, the local set still wins - deletions stick.
   useEffect(() => {
     if (!supabase) return;
     (async () => {
@@ -1162,7 +1162,7 @@ export default function AdminContent() {
         error.code === 'PGRST205' ||
         /schema cache|does not exist|admin_hidden_looks/i.test(error.message);
       if (tableMissing) return;
-      // Rollback on real error — keep user's data in sync with the server.
+      // Rollback on real error - keep user's data in sync with the server.
       setDeletedLookIds(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -1231,8 +1231,8 @@ export default function AdminContent() {
     return ordered.map(look => {
       const c = creators[look.creator];
       // Fallback chain: seed-creator map → profile data emitted by
-      // fetchLooksFromSupabase for user-published looks → '—'.
-      const display = c?.displayName || look.creatorDisplayName || (look.creator?.startsWith('user:') ? '' : look.creator) || '—';
+      // fetchLooksFromSupabase for user-published looks → ' - '.
+      const display = c?.displayName || look.creatorDisplayName || (look.creator?.startsWith('user:') ? '' : look.creator) || ' - ';
       const avatar = c?.avatar || look.creatorAvatar || '';
       return {
         id: look.id,
@@ -1243,7 +1243,7 @@ export default function AdminContent() {
         products: look.products.length,
       };
     });
-    // looks + creators must be in deps — without them the memoized
+    // looks + creators must be in deps - without them the memoized
     // rows array goes stale after a publish (cache is invalidated and
     // looks state refetches, but the table keeps rendering the
     // previous snapshot).
@@ -1294,7 +1294,7 @@ export default function AdminContent() {
 
   // Generate Look commits the in-memory selection to a new `looks` row and
   // attaches each picked product via look_products. Selections accumulate in
-  // createLookSelectedProducts — the "query" the admin is building — and
+  // createLookSelectedProducts - the "query" the admin is building - and
   // nothing hits the DB until this fires.
   const handleGenerateLook = useCallback(async () => {
     if (createLookSelectedProducts.size === 0 || creatingLook) return;
@@ -1375,7 +1375,7 @@ export default function AdminContent() {
     loadAdProductIds();
   }, [loadAdProductIds]);
 
-  // Poll active generation jobs — refresh statuses every 3s, remove finished
+  // Poll active generation jobs - refresh statuses every 3s, remove finished
   // jobs, and reload adVideoMap when any job completes so the new videos
   // appear in the Creative column.
   useEffect(() => {
@@ -1464,7 +1464,7 @@ export default function AdminContent() {
           id: cp.id,
           brand,
           name,
-          price: cp.price || '—',
+          price: cp.price || ' - ',
           url: cp.url || '',
           image_url: cp.image_url,
           images,
@@ -1520,7 +1520,7 @@ export default function AdminContent() {
     if (active) {
       // Auto-approve: find the newest ad with a finished video and flip it
       // to live. If every ad is already live or still generating, this is a
-      // no-op — no harm done.
+      // no-op - no harm done.
       const { data: candidate } = await supabase
         .from('product_creative')
         .select('id')
@@ -1552,7 +1552,7 @@ export default function AdminContent() {
       if (productFilter === 'no-creative' && p.hasCreative) return false;
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
-      // "Untagged" surfaces products missing a gender tag — these leak into
+      // "Untagged" surfaces products missing a gender tag - these leak into
       // every shopper's feed because passesGenderFilter lets nulls through.
       // Use this view to triage and tag them so the gender scope holds.
       if (productFilter === 'untagged' && p.gender != null) return false;
@@ -1567,6 +1567,53 @@ export default function AdminContent() {
     [allProducts, productFilter, deletedProductKeys, adminQuery]
   );
   const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
+
+  // ── Windowed pagination ──────────────────────────────────────────────
+  // The table is the most expensive surface in the admin: ~17 cells per
+  // row, mostly with inline closures + image tags. Rendering the full
+  // 800-row dataset puts ~13K cells in the DOM and grinds every
+  // interaction (selection, filter, scroll) under heavy layout work.
+  //
+  // Render only the first PAGE_SIZE rows, then grow visibleCount when
+  // an IntersectionObserver sentinel near the bottom of the rendered
+  // window enters viewport. Net effect: first paint is ~80 rows
+  // (~1.3K cells), then the user gets near-bottom and another batch
+  // appears below the fold before they've scrolled to it.
+  const PAGE_SIZE = 80;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLTableRowElement>(null);
+  const visibleRows = useMemo(
+    () => productTable.sortedData.slice(0, visibleCount),
+    [productTable.sortedData, visibleCount],
+  );
+  const hasMore = visibleCount < productTable.sortedData.length;
+
+  // Reset the window whenever the filter / sort / search changes - the
+  // user wants to see "the start" of the new view, not whatever scroll
+  // position they were at.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [productFilter, productTable.sort.key, productTable.sort.direction, adminQuery]);
+
+  // IntersectionObserver to grow the window when the sentinel enters
+  // viewport. rootMargin keeps things smooth - we expand before the
+  // user actually reaches the bottom so the next batch is already
+  // rendered by the time it scrolls into view.
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = sentinelRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting)) {
+          setVisibleCount(c => Math.min(c + PAGE_SIZE, productTable.sortedData.length));
+        }
+      },
+      { rootMargin: '600px 0px' },
+    );
+    obs.observe(node);
+    return () => obs.disconnect();
+  }, [hasMore, productTable.sortedData.length, visibleCount]);
 
   const toggleExpand = (id: number) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -1589,7 +1636,7 @@ export default function AdminContent() {
       if (match?.id) ids.push(match.id);
     }
     if (ids.length === 0) return;
-    // Optimistic UI flip — rolled back below on any chunk failure.
+    // Optimistic UI flip - rolled back below on any chunk failure.
     setCrawledProducts(prev =>
       prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
     );
@@ -1638,7 +1685,7 @@ export default function AdminContent() {
         }
       }));
     } else {
-      // Cascade pause — same chunking story.
+      // Cascade pause - same chunking story.
       for (let i = 0; i < ids.length; i += CHUNK) {
         const slice = ids.slice(i, i + CHUNK);
         await supabase
@@ -1654,7 +1701,7 @@ export default function AdminContent() {
   // bulkSetActive's pattern: optimistic local update, then a single
   // .in('id', ids) UPDATE so the round-trip cost is one request
   // regardless of selection size. Lives below showToast because it
-  // captures it for error toasts — declaring it earlier would hit
+  // captures it for error toasts - declaring it earlier would hit
   // a TDZ in the bundled output.
   const bulkSetGender = useCallback(async (gender: 'male' | 'female' | 'unisex') => {
     const ids: string[] = [];
@@ -1667,7 +1714,7 @@ export default function AdminContent() {
       prev.map(r => (ids.includes(r.id) ? { ...r, gender } : r))
     );
     if (!supabase) return ids.length;
-    // Chunk the writes — same URL-length story as bulkSetActive. A
+    // Chunk the writes - same URL-length story as bulkSetActive. A
     // single .in('id', 800ish-uuids) blows past the proxy's URL cap.
     const CHUNK = 100;
     let firstError: string | null = null;
@@ -1763,7 +1810,7 @@ export default function AdminContent() {
               className="admin-btn admin-btn-secondary"
               onClick={runCopywriter}
               disabled={copywriting}
-              title="Claude rewrites product names and adds a hook — only runs on products without display_name"
+              title="Claude rewrites product names and adds a hook - only runs on products without display_name"
             >
               {copywriting && copywriteProgress ? (
                 <>Rewriting {copywriteProgress.done}/{copywriteProgress.total}…</>
@@ -1801,7 +1848,7 @@ export default function AdminContent() {
                 const result = await auditAllProductTypes();
                 setAuditingTypes(false);
                 showToast(
-                  `Audited ${result.scanned} products — updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
+                  `Audited ${result.scanned} products - updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
                 );
                 if (result.updated > 0) {
                   // Refetch so the Type column reflects the new values
@@ -1834,7 +1881,7 @@ export default function AdminContent() {
                 const result = await auditAllProductGenders();
                 setAuditingGenders(false);
                 showToast(
-                  `Gender audit — scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
+                  `Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`,
                 );
                 if (result.updated > 0) {
                   const { data } = await supabase!
@@ -1950,7 +1997,7 @@ export default function AdminContent() {
           <button
             className={`admin-tab ${looksFilter === 'failed' ? 'active' : ''}`}
             onClick={() => setLooksFilter('failed')}
-            title="Generations that failed — see error message for details"
+            title="Generations that failed - see error message for details"
           >
             Failed
             <span className="admin-tab-badge">{failedLooks.length}</span>
@@ -2120,7 +2167,7 @@ export default function AdminContent() {
                                             )}
                                           </div>
                                         ) : (
-                                          <span style={{ fontSize: 11, color: '#ccc' }}>—</span>
+                                          <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                                         )}
                                       </td>
                                       <td>
@@ -2287,7 +2334,7 @@ export default function AdminContent() {
                         title="Inspect the model + prompt + pipeline for this generation"
                         onClick={(e) => { e.stopPropagation(); toggleModelExpand(g.id); }}
                       >
-                        <span style={{ textTransform: 'capitalize' }}>{g.model || '—'}</span>
+                        <span style={{ textTransform: 'capitalize' }}>{g.model || ' - '}</span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expandedModelId === g.id ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
@@ -2304,7 +2351,7 @@ export default function AdminContent() {
                         className="admin-btn admin-btn-primary"
                         style={{ fontSize: 11, padding: '4px 10px' }}
                         disabled={g.status !== 'done' || publishingIds.has(g.id)}
-                        title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish — status is ${g.status}`}
+                        title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish - status is ${g.status}`}
                         onClick={() => publishUnpublishedInline(g)}
                       >
                         {publishingIds.has(g.id) ? 'Publishing…' : 'Publish'}
@@ -2349,8 +2396,8 @@ export default function AdminContent() {
                                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                                       <div style={{ fontSize: 10, color: '#999' }}>{p.brand}</div>
                                     </td>
-                                    <td style={{ textTransform: 'capitalize', fontSize: 11, color: '#666' }}>{p.role_tag || '—'}</td>
-                                    <td style={{ fontWeight: 600 }}>{p.price || '—'}</td>
+                                    <td style={{ textTransform: 'capitalize', fontSize: 11, color: '#666' }}>{p.role_tag || ' - '}</td>
+                                    <td style={{ fontWeight: 600 }}>{p.price || ' - '}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2430,7 +2477,7 @@ export default function AdminContent() {
                     </td>
                     <td className="admin-cell-muted">{created}</td>
                     <td style={{ textTransform: 'capitalize' }}>{g.style}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{g.model || '—'}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{g.model || ' - '}</td>
                     <td>
                       <div
                         title={g.error || 'No error message recorded'}
@@ -2443,7 +2490,7 @@ export default function AdminContent() {
                           maxWidth: 520, lineHeight: 1.4,
                         }}
                       >
-                        {g.error || '— no message recorded —'}
+                        {g.error || ' -  no message recorded  - '}
                       </div>
                     </td>
                   </tr>
@@ -2507,7 +2554,7 @@ export default function AdminContent() {
             <button
               className={`admin-tab ${productFilter === 'inactive' ? 'active' : ''}`}
               onClick={() => setProductFilter('inactive')}
-              title="Products hidden from the feed — often missing a URL, price, or creative"
+              title="Products hidden from the feed - often missing a URL, price, or creative"
             >
               Hidden
               <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active === false).length}</span>
@@ -2522,7 +2569,7 @@ export default function AdminContent() {
             <button
               className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
               onClick={() => setProductFilter('untagged')}
-              title="Products missing a gender tag — leak into every shopper's feed because untagged products bypass the gender filter"
+              title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
             >
               Untagged
               <span className="admin-tab-badge">{allProducts.filter(p => p.gender == null).length}</span>
@@ -2602,7 +2649,7 @@ export default function AdminContent() {
             <button
               className="bulk-pill bulk-pill--primary"
               onClick={() => {
-                // Resolve to the subset with real cloud ids — only those can
+                // Resolve to the subset with real cloud ids - only those can
                 // drive the generation pipeline.
                 const selectedIds: { id: string; name: string }[] = [];
                 for (const k of selectedProductKeys) {
@@ -2752,7 +2799,7 @@ export default function AdminContent() {
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
-                <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative — curated onto the feed and the deck v1.1 background">Elite</th>
+                <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -2767,7 +2814,7 @@ export default function AdminContent() {
               </tr>
             </thead>
             <tbody>
-              {productTable.sortedData.map((p, i) => {
+              {visibleRows.map((p, i) => {
                 const rowKey = `${p.brand}-${p.name}`;
                 const isSelected = selectedProductKeys.has(rowKey);
                 const toggleRow = (shiftKey: boolean) => {
@@ -2822,7 +2869,7 @@ export default function AdminContent() {
                       aria-label={`Select ${p.name}`}
                       checked={isSelected}
                       onChange={() => { /* handled by the td onClick */ }}
-                      // Prevent the native click from double-toggling — the parent
+                      // Prevent the native click from double-toggling - the parent
                       // td already called toggleRow on the way down.
                       onClick={(e) => e.preventDefault()}
                       style={{ pointerEvents: 'none' }}
@@ -2945,7 +2992,7 @@ export default function AdminContent() {
                         fontSize: 11,
                       }}>{p.type}</span>
                     ) : (
-                      <span style={{ color: '#cbd5e1' }}>—</span>
+                      <span style={{ color: '#cbd5e1' }}> - </span>
                     )}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12 }}>
@@ -2956,7 +3003,7 @@ export default function AdminContent() {
                     ) : p.gender === 'unisex' ? (
                       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontWeight: 500, fontSize: 11 }}>Unisex</span>
                     ) : (
-                      <span style={{ color: '#cbd5e1' }}>—</span>
+                      <span style={{ color: '#cbd5e1' }}> - </span>
                     )}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
@@ -2996,13 +3043,13 @@ export default function AdminContent() {
                         onChange={v => toggleProductActive(p.id!, v)}
                       />
                     ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
                     )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     {(p as any).is_elite ? (
                       <span
-                        title="Elite — flag the creative in /admin/creative to toggle"
+                        title="Elite - flag the creative in /admin/creative to toggle"
                         style={{
                           display: 'inline-block',
                           padding: '2px 8px',
@@ -3019,13 +3066,13 @@ export default function AdminContent() {
                         ★ Elite
                       </span>
                     ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
                     )}
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
                   <td>{p.lookCount}</td>
                   <td>{p.creatorCount}</td>
-                  <td>{p.impressions > 0 ? p.impressions.toLocaleString() : '—'}</td>
+                  <td>{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
                   <td>{p.saves}</td>
                   <td>{p.clicks}</td>
                   <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
@@ -3053,7 +3100,7 @@ export default function AdminContent() {
                         {SOURCE_LABELS[p.source] || p.source}
                       </span>
                     ) : (
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
                     )}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
@@ -3209,7 +3256,7 @@ export default function AdminContent() {
                                           cursor: 'help',
                                         }}
                                       >
-                                        {modelLabel ?? '—'}
+                                        {modelLabel ?? ' - '}
                                       </div>
                                     </div>
                                   );
@@ -3316,7 +3363,7 @@ export default function AdminContent() {
                                     style={{ fontSize: 11, padding: '6px 10px' }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // Kick a Google search scoped to the product — the admin can
+                                      // Kick a Google search scoped to the product - the admin can
                                       // then pick a direct retailer URL or an affiliate-friendly one.
                                       const q = encodeURIComponent(`${p.brand} ${p.name}`.trim());
                                       window.open(`https://www.google.com/search?q=${q}&tbm=shop`, '_blank', 'noopener');
@@ -3390,6 +3437,13 @@ export default function AdminContent() {
                 </Fragment>
                 );
               })}
+              {hasMore && (
+                <tr ref={sentinelRef}>
+                  <td colSpan={20} style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
+                    Loading more products...
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -3839,7 +3893,7 @@ export default function AdminContent() {
           onClose={() => setShowAmazonLookup(false)}
           onIngested={(count) => {
             setShowAmazonLookup(false);
-            showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} — refreshing…`);
+            showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} - refreshing…`);
             setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
           }}
         />
@@ -3901,7 +3955,7 @@ export default function AdminContent() {
                       await addProductUrl(url);
                       setBrandUrlBusy(false);
                       setShowBrandUrl(false);
-                      showToast('Product queued for scrape — refreshing…');
+                      showToast('Product queued for scrape - refreshing…');
                       setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
                     } catch (err) {
                       setBrandUrlBusy(false);
@@ -3927,7 +3981,7 @@ export default function AdminContent() {
             <div style={{ padding: '20px 24px 12px' }}>
               <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add Products</h2>
               <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
-                Describe what you want to add — Claude will research popular matching products.
+                Describe what you want to add - Claude will research popular matching products.
               </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
@@ -4149,7 +4203,7 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* Bottom-center publish notification — fades after ~3.2s. */}
+      {/* Bottom-center publish notification - fades after ~3.2s. */}
       {publishMsg && (
         <div
           role="status"

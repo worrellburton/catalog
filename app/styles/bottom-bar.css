@@ -1,5 +1,5 @@
 /* Bottom bar - liquid glass.
-   Hidden on desktop — the desktop search experience is a
+   Hidden on desktop - the desktop search experience is a
    type-anywhere overlay (see TypeAnywhere). The pill is mobile-only. */
 @media (min-width: 769px) {
   .bottom-bar { display: none !important; }
@@ -34,7 +34,7 @@
   padding: 8px 12px;
 }
 
-/* Always-visible inline search variant — replaces the old "all" pill. The
+/* Always-visible inline search variant - replaces the old "all" pill. The
    filter button + input + clear-X stack horizontally inside the bar. */
 .bottom-bar-inner.search-inline {
   width: min(560px, calc(100vw - 48px));
@@ -43,7 +43,7 @@
 }
 
 .bottom-bar-inner.search-inline .bottom-search-input {
-  /* Knock the standalone glow off — the bar already provides the surface. */
+  /* Knock the standalone glow off - the bar already provides the surface. */
   animation: none;
   background: transparent;
   border-color: transparent;
@@ -76,7 +76,7 @@
 
 /* In-app submit button. Sits to the right of the clear button when
    the input has content. Solid white pill so it reads as the
-   primary action — mirrors the keyboard's "Search" key without
+   primary action - mirrors the keyboard's "Search" key without
    making users reach for it. */
 .bottom-search-submit {
   display: inline-flex;
@@ -195,7 +195,7 @@
      pill background on mobile. It existed for the legacy
      "tap-to-search-button" layout where the bar was just a wrapper
      around a separate pill button. With the inline always-on search
-     input, the bar IS the pill — same treatment as desktop. */
+     input, the bar IS the pill - same treatment as desktop. */
   .search-btn {
     width: auto;
     height: 40px;
@@ -735,7 +735,7 @@
   letter-spacing: -0.01em;
 }
 
-/* Search suggestions — full-width vertical editorial column.
+/* Search suggestions - full-width vertical editorial column.
    Sits on top of the .search-backdrop full-viewport dim, so the
    scrim is uniform across the whole screen and doesn't visually
    shift when the iOS keyboard slides up.
@@ -762,7 +762,7 @@
   padding-bottom: var(--suggestions-bar-clear);
   box-sizing: border-box;
   /* Soft entrance fade on just the top edge so the first row of
-     pills doesn't pop visually. No bottom mask — the input bar
+     pills doesn't pop visually. No bottom mask - the input bar
      itself is opaque and naturally clips the column. */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 80px, black 100%);
   mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
@@ -782,7 +782,7 @@
   visibility: visible;
 }
 
-/* Vertical track — the JS rAF loop translates this on Y. The doubled
+/* Vertical track - the JS rAF loop translates this on Y. The doubled
    suggestions array makes the loop read as continuous. */
 .search-suggestions-track {
   display: flex;
@@ -793,7 +793,7 @@
   will-change: transform;
 }
 
-/* Editorial suggestion list — large quiet text that brightens on
+/* Editorial suggestion list - large quiet text that brightens on
    hover, no pill chrome. Matches the desktop treatment so mobile
    gets the same lookup feel. Font caps a bit smaller below 480px so
    long phrases like "minimalist wardrobe" don't overflow. */
@@ -938,7 +938,7 @@
    normal floating offset. */
 @media (max-width: 768px) {
   .bottom-bar {
-    /* 20px breathing room above the iOS URL chrome (was 12 — too tight,
+    /* 20px breathing room above the iOS URL chrome (was 12 - too tight,
        the bar visually crashed into the toolbar on Safari iOS). */
     bottom: max(
       calc(env(safe-area-inset-bottom) + 20px),
@@ -956,7 +956,7 @@
     top: 0;
     bottom: 0;
   }
-  /* Suggestions float above the bar — keep them well clear of the URL
+  /* Suggestions float above the bar - keep them well clear of the URL
      toolbar so the rolling list doesn't clip into Safari's chrome. */
   .search-suggestions {
     bottom: calc(180px + env(safe-area-inset-bottom));
@@ -986,7 +986,7 @@
   to { --beam-angle: 360deg; }
 }
 
-/* Fallback for browsers that don't support @property — rotate the
+/* Fallback for browsers that don't support @property - rotate the
    pseudo-element itself instead. Slightly less smooth but visually
    equivalent. */
 @keyframes bb-beam-rotate-fallback {
@@ -1025,7 +1025,7 @@
   z-index: 1;
 }
 
-/* Apple — single white hot spot orbits the pill once every 6s. The
+/* Apple - single white hot spot orbits the pill once every 6s. The
    conic-gradient has one bright wedge fading symmetrically into
    transparent on both sides, with the rest of the ring barely
    visible (subtle base white at 0.05). */
@@ -1058,7 +1058,7 @@
   }
 }
 
-/* Mirrored — two opposing white beams, 180° apart, spinning together.
+/* Mirrored - two opposing white beams, 180° apart, spinning together.
    Same wedge shape as Apple but duplicated to 170°-190°. Slightly
    slower (8s) so the eye can register both spots. */
 .bottom-bar.is-beam-mirrored::before {
@@ -1093,9 +1093,9 @@
   }
 }
 
-/* Aurora — full iridescent wash rotating slowly (12s). All colors
+/* Aurora - full iridescent wash rotating slowly (12s). All colors
    present at all times; the rotation cycles which color sits where
-   on the ring. Reads as "magic / generative" — the standard
+   on the ring. Reads as "magic / generative" - the standard
    gen-AI / creative-tool trim. */
 .bottom-bar.is-beam-aurora::before {
   background: conic-gradient(
@@ -1124,7 +1124,7 @@
   }
 }
 
-/* Comet — single hot spot with a fading tail trailing behind it.
+/* Comet - single hot spot with a fading tail trailing behind it.
    The wedge starts very dim ~120° behind the head, ramps up through
    the head, and cuts off sharp on the leading edge. Reads as a
    shooting-star / loading-energy feel. */
@@ -1157,7 +1157,7 @@
   }
 }
 
-/* Pulse — combines an outer halo glow that breathes with a rotating
+/* Pulse - combines an outer halo glow that breathes with a rotating
    beam on top. Two layers: ::before for the rotating beam (uses the
    apple-style single hot spot but tinted cyan), and a box-shadow on
    the bar itself that pulses 0.4 ↔ 1.0 opacity in 3s. */

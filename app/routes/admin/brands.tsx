@@ -141,7 +141,7 @@ export default function AdminBrands() {
                       fontWeight: 700,
                       color: b.ctr >= 4 ? '#16a34a' : b.ctr >= 2 ? '#ca8a04' : b.ctr > 0 ? '#64748b' : '#cbd5e1',
                     }}>
-                      {b.impressions > 0 ? `${b.ctr.toFixed(2)}%` : '—'}
+                      {b.impressions > 0 ? `${b.ctr.toFixed(2)}%` : ' - '}
                     </span>
                   </td>
                   <td>${b.cost.toFixed(2)}</td>

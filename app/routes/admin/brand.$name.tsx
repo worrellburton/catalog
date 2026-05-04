@@ -43,7 +43,7 @@ export default function BrandDashboard() {
     const products = new Set(ads.map(a => a.product?.id).filter(Boolean)).size;
     const catalogs = new Set<string>();
     ads.forEach(a => (a.product?.catalog_tags || []).forEach(c => catalogs.add(c)));
-    // Rough estimated commission — clicks × AOV × commission rate. AOV
+    // Rough estimated commission - clicks × AOV × commission rate. AOV
     // derived from ad-weighted product prices (numeric parse).
     const priceTotal = ads.reduce((s, a) => {
       const priceNum = parseFloat((a.product?.price || '').replace(/[^0-9.]/g, '')) || 0;
@@ -232,7 +232,7 @@ export default function BrandDashboard() {
                       <td>{p.impressions.toLocaleString()}</td>
                       <td>{p.clicks.toLocaleString()}</td>
                       <td style={{ fontWeight: 700, color: ctr >= 4 ? '#16a34a' : ctr >= 2 ? '#ca8a04' : '#64748b' }}>
-                        {p.impressions > 0 ? `${ctr.toFixed(2)}%` : '—'}
+                        {p.impressions > 0 ? `${ctr.toFixed(2)}%` : ' - '}
                       </td>
                     </tr>
                   );

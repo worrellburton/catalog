@@ -87,7 +87,7 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
 
 /* 16-month roadmap phases. Hire Directors and Test run as parallel support tracks.
    start/end are months (0..16). Bars render proportionally over a 16-month track.
-   These are the initial values — the user can drag to reposition/resize at runtime. */
+   These are the initial values - the user can drag to reposition/resize at runtime. */
 type RoadmapPhase = { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean };
 const initialRoadmapPhases: RoadmapPhase[] = [
   { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 3,  color: '#f5c542', parallel: true },
@@ -697,7 +697,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
                 );
               })}
             </svg>
-            {/* 5 spawned creatives at bottom — same source as seed, tinted for placeholder variety */}
+            {/* 5 spawned creatives at bottom - same source as seed, tinted for placeholder variety */}
             <div className="deck-v1-tech-neighbors">
               {[0, 1, 2, 3, 4].map((n) => {
                 const src = techVideos[techActiveSeed ?? 0];
@@ -735,7 +735,7 @@ const DeckViewV1: React.FC<DeckViewV1Props> = ({
         </div>
       </div>
 
-      {/* Slide 10: Payouts — how creators earn across four streams */}
+      {/* Slide 10: Payouts - how creators earn across four streams */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>

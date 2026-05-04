@@ -1,4 +1,4 @@
-// TrailMotion — shared CSS vars + reduced-motion gate.
+// TrailMotion - shared CSS vars + reduced-motion gate.
 //
 // History: this file used to wrap framer-motion's LazyMotion +
 // MotionConfig + motion.div(layoutId) so that taps on a card could
@@ -18,7 +18,7 @@ import { forwardRef, useEffect, useState } from 'react';
 const TRAIL_DURATION = 0.36;
 const TRAIL_EASE_CSS = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
-/** Shared transition descriptor — kept for backwards compat. */
+/** Shared transition descriptor - kept for backwards compat. */
 export const trailTransition = {
   type: 'tween' as const,
   ease: [0.32, 0.72, 0, 1] as [number, number, number, number],

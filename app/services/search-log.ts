@@ -1,7 +1,7 @@
 import { supabase } from '~/utils/supabase';
 
 // Search-log batching. The consumer feed used to fire one Supabase insert
-// per debounced query — for a user typing "white shoes nike" with pauses,
+// per debounced query - for a user typing "white shoes nike" with pauses,
 // that's three separate POST round trips. We now queue entries client-side
 // and flush them as a single call to the search-log-batch edge function
 // either every 5 s, or on page unload, or when the queue hits 16 entries
@@ -37,7 +37,7 @@ async function flush(): Promise<void> {
     });
     if (error) console.error('[search-log] batch flush failed:', error.message);
   } catch (err) {
-    // Network blip — we drop these rather than retry indefinitely. Search
+    // Network blip - we drop these rather than retry indefinitely. Search
     // logging is best-effort analytics, not a billable side-effect.
     console.error('[search-log] batch flush threw:', err);
   }

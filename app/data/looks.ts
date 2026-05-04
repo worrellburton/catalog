@@ -15,7 +15,7 @@ export interface Creator {
 
 export interface Look {
   id: number;
-  /** Supabase UUID — present for DB-sourced looks, absent for static seed data. */
+  /** Supabase UUID - present for DB-sourced looks, absent for static seed data. */
   uuid?: string;
   title: string;
   video: string;
@@ -26,7 +26,7 @@ export interface Look {
   description: string;
   color: string;
   products: Product[];
-  // Set when the look's creator isn't in the seed creators map —
+  // Set when the look's creator isn't in the seed creators map  - 
   // typically a user-published look whose creator_handle is null
   // and whose author lives in profiles instead. The admin Looks
   // table reads these as a fallback so the row still shows a name

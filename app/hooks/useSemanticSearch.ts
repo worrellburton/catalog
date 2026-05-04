@@ -1,4 +1,4 @@
-// useSemanticSearch — debounced natural-language search hook.
+// useSemanticSearch - debounced natural-language search hook.
 //
 // Calls the nl-search edge function after the user stops typing (200 ms debounce,
 // or immediately on Enter when `trigger` increments). Returns ranked creative
@@ -33,9 +33,9 @@ export interface SemanticSearchState {
   /** True when the query matched fewer than 3 results or had a very low score.
    *  The backfill agent will pick this up automatically. */
   coldMiss: boolean;
-  /** The classified intent and rewrites — useful for displaying context hints. */
+  /** The classified intent and rewrites - useful for displaying context hints. */
   queryPlan: QueryPlan | null;
-  /** The logged query_id — caller can subscribe to realtime updates on it. */
+  /** The logged query_id - caller can subscribe to realtime updates on it. */
   queryId: string | null;
   /** Non-null when the last request failed. */
   error: string | null;
@@ -160,7 +160,7 @@ export function useSemanticSearch(
     seenIdsRef.current = new Set();
     setBaseCreatives([]);
 
-    // Enter press increments trigger — skip debounce so search fires immediately.
+    // Enter press increments trigger - skip debounce so search fires immediately.
     const immediate = trigger !== triggerRef.current;
     triggerRef.current = trigger;
     timerRef.current = setTimeout(() => runSearch(q, false), immediate ? 0 : DEBOUNCE_MS);

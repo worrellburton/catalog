@@ -67,7 +67,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
 
   // Defer slot population to viewport. The TrailVideoHost pool keeps the
   // element alive so the LookOverlay hero (same trailId) reuses the same
-  // running <video> on tap — no remount, no first-frame black.
+  // running <video> on tap - no remount, no first-frame black.
   const setVideoSlot = useTrailVideo(
     inViewport ? trailId : undefined,
     inViewport ? videoUrl : undefined,
@@ -122,7 +122,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* TrailVideoHost slot — shared <video> hands off to LookOverlay's
+        {/* TrailVideoHost slot - shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
             own video frames stay alive while the overlay opacity-fades in. */}
         <div

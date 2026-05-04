@@ -11,12 +11,12 @@ import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
-// of first paint — the user has to tap into them. Splitting trims the
+// of first paint - the user has to tap into them. Splitting trims the
 // consumer's initial bundle without delaying anything they actually see on
 // load. Each lazy chunk is wrapped in <Suspense> below.
 //
 // Importer fns are kept around so we can fire them again from an idle
-// callback after first paint — that way the bytes are already in the
+// callback after first paint - that way the bytes are already in the
 // browser cache by the time the user actually opens an overlay.
 const importLandingPage = () => import('~/components/LandingPage');
 const importCreatorPage = () => import('~/components/CreatorPage');
@@ -176,7 +176,7 @@ function getRandomCatalogName(query?: string): string {
       }
     }
 
-    // No match — fall back to generic fashion names instead of random unrelated theme
+    // No match - fall back to generic fashion names instead of random unrelated theme
     const fashion = catalogNames.fashion;
     return fashion[Math.floor(Math.random() * fashion.length)];
   }
@@ -193,7 +193,7 @@ export default function Home() {
   // Splash timing is data-aware: we hold for at least 800ms (so the brand
   // moment doesn't flash by) and at most 2500ms (so a slow network never
   // hangs the user). In between, we dismiss as soon as the feed data lands
-  // — so by the time the splash drops, the cards render with real content
+  // - so by the time the splash drops, the cards render with real content
   // already in cache.
   const [firstVisit, setFirstVisit] = useState(() => {
     try {
@@ -280,7 +280,7 @@ export default function Home() {
   // Editorial looks pulled from looks_creative; fed into the "You might also
   // like" grid on ProductPage. Loaded once at mount and reused.
   const [liveLooks, setLiveLooks] = useState<Look[]>([]);
-  // Nav counter — incremented on every product/creative open. ProductPage
+  // Nav counter - incremented on every product/creative open. ProductPage
   // useLayoutEffect's on it (not on brand+name) so the scroll-to-top is
   // guaranteed to fire on every trail step, even if two consecutive
   // products share a brand+name or React batches the re-render in a way
@@ -288,7 +288,7 @@ export default function Home() {
   const [productNavCount, setProductNavCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
   // Once the user manually toggles the gender chip we stop auto-syncing
-  // it from the profile — otherwise their override would get clobbered
+  // it from the profile - otherwise their override would get clobbered
   // on the next session-restore.
   const filterUserOverride = useRef(false);
   const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
@@ -297,7 +297,7 @@ export default function Home() {
     // Also update the module-level shopperGender used by every
     // product-creative query (home feed, brand strip, similar rail).
     // Without this, flipping the Shopping-for toggle to Women only
-    // re-scoped the looks (small portion of the feed) — the much
+    // re-scoped the looks (small portion of the feed) - the much
     // larger creative grid kept rendering whatever the profile's
     // signup gender was set to. Mapping is straightforward:
     //   'men'   → 'male'
@@ -307,8 +307,8 @@ export default function Home() {
   }, []);
   // Initial searchQuery comes from the URL ?q= param so a deep-linked
   // search (someone shares /catalog.shop/?q=shoes) lands in the right
-  // state on first paint. Subsequent commits push history entries — see
-  // the debounced syncSearchToUrl effect below — so the back button
+  // state on first paint. Subsequent commits push history entries - see
+  // the debounced syncSearchToUrl effect below - so the back button
   // walks the user through their search history.
   const initialUrlQuery = (() => {
     if (typeof window === 'undefined') return '';
@@ -367,7 +367,7 @@ export default function Home() {
       return;
     }
     if (splashMounted) {
-      // Auth resolved — start the fade-out, then unmount after the
+      // Auth resolved - start the fade-out, then unmount after the
       // CSS transition completes (240 ms; matching .auth-splash
       // transition duration).
       setSplashLeaving(true);
@@ -429,7 +429,7 @@ export default function Home() {
           // waiting for the user to type.
           setSearchTrigger(t => t + 1);
         }
-      } catch { /* malformed URL — ignore */ }
+      } catch { /* malformed URL - ignore */ }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -447,7 +447,7 @@ export default function Home() {
       if (cancelled) return;
       // Always tell product-creative the gender so brand-strip and
       // live-ads queries scope correctly, even when the looks-level
-      // filter is overridden by the user. Skip 'unknown' — that's the
+      // filter is overridden by the user. Skip 'unknown' - that's the
       // null-state and we never want to hide the catalog from someone
       // we can't tag.
       if (g === 'male' || g === 'female') setShopperGender(g);
@@ -490,7 +490,7 @@ export default function Home() {
         return;
       }
       // Wrap the waitlist lookup so a transient network failure (or RLS
-      // regression) can't leave the user pinned on 'locked' forever — that
+      // regression) can't leave the user pinned on 'locked' forever - that
       // path renders an auth splash with no escape. On throw, default to the
       // waitlist view: it's the same destination an unapproved user lands
       // on, has a Retry affordance, and beats a stuck splash.
@@ -518,7 +518,7 @@ export default function Home() {
 
   // Sync hash when view changes
   useEffect(() => {
-    // Don't clobber Supabase OAuth return URL — let the client parse it
+    // Don't clobber Supabase OAuth return URL - let the client parse it
     // first. Both implicit (#access_token=…) and PKCE (?code=…) flows
     // depend on the URL staying intact until supabase-js's async
     // exchange completes.
@@ -537,7 +537,7 @@ export default function Home() {
     }
   }, [view]);
 
-  // Native shell bridge — when running inside the Flutter wrapper
+  // Native shell bridge - when running inside the Flutter wrapper
   // (catalog-flutter), it dispatches CustomEvents on `window` to drive
   // the feed without needing direct React state access.
   useEffect(() => {
@@ -617,7 +617,7 @@ export default function Home() {
   }, []);
 
   const handleOpenLook = useCallback((look: Look) => {
-    // Trail navigation — when the user opens a look from inside a
+    // Trail navigation - when the user opens a look from inside a
     // ProductPage (or any other product overlay), close the product
     // surface so LookOverlay takes its place cleanly. Without this,
     // the two overlays stack and "back" walks through both layers
@@ -627,7 +627,7 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
-    // The user is committing to this new look — drop any stale "go
+    // The user is committing to this new look - drop any stale "go
     // back to the previous look on close" so opening a product from
     // here doesn't bounce them somewhere unexpected.
     setProductOpenedFromLook(null);
@@ -749,7 +749,7 @@ export default function Home() {
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
-      // Same data the brand rail uses to fill "More from <Brand>" —
+      // Same data the brand rail uses to fill "More from <Brand>"  - 
       // without this, products opened from a Look, search, or recents
       // see an empty rail.
       prefetchCreativesByBrand(product.brand, null, 12)
@@ -785,7 +785,7 @@ export default function Home() {
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
-    // Don't blank the rail state here — that would unmount the tapped rail
+    // Don't blank the rail state here - that would unmount the tapped rail
     // card the very moment Framer Motion is reading its layoutId for the
     // morph, which produces a glitched/jumping transition. Keep the old
     // rails visible; the .then() handlers below overwrite once new data
@@ -805,7 +805,7 @@ export default function Home() {
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
 
-    // Overwrite when data arrives. No intermediate null state — old rail
+    // Overwrite when data arrives. No intermediate null state - old rail
     // content stays put through the morph and gets replaced atomically.
     similarP.then(rows => {
       primeTrailAssets(rows);
@@ -828,7 +828,7 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Popular fallback — fetch the live-ads roster once so the "More like
+  // Popular fallback - fetch the live-ads roster once so the "More like
   // this" feed can fill from it whenever the similar-by-embedding
   // lookup returns nothing for the active product.
   useEffect(() => {
@@ -845,7 +845,7 @@ export default function Home() {
 
   // Curated subset for the "You might also like" grid. Drops legacy seed
   // rows whose video field is a bare filename (e.g. "guy.mp4" / "girl2.mp4"
-  // from migration 002 — those assets aren't deployed and render as empty
+  // from migration 002 - those assets aren't deployed and render as empty
   // black tiles named "Look 02"/"Look 06"/etc.) and dedupes by video URL so
   // the same clip can't show up multiple times in a row.
   const lookFeedTiles = useMemo<Look[]>(() => {
@@ -876,7 +876,7 @@ export default function Home() {
     setSelectedProduct(null);
     setSelectedLook(null);
     setSearchQuery(query);
-    // The catalog name is the user's actual query, title-cased — so a
+    // The catalog name is the user's actual query, title-cased - so a
     // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
     // Single short tokens (acronyms) stay uppercase.
     const trimmed = query.trim();
@@ -917,7 +917,7 @@ export default function Home() {
   }, []);
 
   // Header / BottomBar / UserMenu callbacks. Stable refs so the memo
-  // wrappers on BottomBar and UserMenu actually cut renders — inline
+  // wrappers on BottomBar and UserMenu actually cut renders - inline
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
   const openMyLooks = useCallback(() => setShowMyLooks(true), []);
@@ -962,7 +962,7 @@ export default function Home() {
     }
   }, [productOpenedFromLook]);
 
-  // Sync handlers — push the canonical share URL whenever a modal
+  // Sync handlers - push the canonical share URL whenever a modal
   // opens via in-app interaction. We use replaceState (not navigate)
   // so the SPA doesn't remount the whole feed; we just update the
   // address bar so copy-link / back-button / refresh all do the
@@ -1019,7 +1019,7 @@ export default function Home() {
   }, [brandFilter]);
 
   // Fresh-load handler: read the route param the Remix router gave
-  // us and open the matching modal once. Runs on mount only — after
+  // us and open the matching modal once. Runs on mount only - after
   // that, in-app navigation drives state, and the URL syncs back via
   // the effects above.
   const params = useParams();
@@ -1087,7 +1087,7 @@ export default function Home() {
   }, [handleOpenCreator]);
   const handleBrowserClose = useCallback(() => setBrowserState(null), []);
 
-  // Derived list — depends on liveLooks (changes once on mount) and
+  // Derived list - depends on liveLooks (changes once on mount) and
   // bookmarkedLooks (changes only on bookmark toggle). Memoizing keeps
   // UserMenu's savedLooks prop stable across unrelated re-renders.
   const savedLooksForMenu = useMemo(
@@ -1145,7 +1145,7 @@ export default function Home() {
 
       {isAppVisible && (
         <>
-          {/* Top search loading bar — thin shimmer across the very top of the viewport */}
+          {/* Top search loading bar - thin shimmer across the very top of the viewport */}
           <div className={`search-loading-bar${searchLoading ? ' visible' : ''}`} aria-hidden="true" />
 
           <header>

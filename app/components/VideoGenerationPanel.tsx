@@ -73,7 +73,7 @@ function StatusBadge({
 // ─── Time helpers ────────────────────────────────────────────────────
 
 function timeAgo(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   const d = new Date(iso);
   const now = Date.now();
   const diff = now - d.getTime();
@@ -84,7 +84,7 @@ function timeAgo(iso: string | null): string {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return ' - ';
   return new Date(iso).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -94,7 +94,7 @@ function formatDate(iso: string | null): string {
 }
 
 function formatCost(cost: number | null): string {
-  if (cost === null || cost === undefined) return '—';
+  if (cost === null || cost === undefined) return ' - ';
   return `$${cost.toFixed(2)}`;
 }
 
@@ -353,7 +353,7 @@ export default function AdminVideoGeneration({ embedded = false }: { embedded?: 
                             <span style={{ fontSize: 13 }}>{v.ai_model.name}</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#999', fontSize: 12 }}>—</span>
+                          <span style={{ color: '#999', fontSize: 12 }}> - </span>
                         )}
                       </td>
 
@@ -431,7 +431,7 @@ export default function AdminVideoGeneration({ embedded = false }: { embedded?: 
                                   <span style={{ color: '#888' }}>Job ID</span>
                                   <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{v.id}</span>
                                   <span style={{ color: '#888' }}>Veo Model</span>
-                                  <span>{v.veo_model || '—'}</span>
+                                  <span>{v.veo_model || ' - '}</span>
                                   <span style={{ color: '#888' }}>Duration</span>
                                   <span>{v.duration_seconds}s</span>
                                   <span style={{ color: '#888' }}>Aspect Ratio</span>

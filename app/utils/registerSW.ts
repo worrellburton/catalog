@@ -1,5 +1,5 @@
 // Register the asset-cache service worker once the page is idle. We never
-// want SW setup to compete with the first paint or with Supabase fetches —
+// want SW setup to compete with the first paint or with Supabase fetches  - 
 // it's a perf optimization for *future* visits, not the current one.
 
 const SW_PATH = `${import.meta.env.BASE_URL}sw.js`;

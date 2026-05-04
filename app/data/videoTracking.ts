@@ -17,12 +17,12 @@ export interface VideoTrackingData {
   products: ProductTrack[];
 }
 
-// girl2.mp4 — Lily Wittman, white t-shirt, arms crossed, slight movement
+// girl2.mp4 - Lily Wittman, white t-shirt, arms crossed, slight movement
 // Products: Zara bag (hip/side), Windsor sunglasses (face), Diesel phone case (hand), Pavoi necklace (neck)
 const girl2Tracking: VideoTrackingData = {
   videoDuration: 8,
   products: [
-    // Product 0: Zara Rock Style Flap Shoulder Bag — tracks near left hip/arm area
+    // Product 0: Zara Rock Style Flap Shoulder Bag - tracks near left hip/arm area
     {
       keyframes: [
         { t: 0.0, top: 58, left: 28 },
@@ -36,7 +36,7 @@ const girl2Tracking: VideoTrackingData = {
         { t: 8.0, top: 58, left: 28 },
       ],
     },
-    // Product 1: Windsor Major Shade Cat Eye Sunglasses — tracks near face/forehead
+    // Product 1: Windsor Major Shade Cat Eye Sunglasses - tracks near face/forehead
     {
       keyframes: [
         { t: 0.0, top: 18, left: 42 },
@@ -50,7 +50,7 @@ const girl2Tracking: VideoTrackingData = {
         { t: 8.0, top: 18, left: 42 },
       ],
     },
-    // Product 2: Diesel Oval D Glitter Case — tracks near hand/wrist area
+    // Product 2: Diesel Oval D Glitter Case - tracks near hand/wrist area
     {
       keyframes: [
         { t: 0.0, top: 65, left: 50 },
@@ -64,7 +64,7 @@ const girl2Tracking: VideoTrackingData = {
         { t: 8.0, top: 65, left: 50 },
       ],
     },
-    // Product 3: Pavoi Cross Pendant Necklace — tracks on neck/chest
+    // Product 3: Pavoi Cross Pendant Necklace - tracks on neck/chest
     {
       keyframes: [
         { t: 0.0, top: 38, left: 40 },
@@ -81,12 +81,12 @@ const girl2Tracking: VideoTrackingData = {
   ],
 };
 
-// guy.mp4 — Garrett, casual outfit
+// guy.mp4 - Garrett, casual outfit
 // Products: Vince shirt (torso), Suitsupply jeans (legs), Dior sneakers (feet), Fujifilm camera (hand/chest)
 const guyTracking: VideoTrackingData = {
   videoDuration: 8,
   products: [
-    // Product 0: Vince Patchwork Shirt — tracks on upper torso
+    // Product 0: Vince Patchwork Shirt - tracks on upper torso
     {
       keyframes: [
         { t: 0.0, top: 32, left: 48 },
@@ -100,7 +100,7 @@ const guyTracking: VideoTrackingData = {
         { t: 8.0, top: 32, left: 48 },
       ],
     },
-    // Product 1: Suitsupply Jeans — tracks on mid-thigh area
+    // Product 1: Suitsupply Jeans - tracks on mid-thigh area
     {
       keyframes: [
         { t: 0.0, top: 62, left: 42 },
@@ -114,7 +114,7 @@ const guyTracking: VideoTrackingData = {
         { t: 8.0, top: 62, left: 42 },
       ],
     },
-    // Product 2: Dior Sneakers — tracks at foot level
+    // Product 2: Dior Sneakers - tracks at foot level
     {
       keyframes: [
         { t: 0.0, top: 85, left: 45 },
@@ -128,7 +128,7 @@ const guyTracking: VideoTrackingData = {
         { t: 8.0, top: 85, left: 45 },
       ],
     },
-    // Product 3: Fujifilm Camera — tracks in hand/upper body area
+    // Product 3: Fujifilm Camera - tracks in hand/upper body area
     {
       keyframes: [
         { t: 0.0, top: 25, left: 60 },

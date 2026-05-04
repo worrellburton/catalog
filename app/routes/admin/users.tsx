@@ -19,7 +19,7 @@ function formatDate(iso: string | null): string {
 
 // "Last online" reads better at a glance as a relative duration than
 // an absolute timestamp. Falls back to absolute date once the gap is
-// older than a week so the column never shows "37 days ago" — that's
+// older than a week so the column never shows "37 days ago" - that's
 // less useful than the actual date.
 function formatRelative(iso: string | null): string {
   if (!iso) return '-';
@@ -281,7 +281,7 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
 // Seed-data creators come from app/data/looks.ts so the row can't be
 // removed from the bundle, but the admin still needs delete semantics.
 // We persist a localStorage set of "deleted" handles and filter them
-// out of the Creators tab — same end-state as a real delete from the
+// out of the Creators tab - same end-state as a real delete from the
 // admin's POV (gone, doesn't return on refresh).
 const DELETED_CONTENT_CREATORS_KEY = 'catalog:admin-deleted-content-creators';
 
@@ -322,7 +322,7 @@ export default function AdminUsers() {
     (async () => {
       // Fetch profiles + per-user generated-look counts + waitlist
       // ids in parallel. Waitlist ids let us exclude users still
-      // pending approval from the Shoppers tab — once you're on the
+      // pending approval from the Shoppers tab - once you're on the
       // waitlist you're not a shopper.
       const [profiles, genRowsRes, ids] = await Promise.all([
         getProfiles(),
@@ -414,7 +414,7 @@ export default function AdminUsers() {
   // profile, not the role text column. Keeps role for display while
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
-  // Super-admins are the subset whose primary role is 'super_admin' —
+  // Super-admins are the subset whose primary role is 'super_admin'  - 
   // the strict tier that gates destructive UI on consumer surfaces
   // (e.g. delete-mode in the account menu).
   const superAdmins = allUsers.filter(u => u.role === 'super_admin');
@@ -525,7 +525,7 @@ export default function AdminUsers() {
     }
   }, [allUsers, showToast]);
 
-  // Super-admin toggle — flips the primary role between 'super_admin'
+  // Super-admin toggle - flips the primary role between 'super_admin'
   // and 'admin'. Off lands on 'admin' (not the original role) because
   // the toggle is only surfaced on the Admins / Super Admins tabs, so
   // 'admin' is the right neighbouring tier.
@@ -626,7 +626,7 @@ export default function AdminUsers() {
                   ) : u.gender === 'female' ? (
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#be185d', background: '#fce7f3', padding: '2px 8px', borderRadius: 999 }}>Female</span>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>—</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
                   )}
                 </td>
                 <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
@@ -675,7 +675,7 @@ export default function AdminUsers() {
             setAuditingGender(true);
             const result = await auditAllUserGenders();
             setAuditingGender(false);
-            showToast(`Gender audit — scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`, result.errors ? 'warning' : 'success');
+            showToast(`Gender audit - scanned ${result.scanned}, updated ${result.updated}, skipped ${result.skipped}${result.errors ? `, ${result.errors} errors` : ''}.`, result.errors ? 'warning' : 'success');
             if (result.updated > 0) {
               const profiles = await getProfiles();
               setAllUsers(prev => profiles.map(p => {

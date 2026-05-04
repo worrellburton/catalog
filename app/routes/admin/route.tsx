@@ -178,7 +178,7 @@ function FailedErrorView({ n, onRetry }: { n: GenNotification; onRetry?: () => v
                 Tier 1 has tight per-minute + daily limits for Veo preview models. Options:
               </div>
               <ul style={{ margin: '4px 0 4px 14px', padding: 0 }}>
-                <li>Wait — per-minute limits reset every minute, daily at midnight PDT</li>
+                <li>Wait - per-minute limits reset every minute, daily at midnight PDT</li>
                 <li>Upgrade to Tier 2+ at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>aistudio.google.com/apikey</a></li>
                 <li>Switch to a non-preview model (e.g. <code>veo-2.0-generate-001</code>) which has higher limits</li>
               </ul>

@@ -12,12 +12,12 @@ interface DeckViewV1_1Props {
 }
 
 /*
- * MathPhases — the rebuilt "The Math" slide.
+ * MathPhases - the rebuilt "The Math" slide.
  *
  * 10 progressively revealed phases walk the viewer from a single $200 sale
  * to a $6T-TAM picture. Phases auto-advance (12s each) with a fill bar, and
  * can be clicked ahead/back at any time. The component only runs its timer
- * while the slide is actually visible — we pause when scrolled away to keep
+ * while the slide is actually visible - we pause when scrolled away to keep
  * bandwidth / re-renders low.
  *
  * Numbers here are deliberately traceable: commission rates come from the
@@ -28,7 +28,7 @@ interface DeckViewV1_1Props {
  */
 
 function RevenueChart() {
-  // Lightweight inline SVG — no dep, no layout jank. Values are ARR in $M.
+  // Lightweight inline SVG - no dep, no layout jank. Values are ARR in $M.
   const bars: { label: string; value: number; color: string }[] = [
     { label: 'Y1',  value: 2.3,    color: '#38bdf8' },
     { label: 'Y2',  value: 22.5,   color: '#a78bfa' },
@@ -108,7 +108,7 @@ function RevenueChart() {
 
 // All 10 beats rendered on a single slide: top headline, commission
 // compare, funnel, creator/user/token stat strip, ARR chart, growth row,
-// TAM + flywheel close. No timers, no carousel — everything visible at once.
+// TAM + flywheel close. No timers, no carousel - everything visible at once.
 function MathPhases() {
   return (
     <div className="math-phases math-phases-static">
@@ -128,7 +128,7 @@ function MathPhases() {
       <div className="math-band">
         <span className="math-phase-kicker">Commission</span>
         <h3 className="math-phase-title">Retail norm 5–10%. Catalog negotiates 15–25%.</h3>
-        <p className="math-phase-lede">Surveyed across 18 networks — Impact, Rakuten, CJ, ShareASale, Awin, LTK, Skimlinks, Pepperjam, Refersion, Howl, MagicLinks and more. Because Catalog owns the commerce surface, we take direct creator-first terms.</p>
+        <p className="math-phase-lede">Surveyed across 18 networks - Impact, Rakuten, CJ, ShareASale, Awin, LTK, Skimlinks, Pepperjam, Refersion, Howl, MagicLinks and more. Because Catalog owns the commerce surface, we take direct creator-first terms.</p>
         <div className="math-compare">
           <div className="math-compare-col math-compare-old">
             <span className="math-compare-label">Legacy networks</span>
@@ -192,7 +192,7 @@ function MathPhases() {
         <div className="math-chart-left">
           <span className="math-phase-kicker">ARR · Growth</span>
           <h3 className="math-phase-title">$2.3M → $2.25B.</h3>
-          <p className="math-phase-lede">Holds the $3.75 / user / month net assumption across the curve. Ads, placements, and brand-side tooling add another ~4× on top — deliberately off-chart so this is just the commission spine.</p>
+          <p className="math-phase-lede">Holds the $3.75 / user / month net assumption across the curve. Ads, placements, and brand-side tooling add another ~4× on top - deliberately off-chart so this is just the commission spine.</p>
           <div className="math-growth">
             <div className="math-growth-step"><span className="math-growth-label">Y1</span><span className="math-growth-value">50K</span><span className="math-growth-sub">invite-only</span></div>
             <div className="math-growth-step"><span className="math-growth-label">Y2</span><span className="math-growth-value">500K</span><span className="math-growth-sub">public beta</span></div>
@@ -209,7 +209,7 @@ function MathPhases() {
         <div>
           <span className="math-phase-kicker">TAM</span>
           <h3 className="math-phase-subtitle">Global retail is $6T. 1% indexed is a category.</h3>
-          <p className="math-phase-lede">If every retail item were in one place — affiliate linked, creator distributed, first-party attributed — even 0.1% penetration is $6B GMV. 1% is $10B+ platform net. The surface is that big.</p>
+          <p className="math-phase-lede">If every retail item were in one place - affiliate linked, creator distributed, first-party attributed - even 0.1% penetration is $6B GMV. 1% is $10B+ platform net. The surface is that big.</p>
         </div>
         <div>
           <span className="math-phase-kicker">Flywheel</span>
@@ -298,7 +298,7 @@ const flywheelSteps: { n: number; angle: string; label: string; sub: string; ico
 
 /* 16-month roadmap phases. Hire Directors and Test run as parallel support tracks.
    start/end are months (0..16). Bars render proportionally over a 16-month track.
-   These are the initial values — the user can drag to reposition/resize at runtime. */
+   These are the initial values - the user can drag to reposition/resize at runtime. */
 type RoadmapPhase = { label: string; sub: string; start: number; end: number; color: string; parallel?: boolean };
 const initialRoadmapPhases: RoadmapPhase[] = [
   { label: 'Hire Directors',           sub: 'Staff leadership across seed, Shopify, and creator onboarding.',               start: 0,  end: 3,  color: '#f5c542', parallel: true },
@@ -326,7 +326,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
   // Deck v1.1 differentiator: the background feed only shows hand-picked
   // elite creatives, flagged by admins in /admin/creative. Empty array until
-  // the fetch lands — the old bundled clips stay off so the feed is 100% real.
+  // the fetch lands - the old bundled clips stay off so the feed is 100% real.
   const [eliteVideos, setEliteVideos] = useState<EliteCreative[]>([]);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
@@ -453,7 +453,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
       <div className="deck-v8-bg" aria-hidden="true">
         <div className="deck-insight-grid">
           {/* v1.1: only elite creatives, hand-picked in /admin/creative. If
-              no elites are flagged yet the grid is empty — the overlay still
+              no elites are flagged yet the grid is empty - the overlay still
               provides the dark wash, so the cover slide stays legible. */}
           {Array.from({ length: Math.min(24, eliteVideos.length) }).map((_, i) => {
             const clip = eliteVideos[i % eliteVideos.length];
@@ -710,7 +710,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
         <p className="deck-note deck-v8-market-note">Catalog is the commerce layer connecting creators directly to purchase.</p>
       </div>
 
-      {/* Slide 8: The Math — progressive 10-phase unit economics + ARR curve */}
+      {/* Slide 8: The Math - progressive 10-phase unit economics + ARR curve */}
       <div className="deck-slide deck-v8-math deck-v1-math-phased">
         <div className="deck-v8-math-inner">
           <span className="deck-label">The Math</span>
@@ -879,7 +879,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
                 );
               })}
             </svg>
-            {/* 5 spawned creatives at bottom — same source as seed, tinted for placeholder variety */}
+            {/* 5 spawned creatives at bottom - same source as seed, tinted for placeholder variety */}
             <div className="deck-v1-tech-neighbors">
               {[0, 1, 2, 3, 4].map((n) => {
                 const src = techVideos[techActiveSeed ?? 0];
@@ -917,7 +917,7 @@ const DeckViewV1_1: React.FC<DeckViewV1_1Props> = ({
         </div>
       </div>
 
-      {/* Slide 10: Payouts — how creators earn across four streams */}
+      {/* Slide 10: Payouts - how creators earn across four streams */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>

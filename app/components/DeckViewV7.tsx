@@ -81,7 +81,7 @@ const DeckViewV7: React.FC<DeckViewV7Props> = ({
         <p className="deck-subtitle">Investor Deck V.7 for Alex and Dan</p>
       </div>
 
-      {/* Slide 2: Intro — catalog nostalgia + SVG animations */}
+      {/* Slide 2: Intro - catalog nostalgia + SVG animations */}
       <div className="deck-slide deck-slide-intro">
         <div className="deck-intro-svgs" aria-hidden="true">
           {/* Animated floating catalog/book icons */}
@@ -95,11 +95,11 @@ const DeckViewV7: React.FC<DeckViewV7Props> = ({
         <div className="deck-intro-content">
           <span className="deck-label">Intro</span>
           <h2>Shopping used to be an experience.</h2>
-          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed — you found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
+          <p>Flipping through a catalog was discovery at its best. Curated, visual, personal. You didn&apos;t search for what you needed - you found what you didn&apos;t know you wanted. That feeling disappeared when commerce moved online. Catalog brings it back: a platform where every creator&apos;s taste becomes a shoppable storefront, powered by AI infrastructure and built for how people actually shop today.</p>
         </div>
       </div>
 
-      {/* Slide 3: The Problem — with animated SVG icons */}
+      {/* Slide 3: The Problem - with animated SVG icons */}
       <div className="deck-slide">
         <span className="deck-label">The Problem</span>
         <h2>Three stakeholders.<br />Three broken experiences.</h2>
@@ -125,7 +125,7 @@ const DeckViewV7: React.FC<DeckViewV7Props> = ({
         </div>
       </div>
 
-      {/* Slide 4: The Insight — with video grid bg + revenue mention */}
+      {/* Slide 4: The Insight - with video grid bg + revenue mention */}
       <div className="deck-slide deck-slide-insight">
         <div className="deck-insight-grid" aria-hidden="true">
           {Array.from({ length: 24 }).map((_, i) => (
@@ -144,17 +144,17 @@ const DeckViewV7: React.FC<DeckViewV7Props> = ({
         <div className="deck-insight-content">
           <span className="deck-label">The Insight</span>
           <h2>Human taste, amplified by AI.</h2>
-          <p>Creators drive purchases but can&apos;t capture the value — and have no real revenue stream from curation. Nobody has built the platform that turns taste into a storefront and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators earn from every sale.</p>
+          <p>Creators drive purchases but can&apos;t capture the value - and have no real revenue stream from curation. Nobody has built the platform that turns taste into a storefront and uses AI to make it smarter. Visual similarity, automated tagging, personalized discovery. AI does the heavy lifting; creators earn from every sale.</p>
         </div>
       </div>
 
-      {/* Slide 5: The Solution — three phones */}
+      {/* Slide 5: The Solution - three phones */}
       <div className="deck-slide deck-slide-solution">
         <div className="deck-solution-layout">
           <div className="deck-solution-text">
             <span className="deck-label">The Solution</span>
             <h2>Where discovery becomes commerce.</h2>
-            <p>Shoppers browse curated looks and tap to find visually similar products. Creators build shoppable storefronts powered by their taste. Brands get measurable, creator-driven distribution. One platform connecting all three — with AI surfacing the right content to the right person.</p>
+            <p>Shoppers browse curated looks and tap to find visually similar products. Creators build shoppable storefronts powered by their taste. Brands get measurable, creator-driven distribution. One platform connecting all three - with AI surfacing the right content to the right person.</p>
           </div>
           <div className="deck-solution-phones">
             <div className="deck-app-frame deck-phone-side">
