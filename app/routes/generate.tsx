@@ -180,10 +180,60 @@ function roleTagFromName(name: string | null): string | null {
   return null;
 }
 
+const STEP_VALUES: readonly Step[] = ['photos', 'products', 'about', 'style', 'review', 'result'];
+
+function readStepFromUrl(): Step {
+  if (typeof window === 'undefined') return 'photos';
+  try {
+    const q = new URLSearchParams(window.location.search).get('step');
+    if (q && (STEP_VALUES as readonly string[]).includes(q)) return q as Step;
+  } catch { /* ignore */ }
+  return 'photos';
+}
+
 export default function GeneratePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<Step>('photos');
+  const [step, setStep] = useState<Step>(() => readStepFromUrl());
+
+  // Two-way bind ?step= against the wizard's internal step. Pushing a
+  // history entry on every step change means the browser back button
+  // walks the user back through the flow (result → review → style →
+  // about → products → photos) instead of leaving /generate entirely
+  // on the first back press.
+  //
+  // popstate handles the back/forward direction — it reads the URL
+  // and applies it. The applyingUrlRef guard prevents the push effect
+  // below from echoing it as a forward entry on top of the one we
+  // just walked back to.
+  const applyingUrlRef = useRef(false);
+
+  useEffect(() => {
+    if (applyingUrlRef.current) {
+      applyingUrlRef.current = false;
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('step') ?? 'photos';
+    if (current === step) return;
+    if (step === 'photos') url.searchParams.delete('step');
+    else                   url.searchParams.set('step', step);
+    window.history.pushState({ step }, '', url.toString());
+  }, [step]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const next = readStepFromUrl();
+      setStep(prev => {
+        if (prev === next) return prev;
+        applyingUrlRef.current = true;
+        return next;
+      });
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Photos - fixed 3-slot layout. `slots[i]` is either an upload id (filled)
   // or null (empty). We derive an ordered upload-id list from this for the
@@ -1094,38 +1144,36 @@ export default function GeneratePage() {
 
             </div>
 
-            {/* Create look CTA - fixed to the bottom of the viewport
-                across the photos step (same anchor pattern the gen-dock
-                uses on later steps). Always reachable without scrolling
-                even when the user has many "Your looks" cards below. */}
+            {/* "Make a new look" is the single primary CTA on the
+                photos step. Two states:
+                  - canAdvance (user uploaded photos + picked style) →
+                    call goNext to actually kick off generation. This
+                    folds in the work the previous "Create look" sticky
+                    button used to do, so there's only one button to
+                    click instead of two competing CTAs.
+                  - otherwise → scroll to the top of the page so the
+                    user lands on the upload slots and can start the
+                    flow. The button is never disabled because there's
+                    always a useful action to take.
+                Sits in the dock-style sticky bar at the bottom of the
+                viewport so it's always reachable, even with many
+                "Your looks" cards below. */}
             <div className="gen-photos-cta-bar">
               <button
                 type="button"
-                className="gen-btn-primary gen-create-btn"
-                disabled={!canAdvance}
-                onClick={() => goNext(step, setStep)}
+                className="gen-creator-cta gen-creator-cta--primary"
+                onClick={() => {
+                  if (canAdvance) goNext(step, setStep);
+                  else window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
-                Create look
+                <span className="gen-creator-cta-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </span>
+                <span className="gen-creator-cta-label">Make a new look</span>
+                <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
               </button>
             </div>
-
-            {/* Make a new look CTA - sits above the Your Looks grid as
-                a quick path to start a fresh generation. Scrolls back to
-                the top of the photos step so the user lands on the
-                upload slots and can begin a new look. */}
-            <button
-              type="button"
-              className="gen-creator-cta"
-              onClick={() => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-            >
-              <span className="gen-creator-cta-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </span>
-              <span className="gen-creator-cta-label">Make a new look</span>
-              <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
-            </button>
 
             {(generations.length > 0 || loadingList) && (
               <>
