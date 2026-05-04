@@ -428,7 +428,7 @@ export default function ContinuousFeed({
   // unrelated products (skirts, dresses) to appear after the correct results land.
   const semanticCreatives = useMemo<ProductAd[]>(() => {
     if (!semantic.creatives.length) return [];
-    return semantic.creatives.map(c => ({
+    return semantic.creatives.filter(c => !!c.video_url).map(c => ({
       id:               c.id,
       product_id:       c.product_id,
       look_id:          null,
