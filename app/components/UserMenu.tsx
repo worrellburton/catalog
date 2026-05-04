@@ -3,6 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 import type { Look, Product } from '~/data/looks';
+import { useDeleteMode } from '~/hooks/useDeleteMode';
 
 interface UserMenuUser {
   displayName?: string;
@@ -56,6 +57,8 @@ function UserMenu({
   onOpenProduct,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  const [deleteMode, setDeleteModeState] = useDeleteMode();
+  const isSuperAdmin = user?.role === 'super_admin';
   // Brief grace period after closing during which the scrim stays
   // mounted, even though the popout is gone. Catches the phantom click
   // iOS Safari dispatches after touchend (typically 0-300ms later) on
@@ -234,6 +237,30 @@ function UserMenu({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
               <span>Admin</span>
             </button>
+            {isSuperAdmin && (
+              <button
+                className={`user-menu-item user-menu-item--toggle ${deleteMode ? 'is-on' : ''}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeleteModeState(!deleteMode);
+                }}
+                role="switch"
+                aria-checked={deleteMode}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+                <span>Delete mode</span>
+                <span className={`user-menu-switch ${deleteMode ? 'is-on' : ''}`} aria-hidden="true">
+                  <span className="user-menu-switch-thumb" />
+                </span>
+              </button>
+            )}
             {onOpenDecks && (
               <button className="user-menu-item" onClick={runItem(onOpenDecks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>

@@ -448,3 +448,18 @@
 .light-mode .user-menu-switch-thumb {
   background: #fff;
 }
+
+/* Delete-mode toggle — danger tint when on so a super-admin can't
+   miss that the consumer feed is now armed for destruction. */
+.user-menu-item--toggle.is-on {
+  color: #fca5a5;
+}
+.user-menu-item--toggle.is-on .user-menu-switch {
+  background: #dc2626;
+}
+.light-mode .user-menu-item--toggle.is-on {
+  color: #b91c1c;
+}
+.light-mode .user-menu-item--toggle.is-on .user-menu-switch {
+  background: #dc2626;
+}

@@ -10,6 +10,7 @@ import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
+import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { useSemanticSearch } from '~/hooks/useSemanticSearch';
 
 interface BookmarksInterface {
@@ -629,10 +630,12 @@ export default function ContinuousFeed({
     }
   }, [onOpenLookProp, allLooks]);
 
-  // Delete-on-feed is destructive on a public surface — gate to admins
-  // (admin or super_admin). Regular shoppers / creators don't see the
-  // trash affordance.
-  const canDeleteCreative = user?.role === 'super_admin' || user?.role === 'admin';
+  // Delete-on-feed is destructive on a public surface — only super-admins
+  // see the trash affordance, and only when they've explicitly toggled
+  // "Delete mode" on from the account menu. Off by default so a stray
+  // tap on a public surface can't nuke a product.
+  const [deleteMode] = useDeleteMode();
+  const canDeleteCreative = user?.role === 'super_admin' && deleteMode;
 
   const handleDeleteCreative = useCallback(async (id: string) => {
     // Super-admin long-press on the consumer feed deletes the underlying
