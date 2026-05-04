@@ -1,0 +1,2820 @@
+{
+  "denim": {
+    "ok": true,
+    "results": [
+      {
+        "id": "6e3a4a1e-6d93-4b42-a0a7-54e5303735cf",
+        "product_id": "ba4aa508-91fb-41eb-9c79-d486f03bfb51",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/ba4aa508-91fb-41eb-9c79-d486f03bfb51/lifestyle_context_seedance_image:bytedance/seedance-2_1776648549.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:2088367007875081892,headlineOfferDocid:6795470539683801283,imageDocid:7390725826617453569,gpcid:2779502650873584385,mid:576462845779399015,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Sterling & Stitch Women's Cotton Pieced Denim Jacket",
+        "product_brand": "Sterling & Stitch",
+        "product_price": "$69.99",
+        "product_image_url": "https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcT89UpxziQ0OJLkkU_TnnTiFdl3BlDJCrJVCl6FAzn9rJsDV0zSSmfD6U0jzF6GSmYHOAslkLsUp3SrH7-8o5cVB2mCfH2X",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:2088367007875081892,headlineOfferDocid:6795470539683801283,imageDocid:7390725826617453569,gpcid:2779502650873584385,mid:576462845779399015,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Jacket",
+        "concept_doc": "The Sterling & Stitch Women's Cotton Pieced Denim Jacket is a casual outerwear layer made from cotton denim in a patchwork construction. It covers the upper body from shoulders to hip, featuring visible stitching and mixed denim panels in varying tones. This jacket suits casual everyday wear, weekend outings, layering over basic tops in spring and fall, and informal social occasions where relaxed styling is appropriate.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "weekend wear",
+            "layering"
+          ],
+          "style_tags": [
+            "patchwork",
+            "denim",
+            "casual",
+            "cotton"
+          ],
+          "color_family": [
+            "indigo",
+            "mixed denim tones"
+          ],
+          "garment_type": "jacket",
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0327868852459016,
+        "dense_rank": 1,
+        "bm25_rank": 1,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0327868852459016
+      },
+      {
+        "id": "7f0bb179-ac35-498a-af00-1fda484aa997",
+        "entity_type": "creative",
+        "product_id": "7f0bb179-ac35-498a-af00-1fda484aa997",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Cropped Game Time Full Zip Jacket - Black",
+        "product_brand": "ALO",
+        "product_price": "$88",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/w4679r_01_b1_s1_a4_m218.jpg?v=1751840148",
+        "product_url": "https://www.aloyoga.com/products/w4679r-cropped-game-time-full-zip-jacket-black",
+        "product_gender": null,
+        "product_type": "Jacket",
+        "concept_doc": "This is a lightweight, cropped full-zip jacket from ALO that embodies modern athleisure with its breathable, airy construction\u2014perfect for layering without bulk. It's the go-to piece for anyone transitioning from workout to street style, whether you're heading to a yoga class, grabbing coffee post-swim, or running errands in an active-casual aesthetic. The black colorway is supremely versatile, pairing seamlessly with leggings, bike shorts, joggers, or even casual denim for that effortlessly cool, sporty-chic vibe. Wear it as a cover-up over a bikini or sports bra, or layer it over a fitted tee for an undone, contemporary gym-to-street look that's become essential in contemporary sportswear culture.",
+        "concept_facets": {
+          "occasion": [
+            "post-workout",
+            "casual everyday",
+            "athleisure",
+            "beach cover-up",
+            "activewear",
+            "gym-to-street",
+            "weekend casual"
+          ],
+          "style_tags": [
+            "athleisure",
+            "sporty-chic",
+            "minimalist",
+            "contemporary",
+            "effortless",
+            "lightweight",
+            "breathable",
+            "modern athletic",
+            "casual layering",
+            "versatile",
+            "active-casual"
+          ],
+          "color_family": [
+            "black",
+            "neutral"
+          ],
+          "garment_type": [
+            "jacket",
+            "windbreaker",
+            "track jacket",
+            "zip-up",
+            "athletic jacket",
+            "layering piece"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0161290322580645,
+        "dense_rank": null,
+        "bm25_rank": 2,
+        "score": 0.0161290322580645
+      },
+      {
+        "id": "490103a2-1cbc-4329-9757-4b89a2b328aa",
+        "entity_type": "creative",
+        "product_id": "490103a2-1cbc-4329-9757-4b89a2b328aa",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Motivate Full-Zip Track Jacket - Spruce Green/White",
+        "product_brand": "Alo Yoga",
+        "product_price": "$148",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W4622R_06045_b1_s1_a1_1_m54_86bba07e-0a87-466b-9bb6-1098997a40ca.jpg?v=1740090693",
+        "product_url": "https://www.aloyoga.com/products/w4622r-motivate-full-zip-track-jacket-spruce-green-white",
+        "product_gender": null,
+        "product_type": "Jacket",
+        "concept_doc": "The Motivate Full-Zip Track Jacket is a cropped, performance-inspired layer that brings sporty-chic energy to everyday wear. This Alo Yoga piece in spruce green with white contrast piping embodies the athleisure trend, making it perfect for yoga studio sessions, gym commutes, casual weekend outings, or athlectic streetwear looks. The swishy nylon fabric and hidden zippered pockets deliver functional style that works with everything from matching joggers and leggings to casual denim and loungewear. It's ideal for layering over sports bras, tank tops, or fitted tees, and pairs seamlessly with sneakers, slides, or minimal footwear for that effortless athletic aesthetic.",
+        "concept_facets": {
+          "occasion": [
+            "gym",
+            "yoga studio",
+            "casual weekend",
+            "athleisure errands",
+            "active lifestyle",
+            "studio-to-street",
+            "layering piece"
+          ],
+          "style_tags": [
+            "sporty chic",
+            "athleisure",
+            "performance wear",
+            "contrast piping",
+            "minimalist",
+            "active wear",
+            "streetwear",
+            "functional fashion",
+            "contemporary",
+            "yoga-inspired",
+            "cropped silhouette",
+            "full-zip closure"
+          ],
+          "color_family": [
+            "green",
+            "sage green",
+            "spruce green",
+            "neutral"
+          ],
+          "garment_type": [
+            "track jacket",
+            "zip-up jacket",
+            "cropped jacket",
+            "sports jacket",
+            "athleisure jacket"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0158730158730159,
+        "dense_rank": null,
+        "bm25_rank": 3,
+        "score": 0.0158730158730159
+      },
+      {
+        "id": "22175ce5-1ec5-4d0a-84f0-514a7b34a99b",
+        "entity_type": "creative",
+        "product_id": "22175ce5-1ec5-4d0a-84f0-514a7b34a99b",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Faux Fur Foxy Jacket - Ivory",
+        "product_brand": "Alo Yoga",
+        "product_price": "$298",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W4496R_03299_b2_s1_a1_1_m213.jpg?v=1734054769",
+        "product_url": "https://www.aloyoga.com/products/w4496r-faux-fur-foxy-jacket-ivory",
+        "product_gender": null,
+        "product_type": "Jacket",
+        "concept_doc": "The Foxy Jacket in ivory is a luxe faux fur statement piece that bridges the gap between athleisure comfort and elevated outerwear style. This oversized, plush jacket features a removable hood and satin-lined interior, making it perfect for yoga studio runs, casual weekend outings, and cozy layering moments. The ivory colorway reads clean and modern, pairing effortlessly with everything from fitted leggings and joggers to casual denim and athleisure basics. It's ideal for those seeking a sustainable luxury alternative to real fur while maintaining that soft, tactile glamour\u2014think quiet luxury meets active lifestyle. The jacket channels contemporary trends in faux fur fashion, oversized silhouettes, and the wellness-meets-style movement that defines modern yoga brand aesthetics.",
+        "concept_facets": {
+          "occasion": [
+            "Studio",
+            "Casual Weekend",
+            "Athleisure",
+            "Cozy Layering",
+            "Post-Workout",
+            "Streetwear",
+            "Brunch"
+          ],
+          "style_tags": [
+            "Faux Fur",
+            "Oversized",
+            "Luxe",
+            "Satin-Lined",
+            "Removable Hood",
+            "Sustainable Fashion",
+            "Quiet Luxury",
+            "Athleisure",
+            "Elevated Casual",
+            "Statement Outerwear",
+            "Cozy Chic",
+            "Wellness Style"
+          ],
+          "color_family": [
+            "Ivory",
+            "Cream",
+            "Off-White",
+            "Neutral"
+          ],
+          "garment_type": [
+            "Jacket",
+            "Outerwear",
+            "Faux Fur Jacket",
+            "Hooded Jacket"
+          ],
+          "formality_score": 0.35
+        },
+        "rrf_score": 0.015625,
+        "dense_rank": null,
+        "bm25_rank": 4,
+        "score": 0.015625
+      },
+      {
+        "id": "f700d5a4-11b0-4e06-81e8-9dd3aae72b8a",
+        "entity_type": "creative",
+        "product_id": "f700d5a4-11b0-4e06-81e8-9dd3aae72b8a",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Dreamscape Cargo Wide Leg Pant - Black",
+        "product_brand": "Alo Yoga",
+        "product_price": "$158",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54251R_01_b1_s1_a5_m143.jpg?v=1750699585",
+        "product_url": "https://www.aloyoga.com/products/w54251r-dreamscape-cargo-wide-leg-pant-black",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Dreamscape Cargo Wide Leg Pant in Black is a laid-back, effortlessly cool staple that bridges casual and elevated streetwear. This breezy wide-leg silhouette features functional oversized cargo pockets and an adjustable drawstring waist, giving major 90s-inspired, retro-modern vibes perfect for anyone wanting that relaxed-but-put-together aesthetic. Ideal for everyday wear, casual outings, and relaxed nights out, these pants pair beautifully with crop tops, fitted tees, oversized blazers, and sneakers for a fashion-forward street-style look. The lightweight fabric and roomy fit make them perfect for warm weather, weekend vibes, and anyone seeking comfortable pants that don't sacrifice style. This is the go-to piece for creating effortless, modern-athleisure looks that feel both vintage-inspired and contemporary.",
+        "concept_facets": {
+          "occasion": [
+            "casual",
+            "weekend",
+            "everyday wear",
+            "night out",
+            "street style",
+            "relaxed social"
+          ],
+          "style_tags": [
+            "cargo",
+            "wide-leg",
+            "oversized",
+            "athleisure",
+            "90s inspired",
+            "retro",
+            "streetwear",
+            "contemporary casual",
+            "lightweight",
+            "functional pockets",
+            "drawstring waist",
+            "relaxed fit",
+            "effortless",
+            "cool girl aesthetic",
+            "modern vintage"
+          ],
+          "color_family": [
+            "black",
+            "neutral",
+            "dark"
+          ],
+          "garment_type": [
+            "cargo pants",
+            "wide-leg pants",
+            "baggy pants",
+            "trousers"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0161290322580645,
+        "dense_rank": 2,
+        "bm25_rank": null,
+        "score": 0.0161290322580645
+      },
+      {
+        "id": "645a25a0-3d77-435a-90e4-e2d7c057a59f",
+        "product_id": "0cd19bd2-f606-4cef-8537-348b7f451fc7",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/0cd19bd2-f606-4cef-8537-348b7f451fc7/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777148702.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=rag and bone&prds=catalogid:18020290761377901269,headlineOfferDocid:14580544097910795102,imageDocid:10002097158303421445,rds:PC_2164292828061194126|PROD_PC_2164292828061194126,gpcid:2164292828061194126,mid:576462869356694566,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Derrick Down-Filled Jacket",
+        "product_brand": "rag & bone",
+        "product_price": "$548.00",
+        "product_image_url": "https://cdn.media.amplience.net/i/rb/RV0G25H0MCN-048-A/Derrick-Down-Filled-Jacket-048?$large$&fmt=auto",
+        "product_url": "https://www.rag-bone.com/p/derrick-down-filled-jacket-198825293148.html?Country=US&glCurrency=USD",
+        "product_gender": "male",
+        "product_type": "Jacket",
+        "concept_doc": "The Derrick is a men's down-filled winter jacket made from a cotton blend with a corduroy collar and matching lining. It is designed for men seeking warmth and everyday styling during cold months. The jacket suits casual winter wear, layering over workwear in urban settings, and general cold-weather outdoor activities where insulation is needed without formal dressing.",
+        "concept_facets": {
+          "occasion": [
+            "casual winter wear",
+            "urban commuting",
+            "cold-weather outdoor activities"
+          ],
+          "style_tags": [
+            "workwear-inspired",
+            "urban",
+            "insulated",
+            "classic"
+          ],
+          "color_family": [
+            "neutral"
+          ],
+          "garment_type": "down-filled jacket",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0158730158730159,
+        "dense_rank": 3,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0158730158730159
+      },
+      {
+        "id": "d12edd9f-0b5f-4faf-9815-7013de42a01a",
+        "product_id": "96dea16a-c0f8-4131-883f-6b39faa90c1c",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/96dea16a-c0f8-4131-883f-6b39faa90c1c/studio_clean_seedance_image:bytedance/seedance-2_1776647710.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:11641387143737622475,headlineOfferDocid:14409842851014090138,imageDocid:2566996343157902038,rds:PC_2777914499313744031|PROD_PC_2777914499313744031,gpcid:2777914499313744031,mid:576462783971111376,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Veronica Beard Women's Miller Dickey Jacket",
+        "product_brand": "Veronica Beard",
+        "product_price": "$795.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcRL6YxOBI7iUatM7mWQAoYo_TMiglKhCxlYRe8KRp76uL5QUq5on-j2vPQByZDIQtyKe44yrHXVZWMK5dN6fdWCue0twHUGwhMElxr-Leb9q1WN2puuIMvb",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:11641387143737622475,headlineOfferDocid:14409842851014090138,imageDocid:2566996343157902038,rds:PC_2777914499313744031|PROD_PC_2777914499313744031,gpcid:2777914499313744031,mid:576462783971111376,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Jacket",
+        "concept_doc": "The Veronica Beard Miller Dickey Jacket is a tailored blazer constructed from a blend of polyester, viscose, cotton, and elastane for structure and mobility. It features a double-breasted button front, buttoned cuffs, structured shoulder pads, breast pocket, and flap pockets. Designed for women seeking polished professional and dressy casual wear, this jacket suits office environments, business meetings, cocktail events, and elevated weekend occasions.",
+        "concept_facets": {
+          "occasion": [
+            "business professional",
+            "business casual",
+            "cocktail",
+            "dinner"
+          ],
+          "style_tags": [
+            "tailored",
+            "double-breasted",
+            "structured shoulders"
+          ],
+          "color_family": [
+            "neutral"
+          ],
+          "garment_type": "blazer jacket",
+          "formality_score": 0.8
+        },
+        "rrf_score": 0.015625,
+        "dense_rank": 4,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.015625
+      },
+      {
+        "id": "e90c6610-679b-4911-8f03-362905e3755a",
+        "entity_type": "creative",
+        "product_id": "e90c6610-679b-4911-8f03-362905e3755a",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Dreamscape Cargo Wide Leg Pant - Taupe",
+        "product_brand": "Alo Yoga",
+        "product_price": "$158.00",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54251R_04481_b2_s1_a1_m18.jpg?v=1750655893",
+        "product_url": "https://www.aloyoga.com/products/w54251r-dreamscape-cargo-wide-leg-pant-taupe",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Dreamscape Cargo Wide Leg Pant in Taupe is a laid-back, contemporary essential that bridges casual athleisure with retro streetwear aesthetics. These breezy wide-leg cargo pants feature an adjustable drawstring waist and oversized utility pockets, delivering that effortlessly cool, 90s-inspired silhouette that works equally well for relaxed everyday wear, casual nights out, or weekend brunches. The neutral taupe tone\u2014a soft, earthy beige-gray\u2014is incredibly versatile, pairing seamlessly with fitted tops, oversized blazers, sneakers, or boots. Perfect for anyone seeking comfortable, statement-making bottoms with that coveted retro-modern vibe, these cargos embody the current trend of functional fashion that doesn't sacrifice style.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "weekend wear",
+            "nights out",
+            "brunch",
+            "streetwear",
+            "relaxed social"
+          ],
+          "style_tags": [
+            "cargo pants",
+            "wide-leg",
+            "athleisure",
+            "retro",
+            "90s-inspired",
+            "utility pockets",
+            "oversized silhouette",
+            "drawstring waist",
+            "modern casual",
+            "effortless cool",
+            "street style",
+            "contemporary"
+          ],
+          "color_family": [
+            "taupe",
+            "beige",
+            "gray",
+            "neutral",
+            "earthy"
+          ],
+          "garment_type": "Wide-leg cargo pants",
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.015625,
+        "dense_rank": 4,
+        "bm25_rank": null,
+        "score": 0.015625
+      },
+      {
+        "id": "b1ec276e-0ec8-4dbe-99ab-522f26a072f9",
+        "product_id": "16df4308-fa9c-4b83-9a4c-a2b3903dca78",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/16df4308-fa9c-4b83-9a4c-a2b3903dca78/studio_clean_seedance_text:bytedance/seedance-2_1776647930.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:12078498044687080884,headlineOfferDocid:16047495564725014276,imageDocid:14067900088358475890,rds:PC_13601416329355574146|PROD_PC_13601416329355574146,gpcid:13601416329355574146,mid:576462878172133629,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Abercrombie & Fitch Women's Vegan Leather Utility Jacket",
+        "product_brand": "Abercrombie & Fitch",
+        "product_price": "$84.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcSxbygtOFKgs1VfliGqEuz8JAwHi1xXdUO6lGqQOd0V-77nj2jPb24r29bLIAhHiBn5hQrFSknV_WxHxCKu_ofEvuqsjl4h",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:12078498044687080884,headlineOfferDocid:16047495564725014276,imageDocid:14067900088358475890,rds:PC_13601416329355574146|PROD_PC_13601416329355574146,gpcid:13601416329355574146,mid:576462878172133629,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Jacket",
+        "concept_doc": "The Abercrombie & Fitch Women's Vegan Leather Utility Jacket is a short, cropped jacket made from soft vegan leather with a zip-up front, fold-down collar, and functional front patch pockets with side entry. Designed for women seeking a casual layering piece, this jacket works for everyday wear, casual outings, and transitional weather when a lightweight outer layer is needed.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "weekend outings",
+            "layering for mild weather"
+          ],
+          "style_tags": [
+            "utility",
+            "vegan leather",
+            "cropped",
+            "contemporary"
+          ],
+          "color_family": [
+            "neutral"
+          ],
+          "garment_type": "jacket",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0151515151515152,
+        "dense_rank": 6,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0151515151515152
+      },
+      {
+        "id": "8f28a3b0-b356-43e9-92de-1d0e10d1744f",
+        "product_id": "82b3052e-134a-4904-a9b1-982a3978c198",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/82b3052e-134a-4904-a9b1-982a3978c198/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970581.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w54204r-high-waist-origin-wide-leg-track-pant-navy-black",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "High-Waist Origin Wide Leg Track Pant - Navy/Black",
+        "product_brand": "ALO",
+        "product_price": "$168",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54204R_04660_b2_s1_a1_m191.jpg?v=1752217957",
+        "product_url": "https://www.aloyoga.com/products/w54204r-high-waist-origin-wide-leg-track-pant-navy-black",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The High-Waist Origin Wide Leg Track Pant is a navy and black tracksuit bottom made from performance fabric with mesh paneling and tonal piping details. The high-waist, wide-leg cut provides coverage from waist to ankle with a relaxed, fluid silhouette. Designed for wearers seeking elevated athletic wear, these pants transition between studio fitness settings and casual street wear, functioning as both workout bottoms and leisurewear when styled appropriately.",
+        "concept_facets": {
+          "occasion": [
+            "studio fitness",
+            "casual wear",
+            "athleisure"
+          ],
+          "style_tags": [
+            "high-waist",
+            "wide-leg",
+            "mesh paneling",
+            "tonal piping"
+          ],
+          "color_family": [
+            "navy",
+            "black"
+          ],
+          "garment_type": "Track pants",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0149253731343284,
+        "dense_rank": 7,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0149253731343284
+      },
+      {
+        "id": "67a47a2e-4ee1-4379-beb8-079303783b8b",
+        "product_id": "9ab1fd63-6f62-4a0f-a3ee-24f4845b3fd5",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/9ab1fd63-6f62-4a0f-a3ee-24f4845b3fd5/studio_clean_fal:fal-ai/veo3.1/fast/image-to-video_1776682632.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:1166459587707084214,headlineOfferDocid:5598489410901668698,imageDocid:10393141533014537763,rds:PC_9878199783493915869|PROD_PC_9878199783493915869,gpcid:9878199783493915869,mid:576462876899510533,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Alpha Industries Women's MA-1 Bomber Jacket",
+        "product_brand": "Alpha Industries",
+        "product_price": "$200.00",
+        "product_image_url": "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcSjhM30Cm0uKMbroZml4faaTO6S9Pg0xkDgus2qD5RaejGqQEZMKKfm8X6t1Uq6R5pRIUPUMK2I8tYEyuYIWouwm-NvZNukUSOm1c0FA20ZhD9vcEEozSn_Ug",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Jackets&prds=catalogid:1166459587707084214,headlineOfferDocid:5598489410901668698,imageDocid:10393141533014537763,rds:PC_9878199783493915869|PROD_PC_9878199783493915869,gpcid:9878199783493915869,mid:576462876899510533,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Jacket",
+        "concept_doc": "The Alpha Industries Women's MA-1 Bomber Jacket is a reversible outerwear piece in a classic bomber silhouette with a bright orange interior lining. Constructed with durable fabric and finished with utility pockets, ribbed trim, and a quality zipper, it reflects the brand's aviation-military heritage. Designed for women seeking a recognizable layering piece, this jacket suits casual everyday wear, light layering in cool weather, and urban streetwear contexts where a structured outer layer is needed.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "cool weather layering",
+            "urban streetwear"
+          ],
+          "style_tags": [
+            "reversible",
+            "aviation-inspired",
+            "utility-focused",
+            "classic silhouette"
+          ],
+          "color_family": [
+            "neutral exterior",
+            "orange lining"
+          ],
+          "garment_type": "Bomber jacket",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0142857142857143,
+        "dense_rank": 10,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0142857142857143
+      },
+      {
+        "id": "f9bb8cff-d8e9-41d4-8971-de31f0745e50",
+        "product_id": "bd73250a-5ce9-49a2-abcb-bffc790e49af",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/bd73250a-5ce9-49a2-abcb-bffc790e49af/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776969841.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=alo&prds=catalogid:2018380027980799892,headlineOfferDocid:12810722264742594942,imageDocid:5823407424963581204,rds:PC_6172780237869761335|PROD_PC_6172780237869761335,gpcid:6172780237869761335,mid:576462847602311646,pvt:hg&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Alo Accolade Straight Leg Sweatpant",
+        "product_brand": "ALO",
+        "product_price": "$138.00",
+        "product_image_url": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRuHZFCw4AE9AJrJvT2B-uWxNhK0mHbwCAXATgiZ6TrfvdUglygxGCP9CmT6gfRARr_p3REU68j0xsne0Ksagp60ZLHn6ekmeAknE5WCNbYi_Uh20sfrQCcOA",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=alo&prds=catalogid:2018380027980799892,headlineOfferDocid:12810722264742594942,imageDocid:5823407424963581204,rds:PC_6172780237869761335|PROD_PC_6172780237869761335,gpcid:6172780237869761335,mid:576462847602311646,pvt:hg&hl=en&gl=us&udm=28",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Alo Accolade Straight Leg Sweatpant is a women's activewear bottom made from soft sweatpant fabric, featuring a 12.5-inch rise and straight leg silhouette designed for comfort and everyday wear. It is designed for women seeking casual, functional bottoms that work across seasons and temperature changes. Realistic use cases include wearing as everyday casual pants during colder months, pairing with heavier jackets for warmth, and transitioning to warmer weather by styling with lighter tops or slides for relaxed indoor and outdoor settings.",
+        "concept_facets": {
+          "use_cases": [
+            "everyday casual wear",
+            "cold weather styling with jackets",
+            "warm weather styling with slides",
+            "loungewear and relaxed home wear"
+          ],
+          "attributes": [
+            "straight leg fit",
+            "12.5 inch rise",
+            "soft sweatpant fabric",
+            "casual activewear"
+          ],
+          "style_tags": [
+            "minimalist",
+            "comfortable",
+            "versatile",
+            "casual"
+          ],
+          "product_kind": "women's straight leg sweatpants",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0140845070422535,
+        "dense_rank": 11,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0140845070422535
+      }
+    ],
+    "query_plan": {
+      "intent": "product_find",
+      "rewrites": [],
+      "constraints": {},
+      "result_shape": [
+        "products",
+        "looks"
+      ],
+      "anchor_type": null,
+      "pair_types": null,
+      "resolved_types": [
+        "Pants",
+        "Jacket"
+      ],
+      "branch": "browse"
+    },
+    "cold_miss": false,
+    "query_id": null,
+    "meta": {
+      "result_count": 12,
+      "top_score": 0.0327868852459016,
+      "branch": "browse",
+      "resolved_types": [
+        "Pants",
+        "Jacket"
+      ],
+      "anchor_type": null,
+      "bm25_text": "denim",
+      "embedding_cache_hit": true,
+      "expansion_cache_hit": false,
+      "visual_lane": false,
+      "products_appended": 5,
+      "products_fallback_passes": 1,
+      "pruned_off_type": 0,
+      "canonical_types_count": 31,
+      "expansion": {
+        "intent": "browse",
+        "types": [
+          "Pants",
+          "Jacket"
+        ],
+        "anchor_type": null,
+        "pair_types": null,
+        "keywords": "denim",
+        "source": "static"
+      }
+    }
+  },
+  "shoes": {
+    "ok": true,
+    "results": [
+      {
+        "id": "f525564b-0dee-45f5-89bd-797fee32bd95",
+        "entity_type": "creative",
+        "product_id": "f525564b-0dee-45f5-89bd-797fee32bd95",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Women's Tracksmith Eliot Runner Bering Sea/Ivory / 10 / US Women",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcTg8HR6iOGJh0KMXL4NaCpDBmX0CvdqoSw9BO_AFVyTDU2SVY3ZRrH7RQe684Ze6uB8MVVPWbQ5I62tapjLiaPj0bxYJxX203fxqR6ey7IuVQmNHH9l3mTn5w",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:10459831616223373460,headlineOfferDocid:10459831616223373460,imageDocid:7630763508217847957,rds:PC_13871661945248982911|PROD_PC_13871661945248982911,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a premium athletic sneaker in a sophisticated Bering Sea blue and ivory colorway that transcends typical gym wear. These lightweight, performance-oriented running shoes are designed for active women who value both function and refined aesthetics\u2014perfect for serious runners, fitness enthusiasts, and sneaker collectors who appreciate heritage sportswear. Pair them with athletic wear like moisture-wicking leggings, running shorts, or track pants for obvious workout styling, but they're equally at home with casual athleisure like joggers, oversized sweats, or relaxed-fit hoodies for a effortlessly put-together vibe. The Bering Sea blue and cream palette works beautifully with neutral basics, making these shoes ideal for elevated everyday looks\u2014think white t-shirts, light denim, or minimal sportswear-inspired outfits. This is true designer athletic footwear that bridges the gap between performance running shoes and lifestyle sneakers, appealing to women who follow the contemporary athleisure trend and appreciate the intersection of classic running heritage and modern, minimalist design.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "gym",
+            "workout",
+            "casual everyday",
+            "athleisure",
+            "active lifestyle",
+            "training"
+          ],
+          "style_tags": [
+            "premium athletic",
+            "minimalist",
+            "heritage running",
+            "lightweight performance",
+            "designer sneakers",
+            "athleisure",
+            "contemporary sportswear",
+            "refined casual",
+            "elevated everyday",
+            "neutral aesthetic"
+          ],
+          "color_family": [
+            "blue",
+            "ivory",
+            "cream",
+            "teal",
+            "bering sea"
+          ],
+          "garment_type": "Running sneakers, athletic shoes, performance footwear",
+          "formality_score": 0.35
+        },
+        "rrf_score": 0.0325224748810153,
+        "dense_rank": 2,
+        "bm25_rank": 1,
+        "score": 0.0325224748810153
+      },
+      {
+        "id": "23f9336b-9d50-4c47-a38b-4a3911e08ea5",
+        "entity_type": "creative",
+        "product_id": "23f9336b-9d50-4c47-a38b-4a3911e08ea5",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "B GRADE Tracksmith Eliot Runner White/Navy / 7 / US Men",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRj5w5X5ujG92z5qwTpt0DnONw0TSnimf0FMyBSRntCtxWS2OXVlQ1OIwISc3FmLuLZ_yGYDQG1TLrXTrHgLDiTbgjFWMNbTieaBq5D-sgvbqpJziUtQx0bQw",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:13806452351668694332,headlineOfferDocid:13806452351668694332,imageDocid:7666309156561998876,rds:PC_11989866476577388233|PROD_PC_11989866476577388233,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "male",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner in White/Navy is a premium minimalist running sneaker that bridges athletic performance and casual lifestyle wear. This is the go-to shoe for runners, fitness enthusiasts, and athleisure devotees who value clean Scandinavian design and understated sophistication over bold branding. The classic white and navy colorway works seamlessly with everything from technical running outfits and gym wear to casual everyday looks\u2014pair it with track pants, joggers, chinos, or even tailored trousers for a modern, refined aesthetic. It suits active commuting, weekend training, casual Fridays, and any occasion where you want athletic credibility without sacrificing style. This shoe embodies the quiet luxury and performance-first mentality of contemporary running culture and elevated sneaker culture.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "gym",
+            "casual everyday",
+            "athletic commute",
+            "weekend wear",
+            "fitness"
+          ],
+          "style_tags": [
+            "minimalist",
+            "athleisure",
+            "performance",
+            "scandinavian design",
+            "quiet luxury",
+            "clean aesthetic",
+            "technical sneaker",
+            "modern athletic",
+            "versatile",
+            "understated",
+            "runner aesthetic"
+          ],
+          "color_family": [
+            "white",
+            "navy",
+            "neutral"
+          ],
+          "garment_type": "running sneaker",
+          "formality_score": 0.35
+        },
+        "rrf_score": 0.0293865293865294,
+        "dense_rank": 14,
+        "bm25_rank": 3,
+        "score": 0.0293865293865294
+      },
+      {
+        "id": "cc91595e-ef70-43bd-b6e5-0d7be2fd9256",
+        "entity_type": "creative",
+        "product_id": "cc91595e-ef70-43bd-b6e5-0d7be2fd9256",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "B GRADE Tracksmith Eliot Runner Wine/Ivory / 7 / US Men",
+        "product_brand": "Tracksmith",
+        "product_price": "$79.00",
+        "product_image_url": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcTFz3cydsNvTiwbpDoYRRGoGh0mHmPu43BC5Rk6yuU-ri7aNrCoRp1jQ3EPR41Bra5VT5wYDXckEbITdrkVqa3Azco0I5Rt1pVEqa8RcrL6PHqsOmaQx1TG8w",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:12908168196109547319,headlineOfferDocid:12908168196109547319,imageDocid:11254965402006114040,rds:PC_826522080199949949|PROD_PC_826522080199949949,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "male",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a classic athletic sneaker that bridges the gap between serious running performance and everyday casual wear. This B-grade wine and ivory colorway offers a sophisticated, burgundy-toned aesthetic that feels more refined than standard neon runners, making it perfect for the minimalist sneakerhead or someone building a versatile everyday rotation. It's ideal for gym sessions, weekend errands, athleisure outfits, and casual streetwear looks where you want a reliable, comfortable shoe with understated style. Pair it with joggers, chinos, or cropped trousers for a put-together athletic vibe, or dress it up with neutral denim and a clean tee for elevated casual wear. This shoe embodies the modern 'run anywhere' aesthetic that appeals to fitness enthusiasts and style-conscious men who appreciate functional design without unnecessary flash.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday wear",
+            "gym and fitness",
+            "athleisure",
+            "weekend outings",
+            "streetwear",
+            "active commuting"
+          ],
+          "style_tags": [
+            "minimalist",
+            "performance sneaker",
+            "understated luxury",
+            "athletic-casual",
+            "functional fashion",
+            "neutral colorway",
+            "classic running shoe",
+            "versatile",
+            "sneakerhead approved",
+            "heritage athletic"
+          ],
+          "color_family": [
+            "wine",
+            "burgundy",
+            "ivory",
+            "cream",
+            "two-tone"
+          ],
+          "garment_type": "running sneaker, athletic shoe, everyday sneaker",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0289583333333333,
+        "dense_rank": 15,
+        "bm25_rank": 4,
+        "score": 0.0289583333333333
+      },
+      {
+        "id": "58517913-c5f6-4847-9c6b-529fe358321a",
+        "entity_type": "creative",
+        "product_id": "58517913-c5f6-4847-9c6b-529fe358321a",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "B GRADE Tracksmith Eliot Runner Navy/White / 8.5 / US Men",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcReRtINDQ3XFCGGV2obep80Ievt12WW0h3zgoJsH1Qhu_5um9KwFn66v7tLX1EwRDEqdhOaVqsJPItM2DdH-brKE1K6fbfRn9x_lBm3_R_VQtHhr4pBnpk42Q",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:13328481713886226878,headlineOfferDocid:13328481713886226878,imageDocid:3711494717317145882,rds:PC_11989866476577388233|PROD_PC_11989866476577388233,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "male",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a premium minimalist running sneaker that bridges athletic performance and casual lifestyle wear. In this crisp navy and white colorway, it's the go-to choice for athleisure enthusiasts, runners, and those who appreciate vintage-inspired sportswear aesthetics. These shoes work beautifully with casual everyday outfits\u2014think joggers, track pants, or relaxed denim\u2014and fit seamlessly into a sophisticated gym-to-street wardrobe. The clean navy-white palette pairs effortlessly with neutral tones, dark denim, or even tailored casual pieces for an elevated sneaker look. Perfect for someone seeking timeless, heritage-influenced running shoes that feel as good on a morning jog as they do during a relaxed weekend outing.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "gym",
+            "running",
+            "athleisure",
+            "weekend wear",
+            "street style"
+          ],
+          "style_tags": [
+            "minimalist",
+            "heritage sportswear",
+            "vintage-inspired",
+            "performance-driven",
+            "classic",
+            "clean aesthetic",
+            "neutral sneaker",
+            "trainer",
+            "lifestyle athletic"
+          ],
+          "color_family": [
+            "navy",
+            "white",
+            "neutral"
+          ],
+          "garment_type": "running sneaker, athletic shoe, lifestyle sneaker",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0298773690078038,
+        "dense_rank": 9,
+        "bm25_rank": 5,
+        "score": 0.0298773690078038
+      },
+      {
+        "id": "421bdc66-1e55-48a9-b9ee-b9fdbc9c045a",
+        "entity_type": "creative",
+        "product_id": "421bdc66-1e55-48a9-b9ee-b9fdbc9c045a",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Women's Tracksmith Eliot Runner Ivory/Ivory / 11 / US Women",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcQCg2_bhUC00i9bCAkn4G8XLg001P0nuIMQ3WugxBHDJxDekopYedDmsq3_NSjEPMDGxhX7C7OzkvnQ9th285HLsGstPeL1AIMPJ09G1UUzF98Hxq0YNlScJpI",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:11670470389812349907,headlineOfferDocid:11670470389812349907,imageDocid:2013314161368438626,rds:PC_826522080199949949|PROD_PC_826522080199949949,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner in Ivory is a minimalist performance sneaker that bridges athletic functionality and understated lifestyle style. This lightweight, stable running shoe is perfect for the modern athlete or wellness-focused woman who values both comfort and design\u2014ideal for daily runs, gym sessions, casual outings, and athleisure dressing. The clean ivory colorway works seamlessly with athletic wear like bike shorts, joggers, and fitted leggings, but also elevates casual fits with white jeans, neutral linen trousers, and monochromatic dressing. It embodies the quiet luxury and heritage athletic trends, appealing to those who appreciate vintage-inspired running shoes, timeless sneaker aesthetics, and the intersection of form and function that defines contemporary sportswear fashion.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "gym",
+            "workout",
+            "casual wear",
+            "athleisure",
+            "everyday",
+            "travel",
+            "weekend"
+          ],
+          "style_tags": [
+            "minimalist",
+            "quiet luxury",
+            "heritage athletic",
+            "vintage-inspired",
+            "monochromatic",
+            "neutral aesthetic",
+            "performance-driven",
+            "lightweight",
+            "clean design",
+            "timeless sneaker",
+            "understated",
+            "functional fashion",
+            "wellness wear"
+          ],
+          "color_family": [
+            "ivory",
+            "cream",
+            "off-white",
+            "neutral"
+          ],
+          "garment_type": [
+            "running sneaker",
+            "athletic shoe",
+            "trainer",
+            "lifestyle sneaker",
+            "performance shoe"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0300768882858435,
+        "dense_rank": 7,
+        "bm25_rank": 6,
+        "score": 0.0300768882858435
+      },
+      {
+        "id": "906745b4-427b-4333-a2eb-dcef87d88346",
+        "entity_type": "creative",
+        "product_id": "906745b4-427b-4333-a2eb-dcef87d88346",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Tracksmith Eliot Runner",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcR-HPK_vzhCC5ZxsT150Y05Lmf2K5UsiXOQ3AN0ptjT4dqKvz_aC-mPpEQhUWWSZSwplZK-Fuo5HqGCKLWRdC4xYY0FS0yqqODd-nrZBNfaZNDQfPtolS_0BvI",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=catalogid:14538104382317418588,headlineOfferDocid:1613157533408218857,imageDocid:13706354839669235380,rds:PROD_VAR_1224365551300234364|VAR_1224365551300234364,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": null,
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a neutral performance sneaker designed for women who value both function and understated style. Built with Pebax technology, this New England-inspired trainer bridges the gap between serious running shoes and everyday wear, making it perfect for athletic pursuits, casual errands, and relaxed weekend looks. It pairs effortlessly with athleisure staples like track pants, bike shorts, and oversized sweatshirts, as well as more elevated casual combinations with straight-leg jeans, linen trousers, and minimal dresses. This shoe embodies the quiet luxury and heritage-driven aesthetic of the contemporary running culture movement, appealing to fitness enthusiasts and style-conscious women who prioritize quality, heritage craftsmanship, and earth-toned, versatile footwear over trend-chasing.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "training",
+            "gym",
+            "casual everyday",
+            "athleisure",
+            "weekend wear",
+            "errand running",
+            "coffee shop casual"
+          ],
+          "style_tags": [
+            "minimalist",
+            "heritage running",
+            "New England aesthetic",
+            "quiet luxury",
+            "performance-meets-style",
+            "neutral trainer",
+            "Pebax technology",
+            "everyday sneaker",
+            "wellness-focused",
+            "understated",
+            "versatile",
+            "craft-oriented",
+            "athletic-casual"
+          ],
+          "color_family": [
+            "neutral",
+            "cream",
+            "beige",
+            "white",
+            "grey",
+            "tan"
+          ],
+          "garment_type": "neutral trainer, running sneaker, athletic shoe, lifestyle sneaker",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0303099885189437,
+        "dense_rank": 5,
+        "bm25_rank": 7,
+        "score": 0.0303099885189437
+      },
+      {
+        "id": "eaa2bfc9-4262-4bf2-9748-c1c849082829",
+        "product_id": "4cc82bef-2b57-43a7-87e0-136d0c36e6f6",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/4cc82bef-2b57-43a7-87e0-136d0c36e6f6/lifestyle_context_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776703964.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=catalogid:6308507953651412633,headlineOfferDocid:13162113694604249372,imageDocid:12700283839538193474,rds:PC_11989866476577388233|PROD_PC_11989866476577388233,gpcid:11989866476577388233,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Men B GRADE Tracksmith Eliot Runner",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcSu6kqnu0J2xxTisOUn6lP4pAwdtLckMouDev-IKBlySis_6oV7BjhwNk2wpR3fX7_znDksNw4nIisDg6veThQe-a3k86RsrDR16fDQ_4dOcGqQArAI3Rwk",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=catalogid:6308507953651412633,headlineOfferDocid:13162113694604249372,imageDocid:12700283839538193474,rds:PC_11989866476577388233|PROD_PC_11989866476577388233,gpcid:11989866476577388233,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "male",
+        "product_type": "Sneakers",
+        "concept_doc": "The Men B Grade Tracksmith Eliot Runner is a lightweight running shoe designed for male distance runners and recreational joggers seeking stable, comfortable footwear for training and long-distance runs. B-grade shoes feature minor cosmetic or structural imperfections that do not affect performance, offering the same functional design as full-grade pairs at a reduced price point. These shoes are built for trail running, road running, and extended aerobic activities where cushioning and responsiveness support sustained effort over varied terrain.",
+        "concept_facets": {
+          "use_cases": [
+            "distance running on trails and roads",
+            "daily training runs",
+            "long-distance aerobic workouts",
+            "recreational jogging",
+            "sustained running sessions"
+          ],
+          "attributes": [
+            "lightweight construction",
+            "stable design",
+            "comfortable fit",
+            "Ivory colorway",
+            "B-grade quality",
+            "4.5-star rated",
+            "durable for distance running"
+          ],
+          "style_tags": [
+            "functional",
+            "grounded",
+            "authentic athletic",
+            "minimalist aesthetic",
+            "performance-focused"
+          ],
+          "product_kind": "men's running shoe",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0294181267575168,
+        "dense_rank": 9,
+        "bm25_rank": 7,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0294181267575168
+      },
+      {
+        "id": "df9c27ef-0d1b-4f47-bd31-402419ccce87",
+        "entity_type": "creative",
+        "product_id": "df9c27ef-0d1b-4f47-bd31-402419ccce87",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "ALO Runner - Gravel",
+        "product_brand": "Alo Yoga",
+        "product_price": "$195",
+        "product_image_url": "https://www.aloyoga.com/cdn/shop/files/A0590U_05438_b2_s1_a1_12c0bf6c-a02e-411a-be83-84111b47dd93_1024x1024.jpg?v=1775248326",
+        "product_url": "https://www.aloyoga.com/products/a0590u-alo-runner-gravel",
+        "product_gender": null,
+        "product_type": "Sneakers",
+        "concept_doc": "The ALO Runner in Gravel is a premium performance sneaker that bridges the gap between athletic functionality and wellness-inspired lifestyle wear. Designed by Alo Yoga\u2014the luxury athleisure brand known for elevated basics\u2014this shoe is perfect for the mindful athlete, yoga enthusiast, or anyone seeking a high-performance sneaker that doesn't compromise on style. With its stabilizing heel clip, cushioned midsole, and multi-terrain engineering, it's ideal for running, trail hiking, gym sessions, and active commuting, while the neutral gravel tone pairs effortlessly with athleisure outfits, joggers, leggings, bike shorts, and casual streetwear. This is the sneaker for someone who values moving meditation, wellness culture, and modern performance gear that looks as good during a yoga class as it does on a morning run.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "gym",
+            "yoga studio",
+            "hiking",
+            "trail walking",
+            "casual everyday wear",
+            "active commute",
+            "wellness activities",
+            "athleisure"
+          ],
+          "style_tags": [
+            "premium athleisure",
+            "performance sneaker",
+            "wellness-inspired",
+            "minimalist design",
+            "luxury athletic",
+            "neutral aesthetic",
+            "functional fashion",
+            "yoga culture",
+            "modern sportswear",
+            "stability-focused",
+            "versatile neutral",
+            "elevated casual"
+          ],
+          "color_family": [
+            "gravel",
+            "neutral gray",
+            "stone",
+            "taupe"
+          ],
+          "garment_type": [
+            "sneakers",
+            "running shoes",
+            "athletic shoes",
+            "performance footwear",
+            "cross-training shoes"
+          ],
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0284045124899275,
+        "dense_rank": 13,
+        "bm25_rank": 8,
+        "score": 0.0284045124899275
+      },
+      {
+        "id": "1432595a-3245-4258-b5b7-27e8c21cb31b",
+        "entity_type": "creative",
+        "product_id": "1432595a-3245-4258-b5b7-27e8c21cb31b",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Tracksmith Eliot Runner",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcT8G_FFXAqm3F98583VFrAodyMLglYLr3bBThUNLy9ymAavOKzQcomk2e6mQuYm2-8fciCj_yvMLDXFgF7Ug9wgu55A4En5MO323oOfqOu248etV1L_LY2bag",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=catalogid:16516828235976806837,headlineOfferDocid:7255088965363331694,imageDocid:12317032634711874238,rds:CID_16516828235976806837|PROD_CID_16516828235976806837,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": null,
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a premium minimalist sneaker that bridges the gap between serious athletic performance and everyday style\u2014think clean-lined running shoe meets sophisticated streetwear staple. Perfect for runners, fitness enthusiasts, and anyone who values understated elegance, these trainers excel at both long-distance training and casual daily wear, pairing beautifully with athleisure outfits, running tights, joggers, and relaxed weekend looks. The superior cushioning and durable construction appeal to those who prioritize comfort without sacrificing design, making them ideal for active lifestyles that demand both functionality and refined aesthetics. They embody the modern trend of elevated sportswear and performance luxury, aligned with the broader shift toward quality basics and heritage athletic brands. Wear them with minimalist capsule wardrobes, neutral color palettes, or as a sophisticated counterpoint to elevated casualwear.",
+        "concept_facets": {
+          "occasion": [
+            "daily training",
+            "long-distance running",
+            "casual wear",
+            "weekend style",
+            "athleisure",
+            "gym",
+            "active lifestyle"
+          ],
+          "style_tags": [
+            "minimalist",
+            "premium",
+            "performance-luxury",
+            "heritage athletic",
+            "elevated sportswear",
+            "understated",
+            "clean-lined",
+            "capsule-friendly",
+            "versatile",
+            "contemporary running",
+            "sophisticated sneaker"
+          ],
+          "color_family": [
+            "neutral",
+            "monochrome",
+            "earth tones"
+          ],
+          "garment_type": [
+            "sneakers",
+            "running shoes",
+            "athletic trainers",
+            "performance shoes",
+            "casual shoes"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0296442687747036,
+        "dense_rank": 6,
+        "bm25_rank": 9,
+        "score": 0.0296442687747036
+      },
+      {
+        "id": "202b0acd-35af-4cbe-9b61-c760eac00d4d",
+        "entity_type": "creative",
+        "product_id": "202b0acd-35af-4cbe-9b61-c760eac00d4d",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Women's Tracksmith Eliot Runner Brown Rice/Petrified Oak / 11 / US Women",
+        "product_brand": "Tracksmith",
+        "product_price": "$198.00",
+        "product_image_url": "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcQ3mo7E19P6DMM3wJyGseRpgx-pV0o_IvL3REys63y7WLui9oI9OIZhh3E_iKIsjIM8G00q1Ic0TYTVFWfb9B9teeH6Xe3xGoBh_De4xZ2vsgll7of9ihewLg",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=Tracksmith shoes&prds=productid:16000423008409260252,headlineOfferDocid:16000423008409260252,imageDocid:505432810138084659,rds:PC_15137120026678454689|PROD_PC_15137120026678454689,pvt:a&hl=en&gl=us&udm=28",
+        "product_gender": "female",
+        "product_type": "Sneakers",
+        "concept_doc": "The Tracksmith Eliot Runner is a premium everyday running sneaker that bridges athletic performance and refined casual style. This women's shoe in a sophisticated Brown Rice and Petrified Oak colorway offers a neutral, earthy aesthetic that works seamlessly for active wear, gym sessions, and off-duty casual looks. Built with high-quality materials and construction, it's designed for runners who appreciate both function and fashion\u2014pairing beautifully with athleisure sets, joggers, running tights, and casual weekend wear. The muted earth-tone palette makes it versatile enough to complement neutral wardrobes, minimalist aesthetics, and contemporary athletic-meets-lifestyle dressing. Perfect for fitness enthusiasts, wellness-focused professionals, and anyone seeking a polished alternative to basic athletic footwear.",
+        "concept_facets": {
+          "occasion": [
+            "running",
+            "gym",
+            "casual everyday wear",
+            "athleisure",
+            "active lifestyle",
+            "weekend casual"
+          ],
+          "style_tags": [
+            "minimalist",
+            "performance-focused",
+            "premium athletic",
+            "earth-tone",
+            "neutral palette",
+            "athletic-casual",
+            "quality construction",
+            "running culture",
+            "wellness aesthetic",
+            "contemporary sportswear"
+          ],
+          "color_family": [
+            "brown",
+            "taupe",
+            "neutral earth tones",
+            "beige"
+          ],
+          "garment_type": "running sneaker, athletic shoe, everyday trainer",
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0291385135135135,
+        "dense_rank": 4,
+        "bm25_rank": 14,
+        "score": 0.0291385135135135
+      },
+      {
+        "id": "b2d0e241-d352-44fd-963f-727fa46c5440",
+        "entity_type": "creative",
+        "product_id": "b2d0e241-d352-44fd-963f-727fa46c5440",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "ALO Runner - Seashell Blue",
+        "product_brand": "Alo Yoga",
+        "product_price": "$195",
+        "product_image_url": "https://cdn.builder.io/api/v1/image/assets%2Faa96744e7fe74e2a90d22918299c1f1d%2F5fe140f808fd4db6a476c0900a36fe10",
+        "product_url": "https://www.aloyoga.com/products/a0590u-alo-runner-seashell-blue",
+        "product_gender": null,
+        "product_type": "Sneakers",
+        "concept_doc": "The ALO Runner in Seashell Blue is a premium performance sneaker that bridges the gap between athletic functionality and contemporary wellness fashion. Designed for the mindful mover\u2014yoga practitioners, pilates enthusiasts, and wellness-focused athletes\u2014this shoe delivers technical support for everything from studio to street to trail. With its stabilizing heel clip, dual-density midsole, and cushioned construction, it's perfect for pairing with athleisure basics like bike shorts, leggings, joggers, and seamless tights, as well as elevated casual looks with relaxed-fit trousers or linen pants. The soft seashell blue hue adds a serene, coastal-inspired elegance that complements neutral color palettes and soft pastels while fitting seamlessly into the quiet luxury and clean-girl aesthetic movements. This is an investment piece for the modern wellness lifestyle\u2014equally at home in a yoga class, on a weekend run, or as a statement sneaker with minimalist off-duty fashion.",
+        "concept_facets": {
+          "occasion": [
+            "gym",
+            "yoga",
+            "pilates",
+            "casual weekend",
+            "trail walking",
+            "running",
+            "athleisure",
+            "wellness lifestyle",
+            "everyday wear"
+          ],
+          "style_tags": [
+            "wellness",
+            "athleisure",
+            "quiet luxury",
+            "clean-girl aesthetic",
+            "minimalist",
+            "performance-driven",
+            "coastal vibes",
+            "contemporary sportswear",
+            "premium athletic",
+            "supportive",
+            "comfort-focused"
+          ],
+          "color_family": [
+            "blue",
+            "seashell blue",
+            "soft blue",
+            "pale blue",
+            "powder blue"
+          ],
+          "garment_type": [
+            "sneakers",
+            "performance shoes",
+            "athletic shoes",
+            "lifestyle sneakers"
+          ],
+          "formality_score": 0.15
+        },
+        "rrf_score": 0.0297267759562842,
+        "dense_rank": 1,
+        "bm25_rank": 15,
+        "score": 0.0297267759562842
+      },
+      {
+        "id": "45305861-2331-4d66-ac2a-9dd116eb26fc",
+        "product_id": "35ddfead-fe62-4946-a0dd-8c5392bdface",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/35ddfead-fe62-4946-a0dd-8c5392bdface/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777148117.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=rag and bone&prds=catalogid:17722185554491512526,headlineOfferDocid:13935911865969839609,imageDocid:17118071026001706693,rds:PC_13162132005761183520|PROD_PC_13162132005761183520,gpcid:13162132005761183520,mid:576462863973924372,pvt:a&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Retro Runner Sneakers",
+        "product_brand": "rag & bone",
+        "product_price": "$248.00",
+        "product_image_url": "https://cdn.media.amplience.net/i/rb/WFF22SF0182D18-001-A/Retro-Runner-Sneakers-001?$large$&fmt=auto",
+        "product_url": "https://www.rag-bone.com/p/retro-runner-sneakers-195225111232.html?Country=US&glCurrency=USD",
+        "product_gender": "female",
+        "product_type": "Sneakers",
+        "concept_doc": "The rag & bone Women's Retro Runner Sneaker is a low-top athletic shoe constructed from uppers made of 100% recycled plastic bottles, with leather trim, cotton lining, a molded footbed, and rubber outsole. Designed for women seeking a sustainable everyday sneaker with retro styling, it functions as casual daily footwear suitable for walking, light errands, and general wear. The shoe bridges vintage athletic aesthetics with contemporary material innovation, offering practical comfort for extended casual use.",
+        "concept_facets": {
+          "use_cases": [
+            "casual daily walking",
+            "everyday errands",
+            "general casual wear",
+            "comfortable all-day footwear"
+          ],
+          "attributes": [
+            "100% recycled plastic bottle uppers",
+            "leather trim",
+            "cotton lining",
+            "molded footbed",
+            "rubber outsole",
+            "low-top silhouette",
+            "vintage-inspired design"
+          ],
+          "style_tags": [
+            "retro athletic",
+            "sustainable",
+            "minimalist",
+            "vintage-inspired"
+          ],
+          "product_kind": "women's retro runner sneaker",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0269050198627663,
+        "dense_rank": 11,
+        "bm25_rank": 18,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0269050198627663
+      }
+    ],
+    "query_plan": {
+      "intent": "product_find",
+      "rewrites": [],
+      "constraints": {},
+      "result_shape": [
+        "products",
+        "looks"
+      ],
+      "anchor_type": null,
+      "pair_types": null,
+      "resolved_types": [
+        "Sneakers",
+        "Boots",
+        "Sandals",
+        "Heels",
+        "Loafers",
+        "Flats",
+        "Mules"
+      ],
+      "branch": "browse"
+    },
+    "cold_miss": false,
+    "query_id": null,
+    "meta": {
+      "result_count": 12,
+      "top_score": 0.0325224748810153,
+      "branch": "browse",
+      "resolved_types": [
+        "Sneakers",
+        "Boots",
+        "Sandals",
+        "Heels",
+        "Loafers",
+        "Flats",
+        "Mules"
+      ],
+      "anchor_type": null,
+      "bm25_text": "shoes",
+      "embedding_cache_hit": true,
+      "expansion_cache_hit": false,
+      "visual_lane": false,
+      "products_appended": 10,
+      "products_fallback_passes": 1,
+      "pruned_off_type": 5,
+      "canonical_types_count": 31,
+      "expansion": {
+        "intent": "browse",
+        "types": [
+          "Sneakers",
+          "Boots",
+          "Sandals",
+          "Heels",
+          "Loafers",
+          "Flats",
+          "Mules"
+        ],
+        "anchor_type": null,
+        "pair_types": null,
+        "keywords": "shoes",
+        "source": "static"
+      }
+    }
+  },
+  "toothbrush": {
+    "ok": true,
+    "results": [
+      {
+        "id": "8cbaf9d9-38da-45f3-af85-0fe839ce8cd3",
+        "product_id": "5e20155a-79c8-4b80-8086-1e0298d59303",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/5e20155a-79c8-4b80-8086-1e0298d59303/lifestyle_context_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776788897.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3ODc4MjU4NDMyMzU5NzYxOjE3NzY3ODc3MDk6c3BfYnRmOjMwMTE3NzUwNjIyNTAwMjo6MDo6&url=%2FColgate-Toothbrush-Multipack-Vibrating-Batteries%2Fdp%2FB0G2TW36K3%2Fref%3Dsr_1_20_sspa%3Fdib%3DeyJ2IjoiMSJ9.y5WwzdglzRas4Tduf_wQuynHETBPGvlTa54O27bxXs9MPGBXRe-EzCEHbXDbmDTD4qnYnfKQoKaKOdk0O-D09QMv_dao3xykqT6eDy-zJD2SR6bfWMSGO8maz9gAIR6V4GTk8f4ejgnKAdn0-pB92E30KYDzieyfgIhaC6jX2Y-9P5RyjKqxRi_ei81ymsuKExKtU5EALa7ftuEesGw55I8bFkYb2I9wiuhOd59Bc04.75hpoKexgHR3lDJ4o7-VYaO9MB0SZ_4C4VkW6RL5qpE%26dib_tag%3Dse%26keywords%3Dharry%2Bpotter%26qid%3D1776787709%26sr%3D8-20-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9idGY%26psc%3D1",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Colgate Harry Potter Kids Battery Toothbrush Multipack, Extra Soft Kids Vibrating Toothbrush, AA Batteries Included, 4 Pack, for Witches and Wizards Ages 3 and Older, Lay Flat Design",
+        "product_brand": "Colgate",
+        "product_price": "$24.99",
+        "product_image_url": "https://m.media-amazon.com/images/I/71MgE0y13QL._SX425_.jpg",
+        "product_url": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3ODc4MjU4NDMyMzU5NzYxOjE3NzY3ODc3MDk6c3BfYnRmOjMwMTE3NzUwNjIyNTAwMjo6MDo6&url=%2FColgate-Toothbrush-Multipack-Vibrating-Batteries%2Fdp%2FB0G2TW36K3%2Fref%3Dsr_1_20_sspa%3Fdib%3DeyJ2IjoiMSJ9.y5WwzdglzRas4Tduf_wQuynHETBPGvlTa54O27bxXs9MPGBXRe-EzCEHbXDbmDTD4qnYnfKQoKaKOdk0O-D09QMv_dao3xykqT6eDy-zJD2SR6bfWMSGO8maz9gAIR6V4GTk8f4ejgnKAdn0-pB92E30KYDzieyfgIhaC6jX2Y-9P5RyjKqxRi_ei81ymsuKExKtU5EALa7ftuEesGw55I8bFkYb2I9wiuhOd59Bc04.75hpoKexgHR3lDJ4o7-VYaO9MB0SZ_4C4VkW6RL5qpE%26dib_tag%3Dse%26keywords%3Dharry%2Bpotter%26qid%3D1776787709%26sr%3D8-20-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9idGY%26psc%3D1",
+        "product_gender": null,
+        "product_type": null,
+        "concept_doc": "The Colgate Harry Potter Kids Battery Toothbrush Multipack is a set of four electric toothbrushes designed for children ages 3 and older. Each brush features extra-soft bristles, battery-powered vibrating action, and a lay-flat design for easy storage and handling. The multipack includes AA batteries and Harry Potter-themed styling. This product is intended for daily pediatric oral care to help young children develop consistent brushing habits with gentle, vibration-assisted cleaning.",
+        "concept_facets": {
+          "target": [
+            "teeth",
+            "gums",
+            "children ages 3+"
+          ],
+          "use_cases": [
+            "daily tooth brushing",
+            "pediatric oral hygiene",
+            "children learning proper brushing technique"
+          ],
+          "style_tags": [
+            "character-themed",
+            "kid-friendly",
+            "vibrating action",
+            "battery-powered",
+            "soft bristles"
+          ],
+          "product_kind": "kids electric toothbrush",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0325224748810153,
+        "dense_rank": 1,
+        "bm25_rank": 2,
+        "type_match": false,
+        "entity_type": "creative",
+        "score": 0.0325224748810153
+      }
+    ],
+    "query_plan": {
+      "intent": "vibe_browse",
+      "rewrites": [],
+      "constraints": {},
+      "result_shape": [
+        "products",
+        "looks"
+      ],
+      "anchor_type": null,
+      "pair_types": null,
+      "resolved_types": null,
+      "branch": "vibe"
+    },
+    "cold_miss": true,
+    "query_id": null,
+    "meta": {
+      "result_count": 1,
+      "top_score": 0.0325224748810153,
+      "branch": "vibe",
+      "resolved_types": null,
+      "anchor_type": null,
+      "bm25_text": "toothbrush",
+      "embedding_cache_hit": true,
+      "expansion_cache_hit": false,
+      "visual_lane": false,
+      "products_appended": 0,
+      "products_fallback_passes": 1,
+      "pruned_off_type": 0,
+      "canonical_types_count": 31,
+      "expansion": {
+        "intent": "vibe",
+        "types": [],
+        "anchor_type": null,
+        "pair_types": null,
+        "keywords": "toothbrush",
+        "source": "static"
+      }
+    }
+  },
+  "shorts": {
+    "ok": true,
+    "results": [
+      {
+        "id": "4f9d5a07-313e-48d3-bb62-5daff436f6cb",
+        "product_id": "2af2c067-63f9-436a-bd36-b9199ebbfaf8",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/2af2c067-63f9-436a-bd36-b9199ebbfaf8/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970271.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6518r-alosoft-heart-throb-short-athletic-heather-grey-white",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "4\" Alosoft High-Waist Heart Throb Short - Athletic Heather Grey/White",
+        "product_brand": "Alo Yoga",
+        "product_price": "$84",
+        "product_image_url": "http://www.aloyoga.com/cdn/shop/files/W6518R_03320_b1_s1_a1_m242_1024x1024.jpg?v=1749466489",
+        "product_url": "https://www.aloyoga.com/products/w6518r-alosoft-heart-throb-short-athletic-heather-grey-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Alosoft High-Waist Heart Throb Short is a 4-inch inseam athletic short made from Alo Yoga's signature buttery Alosoft fabric in Athletic Heather Grey with white contrast piping. It features a high-waist cut and is designed for people who want comfortable, soft shorts suitable for workouts, gym sessions, and casual lounging. The shorts work for athletic activities, yoga, and everyday casual wear where a breathable, fitted short is appropriate.",
+        "concept_facets": {
+          "occasion": [
+            "workout",
+            "gym",
+            "yoga",
+            "casual lounging"
+          ],
+          "style_tags": [
+            "high-waist",
+            "athletic",
+            "soft fabric",
+            "contrast piping"
+          ],
+          "color_family": [
+            "grey",
+            "white"
+          ],
+          "garment_type": "athletic shorts",
+          "formality_score": 0.1
+        },
+        "rrf_score": 0.0304779496652043,
+        "dense_rank": 11,
+        "bm25_rank": 1,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0304779496652043
+      },
+      {
+        "id": "d8a2ce22-7961-43c2-9cfc-62d1958e8df7",
+        "entity_type": "creative",
+        "product_id": "d8a2ce22-7961-43c2-9cfc-62d1958e8df7",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "5\" Repetition Short - Steel Grey",
+        "product_brand": "ALO",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M6155R_05541_b1_s1_a1_1_m214.jpg?v=1738173964",
+        "product_url": "https://www.aloyoga.com/products/m6155r-5-repetition-short-steel-grey",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The ALO Repetition Short in Steel Grey is a versatile 5-inch inseam short that strikes the perfect balance between athletic and casual wear. This modern staple is designed for active women and style-conscious gym-to-street enthusiasts who want a streamlined silhouette that works from workout sessions to weekend errands. Perfect for layering over bike shorts or wearing solo with sneakers, sports bras, or oversized tees, these shorts embody the athleisure movement and fit seamlessly into a minimalist, performance-driven wardrobe. The neutral steel grey tone is a contemporary alternative to classic black, pairing beautifully with monochromatic looks, bold tops, or layered accessories. Whether you're heading to the gym, running errands, grabbing coffee, or embracing the elevated casual aesthetic, this short delivers everyday versatility with a polished, intentional edge.",
+        "concept_facets": {
+          "occasion": [
+            "gym",
+            "workout",
+            "casual everyday",
+            "running errands",
+            "athleisure",
+            "weekend wear",
+            "travel"
+          ],
+          "style_tags": [
+            "athleisure",
+            "minimalist",
+            "performance wear",
+            "contemporary",
+            "versatile",
+            "go-everywhere",
+            "elevated casual",
+            "gym-to-street",
+            "monochromatic-friendly",
+            "streamlined",
+            "modern basics"
+          ],
+          "color_family": [
+            "grey",
+            "neutral",
+            "steel",
+            "charcoal grey"
+          ],
+          "garment_type": [
+            "shorts",
+            "athletic shorts",
+            "gym shorts",
+            "casual shorts",
+            "activewear shorts"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0288934426229508,
+        "dense_rank": 20,
+        "bm25_rank": 1,
+        "score": 0.0288934426229508
+      },
+      {
+        "id": "bade9205-974b-47ee-b837-78b66fe2f8aa",
+        "product_id": "dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970459.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-black",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Game Time Short - Black",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/w6500r_01_b2_s1_a1_m218.jpg?v=1751452121",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-black",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a high-rise shorts designed for athletic and wellness activities, featuring an elastic waistband, breezy relaxed fit, and built-in liner shorts for support and coverage. The shorts have a subtle sheen finish and are made to pair with coordinating activewear pieces. Designed for people engaging in yoga, studio workouts, stretching, and casual movement practices, the shorts accommodate moderate activity levels where breathability and secure fit are priorities.",
+        "concept_facets": {
+          "use_cases": [
+            "yoga classes",
+            "home workouts",
+            "studio sessions",
+            "casual movement practice",
+            "post-workout wear"
+          ],
+          "discipline": [
+            "yoga",
+            "pilates",
+            "studio fitness",
+            "stretching",
+            "wellness"
+          ],
+          "style_tags": [
+            "minimalist",
+            "contemporary",
+            "studio aesthetic",
+            "high-rise",
+            "breathable"
+          ],
+          "product_kind": "shorts",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0325224748810153,
+        "dense_rank": 1,
+        "bm25_rank": 2,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0325224748810153
+      },
+      {
+        "id": "2f9f116c-9344-432c-9b0a-11464b08e1c5",
+        "product_id": "0dae1dcf-6d89-4cf3-abfa-b75ab5c121cf",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/0dae1dcf-6d89-4cf3-abfa-b75ab5c121cf/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776971551.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-white",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Game Time Short",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6500_00_b1_s1_a1_m191.jpg?v=1751446971",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a performance shorts designed by Alo Yoga featuring a high-rise elastic waistband and built-in compression shorts for coverage and support. The garment is constructed with a breezy fit and subtle sheen finish, engineered for athletic activity from running and sprinting to post-workout recovery and casual wear. It is designed for people who need functional shorts that transition between intense cardio workouts and relaxed social settings without requiring a change of clothes.",
+        "concept_facets": {
+          "use_cases": [
+            "morning runs and sprints",
+            "gym workouts",
+            "post-exercise cool-down and stretching",
+            "casual hangouts after activity",
+            "warm weather athletic activities"
+          ],
+          "discipline": [
+            "cardio training",
+            "running",
+            "athletic wear",
+            "workout recovery"
+          ],
+          "style_tags": [
+            "minimalist",
+            "high-rise waistband",
+            "built-in shorts",
+            "breezy fit",
+            "subtle sheen"
+          ],
+          "product_kind": "shorts",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0320020481310804,
+        "dense_rank": 2,
+        "bm25_rank": 3,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0320020481310804
+      },
+      {
+        "id": "68af82d1-2912-4b22-8062-37504f67000a",
+        "product_id": "69094f60-0811-40d3-824a-c9d72efc0969",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/69094f60-0811-40d3-824a-c9d72efc0969/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970302.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-navy",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Game Time Short - Navy",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6500_03842_b1_s1_a1_m191.jpg?v=1752685914",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-navy",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a high-rise elastic waistband short in navy with a breezy fit and built-in liner shorts for coverage during workouts. The fabric features a subtle sheen finish suitable for both athletic activity and casual wear. Designed for people who exercise regularly and want a versatile piece that transitions from morning runs or gym sessions to post-workout social settings. The shorts provide freedom of movement for cardio and training while maintaining a polished appearance for everyday wear.",
+        "concept_facets": {
+          "use_cases": [
+            "morning runs",
+            "post-workout activities",
+            "gym sessions",
+            "everyday wear",
+            "social outings after exercise"
+          ],
+          "discipline": [
+            "running",
+            "general fitness",
+            "gym training",
+            "casual wear"
+          ],
+          "style_tags": [
+            "high-rise waistband",
+            "breezy fit",
+            "subtle sheen",
+            "built-in liner",
+            "navy color"
+          ],
+          "product_kind": "shorts",
+          "formality_score": 0.4
+        },
+        "rrf_score": 0.0314980158730159,
+        "dense_rank": 3,
+        "bm25_rank": 4,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0314980158730159
+      },
+      {
+        "id": "ae4df015-7e51-4403-bc2d-275559ffd953",
+        "entity_type": "creative",
+        "product_id": "ae4df015-7e51-4403-bc2d-275559ffd953",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "5\" Airlift Energy Short - Burgundy",
+        "product_brand": "Alo Yoga",
+        "product_price": "$88",
+        "product_image_url": "https://www.aloyoga.com/cdn/shop/files/W6295R_06465_b2_s1_a1_m140_grande.jpg?v=1757324991",
+        "product_url": "https://www.aloyoga.com/products/w6295r-airlift-energy-short-burgundy",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "These Alo Yoga Airlift Energy Shorts are the ultimate high-rise biker short in a rich burgundy tone that works as both a workout essential and athleisure staple. The 5-inch inseam hits that sweet spot between modest coverage and modern proportions, featuring signature sweetheart seams in the back for a flattering, sculpted silhouette. Made from Alo's best-selling Airlift compression fabric, they deliver sleek shaping and comfort for everything from gym sessions and yoga classes to casual errands and elevated loungewear looks. Style them with crop tops, sports bras, oversized tees, or matching sets for a put-together athletic aesthetic; pair with sneakers, slides, or minimal jewelry to complete the vibe. These shorts embody the contemporary athleisure trend and wellness-focused fashion that appeals to yoga enthusiasts, gym-goers, and anyone seeking stylish compression shorts that transition seamlessly from studio to street.",
+        "concept_facets": {
+          "occasion": [
+            "workout",
+            "yoga",
+            "gym",
+            "athleisure",
+            "casual",
+            "loungewear",
+            "errand running"
+          ],
+          "style_tags": [
+            "high-rise",
+            "sculpting",
+            "compression",
+            "fitted",
+            "minimalist",
+            "contemporary athleisure",
+            "wellness wear",
+            "sweetheart seams",
+            "sleek",
+            "modern activewear"
+          ],
+          "color_family": [
+            "burgundy",
+            "deep wine red",
+            "oxblood",
+            "maroon"
+          ],
+          "garment_type": [
+            "biker shorts",
+            "compression shorts",
+            "athletic shorts",
+            "activewear"
+          ],
+          "formality_score": 0.15
+        },
+        "rrf_score": 0.0288981288981289,
+        "dense_rank": 14,
+        "bm25_rank": 5,
+        "score": 0.0288981288981289
+      },
+      {
+        "id": "344c2aed-4b0a-4bba-9e12-d8e230062aef",
+        "entity_type": "creative",
+        "product_id": "344c2aed-4b0a-4bba-9e12-d8e230062aef",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "7\" Make Waves Short - Sunset Pink Tonal",
+        "product_brand": "ALO Yoga",
+        "product_price": "$98",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/U6009R_05999_b1_s1_a1_1_m221.jpg?v=1736466463",
+        "product_url": "https://www.aloyoga.com/products/u6009r-7-make-waves-short-sunset-pink-tonal-mens",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The ALO Yoga Make Waves Short in Sunset Pink Tonal is a 7-inch inseam athleisure short that bridges the gap between gym wear and casual street style. Featuring a luxuriously soft fleece construction with an eye-catching seamed wave pattern, these shorts have a contemporary, fashion-forward aesthetic that appeals to yoga practitioners, fitness enthusiasts, and lifestyle-focused shoppers who want to look put-together while staying comfortable. Perfect for low-key days at home, running errands, post-workout hangouts, or casual outdoor activities, they embody the modern athleisure trend with their tonal pink colorway and textured design. Style them with oversized hoodies, fitted sports bras, crop tops, or lightweight tank tops for a cohesive athleisure look, and pair with slides, sneakers, or minimal footwear. These shorts capture the elevated basics aesthetic that defines contemporary yoga and wellness culture, blending sporty functionality with streetwear sophistication.",
+        "concept_facets": {
+          "occasion": [
+            "casual wear",
+            "athleisure",
+            "home lounging",
+            "post-workout",
+            "errands",
+            "coffee runs",
+            "leisure activities"
+          ],
+          "style_tags": [
+            "athleisure",
+            "contemporary",
+            "yoga-inspired",
+            "textured",
+            "elevated basics",
+            "comfort-forward",
+            "minimalist luxury",
+            "wellness aesthetic",
+            "streetwear",
+            "tonal dressing",
+            "fleece shorts",
+            "wave pattern",
+            "modern casual"
+          ],
+          "color_family": [
+            "pink",
+            "blush",
+            "sunset",
+            "coral-adjacent",
+            "warm neutrals"
+          ],
+          "garment_type": "athletic shorts, athleisure shorts, fleece shorts",
+          "formality_score": 0.15
+        },
+        "rrf_score": 0.029040404040404,
+        "dense_rank": 12,
+        "bm25_rank": 6,
+        "score": 0.029040404040404
+      },
+      {
+        "id": "c9a39cce-9649-4826-8cb0-a5c2df72f8ed",
+        "entity_type": "creative",
+        "product_id": "c9a39cce-9649-4826-8cb0-a5c2df72f8ed",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "7\" Double Take Short - Black",
+        "product_brand": "ALO",
+        "product_price": "$88",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M6143R_01_b2_s1_a2_1_m245.jpg?v=1756316493",
+        "product_url": "https://www.aloyoga.com/products/m6143r-7-double-take-short-black",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The ALO Double Take Short in black is an ultra-soft, midweight essential that bridges the gap between loungewear and casual streetwear. Perfect for athleisure lovers who want comfortable shorts that work equally well for a relaxed day at home, running errands, or grabbing coffee with friends, these 7-inch shorts feature the signature buttery fabric from ALO's beloved Double Take collection. The classic black colorway pairs effortlessly with oversized tees, crop tops, sneakers, slides, and sports bras for a low-key, elevated casual vibe. Whether you're styling them for a gym-to-street look, weekend brunch, or cozy at-home aesthetic, these shorts embody modern comfort culture and the minimalist athleisure trend that prioritizes quality fabric and versatile neutrals.",
+        "concept_facets": {
+          "occasion": [
+            "casual",
+            "loungewear",
+            "athleisure",
+            "weekend",
+            "gym-to-street",
+            "errand running",
+            "low-key social"
+          ],
+          "style_tags": [
+            "athleisure",
+            "comfort",
+            "minimalist",
+            "buttery fabric",
+            "ultra-soft",
+            "elevated casual",
+            "streetwear",
+            "neutral essential",
+            "versatile"
+          ],
+          "color_family": [
+            "black",
+            "neutral"
+          ],
+          "garment_type": [
+            "shorts",
+            "athletic shorts",
+            "athleisure shorts",
+            "lounge shorts"
+          ],
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0278637770897833,
+        "dense_rank": 16,
+        "bm25_rank": 8,
+        "score": 0.0278637770897833
+      },
+      {
+        "id": "a565cdc3-b405-44b9-88ec-2693cef2309d",
+        "product_id": "06aeb4ee-0ad0-47f1-bf78-a2979f669514",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/06aeb4ee-0ad0-47f1-bf78-a2979f669514/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777148379.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6466r-mesh-mirage-short-white",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Mesh Mirage Short - White",
+        "product_brand": "Alo Yoga",
+        "product_price": "$68",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6466R_00_b1_s1_a4_m191_04c2351a-3a82-497c-ab64-8b32b7d7e79e.jpg?v=1743782949",
+        "product_url": "https://www.aloyoga.com/products/w6466r-mesh-mirage-short-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Mesh Mirage Short is a white athletic short made from lightweight perforated fabric with a mesh lining, designed to be breathable and slightly sheer. It covers the thighs and hips, offering a relaxed fit suitable for active wear. The shorts work for casual warm-weather activities like yoga, gym sessions, running, and everyday summer outings where breathability is valued.",
+        "concept_facets": {
+          "occasion": [
+            "yoga",
+            "gym",
+            "running",
+            "casual summer wear"
+          ],
+          "style_tags": [
+            "athletic",
+            "breathable",
+            "lightweight",
+            "minimalist"
+          ],
+          "color_family": [
+            "white"
+          ],
+          "garment_type": "shorts",
+          "formality_score": 0.1
+        },
+        "rrf_score": 0.0287784679089027,
+        "dense_rank": 10,
+        "bm25_rank": 9,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0287784679089027
+      },
+      {
+        "id": "730e2049-9d93-4ec5-9588-78fef5c53a41",
+        "entity_type": "creative",
+        "product_id": "730e2049-9d93-4ec5-9588-78fef5c53a41",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "5\" Airbrush High-Waist Biker Short - Spearmint",
+        "product_brand": "ALO",
+        "product_price": "$68",
+        "product_image_url": "https://www.aloyoga.com/cdn/shop/files/W6311R_06326_b1_s1_a4_m91_1024x1024.jpg?v=1747850687",
+        "product_url": "https://www.aloyoga.com/products/w6311r-5-airbrush-high-waist-biker-short-spearmint",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The ALO Airbrush High-Waist Biker Short in Spearmint is the modern athleisure essential for anyone who wants performance-driven style. These sculpting, lifting shorts feature a flattering high-waist cut and signature Airbrush fabric with 4-way stretch and moisture-wicking technology, making them perfect for workouts, yoga, pilates, gym sessions, and casual street wear. The spearmint hue\u2014a cool, minty green tone\u2014feels fresh and on-trend, pairing beautifully with neutral crop tops, sports bras, oversized sweats, tank tops, and sneakers for an elevated casual look. Whether you're heading to a fitness class, running errands, or creating an Instagram-ready athleisure outfit, these biker shorts deliver the flattering silhouette and functional comfort that defines contemporary active wear and casual styling.",
+        "concept_facets": {
+          "occasion": [
+            "gym",
+            "workout",
+            "yoga",
+            "pilates",
+            "casual",
+            "athleisure",
+            "running errands",
+            "lounge"
+          ],
+          "style_tags": [
+            "high-waist",
+            "sculpting",
+            "lifting",
+            "4-way stretch",
+            "moisture-wicking",
+            "performance fabric",
+            "athleisure",
+            "contemporary casual",
+            "supportive",
+            "flattering silhouette",
+            "trending colors",
+            "versatile basics"
+          ],
+          "color_family": [
+            "green",
+            "mint",
+            "spearmint",
+            "seafoam"
+          ],
+          "garment_type": [
+            "shorts",
+            "biker shorts",
+            "athletic shorts",
+            "activewear shorts"
+          ],
+          "formality_score": 0.15
+        },
+        "rrf_score": 0.0292360221937687,
+        "dense_rank": 6,
+        "bm25_rank": 11,
+        "score": 0.0292360221937687
+      },
+      {
+        "id": "46f478aa-d7d6-4f4f-8db7-e9ca74ff88a7",
+        "product_id": "38abb2be-a885-4b4c-a7f8-f03d95adca89",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/38abb2be-a885-4b4c-a7f8-f03d95adca89/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776969797.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6543r-breezy-short-white",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Breezy Short - White",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6543R_00_b1_s1_a1_m242.jpg?v=1749469686",
+        "product_url": "https://www.aloyoga.com/products/w6543r-breezy-short-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Breezy Short is a white athletic short made from lightweight, breathable fabric with a built-in brief and stretchy waistband. Designed for women engaging in active pursuits, it covers the upper thigh and hip area. The shorts suit casual athletic activities like tennis, gym workouts, beach outings, and leisure wear where breathability and ease of movement are priorities.",
+        "concept_facets": {
+          "occasion": [
+            "casual exercise",
+            "tennis",
+            "gym",
+            "beach",
+            "leisure wear"
+          ],
+          "style_tags": [
+            "lightweight",
+            "breathable",
+            "athletic",
+            "minimalist"
+          ],
+          "color_family": [
+            "white"
+          ],
+          "garment_type": "Athletic shorts",
+          "formality_score": 0.1
+        },
+        "rrf_score": 0.0290098801765819,
+        "dense_rank": 7,
+        "bm25_rank": 11,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0290098801765819
+      },
+      {
+        "id": "994068a9-54fc-4b66-a8cd-d3ae448ee4e6",
+        "entity_type": "creative",
+        "product_id": "994068a9-54fc-4b66-a8cd-d3ae448ee4e6",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "7\" Sports Club Sweater Knit Short - Black",
+        "product_brand": "Alo Yoga",
+        "product_price": "$168",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M6171R_01_b1_s1_a2_m221_e7212db8-19e7-4c79-a75a-4dd40dc40c85.jpg?v=1754504026",
+        "product_url": "https://www.aloyoga.com/products/m6171r-7-sports-club-sweater-knit-short-black",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Sports Club Sweater Knit Short is a relaxed, elevated casual piece that bridges the gap between athletic wear and lifestyle clothing. This black knit short features a soft, lightweight cotton construction with a textured sweater knit fabric that gives it an effortlessly cool, preppy-sporty vibe\u2014think 'quiet luxury' athleisure meets vintage country club aesthetic. Perfect for those who want to elevate casual moments like lunch dates, poolside hangs, and weekend lounging without sacrificing comfort, it pairs beautifully with fitted tanks, oversized linen shirts, crop tops, or lightweight sweaters for layering. The 7-inch inseam hits at the mid-thigh for a flattering, contemporary silhouette that works for active individuals and style-conscious women who embrace the intersection of comfort and chic. This is the modern answer to basic shorts\u2014ideal for anyone seeking a versatile, textured staple that feels both sporty and refined.",
+        "concept_facets": {
+          "occasion": [
+            "casual",
+            "weekend",
+            "poolside",
+            "brunch",
+            "lunch date",
+            "lounging",
+            "travel",
+            "resort wear"
+          ],
+          "style_tags": [
+            "athleisure",
+            "sporty-chic",
+            "quiet luxury",
+            "preppy",
+            "elevated basics",
+            "contemporary",
+            "minimalist",
+            "country club aesthetic",
+            "textured knit",
+            "versatile"
+          ],
+          "color_family": [
+            "black",
+            "neutral",
+            "classic"
+          ],
+          "garment_type": [
+            "shorts",
+            "athletic shorts",
+            "knit shorts",
+            "casual shorts"
+          ],
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0281772250291489,
+        "dense_rank": 2,
+        "bm25_rank": 23,
+        "score": 0.0281772250291489
+      }
+    ],
+    "query_plan": {
+      "intent": "product_find",
+      "rewrites": [],
+      "constraints": {},
+      "result_shape": [
+        "products",
+        "looks"
+      ],
+      "anchor_type": null,
+      "pair_types": null,
+      "resolved_types": [
+        "Shorts"
+      ],
+      "branch": "browse"
+    },
+    "cold_miss": false,
+    "query_id": null,
+    "meta": {
+      "result_count": 12,
+      "top_score": 0.0304779496652043,
+      "branch": "browse",
+      "resolved_types": [
+        "Shorts"
+      ],
+      "anchor_type": null,
+      "bm25_text": "shorts",
+      "embedding_cache_hit": true,
+      "expansion_cache_hit": false,
+      "visual_lane": false,
+      "products_appended": 6,
+      "products_fallback_passes": 1,
+      "pruned_off_type": 0,
+      "canonical_types_count": 31,
+      "expansion": {
+        "intent": "browse",
+        "types": [
+          "Shorts"
+        ],
+        "anchor_type": null,
+        "pair_types": null,
+        "keywords": "shorts",
+        "source": "static"
+      }
+    }
+  },
+  "pants": {
+    "ok": true,
+    "results": [
+      {
+        "id": "640616c0-fc90-41dc-a008-49e40ba28b37",
+        "entity_type": "creative",
+        "product_id": "640616c0-fc90-41dc-a008-49e40ba28b37",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Co-Op Pant (Long) - Anthracite",
+        "product_brand": "ALO",
+        "product_price": "$138",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M5190R_02125_b1_s3_a1_1_m214.jpg?v=1746737390",
+        "product_url": "https://www.aloyoga.com/products/m5190r-co-op-pant-anthracite",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The ALO Co-Op Pant in Anthracite is a sleek, high-performance athletic pant that bridges the gap between gym wear and everyday casual. This streamlined silhouette features water-repellent fabric, an elastic waistband, functional side-zip pockets, and elevated seaming details that give it a polished, modern edge. Perfect for yoga, pilates, studio workouts, and transitioning seamlessly into your day, these pants work beautifully with fitted sports bras, oversized hoodies, cropped jackets, or elevated sneakers. The neutral charcoal-grey tone pairs effortlessly with virtually any top\u2014from minimalist tanks to cozy sweats to button-ups\u2014making it a versatile wardrobe essential for athleisure lovers, wellness-focused dressers, and anyone seeking elevated, functional basics. This is the quintessential modern yoga pant that doesn't sacrifice style for performance.",
+        "concept_facets": {
+          "occasion": [
+            "gym",
+            "yoga class",
+            "pilates",
+            "studio",
+            "casual everyday",
+            "athleisure",
+            "running errands",
+            "weekend wear",
+            "active lifestyle"
+          ],
+          "style_tags": [
+            "athleisure",
+            "minimalist",
+            "high-waisted",
+            "streamlined",
+            "water-resistant",
+            "functional pockets",
+            "elevated basics",
+            "contemporary",
+            "performance wear",
+            "sleek",
+            "modern athletic",
+            "zen-inspired",
+            "gym-to-street"
+          ],
+          "color_family": [
+            "grey",
+            "charcoal",
+            "neutral",
+            "dark grey",
+            "anthracite"
+          ],
+          "garment_type": "athletic pant, yoga pant, performance trouser, long pant",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0308861962461392,
+        "dense_rank": 9,
+        "bm25_rank": 1,
+        "score": 0.0308861962461392
+      },
+      {
+        "id": "8f28a3b0-b356-43e9-92de-1d0e10d1744f",
+        "product_id": "82b3052e-134a-4904-a9b1-982a3978c198",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/82b3052e-134a-4904-a9b1-982a3978c198/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970581.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w54204r-high-waist-origin-wide-leg-track-pant-navy-black",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "High-Waist Origin Wide Leg Track Pant - Navy/Black",
+        "product_brand": "ALO",
+        "product_price": "$168",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54204R_04660_b2_s1_a1_m191.jpg?v=1752217957",
+        "product_url": "https://www.aloyoga.com/products/w54204r-high-waist-origin-wide-leg-track-pant-navy-black",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The High-Waist Origin Wide Leg Track Pant is a navy and black tracksuit bottom made from performance fabric with mesh paneling and tonal piping details. The high-waist, wide-leg cut provides coverage from waist to ankle with a relaxed, fluid silhouette. Designed for wearers seeking elevated athletic wear, these pants transition between studio fitness settings and casual street wear, functioning as both workout bottoms and leisurewear when styled appropriately.",
+        "concept_facets": {
+          "occasion": [
+            "studio fitness",
+            "casual wear",
+            "athleisure"
+          ],
+          "style_tags": [
+            "high-waist",
+            "wide-leg",
+            "mesh paneling",
+            "tonal piping"
+          ],
+          "color_family": [
+            "navy",
+            "black"
+          ],
+          "garment_type": "Track pants",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0325224748810153,
+        "dense_rank": 1,
+        "bm25_rank": 2,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0325224748810153
+      },
+      {
+        "id": "a5b1c13a-cb38-4477-881e-e8c9b54c4585",
+        "entity_type": "creative",
+        "product_id": "a5b1c13a-cb38-4477-881e-e8c9b54c4585",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Edition Sueded Straight Leg Pant - Black",
+        "product_brand": "ALO",
+        "product_price": "$148",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M5200R_01_b1_s1_a1_1_m203.jpg?v=1734054734",
+        "product_url": "https://www.aloyoga.com/products/m5200r-edition-sueded-straight-leg-pant-black",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The ALO Edition Sueded Straight Leg Pant in Black is a modern comfort-meets-polish essential that delivers elevated everyday styling without sacrificing wearability. These sleek black trousers feature a deceptively sophisticated design with a hidden elastic waist and pull-on comfort, yet maintain the polished silhouette of traditional tailored pants through seamed sides, belt loops, back pockets, and functional zippered side pockets. Perfect for the athleisure-to-office transition, these versatile pants work equally well styled with sneakers and an oversized blazer for casual luxury, layered under slip dresses for elevated minimalism, or paired with heels and a silk cami for effortless date night elegance. The rich sueded fabric and structured straight-leg cut align with contemporary quiet luxury and investment basics trends, making them a wardrobe staple for anyone seeking that coveted \"expensive casual\" aesthetic. Ideal for work-from-home days, travel, sophisticated casual outings, and anyone who refuses to choose between comfort and style.",
+        "concept_facets": {
+          "occasion": [
+            "casual",
+            "work-from-home",
+            "weekend",
+            "travel",
+            "smart casual",
+            "elevated everyday",
+            "brunch",
+            "shopping",
+            "dinner"
+          ],
+          "style_tags": [
+            "athleisure",
+            "quiet luxury",
+            "minimalist",
+            "modern tailoring",
+            "comfort-first",
+            "investment basics",
+            "elevated casual",
+            "contemporary",
+            "versatile",
+            "neutral essential",
+            "sueded texture",
+            "effortless chic",
+            "luxury basics"
+          ],
+          "color_family": [
+            "black",
+            "neutral"
+          ],
+          "garment_type": [
+            "pants",
+            "straight-leg pants",
+            "pull-on trousers",
+            "comfortable pants"
+          ],
+          "formality_score": 0.55
+        },
+        "rrf_score": 0.0298276623950508,
+        "dense_rank": 13,
+        "bm25_rank": 2,
+        "score": 0.0298276623950508
+      },
+      {
+        "id": "f9bb8cff-d8e9-41d4-8971-de31f0745e50",
+        "product_id": "bd73250a-5ce9-49a2-abcb-bffc790e49af",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/bd73250a-5ce9-49a2-abcb-bffc790e49af/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776969841.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.google.com/search?ibp=oshop&q=alo&prds=catalogid:2018380027980799892,headlineOfferDocid:12810722264742594942,imageDocid:5823407424963581204,rds:PC_6172780237869761335|PROD_PC_6172780237869761335,gpcid:6172780237869761335,mid:576462847602311646,pvt:hg&hl=en&gl=us&udm=28",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Alo Accolade Straight Leg Sweatpant",
+        "product_brand": "ALO",
+        "product_price": "$138.00",
+        "product_image_url": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRuHZFCw4AE9AJrJvT2B-uWxNhK0mHbwCAXATgiZ6TrfvdUglygxGCP9CmT6gfRARr_p3REU68j0xsne0Ksagp60ZLHn6ekmeAknE5WCNbYi_Uh20sfrQCcOA",
+        "product_url": "https://www.google.com/search?ibp=oshop&q=alo&prds=catalogid:2018380027980799892,headlineOfferDocid:12810722264742594942,imageDocid:5823407424963581204,rds:PC_6172780237869761335|PROD_PC_6172780237869761335,gpcid:6172780237869761335,mid:576462847602311646,pvt:hg&hl=en&gl=us&udm=28",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Alo Accolade Straight Leg Sweatpant is a women's activewear bottom made from soft sweatpant fabric, featuring a 12.5-inch rise and straight leg silhouette designed for comfort and everyday wear. It is designed for women seeking casual, functional bottoms that work across seasons and temperature changes. Realistic use cases include wearing as everyday casual pants during colder months, pairing with heavier jackets for warmth, and transitioning to warmer weather by styling with lighter tops or slides for relaxed indoor and outdoor settings.",
+        "concept_facets": {
+          "use_cases": [
+            "everyday casual wear",
+            "cold weather styling with jackets",
+            "warm weather styling with slides",
+            "loungewear and relaxed home wear"
+          ],
+          "attributes": [
+            "straight leg fit",
+            "12.5 inch rise",
+            "soft sweatpant fabric",
+            "casual activewear"
+          ],
+          "style_tags": [
+            "minimalist",
+            "comfortable",
+            "versatile",
+            "casual"
+          ],
+          "product_kind": "women's straight leg sweatpants",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0320020481310804,
+        "dense_rank": 2,
+        "bm25_rank": 3,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0320020481310804
+      },
+      {
+        "id": "923f12f6-c132-4944-b42e-62b85685954c",
+        "entity_type": "creative",
+        "product_id": "923f12f6-c132-4944-b42e-62b85685954c",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Linen Getaway Cargo Wide Leg Pant - Macadamia",
+        "product_brand": "Alo Yoga",
+        "product_price": "$138",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54198R_03299_b2_s1_a1_m239_21aac55a-7709-465c-bcae-002bebccf913.jpg?v=1747074815",
+        "product_url": "https://www.aloyoga.com/products/w54198r-linen-getaway-cargo-wide-leg-pant-macadamia",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Linen Getaway Cargo Wide Leg Pant in Macadamia is a breathable, elevated linen trouser that effortlessly bridges casual comfort with refined style. Perfect for the modern traveler and resort-goer, these wide-leg pants feature practical cargo pockets that add utilitarian flair while maintaining a luxe aesthetic. They're ideal for warm-weather escapes, sunset-watching, alfresco dining, and leisurely resort strolls\u2014think relaxed vacation elegance meets contemporary minimalism. These pants pair beautifully with lightweight tanks, silk camisoles, linen shirts, and flowing blouses, while the neutral macadamia tone works with virtually anything from your warm-weather wardrobe. This piece embodies the quiet luxury, athleisure-meets-tailoring trend and appeals to those seeking versatile, packable pieces that transition seamlessly from day to evening.",
+        "concept_facets": {
+          "fabric": [
+            "linen",
+            "breathable",
+            "lightweight"
+          ],
+          "season": [
+            "spring",
+            "summer",
+            "warm weather",
+            "resort season"
+          ],
+          "occasion": [
+            "resort wear",
+            "vacation",
+            "casual travel",
+            "warm weather",
+            "evening casual",
+            "al fresco dining",
+            "weekend getaway"
+          ],
+          "pairings": [
+            "tanks",
+            "silk camisoles",
+            "linen shirts",
+            "lightweight blouses",
+            "sandals",
+            "loafers",
+            "resort bags",
+            "sunglasses"
+          ],
+          "aesthetic": [
+            "resort wear",
+            "vacation style",
+            "minimalist",
+            "contemporary casual",
+            "bohemian elegant"
+          ],
+          "lifestyle": [
+            "traveler",
+            "vacation",
+            "leisure",
+            "resort-goer",
+            "warm-weather lifestyle"
+          ],
+          "style_tags": [
+            "elevated casual",
+            "quiet luxury",
+            "athleisure",
+            "utilitarian chic",
+            "modern minimalist",
+            "contemporary resort wear",
+            "cargo pockets",
+            "wide-leg silhouette"
+          ],
+          "color_family": [
+            "neutral",
+            "beige",
+            "tan",
+            "macadamia",
+            "cream"
+          ],
+          "garment_type": "wide-leg cargo pants",
+          "formality_score": 0.45
+        },
+        "rrf_score": 0.0314980158730159,
+        "dense_rank": 3,
+        "bm25_rank": 4,
+        "score": 0.0314980158730159
+      },
+      {
+        "id": "7c0e462f-0a3d-4f6a-ac9a-0430a30d5eef",
+        "entity_type": "creative",
+        "product_id": "7c0e462f-0a3d-4f6a-ac9a-0430a30d5eef",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Co-Op Pant (Long) - Charcoal Green",
+        "product_brand": "Alo Yoga",
+        "product_price": "$138",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/M5190R_06021_b1_s1_a1_1_m221.jpg?v=1738174418",
+        "product_url": "https://www.aloyoga.com/products/m5190r-co-op-pant-charcoal-green",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Co-Op Pant in Charcoal Green is a sleek, high-performance athletic pant that bridges the gap between gym and everyday wear\u2014think athleisure done right. This streamlined silhouette features water-repellent fabric, side-zip pockets, and elevated seaming that elevates it beyond basic workout wear, making it perfect for yoga classes, Pilates sessions, running errands, or casual office days. The muted charcoal green tone is versatile and modern, pairing beautifully with neutral tops, white sneakers, oversized blazers, or matching Alo pieces for a coordinated athleisure moment. It's ideal for the wellness-focused, minimalist dresser who values both performance and polish\u2014whether you're heading to the mat, coffee shops, or casual social hangouts. This pant embodies the contemporary athleisure aesthetic that prioritizes functionality, comfort, and understated sophistication.",
+        "concept_facets": {
+          "occasion": [
+            "Yoga and fitness",
+            "Casual everyday",
+            "Athleisure",
+            "Coffee runs",
+            "Travel",
+            "Relaxed social",
+            "Work-from-home"
+          ],
+          "style_tags": [
+            "Athleisure",
+            "Minimalist",
+            "High-performance",
+            "Water-repellent",
+            "Sleek",
+            "Streamlined",
+            "Elevated basics",
+            "Wellness-inspired",
+            "Contemporary casual",
+            "Side-zip pockets",
+            "Versatile"
+          ],
+          "color_family": [
+            "Green",
+            "Charcoal",
+            "Neutral-toned",
+            "Sage undertones"
+          ],
+          "garment_type": [
+            "Long pants",
+            "Athletic pants",
+            "Performance pants",
+            "Yoga pants",
+            "High-waisted pants"
+          ],
+          "formality_score": 0.35
+        },
+        "rrf_score": 0.0300904977375566,
+        "dense_rank": 8,
+        "bm25_rank": 5,
+        "score": 0.0300904977375566
+      },
+      {
+        "id": "68c43029-df46-435e-a792-798969d54309",
+        "product_id": "03271c77-aa05-4481-9d0f-dea97c023ed3",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/03271c77-aa05-4481-9d0f-dea97c023ed3/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970542.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w5561r-high-waist-airlift-legging-seashell-blue",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "High-Waist Airlift Legging - Seashell Blue",
+        "product_brand": "Alo Yoga",
+        "product_price": "$134",
+        "product_image_url": "https://www.aloyoga.com/cdn/shop/files/W5561R_05442_b1_s1_a1_m161_1024x1024.jpg?v=1749473945",
+        "product_url": "https://www.aloyoga.com/products/w5561r-high-waist-airlift-legging-seashell-blue",
+        "product_gender": null,
+        "product_type": "Activewear",
+        "concept_doc": "The High-Waist Airlift Legging in Seashell Blue is a full-length activewear pant made from Airlift fabric, a four-way-stretch material with high compression and a subtle sheen. The double-layered high-rise waistband provides support and a sleek silhouette, with legs designed to reach the ankle. These leggings are suitable for yoga, gym workouts, and casual everyday wear where comfort and support are priorities.",
+        "concept_facets": {
+          "occasion": [
+            "yoga",
+            "gym",
+            "casual wear"
+          ],
+          "style_tags": [
+            "high-waist",
+            "full-length",
+            "compressive",
+            "four-way-stretch",
+            "sheen finish"
+          ],
+          "color_family": [
+            "blue",
+            "soft blue"
+          ],
+          "garment_type": "leggings",
+          "formality_score": 0.2
+        },
+        "rrf_score": 0.0283716283716284,
+        "dense_rank": 17,
+        "bm25_rank": 5,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0283716283716284
+      },
+      {
+        "id": "e90c6610-679b-4911-8f03-362905e3755a",
+        "entity_type": "creative",
+        "product_id": "e90c6610-679b-4911-8f03-362905e3755a",
+        "video_url": null,
+        "thumbnail_url": null,
+        "affiliate_url": null,
+        "duration_seconds": null,
+        "is_elite": null,
+        "product_name": "Dreamscape Cargo Wide Leg Pant - Taupe",
+        "product_brand": "Alo Yoga",
+        "product_price": "$158.00",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W54251R_04481_b2_s1_a1_m18.jpg?v=1750655893",
+        "product_url": "https://www.aloyoga.com/products/w54251r-dreamscape-cargo-wide-leg-pant-taupe",
+        "product_gender": null,
+        "product_type": "Pants",
+        "concept_doc": "The Dreamscape Cargo Wide Leg Pant in Taupe is a laid-back, contemporary essential that bridges casual athleisure with retro streetwear aesthetics. These breezy wide-leg cargo pants feature an adjustable drawstring waist and oversized utility pockets, delivering that effortlessly cool, 90s-inspired silhouette that works equally well for relaxed everyday wear, casual nights out, or weekend brunches. The neutral taupe tone\u2014a soft, earthy beige-gray\u2014is incredibly versatile, pairing seamlessly with fitted tops, oversized blazers, sneakers, or boots. Perfect for anyone seeking comfortable, statement-making bottoms with that coveted retro-modern vibe, these cargos embody the current trend of functional fashion that doesn't sacrifice style.",
+        "concept_facets": {
+          "occasion": [
+            "casual everyday",
+            "weekend wear",
+            "nights out",
+            "brunch",
+            "streetwear",
+            "relaxed social"
+          ],
+          "style_tags": [
+            "cargo pants",
+            "wide-leg",
+            "athleisure",
+            "retro",
+            "90s-inspired",
+            "utility pockets",
+            "oversized silhouette",
+            "drawstring waist",
+            "modern casual",
+            "effortless cool",
+            "street style",
+            "contemporary"
+          ],
+          "color_family": [
+            "taupe",
+            "beige",
+            "gray",
+            "neutral",
+            "earthy"
+          ],
+          "garment_type": "Wide-leg cargo pants",
+          "formality_score": 0.25
+        },
+        "rrf_score": 0.0297267759562842,
+        "dense_rank": 1,
+        "bm25_rank": 15,
+        "score": 0.0297267759562842
+      },
+      {
+        "id": "68af82d1-2912-4b22-8062-37504f67000a",
+        "product_id": "69094f60-0811-40d3-824a-c9d72efc0969",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/69094f60-0811-40d3-824a-c9d72efc0969/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970302.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-navy",
+        "duration_seconds": 4,
+        "is_elite": false,
+        "product_name": "Game Time Short - Navy",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6500_03842_b1_s1_a1_m191.jpg?v=1752685914",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-navy",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a high-rise elastic waistband short in navy with a breezy fit and built-in liner shorts for coverage during workouts. The fabric features a subtle sheen finish suitable for both athletic activity and casual wear. Designed for people who exercise regularly and want a versatile piece that transitions from morning runs or gym sessions to post-workout social settings. The shorts provide freedom of movement for cardio and training while maintaining a polished appearance for everyday wear.",
+        "concept_facets": {
+          "use_cases": [
+            "morning runs",
+            "post-workout activities",
+            "gym sessions",
+            "everyday wear",
+            "social outings after exercise"
+          ],
+          "discipline": [
+            "running",
+            "general fitness",
+            "gym training",
+            "casual wear"
+          ],
+          "style_tags": [
+            "high-rise waistband",
+            "breezy fit",
+            "subtle sheen",
+            "built-in liner",
+            "navy color"
+          ],
+          "product_kind": "shorts",
+          "formality_score": 0.4
+        },
+        "rrf_score": 0.0153846153846154,
+        "dense_rank": 5,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0153846153846154
+      },
+      {
+        "id": "46f478aa-d7d6-4f4f-8db7-e9ca74ff88a7",
+        "product_id": "38abb2be-a885-4b4c-a7f8-f03d95adca89",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/38abb2be-a885-4b4c-a7f8-f03d95adca89/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776969797.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6543r-breezy-short-white",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Breezy Short - White",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6543R_00_b1_s1_a1_m242.jpg?v=1749469686",
+        "product_url": "https://www.aloyoga.com/products/w6543r-breezy-short-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Breezy Short is a white athletic short made from lightweight, breathable fabric with a built-in brief and stretchy waistband. Designed for women engaging in active pursuits, it covers the upper thigh and hip area. The shorts suit casual athletic activities like tennis, gym workouts, beach outings, and leisure wear where breathability and ease of movement are priorities.",
+        "concept_facets": {
+          "occasion": [
+            "casual exercise",
+            "tennis",
+            "gym",
+            "beach",
+            "leisure wear"
+          ],
+          "style_tags": [
+            "lightweight",
+            "breathable",
+            "athletic",
+            "minimalist"
+          ],
+          "color_family": [
+            "white"
+          ],
+          "garment_type": "Athletic shorts",
+          "formality_score": 0.1
+        },
+        "rrf_score": 0.0151515151515152,
+        "dense_rank": 6,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0151515151515152
+      },
+      {
+        "id": "45c69d69-d6f0-46eb-96fc-eaf74c6aba31",
+        "product_id": "0dae1dcf-6d89-4cf3-abfa-b75ab5c121cf",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/0dae1dcf-6d89-4cf3-abfa-b75ab5c121cf/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776971535.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-white",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Game Time Short",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W6500_00_b1_s1_a1_m191.jpg?v=1751446971",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-white",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a high-rise elastic waistband short designed for athletic activity and casual wear. It features a breezy fit with built-in shorts for coverage and a subtle sheen finish. The product is designed for people who engage in running, workouts, and active recovery, serving dual purposes from morning exercise sessions to post-workout casual time.",
+        "concept_facets": {
+          "use_cases": [
+            "morning runs",
+            "gym sessions",
+            "post-workout casual wear",
+            "active recovery"
+          ],
+          "discipline": [
+            "running",
+            "fitness",
+            "workouts"
+          ],
+          "style_tags": [
+            "high-rise",
+            "elastic waistband",
+            "built-in liner",
+            "breezy fit",
+            "sheen finish"
+          ],
+          "product_kind": "shorts",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0147058823529412,
+        "dense_rank": 8,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0147058823529412
+      },
+      {
+        "id": "d07b9c9b-f257-4ca9-874d-37f4be553396",
+        "product_id": "dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09",
+        "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970345.mp4",
+        "thumbnail_url": null,
+        "affiliate_url": "https://www.aloyoga.com/products/w6500r-game-time-short-black",
+        "duration_seconds": 4,
+        "is_elite": true,
+        "product_name": "Game Time Short - Black",
+        "product_brand": "Alo Yoga",
+        "product_price": "$78",
+        "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/w6500r_01_b2_s1_a1_m218.jpg?v=1751452121",
+        "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-black",
+        "product_gender": null,
+        "product_type": "Shorts",
+        "concept_doc": "The Game Time Short is a high-rise athletic short in black with an elastic waistband, breezy cut, and built-in inner shorts for coverage. Made with a subtle sheen fabric, it is designed for athletes and fitness enthusiasts who need functional, supportive bottoms for workouts, yoga, and active movement. The shorts pair with the Game Time Cropped Jacket as a matching set and work for studio classes, outdoor training, and everyday active wear.",
+        "concept_facets": {
+          "use_cases": [
+            "studio classes",
+            "strength training",
+            "stretching and flexibility work",
+            "outdoor exercise",
+            "active recovery"
+          ],
+          "discipline": [
+            "yoga",
+            "fitness",
+            "workouts",
+            "athletic training"
+          ],
+          "style_tags": [
+            "high-rise",
+            "minimal",
+            "supportive",
+            "premium athletic",
+            "monochromatic"
+          ],
+          "product_kind": "athletic shorts",
+          "formality_score": 0.3
+        },
+        "rrf_score": 0.0142857142857143,
+        "dense_rank": 10,
+        "bm25_rank": null,
+        "type_match": true,
+        "entity_type": "creative",
+        "score": 0.0142857142857143
+      }
+    ],
+    "query_plan": {
+      "intent": "product_find",
+      "rewrites": [],
+      "constraints": {},
+      "result_shape": [
+        "products",
+        "looks"
+      ],
+      "anchor_type": null,
+      "pair_types": null,
+      "resolved_types": [
+        "Pants",
+        "Shorts",
+        "Activewear"
+      ],
+      "branch": "browse"
+    },
+    "cold_miss": false,
+    "query_id": null,
+    "meta": {
+      "result_count": 12,
+      "top_score": 0.0308861962461392,
+      "branch": "browse",
+      "resolved_types": [
+        "Pants",
+        "Shorts",
+        "Activewear"
+      ],
+      "anchor_type": null,
+      "bm25_text": "pants",
+      "embedding_cache_hit": true,
+      "expansion_cache_hit": false,
+      "visual_lane": false,
+      "products_appended": 5,
+      "products_fallback_passes": 1,
+      "pruned_off_type": 0,
+      "canonical_types_count": 31,
+      "expansion": {
+        "intent": "browse",
+        "types": [
+          "Pants",
+          "Shorts",
+          "Activewear"
+        ],
+        "anchor_type": null,
+        "pair_types": null,
+        "keywords": "pants",
+        "source": "static"
+      }
+    }
+  }
+}

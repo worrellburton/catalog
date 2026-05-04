@@ -75,6 +75,7 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   trouser:      ['Pants'],
   jeans:        ['Pants'],
   jean:         ['Pants'],
+  denim:        ['Pants', 'Jacket'],
   leggings:     ['Activewear', 'Pants'],
   legging:      ['Activewear', 'Pants'],
   joggers:      ['Pants', 'Activewear'],

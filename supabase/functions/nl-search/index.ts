@@ -661,6 +661,21 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── Step 4a2: vibe queries — prefer BM25 hits over pure dense drift ───────
+  // When there's at least one BM25-matched product, restrict results to those
+  // rows — this prevents semantic drift (e.g. "toothbrush" returning tennis
+  // skirts via vector proximity in fashion embedding space). When no products
+  // have a BM25 match (true aesthetic queries like "coastal grandmother" or
+  // "Y2K aesthetic"), keep all dense results so the semantic lane still works.
+  if (expansion.intent === 'vibe' && dedupedResults.length > 0) {
+    const bm25Hits = dedupedResults.filter(r => r.bm25_rank != null);
+    if (bm25Hits.length > 0 && bm25Hits.length < dedupedResults.length) {
+      seen.clear();
+      for (const r of bm25Hits) if (r.product_id) seen.add(r.product_id);
+      dedupedResults = bm25Hits;
+    }
+  }
+
   // ── Step 4b: products fallback when creative pool is starved ────────────
   // The creative index excludes products that have no live video; for cold
   // (e.g. brand-new) categories the user would otherwise see an empty grid.
