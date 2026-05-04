@@ -654,10 +654,21 @@ export default function Home() {
   // BrandPage *underneath* the still-visible ProductPage.
   const handleOpenBrand = useCallback((brandName: string) => {
     if (!brandName) return;
+    // Close any open overlays so the feed below is the visible surface,
+    // then push the brand name into the search bar. The feed treats a
+    // brand match as a Tier-1 catalog hit and renders the brand's
+    // products inline. The ?q= URL effect picks this up and pushes a
+    // history entry so the back button returns the user to wherever
+    // they came from. We also bump searchTrigger so the feed fires the
+    // search immediately instead of waiting on the typing debounce.
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
-    setBrandFilter(brandName);
+    setBrandFilter(null);
+    setSearchQuery(brandName);
+    setCatalogName(toCatalogName(brandName));
+    setSearchTrigger(t => t + 1);
+    filterUserOverride.current = true;
   }, []);
 
   const handleCloseBrand = useCallback(() => {
