@@ -84,7 +84,7 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'shoppers' | 'shoppers-waitlist' | 'creators' | 'creators-incoming' | 'admins';
+type Tab = 'shoppers' | 'shoppers-waitlist' | 'creators' | 'creators-incoming' | 'admins' | 'super-admins';
 
 type ToastType = 'success' | 'info' | 'warning';
 
@@ -414,6 +414,10 @@ export default function AdminUsers() {
   // profile, not the role text column. Keeps role for display while
   // letting an admin be elevated without altering their primary role.
   const admins = allUsers.filter(u => u.isAdmin);
+  // Super-admins are the subset whose primary role is 'super_admin' —
+  // the strict tier that gates destructive UI on consumer surfaces
+  // (e.g. delete-mode in the account menu).
+  const superAdmins = allUsers.filter(u => u.role === 'super_admin');
 
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
   // their generated_videos / user_generations. Seed-data ("content-*")
@@ -524,6 +528,7 @@ export default function AdminUsers() {
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creators);
   const adminTable = useSortableTable(admins);
+  const superAdminTable = useSortableTable(superAdmins);
 
   const renderTable = (
     data: UserRow[],
@@ -668,9 +673,14 @@ export default function AdminUsers() {
             Incoming
           </button>
         </div>
-        <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
-          Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
-        </button>
+        <div className="admin-tab-group">
+          <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
+            Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
+          </button>
+          <button className={`admin-tab admin-tab-sub ${activeTab === 'super-admins' ? 'active' : ''}`} onClick={() => setActiveTab('super-admins')}>
+            Super Admins{superAdmins.length > 0 && <span className="admin-tab-count">{superAdmins.length}</span>}
+          </button>
+        </div>
       </div>
 
       {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
@@ -678,6 +688,7 @@ export default function AdminUsers() {
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
       {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}
+      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin')}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
