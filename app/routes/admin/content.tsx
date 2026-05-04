@@ -1575,6 +1575,30 @@ export default function AdminContent() {
     }
   }, [selectedProductKeys, allProducts]);
 
+  // Batch-set the gender column on every selected product. Mirrors
+  // bulkSetActive's pattern: optimistic local update, then a single
+  // .in('id', ids) UPDATE so the round-trip cost is one request
+  // regardless of selection size.
+  const bulkSetGender = useCallback(async (gender: 'male' | 'female' | 'unisex') => {
+    const ids: string[] = [];
+    for (const key of selectedProductKeys) {
+      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+      if (match?.id) ids.push(match.id);
+    }
+    if (ids.length === 0) return 0;
+    setCrawledProducts(prev =>
+      prev.map(r => (ids.includes(r.id) ? { ...r, gender } : r))
+    );
+    if (supabase) {
+      const { error } = await supabase.from('products').update({ gender }).in('id', ids);
+      if (error) {
+        showToast(`Gender update failed: ${error.message}`);
+        return 0;
+      }
+    }
+    return ids.length;
+  }, [selectedProductKeys, allProducts, showToast]);
+
   const lookTable = useSortableTable(lookRows);
 
   const filteredProductsList = useMemo(
@@ -2510,6 +2534,39 @@ export default function AdminContent() {
             >
               Hide from feed
             </button>
+            <span style={{ fontSize: 12, color: '#64748b', marginLeft: 4 }}>Set gender:</span>
+            <div style={{ display: 'inline-flex', gap: 4 }}>
+              <button
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12, padding: '4px 10px', color: '#1d4ed8' }}
+                onClick={async () => {
+                  const n = await bulkSetGender('male');
+                  if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Men's`);
+                }}
+              >
+                Men's
+              </button>
+              <button
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12, padding: '4px 10px', color: '#be185d' }}
+                onClick={async () => {
+                  const n = await bulkSetGender('female');
+                  if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Women's`);
+                }}
+              >
+                Women's
+              </button>
+              <button
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12, padding: '4px 10px', color: '#475569' }}
+                onClick={async () => {
+                  const n = await bulkSetGender('unisex');
+                  if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Unisex`);
+                }}
+              >
+                Unisex
+              </button>
+            </div>
           </div>
         )}
         <div className="admin-table-wrap">

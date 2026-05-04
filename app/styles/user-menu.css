@@ -449,6 +449,54 @@
   background: #fff;
 }
 
+/* "Shopping for" segmented control — super-admin only. Same row
+   geometry as the .user-menu-item rows so it slots into the menu
+   without breaking rhythm. */
+.user-menu-item--segmented {
+  cursor: default;
+  pointer-events: auto;
+}
+.user-menu-segmented {
+  margin-left: auto;
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.user-menu-segmented-btn {
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.user-menu-segmented-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+.user-menu-segmented-btn.is-on {
+  background: #ffd75c;
+  color: #1a1a1a;
+}
+.light-mode .user-menu-segmented {
+  background: rgba(0, 0, 0, 0.06);
+}
+.light-mode .user-menu-segmented-btn {
+  color: rgba(0, 0, 0, 0.55);
+}
+.light-mode .user-menu-segmented-btn:hover {
+  color: rgba(0, 0, 0, 0.85);
+}
+.light-mode .user-menu-segmented-btn.is-on {
+  background: #1a1a1a;
+  color: #fff;
+}
+
 /* Delete-mode toggle — danger tint when on so a super-admin can't
    miss that the consumer feed is now armed for destruction. */
 .user-menu-item--toggle.is-on {

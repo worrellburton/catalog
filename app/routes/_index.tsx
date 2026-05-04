@@ -1095,6 +1095,8 @@ export default function Home() {
                 savedLooks={savedLooksForMenu}
                 onOpenLook={handleOpenLook}
                 onOpenProduct={handleOpenProduct}
+                activeFilter={activeFilter}
+                onChangeCatalogGender={handleGenderFilterChange}
               />
             </div>
           </header>
