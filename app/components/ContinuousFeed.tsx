@@ -440,13 +440,14 @@ export default function ContinuousFeed({
       const n = (name || '').toLowerCase();
       return materialKws.some(kw => n.includes(kw));
     };
-    // NOTE: do NOT filter by video_url here — nl-search returns product
-    // fallback rows for cold categories (no live creative yet, but the product
-    // exists). CreativeCard renders these as image-only cards using the
-    // product image as the poster (see CreativeCard.tsx posterUrl). Filtering
-    // them out makes searches like "shoe"/"cream" appear empty even when
-    // matching products exist in the catalog.
-    return semantic.creatives.filter(c => matchesMaterial(c.product_name)).map(c => ({
+    // Creative-only feed: drop product-fallback rows that have no video.
+    // nl-search returns image-only product rows for cold categories so the
+    // grid isn't empty, but the consumer feed/search UI is meant to be a
+    // video-first lookbook — image cards break that contract. Cold queries
+    // simply return fewer (or zero) results until creatives are generated.
+    return semantic.creatives
+      .filter(c => !!c.video_url && matchesMaterial(c.product_name))
+      .map(c => ({
       id:               c.id,
       product_id:       c.product_id,
       look_id:          null,

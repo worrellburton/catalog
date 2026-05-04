@@ -49,3 +49,38 @@
 {"query": "cozy fall vibes", "expect_category": ["Top","Jacket","Pants"], "expect_name_includes": [], "intent": "vibe"}
 {"query": "athleisure", "expect_category": ["Activewear","Top","Pants","Underwear","Shorts"], "expect_name_includes": [], "intent": "vibe"}
 {"query": "minimalist neutral", "expect_category": [], "expect_name_includes": [], "intent": "vibe"}
+{"query": "date night", "expect_category": ["Dress","Top","Skirt","Pants"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "date night outfit", "expect_category": ["Dress","Top","Skirt","Pants"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "summer outfit", "expect_category": ["Dress","Top","Shorts","Skirt"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "best for summer", "expect_category": ["Dress","Top","Shorts","Skirt"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "best for winter", "expect_category": ["Jacket","Coat","Sweater","Pants"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "rainy day outfit", "expect_category": ["Jacket","Coat","Pants","Boots"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "wedding guest", "expect_category": ["Dress","Suit","Top"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "brunch outfit", "expect_category": ["Dress","Top","Skirt","Pants"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "gym wear", "expect_category": ["Activewear","Top","Pants","Shorts"], "expect_name_includes": [], "intent": "browse"}
+{"query": "work outfit", "expect_category": ["Top","Pants","Skirt","Dress","Jacket"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "denim", "expect_category": ["Pants","Jacket"], "expect_name_includes": ["denim","jean"], "intent": "browse"}
+{"query": "denim jacket", "expect_category": ["Jacket"], "expect_name_includes": ["denim","jean","trucker"], "intent": "browse"}
+{"query": "black jeans combination", "expect_category": ["Top","Jacket","Sneakers"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "white sneakers outfit", "expect_category": ["Top","Pants","Jacket"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "what to wear with white tee", "expect_category": ["Pants","Jacket","Sneakers","Skirt"], "expect_name_includes": [], "intent": "pairing"}
+{"query": "leather jacket", "expect_category": ["Jacket"], "expect_name_includes": ["jacket","leather"], "intent": "browse"}
+{"query": "cashmere sweater", "expect_category": ["Sweater","Top"], "expect_name_includes": ["cashmere","sweater","knit"], "intent": "browse"}
+{"query": "linen shirt", "expect_category": ["Top"], "expect_name_includes": ["linen","shirt","top"], "intent": "browse"}
+{"query": "minimal style", "expect_category": [], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "streetwear", "expect_category": [], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "quiet luxury", "expect_category": [], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "athleisure", "expect_category": ["Activewear","Top","Pants","Shorts"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "cozy fall vibes", "expect_category": ["Sweater","Jacket","Pants"], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "y2k", "expect_category": [], "expect_name_includes": [], "intent": "vibe", "expect_lane": "looks"}
+{"query": "earth tones", "expect_category": [], "expect_name_includes": ["taupe","brown","olive","sand","beige","cream","spruce"], "intent": "vibe"}
+{"query": "running shoes", "expect_category": ["Sneakers","Activewear"], "expect_name_includes": ["run","sneaker","shoe","training"], "intent": "browse"}
+{"query": "yoga pants", "expect_category": ["Activewear","Pants"], "expect_name_includes": ["yoga","legging","airlift","alosoft","pant"], "intent": "browse"}
+{"query": "high waist leggings", "expect_category": ["Activewear","Pants"], "expect_name_includes": ["high-waist","high waist","legging"], "intent": "browse"}
+{"query": "shorts under 80", "expect_category": ["Shorts","Activewear"], "expect_name_includes": ["short"], "intent": "browse", "max_price": 80}
+{"query": "sneakers under 100", "expect_category": ["Sneakers"], "expect_name_includes": ["sneaker","shoe"], "intent": "browse", "max_price": 100}
+{"query": "cologne", "expect_category": ["Fragrance"], "expect_name_includes": ["cologne","perfume","fragrance","scent"], "intent": "browse"}
+{"query": "perfume for her", "expect_category": ["Fragrance"], "expect_name_includes": ["perfume","fragrance","scent"], "intent": "browse"}
+{"query": "skincare", "expect_category": ["Skincare","Beauty"], "expect_name_includes": ["serum","cream","moisturizer","cleanser","lotion","oil"], "intent": "browse"}
+{"query": "moisturizer", "expect_category": ["Skincare","Beauty"], "expect_name_includes": ["moisturizer","cream","lotion","hydrating"], "intent": "browse"}
+{"query": "lipstick", "expect_category": ["Makeup","Beauty"], "expect_name_includes": ["lip","lipstick","gloss","balm"], "intent": "browse"}

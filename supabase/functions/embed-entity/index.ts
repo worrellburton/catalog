@@ -57,6 +57,15 @@ interface ConceptResult {
     style_tags: string[];
     formality_score: number;
   };
+  /**
+   * Shopper-language facet phrases — short comma-joined list of plausible
+   * occasions, seasons, and vibes (e.g. "date night, evening out, dinner;
+   * spring, summer; minimal, polished"). Indexed at BM25 weight C in the
+   * search RPCs so queries like "date night" or "summer outfit" hit the
+   * index without polluting the factual concept_doc. Also appended to the
+   * embedding input so dense vectors incorporate the same shopper signal.
+   */
+  facet_text: string;
 }
 
 type EntityType = 'creative' | 'look' | 'product';
@@ -94,8 +103,12 @@ function systemPromptFor(category: Category, entityType: EntityType): string {
 }
 
 function userPromptFor(category: Category, entityType: EntityType, inputTruncated: string): string {
+  // Shared facet_text guidance — included in every prompt so every entity
+  // gets shopper-language phrases alongside the factual concept_doc.
+  const facetTextRules = `\n- "facet_text": comma-joined list of 6-12 SHORT shopper-language phrases that real users would type when searching for this item. Include realistic occasions, seasons, settings, vibes, and use cases. Examples for a fashion item: "date night, dinner out, evening, going out, weekend, fall, winter, minimal, elevated casual, smart casual". Examples for a candle: "home decor, living room, bedroom, gift, cosy, autumn, winter, evening, relaxation, mood lighting". Examples for a fragrance: "date night, evening, going out, fall, winter, sensual, warm, gift, signature scent, cocktail party". Be specific to what the item ACTUALLY is — never invent a use case the item doesn't suit (e.g. don't write "summer outfit" for a wool coat). 6-12 phrases, comma-separated, lowercase, no quotes, no full sentences.`;
+
   if (entityType === 'look') {
-    return `Generate a factual semantic document for this shoppable outfit look:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) the overall aesthetic or vibe of the look; (2) the key garments, their colours and materials; (3) who it is designed for; (4) realistic occasions. Write plain descriptive prose.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}\n\nRespond with ONLY the JSON object, no other text.`;
+    return `Generate a factual semantic document for this shoppable outfit look:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) the overall aesthetic or vibe of the look; (2) the key garments, their colours and materials; (3) who it is designed for; (4) realistic occasions. Write plain descriptive prose.\n- "concept_facets": {"garment_type":"...","color_family":["..."],"occasion":["..."],"style_tags":["..."],"formality_score":0.0-1.0}${facetTextRules}\n\nRespond with ONLY the JSON object, no other text.`;
   }
   const facetHint =
     category === 'fashion'
@@ -109,7 +122,7 @@ function userPromptFor(category: Category, entityType: EntityType, inputTruncate
             : category === 'lifestyle'
               ? `"product_kind":"e.g. book / yoga mat / supplement","discipline":["..."],"use_cases":["..."],"style_tags":["..."],"formality_score":0.0-1.0`
               : `"product_kind":"...","attributes":["..."],"use_cases":["..."],"style_tags":["..."],"formality_score":0.0-1.0`;
-  return `Generate a factual semantic document for this catalog item:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) what the product IS — its category, key attributes, materials/scent/specs as appropriate; (2) who it's designed for; (3) the realistic use cases based on the product itself, not aspirational stretches. Write plain descriptive prose. Do NOT list shopper search phrases. Do NOT use fashion vocabulary unless the item is actually clothing.\n- "concept_facets": {${facetHint}}\n\nRespond with ONLY the JSON object, no other text.`;
+  return `Generate a factual semantic document for this catalog item:\n\n${inputTruncated}\n\nOutput a JSON object with exactly these keys:\n- "concept_doc": 2-4 sentences. Cover (1) what the product IS — its category, key attributes, materials/scent/specs as appropriate; (2) who it's designed for; (3) the realistic use cases based on the product itself, not aspirational stretches. Write plain descriptive prose. Do NOT list shopper search phrases. Do NOT use fashion vocabulary unless the item is actually clothing.\n- "concept_facets": {${facetHint}}${facetTextRules}\n\nRespond with ONLY the JSON object, no other text.`;
 }
 
 async function generateConcept(
@@ -122,24 +135,34 @@ async function generateConcept(
   const systemPrompt = systemPromptFor(category, entityType);
   const userPrompt = userPromptFor(category, entityType, inputTruncated);
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5',
-      max_tokens: 600,
-      messages: [{ role: 'user', content: userPrompt }],
-      system: systemPrompt,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 900,
+        messages: [{ role: 'user', content: userPrompt }],
+        system: systemPrompt,
+      }),
+    });
+  } catch (err) {
+    // Network failure → degrade to heuristic, never block the embed pipeline.
+    console.warn('[embed-entity] anthropic fetch failed, using heuristic:', err);
+    return heuristicConcept(input, entityType, category);
+  }
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Anthropic error ${res.status}: ${text.slice(0, 200)}`);
+    // 4xx (e.g. credit exhausted) and 5xx → degrade. Better to ship a
+    // heuristic concept_doc than to mark the row as un-embedded forever.
+    const text = await res.text().catch(() => '');
+    console.warn(`[embed-entity] anthropic ${res.status}, using heuristic: ${text.slice(0, 200)}`);
+    return heuristicConcept(input, entityType, category);
   }
 
   const json = await res.json() as { content?: Array<{ type: string; text?: string }> };
@@ -150,14 +173,56 @@ async function generateConcept(
 
   // If Claude refused or returned prose instead of JSON, fall back to heuristic
   try {
-    const parsed = JSON.parse(cleaned) as ConceptResult;
+    const parsed = JSON.parse(cleaned) as Partial<ConceptResult>;
     if (!parsed.concept_doc || !parsed.concept_facets) {
       throw new Error('incomplete');
     }
-    return parsed;
+    // facet_text is best-effort: if Haiku omits it, derive from concept_facets
+    // so the column always has something useful to index. Also normalise (lowercase,
+    // trim, dedupe phrases).
+    const facet_text = normaliseFacetText(
+      parsed.facet_text,
+      parsed.concept_facets as ConceptResult['concept_facets'],
+    );
+    return {
+      concept_doc: parsed.concept_doc,
+      concept_facets: parsed.concept_facets as ConceptResult['concept_facets'],
+      facet_text,
+    };
   } catch {
     return heuristicConcept(input, entityType, category);
   }
+}
+
+// Normalise Haiku's facet_text into a clean, lowercase, deduped, comma-joined
+// phrase list. Falls back to deriving phrases from concept_facets when Haiku
+// omits the field (e.g. when it returns the older two-key schema).
+function normaliseFacetText(raw: unknown, facets: ConceptResult['concept_facets']): string {
+  let phrases: string[] = [];
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    phrases = raw.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+  } else if (Array.isArray(raw)) {
+    phrases = raw.map(p => String(p).trim()).filter(Boolean);
+  }
+  if (phrases.length === 0 && facets) {
+    // Derive a minimal facet_text from concept_facets so the column is never
+    // null on a successful Haiku response.
+    phrases = [
+      ...(Array.isArray(facets.occasion) ? facets.occasion : []),
+      ...(Array.isArray(facets.style_tags) ? facets.style_tags : []),
+      ...(Array.isArray(facets.color_family) ? facets.color_family : []),
+    ].map(s => String(s).trim()).filter(Boolean);
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of phrases) {
+    const k = p.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!k || k.length > 60 || seen.has(k)) continue;
+    seen.add(k);
+    out.push(k);
+    if (out.length >= 16) break;
+  }
+  return out.join(', ');
 }
 
 // Fallback when Claude refuses or returns non-JSON.
@@ -237,6 +302,7 @@ function heuristicConcept(input: string, _entityType: EntityType, category: Cate
         style_tags: [category],
         formality_score: 0.5,
       },
+      facet_text: heuristicFacetText(category, type, name),
     };
   }
 
@@ -301,10 +367,43 @@ function heuristicConcept(input: string, _entityType: EntityType, category: Cate
       style_tags: styleTags,
       formality_score: formality,
     },
+    facet_text: normaliseFacetText(
+      [...occasions, ...styleTags, ...colors, garment].join(', '),
+      undefined as unknown as ConceptResult['concept_facets'],
+    ),
   };
 }
 
+// Lightweight per-category fallback phrases when Haiku is unavailable AND
+// the heuristic has nothing to derive from. Better than an empty facet_text
+// because the BM25 lane still has *something* to match against.
+function heuristicFacetText(category: Category, type: string, name: string): string {
+  const base: string[] = [];
+  if (type) base.push(type.toLowerCase());
+  if (category === 'beauty') base.push('self care', 'wellness', 'gift', 'everyday');
+  else if (category === 'home') base.push('home decor', 'gift', 'cosy', 'styling');
+  else if (category === 'tech') base.push('gadget', 'gift', 'everyday');
+  else if (category === 'lifestyle') base.push('gift', 'hobby', 'everyday');
+  else if (category === 'fashion') base.push('everyday', 'casual', 'going out');
+  if (name) {
+    const words = name.toLowerCase().split(/\s+/).slice(0, 3);
+    base.push(...words);
+  }
+  return normaliseFacetText(base.join(', '), undefined as unknown as ConceptResult['concept_facets']);
+}
+
 // ── OpenAI: text embedding (text-embedding-3-small, 1536-dim) ──────────────
+
+/**
+ * Build the input string fed to the embedding model. concept_doc is the
+ * factual core; facet_text appends shopper-language phrases so the resulting
+ * vector incorporates "date night / summer outfit / cosy" signal alongside
+ * the factual description. Keeps both lanes (dense + BM25) consistent.
+ */
+function buildEmbeddingInput(concept: ConceptResult): string {
+  if (!concept.facet_text) return concept.concept_doc;
+  return `${concept.concept_doc}\n\nShoppers search for this with: ${concept.facet_text}.`;
+}
 
 async function embedText(text: string, openaiKey: string): Promise<number[]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
@@ -376,41 +475,54 @@ async function handleCreative(
 ): Promise<Response> {
   const { data: row, error: fetchErr } = await admin
     .from('product_creative')
-    .select('id, style, prompt, prompt_extra, title, description, concept_doc, product:products(id, name, brand, description, price, type, gender, category)')
+    .select('id, style, prompt, prompt_extra, title, description, concept_doc, concept_facets, concept_at, product:products(id, name, brand, description, price, type, gender, category)')
     .eq('id', id)
     .maybeSingle();
 
   if (fetchErr) return jsonRes({ ok: false, error: fetchErr.message }, 500);
   if (!row)     return jsonRes({ ok: false, error: 'creative not found' }, 404);
 
-  if (!force && row.concept_doc) {
-    return jsonRes({ ok: true, skipped: 'already has concept_doc', id });
+  // Skip only when fully embedded (concept_at is set when both concept_doc and
+  // text_embedding have been written). If concept_doc exists but concept_at is
+  // null the embedding step was never completed — fall through to re-run it
+  // without calling Anthropic again.
+  if (!force && row.concept_doc && (row as Record<string, unknown>).concept_at) {
+    return jsonRes({ ok: true, skipped: 'already embedded', id });
   }
 
   const p = (row as Record<string, unknown>).product as Record<string, unknown> | null;
   if (!p) return jsonRes({ ok: false, error: 'creative is missing joined product' }, 400);
   const category = normalizeCategory((p as { category?: unknown }).category);
 
-  const inputStr = [
-    `Product: ${p.name ?? 'Unknown'}`,
-    p.brand       ? `Brand: ${p.brand}` : null,
-    p.type        ? `Type: ${p.type}` : null,
-    p.price       ? `Price: ${p.price}` : null,
-    p.gender      ? `Gender: ${p.gender}` : null,
-    p.description ? `Description: ${p.description}` : null,
-    row.style          ? `Creative style: ${row.style}` : null,
-    row.prompt         ? `Generation prompt: ${row.prompt}` : null,
-    row.prompt_extra   ? `Prompt notes: ${row.prompt_extra}` : null,
-    row.title          ? `Creative title: ${row.title}` : null,
-    row.description    ? `Creative description: ${row.description}` : null,
-  ].filter(Boolean).join('\n');
-
+  // Concept generation: skip Anthropic when concept_doc is already set.
   let concept: ConceptResult;
-  try { concept = await generateConcept(inputStr, 'creative', category, anthropicKey); }
-  catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  if (!force && row.concept_doc) {
+    concept = {
+      concept_doc: row.concept_doc as string,
+      concept_facets: ((row as Record<string, unknown>).concept_facets as ConceptResult['concept_facets'])
+        ?? { garment_type: '', color_family: [], occasion: [], style_tags: [], formality_score: 0.5 },
+      facet_text: ((row as Record<string, unknown>).facet_text as string | null) ?? '',
+    };
+  } else {
+    const inputStr = [
+      `Product: ${p.name ?? 'Unknown'}`,
+      p.brand       ? `Brand: ${p.brand}` : null,
+      p.type        ? `Type: ${p.type}` : null,
+      p.price       ? `Price: ${p.price}` : null,
+      p.gender      ? `Gender: ${p.gender}` : null,
+      p.description ? `Description: ${p.description}` : null,
+      row.style          ? `Creative style: ${row.style}` : null,
+      row.prompt         ? `Generation prompt: ${row.prompt}` : null,
+      row.prompt_extra   ? `Prompt notes: ${row.prompt_extra}` : null,
+      row.title          ? `Creative title: ${row.title}` : null,
+      row.description    ? `Creative description: ${row.description}` : null,
+    ].filter(Boolean).join('\n');
+    try { concept = await generateConcept(inputStr, 'creative', category, anthropicKey); }
+    catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  }
 
   let embedding: number[];
-  try { embedding = await embedText(concept.concept_doc, openaiKey); }
+  try { embedding = await embedText(buildEmbeddingInput(concept), openaiKey); }
   catch (err) { return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502); }
 
   const { error: updateErr } = await admin
@@ -418,6 +530,7 @@ async function handleCreative(
     .update({
       concept_doc:    concept.concept_doc,
       concept_facets: concept.concept_facets,
+      facet_text:     concept.facet_text,
       concept_at:     new Date().toISOString(),
       text_embedding: toPgVector(embedding),
     })
@@ -437,33 +550,45 @@ async function handleProduct(
 ): Promise<Response> {
   const { data: p, error: fetchErr } = await admin
     .from('products')
-    .select('id, name, brand, description, price, type, gender, category, concept_doc')
+    .select('id, name, brand, description, price, type, gender, category, concept_doc, concept_facets, concept_at')
     .eq('id', id)
     .maybeSingle();
 
   if (fetchErr) return jsonRes({ ok: false, error: fetchErr.message }, 500);
   if (!p)       return jsonRes({ ok: false, error: 'product not found' }, 404);
-  if (!force && (p as Record<string, unknown>).concept_doc) {
-    return jsonRes({ ok: true, skipped: 'already has concept_doc', id });
+
+  const r = p as Record<string, unknown>;
+  // Skip only when fully embedded.
+  if (!force && r.concept_doc && r.concept_at) {
+    return jsonRes({ ok: true, skipped: 'already embedded', id });
   }
 
   const category = normalizeCategory((p as { category?: unknown }).category);
-  const r = p as Record<string, unknown>;
-  const inputStr = [
-    `Product: ${r.name ?? 'Unknown'}`,
-    r.brand       ? `Brand: ${r.brand}` : null,
-    r.type        ? `Type: ${r.type}` : null,
-    r.price       ? `Price: ${r.price}` : null,
-    r.gender      ? `Gender: ${r.gender}` : null,
-    r.description ? `Description: ${r.description}` : null,
-  ].filter(Boolean).join('\n');
 
+  // Concept generation: skip Anthropic when concept_doc is already set.
   let concept: ConceptResult;
-  try { concept = await generateConcept(inputStr, 'product', category, anthropicKey); }
-  catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  if (!force && r.concept_doc) {
+    concept = {
+      concept_doc: r.concept_doc as string,
+      concept_facets: (r.concept_facets as ConceptResult['concept_facets'])
+        ?? { garment_type: '', color_family: [], occasion: [], style_tags: [], formality_score: 0.5 },
+      facet_text: (r.facet_text as string | null) ?? '',
+    };
+  } else {
+    const inputStr = [
+      `Product: ${r.name ?? 'Unknown'}`,
+      r.brand       ? `Brand: ${r.brand}` : null,
+      r.type        ? `Type: ${r.type}` : null,
+      r.price       ? `Price: ${r.price}` : null,
+      r.gender      ? `Gender: ${r.gender}` : null,
+      r.description ? `Description: ${r.description}` : null,
+    ].filter(Boolean).join('\n');
+    try { concept = await generateConcept(inputStr, 'product', category, anthropicKey); }
+    catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  }
 
   let embedding: number[];
-  try { embedding = await embedText(concept.concept_doc, openaiKey); }
+  try { embedding = await embedText(buildEmbeddingInput(concept), openaiKey); }
   catch (err) { return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502); }
 
   const { error: updateErr } = await admin
@@ -471,6 +596,7 @@ async function handleProduct(
     .update({
       concept_doc:    concept.concept_doc,
       concept_facets: concept.concept_facets,
+      facet_text:     concept.facet_text,
       concept_at:     new Date().toISOString(),
       text_embedding: toPgVector(embedding),
     })
@@ -491,19 +617,20 @@ async function handleLook(
   // Fetch the look with its tagged products via look_products junction.
   const { data: look, error: lookErr } = await admin
     .from('looks')
-    .select('id, title, creator_handle, description, gender, concept_doc, look_products(product:products(name, brand, type, description))')
+    .select('id, title, creator_handle, description, gender, concept_doc, concept_facets, concept_at, look_products(product:products(name, brand, type, description))')
     .eq('id', id)
     .maybeSingle();
 
   if (lookErr) return jsonRes({ ok: false, error: lookErr.message }, 500);
   if (!look)   return jsonRes({ ok: false, error: 'look not found' }, 404);
 
-  if (!force && (look as Record<string, unknown>).concept_doc) {
-    return jsonRes({ ok: true, skipped: 'already has concept_doc', id });
+  const l = look as Record<string, unknown>;
+  // Skip only when fully embedded.
+  if (!force && l.concept_doc && l.concept_at) {
+    return jsonRes({ ok: true, skipped: 'already embedded', id });
   }
 
   // Build input string: look metadata + its products
-  const l = look as Record<string, unknown>;
   const lpRows = (l.look_products as Array<Record<string, unknown>> | null) ?? [];
   const productLines = lpRows
     .map(lp => {
@@ -514,20 +641,29 @@ async function handleLook(
     .filter(Boolean)
     .slice(0, 10);
 
-  const inputStr = [
-    l.title       ? `Look title: ${l.title}` : null,
-    l.creator_handle ? `Creator: ${l.creator_handle}` : null,
-    l.description ? `Description: ${l.description}` : null,
-    l.gender      ? `Gender: ${l.gender}` : null,
-    productLines.length ? `Products in look:\n${productLines.map(s => `  • ${s}`).join('\n')}` : null,
-  ].filter(Boolean).join('\n');
-
+  // Concept generation: skip Anthropic when concept_doc is already set.
   let concept: ConceptResult;
-  try { concept = await generateConcept(inputStr, 'look', 'fashion', anthropicKey); }
-  catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  if (!force && l.concept_doc) {
+    concept = {
+      concept_doc: l.concept_doc as string,
+      concept_facets: (l.concept_facets as ConceptResult['concept_facets'])
+        ?? { garment_type: '', color_family: [], occasion: [], style_tags: [], formality_score: 0.5 },
+      facet_text: (l.facet_text as string | null) ?? '',
+    };
+  } else {
+    const inputStr = [
+      l.title       ? `Look title: ${l.title}` : null,
+      l.creator_handle ? `Creator: ${l.creator_handle}` : null,
+      l.description ? `Description: ${l.description}` : null,
+      l.gender      ? `Gender: ${l.gender}` : null,
+      productLines.length ? `Products in look:\n${productLines.map(s => `  • ${s}`).join('\n')}` : null,
+    ].filter(Boolean).join('\n');
+    try { concept = await generateConcept(inputStr, 'look', 'fashion', anthropicKey); }
+    catch (err) { return jsonRes({ ok: false, stage: 'concept_generation', error: String(err) }, 502); }
+  }
 
   let embedding: number[];
-  try { embedding = await embedText(concept.concept_doc, openaiKey); }
+  try { embedding = await embedText(buildEmbeddingInput(concept), openaiKey); }
   catch (err) { return jsonRes({ ok: false, stage: 'embedding', error: String(err) }, 502); }
 
   const { error: updateErr } = await admin
@@ -535,6 +671,7 @@ async function handleLook(
     .update({
       concept_doc:    concept.concept_doc,
       concept_facets: concept.concept_facets,
+      facet_text:     concept.facet_text,
       concept_at:     new Date().toISOString(),
       text_embedding: toPgVector(embedding),
     })
