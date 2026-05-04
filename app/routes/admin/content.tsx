@@ -1575,30 +1575,6 @@ export default function AdminContent() {
     }
   }, [selectedProductKeys, allProducts]);
 
-  // Batch-set the gender column on every selected product. Mirrors
-  // bulkSetActive's pattern: optimistic local update, then a single
-  // .in('id', ids) UPDATE so the round-trip cost is one request
-  // regardless of selection size.
-  const bulkSetGender = useCallback(async (gender: 'male' | 'female' | 'unisex') => {
-    const ids: string[] = [];
-    for (const key of selectedProductKeys) {
-      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
-      if (match?.id) ids.push(match.id);
-    }
-    if (ids.length === 0) return 0;
-    setCrawledProducts(prev =>
-      prev.map(r => (ids.includes(r.id) ? { ...r, gender } : r))
-    );
-    if (supabase) {
-      const { error } = await supabase.from('products').update({ gender }).in('id', ids);
-      if (error) {
-        showToast(`Gender update failed: ${error.message}`);
-        return 0;
-      }
-    }
-    return ids.length;
-  }, [selectedProductKeys, allProducts, showToast]);
-
   const lookTable = useSortableTable(lookRows);
 
   const filteredProductsList = useMemo(
@@ -1632,6 +1608,32 @@ export default function AdminContent() {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // Batch-set the gender column on every selected product. Mirrors
+  // bulkSetActive's pattern: optimistic local update, then a single
+  // .in('id', ids) UPDATE so the round-trip cost is one request
+  // regardless of selection size. Lives below showToast because it
+  // captures it for error toasts — declaring it earlier would hit
+  // a TDZ in the bundled output.
+  const bulkSetGender = useCallback(async (gender: 'male' | 'female' | 'unisex') => {
+    const ids: string[] = [];
+    for (const key of selectedProductKeys) {
+      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+      if (match?.id) ids.push(match.id);
+    }
+    if (ids.length === 0) return 0;
+    setCrawledProducts(prev =>
+      prev.map(r => (ids.includes(r.id) ? { ...r, gender } : r))
+    );
+    if (supabase) {
+      const { error } = await supabase.from('products').update({ gender }).in('id', ids);
+      if (error) {
+        showToast(`Gender update failed: ${error.message}`);
+        return 0;
+      }
+    }
+    return ids.length;
+  }, [selectedProductKeys, allProducts, showToast]);
 
   const handleGenerateCreative = useCallback(async (productId: string, productName: string, style: string, model: string | string[]) => {
     if (genJobs.has(productId)) return;
