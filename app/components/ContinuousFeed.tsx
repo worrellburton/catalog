@@ -165,6 +165,13 @@ export default function ContinuousFeed({
       : allLooks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
+      // For searches >= 3 chars (semantic-eligible), suppress looks entirely.
+      // The look text filter (title/description/product name .includes()) is
+      // too broad — a look with "tennis shoes" in its title or a skirt product
+      // named "tennis skirt" would appear for a "shoes" search. The semantic
+      // lane (renderedCreatives) already surfaces the right products; mixing
+      // looks in via text match adds noise.
+      if (q.length >= 3) return [];
       return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||

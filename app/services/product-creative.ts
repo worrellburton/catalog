@@ -150,7 +150,7 @@ export async function getLiveAds(): Promise<ProductAd[]> {
     .from('product_creative')
     .select(`
       *,
-      product:products(id, name, brand, price, image_url, images, url, catalog_tags, is_active, is_elite, gender)
+      product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
     `)
     .eq('status', 'live')
     .eq('is_elite', true)
