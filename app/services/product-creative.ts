@@ -55,12 +55,17 @@ function visibleGenders(): Array<'male' | 'female' | 'unisex'> | null {
 }
 
 /** Post-filter products by the shopper's gender. Untagged products
- *  (gender is null) stay visible to everyone. */
+ *  (gender is null) only pass when the shopper themselves has no
+ *  gender set — once we know the shopper is male/female we hide
+ *  unscoped rows so the feed doesn't surface random off-domain
+ *  inventory ("Dune", houseplants, pet beds, etc.) that nobody
+ *  bothered to tag. The Gender Audit on /admin/content fills the
+ *  column for everything that should be visible. */
 function passesGenderFilter(p: { gender?: string | null } | null | undefined): boolean {
-  if (!p) return true;
+  if (!p) return false;
   if (shopperGender === 'unknown') return true;
   const g = p.gender;
-  if (!g) return true; // untagged
+  if (!g) return false; // untagged → hidden from gendered shoppers
   if (g === 'unisex') return true;
   if (shopperGender === 'male') return g === 'male';
   if (shopperGender === 'female') return g === 'female';
@@ -138,13 +143,17 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 export async function getHomeFeed(): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Single visibility gate for the home feed: status='live' creative
-  // joined to a product whose Home toggle (products.is_active) is on.
-  // Plus the shopper-gender filter. The is_elite flag is no longer a
-  // gate — it's a quality signal we use to sort the nice creatives to
-  // the top of the grid so admins still get a curated-feeling default
-  // without having to manually flip every product.
-  // Boosted ads (boosted_until > now) sort first; then elite; then newest.
+  // Visibility gates for the home feed, in order of strictness:
+  //   1. status='live' on the creative + a real video_url
+  //   2. The product's Home toggle is on (products.is_active=true)
+  //   3. The product has a type set — untyped rows are usually scrape
+  //      detritus (e.g. a Dune book cover, a houseplant) that slipped
+  //      through and don't belong on a fashion grid. Force admins to
+  //      classify a product before it leaves the staging tab.
+  //   4. The shopper-gender filter (post-fetch) — untagged products
+  //      are hidden from gendered shoppers; see passesGenderFilter.
+  // The is_elite flag is no longer a gate, but it sorts second after
+  // boost so the nice creatives still lead the grid.
   const { data, error } = await supabase
     .from('product_creative')
     .select(`
@@ -153,6 +162,7 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
     `)
     .eq('status', 'live')
     .eq('product.is_active', true)
+    .not('product.type', 'is', null)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('is_elite',      { ascending: false, nullsFirst: false })
