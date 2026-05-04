@@ -481,6 +481,13 @@ export default function ContinuousFeed({
     }
     if (!q) return liveCreatives;
 
+    // Tier-1 queries (shoes, pants, denim, etc.) resolve to canonical
+    // product.type arrays. Use the strict type match so "tennis shoes"
+    // catalog_tag on a skirt doesn't pull the skirt into a "shoes" grid.
+    if (resolveCatalogTypes(q)) {
+      return liveCreatives.filter(c => creativeMatchesCatalogQuery(c, q));
+    }
+
     const isCatalogMatch = liveCreatives.some(c =>
       (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
     );
