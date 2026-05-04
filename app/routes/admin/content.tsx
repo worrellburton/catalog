@@ -1536,45 +1536,6 @@ export default function AdminContent() {
     }
   }, []);
 
-  const bulkSetActive = useCallback(async (active: boolean) => {
-    const ids: string[] = [];
-    for (const key of selectedProductKeys) {
-      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
-      if (match?.id) ids.push(match.id);
-    }
-    if (ids.length === 0) return;
-    setCrawledProducts(prev =>
-      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
-    );
-    if (!supabase) return;
-    await supabase.from('products').update({ is_active: active }).in('id', ids);
-    if (active) {
-      // Promote newest finished ad per product, in parallel.
-      await Promise.all(ids.map(async (pid) => {
-        const { data: candidate } = await supabase!
-          .from('product_creative')
-          .select('id')
-          .eq('product_id', pid)
-          .in('status', ['done', 'paused'])
-          .not('video_url', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (candidate && candidate.length > 0) {
-          await supabase!
-            .from('product_creative')
-            .update({ status: 'live', enabled: true })
-            .eq('id', (candidate[0] as { id: string }).id);
-        }
-      }));
-    } else {
-      await supabase
-        .from('product_creative')
-        .update({ status: 'paused', enabled: false })
-        .in('product_id', ids)
-        .eq('status', 'live');
-    }
-  }, [selectedProductKeys, allProducts]);
-
   const lookTable = useSortableTable(lookRows);
 
   const filteredProductsList = useMemo(
@@ -1609,6 +1570,77 @@ export default function AdminContent() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  // Bulk-flip the Home toggle (products.is_active) on every selected
+  // product. Lives below showToast because it captures it for error
+  // toasts; declaring it earlier would TDZ in the bundled output.
+  const bulkSetActive = useCallback(async (active: boolean) => {
+    const ids: string[] = [];
+    for (const key of selectedProductKeys) {
+      const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === key);
+      if (match?.id) ids.push(match.id);
+    }
+    if (ids.length === 0) return;
+    // Optimistic UI flip — rolled back below on any chunk failure.
+    setCrawledProducts(prev =>
+      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
+    );
+    if (!supabase) return;
+
+    // Chunk the writes. PostgREST passes .in('id', ids) as a query
+    // string, and ~800 UUIDs blow past the proxy's URL length limit
+    // (~30 KB). Without this loop the request silently fails and a
+    // refresh wipes the optimistic UI change. 100 ids per batch keeps
+    // the URL well under the limit while staying fast.
+    const CHUNK = 100;
+    let firstError: string | null = null;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: active })
+        .in('id', slice);
+      if (error && !firstError) firstError = error.message;
+    }
+    if (firstError) {
+      // Roll back the optimistic update so the UI matches the DB.
+      setCrawledProducts(prev =>
+        prev.map(r => (ids.includes(r.id) ? { ...r, is_active: !active } : r))
+      );
+      showToast(`Home toggle failed: ${firstError}`);
+      return;
+    }
+
+    if (active) {
+      // Promote newest finished creative per product, in parallel.
+      await Promise.all(ids.map(async (pid) => {
+        const { data: candidate } = await supabase!
+          .from('product_creative')
+          .select('id')
+          .eq('product_id', pid)
+          .in('status', ['done', 'paused'])
+          .not('video_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (candidate && candidate.length > 0) {
+          await supabase!
+            .from('product_creative')
+            .update({ status: 'live', enabled: true })
+            .eq('id', (candidate[0] as { id: string }).id);
+        }
+      }));
+    } else {
+      // Cascade pause — same chunking story.
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        await supabase
+          .from('product_creative')
+          .update({ status: 'paused', enabled: false })
+          .in('product_id', slice)
+          .eq('status', 'live');
+      }
+    }
+  }, [selectedProductKeys, allProducts, showToast]);
+
   // Batch-set the gender column on every selected product. Mirrors
   // bulkSetActive's pattern: optimistic local update, then a single
   // .in('id', ids) UPDATE so the round-trip cost is one request
@@ -1625,12 +1657,30 @@ export default function AdminContent() {
     setCrawledProducts(prev =>
       prev.map(r => (ids.includes(r.id) ? { ...r, gender } : r))
     );
-    if (supabase) {
-      const { error } = await supabase.from('products').update({ gender }).in('id', ids);
-      if (error) {
-        showToast(`Gender update failed: ${error.message}`);
-        return 0;
-      }
+    if (!supabase) return ids.length;
+    // Chunk the writes — same URL-length story as bulkSetActive. A
+    // single .in('id', 800ish-uuids) blows past the proxy's URL cap.
+    const CHUNK = 100;
+    let firstError: string | null = null;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await supabase
+        .from('products')
+        .update({ gender })
+        .in('id', slice);
+      if (error && !firstError) firstError = error.message;
+    }
+    if (firstError) {
+      // Roll back the optimistic gender flip so the table matches the DB.
+      setCrawledProducts(prev =>
+        prev.map(r => {
+          if (!ids.includes(r.id)) return r;
+          const original = allProducts.find(ap => ap.id === r.id);
+          return { ...r, gender: original?.gender ?? null };
+        })
+      );
+      showToast(`Gender update failed: ${firstError}`);
+      return 0;
     }
     return ids.length;
   }, [selectedProductKeys, allProducts, showToast]);
