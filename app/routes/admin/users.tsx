@@ -556,6 +556,7 @@ export default function AdminUsers() {
     data: UserRow[],
     table: ReturnType<typeof useSortableTable<UserRow>>,
     labelCol: string,
+    showSuperToggle: boolean = false,
   ) => {
     if (data.length === 0) {
       return <p className="admin-detail-empty">No {labelCol.toLowerCase()}s yet</p>;
@@ -568,7 +569,9 @@ export default function AdminUsers() {
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Super" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
+              {showSuperToggle && (
+                <SortableTh label="Super" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
+              )}
               <SortableTh label="Gender" sortKey="gender" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Looks" sortKey="looksCount" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="SSO" sortKey="sso" currentSort={table.sort} onSort={table.handleSort} />
@@ -605,16 +608,18 @@ export default function AdminUsers() {
                     <span className="admin-toggle-track" />
                   </label>
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <label className="admin-toggle" title={u.role === 'super_admin' ? 'Revoke super admin' : 'Make super admin'}>
-                    <input
-                      type="checkbox"
-                      checked={u.role === 'super_admin'}
-                      onChange={(e) => handleSuperAdminToggle(u.id, e.target.checked)}
-                    />
-                    <span className="admin-toggle-track" />
-                  </label>
-                </td>
+                {showSuperToggle && (
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <label className="admin-toggle" title={u.role === 'super_admin' ? 'Revoke super admin' : 'Make super admin'}>
+                      <input
+                        type="checkbox"
+                        checked={u.role === 'super_admin'}
+                        onChange={(e) => handleSuperAdminToggle(u.id, e.target.checked)}
+                      />
+                      <span className="admin-toggle-track" />
+                    </label>
+                  </td>
+                )}
                 <td>
                   {u.gender === 'male' ? (
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: 999 }}>Male</span>
@@ -720,8 +725,8 @@ export default function AdminUsers() {
       {activeTab === 'shoppers-waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
       {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
-      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin')}
-      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin')}
+      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', true)}
+      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', true)}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
