@@ -143,23 +143,21 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 export async function getHomeFeed(): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Strict video-only contract:
-  //   1. status='live' on the creative + a real video_url
-  //   2. The product's Home toggle is on (products.is_active=true)
-  //   3. The product has a type set — untyped rows are usually scrape
-  //      detritus (e.g. a Dune book cover, a houseplant) that don't
-  //      belong on a fashion grid.
-  //   4. The shopper-gender filter (post-fetch).
-  // is_elite sorts after boost so admin-flagged "really nice" creatives
-  // lead the grid without being a hard gate.
+  // Visibility contract:
+  //   1. status='live' on the creative + a real video_url (must have
+  //      something to play — the consumer feed is a video grid).
+  //   2. The product's Home toggle is on (products.is_active=true).
+  //   3. The shopper-gender filter (post-fetch).
   //
-  // We tried briefly surfacing products without creatives (rendering
-  // their static product image), but the consumer feed is a video
-  // catalog — static photos look broken alongside the auto-playing
-  // tiles. So products without a status='live' creative are excluded,
-  // even when Home is on. The admin Content page's "Show without
-  // creative" tab surfaces those rows so they can have creatives
-  // generated.
+  // Note: we do NOT gate on product.type. The Home toggle is the
+  // admin's explicit "yes, show this" — if a product is flipped on,
+  // we trust them, even when the type column hasn't been audited.
+  // The risk is occasionally surfacing non-fashion items (the Dune
+  // book, a houseplant) that sneaked through the scrape, but admins
+  // can untoggle anything that doesn't belong.
+  //
+  // is_elite sorts after boost so admin-flagged "really nice"
+  // creatives lead the grid without being a hard gate.
   const { data, error } = await supabase
     .from('product_creative')
     .select(`
@@ -168,7 +166,6 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
     `)
     .eq('status', 'live')
     .eq('product.is_active', true)
-    .not('product.type', 'is', null)
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('is_elite',      { ascending: false, nullsFirst: false })
@@ -204,7 +201,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
 // mass admin Home-toggle flip).
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v4';
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v5';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -282,6 +279,7 @@ export function invalidateHomeFeed(): void {
         'catalog:home-feed-cache',        // v1
         'catalog:home-feed-cache:v2',     // v2 (creative-only contract)
         'catalog:home-feed-cache:v3',     // v3 (briefly included product-only rows)
+        'catalog:home-feed-cache:v4',     // v4 (type-required gate)
         HOME_FEED_LS_KEY,                 // current
       ];
       for (const base of legacyBases) {
