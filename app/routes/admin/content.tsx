@@ -2439,11 +2439,32 @@ export default function AdminContent() {
           </div>
         {selectedProductKeys.size > 0 && (
           <div className="admin-bulk-bar" style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 24,
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
             display: 'flex', alignItems: 'center', gap: 12,
-            padding: '10px 14px', marginBottom: 8,
-            background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8,
+            padding: '12px 18px',
+            background: 'rgba(20, 20, 22, 0.96)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            color: '#fff',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 999,
+            boxShadow: '0 18px 50px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25)',
+            animation: 'admin-bulk-bar-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both',
+            maxWidth: 'calc(100vw - 32px)',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
           }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#3730a3' }}>
+            <style>{`
+              @keyframes admin-bulk-bar-slide-up {
+                from { transform: translate(-50%, 24px); opacity: 0; }
+                to   { transform: translate(-50%, 0);    opacity: 1; }
+              }
+            `}</style>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
               {selectedProductKeys.size} selected
             </span>
             <button
@@ -2528,7 +2549,7 @@ export default function AdminContent() {
             </button>
             <button
               className="admin-btn admin-btn-secondary"
-              style={{ fontSize: 12, padding: '4px 10px', color: '#64748b' }}
+              style={{ fontSize: 12, padding: '4px 10px', color: '#cbd5e1' }}
               onClick={async () => {
                 await bulkSetActive(false);
                 showToast(`Hid ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'} from the feed`);
@@ -2536,11 +2557,11 @@ export default function AdminContent() {
             >
               Hide from feed
             </button>
-            <span style={{ fontSize: 12, color: '#64748b', marginLeft: 4 }}>Set gender:</span>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginLeft: 4 }}>Set gender:</span>
             <div style={{ display: 'inline-flex', gap: 4 }}>
               <button
                 className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#1d4ed8' }}
+                style={{ fontSize: 12, padding: '4px 10px', color: '#93c5fd' }}
                 onClick={async () => {
                   const n = await bulkSetGender('male');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Men's`);
@@ -2550,7 +2571,7 @@ export default function AdminContent() {
               </button>
               <button
                 className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#be185d' }}
+                style={{ fontSize: 12, padding: '4px 10px', color: '#f9a8d4' }}
                 onClick={async () => {
                   const n = await bulkSetGender('female');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Women's`);
@@ -2560,7 +2581,7 @@ export default function AdminContent() {
               </button>
               <button
                 className="admin-btn admin-btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', color: '#475569' }}
+                style={{ fontSize: 12, padding: '4px 10px', color: '#cbd5e1' }}
                 onClick={async () => {
                   const n = await bulkSetGender('unisex');
                   if (n > 0) showToast(`Set ${n} product${n === 1 ? '' : 's'} to Unisex`);
@@ -2604,7 +2625,7 @@ export default function AdminContent() {
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ textAlign: 'center' }} title="When on, this product is shown on the consumer feed">Show</th>
+                <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative — curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
