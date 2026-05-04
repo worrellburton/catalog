@@ -2,7 +2,6 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
 import { useInViewport } from '~/hooks/useInViewport';
-import { useTrailVideo } from './TrailVideoHost';
 
 interface CreativeCardProps {
   creative: ProductAd;
@@ -18,7 +17,7 @@ interface CreativeCardProps {
 
 const CreativeCard = memo(function CreativeCard({ creative, className = 'look-card', onOpenProduct, canDelete, onDelete, priority = false }: CreativeCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const slotRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
   const inViewport = useInViewport(cardRef);
   const impressionTracked = useRef(false);
@@ -28,25 +27,19 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
 
-  // The TrailVideoHost pool keeps the shared <video> element alive across
-  // remounts, so clicking a card hands the same DOM node — and its
-  // currentTime / decoded frames — to the ProductPage hero. Result: no
-  // reload, no first-frame black gap, even without an explicit morph.
+  // Declarative <video> element. Previously we used TrailVideoHost which
+  // imperatively appendChild'd a shared video element into the slot —
+  // good for surviving the click-into-detail handoff, bad for autoplay
+  // because attributes set on a JS-created element after src can leave
+  // it flagged in a "pending unmuted decode" state and reject autoplay.
+  // Letting React render <video muted autoPlay playsInline> means every
+  // attribute is on the element from creation, which is what every
+  // browser's autoplay heuristic actually inspects. Result: muted
+  // autoplay works on first paint without any user gesture.
   //
-  // We attach immediately on mount instead of waiting for the
-  // IntersectionObserver. The observer fires async and on the first paint
-  // every card is technically "off-screen" — by the time it flips to true
-  // the browser has already settled into a paused state for the muted
-  // video, and on AI-gen creatives whose frame 0 IS the reference image
-  // the card looks indistinguishable from a static product photo. Pool
-  // size is capped (POOL_MAX=32) so eager attach is bounded; the observer
-  // still gates impression tracking and a few other side effects.
-  const setVideoSlot = useTrailVideo(creative.id, creative.video_url ?? undefined);
-
-  const setSlot = useCallback((node: HTMLDivElement | null) => {
-    slotRef.current = node;
-    setVideoSlot(node);
-  }, [setVideoSlot]);
+  // Belt-and-suspenders effects below force play() once metadata loads
+  // and on every visibility change, so a paused element gets a kick
+  // even if the autoplay policy initially blocked.
 
   // Static poster URL — used as a fallback layer behind the video so
   // the card always shows a real image even before video frames decode
@@ -66,50 +59,53 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     }
   }, [inViewport, creative.id]);
 
-  // Mark "loaded" when the shared <video> element actually has frames.
-  // We reach into the slot for it because TrailVideoHost owns the element.
-  //
-  // Race condition: useTrailVideo appends the <video> during the React
-  // commit phase (ref callback), but this effect also fires on the same
-  // commit. The video may not be in the DOM yet when the effect runs, so we
-  // use a MutationObserver to wait for it rather than querying immediately.
+  // Mark "loaded" once the video has frames. Also force play() at the
+  // metadata + first-frame milestones — that's the moment Chrome's
+  // muted-autoplay heuristic actually evaluates.
   useEffect(() => {
-    if (!inViewport) return;
-    const slot = slotRef.current;
-    if (!slot) return;
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-    let mo: MutationObserver | undefined;
-
-    const attachListeners = (node: HTMLVideoElement) => {
-      if (node.readyState >= 2) { setLoaded(true); return; }
-      const handler = () => setLoaded(true);
-      ['playing', 'canplay', 'loadeddata'].forEach(evt =>
-        node.addEventListener(evt, handler, { once: true })
-      );
+    const v = videoRef.current;
+    if (!v) return;
+    const onLoaded = () => {
+      setLoaded(true);
+      if (v.paused) void v.play().catch(() => {});
     };
-
-    const existing = slot.querySelector('video') as HTMLVideoElement | null;
-    if (existing) {
-      attachListeners(existing);
-    } else {
-      mo = new MutationObserver(() => {
-        const v = slot.querySelector('video') as HTMLVideoElement | null;
-        if (v) { mo!.disconnect(); mo = undefined; attachListeners(v); }
-      });
-      mo.observe(slot, { childList: true, subtree: true });
-    }
-
-    // Hard cap: if the video never fires a ready event (network error,
+    if (v.readyState >= 2) onLoaded();
+    v.addEventListener('loadeddata', onLoaded);
+    v.addEventListener('canplay',     onLoaded);
+    v.addEventListener('playing',     () => setLoaded(true));
+    // Hard cap: if the video never reports ready (network error,
     // unsupported codec, etc.) hide the shimmer after 4 s so the card
     // still looks correct even with a broken source.
-    timeoutId = setTimeout(() => setLoaded(true), 4000);
-
+    const timeoutId = setTimeout(() => setLoaded(true), 4000);
     return () => {
       clearTimeout(timeoutId);
-      mo?.disconnect();
+      v.removeEventListener('loadeddata', onLoaded);
+      v.removeEventListener('canplay', onLoaded);
     };
-  }, [inViewport, creative.id]);
+  }, [creative.id, creative.video_url]);
+
+  // Resume play() on visibility return (mobile Safari pauses on tab
+  // background) and on a 1 s heartbeat for the first ~10 s after mount,
+  // for any element that the autoplay policy initially refused.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    let cancelled = false;
+    const kick = () => {
+      if (cancelled) return;
+      if (v.paused) void v.play().catch(() => {});
+    };
+    const onVis = () => { if (!document.hidden) kick(); };
+    document.addEventListener('visibilitychange', onVis);
+    const interval = window.setInterval(kick, 1000);
+    const stopAt = window.setTimeout(() => window.clearInterval(interval), 10_000);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(interval);
+      window.clearTimeout(stopAt);
+    };
+  }, []);
 
   const handleClick = useCallback(() => {
     trackAdClick(creative.id);
@@ -218,16 +214,26 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } as React.CSSProperties}
           />
         )}
-        {/* TrailVideoHost slot — the host appendChild's the shared <video>
-            element here, then moves it to the ProductPage hero on tap. The
-            DOM node survives the move so playback continues unbroken; the
-            overlay's opacity fade IS the entire transition. */}
-        <div
-          ref={setSlot}
-          className="card-video-slot"
-          data-trail-id={creative.id}
-          style={{ position: 'absolute', inset: 0, zIndex: 2 } as React.CSSProperties}
-        />
+        {/* Declarative <video> — every autoplay-relevant attribute is
+            present on the element from creation, which is what every
+            browser's autoplay heuristic actually inspects. JS-property
+            equivalents (.muted, .autoplay) sometimes don't satisfy the
+            heuristic if set after src or after a play() call. */}
+        {creative.video_url && (
+          <video
+            ref={videoRef}
+            className="card-video-slot"
+            data-trail-id={creative.id}
+            src={creative.video_url}
+            muted
+            autoPlay
+            loop
+            playsInline
+            preload="auto"
+            crossOrigin="anonymous"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 2, display: 'block' } as React.CSSProperties}
+          />
+        )}
         <div className="card-gradient" />
 
         {canDelete && onDelete && (
