@@ -308,13 +308,23 @@ if (typeof window !== 'undefined') {
 // the `type` column exactly. Add new entries here as new catalog terms appear.
 const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   // Footwear
-  shoes:        ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
+  shoes:        ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules', 'Shoes'],
+  shoe:         ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules', 'Shoes'],
+  footwear:     ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules', 'Shoes'],
   sneakers:     ['Sneakers'],
+  sneaker:      ['Sneakers'],
+  trainers:     ['Sneakers'],
+  runners:      ['Sneakers'],
   boots:        ['Boots'],
+  boot:         ['Boots'],
   sandals:      ['Sandals'],
+  sandal:       ['Sandals'],
   heels:        ['Heels'],
+  heel:         ['Heels'],
   loafers:      ['Loafers'],
+  loafer:       ['Loafers'],
   flats:        ['Flats'],
+  mules:        ['Mules'],
   // Tops
   tops:         ['Top'],
   top:          ['Top'],
@@ -336,7 +346,7 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   trouser:      ['Pants'],
   jeans:        ['Pants'],
   jean:         ['Pants'],
-  denim:        ['Pants', 'Jacket'],
+  denim:        ['Pants', 'Jacket', 'Shorts'],
   leggings:     ['Activewear', 'Pants'],
   legging:      ['Activewear', 'Pants'],
   joggers:      ['Pants', 'Activewear'],
@@ -369,6 +379,22 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   loungewear:   ['Loungewear'],
 };
 
+// For material-based queries (e.g. "denim", "leather") the type-only filter
+// is too broad — it returns all pants and all jackets regardless of material.
+// This map narrows the DB results to products whose name contains the keyword.
+// Keys must match the normalised (lowercase, trimmed) query keys in
+// CATALOG_TYPE_SYNONYMS above.
+const CATALOG_KEYWORD_FILTER: Record<string, string[]> = {
+  denim:    ['denim', 'jean', 'jeans'],
+  leather:  ['leather'],
+  wool:     ['wool', 'cashmere', 'merino'],
+  silk:     ['silk', 'satin'],
+  cotton:   ['cotton'],
+  linen:    ['linen'],
+  velvet:   ['velvet'],
+  knit:     ['knit', 'knitwear'],
+};
+
 export function resolveCatalogTypes(query: string): string[] | null {
   const key = query.trim().toLowerCase();
   if (!key) return null;
@@ -394,7 +420,8 @@ export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boole
 // available creative for that catalog, not just the curated default-grid set.
 export async function getCreativesByCatalogTag(query: string): Promise<ProductAd[]> {
   if (!supabase) return [];
-  const types = resolveCatalogTypes(query);
+  const key = query.trim().toLowerCase();
+  const types = resolveCatalogTypes(key);
   if (!types || types.length === 0) return [];
 
   const { data, error } = await supabase
@@ -414,11 +441,20 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     console.warn('[getCreativesByCatalogTag] query error:', error.message);
     return [];
   }
+  const keywords = CATALOG_KEYWORD_FILTER[key];
   const rows = (data || []) as ProductAd[];
   return rows.filter(ad => {
     const active = (ad.product as { is_active?: boolean } | null | undefined)?.is_active;
     if (active === false) return false;
-    return passesGenderFilter(ad.product as { gender?: string | null } | null);
+    if (!passesGenderFilter(ad.product as { gender?: string | null } | null)) return false;
+    // For material queries (denim, leather, wool, …) only keep products whose
+    // name actually contains the material keyword — prevents returning all
+    // Pants/Jackets when the user searched "denim".
+    if (keywords) {
+      const name = ((ad.product as { name?: string | null } | null)?.name ?? '').toLowerCase();
+      return keywords.some(k => name.includes(k));
+    }
+    return true;
   });
 }
 
