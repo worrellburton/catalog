@@ -29,8 +29,8 @@ const FORCE = args.force === 'true';
 const CONCURRENCY = parseInt(args.concurrency ?? '4', 10);
 const LIMIT = args.limit ? parseInt(args.limit, 10) : null;
 
-if (KIND !== 'creatives' && KIND !== 'products') {
-  console.error('Usage: node scripts/reembed.mjs --kind=creatives|products [--force] [--concurrency=N] [--limit=N]');
+if (KIND !== 'creatives' && KIND !== 'products' && KIND !== 'looks') {
+  console.error('Usage: node scripts/reembed.mjs --kind=creatives|products|looks [--force] [--concurrency=N] [--limit=N]');
   process.exit(2);
 }
 
@@ -42,11 +42,18 @@ if (!DB_URL || !FN_URL || !KEY) {
   process.exit(2);
 }
 
-const ENTITY_TYPE = KIND === 'creatives' ? 'creative' : 'product';
-const TABLE = KIND === 'creatives' ? 'product_creative' : 'products';
-const where = KIND === 'creatives'
-  ? `status='live' and enabled=true and video_url is not null${FORCE ? '' : ' and (concept_doc is null or text_embedding is null)'}`
-  : `is_active=true${FORCE ? '' : ' and (concept_doc is null or text_embedding is null)'}`;
+const ENTITY_TYPE =
+  KIND === 'creatives' ? 'creative' :
+  KIND === 'products'  ? 'product'  :
+                          'look';
+const TABLE =
+  KIND === 'creatives' ? 'product_creative' :
+  KIND === 'products'  ? 'products'         :
+                          'looks';
+const where =
+  KIND === 'creatives' ? `status='live' and enabled=true and video_url is not null${FORCE ? '' : ' and (concept_doc is null or text_embedding is null)'}`
+  : KIND === 'products' ? `is_active=true${FORCE ? '' : ' and (concept_doc is null or text_embedding is null)'}`
+  : `${FORCE ? '1=1' : '(concept_doc is null or text_embedding is null)'}`;
 
 const client = new pg.Client({ connectionString: DB_URL });
 await client.connect();
