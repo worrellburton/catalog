@@ -464,10 +464,14 @@ export default function ContinuousFeed({
     if (semanticCreatives.length) primeTrailAssets(semanticCreatives);
   }, [semanticCreatives]);
 
-  // Filter creatives by the current search. If any product in the library has
-  // catalog_tags that match the query (case-insensitive), treat the search as
-  // a catalog lookup and keep only creatives whose product is tagged with it.
-  // Otherwise fall back to a text match on product name / brand.
+  // Filter creatives by the current search.
+  // When a search query is active (≥ 3 chars), return [] so the grid is driven
+  // entirely by the semantic pipeline (tagMatchedCreatives + semanticCreatives).
+  // Text / substring matching on catalog_tags or product names is too noisy —
+  // e.g. a skirt tagged "tennis shoes" would match a "shoes" search. Returning
+  // [] here forces the caller to rely on the ranker, not the keyword filter.
+  // filteredCreatives is only used as-is for the default browse state (no query
+  // or short prefix < 3 chars) where we display the full live pool.
   const filteredCreatives = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     // Live (uncommitted) query — used to suppress the elite fallback the
@@ -480,37 +484,10 @@ export default function ContinuousFeed({
       return [];
     }
     if (!q) return liveCreatives;
-
-    // Tier-1 queries (shoes, pants, denim, etc.) resolve to canonical
-    // product.type arrays. Use the strict type match so "tennis shoes"
-    // catalog_tag on a skirt doesn't pull the skirt into a "shoes" grid.
-    if (resolveCatalogTypes(q)) {
-      return liveCreatives.filter(c => creativeMatchesCatalogQuery(c, q));
-    }
-
-    const isCatalogMatch = liveCreatives.some(c =>
-      (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
-    );
-
-    if (isCatalogMatch) {
-      return liveCreatives.filter(c =>
-        (c.product?.catalog_tags || []).some(t => t.toLowerCase() === q),
-      );
-    }
-
-    const matches = liveCreatives.filter(c =>
-      (c.product?.name || '').toLowerCase().includes(q) ||
-      (c.product?.brand || '').toLowerCase().includes(q) ||
-      (c.product?.catalog_tags || []).some(t => t.toLowerCase().includes(q)),
-    );
-    // When the query is long enough to trigger the semantic lane (≥ 3 chars),
-    // do NOT fall back to the full live pool on a text miss — that floods the
-    // grid with unrelated products (e.g. wool sweaters for "summer"). Return []
-    // so only the semantically-ranked video creatives fill the grid.
-    // Short queries (<3 chars, text-only) still fall back to everything so the
-    // grid isn't blank while the user is mid-word.
-    if (matches.length === 0) return q.length >= 3 ? [] : liveCreatives;
-    return matches;
+    // For any active search (≥ 3 chars), let tagMatch + semantic handle results.
+    // Never fall back to text/substring matching — it produces false positives.
+    if (q.length >= 3) return [];
+    return liveCreatives;
   }, [liveCreatives, committedQuery, searchQuery]);
 
   // When the semantic lane returned product hits, use ONLY those results.
