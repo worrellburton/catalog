@@ -93,19 +93,35 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
 
     if (!entry) {
       const el = document.createElement('video');
+      // Set muted BEFORE any other attribute. Chrome's autoplay policy
+      // evaluates the muted state at the moment the element is created;
+      // setting it later (or after src) can leave the element flagged
+      // as unmuted-pending-decode and reject autoplay.
       el.muted = true;
+      el.defaultMuted = true;
+      el.autoplay = true;
       el.loop = true;
       el.playsInline = true;
+      el.setAttribute('muted', '');
+      el.setAttribute('autoplay', '');
+      el.setAttribute('playsinline', '');
       // 'auto' so the video buffers fully while the card sits in the
       // 2-viewport prep band — by the time the user actually scrolls to
       // it, frames are already decoded and playback starts instantly.
-      // Bandwidth-heavy on mobile, but bounded by POOL_MAX (16) so worst
-      // case is ~16 buffered videos at any moment.
+      // Bandwidth-heavy on mobile, but bounded by POOL_MAX (32) so worst
+      // case is ~32 buffered videos at any moment.
       el.preload = 'auto';
       el.crossOrigin = 'anonymous';
       el.src = src;
       el.setAttribute('data-trail-id', id);
       el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      // Fallback retry: when the first frame arrives, attempt play() again.
+      // This is the moment Chrome's autoplay heuristic actually evaluates,
+      // so a play() called pre-loadeddata that "succeeded" but produced no
+      // visible frames will properly start playing here.
+      el.addEventListener('loadeddata', () => {
+        if (el.paused) void el.play().catch(() => {});
+      }, { once: true });
       entry = { el, src, lastUsed: ++tickRef.current };
       pool.set(id, entry);
     }
@@ -194,8 +210,12 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // still image, indistinguishable from the static product photo).
     const onFirstGesture = () => resumeInSlot();
 
-    // Heartbeat: every 3 s, kick any in-slot video that has stalled.
-    const heartbeat = window.setInterval(resumeInSlot, 3000);
+    // Heartbeat: every 1 s, kick any in-slot video that has stalled. A
+    // tighter interval matters most in the first few seconds after the
+    // grid mounts — that's when the muted-autoplay flag is being
+    // evaluated and a play() retry can flip a paused element into
+    // playing without the user touching anything.
+    const heartbeat = window.setInterval(resumeInSlot, 1000);
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
