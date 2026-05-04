@@ -411,13 +411,19 @@ export default function Home() {
         if (!cancelled) setView('app');
         return;
       }
-      const status = await getWaitlistStatus(user.id);
-      if (cancelled) return;
-      if (status?.approved) {
-        setView('app');
-      } else {
-        setView('waitlisted');
+      // Wrap the waitlist lookup so a transient network failure (or RLS
+      // regression) can't leave the user pinned on 'locked' forever — that
+      // path renders an auth splash with no escape. On throw, default to the
+      // waitlist view: it's the same destination an unapproved user lands
+      // on, has a Retry affordance, and beats a stuck splash.
+      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
+      try {
+        status = await getWaitlistStatus(user.id);
+      } catch (err) {
+        console.warn('[auto-route] waitlist lookup failed', err);
       }
+      if (cancelled) return;
+      setView(status?.approved ? 'app' : 'waitlisted');
     })();
     return () => { cancelled = true; };
   }, [user, authLoading, view]);

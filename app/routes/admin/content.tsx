@@ -467,7 +467,7 @@ export default function AdminContent() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
@@ -1582,6 +1582,10 @@ export default function AdminContent() {
       if (productFilter === 'no-creative' && p.hasCreative) return false;
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
+      // "Untagged" surfaces products missing a gender tag — these leak into
+      // every shopper's feed because passesGenderFilter lets nulls through.
+      // Use this view to triage and tag them so the gender scope holds.
+      if (productFilter === 'untagged' && p.gender != null) return false;
       const key = `${p.brand}-${p.name}`;
       if (deletedProductKeys.has(key)) return false;
       if (adminQuery) {
@@ -2397,6 +2401,14 @@ export default function AdminContent() {
             >
               Show without creative
               <span className="admin-tab-badge">{allProducts.filter(p => !p.hasCreative).length}</span>
+            </button>
+            <button
+              className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
+              onClick={() => setProductFilter('untagged')}
+              title="Products missing a gender tag — leak into every shopper's feed because untagged products bypass the gender filter"
+            >
+              Untagged
+              <span className="admin-tab-badge">{allProducts.filter(p => p.gender == null).length}</span>
             </button>
           </div>
         {selectedProductKeys.size > 0 && (
