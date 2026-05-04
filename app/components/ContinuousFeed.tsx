@@ -4,7 +4,7 @@ import { getLooks } from '~/services/looks';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
-import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -429,13 +429,24 @@ export default function ContinuousFeed({
   // unrelated products (skirts, dresses) to appear after the correct results land.
   const semanticCreatives = useMemo<ProductAd[]>(() => {
     if (!semantic.creatives.length) return [];
+    // Material gate: for queries like "denim"/"leather"/"wool" the server
+    // products fallback returns all rows of the resolved type (Pants, Jacket)
+    // without checking the material keyword. Apply the same name-contains
+    // filter we use in the tier-1 path so semantic results don't leak
+    // off-material items (e.g. ALO running shorts under "denim").
+    const materialKws = resolveMaterialKeywords(committedQuery);
+    const matchesMaterial = (name: string | null | undefined): boolean => {
+      if (!materialKws) return true;
+      const n = (name || '').toLowerCase();
+      return materialKws.some(kw => n.includes(kw));
+    };
     // NOTE: do NOT filter by video_url here — nl-search returns product
     // fallback rows for cold categories (no live creative yet, but the product
     // exists). CreativeCard renders these as image-only cards using the
     // product image as the poster (see CreativeCard.tsx posterUrl). Filtering
     // them out makes searches like "shoe"/"cream" appear empty even when
     // matching products exist in the catalog.
-    return semantic.creatives.map(c => ({
+    return semantic.creatives.filter(c => matchesMaterial(c.product_name)).map(c => ({
       id:               c.id,
       product_id:       c.product_id,
       look_id:          null,
@@ -472,7 +483,7 @@ export default function ContinuousFeed({
         catalog_tags: null,
       },
     }));
-  }, [semantic.creatives]);
+  }, [semantic.creatives, committedQuery]);
 
   useEffect(() => {
     if (semanticCreatives.length) primeTrailAssets(semanticCreatives);
@@ -703,12 +714,14 @@ export default function ContinuousFeed({
   const semanticActive = trimmedQuery.length >= 3;
   const semanticPending = !tier1Eligible && liveTrimmed.length >= 3 && (semantic.loading || liveTrimmed !== trimmedQuery);
 
-  // Searching = any in-flight semantic fetch (loader bar is shown).
-  const isSearching =
-    (semanticActive || semanticPending) &&
-    (semantic.loading || semanticPending) &&
-    renderedCreatives.length === 0 &&
-    filteredLooks.length === 0;
+  // Searching = there is an in-flight or pending fetch for a NEW query.
+  // We fire this even when the previous search's results are still on screen
+  // so the loader bar is visible and the stale-content path takes over the
+  // grid render (otherwise the old results sit there until the new ones land
+  // and visibly "snap" without a loading affordance).
+  const isSearching = semanticActive || semanticPending
+    ? (semantic.loading || semanticPending || liveTrimmed !== trimmedQuery)
+    : false;
 
   const [staleCreatives, setStaleCreatives] = useState<ProductAd[]>([]);
   const [staleLooks, setStaleLooks] = useState<Look[]>([]);
