@@ -169,7 +169,31 @@ function FeedSection({
     }
 
     while (items.length < targetCells) {
-      if (deck.length === 0) deck = buildDeck();
+      if (deck.length === 0) {
+        deck = buildDeck();
+        // Cycle-boundary guard: when the new shuffle's first few entries
+        // happen to match the last items already rendered, the user reads
+        // it as "this product just showed up again". Rotate the deck so
+        // the first entry is distinct from the last LOOKBACK rendered
+        // items. Bounded to avoid an infinite loop on tiny pools.
+        const LOOKBACK = Math.min(items.length, deck.length - 1);
+        if (LOOKBACK > 0) {
+          const recentKeys = new Set<string>();
+          for (let r = items.length - LOOKBACK; r < items.length; r++) {
+            const it = items[r];
+            recentKeys.add(it.type === 'look' ? `look:${it.look.id}` : it.type === 'creative' ? `creative:${it.creative.product_id || it.creative.id}` : `ph`);
+          }
+          let rotations = 0;
+          while (rotations < deck.length) {
+            const head = deck[0];
+            const headKey = head.type === 'look' ? `look:${head.look.id}` : `creative:${head.creative.product_id || head.creative.id}`;
+            if (!recentKeys.has(headKey)) break;
+            // Rotate: pop head, push to the back of the deck.
+            deck.push(deck.shift()!);
+            rotations++;
+          }
+        }
+      }
       const next = deck.shift()!;
       if (next.type === 'look') {
         items.push({ type: 'look', look: { ...next.look, displayIndex: displayIndex++ } });
