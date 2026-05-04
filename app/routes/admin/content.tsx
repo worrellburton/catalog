@@ -1590,10 +1590,12 @@ export default function AdminContent() {
 
   // Reset the window whenever the filter / sort / search changes - the
   // user wants to see "the start" of the new view, not whatever scroll
-  // position they were at.
+  // position they were at. productTable.sort can be null (the third
+  // click on a column header cycles back to "no sort"), so guard the
+  // dep with optional chaining + a stable fallback string.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [productFilter, productTable.sort.key, productTable.sort.direction, adminQuery]);
+  }, [productFilter, productTable.sort?.key ?? null, productTable.sort?.direction ?? null, adminQuery]);
 
   // IntersectionObserver to grow the window when the sentinel enters
   // viewport. rootMargin keeps things smooth - we expand before the
