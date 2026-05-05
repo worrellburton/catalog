@@ -74,7 +74,6 @@ Deno.serve(async (req: Request) => {
 
   if (fetchErr) return json({ error: 'fetch failed', detail: fetchErr.message }, 500);
   if (!product) return json({ error: 'product not found' }, 404);
-  if (!product.is_active) return json({ skipped: 'inactive' });
   if (!product.name) return json({ skipped: 'no name' });
 
   if (!force && product.embedding) {
