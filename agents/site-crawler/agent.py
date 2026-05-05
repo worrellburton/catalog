@@ -40,7 +40,7 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-COORDINATOR_MODEL = "claude-sonnet-4-20250514"  # Sonnet for smart navigation discovery
+COORDINATOR_MODEL = "claude-sonnet-4-5-20250929"  # Sonnet for smart navigation discovery
 COLLECTION_MODEL = "claude-haiku-4-5-20251001"   # Haiku for simple URL extraction (~cheaper)
 MAX_COORDINATOR_TURNS = 14
 MAX_COLLECTION_TURNS = 28

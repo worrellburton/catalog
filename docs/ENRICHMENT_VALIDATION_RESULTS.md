@@ -26,7 +26,7 @@ AI-enriched product descriptions successfully enable contextual search queries (
 
 ### Enrichment Strategy
 
-Claude API (claude-sonnet-4-20250514) adds 2-3 sentences with:
+Claude API (claude-sonnet-4-5-20250929) adds 2-3 sentences with:
 - **Occasions**: casual friday, weekend brunch, coffee dates
 - **Activities**: yoga sessions, gym workouts, running errands
 - **Price context**: at $78, under $300, luxury $550

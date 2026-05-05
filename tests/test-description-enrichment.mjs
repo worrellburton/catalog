@@ -64,7 +64,7 @@ Be specific and natural. Match the brand's vibe. Return ONLY the 2-3 additional 
   console.log(`\n🤖 Enriching: ${product.name}...`);
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 250,
     messages: [{ role: 'user', content: prompt }],
   });

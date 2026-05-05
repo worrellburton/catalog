@@ -5,6 +5,11 @@ Exposes two entry points:
   1. HTTP webhook  — POST /scrape-product  (Supabase DB webhook on INSERT)
   2. Cron job      — every 30 min  (retries pending + failed products)
 
+Features:
+  - Scrapes product pages with Playwright + Claude AI
+  - Auto-enriches descriptions with contextual content (occasions, activities, price)
+  - Automatically re-embeds products after enrichment for better search
+
 Deploy:
     modal deploy modal_app.py
 
@@ -32,6 +37,7 @@ scraper_image = (
         "supabase>=2.10.0",
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
+        "requests>=2.31.0",
     )
     .run_commands("playwright install chromium --with-deps")
     .add_local_file("agent.py", "/root/agent.py")
@@ -42,6 +48,71 @@ scraper_image = (
 app = modal.App("product-scraper")
 
 secrets = [modal.Secret.from_name("scraper-secrets")]
+
+# ─── Shared: AI description enrichment ────────────────────────────────
+
+
+def enrich_description(product_data: dict) -> str | None:
+    """
+    Enrich a product description with AI-generated contextual content.
+    
+    Adds occasion/activity/price context to enable contextual search queries
+    like "casual friday", "gym workout", "brunch", etc.
+    
+    Args:
+        product_data: dict with keys: name, brand, type, price, gender, description
+    
+    Returns:
+        Enriched description string, or None on error
+    """
+    import os
+    import anthropic
+    
+    name = product_data.get("name", "Unknown Product")
+    brand = product_data.get("brand", "Unknown")
+    type_ = product_data.get("type", "Unknown")
+    gender = product_data.get("gender", "unisex")
+    price = product_data.get("price", "Unknown")
+    description = product_data.get("description", "No description available.")
+    
+    prompt = f"""You are a fashion copywriter. Enhance this product description by adding 2-3 sentences with:
+- Specific occasions (e.g., "casual friday", "weekend brunch", "date night", "yoga class")
+- Activities it's perfect for (e.g., "gym workouts", "running errands", "lounging")
+- Price context using the actual price (e.g., "at $78", "under $300", "luxury $550")
+- Keep it natural and conversational
+
+Product: {name}
+Brand: {brand}
+Type: {type_}
+Gender: {gender}
+Price: {price}
+
+Current description:
+{description}
+
+IMPORTANT:
+- Keep existing description text
+- Add new sentences at the END
+- Be specific about occasions and activities
+- Mention the actual price if available
+- Keep total length under 500 characters
+- Use natural, flowing language
+
+Return ONLY the enhanced description, nothing else."""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        enriched = response.content[0].text.strip()
+        return enriched
+    except Exception as e:
+        print(f"  ⚠️  [{product_data.get('name')}] Enrichment error: {e}")
+        return None
+
 
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
@@ -67,8 +138,12 @@ def scrape_and_update(product_id: str, url: str):
     # Mark as processing
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
 
+    saved_product_data = None  # Store for enrichment
+
     def _write_to_db(product: dict):
         """Called immediately when Claude calls save_product — no waiting for loop end."""
+        nonlocal saved_product_data
+        
         update_payload = {
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
@@ -95,11 +170,56 @@ def scrape_and_update(product_id: str, url: str):
         supabase.table("products").update(update_payload).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
         
+        # Store product data for enrichment after scraping completes
+        saved_product_data = {
+            "name": product.get("title"),
+            "brand": product.get("brand"),
+            "type": product.get("type"),
+            "price": product.get("price"),
+            "gender": product.get("gender"),
+            "description": product.get("description"),
+        }
+        
         # Note: quality_score is auto-computed by the trg_products_quality_score trigger
 
     try:
         run_agent(url, save=False, on_save=_write_to_db)
         print(f"✅ [{product_id}] agent loop complete")
+        
+        # Enrich description after successful scrape
+        if saved_product_data:
+            print(f"🤖 [{product_id}] Enriching description with AI...")
+            enriched = enrich_description(saved_product_data)
+            
+            if enriched:
+                # Update with enriched description
+                supabase.table("products").update({
+                    "description": enriched,
+                    "description_enriched": True
+                }).eq("id", product_id).execute()
+                print(f"✨ [{product_id}] Description enriched (+{len(enriched) - len(saved_product_data.get('description', ''))} chars)")
+                
+                # Trigger re-embedding with enriched description
+                try:
+                    import requests
+                    response = requests.post(
+                        f"{sb_url}/functions/v1/embed-product",
+                        headers={
+                            "Authorization": f"Bearer {sb_key}",
+                            "apikey": sb_key,
+                            "Content-Type": "application/json",
+                        },
+                        json={"id": product_id, "force": True},
+                        timeout=30
+                    )
+                    if response.ok:
+                        print(f"🔍 [{product_id}] Re-embedded with enriched description")
+                    else:
+                        print(f"  ⚠️  [{product_id}] Re-embed warning: {response.text[:100]}")
+                except Exception as e:
+                    print(f"  ⚠️  [{product_id}] Re-embed error: {e}")
+            else:
+                print(f"  ⚠️  [{product_id}] Enrichment failed, keeping original description")
 
     except Exception as e:
         supabase.table("products").update({

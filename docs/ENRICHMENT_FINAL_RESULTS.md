@@ -103,7 +103,7 @@ quality and timeless design.
 ## 🛠️ Technical Implementation
 
 ### Enrichment Algorithm
-- **Model:** Claude Sonnet 4 (claude-sonnet-4-20250514) via Anthropic API
+- **Model:** Claude Sonnet 4.5 (claude-sonnet-4-5-20250929) via Anthropic API
 - **Prompt:** Add 2-3 contextual sentences covering occasions, activities, price context
 - **Batch Size:** 10 products per batch
 - **Rate Limiting:** 2000ms between batches, 500ms between API calls
