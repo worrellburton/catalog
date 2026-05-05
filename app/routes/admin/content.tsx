@@ -1275,6 +1275,20 @@ export default function AdminContent() {
   // real DB data lands. The seed merge still drives the Looks tab and
   // creator counts; we just don't paint it as if it were the catalog.
   const [productsLoading, setProductsLoading] = useState(true);
+  // Stats column group on the Products table - In Looks, Creators,
+  // Impressions, Saves, Clicks, Date Added all hide behind a single
+  // "Stats" header by default. Click the chevron to expand and see
+  // every column. Persisted so admins don't have to re-expand on
+  // every page load.
+  const [statsExpanded, setStatsExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem('admin:products-stats-expanded') === '1'; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('admin:products-stats-expanded', statsExpanded ? '1' : '0'); }
+    catch { /* quota */ }
+  }, [statsExpanded]);
   const [adProductIds, setAdProductIds] = useState<Set<string>>(new Set());
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
@@ -2803,12 +2817,33 @@ export default function AdminContent() {
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                {!statsExpanded && (
+                  <th
+                    style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setStatsExpanded(true)}
+                    title="Show In Looks, Creators, Impressions, Saves, Clicks, Date Added"
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      Stats
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </span>
+                  </th>
+                )}
+                {statsExpanded && (
+                  <>
+                    <th style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none', width: 24 }}
+                        onClick={() => setStatsExpanded(false)}
+                        title="Collapse stats columns">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="Collapse stats"><polyline points="15 18 9 12 15 6"/></svg>
+                    </th>
+                    <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                  </>
+                )}
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
@@ -3072,14 +3107,34 @@ export default function AdminContent() {
                     )}
                   </td>
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
-                  <td>{p.lookCount}</td>
-                  <td>{p.creatorCount}</td>
-                  <td>{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
-                  <td>{p.saves}</td>
-                  <td>{p.clicks}</td>
-                  <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                    {formatDateAdded(p.created_at)}
-                  </td>
+                  {!statsExpanded && (
+                    <td
+                      style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, cursor: 'pointer' }}
+                      onClick={(e) => { e.stopPropagation(); setStatsExpanded(true); }}
+                      title="Expand stats"
+                    >
+                      {/* Tiny inline summary so the cell isn't empty - e.g.
+                          "5 looks · 132 imp" - so admins glean signal without
+                          expanding when a row has activity. */}
+                      {(p.lookCount > 0 || p.impressions > 0)
+                        ? `${p.lookCount} look${p.lookCount === 1 ? '' : 's'}${p.impressions > 0 ? ` · ${p.impressions.toLocaleString()} imp` : ''}`
+                        : ' - '}
+                    </td>
+                  )}
+                  {statsExpanded && (
+                    <>
+                      <td onClick={(e) => { e.stopPropagation(); setStatsExpanded(false); }}
+                          style={{ width: 24, cursor: 'pointer', color: '#94a3b8' }} />
+                      <td>{p.lookCount}</td>
+                      <td>{p.creatorCount}</td>
+                      <td>{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
+                      <td>{p.saves}</td>
+                      <td>{p.clicks}</td>
+                      <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                        {formatDateAdded(p.created_at)}
+                      </td>
+                    </>
+                  )}
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {p.source ? (
                       <span style={{
