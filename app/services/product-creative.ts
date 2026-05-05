@@ -141,7 +141,7 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
   return (data || []) as ProductAd[];
 }
 
-export async function getHomeFeed(): Promise<ProductAd[]> {
+export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Visibility contract:
   //   1. status='live' on the creative + a real video_url (must have
@@ -191,6 +191,7 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
     seen.add(key);
     deduped.push(ad);
   }
+  if (opts.ignoreGender) return deduped;
   return deduped.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );

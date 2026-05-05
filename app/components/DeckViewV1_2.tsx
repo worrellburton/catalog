@@ -461,11 +461,15 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   }, []);
 
   // Pull the home feed once on mount. Same contract as the consumer
-  // app: status='live' creative + Home toggle on the product. Filtered
-  // to rows with a video_url so the background grid stays motion-only.
+  // app: status='live' creative + Home toggle on the product. The deck
+  // bypasses the shopper-gender filter so the background reflects the
+  // full catalog regardless of who's viewing - investors should see the
+  // breadth, not just the slice tagged for the current super-admin
+  // toggle. Filtered to rows with a video_url so the grid stays
+  // motion-only.
   useEffect(() => {
     let cancelled = false;
-    getHomeFeed().then(list => {
+    getHomeFeed({ ignoreGender: true }).then(list => {
       if (!cancelled) setHomeFeed(list.filter(r => !!r.video_url));
     }).catch(err => {
       console.error('[DeckViewV1_2] getHomeFeed failed:', err);
@@ -476,22 +480,34 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   return (
     <div className={`deck-view deck-view-v8 deck-view-v9 deck-view-v1 active${bgRevealed ? ' deck-v8-bg-revealed' : ''}`} ref={containerRef}>
       <div className="deck-v8-bg" aria-hidden="true">
-        <div className="deck-insight-grid">
+        <div className="deck-insight-grid deck-v1-feed-grid">
           {/* v1.2: mirror of the consumer home feed - whatever is toggled
-              on as Home in /admin/content. If the feed is empty the dark
-              overlay still keeps the cover slide legible. */}
-          {Array.from({ length: Math.min(24, homeFeed.length) }).map((_, i) => {
+              on as Home in /admin/content. The grid uses the same
+              seed-based mosaic FeedSection.tsx applies on the consumer
+              feed (8% featured 2x2, 14% wide 2x1, 14% tall 1x2, 64%
+              normal 1x1) so the background reads as the actual product
+              feed - not a perfect-square wallpaper. */}
+          {Array.from({ length: Math.min(40, homeFeed.length) }).map((_, i) => {
             const clip = homeFeed[i % homeFeed.length];
+            // Same hash FeedSection.tsx uses, with a fixed layoutMode of
+            // 0 since the deck doesn't expose a Remix button.
+            const seed = (1 * 31 + i * 127) % 100;
+            const variant =
+              seed < 8  ? 'deck-v1-tile-featured' :
+              seed < 22 ? 'deck-v1-tile-wide' :
+              seed < 36 ? 'deck-v1-tile-tall' :
+                          'deck-v1-tile-normal';
             return (
-              <video
-                key={`home:${clip.id}`}
-                src={clip.video_url ?? undefined}
-                muted
-                loop
-                playsInline
-                autoPlay
-                className="deck-insight-video"
-              />
+              <div key={`home:${clip.id}:${i}`} className={`deck-v1-tile ${variant}`}>
+                <video
+                  src={clip.video_url ?? undefined}
+                  muted
+                  loop
+                  playsInline
+                  autoPlay
+                  className="deck-insight-video"
+                />
+              </div>
             );
           })}
         </div>
