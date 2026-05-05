@@ -13,6 +13,7 @@ import '~/styles/deck-selector.css';
 const DeckView = lazy(() => import('~/components/DeckView'));
 const DeckViewV1 = lazy(() => import('~/components/DeckViewV1'));
 const DeckViewV1_1 = lazy(() => import('~/components/DeckViewV1_1'));
+const DeckViewV1_2 = lazy(() => import('~/components/DeckViewV1_2'));
 const DeckViewV6 = lazy(() => import('~/components/DeckViewV6'));
 const DeckViewV7 = lazy(() => import('~/components/DeckViewV7'));
 const DeckViewV8 = lazy(() => import('~/components/DeckViewV8'));
@@ -43,6 +44,7 @@ export default function AdminDeckViewer() {
     version === 'v9' ? DeckViewV9 :
     version === 'v1' ? DeckViewV1 :
     version === 'v1-1' ? DeckViewV1_1 :
+    version === 'v1-2' ? DeckViewV1_2 :
     null;
 
   if (!Deck) {
