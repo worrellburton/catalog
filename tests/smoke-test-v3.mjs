@@ -137,7 +137,7 @@ async function runSmokeTests() {
     results,
   };
 
-  const filename = 'smoke-test-v3-results.json';
+  const filename = '../test-results/smoke-test-v3-results.json';
   writeFileSync(filename, JSON.stringify(output, null, 2));
 
   console.log('📊 Summary:');

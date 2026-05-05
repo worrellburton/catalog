@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "query": "leather shoe",
+    "timestamp": "2026-05-05T12:04:52.055Z",
+    "k": 24,
+    "gender": null,
+    "elapsed_ms": 1843,
+    "server_ms": 1315,
+    "result_count": 1
+  },
+  "results": [
+    {
+      "product_id": "a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78",
+      "product_name": "Women's Renegade Shoe in Black Patent Leather",
+      "product_brand": "Thursday Boots",
+      "product_price": "$199",
+      "product_type": "Shoes",
+      "product_gender": "female",
+      "product_url": "https://thursdayboots.com/products/womens-renegade-lug-sole-shoe-black-leather?srsltid=AfmBOoqmb8_F3uoFL40QJoeTr1D6Kd0bAIKazcCT85ifcylYCgTF4ujbGko",
+      "product_image_url": "https://thursdayboots.com/cdn/shop/files/1024x1024-Women_s-Renegade-Black-101923-3.4.jpg?v=1698092265",
+      "score": 0.0327868852459016,
+      "has_video": true,
+      "creative_id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+      "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777415002.mp4",
+      "thumbnail_url": null,
+      "is_elite": true
+    }
+  ]
+}

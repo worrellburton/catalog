@@ -44,7 +44,7 @@ Examples:
 }
 
 const keyword = args[0];
-let outputFile = 'search-results.json';
+let outputFile = '../test-results/search-results.json';
 let k = 24;
 let gender = null;
 let verbose = false;

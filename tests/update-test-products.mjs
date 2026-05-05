@@ -90,7 +90,7 @@ async function updateAndReembed() {
 
   console.log('✅ All 3 products updated and re-embedded!\n');
   console.log('💡 Next: Run contextual search tests to verify improvement');
-  console.log('   node test-enriched-search.mjs');
+  console.log('   node tests/test-enriched-search.mjs');
 }
 
 updateAndReembed().catch(err => {

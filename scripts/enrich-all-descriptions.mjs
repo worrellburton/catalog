@@ -272,7 +272,7 @@ async function runBackfill() {
   }
 
   console.log('\n💡 Next steps:');
-  console.log('   1. Run contextual search tests: node test-contextual-search.mjs');
+  console.log('   1. Run contextual search tests: node tests/test-contextual-search.mjs');
   console.log('   2. Run smoke tests: node tests/search/run-golden.mjs');
   console.log('   3. Validate improvement in contextual queries');
 }
