@@ -21,6 +21,8 @@
  *   - product_name (lowercase) contains any expect_name_includes substring
  */
 
+// set - a && source.env && set + a && ANON_KEY="$VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY" node tests/search/run-golden.mjs --save 2 >& 1
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +34,7 @@ const GOLDEN_FP  = path.join(__dirname, 'golden.jsonl');
 const args     = new Set(process.argv.slice(2));
 const wantJson = args.has('--json');
 const wantWarm = args.has('--warm');
+const wantSave = args.has('--save');
 const oneQuery = (() => {
   const i = process.argv.indexOf('--query');
   return i >= 0 ? process.argv[i + 1] : null;
@@ -151,10 +154,11 @@ async function main() {
   }
 
   if (!wantJson) {
-    console.log(`[eval] ${golden.length} queries → ${fnUrl}/nl-search${wantWarm ? ' (warm pass)' : ''}`);
+    console.log(`[eval] ${golden.length} queries → ${fnUrl}/nl-search${wantWarm ? ' (warm pass)' : ''}${wantSave ? ' (saving creatives)' : ''}`);
   }
 
   const rows = [];
+  const savedRows = [];
   for (const g of golden) {
     if (wantWarm) {
       // Cold-prime so the warm pass measures the cache-hit path.
@@ -165,16 +169,57 @@ async function main() {
       const row = { query: g.query, intent: g.intent || '?', latency_ms: ms, error,
                     found: 0, mrr: 0, cat_precision: null, top_count: 0 };
       rows.push(row);
+      if (wantSave) savedRows.push({ query: g.query, intent: g.intent || '?', found: 0, mrr: 0, error, creatives: [] });
       if (!wantJson) console.log(`  ✗ ERR ${error.padEnd(10)} ${g.query}`);
       continue;
     }
     const ev = evaluate(g, results);
     const row = { query: g.query, intent: g.intent || '?', latency_ms: ms, ...ev };
     rows.push(row);
+    if (wantSave) {
+      const creatives = results
+        .filter(r => r.video_url || r.entity_type === 'creative')
+        .map(r => ({
+          rank:            results.indexOf(r) + 1,
+          creative_id:     r.id,
+          product_id:      r.product_id,
+          product_name:    r.product_name,
+          product_brand:   r.product_brand,
+          product_type:    r.product_type,
+          product_price:   r.product_price,
+          product_gender:  r.product_gender,
+          video_url:       r.video_url,
+          thumbnail_url:   r.thumbnail_url,
+          affiliate_url:   r.affiliate_url,
+          is_elite:        r.is_elite,
+          is_placeholder:  r.is_placeholder,
+          rrf_score:       r.rrf_score,
+          type_match:      r.type_match,
+        }));
+      savedRows.push({
+        query:       g.query,
+        intent:      g.intent || '?',
+        found:       ev.found,
+        mrr:         +ev.mrr.toFixed(3),
+        top_count:   ev.top_count,
+        creatives,
+      });
+    }
     if (!wantJson) console.log(fmtRow(row));
   }
 
   const sum = summarise(rows);
+
+  if (wantSave) {
+    const outPath = path.join(__dirname, 'golden-creative-results.json');
+    const out = {
+      run_at:   new Date().toISOString(),
+      summary:  sum,
+      queries:  savedRows,
+    };
+    fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
+    console.log(`\n[eval] creative results saved → ${outPath}`);
+  }
 
   if (wantJson) {
     console.log(JSON.stringify({ summary: sum, rows }, null, 2));

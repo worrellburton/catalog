@@ -870,6 +870,13 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Cold-miss flag: products lane returned nothing AND query has no type
+  // anchor. Used downstream to short-circuit the looks lane so it can't
+  // refill a confirmed-empty result with semantic drift (e.g. "lip balm"
+  // → static analyzer → vibe → looks lane prepended Sofie Wide-Leg Jeans).
+  const productsLaneColdMiss =
+    isUntypedQuery && dedupedResults.length === 0;
+
   // SEARCH_V3: Step 4b (products fallback dance) + Step 4c (BM25-aware
   // re-rank) removed. The new primary RPC `search_products_with_creatives`
   // already includes every active product in its candidate pool with a
@@ -933,8 +940,14 @@ Deno.serve(async (req: Request) => {
     // For browse queries the looks lane will return outfit projections
     // that have no semantic relation to the keyword (e.g. a Beanie row
     // for a "denim" search). Require a BM25 hit so dense-only drift
-    // doesn't leak in. Vibe/pairing keep dense matches.
-    const requireBm25Hit = expansion.intent === 'browse';
+    // doesn't leak in. Vibe/pairing keep dense matches — UNLESS the
+    // products lane already came up empty for an untyped query (cold
+    // miss), in which case the user's term has zero text evidence
+    // anywhere in the index and any looks-lane row is semantic drift
+    // (e.g. "lip balm" surfacing Sofie Wide-Leg Jeans). In that case
+    // require a BM25 hit on the looks rows too — if none have one, the
+    // query stays empty (correct: there's no real match in inventory).
+    const requireBm25Hit = expansion.intent === 'browse' || productsLaneColdMiss;
 
     const fresh: SearchResult[] = [];
     for (const row of looksMapped) {
