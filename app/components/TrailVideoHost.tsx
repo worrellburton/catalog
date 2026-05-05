@@ -44,7 +44,7 @@ const POOL_MAX = 32;
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
    *  Returns a cleanup that returns the element to the off-screen pool. */
-  attach: (id: string, src: string, container: HTMLElement) => () => void;
+  attach: (id: string, src: string, container: HTMLElement, poster?: string) => () => void;
 }
 
 const TrailVideoContext = createContext<TrailVideoManager | null>(null);
@@ -80,7 +80,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const attach = useCallback((id: string, src: string, container: HTMLElement): (() => void) => {
+  const attach = useCallback((id: string, src: string, container: HTMLElement, poster?: string): (() => void) => {
     const pool = elementsRef.current;
     let entry = pool.get(id);
 
@@ -89,6 +89,15 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       try { entry.el.pause(); } catch {}
       entry.el.src = src;
       entry.src = src;
+    }
+
+    // Keep the poster fresh when the caller supplies one (e.g. once the
+    // backfill populates thumbnail_url for a creative that previously
+    // had none, the next render path picks up the URL and we patch it
+    // onto the live element so first paint of any future detach/attach
+    // cycle has a real image to show).
+    if (entry && poster && entry.el.getAttribute('poster') !== poster) {
+      entry.el.setAttribute('poster', poster);
     }
 
     if (!entry) {
@@ -112,6 +121,11 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       // case is ~32 buffered videos at any moment.
       el.preload = 'auto';
       el.crossOrigin = 'anonymous';
+      // Poster paints instantly while the MP4 streams - the single
+      // biggest perceived-latency win on the consumer feed. We set it
+      // BEFORE src so the browser doesn't render a black frame for
+      // even one paint cycle.
+      if (poster) el.setAttribute('poster', poster);
       el.src = src;
       el.setAttribute('data-trail-id', id);
       el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
@@ -258,8 +272,10 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   );
 }
 
-/** Returns a ref callback; assign to the slot div. */
-export function useTrailVideo(id: string | undefined, src: string | undefined) {
+/** Returns a ref callback; assign to the slot div. The optional poster
+ *  becomes the <video poster=> attribute so first paint shows a real
+ *  image instead of black, even if the MP4 takes a beat to decode. */
+export function useTrailVideo(id: string | undefined, src: string | undefined, poster?: string) {
   const mgr = useContext(TrailVideoContext);
   const cleanupRef = useRef<(() => void) | null>(null);
   return useCallback((node: HTMLElement | null) => {
@@ -269,6 +285,6 @@ export function useTrailVideo(id: string | undefined, src: string | undefined) {
       cleanupRef.current = null;
     }
     if (!mgr || !node || !id || !src) return;
-    cleanupRef.current = mgr.attach(id, src, node);
-  }, [mgr, id, src]);
+    cleanupRef.current = mgr.attach(id, src, node, poster);
+  }, [mgr, id, src, poster]);
 }

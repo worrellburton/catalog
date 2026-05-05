@@ -26,13 +26,23 @@ export interface Look {
   description: string;
   color: string;
   products: Product[];
-  // Set when the look's creator isn't in the seed creators map  - 
+  // Set when the look's creator isn't in the seed creators map  -
   // typically a user-published look whose creator_handle is null
   // and whose author lives in profiles instead. The admin Looks
   // table reads these as a fallback so the row still shows a name
   // and avatar.
   creatorDisplayName?: string;
   creatorAvatar?: string;
+  /** Server-extracted first frame of the video, used as the
+   *  <video poster=> so the card paints a real image while the MP4
+   *  streams. Populated by the Modal worker on upload + by the
+   *  backfill job for legacy rows. Omitted means we fall back to the
+   *  cover image (or nothing). */
+  thumbnail_url?: string;
+  /** Static cover image - alternative to thumbnail_url, used by some
+   *  legacy looks. Lower priority than thumbnail_url because it's
+   *  often a product still rather than a video frame. */
+  cover?: string;
 }
 
 export const creators: Record<string, Creator> = {

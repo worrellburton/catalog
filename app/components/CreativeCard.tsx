@@ -1,5 +1,13 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import {
+  pickVideoUrl,
+  pickPosterUrl,
+  prefetchVideoBytes,
+  captureVideoFrame,
+  markFeedMilestone,
+  isMobileViewport,
+} from '~/services/video-loading';
 import { useAuth } from '~/hooks/useAuth';
 import { useInViewport } from '~/hooks/useInViewport';
 
@@ -41,13 +49,16 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // and on every visibility change, so a paused element gets a kick
   // even if the autoplay policy initially blocked.
 
-  // Static poster URL - used as a fallback layer behind the video so
-  // the card always shows a real image even before video frames decode
-  // (and even if the video URL is broken or absent entirely).
-  const posterUrl = creative.thumbnail_url
-    || creative.product?.image_url
-    || (creative.product?.images && creative.product.images[0])
-    || '';
+  // Static poster URL: creative thumbnail (server-extracted first frame)
+  // → product image fallback. Set as <video poster=> so the browser
+  // paints it during MP4 load, and as a separate <img> behind the video
+  // so even a broken video URL still shows a real picture.
+  const posterUrl = pickPosterUrl(creative);
+  // Mobile viewports get the small variant when it exists; everywhere
+  // else gets full-res. Phase 8 below silently warms the full-res
+  // version into cache once the card has dwelled in viewport, so a
+  // tap-into-detail navigation hits the cache rather than re-downloads.
+  const playableUrl = pickVideoUrl(creative);
 
   // Fire the impression ping once, the first time the card crosses into the
   // shared observer's pre-mount band. Visibility itself is tracked by
@@ -67,6 +78,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
     if (!v) return;
     const onLoaded = () => {
       setLoaded(true);
+      markFeedMilestone(`first-frame:${creative.id}`);
       if (v.paused) void v.play().catch(() => {});
     };
     if (v.readyState >= 2) onLoaded();
@@ -82,7 +94,24 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
       v.removeEventListener('loadeddata', onLoaded);
       v.removeEventListener('canplay', onLoaded);
     };
-  }, [creative.id, creative.video_url]);
+  }, [creative.id, playableUrl]);
+
+  // Phase 8: once the card has been visible for ~600ms on mobile, kick
+  // off a background fetch of the FULL-res variant. By the time the
+  // user taps the card the bytes are cached, so the ProductPage hero
+  // gets a near-instant first frame even though it uses a different
+  // (higher-quality) source URL than the card itself. Desktop already
+  // serves the full-res clip in the card so no extra warming needed.
+  useEffect(() => {
+    if (!inViewport) return;
+    if (!isMobileViewport()) return;
+    if (!creative.video_url) return;
+    if (creative.video_url === playableUrl) return; // already fetching it
+    const t = window.setTimeout(() => {
+      prefetchVideoBytes(creative.video_url);
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [inViewport, creative.id, creative.video_url, playableUrl]);
 
   // Resume play() on visibility return (mobile Safari pauses on tab
   // background) and on a 1 s heartbeat for the first ~10 s after mount,
@@ -109,6 +138,21 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
 
   const handleClick = useCallback(() => {
     trackAdClick(creative.id);
+    // Phase 9: capture the playing frame so the ProductPage hero can
+    // use it as the immediate poster, eliminating the black flash
+    // between feed → detail. Stashed on history.state via the parent
+    // navigation handler (onOpenProduct sees the carry below).
+    const frame = captureVideoFrame(videoRef.current);
+    if (frame) {
+      try {
+        // Stash on the global so ProductPage / LookOverlay can read it
+        // synchronously on mount. Cleared once consumed. Plain object
+        // keyed by creative id so multiple in-flight taps don't clash.
+        const w = window as Window & { __feedTapPosters?: Record<string, string> };
+        w.__feedTapPosters = w.__feedTapPosters || {};
+        w.__feedTapPosters[creative.id] = frame;
+      } catch { /* ignore */ }
+    }
     if (onOpenProduct) {
       onOpenProduct(creative);
     } else if (creative.affiliate_url) {
@@ -219,12 +263,13 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             browser's autoplay heuristic actually inspects. JS-property
             equivalents (.muted, .autoplay) sometimes don't satisfy the
             heuristic if set after src or after a play() call. */}
-        {creative.video_url && (
+        {playableUrl && (
           <video
             ref={videoRef}
             className="card-video-slot"
             data-trail-id={creative.id}
-            src={creative.video_url}
+            src={playableUrl}
+            poster={posterUrl || undefined}
             muted
             autoPlay
             loop
