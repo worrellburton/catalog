@@ -34,11 +34,11 @@ load_dotenv()
 
 MODEL = "claude-sonnet-4-5-20250929"
 # Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
-# anything past 6 means the agent is wandering on a non-product page.
-MAX_AGENT_TURNS = 8
+# anything past 10 means the agent is wandering on a non-product page.
+MAX_AGENT_TURNS = 12
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
-MAX_IMAGES_RETURN = 15
+MAX_IMAGES_RETURN = 30
 
 # Rate-limit retry config
 MAX_RETRIES = 3
@@ -189,12 +189,34 @@ TOOLS = [
 
 # ─── Image URL helpers ────────────────────────────────────────────────
 
-_IMAGE_CHECK_TIMEOUT = 5  # seconds per HTTP probe
-_IMAGE_CHECK_WORKERS = 8
+_IMAGE_CHECK_TIMEOUT = 10  # seconds per HTTP probe
+_IMAGE_CHECK_WORKERS = 16
 _IMAGE_CHECK_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
+)
+
+# CDN domains that are always publicly accessible -- skip the HTTP probe
+# for these to avoid inconsistent results from slow CDN HEAD responses.
+_TRUSTED_CDN_DOMAINS = (
+    "cdn.shopify.com",
+    "shopify.com",
+    "cdn.shopifycdn.com",
+    "res.cloudinary.com",
+    "images.ctfassets.net",
+    "cdn.sanity.io",
+    "i.imgur.com",
+    "images.squarespace-cdn.com",
+    "cdn.pixelunion.net",
+    "imagedelivery.net",  # Cloudflare Images
+    "media.istockphoto.com",
+    "images-na.ssl-images-amazon.com",
+    "m.media-amazon.com",
+    "cdn.media.amplience.net",
+    "dam.northface.com",
+    "cdn.prod.website-files.com",
+    "framerusercontent.com",
 )
 
 
@@ -260,6 +282,16 @@ def _is_image_url_accessible(url: str) -> bool:
         return False
     if not url.startswith(("http://", "https://")):
         return False
+
+    # Skip probe for well-known public CDNs -- they're always accessible
+    # and slow HEAD checks cause intermittent false negatives.
+    try:
+        from urllib.parse import urlparse as _urlparse
+        host = _urlparse(url).hostname or ""
+        if any(host == d or host.endswith("." + d) for d in _TRUSTED_CDN_DOMAINS):
+            return True
+    except Exception:
+        pass
 
     headers = {
         "User-Agent": _IMAGE_CHECK_USER_AGENT,
@@ -517,7 +549,12 @@ class BrowserSession:
             const base = window.location.origin;
             return Array.from(imgs)
                 .map(img => ({
-                    src: img.src || img.dataset.src || img.dataset.lazySrc || '',
+                    src: img.src || 
+                         img.dataset.src || 
+                         img.dataset.lazySrc ||
+                         img.dataset.original ||
+                         img.dataset.srcset?.split(',')[0]?.trim().split(/\\s+/)[0] ||
+                         '',
                     w: img.naturalWidth || img.width || 0,
                     h: img.naturalHeight || img.height || 0,
                 }))
@@ -868,7 +905,9 @@ Rules:
   * Other things to NEVER include: site-wide hero/banners, logos, category
     thumbnails, "you might also like" carousels, reviewer photos, payment-method
     icons, social badges, blog/article images, generic lifestyle photos.
-  * Aim for 1-6 high-quality product images.
+  * Extract ALL product images from the product gallery/carousel. Most products
+    have 3-8 images showing different angles, colors, or styled views. Include
+    all of them -- do not limit to just 1-2 images.
 - Keep description concise (1-3 sentences).
 - Use null for any field that cannot be determined.
 
@@ -907,7 +946,7 @@ def run_agent(
 
     saved_product = None
     nudge_count = 0
-    MAX_NUDGES = 1
+    MAX_NUDGES = 3
     last_agent_reply: str | None = None
 
     # Fast-fail on URLs that obviously aren't product pages (Google search
@@ -939,17 +978,25 @@ def run_agent(
             if turn > 2:
                 _trim_old_tool_results(messages)
 
+            # Force tool use on the last few turns if we still haven't saved
+            # This prevents Claude from ending with a text response when it
+            # should be calling save_product with whatever data it has.
+            force_save = (nudge_count > 0 or turn >= MAX_AGENT_TURNS - 3)
+
             # Call Claude with retry on rate-limit (429)
             response = None
             for attempt in range(MAX_RETRIES + 1):
                 try:
-                    response = client.messages.create(
+                    create_kwargs = dict(
                         model=MODEL,
                         max_tokens=4096,
                         system=SYSTEM_PROMPT,
                         tools=TOOLS,
                         messages=messages,
                     )
+                    if force_save and not saved_product:
+                        create_kwargs["tool_choice"] = {"type": "any"}
+                    response = client.messages.create(**create_kwargs)
                     break
                 except anthropic.RateLimitError as e:
                     if attempt >= MAX_RETRIES:
@@ -985,9 +1032,10 @@ def run_agent(
                 messages.append({
                     "role": "user",
                     "content": (
-                        "You must call the save_product tool now with whatever data you "
-                        "were able to extract. Use null for any fields you couldn't determine. "
-                        "Do not respond with text -- call the save_product tool."
+                        "Call save_product NOW with all the data you have collected from "
+                        f"visiting {product_url}. You have already browsed the page -- "
+                        "do not visit it again. Use null for any fields you couldn't "
+                        "determine. You MUST call the save_product tool, not reply with text."
                     ),
                 })
                 continue
