@@ -29,14 +29,20 @@ export interface QueryPlan {
 }
 
 export interface SemanticCreative {
-  id: string;                       // creative UUID
+  id: string;                       // creative UUID (or product UUID when placeholder)
   entity_type: 'creative';
   product_id: string;
+  // SEARCH_V3: present when row is hydrated from a real creative; null when
+  // the row is a product-only placeholder (no live video yet).
+  creative_id?: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
   affiliate_url: string | null;
   duration_seconds: number | null;
   is_elite: boolean | null;
+  // SEARCH_V3: true when no live creative exists for this product. The UI
+  // should fall back to an image card.
+  is_placeholder?: boolean;
   product_name: string | null;
   product_brand: string | null;
   product_price: string | null;
@@ -45,6 +51,7 @@ export interface SemanticCreative {
   product_gender: string | null;
   product_type: string | null;
   concept_doc: string | null;
+  facet_text?: string | null;
   score: number;
 }
 

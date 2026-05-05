@@ -28,11 +28,15 @@
 // Plural & singular both map to the same type set so the analyzer is
 // natural-language tolerant.
 
+// SEARCH_V3 Phase A fix: generic shoe terms map to the canonical "Shoes"
+// type that actually has rows in the active catalog. Specific subtypes
+// (Sneakers, Boots, etc.) stay narrow so when a user asks "sneakers" and
+// such products go active later, the filter still works.
 const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   // Footwear
-  shoes:        ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
-  shoe:         ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
-  footwear:     ['Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
+  shoes:        ['Shoes', 'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
+  shoe:         ['Shoes', 'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
+  footwear:     ['Shoes', 'Sneakers', 'Boots', 'Sandals', 'Heels', 'Loafers', 'Flats', 'Mules'],
   sneakers:     ['Sneakers'],
   sneaker:      ['Sneakers'],
   trainers:     ['Sneakers'],
@@ -98,7 +102,12 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
   hat:          ['Hat'],
   cap:          ['Hat'],
   caps:         ['Hat'],
+  'baseball cap': ['Hat'],
+  'baseball caps': ['Hat'],
   beanie:       ['Hat'],
+  beanies:      ['Hat'],
+  headwear:     ['Hat'],
+  'bucket hat': ['Hat'],
   bags:         ['Bag'],
   bag:          ['Bag'],
   purse:        ['Bag'],
@@ -151,21 +160,25 @@ const CATALOG_TYPE_SYNONYMS: Record<string, string[]> = {
 // itself (asking "what to wear with jeans" should NOT return more jeans).
 
 const OUTFIT_PAIRS: Record<string, string[]> = {
-  Top:        ['Pants', 'Jacket', 'Sneakers', 'Boots', 'Loafers', 'Bag', 'Hat'],
-  Pants:      ['Top', 'Jacket', 'Sneakers', 'Boots', 'Loafers', 'Bag'],
-  Shorts:     ['Top', 'Sneakers', 'Sandals', 'Hat', 'Bag'],
-  Skirt:      ['Top', 'Jacket', 'Heels', 'Boots', 'Bag'],
-  Dress:      ['Jacket', 'Coat', 'Heels', 'Sandals', 'Bag'],
-  Jacket:     ['Top', 'Pants', 'Boots', 'Sneakers', 'Bag'],
-  Coat:       ['Top', 'Pants', 'Boots', 'Bag', 'Scarf'],
+  Top:        ['Pants', 'Shorts', 'Skirt', 'Jacket', 'Shoes', 'Sneakers', 'Boots', 'Loafers', 'Bag', 'Hat'],
+  Pants:      ['Top', 'Jacket', 'Shoes', 'Sneakers', 'Boots', 'Loafers', 'Bag', 'Hat'],
+  Shorts:     ['Top', 'Shoes', 'Sneakers', 'Sandals', 'Hat', 'Bag'],
+  Skirt:      ['Top', 'Jacket', 'Shoes', 'Heels', 'Boots', 'Bag'],
+  Dress:      ['Jacket', 'Coat', 'Shoes', 'Heels', 'Sandals', 'Bag'],
+  Jacket:     ['Top', 'Pants', 'Shorts', 'Shoes', 'Boots', 'Sneakers', 'Bag'],
+  Coat:       ['Top', 'Pants', 'Shoes', 'Boots', 'Bag', 'Scarf'],
+  // Generic Shoes (the canonical type used by active catalog rows)
+  Shoes:      ['Top', 'Pants', 'Shorts', 'Skirt', 'Dress', 'Jacket', 'Bag'],
   Sneakers:   ['Top', 'Pants', 'Shorts', 'Hat'],
   Boots:      ['Pants', 'Skirt', 'Dress', 'Coat', 'Jacket'],
   Heels:      ['Dress', 'Skirt', 'Pants'],
   Loafers:    ['Pants', 'Top', 'Jacket'],
   Hat:        ['Top', 'Jacket', 'Coat'],
   Bag:        ['Top', 'Dress', 'Jacket', 'Coat'],
-  Activewear: ['Sneakers', 'Hat'],
-  Swimwear:   ['Sandals', 'Hat', 'Bag'],
+  Activewear: ['Sneakers', 'Shoes', 'Hat'],
+  Swimwear:   ['Sandals', 'Shoes', 'Hat', 'Bag'],
+  Underwear:  ['Top', 'Pants', 'Loungewear'],
+  Decor:      [],
 };
 
 // ── Pair-intent triggers ───────────────────────────────────────────────────

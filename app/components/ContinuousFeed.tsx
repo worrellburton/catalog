@@ -441,13 +441,11 @@ export default function ContinuousFeed({
       const n = (name || '').toLowerCase();
       return materialKws.some(kw => n.includes(kw));
     };
-    // Creative-only feed: drop product-fallback rows that have no video.
-    // nl-search returns image-only product rows for cold categories so the
-    // grid isn't empty, but the consumer feed/search UI is meant to be a
-    // video-first lookbook - image cards break that contract. Cold queries
-    // simply return fewer (or zero) results until creatives are generated.
+    // SEARCH_V3: keep placeholder (image-only) rows so cold categories
+    // surface real products instead of an empty grid. CreativeCard handles
+    // the missing video_url by rendering the product image.
     return semantic.creatives
-      .filter(c => !!c.video_url && matchesMaterial(c.product_name))
+      .filter(c => matchesMaterial(c.product_name))
       .map(c => ({
       id:               c.id,
       product_id:       c.product_id,

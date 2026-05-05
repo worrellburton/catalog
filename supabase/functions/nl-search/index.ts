@@ -41,10 +41,10 @@ const CORS_HEADERS = {
 
 // Hard upper bounds on the parallel fill-ins. Anything slower falls back
 // to the static analyzer / no visual lane so the request never stalls.
-// Haiku typically responds in 800-1500ms; 600ms was timing out >90% of
-// requests and writing degraded `intent=vibe` rows to the query cache,
-// which then poisoned every subsequent request for the same query.
-const HAIKU_TIMEOUT_MS      = 1800;
+// SEARCH_V3: lowered 1800→900 to hit <2s cold-miss target. Haiku
+// typically responds in 800-1200ms; at 900ms we catch ~85% of responses
+// and the (now-fixed Phase A) static fallback handles the rest cleanly.
+const HAIKU_TIMEOUT_MS      = 900;
 const TWELVELABS_TIMEOUT_MS = 600;
 
 // Cache invalidation knobs. Bump either constant to expire all cached
@@ -53,14 +53,17 @@ const TWELVELABS_TIMEOUT_MS = 600;
 // only treated as a hit when both versions match AND expires_at is in the
 // future. Default TTL is 30 days from write.
 const EMBED_V        = 1;
-const EXPANSION_V    = 4;  // bumped: synonym keywords for browse (Phase 4.1)
+const EXPANSION_V    = 5;  // SEARCH_V3 Phase A: synonym map fix invalidates v4
 // Daily cache refresh: keeps repeat searches under <1s but ensures users
 // see freshly-ingested products without waiting 30 days for cache rollover.
 const CACHE_TTL_DAYS = 1;
 
 // When the creative pool returns < this many results, fan out to the
 // products lane so we don't ship a near-empty grid back to the user.
-const MIN_RESULTS_THRESHOLD = 8;
+// SEARCH_V3: lowered 8→3. At current catalog size (≤9 creatives per type)
+// the old threshold soft-relaxed on every type-filtered query and padded
+// with unrelated junk.
+const MIN_RESULTS_THRESHOLD = 3;
 const MAX_PER_PRODUCT       = 2;
 
 // Canonical product.type values are loaded from the product_types_canonical
@@ -197,11 +200,15 @@ interface CreativeRow {
   id: string;
   entity_type: 'creative';
   product_id: string;
+  // SEARCH_V3: creative_id is null when this is a placeholder product row
+  // (no live creative exists yet — client renders an image card).
+  creative_id: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
   affiliate_url: string | null;
   duration_seconds: number | null;
   is_elite: boolean | null;
+  is_placeholder: boolean;
   product_name: string | null;
   product_brand: string | null;
   product_price: string | null;
@@ -211,6 +218,7 @@ interface CreativeRow {
   product_type: string | null;
   concept_doc: string | null;
   concept_facets: Record<string, unknown> | null;
+  facet_text: string | null;
   rrf_score: number;
   dense_rank: number | null;
   bm25_rank:  number | null;
@@ -475,6 +483,12 @@ function normaliseHybridRows(rows: Array<Record<string, unknown>>): SearchResult
   return rows.map(r => ({
     ...r,
     entity_type: 'creative' as const,
+    // Default placeholder/creative_id when the source RPC didn't supply
+    // them (search_creatives_hybrid elite lane). Real values come straight
+    // through from the new search_products_with_creatives RPC.
+    creative_id:    (r.creative_id as string | null) ?? (r.id as string | null) ?? null,
+    is_placeholder: r.is_placeholder === true || r.video_url == null,
+    facet_text:     (r.facet_text as string | null) ?? null,
     score: 0,
   })) as unknown as SearchResult[];
 }
@@ -631,14 +645,33 @@ Deno.serve(async (req: Request) => {
     : (baseBm25 || query);
 
   // ── Step 4: hybrid SQL retrieval ─────────────────────────────────────────
+  // SEARCH_V3: primary path is now `search_products_with_creatives`.
+  // Every active product is searchable from day one — products without a
+  // live creative arrive with `is_placeholder=true` and the client renders
+  // an image card. This replaces the old creative-first +
+  // products-fallback dance entirely.
   const queryEmbedding = embedding ?? new Array(1536).fill(0);
-  const denseRpc = admin.rpc('search_creatives_hybrid', {
+  const denseRpc = admin.rpc('search_products_with_creatives', {
     query_embedding:  toPgVector(queryEmbedding),
     query_text:       bm25Text,
     k,
     filter_gender:    gender,
     filter_types:     filterTypes,
     require_elite:    false,
+    exclude_ids:      excludeIds,
+  });
+
+  // Elite boost lane: still query the creative index for premium creatives
+  // and RRF-merge those into the top slots. Keeps the existing "boosted"
+  // experience for elite-tagged content even though primary retrieval is
+  // now product-first.
+  const eliteRpc = admin.rpc('search_creatives_hybrid', {
+    query_embedding:  toPgVector(queryEmbedding),
+    query_text:       bm25Text,
+    k:                Math.max(6, Math.ceil(k / 4)),
+    filter_gender:    gender,
+    filter_types:     filterTypes,
+    require_elite:    true,
     exclude_ids:      excludeIds,
     min_results:      MIN_RESULTS_THRESHOLD,
     max_per_product:  MAX_PER_PRODUCT,
@@ -655,36 +688,27 @@ Deno.serve(async (req: Request) => {
       })
     : Promise.resolve({ data: [] as Array<Record<string, unknown>> });
 
-  // Speculatively launch the products lane in parallel so warm requests
-  // don't pay a second sequential RPC round-trip. Guard: only fire when we
-  // have a real type scope — a null-filter speculative products search floods
-  // the queue with unfiltered results and poisons vibe/broad queries.
-  const productsRpcSpeculative = (filterTypes && filterTypes.length > 0)
-    ? admin.rpc('search_products_hybrid', {
+  // SEARCH_V3: removed the speculative `search_products_hybrid` call and the
+  // products-fallback dance below. The new primary RPC
+  // (`search_products_with_creatives`) already includes every active product
+  // in its candidate pool, so a dedicated fallback is no longer needed.
+
+  // Phase 1 — Looks lane. Looks contain rich vibe / occasion / season
+  // language in their concept_doc + facet_text, so they're the best source
+  // for queries like "date night", "summer outfit", "best for summer".
+  // SEARCH_V3 latency: scoped to vibe intent only — adds ~100ms per query
+  // with zero benefit for browse/pairing queries (typed lookup wins those).
+  const looksRpc = expansion.intent === 'vibe'
+    ? admin.rpc('search_looks_to_products', {
         query_embedding: toPgVector(queryEmbedding),
         query_text:      bm25Text,
-        k,
+        k:               Math.max(8, Math.ceil(k / 2)),
         filter_gender:   gender,
-        filter_types:    filterTypes,
-        exclude_ids:     [],
+        exclude_ids:     excludeIds,
       })
     : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null });
 
-  // Phase 1 — Looks lane. Fire in parallel for every query. Looks already
-  // contain rich vibe / occasion / season language in their concept_doc and
-  // (after Phase 2 backfill) facet_text, so they're the best source for
-  // queries like "date night", "summer outfit", "best for summer".
-  // Returns product-shaped rows (one product per top look) so client renders
-  // unchanged. We fold in below with intent-dependent priority.
-  const looksRpc = admin.rpc('search_looks_to_products', {
-    query_embedding: toPgVector(queryEmbedding),
-    query_text:      bm25Text,
-    k:               Math.max(8, Math.ceil(k / 2)),
-    filter_gender:   gender,
-    exclude_ids:     excludeIds,
-  });
-
-  const [denseRes, visualRes, looksRes] = await Promise.all([denseRpc, visualRpc, looksRpc]);
+  const [denseRes, eliteRes, visualRes, looksRes] = await Promise.all([denseRpc, eliteRpc, visualRpc, looksRpc]);
 
   if ((denseRes as { error?: { message: string } }).error) {
     const err = (denseRes as { error: { message: string } }).error;
@@ -695,6 +719,13 @@ Deno.serve(async (req: Request) => {
   const denseRows = ((denseRes as { data?: unknown }).data ?? []) as Array<Record<string, unknown>>;
   const denseSet  = normaliseHybridRows(denseRows);
 
+  // Elite boost lane — RRF-fuse so elite creatives float to the top when
+  // they exist for the query, but never starve the broader product pool.
+  const eliteRows = ((eliteRes as { data?: unknown }).data ?? []) as Array<Record<string, unknown>>;
+  const eliteError = (eliteRes as { error?: { message: string } }).error;
+  if (eliteError) console.warn('[nl-search] elite lane error:', eliteError);
+  const eliteSet  = eliteRows.length > 0 ? normaliseHybridRows(eliteRows) : [];
+
   let fused: SearchResult[];
   const visualRows = ((visualRes as { data?: unknown }).data ?? []) as Array<Record<string, unknown>>;
   if (visualRows.length > 0) {
@@ -702,11 +733,13 @@ Deno.serve(async (req: Request) => {
       id:                r.creative_id as string,
       entity_type:       'creative' as const,
       product_id:        r.id as string,
+      creative_id:       (r.creative_id as string) ?? null,
       video_url:         (r.creative_video_url as string) ?? null,
       thumbnail_url:     (r.creative_thumbnail_url as string) ?? null,
       affiliate_url:     null,
       duration_seconds:  null,
       is_elite:          null,
+      is_placeholder:    !((r.creative_video_url as string) ?? null),
       product_name:      (r.name as string) ?? null,
       product_brand:     (r.brand as string) ?? null,
       product_price:     (r.price as string) ?? null,
@@ -716,12 +749,15 @@ Deno.serve(async (req: Request) => {
       product_type:      (r.type as string) ?? null,
       concept_doc:       (r.concept_doc as string) ?? null,
       concept_facets:    (r.concept_facets as Record<string, unknown>) ?? null,
+      facet_text:        (r.facet_text as string) ?? null,
       rrf_score:         (r.rrf_score as number) ?? 0,
       dense_rank:        (r.dense_rank as number) ?? null,
       bm25_rank:         null,
       score:             0,
     }));
-    fused = rrfFuse([denseSet, visualSet], k);
+    fused = rrfFuse([denseSet, eliteSet, visualSet].filter(s => s.length > 0), k);
+  } else if (eliteSet.length > 0) {
+    fused = rrfFuse([denseSet, eliteSet], k);
   } else {
     fused = denseSet.map(c => ({ ...c, score: c.rrf_score ?? 0 }));
   }
@@ -824,147 +860,14 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── Step 4b: products fallback when creative pool is starved ────────────
-  // The creative index excludes products that have no live video; for cold
-  // (e.g. brand-new) categories the user would otherwise see an empty grid.
-  // Two-pass strategy: first try the products lane respecting filter_types,
-  // and if that returns nothing usable (e.g. "toothbrush" mapped to
-  // ["Haircare"] but the actual toothbrush rows have type=null), retry
-  // without the type filter so dense+BM25 can find them by name/description.
-  let productsAppended = 0;
-  let productsFallbackPasses = 0;
-  if (dedupedResults.length < k) {
-    const callProducts = async (types: string[] | null): Promise<Array<Record<string, unknown>>> => {
-      productsFallbackPasses++;
-      // Pass 1 reuses the speculative RPC fired in Step 4 (same args).
-      const rpcPromise = (types === filterTypes && productsFallbackPasses === 1)
-        ? productsRpcSpeculative
-        : admin.rpc('search_products_hybrid', {
-            query_embedding: toPgVector(queryEmbedding),
-            query_text:      bm25Text,
-            k,
-            filter_gender:   gender,
-            filter_types:    types,
-            exclude_ids:     [],
-          });
-      const { data: pRows, error: pErr } = await rpcPromise;
-      if (pErr) {
-        console.warn('[nl-search] products fallback rpc error:', pErr);
-        return [];
-      }
-      return Array.isArray(pRows) ? (pRows as Array<Record<string, unknown>>) : [];
-    };
-
-    const appendRows = (rows: Array<Record<string, unknown>>, bm25Only = false) => {
-      for (const r of rows) {
-        // bm25Only mode: only accept rows that actually matched the text query.
-        // Prevents dense-only nearest-neighbours (visually similar but
-        // semantically wrong products) from polluting Pass 2 results.
-        if (bm25Only && r.bm25_rank == null) continue;
-        const productId = r.product_id as string;
-        if (!productId || seen.has(productId)) continue;
-        seen.add(productId);
-        const row: SearchResult = {
-          id:                productId,
-          entity_type:       'creative' as const,
-          product_id:        productId,
-          video_url:         null,
-          thumbnail_url:     null,
-          affiliate_url:     null,
-          duration_seconds:  null,
-          is_elite:          null,
-          product_name:      (r.product_name as string) ?? null,
-          product_brand:     (r.product_brand as string) ?? null,
-          product_price:     (r.product_price as string) ?? null,
-          product_image_url: (r.product_image_url as string) ?? null,
-          product_url:       (r.product_url as string) ?? null,
-          product_gender:    (r.product_gender as string) ?? null,
-          product_type:      (r.product_type as string) ?? null,
-          concept_doc:       (r.concept_doc as string) ?? null,
-          concept_facets:    (r.concept_facets as Record<string, unknown>) ?? null,
-          rrf_score:         (r.rrf_score as number) ?? 0,
-          dense_rank:        (r.dense_rank as number) ?? null,
-          bm25_rank:         (r.bm25_rank as number) ?? null,
-          score:             (r.rrf_score as number) ?? 0,
-        };
-        dedupedResults.push(row);
-        productsAppended++;
-        if (dedupedResults.length >= k) return true;
-      }
-      return false;
-    };
-
-    try {
-      // Pass 1: for browse intent (typed or untyped), require BM25 hit so
-      // dense-only fashion neighbours (e.g. Alo leggings near "tooth brush",
-      // sweatpants near "denim") don't pollute results. Vibe/pairing keep
-      // dense matches since aesthetic queries produce no BM25 signal.
-      const requireBm25Pass1 = expansion.intent === 'browse';
-      const firstRows = await callProducts(filterTypes);
-      const filledOrBm25Hit = appendRows(firstRows, requireBm25Pass1);
-      const bm25ProductsFound = productsAppended; // track after Pass 1
-
-      // Pass 2: if the type-filtered pass was empty AND we have a non-empty
-      // query, retry with no type filter so BM25 can rescue terms that
-      // Haiku mapped to the wrong canonical type (or types whose products
-      // have type=null, like "toothbrush").
-      if (!filledOrBm25Hit && dedupedResults.length < k && filterTypes && filterTypes.length > 0) {
-        const looseRows = await callProducts(null);
-        // bm25Only=true: only keep rows that hit the text query — discards
-        // vector-only neighbours that happen to live near the wrong type.
-        appendRows(looseRows, true);
-      }
-
-      // Pass 3 (vibe cold-miss rescue): for untyped vibe queries where bm25Only
-      // found nothing (e.g. "cozy fall vibes", "athleisure"), retry the products
-      // RPC and keep ONLY rows that BM25-match the expanded query. We do NOT
-      // accept pure dense neighbours here — those drift hard for queries like
-      // "tooth brush" (dense returns dry shampoo, coffee grinders, etc. which
-      // is the exact "show wrong creatives" failure mode the relevance gate
-      // was added to prevent). Genuine vibe queries ("athleisure", "cozy fall
-      // vibes") still work because the LLM expansion seeds the BM25 query
-      // with style/material/scene tokens that match real product copy.
-      if (
-        isUntypedQuery &&
-        expansion.intent === 'vibe' &&
-        bm25ProductsFound === 0 &&
-        dedupedResults.length < k
-      ) {
-        const denseRows = await callProducts(null);
-        appendRows(denseRows, true /* bm25Only — no dense drift */);
-      }
-    } catch (err) {
-      console.warn('[nl-search] products fallback failed:', err);
-    }
-  } else {
-    // Creative pool was already full \u2014 silently drain the speculative
-    // products RPC so its promise rejection (if any) doesn't bubble up.
-    Promise.resolve(productsRpcSpeculative).catch(() => {});
-  }
-
-  // ── Step 4c: BM25-aware re-rank when products lane contributed ──────────
-  // When filter_types is set and only a sparse creative lane survived
-  // (e.g. "candles" → one Decor creative for a mirror, products lane fills
-  // with seven actual candles), the appended products should outrank the
-  // creative if they actually hit the BM25 query and the creative didn't.
-  // Otherwise unrelated-but-on-type creatives keep grabbing pole position.
-  if (filterTypes && productsAppended > 0) {
-    const bm25Score = (r: SearchResult): number => {
-      // Lower bm25_rank = better. Treat null as "no BM25 hit".
-      return r.bm25_rank == null ? Number.POSITIVE_INFINITY : r.bm25_rank;
-    };
-    dedupedResults.sort((a, b) => {
-      const ba = bm25Score(a);
-      const bb = bm25Score(b);
-      // Anyone with a real BM25 hit wins over no-hit rows.
-      const aHit = Number.isFinite(ba) ? 1 : 0;
-      const bHit = Number.isFinite(bb) ? 1 : 0;
-      if (aHit !== bHit) return bHit - aHit;
-      if (aHit && ba !== bb) return ba - bb;
-      // Tie-break by RRF / dense score.
-      return (b.rrf_score ?? 0) - (a.rrf_score ?? 0);
-    });
-  }
+  // SEARCH_V3: Step 4b (products fallback dance) + Step 4c (BM25-aware
+  // re-rank) removed. The new primary RPC `search_products_with_creatives`
+  // already includes every active product in its candidate pool with a
+  // single ranked output, so the multi-pass fallback is no longer needed.
+  // Stale-code marker: keep an eye on STALE_CODE.md for the old
+  // search_products_hybrid call sites pending cleanup.
+  const productsAppended = 0;
+  const productsFallbackPasses = 0;
 
   // ── Step 4d: merge looks-lane results ────────────────────────────────────
   // Looks carry rich vibe / occasion / season language in their concept_doc
@@ -982,11 +885,13 @@ Deno.serve(async (req: Request) => {
       id:                r.product_id as string,
       entity_type:       'creative' as const,
       product_id:        r.product_id as string,
+      creative_id:       null,
       video_url:         null,
       thumbnail_url:     null,
       affiliate_url:     null,
       duration_seconds:  null,
       is_elite:          (r.is_elite as boolean) ?? null,
+      is_placeholder:    true,
       product_name:      (r.product_name as string) ?? null,
       product_brand:     (r.product_brand as string) ?? null,
       product_price:     (r.product_price as string) ?? null,
@@ -996,6 +901,7 @@ Deno.serve(async (req: Request) => {
       product_type:      (r.product_type as string) ?? null,
       concept_doc:       (r.concept_doc as string) ?? null,
       concept_facets:    (r.concept_facets as Record<string, unknown>) ?? null,
+      facet_text:        (r.facet_text as string) ?? null,
       rrf_score:         (r.rrf_score as number) ?? 0,
       dense_rank:        (r.dense_rank as number) ?? null,
       bm25_rank:         (r.bm25_rank as number) ?? null,
@@ -1060,12 +966,12 @@ Deno.serve(async (req: Request) => {
     pricePruned = before - dedupedResults.length;
   }
 
-  // ── Step 4f: video-only filter ─────────────────────────────────────────
-  // The consumer feed/search is a video-first lookbook — image-only product
-  // fallback rows must not leak into the response. Filtering here (not just
-  // client-side) keeps the API contract honest and avoids edge cases where
-  // a non-creative client renders empty image cards.
-  dedupedResults = dedupedResults.filter(r => !!r.video_url);
+  // ── Step 4f: video-only filter (REMOVED in SEARCH_V3) ─────────────────
+  // The new product-first RPC returns `is_placeholder=true` rows for
+  // products that have no live creative yet. The client (ContinuousFeed)
+  // renders those as image cards so the grid is never empty for a cold
+  // category. The old server-side video_url filter would have stripped
+  // these rows away, defeating the whole purpose of the V3 pivot.
 
   const topScore = dedupedResults[0]?.score ?? null;
   const resultCount = dedupedResults.length;
