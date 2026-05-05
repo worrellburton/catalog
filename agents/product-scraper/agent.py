@@ -162,6 +162,24 @@ TOOLS = [
                     "type": ["string", "null"],
                     "description": "Stock status: 'In Stock', 'Out of Stock', 'Limited', etc.",
                 },
+                "type": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Product category/type: 'Shoes', 'Sneakers', 'Boots', 'Sandals', "
+                        "'Top', 'Shirt', 'T-Shirt', 'Sweater', 'Hoodie', 'Jacket', 'Coat', "
+                        "'Dress', 'Skirt', 'Pants', 'Jeans', 'Shorts', 'Leggings', "
+                        "'Underwear', 'Bra', 'Socks', 'Hat', 'Cap', 'Beanie', "
+                        "'Bag', 'Backpack', 'Handbag', 'Accessories', 'Jewelry', "
+                        "'Watch', 'Sunglasses', 'Belt', 'Scarf', 'Gloves', "
+                        "'Activewear', 'Swimwear', 'Sleepwear', 'Decor', 'Furniture', "
+                        "'Book', 'Toy', 'Electronics', 'Beauty', 'Skincare', 'Haircare', "
+                        "'Coffee', 'Food', 'Supplement', 'Other'"
+                    ),
+                },
+                "gender": {
+                    "type": ["string", "null"],
+                    "description": "Target gender: 'male', 'female', or 'unisex'. Use null if uncertain.",
+                },
             },
             "required": ["title", "images"],
         },
@@ -821,6 +839,11 @@ Rules:
 - Extract ACTUAL data from the page. Never guess or fabricate.
 - Include currency symbols in price strings (e.g. "$129.99").
 - If there is both an original price and a sale/discounted price, capture both.
+- **ALWAYS extract product type and gender** for quality scoring:
+  * TYPE: categorize as specifically as possible (e.g., "Sneakers" not "Shoes", 
+    "Hoodie" not "Top", "Jeans" not "Pants" when applicable)
+  * GENDER: infer from product name, description, URL, or visual cues. Use 'male', 
+    'female', or 'unisex'. If truly uncertain, use null.
 - IMAGE SELECTION (strict):
   * `get_all_images` returns `{ canonical: [...], page_images: [...] }`.
     Every URL it returns has ALREADY been verified as publicly accessible
@@ -829,25 +852,25 @@ Rules:
     elsewhere (visit_page metadata, get_page_html) but that is missing from
     `get_all_images`, because that means it isn't public.
   * `canonical` images come from the page's OWN metadata (og:image, JSON-LD
-    Product.image). They are the authoritative product photos \u2014 ALWAYS prefer
+    Product.image). They are the authoritative product photos — ALWAYS prefer
     them. If `canonical` is non-empty, use ONLY `canonical` images unless the
     screenshot clearly shows additional product angles you can match in
     `page_images`.
-  * On aggregator / affiliate / link-in-bio pages \u2014 shopmy.us, ltk.app,
+  * On aggregator / affiliate / link-in-bio pages — shopmy.us, ltk.app,
     liketoknow.it, linktree, beacons.ai, stan.store, bio.link, koji.to,
-    snipfeed, withkoji \u2014 `page_images` is full of CURATOR-UPLOADED user
+    snipfeed, withkoji — `page_images` is full of CURATOR-UPLOADED user
     photos showing people using the product. These are NOT the product image.
     On these domains, save ONLY the `canonical` images. Never include
     page_images entries from these sites.
   * If BOTH `canonical` and `page_images` are empty, save_product with an
-    empty images array \u2014 do not invent URLs from the page HTML, because
+    empty images array — do not invent URLs from the page HTML, because
     they are likely private.
   * Other things to NEVER include: site-wide hero/banners, logos, category
     thumbnails, "you might also like" carousels, reviewer photos, payment-method
     icons, social badges, blog/article images, generic lifestyle photos.
-  * Aim for 1\u20136 high-quality product images.
+  * Aim for 1–6 high-quality product images.
 - Keep description concise (1-3 sentences).
-- Use null for any field that cannot be determined.
+- Use null for any field that cannot be determined."""
 
 IMPORTANT — non-product pages:
 If the URL redirected to a homepage, category page, search results, blog post,

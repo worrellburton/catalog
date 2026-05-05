@@ -47,6 +47,10 @@ insert into public.catalogs (slug, name, sort, is_featured) values
   ('pilates-princess',     'pilates princess',   19, true)
 on conflict (slug) do nothing;
 
+-- Ensure columns exist (may have been added on cloud before this migration).
+alter table public.looks    add column if not exists catalog_tags jsonb default '[]'::jsonb;
+alter table public.products add column if not exists catalog_tags jsonb default '[]'::jsonb;
+
 -- GIN indexes on the jsonb catalog_tags columns. "jsonb_path_ops" is the
 -- smaller, faster index when the only query shape is containment
 -- (catalog_tags @> '[...]') — which is exactly what the feed service uses.

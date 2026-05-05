@@ -84,9 +84,12 @@ def mark_done(supabase, product_id: str, data: dict):
             "images": data.get("images", []),
             "availability": data.get("availability"),
             "image_url": data.get("images", [None])[0],  # first image as primary
+            "type": data.get("type"),
+            "gender": data.get("gender"),
         }
     ).eq("id", product_id).execute()
     # Trigger semantic embedding immediately after save
+    # Note: quality_score is auto-computed by the trg_products_quality_score trigger
     trigger_embed(product_id)
 
 

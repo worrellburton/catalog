@@ -31,6 +31,10 @@ interface CrawledProduct {
   is_crawled: boolean;
   is_active?: boolean;
   is_elite?: boolean;
+  /** Sister flag to is_active. When false the product is hidden from
+   *  search results / catalog-wide listings (admin keeps the row).
+   *  Default true so existing inventory keeps surfacing. */
+  is_platform?: boolean;
   type?: string | null;
   gender?: 'male' | 'female' | 'unisex' | null;
   created_at?: string | null;
@@ -968,7 +972,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1029,7 +1033,7 @@ export default function AdminContent() {
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1371,7 +1375,7 @@ export default function AdminContent() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -1432,7 +1436,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -1462,6 +1466,7 @@ export default function AdminContent() {
         entry.clicks = adClicksMap.get(cp.id) || 0;
         entry.is_active = active;
         entry.is_elite = !!cp.is_elite;
+        entry.is_platform = cp.is_platform !== false; // default true on legacy rows
         entry.type = cp.type ?? null;
         entry.gender = cp.gender ?? null;
         entry.created_at = cp.created_at ?? null;
@@ -1491,6 +1496,7 @@ export default function AdminContent() {
           connection,
           is_active: active,
           is_elite: !!cp.is_elite,
+          is_platform: cp.is_platform !== false,
           type: cp.type ?? null,
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
@@ -1641,6 +1647,27 @@ export default function AdminContent() {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // Platform visibility toggle. Sister to toggleProductActive (which
+  // governs the home grid). When false, the product is excluded from
+  // search results + catalog-wide listings but stays in the admin
+  // table so an admin can flip it back on.
+  const toggleProductPlatform = useCallback(async (productId: string, on: boolean) => {
+    setCrawledProducts(prev =>
+      prev.map(r => (r.id === productId ? { ...r, is_platform: on } : r))
+    );
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('products')
+      .update({ is_platform: on })
+      .eq('id', productId);
+    if (error) {
+      setCrawledProducts(prev =>
+        prev.map(r => (r.id === productId ? { ...r, is_platform: !on } : r))
+      );
+      showToast(`Platform toggle failed: ${error.message}`);
+    }
+  }, [showToast]);
 
   // Bulk-flip the Home toggle (products.is_active) on every selected
   // product. Lives below showToast because it captures it for error
@@ -1871,7 +1898,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -1902,7 +1929,7 @@ export default function AdminContent() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2815,6 +2842,7 @@ export default function AdminContent() {
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
+                <th style={{ textAlign: 'center' }} title="When on, this product appears in search results and catalog-wide listings. When off, the product is hidden from the platform but stays in this admin table.">Platform</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 {!statsExpanded && (
@@ -3078,6 +3106,16 @@ export default function AdminContent() {
                       <AdminToggle
                         on={(p as any).is_active !== false}
                         onChange={v => toggleProductActive(p.id!, v)}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {p.id ? (
+                      <AdminToggle
+                        on={(p as any).is_platform !== false}
+                        onChange={v => toggleProductPlatform(p.id!, v)}
                       />
                     ) : (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>

@@ -104,9 +104,11 @@ create index if not exists idx_entity_edges_dst on public.entity_edges(dst_id, e
 
 alter table public.entity_edges enable row level security;
 
+drop policy if exists "Public read entity_edges" on public.entity_edges;
 create policy "Public read entity_edges"
   on public.entity_edges for select using (true);
 
+drop policy if exists "Service write entity_edges" on public.entity_edges;
 create policy "Service write entity_edges"
   on public.entity_edges for all using (auth.role() = 'service_role');
 
@@ -142,10 +144,12 @@ create index if not exists idx_search_queries_created
 alter table public.search_queries enable row level security;
 
 -- Service role has full access for logging and backfill processing.
+drop policy if exists "Service write search_queries" on public.search_queries;
 create policy "Service write search_queries"
   on public.search_queries for all using (auth.role() = 'service_role');
 
 -- Public read so the client can poll for backfill_status on its own queries.
+drop policy if exists "Public read search_queries" on public.search_queries;
 create policy "Public read search_queries"
   on public.search_queries for select using (true);
 
@@ -207,6 +211,7 @@ grant execute on function public.log_search_query(text, integer, float, jsonb, u
 -- The backfill agent reads this view to prioritise which gaps to fill.
 -- Sorted by served_count desc so high-frequency misses go first.
 
+drop view if exists public.search_query_misses;
 create or replace view public.search_query_misses as
   select *
   from public.search_queries

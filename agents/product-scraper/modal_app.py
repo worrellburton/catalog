@@ -82,6 +82,8 @@ def scrape_and_update(product_id: str, url: str):
             "images": product.get("images", []),
             "image_url": (product.get("images") or [None])[0],
             "availability": product.get("availability"),
+            "type": product.get("type"),
+            "gender": product.get("gender"),
         }
         # If the original URL was a Google Shopping link, overwrite it with the
         # resolved merchant URL so the row points to the actual product page.
@@ -92,6 +94,8 @@ def scrape_and_update(product_id: str, url: str):
 
         supabase.table("products").update(update_payload).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
+        
+        # Note: quality_score is auto-computed by the trg_products_quality_score trigger
 
     try:
         run_agent(url, save=False, on_save=_write_to_db)

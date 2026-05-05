@@ -53,6 +53,7 @@ BEGIN
   END IF;
 END $$;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogs_id   ON public.catalogs(id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogs_slug ON public.catalogs(slug);
 CREATE INDEX IF NOT EXISTS idx_catalogs_status ON public.catalogs(status);
 CREATE INDEX IF NOT EXISTS idx_catalogs_featured ON public.catalogs(is_featured) WHERE is_featured = true;

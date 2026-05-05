@@ -101,6 +101,22 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
     <div className="empty-catalog">
       <ParticleBackground />
       <div className="empty-catalog-content">
+
+        {/* Animated graphic — shared between both states */}
+        <div className="ec-graphic" aria-hidden="true">
+          <span className="ec-ring ec-ring-1" />
+          <span className="ec-ring ec-ring-2" />
+          <span className="ec-ring ec-ring-3" />
+          <div className="ec-orb">
+            <svg className="ec-orb-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M20 4 L22.4 15.6 L34 20 L22.4 24.4 L20 36 L17.6 24.4 L6 20 L17.6 15.6 Z"
+                fill="rgba(255,215,92,0.95)"
+              />
+            </svg>
+          </div>
+        </div>
+
         {isSourcing ? (
           <>
             <p className="empty-catalog-eyebrow">Sourcing now</p>
@@ -108,10 +124,13 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
               We're finding <em>{catalogName}</em> for you.
             </h2>
             <p className="empty-catalog-subhead">
-              Our agents are pulling looks and products. Check back shortly - this catalog is being built.
+              Our agents are pulling looks and products. Check back shortly — this catalog is being built.
             </p>
-            <div className="empty-catalog-sourcing-indicator" aria-live="polite">
-              <span className="sourcing-dot" /><span className="sourcing-dot" /><span className="sourcing-dot" />
+            <div className="ec-sourcing" aria-live="polite">
+              <div className="ec-sourcing-track">
+                <span className="ec-sourcing-fill" />
+              </div>
+              <span className="ec-sourcing-label">Sourcing products…</span>
             </div>
           </>
         ) : (
@@ -131,16 +150,34 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
               disabled={pressed}
               aria-pressed={pressed}
             >
-              {pressed ? 'Got it - we hear you' : 'I want this catalog'}
+              {pressed ? (
+                <>
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                    <path d="M2.5 7.5L6 11L12.5 4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Got it — we hear you
+                </>
+              ) : (
+                'I want this catalog'
+              )}
             </button>
 
-            <div className={`empty-catalog-counter ${pulse ? 'pulse' : ''}`} aria-live="polite">
+            <div className={`ec-demand ${pulse ? 'pulse' : ''}`} aria-live="polite">
               {count == null ? (
                 <span className="empty-catalog-counter-loading">…</span>
+              ) : count > 0 ? (
+                <>
+                  <div className="ec-avatars" aria-hidden="true">
+                    {Array.from({ length: Math.min(count, 3) }, (_, i) => (
+                      <span key={i} className={`ec-avatar ec-avatar-${i + 1}`} />
+                    ))}
+                  </div>
+                  <span className="ec-demand-text">
+                    <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
+                  </span>
+                </>
               ) : (
-                <span>
-                  <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
-                </span>
+                <span className="ec-demand-text">Be the first to ask for this</span>
               )}
             </div>
           </>

@@ -263,17 +263,19 @@ Deno.serve(async (req: Request) => {
         }
         ingested = inserted ?? [];
 
-        // Fire embed-entity for each newly inserted product (best-effort, parallel)
+        // Fire embed-product for each newly inserted product (best-effort, parallel).
+        // The DB trigger trg_products_auto_embed also covers this, but calling
+        // explicitly here avoids waiting on pg_net's deferred queue.
         await Promise.allSettled(
           ingested.map(row =>
-            fetch(`${supabaseUrl}/functions/v1/embed-entity`, {
+            fetch(`${supabaseUrl}/functions/v1/embed-product`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${serviceKey}`,
                 apikey: serviceKey,
               },
-              body: JSON.stringify({ id: row.id, entity_type: 'product' }),
+              body: JSON.stringify({ id: row.id }),
             })
           )
         );

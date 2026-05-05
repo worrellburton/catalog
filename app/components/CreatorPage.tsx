@@ -342,6 +342,7 @@ export default function CreatorPage({
                 onOpenLook={onOpenLook}
                 onOpenCreator={() => {}}
                 onCreateCatalog={onCreateCatalog}
+                hideCreator
               />
             ))}
           </div>

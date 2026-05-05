@@ -22,6 +22,11 @@ ALTER TABLE looks ADD COLUMN IF NOT EXISTS thumbnail_url text;
 -- archived_at: timestamp when the look was archived
 ALTER TABLE looks ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
+-- assembly_prompt: legacy AI prompt stored on look (migrated to looks_creative in 045, dropped in 048)
+ALTER TABLE looks ADD COLUMN IF NOT EXISTS assembly_prompt text;
+-- ai_assembled: legacy flag (dropped in 048)
+ALTER TABLE looks ADD COLUMN IF NOT EXISTS ai_assembled boolean NOT NULL DEFAULT false;
+
 -- ============================================
 -- 2. FIX GENDER CHECK CONSTRAINT
 --    Old: ('men', 'women')  →  New: ('men', 'women', 'unisex')
