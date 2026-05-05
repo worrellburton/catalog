@@ -1,0 +1,132 @@
+{
+  "summary": {
+    "timestamp": "2026-05-05T11:04:33.952Z",
+    "endpoint": "https://vtarjrnqvcqbhoclvcur.supabase.co/functions/v1/search",
+    "total_queries": 8,
+    "passed": 0,
+    "failed": 8,
+    "success_rate": "0.0%"
+  },
+  "results": [
+    {
+      "query": "shoes",
+      "k": 10,
+      "description": "Basic footwear query",
+      "count": 0,
+      "took_client_ms": 1721,
+      "took_server_ms": 862,
+      "results": [],
+      "raw": {
+        "query": "shoes",
+        "results": [],
+        "count": 0,
+        "took_ms": 862
+      }
+    },
+    {
+      "query": "black leather boots",
+      "k": 10,
+      "description": "Specific product search",
+      "count": 0,
+      "took_client_ms": 1155,
+      "took_server_ms": 851,
+      "results": [],
+      "raw": {
+        "query": "black leather boots",
+        "results": [],
+        "count": 0,
+        "took_ms": 851
+      }
+    },
+    {
+      "query": "sunglasses",
+      "k": 10,
+      "description": "Accessories",
+      "count": 0,
+      "took_client_ms": 1180,
+      "took_server_ms": 883,
+      "results": [],
+      "raw": {
+        "query": "sunglasses",
+        "results": [],
+        "count": 0,
+        "took_ms": 883
+      }
+    },
+    {
+      "query": "jacket",
+      "k": 10,
+      "description": "Outerwear",
+      "count": 0,
+      "took_client_ms": 736,
+      "took_server_ms": 409,
+      "results": [],
+      "raw": {
+        "query": "jacket",
+        "results": [],
+        "count": 0,
+        "took_ms": 409
+      }
+    },
+    {
+      "query": "dress",
+      "k": 10,
+      "description": "Womens clothing",
+      "count": 0,
+      "took_client_ms": 1206,
+      "took_server_ms": 884,
+      "results": [],
+      "raw": {
+        "query": "dress",
+        "results": [],
+        "count": 0,
+        "took_ms": 884
+      }
+    },
+    {
+      "query": "sneakers",
+      "k": 10,
+      "description": "Athletic footwear",
+      "count": 0,
+      "took_client_ms": 1149,
+      "took_server_ms": 835,
+      "results": [],
+      "raw": {
+        "query": "sneakers",
+        "results": [],
+        "count": 0,
+        "took_ms": 835
+      }
+    },
+    {
+      "query": "handbag",
+      "k": 10,
+      "description": "Bags & accessories",
+      "count": 0,
+      "took_client_ms": 774,
+      "took_server_ms": 425,
+      "results": [],
+      "raw": {
+        "query": "handbag",
+        "results": [],
+        "count": 0,
+        "took_ms": 425
+      }
+    },
+    {
+      "query": "watch",
+      "k": 10,
+      "description": "Jewelry & watches",
+      "count": 0,
+      "took_client_ms": 1141,
+      "took_server_ms": 845,
+      "results": [],
+      "raw": {
+        "query": "watch",
+        "results": [],
+        "count": 0,
+        "took_ms": 845
+      }
+    }
+  ]
+}

@@ -483,11 +483,12 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
     `)
     .eq('status', 'live')
     .not('video_url', 'is', null)
     .in('product.type', types)
+    .neq('product.is_platform', false) // hide products an admin has Platform-toggled off
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at',     { ascending: false })
     .limit(60);
@@ -832,10 +833,11 @@ export async function getCreativesByBrand(
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags, gender)
+      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags, gender, is_platform)
     `)
     .eq('status', 'live')
     .ilike('product.brand', normalizedBrand)
+    .neq('product.is_platform', false) // hide products an admin has Platform-toggled off
     .not('video_url', 'is', null)
     .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
