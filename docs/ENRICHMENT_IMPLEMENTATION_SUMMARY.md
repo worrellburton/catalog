@@ -34,7 +34,7 @@ CREATE INDEX idx_products_description_enriched ON products (description_enriched
 
 **Functionality:**
 - Fetches all products where `description_enriched = false`
-- Calls Claude API (claude-sonnet-4-20250514) to enhance each description
+- Calls Claude API (claude-sonnet-4-5-20250929) to enhance each description
 - Adds 150-250 characters of contextual content per product
 - Updates database and flags product as enriched
 - Processes in batches of 10 with rate limiting (2s between batches, 500ms between calls)

@@ -32,7 +32,7 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-5-20250929"
 # Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
 # anything past 6 means the agent is wandering on a non-product page.
 MAX_AGENT_TURNS = 8
@@ -99,7 +99,7 @@ TOOLS = [
         "name": "take_screenshot",
         "description": (
             "Take a visual screenshot of the current page. Use this to see the product "
-            "as a real user would — helpful for verifying prices, spotting sale badges, "
+            "as a real user would -- helpful for verifying prices, spotting sale badges, "
             "and identifying the correct product image."
         ),
         "input_schema": {
@@ -219,7 +219,7 @@ def _non_product_url_reason(raw_url: str) -> str | None:
     path = (parsed.path or "").lower()
 
     if host == "google.com" or host.endswith(".google.com"):
-        # Allow Google Shopping product detail pages — they get resolved to
+        # Allow Google Shopping product detail pages -- they get resolved to
         # the underlying merchant URL before scraping (see resolve_google_shopping).
         # Two known product-detail URL shapes:
         #   1. /shopping/product/<id>
@@ -285,7 +285,7 @@ def _is_image_url_accessible(url: str) -> bool:
 
     if _check("HEAD"):
         return True
-    # Some CDNs / S3-style endpoints reject HEAD — try a tiny ranged GET.
+    # Some CDNs / S3-style endpoints reject HEAD -- try a tiny ranged GET.
     return _check("GET", {"Range": "bytes=0-0"})
 
 
@@ -566,7 +566,7 @@ class BrowserSession:
 
         # Filter to only publicly-accessible URLs. Aggregator pages (shopmy.us,
         # ltk.app, etc.) often serve images from PRIVATE S3 buckets via signed
-        # cookies — those URLs render in the browser but return 403 to anyone
+        # cookies -- those URLs render in the browser but return 403 to anyone
         # without the session, making them useless for downstream consumers.
         canonical_public = _filter_accessible_images(canonical_upgraded)
         page_images_public = _filter_accessible_images(page_images)
@@ -628,7 +628,7 @@ class BrowserSession:
                 if (blocklist.some(b => txt === b)) continue;
                 const rect = a.getBoundingClientRect();
                 if (rect.width < 5 || rect.height < 5) continue;
-                // Must have price text within 5 ancestors — filters out
+                // Must have price text within 5 ancestors -- filters out
                 // page chrome (header/footer/nav) and keeps only real offer cards.
                 let el = a;
                 let depth = -1;
@@ -651,7 +651,7 @@ class BrowserSession:
                 f"Could not find a merchant offer link on Google Shopping page: {url}"
             )
 
-        # Follow the candidate URL — Google's /url? and /aclk? endpoints
+        # Follow the candidate URL -- Google's /url? and /aclk? endpoints
         # redirect to the real merchant URL. A direct merchant URL just
         # navigates straight there.
         try:
@@ -771,7 +771,7 @@ def _trim_old_tool_results(messages: list):
             for inner in block.get("content", []):
                 if isinstance(inner, dict) and inner.get("type") == "image":
                     # Drop old screenshots entirely
-                    new_inner.append({"type": "text", "text": "[screenshot — trimmed from history]"})
+                    new_inner.append({"type": "text", "text": "[screenshot -- trimmed from history]"})
                 elif isinstance(inner, dict) and inner.get("type") == "text":
                     text = inner["text"]
                     if len(text) > TEXT_TRIM_THRESHOLD:
@@ -828,12 +828,12 @@ You are a product data extraction agent. You control a real browser.
 Your job is to visit a product page, inspect it, and extract structured product data.
 
 Workflow:
-1. visit_page — load the URL and read metadata / JSON-LD / visible text
-2. take_screenshot — visually inspect the page to verify prices, sale badges, etc.
-3. get_all_images — collect product image URLs
-4. (optional) get_page_html — if prices or details are missing from step 1
-5. (optional) scroll_down + take_screenshot — if content is below the fold
-6. save_product — once all data is gathered, call this with the final values
+1. visit_page -- load the URL and read metadata / JSON-LD / visible text
+2. take_screenshot -- visually inspect the page to verify prices, sale badges, etc.
+3. get_all_images -- collect product image URLs
+4. (optional) get_page_html -- if prices or details are missing from step 1
+5. (optional) scroll_down + take_screenshot -- if content is below the fold
+6. save_product -- once all data is gathered, call this with the final values
 
 Rules:
 - Extract ACTUAL data from the page. Never guess or fabricate.
@@ -848,31 +848,31 @@ Rules:
   * `get_all_images` returns `{ canonical: [...], page_images: [...] }`.
     Every URL it returns has ALREADY been verified as publicly accessible
     (HTTP 200 with image content-type). URLs that would return 403/private
-    have been pre-filtered out — do NOT use any image URL that you saw
+    have been pre-filtered out -- do NOT use any image URL that you saw
     elsewhere (visit_page metadata, get_page_html) but that is missing from
     `get_all_images`, because that means it isn't public.
   * `canonical` images come from the page's OWN metadata (og:image, JSON-LD
-    Product.image). They are the authoritative product photos — ALWAYS prefer
+    Product.image). They are the authoritative product photos -- ALWAYS prefer
     them. If `canonical` is non-empty, use ONLY `canonical` images unless the
     screenshot clearly shows additional product angles you can match in
     `page_images`.
-  * On aggregator / affiliate / link-in-bio pages — shopmy.us, ltk.app,
+  * On aggregator / affiliate / link-in-bio pages -- shopmy.us, ltk.app,
     liketoknow.it, linktree, beacons.ai, stan.store, bio.link, koji.to,
-    snipfeed, withkoji — `page_images` is full of CURATOR-UPLOADED user
+    snipfeed, withkoji -- `page_images` is full of CURATOR-UPLOADED user
     photos showing people using the product. These are NOT the product image.
     On these domains, save ONLY the `canonical` images. Never include
     page_images entries from these sites.
   * If BOTH `canonical` and `page_images` are empty, save_product with an
-    empty images array — do not invent URLs from the page HTML, because
+    empty images array -- do not invent URLs from the page HTML, because
     they are likely private.
   * Other things to NEVER include: site-wide hero/banners, logos, category
     thumbnails, "you might also like" carousels, reviewer photos, payment-method
     icons, social badges, blog/article images, generic lifestyle photos.
-  * Aim for 1–6 high-quality product images.
+  * Aim for 1-6 high-quality product images.
 - Keep description concise (1-3 sentences).
-- Use null for any field that cannot be determined."""
+- Use null for any field that cannot be determined.
 
-IMPORTANT — non-product pages:
+IMPORTANT -- non-product pages:
 If the URL redirected to a homepage, category page, search results, blog post,
 help/FAQ article, 404, or any page that is NOT a single product detail page,
 DO NOT call save_product. Instead reply with plain text starting with
@@ -891,10 +891,10 @@ def run_agent(
     product_url: str,
     look_id: str | None = None,
     save: bool = True,
-    on_save=None,  # callable | None — called immediately when save_product fires
+    on_save=None,  # callable | None -- called immediately when save_product fires
 ) -> dict:
     """
-    on_save(product: dict) — optional callback fired the instant Claude calls
+    on_save(product: dict) -- optional callback fired the instant Claude calls
     save_product, BEFORE the agent loop finishes.  Use this in Modal to write
     the DB row immediately so no work is lost if the container is killed later.
     """
@@ -914,19 +914,19 @@ def run_agent(
     # results, bare homepages, etc.). Saves a Claude call per row.
     bad_url_reason = _non_product_url_reason(product_url)
     if bad_url_reason:
-        raise RuntimeError(f"Not a product page — {bad_url_reason}: {product_url}")
+        raise RuntimeError(f"Not a product page -- {bad_url_reason}: {product_url}")
 
     try:
         browser.start()
-        print(f"🌐 Agent started — visiting {product_url}\n")
+        print(f"🌐 Agent started -- visiting {product_url}\n")
 
         # If this is a Google Shopping product page, resolve it to the
         # underlying merchant URL first. Google Shopping pages are not
         # scrapeable directly (different DOM, no canonical product image
-        # for the chosen seller, etc.) — but each one lists merchant
+        # for the chosen seller, etc.) -- but each one lists merchant
         # offers we can follow.
         if _is_google_shopping_url(product_url):
-            print(f"🛒 Google Shopping URL detected — resolving merchant…")
+            print(f"🛒 Google Shopping URL detected -- resolving merchant…")
             resolved = browser.resolve_google_shopping(product_url)
             print(f"   → resolved to {resolved}\n")
             product_url = resolved
@@ -958,7 +958,7 @@ def run_agent(
                     print(f"  ⏳ Rate limited, retrying in {delay}s (attempt {attempt + 1}/{MAX_RETRIES})…")
                     time.sleep(delay)
 
-            # If Claude finished with text only — nudge it to call save_product
+            # If Claude finished with text only -- nudge it to call save_product
             if response.stop_reason == "end_turn":
                 if saved_product:
                     print(f"\n✅ Agent finished in {turn + 1} turn(s)")
@@ -971,14 +971,14 @@ def run_agent(
                 ).strip()
                 if "NOT_A_PRODUCT_PAGE" in reply_text.upper():
                     snippet = reply_text[:300].replace("\n", " ")
-                    raise RuntimeError(f"Not a product page — {snippet}")
+                    raise RuntimeError(f"Not a product page -- {snippet}")
 
                 if nudge_count >= MAX_NUDGES:
                     last_agent_reply = reply_text
                     print(f"\n⚠️  Agent could not extract product after {MAX_NUDGES} nudges")
                     break
 
-                # Claude replied with text but didn't save — ask it to use the tool
+                # Claude replied with text but didn't save -- ask it to use the tool
                 nudge_count += 1
                 print(f"  💬 Claude responded with text, nudging to call save_product ({nudge_count}/{MAX_NUDGES})...")
                 messages.append({"role": "assistant", "content": response.content})
@@ -987,7 +987,7 @@ def run_agent(
                     "content": (
                         "You must call the save_product tool now with whatever data you "
                         "were able to extract. Use null for any fields you couldn't determine. "
-                        "Do not respond with text — call the save_product tool."
+                        "Do not respond with text -- call the save_product tool."
                     ),
                 })
                 continue
@@ -1027,7 +1027,7 @@ def run_agent(
                                 f"URL: {product_url}"
                             )
                         print(
-                            "  ⚠️  save_product called with no price/brand/availability — "
+                            "  ⚠️  save_product called with no price/brand/availability -- "
                             f"asking agent to verify ({nudge_count}/{MAX_NUDGES})"
                         )
                         tool_results.append({
@@ -1050,10 +1050,10 @@ def run_agent(
                     if saved_images and not public_images:
                         print(
                             f"  ⚠️  All {len(saved_images)} image(s) returned by Claude are "
-                            "private/inaccessible — saving with empty images list."
+                            "private/inaccessible -- saving with empty images list."
                         )
                         image_missing_reason = (
-                            f"Private images — all {len(saved_images)} URL(s) were "
+                            f"Private images -- all {len(saved_images)} URL(s) were "
                             "inaccessible (403 / non-image response)"
                         )
                     elif not saved_images:
@@ -1079,7 +1079,7 @@ def run_agent(
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
 
-                    # ── Fire callback immediately — don't wait for loop to finish ──
+                    # ── Fire callback immediately -- don't wait for loop to finish ──
                     # This ensures the DB is updated the moment data is extracted,
                     # even if the container is killed or times out afterwards.
                     if on_save:
