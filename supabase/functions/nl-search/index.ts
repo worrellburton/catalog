@@ -611,15 +611,18 @@ Deno.serve(async (req: Request) => {
     writeCache(admin, cacheKey, embedding, cacheableExpansion);
   }
 
-  // ── Step 3: filter_types — Phase C default ──────────────────────────────
-  // Phase C is now the production default: vector + BM25 self-rank correctly
-  // without a SQL type guardrail (validated empirically: 60/86 found@K,
-  // MRR=0.938 — identical with or without the guardrail).
-  // The only way to set filter_types is via an explicit UI chip in the request.
+  // ── Step 3: filter_types ─────────────────────────────────────────────────
+  // Browse/pairing: use expansion-derived types as the SQL guardrail.
+  // This prevents incidental BM25 hits in unrelated products (e.g. a hat
+  // whose concept_doc says "no-shampoo days" surfacing for "shampoo").
+  // Vibe queries keep filter_types=null — no type anchor by design.
+  // An explicit body.filter_types (UI chip) always takes precedence.
   const filterTypes: string[] | null =
     Array.isArray(body.filter_types) && body.filter_types.length > 0
       ? body.filter_types
-      : null;
+      : expansion.intent === 'pairing' ? (expansion.pair_types ?? null)
+      : expansion.intent === 'browse'  ? (expansion.types.length > 0 ? expansion.types : null)
+      : null; // vibe: no SQL type filter — let embeddings + BM25 rank freely
 
   // BM25 input: keywords stripped of category noun for browse/pairing,
   // raw query for vibe (no noun was extracted).
