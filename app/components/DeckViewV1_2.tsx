@@ -1,7 +1,17 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
+import ProjectionsChart from './ProjectionsChart';
 import { getHomeFeed, type ProductAd } from '~/services/product-creative';
+import {
+  type Assumptions,
+  buildSeries,
+  fmtCurrency,
+  fmtPercent,
+  readStored as readProjections,
+  summarize,
+  MONTHS as PROJ_MONTHS,
+} from '~/services/projections';
 
 interface DeckViewV1_2Props {
   onSeeApp: () => void;
@@ -329,6 +339,21 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   // Empty until the fetch lands; the dark overlay keeps the cover slide
   // legible regardless.
   const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
+  // Projections - read once on mount from the same localStorage key the
+  // admin page writes to, so the deck's curve mirrors whatever they last
+  // dialed in. Falls back to defaults if the key is absent.
+  const [projAssumptions, setProjAssumptions] = useState<Assumptions | null>(null);
+  useEffect(() => {
+    setProjAssumptions(readProjections());
+  }, []);
+  const projSeries = useMemo(
+    () => (projAssumptions ? buildSeries(projAssumptions) : null),
+    [projAssumptions],
+  );
+  const projSummary = useMemo(
+    () => (projSeries ? summarize(projSeries) : null),
+    [projSeries],
+  );
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
   const roadmapTrackRef = useRef<HTMLDivElement>(null);
@@ -376,13 +401,12 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const slideTitles = [
     'Cover',
     'The Dream',
-    'The Problem',
-    'The Solution',
+    'Problem & Solution',
     'Market Opportunity',
-    'The Math',
+    'Projections',
+    'Technology',
     'Seed Product',
     'Creator Flywheel',
-    'Technology',
     'Payouts',
     'Traction',
     'Roadmap',
@@ -453,15 +477,15 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     <div className={`deck-view deck-view-v8 deck-view-v9 deck-view-v1 active${bgRevealed ? ' deck-v8-bg-revealed' : ''}`} ref={containerRef}>
       <div className="deck-v8-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {/* v1.1: only elite creatives, hand-picked in /admin/creative. If
-              no elites are flagged yet the grid is empty - the overlay still
-              provides the dark wash, so the cover slide stays legible. */}
-          {Array.from({ length: Math.min(24, eliteVideos.length) }).map((_, i) => {
-            const clip = eliteVideos[i % eliteVideos.length];
+          {/* v1.2: mirror of the consumer home feed - whatever is toggled
+              on as Home in /admin/content. If the feed is empty the dark
+              overlay still keeps the cover slide legible. */}
+          {Array.from({ length: Math.min(24, homeFeed.length) }).map((_, i) => {
+            const clip = homeFeed[i % homeFeed.length];
             return (
               <video
-                key={`${clip.source}:${clip.id}`}
-                src={clip.video_url}
+                key={`home:${clip.id}`}
+                src={clip.video_url ?? undefined}
                 muted
                 loop
                 playsInline
@@ -524,68 +548,78 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
           <h2 className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-h2">The AI for Shopping</h2>
+          <p className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-sub">Human Taste, Powered by AI.</p>
         </div>
       </div>
 
-      {/* Slide 3: The Problem: split layout with stakeholders stacked right */}
-      <div className="deck-slide deck-v8-problem deck-v9-problem-slide">
-        <div className="deck-v8-split-left">
-          <span className="deck-label">The Problem</span>
-          <h2>Three stakeholders.<br />Three broken experiences.</h2>
+      {/* Slide 3: Problem & Solution side-by-side. Three stakeholders down
+          the left rail; broken experience on the left, win on the right
+          for each row, so the eye reads "this → fixed by us" three times. */}
+      <div className="deck-slide deck-v1-compare-slide">
+        <div className="deck-v1-compare-head">
+          <span className="deck-label">The Problem &amp; The Solution</span>
+          <h2>Three broken experiences.<br />One platform that fixes them.</h2>
         </div>
-        <div className="deck-v8-split-right">
+        <div className="deck-v1-compare-grid">
+          <div className="deck-v1-compare-col deck-v1-compare-col-problem">
+            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-problem">The Problem</span>
+          </div>
+          <div className="deck-v1-compare-col deck-v1-compare-col-solution">
+            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-solution">The Solution</span>
+          </div>
           {[
-            { num: '01', role: 'Shoppers', word: 'Discovery.', sub: 'Fragmented, ad-heavy, impersonal.' },
-            { num: '02', role: 'Creators', word: 'Revenue.', sub: 'Single-digit commissions, disorganized and hard.' },
-            { num: '03', role: 'Brands', word: 'ROAS.', sub: 'Opaque attribution, no commerce outcomes.' },
-          ].map(({ num, role, word, sub }) => (
-            <div key={num} className="deck-v8-problem-item deck-v9-problem-item">
-              <div className="deck-v9-problem-body">
-                <div className="deck-v9-problem-headline">
-                  <span className="deck-v9-problem-role">{role}</span>
-                  <span className="deck-v9-problem-num">{num}</span>
+            {
+              num: '01',
+              role: 'Shoppers',
+              problem: { word: 'Discovery.', sub: 'Fragmented, ad-heavy, impersonal.' },
+              solution: { word: 'Discovery.', sub: 'Curated by people they trust. No ads, no noise.' },
+            },
+            {
+              num: '02',
+              role: 'Creators',
+              problem: { word: 'Revenue.', sub: 'Single-digit commissions, disorganized and hard.' },
+              solution: { word: 'Revenue.', sub: 'Real commissions, audience ownership, paid in days.' },
+            },
+            {
+              num: '03',
+              role: 'Brands',
+              problem: { word: 'Acquisition.', sub: 'Renting traffic from Meta and Amazon at rising CAC.' },
+              solution: { word: 'Acquisition.', sub: 'First-party top-of-funnel from creators they own a relationship with.' },
+            },
+          ].map(({ num, role, problem, solution }) => (
+            <div key={num} className="deck-v1-compare-row">
+              <div className="deck-v1-compare-cell deck-v1-compare-cell-problem">
+                <div className="deck-v9-problem-body">
+                  <div className="deck-v9-problem-headline">
+                    <span className="deck-v9-problem-role">{role}</span>
+                    <span className="deck-v9-problem-num">{num}</span>
+                  </div>
+                  <div className="deck-v9-problem-pain">
+                    <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle className="broken-circle" cx="12" cy="12" r="10" />
+                      <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+                      <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+                    </svg>
+                    <h3>{problem.word}</h3>
+                  </div>
+                  <p>{problem.sub}</p>
                 </div>
-                <div className="deck-v9-problem-pain">
-                  <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle className="broken-circle" cx="12" cy="12" r="10" />
-                    <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-                    <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-                  </svg>
-                  <h3>{word}</h3>
-                </div>
-                <p>{sub}</p>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Slide 4: The Solution - inverse of Problem, split layout with checkmarks */}
-      <div className="deck-slide deck-v8-problem deck-v8-wins deck-v9-problem-slide">
-        <div className="deck-v8-split-left">
-          <span className="deck-label">The Solution</span>
-          <h2>Creators curate.<br />AI indexes.<br />Everyone wins.</h2>
-        </div>
-        <div className="deck-v8-split-right">
-          {[
-            { num: '01', role: 'For Shoppers', word: 'Discovery.', sub: 'Curated by people they trust. No ads, no noise.' },
-            { num: '02', role: 'For Creators', word: 'Revenue.', sub: 'Real commissions, audience ownership, paid in days.' },
-            { num: '03', role: 'For Brands',   word: 'ROAS.',     sub: 'Clean attribution and guaranteed commerce outcomes.' },
-          ].map(({ num, role, word, sub }) => (
-            <div key={num} className="deck-v8-problem-item deck-v9-problem-item">
-              <div className="deck-v9-problem-body">
-                <div className="deck-v9-problem-headline">
-                  <span className="deck-v9-problem-role">{role}</span>
-                  <span className="deck-v9-problem-num">{num}</span>
+              <div className="deck-v1-compare-cell deck-v1-compare-cell-solution">
+                <div className="deck-v9-problem-body">
+                  <div className="deck-v9-problem-headline">
+                    <span className="deck-v9-problem-role">{role}</span>
+                    <span className="deck-v9-problem-num">{num}</span>
+                  </div>
+                  <div className="deck-v9-problem-pain">
+                    <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle className="win-circle" cx="12" cy="12" r="10" />
+                      <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+                    </svg>
+                    <h3>{solution.word}</h3>
+                  </div>
+                  <p>{solution.sub}</p>
                 </div>
-                <div className="deck-v9-problem-pain">
-                  <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle className="win-circle" cx="12" cy="12" r="10" />
-                    <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-                  </svg>
-                  <h3>{word}</h3>
-                </div>
-                <p>{sub}</p>
               </div>
             </div>
           ))}
@@ -595,7 +629,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       {/* Slide 6: Market Opportunity */}
       <div className="deck-slide deck-v8-market">
         <span className="deck-label">Market Opportunity</span>
-        <h2>Three curves, one window.</h2>
+        <h2>Social commerce: three curves, one window.</h2>
         <div className="deck-v8-market-grid">
           {([
             {
@@ -710,12 +744,132 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <p className="deck-note deck-v8-market-note">Catalog is the commerce layer connecting creators directly to purchase.</p>
       </div>
 
-      {/* Slide 8: The Math - progressive 10-phase unit economics + ARR curve */}
-      <div className="deck-slide deck-v8-math deck-v1-math-phased">
-        <div className="deck-v8-math-inner">
-          <span className="deck-label">The Math</span>
-          <h2>One sale to ten billion.</h2>
-          <MathPhases />
+      {/* Projections - 16-month revenue model wired live to the assumptions
+          stored on /admin/projections. Hover any month for the funnel
+          breakdown (MAU, sessions, impressions, sales, revenue, MoM/YoY). */}
+      <div className="deck-slide deck-v1-projections-slide">
+        <div className="deck-v1-projections-head">
+          <span className="deck-label">Projections</span>
+          <h2>16 months from one sale to a run-rate.</h2>
+          <p className="deck-v1-projections-sub">
+            Live from the model on /admin/projections. Hover any month for the funnel breakdown.
+          </p>
+        </div>
+        {projAssumptions && projSeries && (
+          <>
+            <div className="deck-v1-projections-summary">
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">{PROJ_MONTHS}-mo total</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.total)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Final month</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalMonth)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Exit run-rate (ARR)</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalRunRate)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Implied CAGR</span>
+                <span className="deck-v1-projections-stat-value">{fmtPercent(projSummary!.cagrEquivalent, 0)}</span>
+              </div>
+            </div>
+            <ProjectionsChart series={projSeries} />
+            <p className="deck-v1-projections-formula">
+              Revenue = MAU × sessions/user × impressions/session × conversion × avg sale × commission &nbsp;·&nbsp;
+              MAU growth tapers <strong>{fmtPercent(projAssumptions.mauGrowthStart)}</strong> → <strong>{fmtPercent(projAssumptions.mauGrowthEnd)}</strong> MoM
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Slide 9: Technology - vector DB visual discovery demo. Lifted up
+          to come right after Projections so the conversation goes
+          "here's the curve, here's the engine driving it". */}
+      <div className="deck-slide deck-v9-tech">
+        <div className="deck-v9-tech-left">
+          <span className="deck-label">Technology</span>
+          <h2>Visual taste,<br />indexed by AI.</h2>
+          <p className="deck-v9-tech-lede">
+            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
+          </p>
+          <ul className="deck-v9-tech-points">
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Visual embeddings.</strong>
+                <span>Each look becomes a 1024-dim vector capturing composition, garment, color, and mood.</span>
+              </div>
+            </li>
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Nearest-neighbor search.</strong>
+                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
+              </div>
+            </li>
+            <li>
+              <span className="deck-v9-tech-bullet" aria-hidden="true" />
+              <div>
+                <strong>Discovery that compounds.</strong>
+                <span>Every interaction sharpens the model. The feed gets smarter with every shopper.</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div className="deck-v9-tech-right">
+          <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
+            <div className="deck-v1-tech-seed">
+              <video src={`${basePath}/${techVideos[techActiveSeed ?? 0]}`} autoPlay loop muted playsInline />
+            </div>
+            <svg className="deck-v1-tech-rays" viewBox="0 0 600 260" preserveAspectRatio="none" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((n) => {
+                const x2 = 60 + n * 120;
+                return (
+                  <line
+                    key={`ray-${techActiveSeed}-${n}`}
+                    className="deck-v1-tech-ray"
+                    x1="300" y1="8" x2={x2} y2="240"
+                    style={{ '--ray-i': n } as React.CSSProperties}
+                  />
+                );
+              })}
+            </svg>
+            <div className="deck-v1-tech-neighbors">
+              {[0, 1, 2, 3, 4].map((n) => {
+                const src = techVideos[techActiveSeed ?? 0];
+                const tints = [
+                  'hue-rotate(15deg) saturate(1.1)',
+                  'hue-rotate(-20deg) saturate(0.95)',
+                  'hue-rotate(35deg) saturate(1.05)',
+                  'hue-rotate(-45deg) saturate(0.9)',
+                  'hue-rotate(60deg) saturate(1.15)',
+                ];
+                return (
+                  <div
+                    key={`neighbor-${techActiveSeed}-${n}`}
+                    className="deck-v1-tech-neighbor"
+                    style={{ '--n-i': n } as React.CSSProperties}
+                  >
+                    <video
+                      src={`${basePath}/${src}`}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      style={{ filter: tints[n] }}
+                    />
+                    <span className="deck-v1-tech-neighbor-tag">0.9{9 - n}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="deck-v9-tech-meta">
+            <span className="deck-v9-tech-meta-dot" />
+            <span>Vector index &middot; cosine similarity &middot; ~12ms p99</span>
+          </div>
         </div>
       </div>
 
@@ -827,95 +981,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
       </div>
 
-      {/* Slide 9: Technology - vector DB visual discovery demo */}
-      <div className="deck-slide deck-v9-tech">
-        <div className="deck-v9-tech-left">
-          <span className="deck-label">Technology</span>
-          <h2>Visual taste,<br />indexed by AI.</h2>
-          <p className="deck-v9-tech-lede">
-            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
-          </p>
-          <ul className="deck-v9-tech-points">
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Visual embeddings.</strong>
-                <span>Each look becomes a 1024-dim vector capturing composition, garment, color, and mood.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Nearest-neighbor search.</strong>
-                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Discovery that compounds.</strong>
-                <span>Every interaction sharpens the model. The feed gets smarter with every shopper.</span>
-              </div>
-            </li>
-          </ul>
-        </div>
-        <div className="deck-v9-tech-right">
-          <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
-            {/* 1 seed creative at top */}
-            <div className="deck-v1-tech-seed">
-              <video src={`${basePath}/${techVideos[techActiveSeed ?? 0]}`} autoPlay loop muted playsInline />
-            </div>
-            {/* 5 rays spawning down to 5 new creatives */}
-            <svg className="deck-v1-tech-rays" viewBox="0 0 600 260" preserveAspectRatio="none" aria-hidden="true">
-              {[0, 1, 2, 3, 4].map((n) => {
-                const x2 = 60 + n * 120;
-                return (
-                  <line
-                    key={`ray-${techActiveSeed}-${n}`}
-                    className="deck-v1-tech-ray"
-                    x1="300" y1="8" x2={x2} y2="240"
-                    style={{ '--ray-i': n } as React.CSSProperties}
-                  />
-                );
-              })}
-            </svg>
-            {/* 5 spawned creatives at bottom - same source as seed, tinted for placeholder variety */}
-            <div className="deck-v1-tech-neighbors">
-              {[0, 1, 2, 3, 4].map((n) => {
-                const src = techVideos[techActiveSeed ?? 0];
-                const tints = [
-                  'hue-rotate(15deg) saturate(1.1)',
-                  'hue-rotate(-20deg) saturate(0.95)',
-                  'hue-rotate(35deg) saturate(1.05)',
-                  'hue-rotate(-45deg) saturate(0.9)',
-                  'hue-rotate(60deg) saturate(1.15)',
-                ];
-                return (
-                  <div
-                    key={`neighbor-${techActiveSeed}-${n}`}
-                    className="deck-v1-tech-neighbor"
-                    style={{ '--n-i': n } as React.CSSProperties}
-                  >
-                    <video
-                      src={`${basePath}/${src}`}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      style={{ filter: tints[n] }}
-                    />
-                    <span className="deck-v1-tech-neighbor-tag">0.9{9 - n}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="deck-v9-tech-meta">
-            <span className="deck-v9-tech-meta-dot" />
-            <span>Vector index &middot; cosine similarity &middot; ~12ms p99</span>
-          </div>
-        </div>
-      </div>
 
       {/* Slide 10: Payouts - how creators earn across four streams */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">

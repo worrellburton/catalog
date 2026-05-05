@@ -50,14 +50,15 @@ interface SortableThProps {
   sortKey: string;
   currentSort: SortState | null;
   onSort: (key: string) => void;
+  className?: string;
 }
 
-export function SortableTh({ label, sortKey, currentSort, onSort }: SortableThProps) {
+export function SortableTh({ label, sortKey, currentSort, onSort, className }: SortableThProps) {
   const isActive = currentSort?.key === sortKey;
   const direction = isActive ? currentSort.direction : null;
 
   return (
-    <th className="admin-th-sortable" onClick={() => onSort(sortKey)}>
+    <th className={`admin-th-sortable${className ? ` ${className}` : ''}`} onClick={() => onSort(sortKey)}>
       <span className="admin-th-sortable-inner">
         {label}
         <span className={`admin-sort-icon ${isActive ? 'active' : ''}`}>

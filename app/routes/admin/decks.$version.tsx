@@ -6,6 +6,9 @@ import { useState, lazy, Suspense } from 'react';
 import '~/styles/deck-view.css';
 import '~/styles/deck-v6.css';
 import '~/styles/deck-selector.css';
+// admin.css carries the .proj-chart-wrap / .proj-tooltip styles that the
+// v1.2 Projections slide reuses verbatim from /admin/projections.
+import '~/styles/admin.css';
 
 // Each deck variant is 400–1100 lines and only one is rendered at a time.
 // Lazy-loading splits them into per-version chunks so the admin viewer
