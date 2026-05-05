@@ -153,7 +153,7 @@ as $$
   order by f.rrf_score desc;
 $$;
 
-comment on function public.search_looks_hybrid is
+comment on function public.search_looks_hybrid(vector(1536), text, int, text, uuid[], int) is
   'Hybrid dense+BM25 RRF retrieval over looks. Routed first by nl-search for vibe/occasion/outfit intents.';
 
 -- ─────────────────────────────────────────────────────────────────────────────

@@ -8,6 +8,9 @@ alter table public.products
 alter table public.product_ads
   add column if not exists is_elite boolean not null default false;
 
+alter table public.product_ads
+  add column if not exists boosted_until timestamptz;
+
 alter table public.generated_videos
   add column if not exists is_elite boolean not null default false;
 

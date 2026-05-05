@@ -5,6 +5,29 @@
 create extension if not exists vector with schema extensions;
 
 -- ============================================
+-- PROFILES (mirrors auth.users, created on signup via trigger)
+-- ============================================
+create table if not exists public.profiles (
+  id              uuid primary key references auth.users(id) on delete cascade,
+  email           text,
+  full_name       text,
+  avatar_url      text,
+  provider        text,
+  created_at      timestamptz default now(),
+  last_sign_in_at timestamptz,
+  role            text default 'shopper',
+  is_admin        boolean not null default false,
+  gender          text not null default 'unknown' check (gender in ('male','female','unknown'))
+);
+
+create index if not exists profiles_is_admin_idx on public.profiles (is_admin) where is_admin = true;
+create index if not exists profiles_gender_idx   on public.profiles (gender);
+
+alter table public.profiles enable row level security;
+create policy "profiles_read_all"  on public.profiles for select using (true);
+create policy "profiles_self_update" on public.profiles for update using (auth.uid() = id);
+
+-- ============================================
 -- CREATORS
 -- ============================================
 create table if not exists creators (
