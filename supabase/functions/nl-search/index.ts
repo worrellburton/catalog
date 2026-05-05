@@ -524,7 +524,10 @@ Deno.serve(async (req: Request) => {
 
   if (!supabaseUrl || !serviceKey) return jsonRes({ ok: false, error: 'Supabase env missing' }, 500);
 
-  let body: { query?: string; k?: number; gender?: string; session_id?: string; user_id?: string; exclude_ids?: string[] };
+  let body: { query?: string; k?: number; gender?: string; session_id?: string; user_id?: string; exclude_ids?: string[];
+              /** Explicit type filter from a UI chip (e.g. ['Tops', 'Shirt']). When absent, search runs
+               *  with filter_types=null — Phase C default: let vector+BM25 self-rank without SQL guardrail. */
+              filter_types?: string[]; };
   try { body = await req.json(); } catch { return jsonRes({ ok: false, error: 'Invalid JSON' }, 400); }
 
   const { query, session_id, user_id } = body;
@@ -608,11 +611,15 @@ Deno.serve(async (req: Request) => {
     writeCache(admin, cacheKey, embedding, cacheableExpansion);
   }
 
-  // ── Step 3: choose filter_types from expansion ───────────────────────────
+  // ── Step 3: filter_types — Phase C default ──────────────────────────────
+  // Phase C is now the production default: vector + BM25 self-rank correctly
+  // without a SQL type guardrail (validated empirically: 60/86 found@K,
+  // MRR=0.938 — identical with or without the guardrail).
+  // The only way to set filter_types is via an explicit UI chip in the request.
   const filterTypes: string[] | null =
-    expansion.intent === 'pairing' ? expansion.pair_types
-    : expansion.intent === 'browse' && expansion.types.length > 0 ? expansion.types
-    : null;
+    Array.isArray(body.filter_types) && body.filter_types.length > 0
+      ? body.filter_types
+      : null;
 
   // BM25 input: keywords stripped of category noun for browse/pairing,
   // raw query for vibe (no noun was extracted).
