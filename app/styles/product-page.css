@@ -487,6 +487,25 @@
   padding: 32px 24px 16px;
   max-width: 1280px;
   margin: 0 auto;
+  /* Make absolutely sure the rail is reachable on mobile - the
+     bottom-sheet behaviour above can clip flyout overflow if a
+     descendant has its own stacking context. */
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 600px) {
+  .pd-similar-feed {
+    padding: 20px 12px 8px;
+  }
+  .pd-similar-grid {
+    gap: 8px;
+  }
+  .pd-feed-title {
+    font-size: 14px;
+    letter-spacing: 0.06em;
+  }
 }
 
 .pd-similar-grid {
@@ -697,6 +716,15 @@
   padding: 32px 24px 56px;
   max-width: 1280px;
   margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+  .pd-look-feed {
+    padding: 20px 12px 40px;
+  }
+  .pd-look-grid {
+    gap: 8px;
+  }
 }
 
 .pd-look-grid {
