@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "query": "casual friday",
+    "timestamp": "2026-05-05T12:03:08.986Z",
+    "k": 24,
+    "gender": null,
+    "elapsed_ms": 1338,
+    "server_ms": 872,
+    "result_count": 2
+  },
+  "results": [
+    {
+      "product_id": "afa96fda-f523-4ce0-8802-8bca1b74489a",
+      "product_name": "Classic Denim Pant - Medium Wash",
+      "product_brand": "James Perse",
+      "product_price": "$550.00",
+      "product_type": "Pants",
+      "product_gender": "male",
+      "product_url": "https://www.jamesperse.com/products/classic-denim-pant-medium-wash-mocd1452?collection=mens",
+      "product_image_url": "https://www.jamesperse.com/cdn/shop/files/MOCD1452_MDWH_1109_3fba7e58-990e-4efc-83c5-5d4b2241f638.jpg?v=1777072793",
+      "score": 0.0325224748810153,
+      "has_video": true,
+      "creative_id": "ac3477ac-215e-4340-86da-66fefe4d9d2a",
+      "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/afa96fda-f523-4ce0-8802-8bca1b74489a/lifestyle_context_seedance_text:bytedance/seedance-2.0/pro/reference-to-video_1777874532.mp4",
+      "thumbnail_url": null,
+      "is_elite": false
+    },
+    {
+      "product_id": "bab90bab-adae-4bab-98e3-e49da00217ce",
+      "product_name": "Logan Wide-Leg Jeans - Wellbrook",
+      "product_brand": "rag & bone",
+      "product_price": "$278.00",
+      "product_type": "Pants",
+      "product_gender": "female",
+      "product_url": "https://www.rag-bone.com/p/logan-wide-leg-jeans-198825244157.html?Country=US&glCurrency=USD",
+      "product_image_url": "https://cdn.media.amplience.net/i/rb/RJ2525F1FWE-721-A/Logan-Wide-Leg-Jeans-721?$large$&fmt=auto",
+      "score": 0.031099324975892,
+      "has_video": true,
+      "creative_id": "6528dfdd-1208-49a0-8d80-f6e6c7b7401b",
+      "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/bab90bab-adae-4bab-98e3-e49da00217ce/studio_clean_seedance_text:bytedance/seedance-2.0/fast/image-to-video_1777148060.mp4",
+      "thumbnail_url": null,
+      "is_elite": false
+    }
+  ]
+}

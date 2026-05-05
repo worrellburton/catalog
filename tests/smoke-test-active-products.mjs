@@ -157,7 +157,7 @@ async function runTests() {
   console.log(`  Success rate: ${((passed / TEST_QUERIES.length) * 100).toFixed(1)}%`);
 
   // Save results
-  const outputFile = 'smoke-test-active-products-results.json';
+  const outputFile = '../test-results/smoke-test-active-products-results.json';
   const fs = await import('fs/promises');
   await fs.writeFile(
     outputFile,

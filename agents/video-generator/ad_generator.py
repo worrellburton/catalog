@@ -474,6 +474,37 @@ def generate_ad_video(ad_id: str) -> dict:
         )
         video_url = supabase.storage.from_("look-media").get_public_url(storage_path)
 
+        # Encode + upload poster JPEG and mobile variant. Same contract
+        # as agent.py: feeds the consumer-side instant first-paint
+        # contract. Failures here are non-fatal - the row still ships
+        # with the source MP4 and backfill_creative_assets.py picks up
+        # any gaps later.
+        thumbnail_url = None
+        mobile_video_url = None
+        try:
+            from asset_encoder import encode_assets_from_url, cleanup as cleanup_assets
+            assets = encode_assets_from_url(video_url)
+            try:
+                base = storage_path[:-4]  # strip ".mp4"
+                poster_key = f"{base}.poster.jpg"
+                mobile_key = f"{base}.mobile.mp4"
+                with open(assets.poster_jpeg_path, "rb") as f:
+                    supabase.storage.from_("look-media").upload(
+                        poster_key, f.read(),
+                        {"content-type": "image/jpeg", "upsert": "true"},
+                    )
+                thumbnail_url = supabase.storage.from_("look-media").get_public_url(poster_key)
+                with open(assets.mobile_mp4_path, "rb") as f:
+                    supabase.storage.from_("look-media").upload(
+                        mobile_key, f.read(),
+                        {"content-type": "video/mp4", "upsert": "true"},
+                    )
+                mobile_video_url = supabase.storage.from_("look-media").get_public_url(mobile_key)
+            finally:
+                cleanup_assets(assets)
+        except Exception as e:
+            print(f"    ⚠ Asset encode failed (non-fatal): {e}")
+
         # Set affiliate URL from product URL if not already set
         affiliate_url = ad.get("affiliate_url") or product.get("url")
 
@@ -481,7 +512,7 @@ def generate_ad_video(ad_id: str) -> dict:
         cost = _estimate_cost(GENERATION_DEFAULTS["model"], GENERATION_DEFAULTS["resolution"])
 
         # Update ad as done
-        supabase.table("product_creative").update({
+        update_payload = {
             "status": "done",
             "video_url": video_url,
             "storage_path": storage_path,
@@ -489,7 +520,12 @@ def generate_ad_video(ad_id: str) -> dict:
             "cost_usd": cost,
             "title": f"{product.get('name', 'Product')} — {style.replace('_', ' ').title()} ({method})",
             "completed_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", ad_id).execute()
+        }
+        if thumbnail_url:
+            update_payload["thumbnail_url"] = thumbnail_url
+        if mobile_video_url:
+            update_payload["mobile_video_url"] = mobile_video_url
+        supabase.table("product_creative").update(update_payload).eq("id", ad_id).execute()
 
         print(f"  ✓ Done — ad {ad_id} | {method} | {video_url}")
         return {

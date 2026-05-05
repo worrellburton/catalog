@@ -1,0 +1,330 @@
+{
+  "summary": {
+    "timestamp": "2026-05-05T12:57:05.695Z",
+    "endpoint": "https://vtarjrnqvcqbhoclvcur.supabase.co/functions/v1/search",
+    "total_queries": 8,
+    "passed": 4,
+    "failed": 4,
+    "success_rate": "50.0%"
+  },
+  "results": [
+    {
+      "query": "shoes",
+      "k": 10,
+      "description": "Basic footwear query",
+      "count": 1,
+      "took_client_ms": 858,
+      "took_server_ms": 416,
+      "results": [
+        {
+          "id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+          "product_id": "a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78",
+          "creative_id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+          "is_placeholder": false,
+          "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777415002.mp4",
+          "thumbnail_url": null,
+          "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Thursday Boots Renegade mens&prds=catalogid:9914492523541978621,headlineOfferDocid:11593539536754757078,imageDocid:8158899225629157524,rds:PC_2038928030954189198|PROD_PC_2038928030954189198,gpcid:2038928030954189198,mid:576462781635182987,pvt:a&hl=en&gl=us&udm=28",
+          "duration_seconds": 4,
+          "is_elite": true,
+          "product_name": "Women's Renegade Shoe in Black Patent Leather",
+          "product_brand": "Thursday Boots",
+          "product_price": "$199",
+          "product_image_url": "https://thursdayboots.com/cdn/shop/files/1024x1024-Women_s-Renegade-Black-101923-3.4.jpg?v=1698092265",
+          "product_url": "https://thursdayboots.com/products/womens-renegade-lug-sole-shoe-black-leather?srsltid=AfmBOoqmb8_F3uoFL40QJoeTr1D6Kd0bAIKazcCT85ifcylYCgTF4ujbGko",
+          "product_gender": "female",
+          "product_type": "Shoes",
+          "score": 0.0327868852459016
+        }
+      ],
+      "raw": {
+        "query": "shoes",
+        "results": [
+          {
+            "id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+            "product_id": "a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78",
+            "creative_id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+            "is_placeholder": false,
+            "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777415002.mp4",
+            "thumbnail_url": null,
+            "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Thursday Boots Renegade mens&prds=catalogid:9914492523541978621,headlineOfferDocid:11593539536754757078,imageDocid:8158899225629157524,rds:PC_2038928030954189198|PROD_PC_2038928030954189198,gpcid:2038928030954189198,mid:576462781635182987,pvt:a&hl=en&gl=us&udm=28",
+            "duration_seconds": 4,
+            "is_elite": true,
+            "product_name": "Women's Renegade Shoe in Black Patent Leather",
+            "product_brand": "Thursday Boots",
+            "product_price": "$199",
+            "product_image_url": "https://thursdayboots.com/cdn/shop/files/1024x1024-Women_s-Renegade-Black-101923-3.4.jpg?v=1698092265",
+            "product_url": "https://thursdayboots.com/products/womens-renegade-lug-sole-shoe-black-leather?srsltid=AfmBOoqmb8_F3uoFL40QJoeTr1D6Kd0bAIKazcCT85ifcylYCgTF4ujbGko",
+            "product_gender": "female",
+            "product_type": "Shoes",
+            "score": 0.0327868852459016
+          }
+        ],
+        "count": 1,
+        "took_ms": 416
+      }
+    },
+    {
+      "query": "black leather boots",
+      "k": 10,
+      "description": "Specific product search",
+      "count": 1,
+      "took_client_ms": 753,
+      "took_server_ms": 430,
+      "results": [
+        {
+          "id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+          "product_id": "a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78",
+          "creative_id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+          "is_placeholder": false,
+          "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777415002.mp4",
+          "thumbnail_url": null,
+          "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Thursday Boots Renegade mens&prds=catalogid:9914492523541978621,headlineOfferDocid:11593539536754757078,imageDocid:8158899225629157524,rds:PC_2038928030954189198|PROD_PC_2038928030954189198,gpcid:2038928030954189198,mid:576462781635182987,pvt:a&hl=en&gl=us&udm=28",
+          "duration_seconds": 4,
+          "is_elite": true,
+          "product_name": "Women's Renegade Shoe in Black Patent Leather",
+          "product_brand": "Thursday Boots",
+          "product_price": "$199",
+          "product_image_url": "https://thursdayboots.com/cdn/shop/files/1024x1024-Women_s-Renegade-Black-101923-3.4.jpg?v=1698092265",
+          "product_url": "https://thursdayboots.com/products/womens-renegade-lug-sole-shoe-black-leather?srsltid=AfmBOoqmb8_F3uoFL40QJoeTr1D6Kd0bAIKazcCT85ifcylYCgTF4ujbGko",
+          "product_gender": "female",
+          "product_type": "Shoes",
+          "score": 0.0327868852459016
+        }
+      ],
+      "raw": {
+        "query": "black leather boots",
+        "results": [
+          {
+            "id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+            "product_id": "a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78",
+            "creative_id": "020f9cbb-c7a9-4b8d-8908-8a7916ca1193",
+            "is_placeholder": false,
+            "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/a6f55888-b5a1-4ae9-a5c8-1fd7dbf59a78/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777415002.mp4",
+            "thumbnail_url": null,
+            "affiliate_url": "https://www.google.com/search?ibp=oshop&q=Thursday Boots Renegade mens&prds=catalogid:9914492523541978621,headlineOfferDocid:11593539536754757078,imageDocid:8158899225629157524,rds:PC_2038928030954189198|PROD_PC_2038928030954189198,gpcid:2038928030954189198,mid:576462781635182987,pvt:a&hl=en&gl=us&udm=28",
+            "duration_seconds": 4,
+            "is_elite": true,
+            "product_name": "Women's Renegade Shoe in Black Patent Leather",
+            "product_brand": "Thursday Boots",
+            "product_price": "$199",
+            "product_image_url": "https://thursdayboots.com/cdn/shop/files/1024x1024-Women_s-Renegade-Black-101923-3.4.jpg?v=1698092265",
+            "product_url": "https://thursdayboots.com/products/womens-renegade-lug-sole-shoe-black-leather?srsltid=AfmBOoqmb8_F3uoFL40QJoeTr1D6Kd0bAIKazcCT85ifcylYCgTF4ujbGko",
+            "product_gender": "female",
+            "product_type": "Shoes",
+            "score": 0.0327868852459016
+          }
+        ],
+        "count": 1,
+        "took_ms": 430
+      }
+    },
+    {
+      "query": "sunglasses",
+      "k": 10,
+      "description": "Accessories",
+      "count": 0,
+      "took_client_ms": 936,
+      "took_server_ms": 599,
+      "results": [],
+      "raw": {
+        "query": "sunglasses",
+        "results": [],
+        "count": 0,
+        "took_ms": 599
+      }
+    },
+    {
+      "query": "jacket",
+      "k": 10,
+      "description": "Outerwear",
+      "count": 1,
+      "took_client_ms": 792,
+      "took_server_ms": 425,
+      "results": [
+        {
+          "id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+          "product_id": "797fc34a-d937-4cd5-bee3-c6ecaf48ace9",
+          "creative_id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+          "is_placeholder": false,
+          "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/797fc34a-d937-4cd5-bee3-c6ecaf48ace9/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777148551.mp4",
+          "thumbnail_url": null,
+          "affiliate_url": "https://www.google.com/search?ibp=oshop&q=rag and bone&prds=catalogid:1377889248104961306,headlineOfferDocid:17075550384283438682,imageDocid:12990322662231984327,rds:PC_2438499964249885996|PROD_PC_2438499964249885996,gpcid:2438499964249885996,mid:576462888710523392,pvt:a&hl=en&gl=us&udm=28",
+          "duration_seconds": 4,
+          "is_elite": false,
+          "product_name": "Gregory Crewneck Sweater - Desert Sand",
+          "product_brand": "rag & bone",
+          "product_price": "$90.00",
+          "product_image_url": "https://cdn.media.amplience.net/i/rb/RH3225F6MWL-270-A/Gregory-Crewneck-Sweater-270?$large$&fmt=auto",
+          "product_url": "https://www.rag-bone.com/p/gregory-crewneck-sweater-198825203444.html?Country=US&glCurrency=USD",
+          "product_gender": "male",
+          "product_type": "Top",
+          "score": 0.0300920727599371
+        }
+      ],
+      "raw": {
+        "query": "jacket",
+        "results": [
+          {
+            "id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+            "product_id": "797fc34a-d937-4cd5-bee3-c6ecaf48ace9",
+            "creative_id": "8615e2cc-5fbc-4049-9fac-39be7482ebbf",
+            "is_placeholder": false,
+            "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/797fc34a-d937-4cd5-bee3-c6ecaf48ace9/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1777148551.mp4",
+            "thumbnail_url": null,
+            "affiliate_url": "https://www.google.com/search?ibp=oshop&q=rag and bone&prds=catalogid:1377889248104961306,headlineOfferDocid:17075550384283438682,imageDocid:12990322662231984327,rds:PC_2438499964249885996|PROD_PC_2438499964249885996,gpcid:2438499964249885996,mid:576462888710523392,pvt:a&hl=en&gl=us&udm=28",
+            "duration_seconds": 4,
+            "is_elite": false,
+            "product_name": "Gregory Crewneck Sweater - Desert Sand",
+            "product_brand": "rag & bone",
+            "product_price": "$90.00",
+            "product_image_url": "https://cdn.media.amplience.net/i/rb/RH3225F6MWL-270-A/Gregory-Crewneck-Sweater-270?$large$&fmt=auto",
+            "product_url": "https://www.rag-bone.com/p/gregory-crewneck-sweater-198825203444.html?Country=US&glCurrency=USD",
+            "product_gender": "male",
+            "product_type": "Top",
+            "score": 0.0300920727599371
+          }
+        ],
+        "count": 1,
+        "took_ms": 425
+      }
+    },
+    {
+      "query": "dress",
+      "k": 10,
+      "description": "Womens clothing",
+      "count": 2,
+      "took_client_ms": 819,
+      "took_server_ms": 475,
+      "results": [
+        {
+          "id": "931ce556-9cbc-4f4b-bc12-70ef2d8d885e",
+          "product_id": "931ce556-9cbc-4f4b-bc12-70ef2d8d885e",
+          "creative_id": null,
+          "is_placeholder": true,
+          "video_url": null,
+          "thumbnail_url": null,
+          "affiliate_url": null,
+          "duration_seconds": null,
+          "is_elite": false,
+          "product_name": "Breezy Tennis Dress - Navy",
+          "product_brand": "Alo Yoga",
+          "product_price": "$138",
+          "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W8322R_03842_b1_s1_a5_m218.jpg?v=1752550672",
+          "product_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-navy",
+          "product_gender": "female",
+          "product_type": "Dress",
+          "score": 0.0325224748810153
+        },
+        {
+          "id": "8b6c971f-ab4a-4fd9-b80c-f1f38f8b37f7",
+          "product_id": "214102ec-3151-4708-9ca0-1ea413af6fb5",
+          "creative_id": "8b6c971f-ab4a-4fd9-b80c-f1f38f8b37f7",
+          "is_placeholder": false,
+          "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/214102ec-3151-4708-9ca0-1ea413af6fb5/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970286.mp4",
+          "thumbnail_url": null,
+          "affiliate_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-black",
+          "duration_seconds": 4,
+          "is_elite": true,
+          "product_name": "Breezy Tennis Dress - Black",
+          "product_brand": "Alo Yoga",
+          "product_price": "$138",
+          "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W8322R_01_b1_s1_a1_m143.jpg?v=1749472616",
+          "product_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-black",
+          "product_gender": "female",
+          "product_type": "Dress",
+          "score": 0.0325224748810153
+        }
+      ],
+      "raw": {
+        "query": "dress",
+        "results": [
+          {
+            "id": "931ce556-9cbc-4f4b-bc12-70ef2d8d885e",
+            "product_id": "931ce556-9cbc-4f4b-bc12-70ef2d8d885e",
+            "creative_id": null,
+            "is_placeholder": true,
+            "video_url": null,
+            "thumbnail_url": null,
+            "affiliate_url": null,
+            "duration_seconds": null,
+            "is_elite": false,
+            "product_name": "Breezy Tennis Dress - Navy",
+            "product_brand": "Alo Yoga",
+            "product_price": "$138",
+            "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W8322R_03842_b1_s1_a5_m218.jpg?v=1752550672",
+            "product_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-navy",
+            "product_gender": "female",
+            "product_type": "Dress",
+            "score": 0.0325224748810153
+          },
+          {
+            "id": "8b6c971f-ab4a-4fd9-b80c-f1f38f8b37f7",
+            "product_id": "214102ec-3151-4708-9ca0-1ea413af6fb5",
+            "creative_id": "8b6c971f-ab4a-4fd9-b80c-f1f38f8b37f7",
+            "is_placeholder": false,
+            "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/214102ec-3151-4708-9ca0-1ea413af6fb5/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970286.mp4",
+            "thumbnail_url": null,
+            "affiliate_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-black",
+            "duration_seconds": 4,
+            "is_elite": true,
+            "product_name": "Breezy Tennis Dress - Black",
+            "product_brand": "Alo Yoga",
+            "product_price": "$138",
+            "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/W8322R_01_b1_s1_a1_m143.jpg?v=1749472616",
+            "product_url": "https://www.aloyoga.com/products/w8322r-breezy-tennis-dress-black",
+            "product_gender": "female",
+            "product_type": "Dress",
+            "score": 0.0325224748810153
+          }
+        ],
+        "count": 2,
+        "took_ms": 475
+      }
+    },
+    {
+      "query": "sneakers",
+      "k": 10,
+      "description": "Athletic footwear",
+      "count": 0,
+      "took_client_ms": 771,
+      "took_server_ms": 424,
+      "results": [],
+      "raw": {
+        "query": "sneakers",
+        "results": [],
+        "count": 0,
+        "took_ms": 424
+      }
+    },
+    {
+      "query": "handbag",
+      "k": 10,
+      "description": "Bags & accessories",
+      "count": 0,
+      "took_client_ms": 690,
+      "took_server_ms": 420,
+      "results": [],
+      "raw": {
+        "query": "handbag",
+        "results": [],
+        "count": 0,
+        "took_ms": 420
+      }
+    },
+    {
+      "query": "watch",
+      "k": 10,
+      "description": "Jewelry & watches",
+      "count": 0,
+      "took_client_ms": 705,
+      "took_server_ms": 426,
+      "results": [],
+      "raw": {
+        "query": "watch",
+        "results": [],
+        "count": 0,
+        "took_ms": 426
+      }
+    }
+  ]
+}
