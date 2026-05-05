@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
-import { getEliteCreatives, type EliteCreative } from '~/services/product-creative';
+import { getHomeFeed, type ProductAd } from '~/services/product-creative';
 
 interface DeckViewV1_2Props {
   onSeeApp: () => void;
@@ -324,10 +324,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed] = useState<number | null>(0);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
-  // Deck v1.1 differentiator: the background feed only shows hand-picked
-  // elite creatives, flagged by admins in /admin/creative. Empty array until
-  // the fetch lands - the old bundled clips stay off so the feed is 100% real.
-  const [eliteVideos, setEliteVideos] = useState<EliteCreative[]>([]);
+  // Deck v1.2 differentiator: the background grid mirrors the consumer
+  // home feed - every product with the Home toggle on in /admin/content.
+  // Empty until the fetch lands; the dark overlay keeps the cover slide
+  // legible regardless.
+  const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>(initialRoadmapPhases);
   const roadmapTrackRef = useRef<HTMLDivElement>(null);
@@ -435,15 +436,15 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     };
   }, []);
 
-  // Pull the elite creative set once on mount. The admin Creative view flips
-  // is_elite on both the creative and its product, so these are the videos we
-  // want behind every slide.
+  // Pull the home feed once on mount. Same contract as the consumer
+  // app: status='live' creative + Home toggle on the product. Filtered
+  // to rows with a video_url so the background grid stays motion-only.
   useEffect(() => {
     let cancelled = false;
-    getEliteCreatives().then(list => {
-      if (!cancelled) setEliteVideos(list);
+    getHomeFeed().then(list => {
+      if (!cancelled) setHomeFeed(list.filter(r => !!r.video_url));
     }).catch(err => {
-      console.error('[DeckViewV1_2] getEliteCreatives failed:', err);
+      console.error('[DeckViewV1_2] getHomeFeed failed:', err);
     });
     return () => { cancelled = true; };
   }, []);
