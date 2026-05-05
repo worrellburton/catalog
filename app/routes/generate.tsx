@@ -879,7 +879,12 @@ export default function GeneratePage() {
   };
 
   const canAdvance = useMemo(() => {
-    if (step === 'photos') return pickedUploadIds.length > 0 && !uploading;
+    // Photos step now also requires height + age. Without this, a user
+    // could skip the About step's prereqs (only validated when the
+    // wizard is on About itself) by hitting the "Make a new look" CTA
+    // from the photos step. The model needs both anchors to render a
+    // believable look, so we gate at the entry point.
+    if (step === 'photos') return pickedUploadIds.length > 0 && !uploading && !!heightLabel && !!ageLabel;
     if (step === 'products') return picked.length > 0;
     if (step === 'about') return !!heightLabel && !!ageLabel;
     if (step === 'style') return !!style;

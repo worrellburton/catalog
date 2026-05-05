@@ -13,9 +13,13 @@ interface LookCardProps {
   onOpenLook: (look: Look) => void;
   onOpenCreator: (creatorName: string) => void;
   onCreateCatalog?: (query: string) => void;
+  /** Hide the creator avatar+name row on the tile. Used by the Creator
+   *  Catalog page where the creator identity is already in the page
+   *  header - per-tile attribution is redundant noise there. */
+  hideCreator?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -133,28 +137,30 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
         />
         <div className="card-gradient" />
 
-        <div
-          className="card-creator-row"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenCreator(look.creator);
-          }}
-        >
-          <img
-            className="card-creator-avatar"
-            src={creatorData?.avatar || look.creatorAvatar || ''}
-            alt={creatorData?.displayName || look.creatorDisplayName || ''}
-          />
-          <span className="card-creator-name">
-            {/* Prefer the static-seed display name, then the look-level
-                fallback emitted by user-published flows. If neither is
-                set and the handle is a raw user:<uuid>, hide it - the
-                uuid is noise in the UI. */}
-            {creatorData?.displayName
-              || look.creatorDisplayName
-              || (look.creator?.startsWith('user:') ? '' : look.creator)}
-          </span>
-        </div>
+        {!hideCreator && (
+          <div
+            className="card-creator-row"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCreator(look.creator);
+            }}
+          >
+            <img
+              className="card-creator-avatar"
+              src={creatorData?.avatar || look.creatorAvatar || ''}
+              alt={creatorData?.displayName || look.creatorDisplayName || ''}
+            />
+            <span className="card-creator-name">
+              {/* Prefer the static-seed display name, then the look-level
+                  fallback emitted by user-published flows. If neither is
+                  set and the handle is a raw user:<uuid>, hide it - the
+                  uuid is noise in the UI. */}
+              {creatorData?.displayName
+                || look.creatorDisplayName
+                || (look.creator?.startsWith('user:') ? '' : look.creator)}
+            </span>
+          </div>
+        )}
       </div>
       {menu && isSuperAdmin && (
         <div
