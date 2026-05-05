@@ -12,7 +12,7 @@ import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
-import { useSemanticSearch } from '~/hooks/useSemanticSearch';
+import { useSearch } from '~/hooks/useSearch';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -195,10 +195,10 @@ export default function ContinuousFeed({
   // broaden / refine results, but we suppress the pending/loading UX so
   // the UI stays instant for these common queries.
   const tier1Eligible = !!resolveCatalogTypes(searchQuery);
-  // Always run nl-search so Haiku gets to expand every query against the
-  // canonical product.type set. Cache hits are ~80ms; misses ~400ms with
-  // Haiku+embed running in parallel. Tier-1 still wins the first paint.
-  const semantic = useSemanticSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
+  // Always run V3 search (gte-small + BM25 + RRF over products). It runs
+  // entirely in-edge with no external APIs, so warm queries land in ~60ms
+  // and tier-1 still wins the first paint via the catalog_tags fast-path.
+  const semantic = useSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the
