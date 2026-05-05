@@ -4563,6 +4563,13 @@
   font-size: clamp(36px, 5.2vw, 72px);
   line-height: 1.08;
 }
+.deck-view-v1 .deck-v1-dream-sub {
+  margin-top: 18px;
+  font-size: clamp(18px, 1.8vw, 28px);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.62);
+}
 .light-mode .deck-view-v1 .deck-v1-dream-sub { color: rgba(0, 0, 0, 0.5); }
 
 /* ===========================================================
@@ -5935,4 +5942,295 @@
     align-items: flex-start;
   }
   .math-chart-left, .math-chart-right { flex: 1 1 auto; }
+}
+
+/* ===========================================================
+   V1.2 Problem & Solution combined slide
+   =========================================================== */
+.deck-view-v1 .deck-v1-compare-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: clamp(48px, 5vh, 88px) clamp(40px, 5vw, 120px) !important;
+  gap: clamp(24px, 3vh, 44px);
+}
+
+.deck-view-v1 .deck-v1-compare-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deck-view-v1 .deck-v1-compare-head h2 {
+  font-size: clamp(28px, 3.4vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.deck-view-v1 .deck-v1-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: clamp(20px, 2.5vw, 40px);
+  row-gap: clamp(14px, 2vh, 22px);
+}
+
+.deck-view-v1 .deck-v1-compare-col {
+  display: flex;
+  align-items: center;
+}
+
+.deck-view-v1 .deck-v1-compare-col-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+.deck-view-v1 .deck-v1-compare-col-label-problem {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.18);
+}
+.deck-view-v1 .deck-v1-compare-col-label-solution {
+  color: #6ee7b7;
+  background: rgba(110, 231, 183, 0.08);
+  border-color: rgba(110, 231, 183, 0.22);
+}
+
+.deck-view-v1 .deck-v1-compare-row {
+  display: contents;
+}
+
+.deck-view-v1 .deck-v1-compare-cell {
+  border-radius: 18px;
+  padding: clamp(16px, 1.6vw, 22px) clamp(18px, 1.8vw, 24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  display: flex;
+  flex-direction: column;
+}
+.deck-view-v1 .deck-v1-compare-cell-problem {
+  border-color: rgba(248, 113, 113, 0.15);
+}
+.deck-view-v1 .deck-v1-compare-cell-solution {
+  border-color: rgba(110, 231, 183, 0.18);
+}
+
+/* Tighten the inherited problem-body styles inside compare cells so two
+   columns + three rows fit inside one slide without scrolling. */
+.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body {
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-pain h3 {
+  font-size: clamp(22px, 2.2vw, 30px);
+}
+.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body > p {
+  font-size: clamp(13px, 1vw, 15px);
+  line-height: 1.4;
+}
+
+.light-mode .deck-view-v1 .deck-v1-compare-col-label {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.55);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-col-label-problem {
+  color: #b91c1c;
+  background: rgba(185, 28, 28, 0.06);
+  border-color: rgba(185, 28, 28, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-col-label-solution {
+  color: #047857;
+  background: rgba(4, 120, 87, 0.06);
+  border-color: rgba(4, 120, 87, 0.2);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.01));
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-compare-grid {
+    grid-template-columns: 1fr;
+  }
+  .deck-view-v1 .deck-v1-compare-col-solution {
+    margin-top: 12px;
+  }
+}
+
+/* ===========================================================
+   V1.2 Projections slide - 16-month revenue model embed
+   =========================================================== */
+.deck-view-v1 .deck-v1-projections-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: clamp(48px, 5vh, 80px) clamp(40px, 5vw, 100px) !important;
+  gap: clamp(20px, 2.4vh, 32px);
+}
+
+.deck-view-v1 .deck-v1-projections-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.deck-view-v1 .deck-v1-projections-head h2 {
+  font-size: clamp(28px, 3.2vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.deck-view-v1 .deck-v1-projections-sub {
+  font-size: clamp(13px, 1vw, 16px);
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  max-width: 64ch;
+}
+
+.deck-view-v1 .deck-v1-projections-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px, 1vw, 16px);
+}
+.deck-view-v1 .deck-v1-projections-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: clamp(12px, 1.2vw, 18px) clamp(14px, 1.4vw, 20px);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.deck-view-v1 .deck-v1-projections-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.deck-view-v1 .deck-v1-projections-stat-value {
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-view-v1 .deck-v1-projections-formula {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+}
+.deck-view-v1 .deck-v1-projections-formula strong { color: rgba(255, 255, 255, 0.85); }
+
+/* The chart component carries .proj-chart-wrap from admin.css; that has
+   a white background which clashes with the deck's dark theme. Override
+   for the deck context only. */
+.deck-view-v1 .deck-v1-projections-slide .proj-chart-wrap {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+.deck-view-v1 .deck-v1-projections-slide .proj-chart text {
+  fill: rgba(255, 255, 255, 0.55);
+}
+.deck-view-v1 .deck-v1-projections-slide .proj-chart line[stroke="#e5e7eb"] {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.light-mode .deck-view-v1 .deck-v1-projections-sub { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-projections-stat {
+  background: rgba(0, 0, 0, 0.025);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+.light-mode .deck-view-v1 .deck-v1-projections-stat-label { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-projections-stat-value { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-projections-formula { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-projections-formula strong { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-projections-slide .proj-chart-wrap {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+.light-mode .deck-view-v1 .deck-v1-projections-slide .proj-chart text {
+  fill: #6b7280;
+}
+.light-mode .deck-view-v1 .deck-v1-projections-slide .proj-chart line[stroke="#e5e7eb"] {
+  stroke: #e5e7eb;
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-projections-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ===========================================================
+   V1.2 Background feed grid - mosaic mirror of FeedSection.tsx
+   (8% featured 2x2, 14% wide 2x1, 14% tall 1x2, 64% normal).
+   Each tile wraps the existing .deck-insight-video so the
+   playing pool keeps working unchanged.
+   =========================================================== */
+.deck-view-v1 .deck-v1-feed-grid {
+  /* Override the v8 default 4-col / 33vh-row grid so we can use a
+     denser mosaic with span-based variants. 6 columns at desktop with
+     square cells gives the seeded 2x2 / 2x1 / 1x2 spans room to
+     breathe; rows are sized off the column width so cells stay
+     proportional. */
+  grid-template-columns: repeat(6, 1fr) !important;
+  grid-auto-rows: 16vh !important;
+  grid-auto-flow: dense;
+}
+
+.deck-view-v1 .deck-v1-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #111;
+}
+
+.deck-view-v1 .deck-v1-tile video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Match the FeedSection.tsx variant grammar:
+   featured = 2 cols x 2 rows, wide = 2 cols x 1 row, tall = 1 col x 2 rows. */
+.deck-view-v1 .deck-v1-tile-featured {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.deck-view-v1 .deck-v1-tile-wide {
+  grid-column: span 2;
+  grid-row: span 1;
+}
+.deck-view-v1 .deck-v1-tile-tall {
+  grid-column: span 1;
+  grid-row: span 2;
+}
+
+@media (max-width: 768px) {
+  .deck-view-v1 .deck-v1-feed-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    grid-auto-rows: 22vh !important;
+  }
+  /* Mobile collapses every variant to 1x1 so the layout stays legible
+     at narrow widths - same compromise FeedSection makes. */
+  .deck-view-v1 .deck-v1-tile-featured,
+  .deck-view-v1 .deck-v1-tile-wide,
+  .deck-view-v1 .deck-v1-tile-tall {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
 }

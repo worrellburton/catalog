@@ -140,6 +140,37 @@ def generate_video(
         )
         video_url = supabase.storage.from_("look-media").get_public_url(storage_path)
 
+        # 7b — Encode + upload poster JPEG and mobile variant. The
+        # consumer feed needs both for instant first-frame paint on
+        # mobile - see app/services/video-loading.ts. Failure here is
+        # non-fatal: the row still ships with the source MP4 and the
+        # nightly backfill_creative_assets.py job will fill the gap.
+        thumbnail_url = None
+        mobile_video_url = None
+        try:
+            from asset_encoder import encode_assets_from_url, cleanup as cleanup_assets
+            assets = encode_assets_from_url(video_url)
+            try:
+                base = storage_path[:-4]  # strip ".mp4"
+                poster_key = f"{base}.poster.jpg"
+                mobile_key = f"{base}.mobile.mp4"
+                with open(assets.poster_jpeg_path, "rb") as f:
+                    supabase.storage.from_("look-media").upload(
+                        poster_key, f.read(),
+                        {"content-type": "image/jpeg", "upsert": "true"},
+                    )
+                thumbnail_url = supabase.storage.from_("look-media").get_public_url(poster_key)
+                with open(assets.mobile_mp4_path, "rb") as f:
+                    supabase.storage.from_("look-media").upload(
+                        mobile_key, f.read(),
+                        {"content-type": "video/mp4", "upsert": "true"},
+                    )
+                mobile_video_url = supabase.storage.from_("look-media").get_public_url(mobile_key)
+            finally:
+                cleanup_assets(assets)
+        except Exception as e:
+            print(f"  ⚠ Asset encode failed (non-fatal): {e}")
+
         # 8 — Create look record (linked to AI model's creator)
         look_data = {
             "title": f"{product.get('name', 'Untitled')} — {style.replace('_', ' ').title()}",
@@ -171,14 +202,19 @@ def generate_video(
 
         # 11 — Mark job done
         cost = _estimate_cost(GENERATION_DEFAULTS["model"], GENERATION_DEFAULTS["resolution"])
-        supabase.table("generated_videos").update({
+        update_payload = {
             "status": "done",
             "video_url": video_url,
             "storage_path": storage_path,
             "look_id": look_id,
             "cost_usd": cost,
             "completed_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", job_id).execute()
+        }
+        if thumbnail_url:
+            update_payload["thumbnail_url"] = thumbnail_url
+        if mobile_video_url:
+            update_payload["mobile_video_url"] = mobile_video_url
+        supabase.table("generated_videos").update(update_payload).eq("id", job_id).execute()
 
         # 12 — Increment AI model's looks_count
         if ai_model_id:

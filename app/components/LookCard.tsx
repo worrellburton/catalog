@@ -68,6 +68,10 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const trailId = lookTrailId(look.id);
   const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Look thumbnail (server-extracted) → look cover image → empty.
+  // Used as the <video poster=> so the card paints a real image while
+  // the MP4 streams. Empty string disables the attribute.
+  const posterUrl = look.thumbnail_url || look.cover || '';
 
   // Defer slot population to viewport. The TrailVideoHost pool keeps the
   // element alive so the LookOverlay hero (same trailId) reuses the same
@@ -75,6 +79,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const setVideoSlot = useTrailVideo(
     inViewport ? trailId : undefined,
     inViewport ? videoUrl : undefined,
+    posterUrl || undefined,
   );
 
   const setSlot = useCallback((node: HTMLDivElement | null) => {

@@ -5,6 +5,7 @@ import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { pickVideoUrl, pickPosterUrl, prefetchVideoBytes } from '~/services/video-loading';
 
 interface ProductPageCreative {
   /** The product_creative.id - used to resolve the shared <video> element
@@ -180,7 +181,12 @@ function dummySavedBy(productKey: string): SavedByDummy {
 function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c: ProductAd) => void }) {
   const [loaded, setLoaded] = useState(false);
   const slotRef = useRef<HTMLDivElement | null>(null);
-  const setSlot = useTrailVideo(creative.id, creative.video_url ?? undefined);
+  // pickPosterUrl returns the thumbnail when present, falls back to
+  // product image. Passed to the trail-video pool so the <video poster=>
+  // attribute paints a real image during MP4 load.
+  const tilePoster = pickPosterUrl(creative);
+  const tileSrc = pickVideoUrl(creative) ?? creative.video_url ?? undefined;
+  const setSlot = useTrailVideo(creative.id, tileSrc, tilePoster || undefined);
   const setRef = useCallback((node: HTMLDivElement | null) => {
     slotRef.current = node;
     setSlot(node);
@@ -291,20 +297,39 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
     || '';
   const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
 
+  // Look poster: the server-extracted thumbnail when present, the
+  // legacy cover image otherwise. Set as <video poster=> so the tile
+  // never paints a black frame, and rendered as a separate <img>
+  // behind the video so the tile is never blank even outside the
+  // viewport prep band.
+  const tilePoster = look.thumbnail_url || look.cover || '';
+
   return (
     <button type="button" className="pd-look-tile" onClick={() => onOpen(look)} ref={wrapRef}>
+      {tilePoster && (
+        <img
+          src={tilePoster}
+          alt=""
+          aria-hidden="true"
+          className="pd-look-tile-video"
+          loading="lazy"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        />
+      )}
       {videoUrl && inViewport && (
         <video
           ref={videoRef}
           className="pd-look-tile-video"
           data-trail-id={trailId}
           src={videoUrl}
+          poster={tilePoster || undefined}
           muted
           autoPlay
           loop
           playsInline
           preload="auto"
           crossOrigin="anonymous"
+          style={{ position: 'relative', zIndex: 1 }}
         />
       )}
       {(!videoUrl || !inViewport) && (
@@ -527,11 +552,41 @@ export default function ProductPage({
 
   const heroClassName = `pd-hero${creative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
+  // Tap-handoff poster: when CreativeCard navigates here, it stashes a
+  // canvas snapshot of the playing card frame on window.__feedTapPosters.
+  // We pick it up synchronously so the hero can paint that exact frame
+  // BEFORE the trail-host has had a chance to swap in the live element.
+  // Cleared after read so the next tap doesn't reuse a stale snapshot.
+  const tapHandoffPoster = (() => {
+    if (typeof window === 'undefined') return '';
+    if (!creative?.id) return '';
+    const w = window as Window & { __feedTapPosters?: Record<string, string> };
+    const url = w.__feedTapPosters?.[creative.id];
+    if (url && w.__feedTapPosters) delete w.__feedTapPosters[creative.id];
+    return url || '';
+  })();
+  const heroPoster = tapHandoffPoster || creative?.thumbnailUrl || '';
+
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
   // hero slot - appendChild preserves currentTime + decoded frames, so there
-  // is no reload, no black flash, no audio gap.
-  const setHeroSlot = useTrailVideo(creative?.id, creative?.videoUrl);
+  // is no reload, no black flash, no audio gap. The poster argument keeps
+  // the <video> element painting a real image even on the (rare) cold
+  // path where the pool element was evicted between card unmount and
+  // hero attach.
+  const setHeroSlot = useTrailVideo(
+    creative?.id,
+    creative?.videoUrl,
+    heroPoster || undefined,
+  );
+
+  // Phase 8 helper: kick off a high-res prefetch on hero mount in case
+  // the card-side preload (only fires on mobile) didn't run. Idempotent
+  // by URL so a second call here is free when the card already warmed
+  // the cache.
+  useEffect(() => {
+    if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
+  }, [creative?.id, creative?.videoUrl]);
 
   return (
     <div
@@ -554,11 +609,29 @@ export default function ProductPage({
         <div className="pd-split">
           <section className={heroClassName}>
             {creative ? (
-              <div
-                ref={setHeroSlot}
-                className="pd-hero-media pd-hero-video-slot"
-                data-trail-id={creative.id}
-              />
+              <>
+                {/* Phase 9 instant poster: paints synchronously on mount
+                    using either the canvas-frame stashed by the tapped
+                    card or the static thumbnail. The trail-host attaches
+                    its <video> on top in the same paint cycle, so the
+                    user sees a real frame immediately - never the black
+                    flash that used to bridge the card-to-hero gap. */}
+                {heroPoster && (
+                  <img
+                    src={heroPoster}
+                    alt=""
+                    aria-hidden="true"
+                    className="pd-hero-media pd-hero-handoff-poster"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+                  />
+                )}
+                <div
+                  ref={setHeroSlot}
+                  className="pd-hero-media pd-hero-video-slot"
+                  data-trail-id={creative.id}
+                  style={{ position: 'relative', zIndex: 1 }}
+                />
+              </>
             ) : product.image ? (
               <img
                 src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}

@@ -14,6 +14,7 @@
     "eval:search:warm": "node tests/search/run-golden.mjs --warm"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.93.0",
     "@remix-run/node": "^2.17.4",
     "@remix-run/react": "^2.17.4",
     "@supabase/supabase-js": "^2.100.1",

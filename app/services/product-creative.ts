@@ -79,6 +79,13 @@ export interface ProductAd {
   title: string | null;
   description: string | null;
   video_url: string | null;
+  /** Mobile-optimized variant of video_url: 480p H.264 ~600kbps, much
+   *  smaller bitrate so cellular users get a playable first frame in a
+   *  fraction of the time. The renderer picks this on narrow viewports
+   *  + slow connections; full-res streams in the background while the
+   *  user browses (see prefetchHighResForFeed) so tapping into a
+   *  detail view is a cache hit. */
+  mobile_video_url: string | null;
   storage_path: string | null;
   thumbnail_url: string | null;
   affiliate_url: string | null;
@@ -141,7 +148,7 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
   return (data || []) as ProductAd[];
 }
 
-export async function getHomeFeed(): Promise<ProductAd[]> {
+export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Visibility contract:
   //   1. status='live' on the creative + a real video_url (must have
@@ -191,6 +198,7 @@ export async function getHomeFeed(): Promise<ProductAd[]> {
     seen.add(key);
     deduped.push(ad);
   }
+  if (opts.ignoreGender) return deduped;
   return deduped.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );
@@ -271,15 +279,54 @@ export function prefetchHomeFeed(): Promise<ProductAd[]> {
   homeFeedPromise = getHomeFeed().then(rows => {
     // Always overwrite the cache, even when the fresh fetch is empty.
     // Otherwise an admin who turns every Home toggle off ends up with
-    // a stale cache that keeps hydrating the consumer feed forever  - 
+    // a stale cache that keeps hydrating the consumer feed forever  -
     // the empty fetch was treated as "skip the write" and the old
     // rows stuck around on every reload.
     writeHomeFeedToStorage(rows);
+    // Phase 7: while the user is still looking at the splash screen,
+    // warm the browser's HTTP cache with the first few above-the-fold
+    // creatives. Posters first (small, fast, immediate visual win) and
+    // then the actual mobile video bytes. By the time the gate drops,
+    // the feed grid renders against an already-populated cache.
+    void warmAboveTheFoldAssets(rows);
     return rows;
   });
   // If the fetch errors out, drop the cache so the next call retries.
   homeFeedPromise.catch(() => { homeFeedPromise = null; });
   return homeFeedPromise;
+}
+
+// Warm the HTTP cache for the first ~6 above-the-fold creatives. We
+// deliberately keep the fan-out small - mobile bandwidth is precious
+// and the 6 tiles at the top of the grid are what the user sees during
+// the first paint after the splash drops.
+function warmAboveTheFoldAssets(rows: ProductAd[]): void {
+  if (typeof window === 'undefined') return;
+  const head = rows.slice(0, 6);
+  for (const ad of head) {
+    // Image cache hit for the poster - the <img loading=eager> on the
+    // card immediately reuses this without a fresh round-trip.
+    const poster = ad.thumbnail_url || ad.product?.image_url;
+    if (poster) {
+      try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = poster;
+      } catch { /* ignore */ }
+    }
+    // Video cache hit for the mobile variant when present, fallback to
+    // full-res. Lower priority so we don't compete with the splash
+    // animation's own asset traffic.
+    const url = ad.mobile_video_url || ad.video_url;
+    if (url) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fetch(url, { headers: { Range: 'bytes=0-262143' }, priority: 'low' as any })
+          .then(r => r.arrayBuffer())
+          .catch(() => { /* ignore */ });
+      } catch { /* ignore */ }
+    }
+  }
 }
 
 export function invalidateHomeFeed(): void {

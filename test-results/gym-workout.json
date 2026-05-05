@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "query": "gym workout",
+    "timestamp": "2026-05-05T12:05:32.039Z",
+    "k": 24,
+    "gender": null,
+    "elapsed_ms": 1305,
+    "server_ms": 849,
+    "result_count": 1
+  },
+  "results": [
+    {
+      "product_id": "dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09",
+      "product_name": "Game Time Short - Black",
+      "product_brand": "Alo Yoga",
+      "product_price": "$78",
+      "product_type": "Shorts",
+      "product_gender": "female",
+      "product_url": "https://www.aloyoga.com/products/w6500r-game-time-short-black",
+      "product_image_url": "https://cdn.shopify.com/s/files/1/2185/2813/files/w6500r_01_b2_s1_a1_m218.jpg?v=1751452121",
+      "score": 0.0313188157572792,
+      "has_video": true,
+      "creative_id": "bade9205-974b-47ee-b837-78b66fe2f8aa",
+      "video_url": "https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/look-media/ads/dd23b8d8-de2a-4ce9-9c42-ed3dfdde2d09/studio_clean_seedance_image:bytedance/seedance-2.0/fast/image-to-video_1776970459.mp4",
+      "thumbnail_url": null,
+      "is_elite": false
+    }
+  ]
+}

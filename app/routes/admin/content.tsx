@@ -2847,6 +2847,7 @@ export default function AdminContent() {
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 {!statsExpanded && (
                   <th
+                    className="admin-stats-col"
                     style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
                     onClick={() => setStatsExpanded(true)}
                     title="Show In Looks, Creators, Impressions, Saves, Clicks, Date Added"
@@ -2859,17 +2860,17 @@ export default function AdminContent() {
                 )}
                 {statsExpanded && (
                   <>
-                    <th style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none', width: 24 }}
+                    <th className="admin-stats-col" style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none', width: 24 }}
                         onClick={() => setStatsExpanded(false)}
                         title="Collapse stats columns">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="Collapse stats"><polyline points="15 18 9 12 15 6"/></svg>
                     </th>
-                    <SortableTh label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="In Looks" sortKey="lookCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="Creators" sortKey="creatorCount" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                    <SortableTh className="admin-stats-col" label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                   </>
                 )}
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -3147,7 +3148,8 @@ export default function AdminContent() {
                   <td style={{ fontWeight: 600 }}>{p.price}</td>
                   {!statsExpanded && (
                     <td
-                      style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, cursor: 'pointer' }}
+                      className="admin-stats-col"
+                      style={{ textAlign: 'center', fontSize: 12, cursor: 'pointer' }}
                       onClick={(e) => { e.stopPropagation(); setStatsExpanded(true); }}
                       title="Expand stats"
                     >
@@ -3161,14 +3163,14 @@ export default function AdminContent() {
                   )}
                   {statsExpanded && (
                     <>
-                      <td onClick={(e) => { e.stopPropagation(); setStatsExpanded(false); }}
-                          style={{ width: 24, cursor: 'pointer', color: '#94a3b8' }} />
-                      <td>{p.lookCount}</td>
-                      <td>{p.creatorCount}</td>
-                      <td>{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
-                      <td>{p.saves}</td>
-                      <td>{p.clicks}</td>
-                      <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                      <td className="admin-stats-col" onClick={(e) => { e.stopPropagation(); setStatsExpanded(false); }}
+                          style={{ width: 24, cursor: 'pointer' }} />
+                      <td className="admin-stats-col">{p.lookCount}</td>
+                      <td className="admin-stats-col">{p.creatorCount}</td>
+                      <td className="admin-stats-col">{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
+                      <td className="admin-stats-col">{p.saves}</td>
+                      <td className="admin-stats-col">{p.clicks}</td>
+                      <td className="admin-stats-col" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
                         {formatDateAdded(p.created_at)}
                       </td>
                     </>
