@@ -404,6 +404,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'Problem & Solution',
     'Market Opportunity',
     'Technology',
+    'The Ask',
     'Seed Product',
     'Start the Flywheel',
     'Creator Flywheel',
@@ -411,7 +412,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'Traction',
     'Roadmap',
     'Projections',
-    'The Ask',
     'Closing',
   ];
 
@@ -487,8 +487,14 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               seed-based mosaic FeedSection.tsx applies on the consumer
               feed (8% featured 2x2, 14% wide 2x1, 14% tall 1x2, 64%
               normal 1x1) so the background reads as the actual product
-              feed - not a perfect-square wallpaper. */}
-          {Array.from({ length: Math.min(48, homeFeed.length) }).map((_, i) => {
+              feed - not a perfect-square wallpaper. We render up to 120
+              tiles by cycling through homeFeed (homeFeed[i % len]) so
+              even a small live-creative pool fills the parent's 200vh
+              inset edge-to-edge. The repeat is intentional - the
+              eye reads "endless feed", and any single creative shows
+              up in multiple cells of the mosaic so the grid never
+              shows blank space at the bottom. */}
+          {Array.from({ length: homeFeed.length === 0 ? 0 : 120 }).map((_, i) => {
             const clip = homeFeed[i % homeFeed.length];
             // Same hash FeedSection.tsx uses, with a fixed layoutMode of
             // 0 since the deck doesn't expose a Remix button.
@@ -579,6 +585,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
           <h2>Three broken experiences. One platform that fixes them.</h2>
+          <p className="deck-v1-compare-sub">Creators curate. AI indexes. Everyone wins.</p>
         </div>
         <div className="deck-v1-compare-grid">
           <div className="deck-v1-compare-col deck-v1-compare-col-problem">
@@ -591,20 +598,20 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             {
               num: '01',
               role: 'Shoppers',
-              problem: { word: 'Discovery.', sub: 'Fragmented, ad-heavy, impersonal.' },
-              solution: { word: 'Discovery.', sub: 'Curated by people they trust. No ads, no noise.' },
+              problem: { word: 'Guesswork.', sub: 'Fragmented, ad-heavy, impersonal.' },
+              solution: { word: 'Curation.', sub: 'Tastemakers they trust. No ads, no noise.' },
             },
             {
               num: '02',
               role: 'Creators',
-              problem: { word: 'Revenue.', sub: 'Single-digit commissions, disorganized and hard.' },
-              solution: { word: 'Revenue.', sub: 'Real commissions, audience ownership, paid in days.' },
+              problem: { word: 'Pennies.', sub: 'Single-digit commissions, disorganized payouts.' },
+              solution: { word: 'Ownership.', sub: 'Real revenue, audience ownership, paid in days.' },
             },
             {
               num: '03',
               role: 'Brands',
-              problem: { word: 'Acquisition.', sub: 'Renting traffic from Meta and Amazon at rising CAC.' },
-              solution: { word: 'Acquisition.', sub: 'First-party top-of-funnel from creators they own a relationship with.' },
+              problem: { word: 'Renting.', sub: 'Renting traffic from Meta and Amazon at rising CAC.' },
+              solution: { word: 'Pulling.', sub: 'First-party top-of-funnel from creators they own.' },
             },
           ].map(({ num, role, problem, solution }) => (
             <div key={num} className="deck-v1-compare-row">
@@ -627,10 +634,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               </div>
               <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
                 <div className="deck-v9-problem-body">
-                  <div className="deck-v9-problem-headline">
-                    <span className="deck-v9-problem-role">{role}</span>
-                    <span className="deck-v9-problem-num">{num}</span>
-                  </div>
+                  {/* Solution side intentionally drops the duplicate
+                      stakeholder/number header - the problem cell on
+                      the left already labels the row, and removing the
+                      duplicate makes the eye land on the contrast word
+                      (Curation. / Ownership. / Pulling.) immediately. */}
                   <div className="deck-v9-problem-pain">
                     <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle className="win-circle" cx="12" cy="12" r="10" />
@@ -679,6 +687,18 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               points: '20,108 42,100 64,92 85,82 107,72 129,62 150,54 172,46 194,38 216,30 238,24 260,20',
               source: 'Matter Communications, 2024',
               sourceUrl: 'https://www.matternow.com/blog/new-consumer-survey-81-increase-their-trust-in-brand-through-influencer-marketing/',
+            },
+            {
+              // Market-side companion to the trust stat - gives the
+              // recommendation-driven slice of retail a dollar value so
+              // the slide reads as four market curves, not three.
+              key: 'recommendation',
+              value: '$1.0T',
+              label: 'Recommendation-driven retail by 2035',
+              growth: '+19% CAGR',
+              points: '20,118 42,110 64,102 85,92 107,82 129,70 150,60 172,50 194,40 216,32 238,26 260,22',
+              source: 'McKinsey, 2024',
+              sourceUrl: 'https://www.mckinsey.com/industries/retail/our-insights',
             },
           ]).map((chart) => {
             const points = chart.points.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
@@ -855,6 +875,62 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <span className="deck-v9-tech-meta-dot" />
             <span>Vector index &middot; cosine similarity &middot; ~12ms p99</span>
           </div>
+        </div>
+      </div>
+
+      {/* The Ask - moved up to slide 6 (right after Technology) so the
+          round-size + funnel ask sits before the product / flywheel
+          mechanics, not at the very end. */}
+      <div className="deck-slide deck-v8-ask">
+        <span className="deck-label">The Ask</span>
+        <h2>Build the future.<br />Fuel the flywheel.</h2>
+
+        <div className="deck-v8-ask-stage">
+          <div className="deck-v8-ask-raise">
+            <div className="deck-v8-ask-raise-card">
+              <div className="deck-v8-ask-raise-row">
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">$2.5M</span>
+                  <span className="deck-v8-ask-raise-label">Round size</span>
+                </div>
+                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">$12.5M</span>
+                  <span className="deck-v8-ask-raise-label">SAFE cap</span>
+                </div>
+                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
+                <div className="deck-v8-ask-raise-item">
+                  <span className="deck-v8-ask-raise-num">Seed</span>
+                  <span className="deck-v8-ask-raise-label">Stage</span>
+                </div>
+              </div>
+              <p className="deck-v8-ask-raise-caption">Capital deployed across three priorities to ignite the flywheel.</p>
+            </div>
+          </div>
+
+          <svg className="deck-v8-ask-flow" viewBox="0 0 1000 240" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="v8AskFlowGrad" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="230">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+                <stop offset="55%" stopColor="rgba(253,224,130,0.8)" />
+                <stop offset="100%" stopColor="rgba(245,197,66,0.95)" />
+              </linearGradient>
+              <filter id="v8AskFlowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.8" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-1" pathLength="1" d="M 500 10 C 500 90, 170 100, 170 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-2" pathLength="1" d="M 500 10 C 501 90, 499 150, 500 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-3" pathLength="1" d="M 500 10 C 500 90, 830 100, 830 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-1" cx="170" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-2" cx="500" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
+            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
+          </svg>
+
         </div>
       </div>
 
@@ -1186,60 +1262,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             </p>
           </>
         )}
-      </div>
-
-      {/* Slide 12: The Ask */}
-      <div className="deck-slide deck-v8-ask">
-        <span className="deck-label">The Ask</span>
-        <h2>Build the future.<br />Fuel the flywheel.</h2>
-
-        <div className="deck-v8-ask-stage">
-          <div className="deck-v8-ask-raise">
-            <div className="deck-v8-ask-raise-card">
-              <div className="deck-v8-ask-raise-row">
-                <div className="deck-v8-ask-raise-item">
-                  <span className="deck-v8-ask-raise-num">$2.5M</span>
-                  <span className="deck-v8-ask-raise-label">Round size</span>
-                </div>
-                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
-                <div className="deck-v8-ask-raise-item">
-                  <span className="deck-v8-ask-raise-num">$12.5M</span>
-                  <span className="deck-v8-ask-raise-label">SAFE cap</span>
-                </div>
-                <div className="deck-v8-ask-raise-divider" aria-hidden="true" />
-                <div className="deck-v8-ask-raise-item">
-                  <span className="deck-v8-ask-raise-num">Seed</span>
-                  <span className="deck-v8-ask-raise-label">Stage</span>
-                </div>
-              </div>
-              <p className="deck-v8-ask-raise-caption">Capital deployed across three priorities to ignite the flywheel.</p>
-            </div>
-          </div>
-
-          <svg className="deck-v8-ask-flow" viewBox="0 0 1000 240" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="v8AskFlowGrad" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="230">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-                <stop offset="55%" stopColor="rgba(253,224,130,0.8)" />
-                <stop offset="100%" stopColor="rgba(245,197,66,0.95)" />
-              </linearGradient>
-              <filter id="v8AskFlowGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2.8" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-1" pathLength="1" d="M 500 10 C 500 90, 170 100, 170 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
-            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-2" pathLength="1" d="M 500 10 C 501 90, 499 150, 500 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
-            <path className="deck-v8-ask-flow-path deck-v8-ask-flow-path-3" pathLength="1" d="M 500 10 C 500 90, 830 100, 830 230" stroke="url(#v8AskFlowGrad)" strokeWidth="1.8" fill="none" filter="url(#v8AskFlowGlow)" strokeLinecap="round" />
-            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-1" cx="170" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
-            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-2" cx="500" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
-            <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
-          </svg>
-
-        </div>
       </div>
 
       {/* Slide 13: Final */}
