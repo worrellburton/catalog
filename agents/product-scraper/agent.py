@@ -402,17 +402,28 @@ def _upgrade_image_url(url: str) -> str:
 
 
 class BrowserSession:
-    """Manages a headless Chromium browser via Playwright."""
+    """Manages a headless Chromium browser via Playwright.
 
-    def __init__(self):
+    Options:
+        use_stealth: when True, applies playwright-stealth evasions on top of
+            the default fingerprint patches. Used as an automatic fallback
+            after a SITE_BLOCKED first attempt.
+        proxy: optional dict {"server": "...", "username": "...", "password": "..."}
+            forwarded to chromium.launch(proxy=...). Use a US residential proxy
+            for sites that block datacenter IPs (Reiss / Akamai, Amazon, etc.).
+    """
+
+    def __init__(self, use_stealth: bool = False, proxy: dict | None = None):
         self._pw = None
         self.browser: Browser | None = None
         self.context = None
         self.page: Page | None = None
+        self.use_stealth = use_stealth
+        self.proxy = proxy
 
     def start(self):
         self._pw = sync_playwright().start()
-        self.browser = self._pw.chromium.launch(
+        launch_kwargs = dict(
             headless=True,
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -420,6 +431,9 @@ class BrowserSession:
                 "--disable-dev-shm-usage",
             ],
         )
+        if self.proxy:
+            launch_kwargs["proxy"] = self.proxy
+        self.browser = self._pw.chromium.launch(**launch_kwargs)
         # Use a full browser context so we can pin locale/timezone/geolocation
         # to the United States. Without this, sites that geo-detect via IP
         # (Reiss, Zara, H&M, Adidas, etc.) return EUR / GBP / INR pricing
@@ -467,6 +481,17 @@ class BrowserSession:
             Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
             window.chrome = { runtime: {} };
         """)
+        # Optional: layer playwright-stealth evasions for the retry attempt.
+        # Imported lazily so the package is only required when actually used.
+        if self.use_stealth:
+            try:
+                from playwright_stealth import stealth_sync  # type: ignore
+                stealth_sync(self.page)
+                print("  🥷 playwright-stealth applied")
+            except ImportError:
+                print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
+            except Exception as e:
+                print(f"  ⚠️  stealth_sync failed: {e}")
 
     def stop(self):
         if self.browser:
@@ -1009,6 +1034,27 @@ How to recognise a real product detail page:
 """
 
 
+def _proxy_from_env() -> dict | None:
+    """Read proxy config from env vars. Returns None if not configured.
+
+    Recognised vars:
+        SCRAPER_PROXY_SERVER     e.g. "http://us.smartproxy.com:10000"
+        SCRAPER_PROXY_USERNAME   (optional)
+        SCRAPER_PROXY_PASSWORD   (optional)
+    """
+    server = os.environ.get("SCRAPER_PROXY_SERVER", "").strip()
+    if not server:
+        return None
+    proxy = {"server": server}
+    user = os.environ.get("SCRAPER_PROXY_USERNAME", "").strip()
+    pwd = os.environ.get("SCRAPER_PROXY_PASSWORD", "").strip()
+    if user:
+        proxy["username"] = user
+    if pwd:
+        proxy["password"] = pwd
+    return proxy
+
+
 def run_agent(
     product_url: str,
     look_id: str | None = None,
@@ -1016,12 +1062,45 @@ def run_agent(
     on_save=None,  # callable | None -- called immediately when save_product fires
 ) -> dict:
     """
+    Top-level entry point. Tries a normal scrape first; if the site blocks the
+    request (raises SITE_BLOCKED), automatically retries once with stealth +
+    proxy enabled. The proxy is read from env vars (see _proxy_from_env).
+
     on_save(product: dict) -- optional callback fired the instant Claude calls
     save_product, BEFORE the agent loop finishes.  Use this in Modal to write
     the DB row immediately so no work is lost if the container is killed later.
     """
+    try:
+        return _run_agent_attempt(
+            product_url, look_id=look_id, save=save, on_save=on_save,
+            use_stealth=False, proxy=None,
+        )
+    except RuntimeError as e:
+        if "SITE_BLOCKED" not in str(e).upper():
+            raise
+        proxy = _proxy_from_env()
+        # Always retry with stealth; proxy only if configured. If neither
+        # gives us anything new (no proxy AND stealth not installed) we'd
+        # just fail the same way -- but stealth alone often clears
+        # Cloudflare/Akamai checks, so it's worth the attempt.
+        print(f"\n🔁 First attempt blocked ({e}); retrying with stealth"
+              f"{' + proxy' if proxy else ''}…\n")
+        return _run_agent_attempt(
+            product_url, look_id=look_id, save=save, on_save=on_save,
+            use_stealth=True, proxy=proxy,
+        )
+
+
+def _run_agent_attempt(
+    product_url: str,
+    look_id: str | None,
+    save: bool,
+    on_save,
+    use_stealth: bool,
+    proxy: dict | None,
+) -> dict:
     client = anthropic.Anthropic()
-    browser = BrowserSession()
+    browser = BrowserSession(use_stealth=use_stealth, proxy=proxy)
 
     messages = [
         {"role": "user", "content": f"Extract product data from: {product_url}"}
