@@ -888,7 +888,9 @@ export default function Home() {
       seenIds.add(idKey);
       seenCreatorVideo.add(creatorVideoKey);
       out.push(l);
-      if (out.length >= 12) break;
+      // Bumped from 12 to 24 so the "Featured in these looks" rail
+      // surfaces the full published-look feed, not a curated subset.
+      if (out.length >= 24) break;
     }
     return out;
   }, [liveLooks]);

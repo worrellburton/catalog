@@ -244,14 +244,25 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
   const [inViewport, setInViewport] = useState(false);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Pick the mobile variant when one exists + we're on a narrow
+  // viewport. Same contract as ProductAd's pickVideoUrl - smaller
+  // bytes on cellular, full-res on desktop. The variant is roughly
+  // 1/8th the size, which is the difference between a 2.5s first-
+  // frame and a sub-500ms first-frame on a typical iPhone-on-LTE.
+  const isNarrow = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const rawVideo = (isNarrow && look.mobile_video_url) || look.video;
+  const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
 
   useEffect(() => {
     const node = wrapRef.current;
     if (!node) return;
     const obs = new IntersectionObserver(
       es => es.forEach(e => setInViewport(e.isIntersecting)),
-      { rootMargin: '400px' },
+      // Bumped from 400px to 800px so look-tile videos start streaming
+      // ~half a viewport before the user actually scrolls them into
+      // view; closes the perceived gap to product images, which paint
+      // instantly because they're way smaller.
+      { rootMargin: '800px' },
     );
     obs.observe(node);
     return () => obs.disconnect();
@@ -588,6 +599,27 @@ export default function ProductPage({
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
   }, [creative?.id, creative?.videoUrl]);
 
+  // Prewarm "Featured in these looks" poster images. Each look that's
+  // about to render a tile gets its poster jpeg pulled into the
+  // browser image cache while the user is still reading the hero.
+  // Posters are tiny (~30 KB) so the cost is negligible and the
+  // payoff is the rail painting instantly the moment it scrolls
+  // into view - same first-paint cadence as the product images
+  // around it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!lookCreatives || lookCreatives.length === 0) return;
+    for (const l of lookCreatives.slice(0, 12)) {
+      const url = l.thumbnail_url;
+      if (!url) continue;
+      try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
+      } catch { /* ignore */ }
+    }
+  }, [lookCreatives]);
+
   return (
     <div
       ref={overlayRef}
@@ -796,9 +828,9 @@ export default function ProductPage({
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
-            <h2 className="pd-feed-title">You might also like</h2>
+            <h2 className="pd-feed-title">Featured in these looks</h2>
             <div className="pd-look-grid">
-              {lookCreatives.slice(0, 12).map(l => (
+              {lookCreatives.slice(0, 24).map(l => (
                 <LookTile key={l.id} look={l} onOpen={onOpenLook} />
               ))}
             </div>
