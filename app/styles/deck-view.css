@@ -6008,9 +6008,12 @@
 }
 
 .deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(22px, 2.4vw, 38px);
-  line-height: 1.12;
-  letter-spacing: -0.018em;
+  /* Match the cover slide's "The AI for Shopping" headline scale so the
+     opening punchline and the problem/solution punchline read with
+     the same weight in the deck's narrative arc. */
+  font-size: clamp(36px, 5.2vw, 72px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   margin: 0;
   font-weight: 600;
 }
@@ -6018,21 +6021,26 @@
 .deck-view-v1 .deck-v1-compare-rows {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: clamp(12px, 1.6vh, 22px);
 }
 
 .deck-view-v1 .deck-v1-compare-row {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: clamp(6px, 0.9vh, 12px);
+  width: 100%;
 }
 
 .deck-view-v1 .deck-v1-compare-row-head {
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
+  text-align: left;
   gap: clamp(10px, 1vw, 16px);
-  padding-left: 4px;
+  padding-left: 0;
+  width: 100%;
 }
 .deck-view-v1 .deck-v1-compare-row-num {
   font-size: 10px;
@@ -6630,3 +6638,87 @@
   color: #0a0a0a;
 }
 .light-mode .deck-view-v1 .deck-v1-demo-exit-overlay { background: #fafafa; }
+
+/* V1.2 combined Cover + Dream slide. Catalog wordmark sits above the
+   THE DREAM label / AI-for-Shopping h2 / human-taste subtitle, all
+   centered, with the floating intro icons behind. Tighter vertical
+   gap so the wordmark + headline read as one composition rather than
+   two stacked blocks. */
+.deck-view-v1 .deck-v1-cover-combined {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 2.6vh, 36px);
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-logo {
+  margin: 0 auto;
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+/* V1.2 Payouts slide - money fly-up overlay. 36 emoji flakes scatter
+   from the bottom of the slide upward with randomized horizontal
+   drift, rotation, delay, and duration. Triggered when the slide
+   enters the viewport (.deck-slide.visible) so it doesn't burn
+   animation cycles off-screen. */
+.deck-view-v1 .deck-v1-money-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.deck-view-v1 .deck-v1-money-flake {
+  position: absolute;
+  bottom: -10vh;
+  width: auto;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(0, 0) rotate(0deg);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+  will-change: transform, opacity;
+}
+
+/* Only animate while the slide is in viewport. The .visible class is
+   added by the deck's IntersectionObserver. */
+.deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+  animation: deck-v1-money-fly var(--money-dur, 6s) cubic-bezier(0.25, 0.46, 0.45, 0.94) var(--money-delay, 0s) infinite;
+}
+
+@keyframes deck-v1-money-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--money-drift, 0), -120vh) rotate(var(--money-rot, 360deg));
+    opacity: 0;
+  }
+}
+
+/* Payouts content sits above the money layer. */
+.deck-view-v1 .deck-v1-payouts > *:not(.deck-v1-money-burst) {
+  position: relative;
+  z-index: 2;
+}
+
+/* Reduce motion - don't bombard accessibility-conscious users with
+   flying emoji. */
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+    animation: none;
+    opacity: 0;
+  }
+}

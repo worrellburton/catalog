@@ -403,7 +403,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     }
   };
   const slideTitles = [
-    'Cover',
     'The Dream',
     'Problem & Solution',
     'Market Opportunity',
@@ -555,13 +554,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         ))}
       </nav>
 
-      {/* Slide 1: Cover */}
-      <div className="deck-slide deck-cover deck-v8-cover-intro">
-        <CatalogLogo className="deck-logo deck-v8-cover-logo" />
-      </div>
-
-      {/* Slide 2: Intro: catalog nostalgia + SVG animations */}
-      <div className="deck-slide deck-slide-intro deck-v8-intro">
+      {/* Slide 1: Cover + The Dream merged into one opening slide.
+          Catalog wordmark sits at the top; "THE DREAM" label, the
+          AI-for-Shopping headline, and the human-taste subtitle land
+          below. The animated catalog/book icons float behind. */}
+      <div className="deck-slide deck-cover deck-slide-intro deck-v8-cover-intro deck-v8-intro deck-v1-cover-combined">
         <div className="deck-intro-svgs" aria-hidden="true">
           {/* Animated floating catalog/book icons */}
           <svg className="deck-intro-icon deck-intro-icon-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
@@ -571,6 +568,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <svg className="deck-intro-icon deck-intro-icon-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
           <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </div>
+        <CatalogLogo className="deck-logo deck-v8-cover-logo deck-v8-reveal deck-v8-reveal-1" />
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
           <h2 className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-h2">The AI for Shopping</h2>
@@ -786,8 +784,45 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
 
       {/* Payouts - how creators earn across four streams. Sits right
           after Market Opportunity so the conversation goes "here's the
-          market" -> "here's how creators get paid for it". */}
+          market" -> "here's how creators get paid for it". When the
+          slide enters the viewport, a swarm of money emoji float up
+          from the bottom (deck-v1-money-burst) - the literal "money
+          flies everywhere" gag the deck calls for. */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
+        {/* Money fly-up overlay. 36 emoji flakes scatter across the
+            slide with deterministic random positions/delays so the
+            burst feels chaotic without being repetitive. Container
+            covers the slide; pointer-events: none so it never blocks
+            the underlying list copy. */}
+        <div className="deck-v1-money-burst" aria-hidden="true">
+          {Array.from({ length: 36 }).map((_, i) => {
+            const emojis = ['💵', '💸', '💰', '🪙', '💴', '💶'];
+            // Pseudo-random spread using small primes so the swarm
+            // looks scattered rather than gridded.
+            const left = (i * 37 + 11) % 100;
+            const delay = ((i * 0.17) % 2.4).toFixed(2);
+            const dur = (4.5 + (i * 0.31) % 3).toFixed(2);
+            const rotEnd = ((i * 73) % 720) - 360;
+            const driftX = ((i * 53) % 60) - 30;
+            const size = 22 + (i * 7) % 18;
+            return (
+              <span
+                key={i}
+                className="deck-v1-money-flake"
+                style={{
+                  left: `${left}%`,
+                  fontSize: `${size}px`,
+                  ['--money-delay' as string]: `${delay}s`,
+                  ['--money-dur' as string]: `${dur}s`,
+                  ['--money-rot' as string]: `${rotEnd}deg`,
+                  ['--money-drift' as string]: `${driftX}vw`,
+                }}
+              >
+                {emojis[i % emojis.length]}
+              </span>
+            );
+          })}
+        </div>
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
           <h2>Post once.<br />Earn four ways.</h2>
