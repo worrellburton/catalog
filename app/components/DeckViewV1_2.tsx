@@ -574,78 +574,81 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
       </div>
 
-      {/* Slide 3: Problem & Solution side-by-side. Three stakeholders down
-          the left rail; broken experience on the left, win on the right
-          for each row, so the eye reads "this → fixed by us" three times.
-          Class also carries .deck-v8-problem so the existing X / check
-          icon animations (defined for the v8 problem/solution layout)
-          fire when the slide enters the viewport. */}
+      {/* Slide 3: Problem & Solution.
+          Per-stakeholder row layout - the headline word (Discovery /
+          Revenue / Acquisition) is shared between problem and solution
+          (one source of truth for "what this stakeholder needs").
+          Below the shared header, two side-by-side cells contrast
+          today (broken) vs Catalog (fixed) via descriptive text only.
+
+          Animations: each row + cell hooks into the existing v8 fade-
+          in-up + blur reveal vocabulary (same easing/timing as the
+          rest of the deck) via the deck-v1-compare-row class. Stagger
+          delays cascade across the 3 rows so the slide unfolds left-
+          to-right then top-to-bottom. The X / check icon strokes
+          re-use the existing deck-v8-problem-item draw-on animation. */}
       <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
           <h2>Three broken experiences. One platform that fixes them.</h2>
           <p className="deck-v1-compare-sub">Creators curate. AI indexes. Everyone wins.</p>
         </div>
-        <div className="deck-v1-compare-grid">
-          <div className="deck-v1-compare-col deck-v1-compare-col-problem">
-            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-problem">The Problem</span>
-          </div>
-          <div className="deck-v1-compare-col deck-v1-compare-col-solution">
-            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-solution">The Solution</span>
-          </div>
+        <div className="deck-v1-compare-rows">
           {[
             {
               num: '01',
               role: 'Shoppers',
-              problem: { word: 'Guesswork.', sub: 'Fragmented, ad-heavy, impersonal.' },
-              solution: { word: 'Curation.', sub: 'Tastemakers they trust. No ads, no noise.' },
+              word: 'Discovery',
+              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise — just the looks they want.',
             },
             {
               num: '02',
               role: 'Creators',
-              problem: { word: 'Pennies.', sub: 'Single-digit commissions, disorganized payouts.' },
-              solution: { word: 'Ownership.', sub: 'Real revenue, audience ownership, paid in days.' },
+              word: 'Revenue',
+              problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
+              solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
             },
             {
               num: '03',
               role: 'Brands',
-              problem: { word: 'Renting.', sub: 'Renting traffic from Meta and Amazon at rising CAC.' },
-              solution: { word: 'Pulling.', sub: 'First-party top-of-funnel from creators they own.' },
+              word: 'Acquisition',
+              problem: 'Renting traffic from Meta and Amazon at rising CAC. No first-party top-of-funnel they own.',
+              solution: 'First-party demand pulled in by creators with real audiences. CAC trends to zero as the loop spins.',
             },
-          ].map(({ num, role, problem, solution }) => (
-            <div key={num} className="deck-v1-compare-row">
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
-                <div className="deck-v9-problem-body">
-                  <div className="deck-v9-problem-headline">
-                    <span className="deck-v9-problem-role">{role}</span>
-                    <span className="deck-v9-problem-num">{num}</span>
-                  </div>
-                  <div className="deck-v9-problem-pain">
-                    <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          ].map(({ num, role, word, problem, solution }, rowIdx) => (
+            <div
+              key={num}
+              className="deck-v1-compare-row"
+              style={{ ['--row-idx' as string]: rowIdx }}
+            >
+              <div className="deck-v1-compare-row-head">
+                <span className="deck-v1-compare-row-num">{num}</span>
+                <span className="deck-v1-compare-row-role">{role}</span>
+                <span className="deck-v1-compare-row-dot" aria-hidden="true">·</span>
+                <h3 className="deck-v1-compare-row-word">{word}.</h3>
+              </div>
+              <div className="deck-v1-compare-row-cells">
+                <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
+                  <div className="deck-v1-compare-cell-label-row">
+                    <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle className="broken-circle" cx="12" cy="12" r="10" />
                       <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
                       <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
                     </svg>
-                    <h3>{problem.word}</h3>
+                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
                   </div>
-                  <p>{problem.sub}</p>
+                  <p className="deck-v1-compare-cell-text">{problem}</p>
                 </div>
-              </div>
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
-                <div className="deck-v9-problem-body">
-                  {/* Solution side intentionally drops the duplicate
-                      stakeholder/number header - the problem cell on
-                      the left already labels the row, and removing the
-                      duplicate makes the eye land on the contrast word
-                      (Curation. / Ownership. / Pulling.) immediately. */}
-                  <div className="deck-v9-problem-pain">
-                    <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
+                  <div className="deck-v1-compare-cell-label-row">
+                    <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle className="win-circle" cx="12" cy="12" r="10" />
                       <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
                     </svg>
-                    <h3>{solution.word}</h3>
+                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
                   </div>
-                  <p>{solution.sub}</p>
+                  <p className="deck-v1-compare-cell-text">{solution}</p>
                 </div>
               </div>
             </div>

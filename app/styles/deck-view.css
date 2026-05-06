@@ -5967,124 +5967,202 @@
 }
 
 /* ===========================================================
-   V1.2 Problem & Solution combined slide
+   V1.2 Problem & Solution slide.
+   Per-stakeholder row: shared headline word (Discovery / Revenue /
+   Acquisition) on top, two side-by-side description cells (Today vs
+   With Catalog) below. Hooks into the existing v8 fade-up + blur
+   reveal animation vocabulary so the slide unfolds in the same
+   cinematic style as the rest of the deck.
    =========================================================== */
 .deck-view-v1 .deck-v1-compare-slide {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  justify-content: flex-start;
-  padding: clamp(48px, 5vh, 88px) clamp(40px, 5vw, 120px) !important;
-  gap: clamp(24px, 3vh, 44px);
+  justify-content: center;
+  padding: clamp(40px, 4.5vh, 80px) clamp(40px, 5vw, 120px) !important;
+  gap: clamp(20px, 2.6vh, 36px);
 }
 
 .deck-view-v1 .deck-v1-compare-head {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  max-width: 78ch;
 }
 
 .deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(20px, 2.2vw, 34px);
-  line-height: 1.15;
-  letter-spacing: -0.015em;
+  font-size: clamp(22px, 2.4vw, 38px);
+  line-height: 1.12;
+  letter-spacing: -0.018em;
   margin: 0;
-  max-width: 60ch;
   font-weight: 600;
 }
 
-.deck-view-v1 .deck-v1-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: clamp(20px, 2.5vw, 40px);
-  row-gap: clamp(14px, 2vh, 22px);
-}
-
-.deck-view-v1 .deck-v1-compare-col {
+.deck-view-v1 .deck-v1-compare-rows {
   display: flex;
-  align-items: center;
-}
-
-.deck-view-v1 .deck-v1-compare-col-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
-}
-.deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.18);
-}
-.deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #6ee7b7;
-  background: rgba(110, 231, 183, 0.08);
-  border-color: rgba(110, 231, 183, 0.22);
+  flex-direction: column;
+  gap: clamp(16px, 2.2vh, 30px);
 }
 
 .deck-view-v1 .deck-v1-compare-row {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.2vh, 16px);
+}
+
+.deck-view-v1 .deck-v1-compare-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(10px, 1vw, 16px);
+  padding-left: 4px;
+}
+.deck-view-v1 .deck-v1-compare-row-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+  padding-top: 4px;
+}
+.deck-view-v1 .deck-v1-compare-row-role {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  padding-top: 4px;
+}
+.deck-view-v1 .deck-v1-compare-row-dot {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1;
+  padding-top: 2px;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+  color: #fff;
+  margin: 0;
+  font-weight: 700;
+}
+
+.deck-view-v1 .deck-v1-compare-row-cells {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(14px, 1.6vw, 22px);
 }
 
 .deck-view-v1 .deck-v1-compare-cell {
   border-radius: 18px;
-  padding: clamp(16px, 1.6vw, 22px) clamp(18px, 1.8vw, 24px);
+  padding: clamp(14px, 1.4vw, 20px) clamp(16px, 1.6vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005));
   display: flex;
   flex-direction: column;
+  gap: 10px;
 }
 .deck-view-v1 .deck-v1-compare-cell-problem {
-  border-color: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.16);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.04), rgba(248, 113, 113, 0.01));
 }
 .deck-view-v1 .deck-v1-compare-cell-solution {
   border-color: rgba(110, 231, 183, 0.18);
+  background: linear-gradient(180deg, rgba(110, 231, 183, 0.05), rgba(110, 231, 183, 0.01));
 }
 
-/* Tighten the inherited problem-body styles inside compare cells so two
-   columns + three rows fit inside one slide without scrolling. */
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body {
-  gap: 6px;
+.deck-view-v1 .deck-v1-compare-cell-label-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-pain h3 {
-  font-size: clamp(22px, 2.2vw, 30px);
+.deck-view-v1 .deck-v1-compare-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body > p {
-  font-size: clamp(13px, 1vw, 15px);
-  line-height: 1.4;
+.deck-view-v1 .deck-v1-compare-cell-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.deck-view-v1 .deck-v1-compare-cell-label-problem { color: #fca5a5; }
+.deck-view-v1 .deck-v1-compare-cell-label-solution { color: #6ee7b7; }
+
+.deck-view-v1 .deck-v1-compare-cell-text {
+  font-size: clamp(13px, 1.05vw, 16px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
 }
 
-.light-mode .deck-view-v1 .deck-v1-compare-col-label {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
+/* ── Cinematic reveal: fade-up + blur, staggered per row + cell ──
+   Mirrors the deck-wide v8 reveal vocabulary (1.4s cubic-bezier,
+   24px translateY, blur(8px) for the headline word) so this slide
+   feels like the rest of the deck instead of a one-off. */
+.deck-view-v1 .deck-v1-compare-row-head,
+.deck-view-v1 .deck-v1-compare-cell {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  filter: blur(6px);
+  transition: filter 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-head,
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-cell {
+  opacity: 1;
+  transform: translateY(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-word {
+  filter: blur(0);
+}
+
+/* Per-row stagger: header lands first, then problem cell, then solution
+   cell. --row-idx is set inline so each row picks up its base delay. */
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-head {
+  transition-delay: calc(0.6s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-problem {
+  transition-delay: calc(0.78s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-solution {
+  transition-delay: calc(0.92s + var(--row-idx, 0) * 0.18s);
+}
+
+/* Light mode mirrors */
+.light-mode .deck-view-v1 .deck-v1-compare-row-num,
+.light-mode .deck-view-v1 .deck-v1-compare-row-role {
   color: rgba(0, 0, 0, 0.55);
 }
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #b91c1c;
-  background: rgba(185, 28, 28, 0.06);
-  border-color: rgba(185, 28, 28, 0.18);
-}
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #047857;
-  background: rgba(4, 120, 87, 0.06);
-  border-color: rgba(4, 120, 87, 0.2);
-}
+.light-mode .deck-view-v1 .deck-v1-compare-row-dot { color: rgba(0, 0, 0, 0.35); }
+.light-mode .deck-view-v1 .deck-v1-compare-row-word { color: #0a0a0a; }
 .light-mode .deck-view-v1 .deck-v1-compare-cell {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.01));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.005));
   border-color: rgba(0, 0, 0, 0.08);
 }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-problem {
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.05), rgba(185, 28, 28, 0.01));
+  border-color: rgba(185, 28, 28, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-solution {
+  background: linear-gradient(180deg, rgba(4, 120, 87, 0.05), rgba(4, 120, 87, 0.01));
+  border-color: rgba(4, 120, 87, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-problem { color: #b91c1c; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-solution { color: #047857; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-text { color: rgba(0, 0, 0, 0.72); }
 
 @media (max-width: 980px) {
-  .deck-view-v1 .deck-v1-compare-grid {
+  .deck-view-v1 .deck-v1-compare-row-cells {
     grid-template-columns: 1fr;
-  }
-  .deck-view-v1 .deck-v1-compare-col-solution {
-    margin-top: 12px;
   }
 }
 
