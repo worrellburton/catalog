@@ -405,8 +405,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'Market Opportunity',
     'Technology',
     'The Ask',
-    'Seed Product',
-    'Start the Flywheel',
+    'Step Zero · Start the Flywheel',
     'Creator Flywheel',
     'Payouts',
     'Traction',
@@ -883,7 +882,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           mechanics, not at the very end. */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
-        <h2>Build the future.<br />Fuel the flywheel.</h2>
+        <h2>Capital to build the flywheel.</h2>
 
         <div className="deck-v8-ask-stage">
           <div className="deck-v8-ask-raise">
@@ -931,14 +930,41 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
           </svg>
 
+          {/* Flywheel components - the SVG flow lines from the round-size
+              card terminate at three dots; these cards sit directly under
+              those dots so the eye reads "$2.5M flows into these three
+              flywheel components". Same data the standalone "Start the
+              flywheel" framing carries elsewhere in the deck - here the
+              point is "where the money goes", not the narrative arc. */}
+          <div className="deck-v8-ask-priorities deck-v8-ask-components">
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">01</span>
+              <h3>Creator supply</h3>
+              <p>Onboard the first wave of creators. Free tools, fast payouts, instant storefronts - the side of the loop the round seeds.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">02</span>
+              <h3>Product depth</h3>
+              <p>Tagging infrastructure, native mobile app, creator analytics. Make Catalog the default tool so taste compounds inside the platform.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">03</span>
+              <h3>Brand pull</h3>
+              <p>Launch the fixed-ROAS model with early brand partners. Prove the economics that make the marketplace self-sustaining.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Slide 9a: Seed Product */}
-      <div className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide">
+      {/* Step Zero + Start the Flywheel - combined into one slide so the
+          "build the inventory" mechanics sit next to the "ignite the
+          loop" priorities. The split-layout block (3 steps + pipeline
+          diagram) is the seed; the 3 priority cards below show the
+          flywheel ignition steps the round funds. */}
+      <div className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide deck-v1-step-zero-combined">
         <div className="deck-v1-fw-view deck-v1-fw-view-seed">
           <div className="flywheel-left">
-            <span className="deck-label">Step Zero</span>
+            <span className="deck-label">Step Zero · Start the Flywheel</span>
             <h2>Build and seed product.</h2>
             <div className="deck-v1-seed-steps">
               <div className="deck-v1-seed-step">
@@ -992,30 +1018,32 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Start the flywheel - the three priorities the round funds.
-          Lifted out of the Ask slide so the conversation arrives at the
-          mechanics ("how the flywheel actually starts") right before
-          the visual flywheel slide that follows. */}
-      <div className="deck-slide deck-v1-start-flywheel-slide">
-        <span className="deck-label">Start the flywheel</span>
-        <h2>Three priorities to ignite the loop.</h2>
-        <div className="deck-v8-ask-priorities deck-v1-start-flywheel-cards">
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">01</span>
-            <h3>Seed the creator side</h3>
-            <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
+        {/* Start the flywheel - the three priorities the round ignites
+            once the seed inventory is in. Sits inside the same slide so
+            the conversation arrives at "build → ignite" without a
+            slide break in between. */}
+        <div className="deck-v1-step-zero-priorities">
+          <div className="deck-v1-step-zero-priorities-head">
+            <span className="deck-label">Then ignite the loop</span>
+            <h3>Three priorities the round funds.</h3>
           </div>
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">02</span>
-            <h3>Deepen the product</h3>
-            <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
-          </div>
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">03</span>
-            <h3>Bring brands on board</h3>
-            <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
+          <div className="deck-v8-ask-priorities deck-v1-start-flywheel-cards">
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">01</span>
+              <h3>Seed the creator side</h3>
+              <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">02</span>
+              <h3>Deepen the product</h3>
+              <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">03</span>
+              <h3>Bring brands on board</h3>
+              <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
+            </div>
           </div>
         </div>
       </div>

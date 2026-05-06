@@ -6312,3 +6312,55 @@
 .light-mode .deck-view-v1 .deck-v1-compare-sub {
   color: rgba(0, 0, 0, 0.55);
 }
+
+/* V1.2 Step Zero · Start the Flywheel combined slide.
+   The seed-product split layout keeps its existing rules; we just add
+   the priorities strip below it so both pieces fit on one slide. */
+.deck-view-v1 .deck-v1-step-zero-combined {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 2.4vh, 36px);
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.5vh, 20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: clamp(16px, 2vh, 28px);
+  margin-top: clamp(8px, 1vh, 16px);
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-step-zero-priorities-head h3 {
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-step-zero-priorities {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V1.2 Ask slide - flywheel components sit under the SVG flow dots,
+   3 equal columns aligned with the dots at x=170/500/830 of a 1000-wide
+   viewBox (=17%/50%/83% center). */
+.deck-view-v1 .deck-v8-ask-components {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(-12px, -1vh, -8px);
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+  }
+}
