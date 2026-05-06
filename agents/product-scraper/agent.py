@@ -32,13 +32,13 @@ load_dotenv()
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-5-20250929"
 # Hard cap on Claude turns. Real product pages are extracted in 2-4 turns;
-# anything past 6 means the agent is wandering on a non-product page.
-MAX_AGENT_TURNS = 8
+# anything past 10 means the agent is wandering on a non-product page.
+MAX_AGENT_TURNS = 12
 MAX_HTML_LENGTH = 15_000
 MAX_TEXT_LENGTH = 3_000
-MAX_IMAGES_RETURN = 15
+MAX_IMAGES_RETURN = 30
 
 # Rate-limit retry config
 MAX_RETRIES = 3
@@ -99,7 +99,7 @@ TOOLS = [
         "name": "take_screenshot",
         "description": (
             "Take a visual screenshot of the current page. Use this to see the product "
-            "as a real user would — helpful for verifying prices, spotting sale badges, "
+            "as a real user would -- helpful for verifying prices, spotting sale badges, "
             "and identifying the correct product image."
         ),
         "input_schema": {
@@ -189,16 +189,72 @@ TOOLS = [
 
 # ─── Image URL helpers ────────────────────────────────────────────────
 
-_IMAGE_CHECK_TIMEOUT = 5  # seconds per HTTP probe
-_IMAGE_CHECK_WORKERS = 8
+_IMAGE_CHECK_TIMEOUT = 10  # seconds per HTTP probe
+_IMAGE_CHECK_WORKERS = 16
 _IMAGE_CHECK_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
+# CDN domains that are always publicly accessible -- skip the HTTP probe
+# for these to avoid inconsistent results from slow CDN HEAD responses.
+_TRUSTED_CDN_DOMAINS = (
+    "cdn.shopify.com",
+    "shopify.com",
+    "cdn.shopifycdn.com",
+    "res.cloudinary.com",
+    "images.ctfassets.net",
+    "cdn.sanity.io",
+    "i.imgur.com",
+    "images.squarespace-cdn.com",
+    "cdn.pixelunion.net",
+    "imagedelivery.net",  # Cloudflare Images
+    "media.istockphoto.com",
+    "images-na.ssl-images-amazon.com",
+    "m.media-amazon.com",
+    "cdn.media.amplience.net",
+    "dam.northface.com",
+    "cdn.prod.website-files.com",
+    "framerusercontent.com",
+)
+
 
 # ─── URL pre-filter ───────────────────────────────────────────────────
+
+
+_BLOCK_PATTERNS = (
+    "access denied",
+    "you don't have permission to access",
+    "request blocked",
+    "pardon our interruption",  # Distil
+    "sorry, we just need to make sure",  # Amazon bot
+    "to discuss automated access",  # Amazon
+    "are you a robot",
+    "captcha",
+    "checking your browser before accessing",  # Cloudflare
+    "ddos protection by cloudflare",
+    "this website is using a security service to protect itself",  # Cloudflare
+    "reference #",  # Akamai/CloudFront block reference id
+    "akamai",
+    "incapsula incident id",  # Imperva
+    "perimeterx",
+)
+
+
+def _detect_block(status: int | None, title: str, body: str) -> str | None:
+    """Return a short reason if the response looks like a bot-protection
+    block page rather than a real product page; else None."""
+    title_l = (title or "").lower()
+    body_l = (body or "").lower()
+    if status in (401, 403, 429, 503):
+        return f"site returned HTTP {status} (likely bot-protection block)"
+    if "access denied" in title_l or "access denied" in body_l[:300]:
+        return "site returned an Access Denied page"
+    for pat in _BLOCK_PATTERNS:
+        if pat in body_l:
+            return f"site returned a bot-protection page ({pat!r})"
+    return None
 
 
 def _non_product_url_reason(raw_url: str) -> str | None:
@@ -219,7 +275,7 @@ def _non_product_url_reason(raw_url: str) -> str | None:
     path = (parsed.path or "").lower()
 
     if host == "google.com" or host.endswith(".google.com"):
-        # Allow Google Shopping product detail pages — they get resolved to
+        # Allow Google Shopping product detail pages -- they get resolved to
         # the underlying merchant URL before scraping (see resolve_google_shopping).
         # Two known product-detail URL shapes:
         #   1. /shopping/product/<id>
@@ -261,6 +317,16 @@ def _is_image_url_accessible(url: str) -> bool:
     if not url.startswith(("http://", "https://")):
         return False
 
+    # Skip probe for well-known public CDNs -- they're always accessible
+    # and slow HEAD checks cause intermittent false negatives.
+    try:
+        from urllib.parse import urlparse as _urlparse
+        host = _urlparse(url).hostname or ""
+        if any(host == d or host.endswith("." + d) for d in _TRUSTED_CDN_DOMAINS):
+            return True
+    except Exception:
+        pass
+
     headers = {
         "User-Agent": _IMAGE_CHECK_USER_AGENT,
         "Accept": "image/*,*/*;q=0.8",
@@ -285,7 +351,7 @@ def _is_image_url_accessible(url: str) -> bool:
 
     if _check("HEAD"):
         return True
-    # Some CDNs / S3-style endpoints reject HEAD — try a tiny ranged GET.
+    # Some CDNs / S3-style endpoints reject HEAD -- try a tiny ranged GET.
     return _check("GET", {"Range": "bytes=0-0"})
 
 
@@ -336,16 +402,28 @@ def _upgrade_image_url(url: str) -> str:
 
 
 class BrowserSession:
-    """Manages a headless Chromium browser via Playwright."""
+    """Manages a headless Chromium browser via Playwright.
 
-    def __init__(self):
+    Options:
+        use_stealth: when True, applies playwright-stealth evasions on top of
+            the default fingerprint patches. Used as an automatic fallback
+            after a SITE_BLOCKED first attempt.
+        proxy: optional dict {"server": "...", "username": "...", "password": "..."}
+            forwarded to chromium.launch(proxy=...). Use a US residential proxy
+            for sites that block datacenter IPs (Reiss / Akamai, Amazon, etc.).
+    """
+
+    def __init__(self, use_stealth: bool = False, proxy: dict | None = None):
         self._pw = None
         self.browser: Browser | None = None
+        self.context = None
         self.page: Page | None = None
+        self.use_stealth = use_stealth
+        self.proxy = proxy
 
     def start(self):
         self._pw = sync_playwright().start()
-        self.browser = self._pw.chromium.launch(
+        launch_kwargs = dict(
             headless=True,
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -353,13 +431,24 @@ class BrowserSession:
                 "--disable-dev-shm-usage",
             ],
         )
-        self.page = self.browser.new_page(
+        if self.proxy:
+            launch_kwargs["proxy"] = self.proxy
+        self.browser = self._pw.chromium.launch(**launch_kwargs)
+        # Use a full browser context so we can pin locale/timezone/geolocation
+        # to the United States. Without this, sites that geo-detect via IP
+        # (Reiss, Zara, H&M, Adidas, etc.) return EUR / GBP / INR pricing
+        # depending on where the Modal worker happens to run.
+        self.context = self.browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 900},
+            locale="en-US",
+            timezone_id="America/New_York",
+            geolocation={"latitude": 40.7128, "longitude": -74.0060},  # NYC
+            permissions=["geolocation"],
             extra_http_headers={
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -369,8 +458,22 @@ class BrowserSession:
                 "Sec-Fetch-Site": "none",
                 "Sec-Fetch-User": "?1",
                 "Upgrade-Insecure-Requests": "1",
+                # Cloudflare / Akamai forward this to origin; some merchants
+                # use it as a hint for currency selection.
+                "CF-IPCountry": "US",
             },
         )
+        # Pre-seed currency / country cookies for merchants that store the
+        # locale on the cookie jar instead of the URL. Harmless on sites
+        # that don't read these names.
+        self.context.add_cookies([
+            {"name": "currency", "value": "USD", "domain": ".reiss.com", "path": "/"},
+            {"name": "country", "value": "US", "domain": ".reiss.com", "path": "/"},
+            {"name": "currency", "value": "USD", "domain": ".zara.com", "path": "/"},
+            {"name": "preferredCountry", "value": "US", "domain": ".hm.com", "path": "/"},
+            {"name": "i18n_redirected", "value": "en-us", "domain": ".adidas.com", "path": "/"},
+        ])
+        self.page = self.context.new_page()
         # Hide webdriver fingerprint to reduce bot-detection false positives
         self.page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -378,6 +481,17 @@ class BrowserSession:
             Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
             window.chrome = { runtime: {} };
         """)
+        # Optional: layer playwright-stealth evasions for the retry attempt.
+        # Imported lazily so the package is only required when actually used.
+        if self.use_stealth:
+            try:
+                from playwright_stealth import stealth_sync  # type: ignore
+                stealth_sync(self.page)
+                print("  🥷 playwright-stealth applied")
+            except ImportError:
+                print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
+            except Exception as e:
+                print(f"  ⚠️  stealth_sync failed: {e}")
 
     def stop(self):
         if self.browser:
@@ -388,10 +502,27 @@ class BrowserSession:
     # ── Tools ──
 
     def visit(self, url: str) -> dict:
-        self.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+        response = self.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
         self.page.wait_for_timeout(3000)  # let JS render
 
+        # Detect bot-protection / access-denied responses up front so the
+        # agent doesn't waste turns trying to extract a product from an
+        # Akamai / Cloudflare / Imperva block page (which has no product
+        # data and would otherwise be misclassified as NOT_A_PRODUCT_PAGE).
+        status = response.status if response is not None else None
         title = self.page.title()
+        body_snippet = ""
+        try:
+            body_snippet = self.page.evaluate(
+                "() => (document.body && document.body.innerText || '').slice(0, 800)"
+            )
+        except Exception:
+            pass
+        block_reason = _detect_block(status, title, body_snippet)
+        if block_reason:
+            raise RuntimeError(
+                f"SITE_BLOCKED: {block_reason} (HTTP {status}) at {self.page.url}"
+            )
 
         meta = self.page.evaluate(
             """() => {
@@ -517,7 +648,12 @@ class BrowserSession:
             const base = window.location.origin;
             return Array.from(imgs)
                 .map(img => ({
-                    src: img.src || img.dataset.src || img.dataset.lazySrc || '',
+                    src: img.src || 
+                         img.dataset.src || 
+                         img.dataset.lazySrc ||
+                         img.dataset.original ||
+                         img.dataset.srcset?.split(',')[0]?.trim().split(/\\s+/)[0] ||
+                         '',
                     w: img.naturalWidth || img.width || 0,
                     h: img.naturalHeight || img.height || 0,
                 }))
@@ -566,7 +702,7 @@ class BrowserSession:
 
         # Filter to only publicly-accessible URLs. Aggregator pages (shopmy.us,
         # ltk.app, etc.) often serve images from PRIVATE S3 buckets via signed
-        # cookies — those URLs render in the browser but return 403 to anyone
+        # cookies -- those URLs render in the browser but return 403 to anyone
         # without the session, making them useless for downstream consumers.
         canonical_public = _filter_accessible_images(canonical_upgraded)
         page_images_public = _filter_accessible_images(page_images)
@@ -628,7 +764,7 @@ class BrowserSession:
                 if (blocklist.some(b => txt === b)) continue;
                 const rect = a.getBoundingClientRect();
                 if (rect.width < 5 || rect.height < 5) continue;
-                // Must have price text within 5 ancestors — filters out
+                // Must have price text within 5 ancestors -- filters out
                 // page chrome (header/footer/nav) and keeps only real offer cards.
                 let el = a;
                 let depth = -1;
@@ -651,7 +787,7 @@ class BrowserSession:
                 f"Could not find a merchant offer link on Google Shopping page: {url}"
             )
 
-        # Follow the candidate URL — Google's /url? and /aclk? endpoints
+        # Follow the candidate URL -- Google's /url? and /aclk? endpoints
         # redirect to the real merchant URL. A direct merchant URL just
         # navigates straight there.
         try:
@@ -771,7 +907,7 @@ def _trim_old_tool_results(messages: list):
             for inner in block.get("content", []):
                 if isinstance(inner, dict) and inner.get("type") == "image":
                     # Drop old screenshots entirely
-                    new_inner.append({"type": "text", "text": "[screenshot — trimmed from history]"})
+                    new_inner.append({"type": "text", "text": "[screenshot -- trimmed from history]"})
                 elif isinstance(inner, dict) and inner.get("type") == "text":
                     text = inner["text"]
                     if len(text) > TEXT_TRIM_THRESHOLD:
@@ -828,12 +964,12 @@ You are a product data extraction agent. You control a real browser.
 Your job is to visit a product page, inspect it, and extract structured product data.
 
 Workflow:
-1. visit_page — load the URL and read metadata / JSON-LD / visible text
-2. take_screenshot — visually inspect the page to verify prices, sale badges, etc.
-3. get_all_images — collect product image URLs
-4. (optional) get_page_html — if prices or details are missing from step 1
-5. (optional) scroll_down + take_screenshot — if content is below the fold
-6. save_product — once all data is gathered, call this with the final values
+1. visit_page -- load the URL and read metadata / JSON-LD / visible text
+2. take_screenshot -- visually inspect the page to verify prices, sale badges, etc.
+3. get_all_images -- collect product image URLs
+4. (optional) get_page_html -- if prices or details are missing from step 1
+5. (optional) scroll_down + take_screenshot -- if content is below the fold
+6. save_product -- once all data is gathered, call this with the final values
 
 Rules:
 - Extract ACTUAL data from the page. Never guess or fabricate.
@@ -848,36 +984,47 @@ Rules:
   * `get_all_images` returns `{ canonical: [...], page_images: [...] }`.
     Every URL it returns has ALREADY been verified as publicly accessible
     (HTTP 200 with image content-type). URLs that would return 403/private
-    have been pre-filtered out — do NOT use any image URL that you saw
+    have been pre-filtered out -- do NOT use any image URL that you saw
     elsewhere (visit_page metadata, get_page_html) but that is missing from
     `get_all_images`, because that means it isn't public.
   * `canonical` images come from the page's OWN metadata (og:image, JSON-LD
-    Product.image). They are the authoritative product photos — ALWAYS prefer
+    Product.image). They are the authoritative product photos -- ALWAYS prefer
     them. If `canonical` is non-empty, use ONLY `canonical` images unless the
     screenshot clearly shows additional product angles you can match in
     `page_images`.
-  * On aggregator / affiliate / link-in-bio pages — shopmy.us, ltk.app,
+  * On aggregator / affiliate / link-in-bio pages -- shopmy.us, ltk.app,
     liketoknow.it, linktree, beacons.ai, stan.store, bio.link, koji.to,
-    snipfeed, withkoji — `page_images` is full of CURATOR-UPLOADED user
+    snipfeed, withkoji -- `page_images` is full of CURATOR-UPLOADED user
     photos showing people using the product. These are NOT the product image.
     On these domains, save ONLY the `canonical` images. Never include
     page_images entries from these sites.
   * If BOTH `canonical` and `page_images` are empty, save_product with an
-    empty images array — do not invent URLs from the page HTML, because
+    empty images array -- do not invent URLs from the page HTML, because
     they are likely private.
   * Other things to NEVER include: site-wide hero/banners, logos, category
     thumbnails, "you might also like" carousels, reviewer photos, payment-method
     icons, social badges, blog/article images, generic lifestyle photos.
-  * Aim for 1–6 high-quality product images.
+  * Extract ALL product images from the product gallery/carousel. Most products
+    have 3-8 images showing different angles, colors, or styled views. Include
+    all of them -- do not limit to just 1-2 images.
 - Keep description concise (1-3 sentences).
-- Use null for any field that cannot be determined."""
+- Use null for any field that cannot be determined.
 
-IMPORTANT — non-product pages:
+IMPORTANT -- non-product pages:
 If the URL redirected to a homepage, category page, search results, blog post,
 help/FAQ article, 404, or any page that is NOT a single product detail page,
 DO NOT call save_product. Instead reply with plain text starting with
 "NOT_A_PRODUCT_PAGE:" followed by a short reason (e.g. the actual page type
 and the final URL). The orchestrator will mark the URL as failed.
+
+IMPORTANT -- blocked pages:
+If a tool returns an error containing "SITE_BLOCKED" (HTTP 403/429/503,
+"Access Denied", Cloudflare/Akamai/Imperva captcha pages, etc.), the site is
+actively blocking automated access. DO NOT keep retrying with other tools --
+the page has no product data to extract. Reply with plain text starting with
+"SITE_BLOCKED:" followed by the reason from the tool error and the URL. The
+orchestrator will mark the URL as failed with a "blocked" status so a human
+can decide whether to use a manual scrape / proxy.
 
 How to recognise a real product detail page:
 - It shows ONE specific product as the focus (not a grid/list of many).
@@ -887,19 +1034,73 @@ How to recognise a real product detail page:
 """
 
 
+def _proxy_from_env() -> dict | None:
+    """Read proxy config from env vars. Returns None if not configured.
+
+    Recognised vars:
+        SCRAPER_PROXY_SERVER     e.g. "http://us.smartproxy.com:10000"
+        SCRAPER_PROXY_USERNAME   (optional)
+        SCRAPER_PROXY_PASSWORD   (optional)
+    """
+    server = os.environ.get("SCRAPER_PROXY_SERVER", "").strip()
+    if not server:
+        return None
+    proxy = {"server": server}
+    user = os.environ.get("SCRAPER_PROXY_USERNAME", "").strip()
+    pwd = os.environ.get("SCRAPER_PROXY_PASSWORD", "").strip()
+    if user:
+        proxy["username"] = user
+    if pwd:
+        proxy["password"] = pwd
+    return proxy
+
+
 def run_agent(
     product_url: str,
     look_id: str | None = None,
     save: bool = True,
-    on_save=None,  # callable | None — called immediately when save_product fires
+    on_save=None,  # callable | None -- called immediately when save_product fires
 ) -> dict:
     """
-    on_save(product: dict) — optional callback fired the instant Claude calls
+    Top-level entry point. Tries a normal scrape first; if the site blocks the
+    request (raises SITE_BLOCKED), automatically retries once with stealth +
+    proxy enabled. The proxy is read from env vars (see _proxy_from_env).
+
+    on_save(product: dict) -- optional callback fired the instant Claude calls
     save_product, BEFORE the agent loop finishes.  Use this in Modal to write
     the DB row immediately so no work is lost if the container is killed later.
     """
+    try:
+        return _run_agent_attempt(
+            product_url, look_id=look_id, save=save, on_save=on_save,
+            use_stealth=False, proxy=None,
+        )
+    except RuntimeError as e:
+        if "SITE_BLOCKED" not in str(e).upper():
+            raise
+        proxy = _proxy_from_env()
+        # Always retry with stealth; proxy only if configured. If neither
+        # gives us anything new (no proxy AND stealth not installed) we'd
+        # just fail the same way -- but stealth alone often clears
+        # Cloudflare/Akamai checks, so it's worth the attempt.
+        print(f"\n🔁 First attempt blocked ({e}); retrying with stealth"
+              f"{' + proxy' if proxy else ''}…\n")
+        return _run_agent_attempt(
+            product_url, look_id=look_id, save=save, on_save=on_save,
+            use_stealth=True, proxy=proxy,
+        )
+
+
+def _run_agent_attempt(
+    product_url: str,
+    look_id: str | None,
+    save: bool,
+    on_save,
+    use_stealth: bool,
+    proxy: dict | None,
+) -> dict:
     client = anthropic.Anthropic()
-    browser = BrowserSession()
+    browser = BrowserSession(use_stealth=use_stealth, proxy=proxy)
 
     messages = [
         {"role": "user", "content": f"Extract product data from: {product_url}"}
@@ -907,26 +1108,26 @@ def run_agent(
 
     saved_product = None
     nudge_count = 0
-    MAX_NUDGES = 1
+    MAX_NUDGES = 3
     last_agent_reply: str | None = None
 
     # Fast-fail on URLs that obviously aren't product pages (Google search
     # results, bare homepages, etc.). Saves a Claude call per row.
     bad_url_reason = _non_product_url_reason(product_url)
     if bad_url_reason:
-        raise RuntimeError(f"Not a product page — {bad_url_reason}: {product_url}")
+        raise RuntimeError(f"Not a product page -- {bad_url_reason}: {product_url}")
 
     try:
         browser.start()
-        print(f"🌐 Agent started — visiting {product_url}\n")
+        print(f"🌐 Agent started -- visiting {product_url}\n")
 
         # If this is a Google Shopping product page, resolve it to the
         # underlying merchant URL first. Google Shopping pages are not
         # scrapeable directly (different DOM, no canonical product image
-        # for the chosen seller, etc.) — but each one lists merchant
+        # for the chosen seller, etc.) -- but each one lists merchant
         # offers we can follow.
         if _is_google_shopping_url(product_url):
-            print(f"🛒 Google Shopping URL detected — resolving merchant…")
+            print(f"🛒 Google Shopping URL detected -- resolving merchant…")
             resolved = browser.resolve_google_shopping(product_url)
             print(f"   → resolved to {resolved}\n")
             product_url = resolved
@@ -939,17 +1140,25 @@ def run_agent(
             if turn > 2:
                 _trim_old_tool_results(messages)
 
+            # Force tool use on the last few turns if we still haven't saved
+            # This prevents Claude from ending with a text response when it
+            # should be calling save_product with whatever data it has.
+            force_save = (nudge_count > 0 or turn >= MAX_AGENT_TURNS - 3)
+
             # Call Claude with retry on rate-limit (429)
             response = None
             for attempt in range(MAX_RETRIES + 1):
                 try:
-                    response = client.messages.create(
+                    create_kwargs = dict(
                         model=MODEL,
                         max_tokens=4096,
                         system=SYSTEM_PROMPT,
                         tools=TOOLS,
                         messages=messages,
                     )
+                    if force_save and not saved_product:
+                        create_kwargs["tool_choice"] = {"type": "any"}
+                    response = client.messages.create(**create_kwargs)
                     break
                 except anthropic.RateLimitError as e:
                     if attempt >= MAX_RETRIES:
@@ -958,7 +1167,7 @@ def run_agent(
                     print(f"  ⏳ Rate limited, retrying in {delay}s (attempt {attempt + 1}/{MAX_RETRIES})…")
                     time.sleep(delay)
 
-            # If Claude finished with text only — nudge it to call save_product
+            # If Claude finished with text only -- nudge it to call save_product
             if response.stop_reason == "end_turn":
                 if saved_product:
                     print(f"\n✅ Agent finished in {turn + 1} turn(s)")
@@ -971,23 +1180,27 @@ def run_agent(
                 ).strip()
                 if "NOT_A_PRODUCT_PAGE" in reply_text.upper():
                     snippet = reply_text[:300].replace("\n", " ")
-                    raise RuntimeError(f"Not a product page — {snippet}")
+                    raise RuntimeError(f"Not a product page -- {snippet}")
+                if "SITE_BLOCKED" in reply_text.upper():
+                    snippet = reply_text[:300].replace("\n", " ")
+                    raise RuntimeError(f"SITE_BLOCKED: {snippet}")
 
                 if nudge_count >= MAX_NUDGES:
                     last_agent_reply = reply_text
                     print(f"\n⚠️  Agent could not extract product after {MAX_NUDGES} nudges")
                     break
 
-                # Claude replied with text but didn't save — ask it to use the tool
+                # Claude replied with text but didn't save -- ask it to use the tool
                 nudge_count += 1
                 print(f"  💬 Claude responded with text, nudging to call save_product ({nudge_count}/{MAX_NUDGES})...")
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({
                     "role": "user",
                     "content": (
-                        "You must call the save_product tool now with whatever data you "
-                        "were able to extract. Use null for any fields you couldn't determine. "
-                        "Do not respond with text — call the save_product tool."
+                        "Call save_product NOW with all the data you have collected from "
+                        f"visiting {product_url}. You have already browsed the page -- "
+                        "do not visit it again. Use null for any fields you couldn't "
+                        "determine. You MUST call the save_product tool, not reply with text."
                     ),
                 })
                 continue
@@ -1027,7 +1240,7 @@ def run_agent(
                                 f"URL: {product_url}"
                             )
                         print(
-                            "  ⚠️  save_product called with no price/brand/availability — "
+                            "  ⚠️  save_product called with no price/brand/availability -- "
                             f"asking agent to verify ({nudge_count}/{MAX_NUDGES})"
                         )
                         tool_results.append({
@@ -1050,10 +1263,10 @@ def run_agent(
                     if saved_images and not public_images:
                         print(
                             f"  ⚠️  All {len(saved_images)} image(s) returned by Claude are "
-                            "private/inaccessible — saving with empty images list."
+                            "private/inaccessible -- saving with empty images list."
                         )
                         image_missing_reason = (
-                            f"Private images — all {len(saved_images)} URL(s) were "
+                            f"Private images -- all {len(saved_images)} URL(s) were "
                             "inaccessible (403 / non-image response)"
                         )
                     elif not saved_images:
@@ -1079,7 +1292,7 @@ def run_agent(
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
 
-                    # ── Fire callback immediately — don't wait for loop to finish ──
+                    # ── Fire callback immediately -- don't wait for loop to finish ──
                     # This ensures the DB is updated the moment data is extracted,
                     # even if the container is killed or times out afterwards.
                     if on_save:

@@ -1915,13 +1915,35 @@
    V.8 Market Opportunity: projection chart grid
    ============================================================= */
 
+/* Center the whole Market Opportunity slide so label + h2 + 4-card grid
+   sit in a single centered column instead of left-rolling across the
+   slide width. */
+.deck-view-v8 .deck-v8-market {
+  align-items: center;
+  text-align: center;
+}
+.deck-view-v8 .deck-v8-market > .deck-label,
+.deck-view-v8 .deck-v8-market > h2,
+.deck-view-v8 .deck-v8-market > .deck-v8-market-note {
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .deck-view-v8 .deck-v8-market-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
-  margin-top: 36px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin: 36px auto 0;
   width: 100%;
-  max-width: 1180px;
+  max-width: 1480px;
+}
+
+@media (max-width: 1280px) {
+  .deck-view-v8 .deck-v8-market-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 980px;
+  }
 }
 
 .deck-view-v8 .deck-v8-market-card {
@@ -5963,10 +5985,12 @@
 }
 
 .deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(28px, 3.4vw, 52px);
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  font-size: clamp(20px, 2.2vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
   margin: 0;
+  max-width: 60ch;
+  font-weight: 600;
 }
 
 .deck-view-v1 .deck-v1-compare-grid {
@@ -6181,12 +6205,14 @@
 .deck-view-v1 .deck-v1-feed-grid {
   /* Override the v8 default 4-col / 33vh-row grid so we can use a
      denser mosaic with span-based variants. 6 columns at desktop with
-     square cells gives the seeded 2x2 / 2x1 / 1x2 spans room to
-     breathe; rows are sized off the column width so cells stay
-     proportional. */
+     ~22vh rows so the seeded 2x2 / 2x1 / 1x2 spans + the 48-tile
+     fan-out exactly fills the parent's 200vh inset (the parent has
+     inset: -50% 0 so it spans 2x viewport height; rows × tiles need
+     to land near 200vh or the bottom reads as a black band). */
   grid-template-columns: repeat(6, 1fr) !important;
-  grid-auto-rows: 16vh !important;
+  grid-auto-rows: 22vh !important;
   grid-auto-flow: dense;
+  min-height: 100%;
 }
 
 .deck-view-v1 .deck-v1-tile {
@@ -6233,4 +6259,56 @@
     grid-column: span 1;
     grid-row: span 1;
   }
+}
+
+/* ===========================================================
+   V1.2 "Start the flywheel" slide - lifted from the Ask slide
+   so the priorities sit immediately before the Creator Flywheel
+   visual. Reuses .deck-v8-ask-priority card styles for the cards
+   (existing rules already paint the yellow rail/dot connectors)
+   and just owns the slide-level layout.
+   =========================================================== */
+.deck-view-v1 .deck-v1-start-flywheel-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding: clamp(48px, 5vh, 88px) clamp(40px, 5vw, 120px) !important;
+  gap: clamp(20px, 3vh, 36px);
+}
+
+.deck-view-v1 .deck-v1-start-flywheel-slide h2 {
+  font-size: clamp(28px, 3.4vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0 0 clamp(16px, 2.5vh, 32px);
+}
+
+.deck-view-v1 .deck-v1-start-flywheel-cards {
+  /* The default .deck-v8-ask-priorities grid is tuned for the Ask
+     slide context where the cards sit under a flow-svg connector;
+     here we want simpler equal-width columns. */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-start-flywheel-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* V1.2 Problem & Solution sub-headline ("Creators curate. AI indexes.
+   Everyone wins.") - lighter weight, sits below the main h2. */
+.deck-view-v1 .deck-v1-compare-sub {
+  margin: 8px 0 0;
+  font-size: clamp(13px, 1.2vw, 18px);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.62);
+  max-width: 60ch;
+}
+.light-mode .deck-view-v1 .deck-v1-compare-sub {
+  color: rgba(0, 0, 0, 0.55);
 }

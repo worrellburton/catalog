@@ -71,7 +71,7 @@ Keep it natural and concise. Return ONLY the additional sentences, not the full 
     
     # Call Claude via Anthropic API
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
         max_tokens=200,
         messages=[{"role": "user", "content": enrichment_prompt}]
     )
@@ -166,7 +166,7 @@ Natural and concise. Return ONLY the additional sentences.
 `;
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 200,
     messages: [{ role: 'user', content: prompt }],
   });

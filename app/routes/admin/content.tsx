@@ -51,7 +51,13 @@ function formatDateAdded(iso: string | null | undefined): string {
   if (!iso) return ' - ';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return ' - ';
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  // DD/MM/YY (e.g. 05/05/26). Manual padding because toLocaleDateString
+  // can't emit a 2-digit year + 2-digit month + 2-digit day combo
+  // consistently across runtimes.
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -1297,7 +1303,7 @@ export default function AdminContent() {
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
   // label the model used and surface the prompt on hover.
-  const [adMetaByUrl, setAdMetaByUrl] = useState<Map<string, { model: string | null; prompt: string | null }>>(new Map());
+  const [adMetaByUrl, setAdMetaByUrl] = useState<Map<string, { id: string; model: string | null; prompt: string | null }>>(new Map());
   const [adImpressionsMap, setAdImpressionsMap] = useState<Map<string, number>>(new Map());
   const [adClicksMap, setAdClicksMap] = useState<Map<string, number>>(new Map());
 
@@ -1341,21 +1347,27 @@ export default function AdminContent() {
 
   const loadAdProductIds = useCallback(async () => {
     if (!supabase) return;
+    // ORDER BY sort_order so the per-product video tile ordering admins
+    // set via drag-and-drop survives reload. created_at is the
+    // tie-breaker for rows that haven't been reordered yet.
     const { data } = await supabase
       .from('product_creative')
-      .select('product_id, video_url, status, impressions, clicks, model, prompt');
+      .select('id, product_id, video_url, status, impressions, clicks, model, prompt, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
     if (data) {
       setAdProductIds(new Set(data.map(r => r.product_id)));
       const videoMap = new Map<string, string[]>();
       const impMap = new Map<string, number>();
       const clkMap = new Map<string, number>();
-      const metaMap = new Map<string, { model: string | null; prompt: string | null }>();
+      const metaMap = new Map<string, { id: string; model: string | null; prompt: string | null }>();
       data.forEach(r => {
         if (r.video_url) {
           const existing = videoMap.get(r.product_id) || [];
           existing.push(r.video_url);
           videoMap.set(r.product_id, existing);
           metaMap.set(r.video_url, {
+            id: (r as { id: string }).id,
             model: (r as any).model ?? null,
             prompt: (r as any).prompt ?? null,
           });
@@ -1648,6 +1660,73 @@ export default function AdminContent() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  // Delete a single creative (one product_creative row) by id. Used by
+  // the X overlay on each video tile in the Products-row expanded view.
+  // Optimistic local update so the tile vanishes immediately; on failure
+  // we reload the ad map so the UI catches up with reality.
+  const deleteCreative = useCallback(async (creativeId: string, videoUrl: string, productId: string | undefined) => {
+    if (!supabase) return;
+    if (!confirm('Delete this creative? This removes the video from the product everywhere.')) return;
+    // Optimistic: drop the URL from adVideoMap + adMetaByUrl so the
+    // tile disappears the moment the user confirms. We also nuke the
+    // product_creative row server-side; a successful round-trip keeps
+    // local state in sync, a failure triggers a reload to roll back.
+    setAdVideoMap(prev => {
+      if (!productId) return prev;
+      const next = new Map(prev);
+      const list = (next.get(productId) || []).filter(u => u !== videoUrl);
+      if (list.length === 0) next.delete(productId);
+      else next.set(productId, list);
+      return next;
+    });
+    setAdMetaByUrl(prev => {
+      const next = new Map(prev);
+      next.delete(videoUrl);
+      return next;
+    });
+    const { error } = await supabase.from('product_creative').delete().eq('id', creativeId);
+    if (error) {
+      showToast(`Delete failed: ${error.message}`);
+      // Reload so the UI matches reality after a failed delete.
+      void loadAdProductIds();
+      return;
+    }
+    showToast('Creative deleted');
+  }, [showToast, loadAdProductIds]);
+
+  // Drag-and-drop reorder of the per-product creative tiles. Updates the
+  // local adVideoMap optimistically so the UI is instant, then persists
+  // the new sort_order on each row in parallel. On error reloads the map
+  // so the UI catches up with reality.
+  const reorderCreatives = useCallback(async (productId: string, fromIndex: number, toIndex: number) => {
+    if (!supabase) return;
+    if (fromIndex === toIndex) return;
+    const current = adVideoMap.get(productId) || [];
+    if (fromIndex < 0 || fromIndex >= current.length) return;
+    if (toIndex < 0 || toIndex > current.length) return;
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved);
+    setAdVideoMap(prev => {
+      const m = new Map(prev);
+      m.set(productId, next);
+      return m;
+    });
+    // Persist: each row's sort_order = its new array index.
+    const updates = next
+      .map((url, i) => {
+        const meta = adMetaByUrl.get(url);
+        return meta ? supabase.from('product_creative').update({ sort_order: i }).eq('id', meta.id) : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => !!p);
+    const results = await Promise.all(updates);
+    const errored = results.find(r => r.error);
+    if (errored?.error) {
+      showToast(`Reorder failed: ${errored.error.message}`);
+      void loadAdProductIds();
+    }
+  }, [adVideoMap, adMetaByUrl, showToast, loadAdProductIds]);
+
   // Platform visibility toggle. Sister to toggleProductActive (which
   // governs the home grid). When false, the product is excluded from
   // search results + catalog-wide listings but stays in the admin
@@ -1818,19 +1897,21 @@ export default function AdminContent() {
             height: 290,
             borderRadius: 8,
             overflow: 'hidden',
-            background: '#000',
+            background: '#fff',
             boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
             zIndex: 9999,
             pointerEvents: 'none',
+            border: '1px solid rgba(0,0,0,0.08)',
           }}
         >
-          <video
+          {/* Product photo preview - hovering a generated-creative tile
+              flashes the source product image so admins can compare the
+              AI rendition against the canonical product shot at a glance. */}
+          <img
             src={hoverPreview.url}
-            autoPlay
-            muted
-            loop
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
         </div>
       )}
@@ -2850,7 +2931,7 @@ export default function AdminContent() {
                     className="admin-stats-col"
                     style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
                     onClick={() => setStatsExpanded(true)}
-                    title="Show In Looks, Creators, Impressions, Saves, Clicks, Date Added"
+                    title="Show In Looks, Creators, Impressions, Saves, Clicks"
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       Stats
@@ -2870,9 +2951,13 @@ export default function AdminContent() {
                     <SortableTh className="admin-stats-col" label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                     <SortableTh className="admin-stats-col" label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
                     <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                   </>
                 )}
+                {/* Date Added is now its own untinted column, sitting
+                    next to Method instead of inside the Stats group -
+                    Date is metadata, not engagement, so it shouldn't
+                    share the indigo Stats tint. */}
+                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
@@ -3170,11 +3255,11 @@ export default function AdminContent() {
                       <td className="admin-stats-col">{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
                       <td className="admin-stats-col">{p.saves}</td>
                       <td className="admin-stats-col">{p.clicks}</td>
-                      <td className="admin-stats-col" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                        {formatDateAdded(p.created_at)}
-                      </td>
                     </>
                   )}
+                  <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                    {formatDateAdded(p.created_at)}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {p.source ? (
                       <span style={{
@@ -3332,17 +3417,66 @@ export default function AdminContent() {
                                     ? `${modelLabel ?? 'Unknown model'}\n\nPrompt:\n${meta.prompt}`
                                     : (modelLabel ?? 'Model unknown');
                                   return (
-                                    <div key={vi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div
+                                      key={vi}
+                                      style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                                      // HTML5 drag-and-drop wires up the per-tile reorder.
+                                      // dataTransfer carries the source product id + index;
+                                      // drops on a tile from the same product land at that
+                                      // tile's index. Drops across products are rejected.
+                                      draggable={!!p.id && !!meta?.id}
+                                      onDragStart={(e) => {
+                                        if (!p.id) return;
+                                        e.dataTransfer.setData('text/plain', JSON.stringify({ pid: p.id, from: vi }));
+                                        e.dataTransfer.effectAllowed = 'move';
+                                      }}
+                                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        try {
+                                          const payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}') as { pid?: string; from?: number };
+                                          if (!p.id || payload.pid !== p.id || typeof payload.from !== 'number') return;
+                                          reorderCreatives(p.id, payload.from, vi);
+                                        } catch { /* malformed payload - ignore */ }
+                                      }}
+                                    >
                                       <div
-                                        style={{ aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
+                                        style={{ position: 'relative', aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: meta?.id ? 'grab' : 'help' }}
                                         title={hoverTitle}
                                         onMouseEnter={(ev) => {
+                                          // Hover preview shows the product photo (not
+                                          // the video itself) - admins can flash between
+                                          // the AI render and the canonical product
+                                          // image to spot styling drift at a glance.
+                                          const photo = rowImages[0];
+                                          if (!photo) return;
                                           const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                                          setHoverPreview({ url: v, x: r.right + 8, y: r.top });
+                                          setHoverPreview({ url: photo, x: r.right + 8, y: r.top });
                                         }}
                                         onMouseLeave={() => setHoverPreview(null)}
                                       >
                                         <video src={v} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        {meta?.id && (
+                                          <button
+                                            type="button"
+                                            aria-label="Delete this creative"
+                                            title="Delete this creative"
+                                            onClick={(e) => { e.stopPropagation(); deleteCreative(meta.id, v, p.id); }}
+                                            style={{
+                                              position: 'absolute', top: 4, right: 4,
+                                              width: 22, height: 22, borderRadius: 11,
+                                              background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.25)',
+                                              color: '#fff', display: 'inline-flex',
+                                              alignItems: 'center', justifyContent: 'center',
+                                              padding: 0, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                                            }}
+                                          >
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                              <line x1="18" y1="6" x2="6" y2="18" />
+                                              <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                          </button>
+                                        )}
                                       </div>
                                       <div
                                         title={hoverTitle}
