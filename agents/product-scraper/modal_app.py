@@ -34,6 +34,7 @@ scraper_image = (
     .pip_install(
         "anthropic>=0.39.0",
         "playwright>=1.48.0",
+        "playwright-stealth>=1.0.6",
         "supabase>=2.10.0",
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
