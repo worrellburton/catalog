@@ -373,14 +373,20 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
-  // "More like this" rail. Filter to cross-brand only and cap at 16.
-  // If find_similar_creatives returns nothing, the section is hidden.
+  // "More like this" rail. Filter to cross-brand only and cap at 16 so
+  // the grid is at most 4 rows on desktop (4 cols), 5 on tablet (3 cols),
+  // 8 on mobile (2 cols). When find_similar_creatives returns nothing
+  // for the seed (cold-start product, missing embedding), fall back to
+  // popularFallback so the section is never blank.
   const moreLikeThis = useMemo(() => {
     const ownBrand = (product.brand || '').trim().toLowerCase();
     const ownProductId = (product as Product & { id?: string }).id || '';
-    // Resolve the seed product's gender from the similarCreatives rows
-    // (joined from products.gender). Falls back to undefined when the
-    // seed isn't in the list — no gender filter applied in that case.
+    // Resolve the seed product's gender so we can scope the rail to
+    // matching items + unisex. The Product type doesn't carry gender,
+    // but popularFallback / similarCreatives rows do (joined from
+    // products.gender), so we look up the seed by id or brand+name and
+    // grab whatever lands. Falls back to undefined when the seed isn't
+    // in either list - in that case we don't gender-filter at all.
     const findSeed = (rows: ProductAd[] | undefined): { gender?: string | null } | null => {
       if (!rows) return null;
       for (const c of rows) {
@@ -393,7 +399,7 @@ export default function ProductPage({
       }
       return null;
     };
-    const seedProduct = findSeed(similarCreatives);
+    const seedProduct = findSeed(similarCreatives) || findSeed(popularFallback);
     const seedGender = (seedProduct?.gender || '').toLowerCase();
     const genderMatches = (otherGender: string | null | undefined): boolean => {
       // Seed is unknown - don't filter by gender.
@@ -421,8 +427,10 @@ export default function ProductPage({
       }
       return out;
     };
-    return pickFrom(similarCreatives);
-  }, [similarCreatives, product.brand, product.name, (product as Product & { id?: string }).id]);
+    const fromSimilar = pickFrom(similarCreatives);
+    if (fromSimilar.length > 0) return fromSimilar;
+    return pickFrom(popularFallback);
+  }, [similarCreatives, popularFallback, product.brand, product.name, (product as Product & { id?: string }).id]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer

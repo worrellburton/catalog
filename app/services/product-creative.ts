@@ -916,64 +916,6 @@ function normalizeBrandKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-// Damerau-Levenshtein distance with transposition. Used to fall through
-// to fuzzy brand match when the exact lookup misses ("annie bing" →
-// "anine bing"). Quadratic in input length but the brand index is small
-// (~hundreds of entries) and queries are short, so the cost is bounded.
-function editDistance(a: string, b: string): number {
-  if (a === b) return 0;
-  const la = a.length, lb = b.length;
-  if (la === 0) return lb;
-  if (lb === 0) return la;
-  // Two-row optimization isn't worth the complexity for transposition;
-  // use the full N×M matrix.
-  const dp: number[][] = Array.from({ length: la + 1 }, () => new Array(lb + 1).fill(0));
-  for (let i = 0; i <= la; i++) dp[i][0] = i;
-  for (let j = 0; j <= lb; j++) dp[0][j] = j;
-  for (let i = 1; i <= la; i++) {
-    for (let j = 1; j <= lb; j++) {
-      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,         // deletion
-        dp[i][j - 1] + 1,         // insertion
-        dp[i - 1][j - 1] + cost,  // substitution
-      );
-      if (
-        i > 1 && j > 1 &&
-        a.charCodeAt(i - 1) === b.charCodeAt(j - 2) &&
-        a.charCodeAt(i - 2) === b.charCodeAt(j - 1)
-      ) {
-        dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1); // transposition
-      }
-    }
-  }
-  return dp[la][lb];
-}
-
-// Pick the closest brand key whose edit distance from `key` is within a
-// proportional tolerance (max(1, ceil(len/5)) edits). Returns the
-// canonical brand string or null. "annie bing" → "ANINE BING" lands at
-// distance 2 with len 10 → tolerance 2 → match.
-function fuzzyBrandLookup(key: string, index: Map<string, string>): string | null {
-  if (!key) return null;
-  // Cap on tolerance scales with key length so 5-char keys allow 1 edit
-  // and 15-char keys allow 3. Avoids matching a 4-char query to a wildly
-  // different brand by tolerating too many edits.
-  const tolerance = Math.max(1, Math.ceil(key.length / 5));
-  let best: { brand: string; dist: number } | null = null;
-  for (const [candidateKey, brand] of index) {
-    // Cheap pre-filter: skip candidates with vastly different length
-    // (anything outside ±tolerance can't possibly be a match).
-    if (Math.abs(candidateKey.length - key.length) > tolerance) continue;
-    const d = editDistance(key, candidateKey);
-    if (d <= tolerance && (!best || d < best.dist)) {
-      best = { brand, dist: d };
-      if (d === 0) break; // exact match - stop early
-    }
-  }
-  return best?.brand ?? null;
-}
-
 async function ensureBrandIndex(): Promise<Map<string, string>> {
   if (brandIndex) return brandIndex;
   if (brandIndexPromise) return brandIndexPromise;
@@ -1000,30 +942,22 @@ async function ensureBrandIndex(): Promise<Map<string, string>> {
 }
 
 /** Returns the canonical brand string when `query` is an exact-brand
- *  search (case- and whitespace-insensitive), else falls through to
- *  fuzzy match (Damerau-Levenshtein with proportional tolerance) so
- *  common typos resolve to the right brand ("annie bing" → "ANINE
- *  BING"). Returns null when neither exact nor fuzzy lands. */
+ *  search (case- and whitespace-insensitive), else null. */
 export async function resolveBrandFromQuery(query: string): Promise<string | null> {
   const key = normalizeBrandKey(query);
   if (!key) return null;
   const index = await ensureBrandIndex();
-  const exact = index.get(key);
-  if (exact) return exact;
-  return fuzzyBrandLookup(key, index);
+  return index.get(key) ?? null;
 }
 
 /** Synchronous variant - only resolves once the brand index has been
  *  warmed by a prior call. Useful in render paths where we don't want to
- *  await before rendering. Returns null on cold-start. Includes the
- *  same fuzzy fallback as the async variant. */
+ *  await before rendering. Returns null on cold-start. */
 export function resolveBrandFromQuerySync(query: string): string | null {
   if (!brandIndex) return null;
   const key = normalizeBrandKey(query);
   if (!key) return null;
-  const exact = brandIndex.get(key);
-  if (exact) return exact;
-  return fuzzyBrandLookup(key, brandIndex);
+  return brandIndex.get(key) ?? null;
 }
 
 /** Search fast-path: if the query is an exact brand match, return every
