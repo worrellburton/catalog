@@ -1348,49 +1348,46 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
               <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
-              <div className="gen-review-row"><span>Model</span><span style={{ textTransform: 'capitalize' }}>{model}</span></div>
-              <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
-            </div>
-
-            <div className="gen-sectionlabel">Model</div>
-            <div className="gen-lengthgrid">
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'fast' ? ' is-picked' : ''}`}
-                onClick={() => { setModel('fast'); setClipSeconds(5); }}
-                title="Fast: cheaper, ~3 min, 5-second output"
-              >
-                Fast
-              </button>
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
-                onClick={() => setModel('pro')}
-                title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
-              >
-                Pro
-              </button>
+              <div className="gen-review-row">
+                <span>Model</span>
+                <div className="gen-review-toggle">
+                  <button
+                    type="button"
+                    className={`gen-review-toggle-btn${model === 'fast' ? ' is-picked' : ''}`}
+                    onClick={() => { setModel('fast'); setClipSeconds(5); }}
+                    title="Fast: cheaper, ~3 min, 5-second output"
+                  >Fast</button>
+                  <button
+                    type="button"
+                    className={`gen-review-toggle-btn${model === 'pro' ? ' is-picked' : ''}`}
+                    onClick={() => setModel('pro')}
+                    title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
+                  >Pro</button>
+                </div>
+              </div>
+              <div className="gen-review-row">
+                <span>Length</span>
+                {model === 'pro' ? (
+                  <div className="gen-review-toggle">
+                    {[5, 10].map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
+                        onClick={() => setClipSeconds(sec as 5 | 10)}
+                      >{sec}s</button>
+                    ))}
+                  </div>
+                ) : (
+                  <span>{clipSeconds}s</span>
+                )}
+              </div>
             </div>
 
             {model === 'pro' && (
-              <>
-                <div className="gen-pro-preview-note">
-                  Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
-                </div>
-                <div className="gen-sectionlabel">Clip length</div>
-                <div className="gen-lengthgrid">
-                  {[5, 10].map(sec => (
-                    <button
-                      key={sec}
-                      type="button"
-                      className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
-                      onClick={() => setClipSeconds(sec as 5 | 10)}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
-                </div>
-              </>
+              <div className="gen-pro-preview-note">
+                Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
+              </div>
             )}
 
             <div className="gen-review-products">
