@@ -5,18 +5,51 @@
 .gen-page {
   width: 100%;
   margin: 0 auto;
-  /* Bottom padding clears the fixed footer (Back/Next) plus the
-     liquid-glass step dock stacked beneath it, plus iOS safe-area. */
+  /* Single-viewport contract: the entire wizard fits within the dynamic
+     viewport. height (100dvh, falls back to vh) so step content never
+     scrolls. Bottom padding still clears the fixed dock + safe-area
+     inset; horizontal padding stays generous. Inner step content uses
+     min-height: 0 + overflow: hidden to shrink to fit instead of
+     spilling past the dock. */
   padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.06), transparent 55%),
     radial-gradient(ellipse at 100% 100%, rgba(120, 80, 220, 0.04), transparent 50%),
     #050505;
   font-feature-settings: 'ss01', 'cv11';
   letter-spacing: -0.005em;
+}
+
+/* Step container fills the remaining viewport space below the header
+   and above the docked rail. min-height: 0 lets flex children shrink
+   inside it; overflow: hidden enforces the no-scroll contract. */
+.gen-page > .gen-step {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* Result step's phone-frame video is the tallest single element on the
+   wizard. Cap it to the available height so the frame scales to fit
+   instead of pushing the dock off-screen. */
+.gen-page .gen-step-result .gen-app-frame {
+  max-height: 100%;
+}
+.gen-page .gen-result-stage,
+.gen-page .gen-result-layout {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 /* When running inside the native app shell, push content below the status bar.
@@ -731,14 +764,14 @@ html[data-shell="catalog-app"] .gen-page {
   border-radius: 12px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .gen-review-row {
   display: flex;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 14px;
   background: rgba(0, 0, 0, 0.4);
-  font-size: 14px;
+  font-size: 13px;
 }
 .gen-review-row span:first-child { color: rgba(255, 255, 255, 0.55); }
 .gen-review-row span:last-child { font-weight: 600; }
@@ -2244,4 +2277,155 @@ html[data-shell="catalog-app"] .gen-page {
 @keyframes gen-limit-toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Inline Model + Length toggles inside the review summary rows. Two
+   small chips on the right of the row so the user can flip Fast/Pro
+   (or 5s/10s) without leaving the review screen. */
+.gen-review-toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+.gen-review-toggle-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  letter-spacing: -0.005em;
+}
+.gen-review-toggle-btn.is-picked {
+  background: rgba(255, 255, 255, 0.95);
+  color: #0a0a0a;
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+/* Review-step product list scrolls within its own card so the wizard
+   stays single-viewport even when the user picked the max 5 products. */
+.gen-step .gen-review-products {
+  max-height: 38vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* "How did I do?" feedback bar - sits below the result video on the
+   done state. Three primary options expand inline into sub-actions
+   instead of opening a modal, so the user stays oriented. */
+.gen-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 14px;
+  text-align: left;
+}
+.gen-feedback-prompt {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.005em;
+}
+.gen-feedback-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.gen-feedback-btn {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  cursor: pointer;
+  letter-spacing: -0.005em;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.gen-feedback-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.gen-feedback-btn:active { transform: translateY(1px); }
+.gen-feedback-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Tone the three primary options so the contrast registers. */
+.gen-feedback-btn-love {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #6ee7b7;
+}
+.gen-feedback-btn-off {
+  background: rgba(251, 191, 36, 0.10);
+  border-color: rgba(251, 191, 36, 0.30);
+  color: #fde047;
+}
+.gen-feedback-btn-delete {
+  background: rgba(248, 113, 113, 0.10);
+  border-color: rgba(248, 113, 113, 0.30);
+  color: #fca5a5;
+}
+.gen-feedback-btn-publish {
+  background: linear-gradient(135deg, #fde047, #f59e0b);
+  border-color: #f59e0b;
+  color: #1a1a1a;
+}
+.gen-feedback-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+}
+.gen-feedback-btn-link {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.gen-feedback-btn-link:hover { color: rgba(255, 255, 255, 0.85); }
+
+.gen-feedback-off { display: flex; flex-direction: column; gap: 10px; }
+.gen-feedback-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 70px;
+}
+.gen-feedback-textarea:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.gen-feedback-done {
+  margin-top: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-align: center;
+}
+.gen-feedback-done-kept {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+}
+.gen-feedback-done-published {
+  background: linear-gradient(135deg, rgba(253, 224, 71, 0.18), rgba(245, 158, 11, 0.10));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde047;
+}
+.gen-feedback-done-reported {
+  background: rgba(251, 191, 36, 0.10);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  color: #fde047;
 }

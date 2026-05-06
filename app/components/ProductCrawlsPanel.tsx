@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, triggerScrape, type ProductRow } from '~/services/scrape-product';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import { isStuck } from '~/utils/aiBudget';
@@ -128,6 +128,7 @@ export default function ProductCrawlsPanel() {
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
   // Tracks when each row was last retried - used as startedAt so the
   // JobProgress timer counts from the retry click, not from created_at.
   const [retriedAt, setRetriedAt] = useState<Record<string, string>>({});
@@ -233,6 +234,17 @@ export default function ProductCrawlsPanel() {
       console.error('Failed to retry scrape:', e);
     } finally {
       setRetrying(null);
+    }
+  };
+
+  const handleResolveUrl = async (id: string, url: string) => {
+    setResolving(id);
+    try {
+      await triggerScrape(id, url);
+    } catch (e) {
+      console.error('Failed to trigger scrape:', e);
+    } finally {
+      setResolving(null);
     }
   };
 
@@ -447,6 +459,12 @@ export default function ProductCrawlsPanel() {
                       ) : (
                         <span style={{ color: '#d1d5db' }}> - </span>
                       )}
+                      {r.url && /google\.com/i.test(r.url) && (
+                        <span style={{ fontSize: 10, color: '#b45309', marginTop: 2, display: 'block' }}
+                          title="Google Shopping URL — direct merchant URL not yet resolved">
+                          ⚠ Google URL
+                        </span>
+                      )}
                     </td>
                     <td className="admin-cell-muted">{r.brand || ' - '}</td>
                     <td className="admin-cell-muted">{r.price || ' - '}</td>
@@ -455,6 +473,17 @@ export default function ProductCrawlsPanel() {
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {r.url && /google\.com/i.test(r.url) && r.scrape_status !== 'pending' && r.scrape_status !== 'processing' && (
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            disabled={resolving === r.id}
+                            onClick={() => handleResolveUrl(r.id, r.url!)}
+                            style={{ fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', color: '#b45309', borderColor: '#fcd34d' }}
+                            title="Resolve Google Shopping URL to direct merchant URL"
+                          >
+                            {resolving === r.id ? '…' : '🔗 Resolve URL'}
+                          </button>
+                        )}
                         {(r.scrape_status === 'failed' || r.scrape_status === 'pending') && (
                           <button
                             className="admin-btn admin-btn-secondary"

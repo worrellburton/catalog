@@ -333,6 +333,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed] = useState<number | null>(0);
+  // Exit transition for the Demo slide CTA. Set to true on click; the
+  // overlay fades in + the slide scales down for ~700ms, then we
+  // navigate to catalog.shop.
+  const [demoExiting, setDemoExiting] = useState(false);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
   // Deck v1.2 differentiator: the background grid mirrors the consumer
   // home feed - every product with the Home toggle on in /admin/content.
@@ -403,12 +407,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'The Dream',
     'Problem & Solution',
     'Market Opportunity',
+    'Payouts',
     'Technology',
     'The Ask',
-    'Seed Product',
-    'Start the Flywheel',
-    'Creator Flywheel',
-    'Payouts',
+    'Demo',
+    // Appendix (everything below Demo is supplementary)
     'Traction',
     'Roadmap',
     'Projections',
@@ -575,78 +578,79 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
       </div>
 
-      {/* Slide 3: Problem & Solution side-by-side. Three stakeholders down
-          the left rail; broken experience on the left, win on the right
-          for each row, so the eye reads "this → fixed by us" three times.
-          Class also carries .deck-v8-problem so the existing X / check
-          icon animations (defined for the v8 problem/solution layout)
-          fire when the slide enters the viewport. */}
+      {/* Slide 3: Problem & Solution.
+          Per-stakeholder row layout - the headline word (Discovery /
+          Revenue / Acquisition) is shared between problem and solution
+          (one source of truth for "what this stakeholder needs").
+          Below the shared header, two side-by-side cells contrast
+          today (broken) vs Catalog (fixed) via descriptive text only.
+
+          Animations: each row + cell hooks into the existing v8 fade-
+          in-up + blur reveal vocabulary (same easing/timing as the
+          rest of the deck) via the deck-v1-compare-row class. Stagger
+          delays cascade across the 3 rows so the slide unfolds left-
+          to-right then top-to-bottom. The X / check icon strokes
+          re-use the existing deck-v8-problem-item draw-on animation. */}
       <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
-          <h2>Three broken experiences. One platform that fixes them.</h2>
-          <p className="deck-v1-compare-sub">Creators curate. AI indexes. Everyone wins.</p>
+          <h2>Creators curate. AI indexes.<br />Everyone wins.</h2>
         </div>
-        <div className="deck-v1-compare-grid">
-          <div className="deck-v1-compare-col deck-v1-compare-col-problem">
-            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-problem">The Problem</span>
-          </div>
-          <div className="deck-v1-compare-col deck-v1-compare-col-solution">
-            <span className="deck-v1-compare-col-label deck-v1-compare-col-label-solution">The Solution</span>
-          </div>
+        <div className="deck-v1-compare-rows">
           {[
             {
               num: '01',
               role: 'Shoppers',
-              problem: { word: 'Guesswork.', sub: 'Fragmented, ad-heavy, impersonal.' },
-              solution: { word: 'Curation.', sub: 'Tastemakers they trust. No ads, no noise.' },
+              word: 'Discovery',
+              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise — just the looks they want.',
             },
             {
               num: '02',
               role: 'Creators',
-              problem: { word: 'Pennies.', sub: 'Single-digit commissions, disorganized payouts.' },
-              solution: { word: 'Ownership.', sub: 'Real revenue, audience ownership, paid in days.' },
+              word: 'Revenue',
+              problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
+              solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
             },
             {
               num: '03',
               role: 'Brands',
-              problem: { word: 'Renting.', sub: 'Renting traffic from Meta and Amazon at rising CAC.' },
-              solution: { word: 'Pulling.', sub: 'First-party top-of-funnel from creators they own.' },
+              word: 'Acquisition',
+              problem: 'Renting traffic from Meta and Amazon at rising CAC. No first-party top-of-funnel they own.',
+              solution: 'First-party demand pulled in by creators with real audiences. CAC trends to zero as the loop spins.',
             },
-          ].map(({ num, role, problem, solution }) => (
-            <div key={num} className="deck-v1-compare-row">
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
-                <div className="deck-v9-problem-body">
-                  <div className="deck-v9-problem-headline">
-                    <span className="deck-v9-problem-role">{role}</span>
-                    <span className="deck-v9-problem-num">{num}</span>
-                  </div>
-                  <div className="deck-v9-problem-pain">
-                    <svg className="deck-v8-broken-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          ].map(({ num, role, word, problem, solution }, rowIdx) => (
+            <div
+              key={num}
+              className="deck-v1-compare-row"
+              style={{ ['--row-idx' as string]: rowIdx }}
+            >
+              <div className="deck-v1-compare-row-head">
+                <span className="deck-v1-compare-row-num">{num}</span>
+                <h3 className="deck-v1-compare-row-role">{role}</h3>
+                <span className="deck-v1-compare-row-word">{word}.</span>
+              </div>
+              <div className="deck-v1-compare-row-cells">
+                <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
+                  <div className="deck-v1-compare-cell-label-row">
+                    <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle className="broken-circle" cx="12" cy="12" r="10" />
                       <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
                       <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
                     </svg>
-                    <h3>{problem.word}</h3>
+                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
                   </div>
-                  <p>{problem.sub}</p>
+                  <p className="deck-v1-compare-cell-text">{problem}</p>
                 </div>
-              </div>
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
-                <div className="deck-v9-problem-body">
-                  {/* Solution side intentionally drops the duplicate
-                      stakeholder/number header - the problem cell on
-                      the left already labels the row, and removing the
-                      duplicate makes the eye land on the contrast word
-                      (Curation. / Ownership. / Pulling.) immediately. */}
-                  <div className="deck-v9-problem-pain">
-                    <svg className="deck-v8-win-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
+                  <div className="deck-v1-compare-cell-label-row">
+                    <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle className="win-circle" cx="12" cy="12" r="10" />
                       <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
                     </svg>
-                    <h3>{solution.word}</h3>
+                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
                   </div>
-                  <p>{solution.sub}</p>
+                  <p className="deck-v1-compare-cell-text">{solution}</p>
                 </div>
               </div>
             </div>
@@ -657,7 +661,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       {/* Slide 6: Market Opportunity */}
       <div className="deck-slide deck-v8-market">
         <span className="deck-label">Market Opportunity</span>
-        <h2>Social commerce: three curves, one window.</h2>
+        <h2>Trust is the market: three curves, one window.</h2>
         <div className="deck-v8-market-grid">
           {([
             {
@@ -680,18 +684,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               sourceUrl: 'https://www.goldmansachs.com/insights/articles/the-creator-economy-could-approach-half-a-trillion-dollars-by-2027',
             },
             {
-              key: 'trust',
-              value: '94%',
-              label: 'Shoppers trust creators over ads by 2035',
-              growth: '+12% YoY',
-              points: '20,108 42,100 64,92 85,82 107,72 129,62 150,54 172,46 194,38 216,30 238,24 260,20',
-              source: 'Matter Communications, 2024',
-              sourceUrl: 'https://www.matternow.com/blog/new-consumer-survey-81-increase-their-trust-in-brand-through-influencer-marketing/',
-            },
-            {
-              // Market-side companion to the trust stat - gives the
-              // recommendation-driven slice of retail a dollar value so
-              // the slide reads as four market curves, not three.
+              // Trust-anchored market figure: the recommendation-driven
+              // slice of retail. Three curves on this slide all live
+              // downstream of trust - this one names the dollar value
+              // explicitly.
               key: 'recommendation',
               value: '$1.0T',
               label: 'Recommendation-driven retail by 2035',
@@ -788,6 +784,39 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           third-to-last slide so the curve is the last thing investors
           see before The Ask.) */}
 
+      {/* Payouts - how creators earn across four streams. Sits right
+          after Market Opportunity so the conversation goes "here's the
+          market" -> "here's how creators get paid for it". */}
+      <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
+        <div className="deck-v1-payouts-split-left">
+          <span className="deck-label">Payouts</span>
+          <h2>Post once.<br />Earn four ways.</h2>
+          <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
+          <ul className="deck-v1-payouts-list">
+            {[
+              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.' },
+              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links — transparent and fast.' },
+              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
+              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
+            ].map((item) => (
+              <li key={item.num} className="deck-v1-payouts-list-item">
+                <span className="deck-v1-payouts-num">{item.num}</span>
+                <div className="deck-v1-payouts-list-body">
+                  <div className="deck-v1-payouts-list-head">
+                    <h3>{item.title}</h3>
+                    <span className="deck-v1-payouts-chip">{item.chip}</span>
+                  </div>
+                  <p>{item.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="deck-v1-payouts-split-right" aria-hidden="true">
+          {/* Decorative graphic removed. */}
+        </div>
+      </div>
+
       {/* Slide 9: Technology - vector DB visual discovery demo.
           Conversation arrives here from Market Opportunity: "here's the
           space, here's the engine that owns it." The Projections curve
@@ -799,29 +828,41 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <p className="deck-v9-tech-lede">
             Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
           </p>
-          <ul className="deck-v9-tech-points">
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Visual embeddings.</strong>
-                <span>Each look becomes a 1024-dim vector capturing composition, garment, color, and mood.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Nearest-neighbor search.</strong>
-                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Discovery that compounds.</strong>
-                <span>Every interaction sharpens the model. The feed gets smarter with every shopper.</span>
-              </div>
-            </li>
-          </ul>
+          {/* AI partners we wire into Catalog. Each line names the
+              company first, then the model + use case in one breath.
+              Search & Data (SerpAPI / Rainforest) was removed - those
+              are data-lookup services, not AI. */}
+          <div className="deck-v1-tech-stack">
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">LLMs</span>
+              <ul>
+                <li><strong>Anthropic</strong> — Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
+                <li><strong>Google</strong> — Gemini Flash</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Video</span>
+              <ul>
+                <li><strong>Bytedance</strong> — Seedance 2.0 Pro &amp; Fast</li>
+                <li><strong>Google</strong> — Veo 3.1</li>
+                <li><strong>Tencent</strong> — Vidu</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
+              <ul>
+                <li><strong>TwelveLabs</strong> — Marengo 3.0 video embeddings</li>
+                <li><strong>Postgres</strong> — pgvector storage</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Compute</span>
+              <ul>
+                <li><strong>Modal</strong> — serverless agents</li>
+                <li><strong>Fal.ai</strong> — video generation queue</li>
+              </ul>
+            </div>
+          </div>
         </div>
         <div className="deck-v9-tech-right">
           <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
@@ -883,7 +924,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           mechanics, not at the very end. */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
-        <h2>Build the future.<br />Fuel the flywheel.</h2>
+        <h2>Capital to build the flywheel.</h2>
 
         <div className="deck-v8-ask-stage">
           <div className="deck-v8-ask-raise">
@@ -931,174 +972,75 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
           </svg>
 
-        </div>
-      </div>
-
-      {/* Slide 9a: Seed Product */}
-      <div className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide">
-        <div className="deck-v1-fw-view deck-v1-fw-view-seed">
-          <div className="flywheel-left">
-            <span className="deck-label">Step Zero</span>
-            <h2>Build and seed product.</h2>
-            <div className="deck-v1-seed-steps">
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">01</span>
-                <p><strong>Autonomous Product Sync.</strong> Agent-driven pipeline connects to brand stores and pulls product data, imagery, and pricing in real time.</p>
-              </div>
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">02</span>
-                <p><strong>AI creative via Seedance, Grok &amp; Veo.</strong> Static product shots are automatically transformed into editorial imagery and short-form video using frontier generative models.</p>
-              </div>
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">03</span>
-                <p><strong>Index elegantly.</strong> Every look is vectorised and indexed &mdash; ready for the feed before a single creator arrives.</p>
-              </div>
+          {/* Flywheel components - the SVG flow lines from the round-size
+              card terminate at three dots; these cards sit directly under
+              those dots so the eye reads "$2.5M flows into these three
+              flywheel components". Same data the standalone "Start the
+              flywheel" framing carries elsewhere in the deck - here the
+              point is "where the money goes", not the narrative arc. */}
+          <div className="deck-v8-ask-priorities deck-v8-ask-components">
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">01</span>
+              <h3>Product Seeding</h3>
+              <p>Autonomous product sync, AI creative generation, vector indexing &mdash; Catalog launches with inventory built in, no cold start.</p>
             </div>
-            <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
-          </div>
-          <div className="flywheel-right">
-            <div className="deck-v1-seed-pipeline">
-              <div className="deck-v1-seed-pipeline-stage">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Autonomous Product Sync</span>
-                <span className="deck-v1-seed-pipeline-hint">Agent-driven ingest pipeline</span>
-              </div>
-              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                <span className="deck-v1-seed-pipeline-dot" />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.8s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.6s' }} />
-              </div>
-              <div className="deck-v1-seed-pipeline-stage">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Seedance · Grok · Veo</span>
-                <span className="deck-v1-seed-pipeline-hint">AI-generated imagery &amp; video</span>
-              </div>
-              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.2s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.0s' }} />
-              </div>
-              <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Indexed elegantly</span>
-                <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
-              </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">02</span>
+              <h3>Go to Market</h3>
+              <p>Onboard the first wave of creators with free tools, fast payouts, and instant storefronts. Public launch with proven unit economics.</p>
+            </div>
+            <div className="deck-v8-ask-priority">
+              <span className="deck-v8-ask-priority-num">03</span>
+              <h3>Brand Pull</h3>
+              <p>Launch the fixed-ROAS model with early brand partners. Prove the economics that make the marketplace self-sustaining.</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Start the flywheel - the three priorities the round funds.
-          Lifted out of the Ask slide so the conversation arrives at the
-          mechanics ("how the flywheel actually starts") right before
-          the visual flywheel slide that follows. */}
-      <div className="deck-slide deck-v1-start-flywheel-slide">
-        <span className="deck-label">Start the flywheel</span>
-        <h2>Three priorities to ignite the loop.</h2>
-        <div className="deck-v8-ask-priorities deck-v1-start-flywheel-cards">
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">01</span>
-            <h3>Seed the creator side</h3>
-            <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
-          </div>
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">02</span>
-            <h3>Deepen the product</h3>
-            <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
-          </div>
-          <div className="deck-v8-ask-priority">
-            <span className="deck-v8-ask-priority-num">03</span>
-            <h3>Bring brands on board</h3>
-            <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
-          </div>
-        </div>
-      </div>
+      {/* Demo - the dramatic close of the main pitch. CTA shoots the
+          investor over to catalog.shop with a fade-to-black exit. The
+          appendix arrow at the bottom signals that everything below
+          this slide is supporting material. */}
+      <div className="deck-slide deck-v1-demo-slide">
+        <span className="deck-label">Demo</span>
+        <h2 className="deck-v1-demo-h2">See it for yourself.</h2>
+        <p className="deck-v1-demo-sub">The pitch is the product. Press play.</p>
+        <button
+          type="button"
+          className={`deck-v1-demo-cta${demoExiting ? ' is-exiting' : ''}`}
+          disabled={demoExiting}
+          onClick={() => {
+            if (demoExiting) return;
+            setDemoExiting(true);
+            // Cool exit: 700ms fade-to-black + scale, then jump.
+            window.setTimeout(() => {
+              window.location.href = 'https://catalog.shop';
+            }, 700);
+          }}
+        >
+          <span className="deck-v1-demo-cta-label">Let&apos;s see the demo</span>
+          <svg className="deck-v1-demo-cta-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="13 6 19 12 13 18" />
+          </svg>
+        </button>
 
-      {/* Slide 9b: Creator Flywheel */}
-      <div
-        className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
-        data-active-step={activeFlywheelStep ?? undefined}
-      >
-        <div className="deck-v1-fw-view deck-v1-fw-view-wheel">
-          <div className="flywheel-left">
-            <span className="deck-label">Creator Flywheel</span>
-            <h2>Build supply first.<br />Demand follows trust.</h2>
-            <div className="flywheel-labels">
-              {flywheelSteps.map(({ n, label, icon }) => (
-                <div
-                  key={n}
-                  className="flywheel-label-item"
-                  onMouseEnter={() => setActiveFlywheelStep(n)}
-                  onMouseLeave={() => setActiveFlywheelStep(null)}
-                >
-                  <span className="fl-num">{icon}</span>
-                  <div className="fl-text">
-                    <p className="fl-label">{label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
-          </div>
-          <div className="flywheel-right">
-            <div className="flywheel-center">
-              <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
-                <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-                <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
-              </svg>
-              {flywheelSteps.map(({ n, angle, icon }) => (
-                <div
-                  key={n}
-                  className="flywheel-node"
-                  style={{ '--angle': angle } as React.CSSProperties}
-                  onMouseEnter={() => setActiveFlywheelStep(n)}
-                  onMouseLeave={() => setActiveFlywheelStep(null)}
-                >
-                  <span>{icon}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* Appendix indicator - everything below this slide is supporting
+            material. Down-arrow + label cue the audience that the deck
+            isn't over but the main pitch is. */}
+        <div className="deck-v1-demo-appendix" aria-hidden="true">
+          <span className="deck-v1-demo-appendix-label">Appendix</span>
+          <svg className="deck-v1-demo-appendix-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="6 13 12 19 18 13" />
+          </svg>
         </div>
-      </div>
 
-
-      {/* Slide 10: Payouts - how creators earn across four streams */}
-      <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
-        <div className="deck-v1-payouts-split-left">
-          <span className="deck-label">Payouts</span>
-          <h2>Post once.<br />Earn four ways.</h2>
-          <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
-          <ul className="deck-v1-payouts-list">
-            {[
-              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube\u2019s ad-revenue model \u2014 paid out daily.' },
-              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator\u2019s own affiliate links \u2014 transparent and fast.' },
-              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator\u2019s look. Direct, no shared pool.' },
-              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
-            ].map((item) => (
-              <li key={item.num} className="deck-v1-payouts-list-item">
-                <span className="deck-v1-payouts-num">{item.num}</span>
-                <div className="deck-v1-payouts-list-body">
-                  <div className="deck-v1-payouts-list-head">
-                    <h3>{item.title}</h3>
-                    <span className="deck-v1-payouts-chip">{item.chip}</span>
-                  </div>
-                  <p>{item.desc}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="deck-v1-payouts-split-right" aria-hidden="true">
-          {/* Decorative graphic removed - the four-stream payout list on
-              the left carries the slide on its own. */}
-        </div>
+        {/* Full-screen exit overlay - fades in over the slide while we
+            wait for window.location.href to load catalog.shop. Sits
+            above every other element on the slide. */}
+        {demoExiting && <div className="deck-v1-demo-exit-overlay" aria-hidden="true" />}
       </div>
 
       {/* Slide 11: Traction */}

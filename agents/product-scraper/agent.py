@@ -485,13 +485,19 @@ class BrowserSession:
         # Imported lazily so the package is only required when actually used.
         if self.use_stealth:
             try:
-                from playwright_stealth import stealth_sync  # type: ignore
-                stealth_sync(self.page)
+                # playwright-stealth v2 uses Stealth().apply_stealth_sync(page)
+                # v1 used stealth_sync(page) -- handle both for compatibility.
+                try:
+                    from playwright_stealth import Stealth  # type: ignore
+                    Stealth().apply_stealth_sync(self.page)
+                except (ImportError, AttributeError):
+                    from playwright_stealth import stealth_sync  # type: ignore
+                    stealth_sync(self.page)
                 print("  🥷 playwright-stealth applied")
             except ImportError:
                 print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
             except Exception as e:
-                print(f"  ⚠️  stealth_sync failed: {e}")
+                print(f"  ⚠️  stealth apply failed: {e}")
 
     def stop(self):
         if self.browser:
@@ -787,13 +793,31 @@ class BrowserSession:
                 f"Could not find a merchant offer link on Google Shopping page: {url}"
             )
 
-        # Follow the candidate URL -- Google's /url? and /aclk? endpoints
-        # redirect to the real merchant URL. A direct merchant URL just
-        # navigates straight there.
+        # If the candidate is already a direct merchant URL (not a Google
+        # redirect), return it without navigating -- many merchant sites
+        # (e.g. shop.lululemon.com) reject Playwright with HTTP2 protocol
+        # errors, but we already have the canonical URL we need.
+        candidate_host = (urlparse(candidate).hostname or "").lower()
+        is_google_redirect = (
+            "google.com" in candidate_host
+            and ("/url" in candidate or "/aclk" in candidate)
+        )
+        if not is_google_redirect:
+            return candidate
+
+        # Follow Google's /url? or /aclk? redirect to resolve the real
+        # merchant URL.
         try:
             self.page.goto(candidate, wait_until="domcontentloaded", timeout=60_000)
             self.page.wait_for_timeout(2000)
         except Exception as e:
+            # Navigation failed (often HTTP2 / bot protection on the merchant
+            # site). Fall back to the candidate URL if it already resolved
+            # away from google.com via the redirect chain.
+            current_url = self.page.url
+            current_host = (urlparse(current_url).hostname or "").lower()
+            if current_url and "google.com" not in current_host:
+                return current_url
             raise RuntimeError(
                 f"Failed to follow Google Shopping merchant link {candidate}: {e}"
             )

@@ -18,6 +18,14 @@ async function _triggerScrape(productId: string, url: string): Promise<void> {
   }
 }
 
+/**
+ * Trigger the scraper for a product immediately (non-fatal).
+ * Call after inserting a pending product so it doesn't wait for the daily cron.
+ */
+export async function triggerScrape(productId: string, url: string): Promise<void> {
+  return _triggerScrape(productId, url);
+}
+
 // ============================================
 // Types
 // ============================================

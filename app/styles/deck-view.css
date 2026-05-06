@@ -1932,17 +1932,17 @@
 
 .deck-view-v8 .deck-v8-market-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
   margin: 36px auto 0;
   width: 100%;
-  max-width: 1480px;
+  max-width: 1280px;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 980px) {
   .deck-view-v8 .deck-v8-market-grid {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 980px;
+    grid-template-columns: 1fr;
+    max-width: 540px;
   }
 }
 
@@ -5967,124 +5967,215 @@
 }
 
 /* ===========================================================
-   V1.2 Problem & Solution combined slide
+   V1.2 Problem & Solution slide.
+   Per-stakeholder row: shared headline word (Discovery / Revenue /
+   Acquisition) on top, two side-by-side description cells (Today vs
+   With Catalog) below. Hooks into the existing v8 fade-up + blur
+   reveal animation vocabulary so the slide unfolds in the same
+   cinematic style as the rest of the deck.
    =========================================================== */
 .deck-view-v1 .deck-v1-compare-slide {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: clamp(48px, 5vh, 88px) clamp(40px, 5vw, 120px) !important;
-  gap: clamp(24px, 3vh, 44px);
+  align-items: center;
+  justify-content: center;
+  /* Generous horizontal padding so the inner content is well off the
+     slide edges; vertical padding stays compact so the 3 rows + head
+     fit one viewport even on shorter screens. */
+  padding: clamp(40px, 5vh, 72px) clamp(48px, 6vw, 120px) !important;
+  gap: clamp(20px, 2.6vh, 36px);
+  min-height: 100vh;
+}
+
+/* Inner column constrains content width so the head + rows sit in a
+   single centered stack instead of spreading across the whole slide.
+   max-width prevents the cells from looking sparse on ultrawide
+   displays. */
+.deck-view-v1 .deck-v1-compare-head,
+.deck-view-v1 .deck-v1-compare-rows {
+  width: 100%;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .deck-view-v1 .deck-v1-compare-head {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(20px, 2.2vw, 34px);
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  margin: 0;
-  max-width: 60ch;
-  font-weight: 600;
-}
-
-.deck-view-v1 .deck-v1-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: clamp(20px, 2.5vw, 40px);
-  row-gap: clamp(14px, 2vh, 22px);
-}
-
-.deck-view-v1 .deck-v1-compare-col {
-  display: flex;
+  gap: 10px;
+  text-align: center;
   align-items: center;
 }
 
-.deck-view-v1 .deck-v1-compare-col-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+.deck-view-v1 .deck-v1-compare-head h2 {
+  font-size: clamp(22px, 2.4vw, 38px);
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  margin: 0;
+  font-weight: 600;
 }
-.deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.18);
-}
-.deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #6ee7b7;
-  background: rgba(110, 231, 183, 0.08);
-  border-color: rgba(110, 231, 183, 0.22);
+
+.deck-view-v1 .deck-v1-compare-rows {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.6vh, 22px);
 }
 
 .deck-view-v1 .deck-v1-compare-row {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 0.9vh, 12px);
+}
+
+.deck-view-v1 .deck-v1-compare-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: clamp(10px, 1vw, 16px);
+  padding-left: 4px;
+}
+.deck-view-v1 .deck-v1-compare-row-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+  align-self: center;
+}
+/* Stakeholder name is the primary heading (Shoppers / Creators /
+   Brands). Word that follows is the secondary subhead. */
+.deck-view-v1 .deck-v1-compare-row-role {
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+  color: #fff;
+  margin: 0;
+  font-weight: 700;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  font-size: clamp(14px, 1.3vw, 19px);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  align-self: center;
+}
+
+.deck-view-v1 .deck-v1-compare-row-cells {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 1.8vw, 26px);
 }
 
 .deck-view-v1 .deck-v1-compare-cell {
-  border-radius: 18px;
-  padding: clamp(16px, 1.6vw, 22px) clamp(18px, 1.8vw, 24px);
+  border-radius: 16px;
+  padding: clamp(14px, 1.4vw, 20px) clamp(16px, 1.6vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005));
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 .deck-view-v1 .deck-v1-compare-cell-problem {
-  border-color: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.16);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.04), rgba(248, 113, 113, 0.01));
 }
 .deck-view-v1 .deck-v1-compare-cell-solution {
   border-color: rgba(110, 231, 183, 0.18);
+  background: linear-gradient(180deg, rgba(110, 231, 183, 0.05), rgba(110, 231, 183, 0.01));
 }
 
-/* Tighten the inherited problem-body styles inside compare cells so two
-   columns + three rows fit inside one slide without scrolling. */
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body {
-  gap: 6px;
+.deck-view-v1 .deck-v1-compare-cell-label-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-pain h3 {
-  font-size: clamp(22px, 2.2vw, 30px);
+.deck-view-v1 .deck-v1-compare-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body > p {
-  font-size: clamp(13px, 1vw, 15px);
-  line-height: 1.4;
+.deck-view-v1 .deck-v1-compare-cell-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.deck-view-v1 .deck-v1-compare-cell-label-problem { color: #fca5a5; }
+.deck-view-v1 .deck-v1-compare-cell-label-solution { color: #6ee7b7; }
+
+.deck-view-v1 .deck-v1-compare-cell-text {
+  font-size: clamp(13px, 1.05vw, 16px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
 }
 
-.light-mode .deck-view-v1 .deck-v1-compare-col-label {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
+/* ── Cinematic reveal: fade-up + blur, staggered per row + cell ──
+   Mirrors the deck-wide v8 reveal vocabulary (1.4s cubic-bezier,
+   24px translateY, blur(8px) for the headline word) so this slide
+   feels like the rest of the deck instead of a one-off. */
+.deck-view-v1 .deck-v1-compare-row-head,
+.deck-view-v1 .deck-v1-compare-cell {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  filter: blur(6px);
+  transition: filter 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-head,
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-cell {
+  opacity: 1;
+  transform: translateY(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-word {
+  filter: blur(0);
+}
+
+/* Per-row stagger: header lands first, then problem cell, then solution
+   cell. --row-idx is set inline so each row picks up its base delay. */
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-head {
+  transition-delay: calc(0.6s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-problem {
+  transition-delay: calc(0.78s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-solution {
+  transition-delay: calc(0.92s + var(--row-idx, 0) * 0.18s);
+}
+
+/* Light mode mirrors */
+.light-mode .deck-view-v1 .deck-v1-compare-row-num {
   color: rgba(0, 0, 0, 0.55);
 }
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #b91c1c;
-  background: rgba(185, 28, 28, 0.06);
-  border-color: rgba(185, 28, 28, 0.18);
-}
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #047857;
-  background: rgba(4, 120, 87, 0.06);
-  border-color: rgba(4, 120, 87, 0.2);
-}
+.light-mode .deck-view-v1 .deck-v1-compare-row-role { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-compare-row-word { color: rgba(0, 0, 0, 0.55); }
 .light-mode .deck-view-v1 .deck-v1-compare-cell {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.01));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.005));
   border-color: rgba(0, 0, 0, 0.08);
 }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-problem {
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.05), rgba(185, 28, 28, 0.01));
+  border-color: rgba(185, 28, 28, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-solution {
+  background: linear-gradient(180deg, rgba(4, 120, 87, 0.05), rgba(4, 120, 87, 0.01));
+  border-color: rgba(4, 120, 87, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-problem { color: #b91c1c; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-solution { color: #047857; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-text { color: rgba(0, 0, 0, 0.72); }
 
 @media (max-width: 980px) {
-  .deck-view-v1 .deck-v1-compare-grid {
+  .deck-view-v1 .deck-v1-compare-row-cells {
     grid-template-columns: 1fr;
-  }
-  .deck-view-v1 .deck-v1-compare-col-solution {
-    margin-top: 12px;
   }
 }
 
@@ -6312,3 +6403,230 @@
 .light-mode .deck-view-v1 .deck-v1-compare-sub {
   color: rgba(0, 0, 0, 0.55);
 }
+
+/* V1.2 Step Zero · Start the Flywheel combined slide.
+   The seed-product split layout keeps its existing rules; we just add
+   the priorities strip below it so both pieces fit on one slide. */
+.deck-view-v1 .deck-v1-step-zero-combined {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 2.4vh, 36px);
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.5vh, 20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: clamp(16px, 2vh, 28px);
+  margin-top: clamp(8px, 1vh, 16px);
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-step-zero-priorities-head h3 {
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-step-zero-priorities {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V1.2 Ask slide - flywheel components sit under the SVG flow dots,
+   3 equal columns aligned with the dots at x=170/500/830 of a 1000-wide
+   viewBox (=17%/50%/83% center). */
+.deck-view-v1 .deck-v8-ask-components {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(-12px, -1vh, -8px);
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* V1.2 Technology slide - AI stack inventory.
+   2-col grid of categories on the left side of the tech slide. Each
+   group has a small uppercase label + a tight list of model names
+   with a one-line "what we use it for" suffix. */
+.deck-view-v1 .deck-v1-tech-stack {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(14px, 1.6vw, 22px) clamp(20px, 2vw, 32px);
+  margin-top: clamp(14px, 1.6vh, 22px);
+}
+.deck-view-v1 .deck-v1-tech-stack-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-tech-stack-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.deck-view-v1 .deck-v1-tech-stack-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.deck-view-v1 .deck-v1-tech-stack-group li {
+  font-size: clamp(11px, 0.95vw, 14px);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.light-mode .deck-view-v1 .deck-v1-tech-stack-label { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-tech-stack-group li { color: rgba(0, 0, 0, 0.78); }
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-tech-stack {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===========================================================
+   V1.2 Demo slide - the dramatic close of the main pitch.
+   Centered CTA + appendix indicator at the bottom showing more
+   slides exist as supporting material below.
+   =========================================================== */
+.deck-view-v1 .deck-v1-demo-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(40px, 5vh, 72px) clamp(40px, 5vw, 120px) !important;
+  min-height: 100vh;
+  position: relative;
+  gap: clamp(14px, 2vh, 24px);
+}
+
+.deck-view-v1 .deck-v1-demo-h2 {
+  font-size: clamp(40px, 5.4vw, 84px) !important;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0;
+  max-width: 16ch;
+}
+
+.deck-view-v1 .deck-v1-demo-sub {
+  font-size: clamp(15px, 1.4vw, 22px);
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0 0 clamp(18px, 2.4vh, 36px);
+  max-width: 42ch;
+  font-weight: 500;
+}
+
+.deck-view-v1 .deck-v1-demo-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 32px;
+  font-size: clamp(16px, 1.4vw, 20px);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: #0a0a0a;
+  background: linear-gradient(135deg, #fff 0%, #fde047 60%, #f59e0b 100%);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow:
+    0 12px 40px rgba(245, 197, 66, 0.35),
+    0 4px 14px rgba(245, 197, 66, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.5s ease,
+              filter 0.5s ease;
+}
+.deck-view-v1 .deck-v1-demo-cta:hover {
+  transform: translateY(-2px) scale(1.015);
+  box-shadow:
+    0 18px 56px rgba(245, 197, 66, 0.5),
+    0 6px 20px rgba(245, 197, 66, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.deck-view-v1 .deck-v1-demo-cta:active { transform: translateY(0) scale(1); }
+
+.deck-view-v1 .deck-v1-demo-cta-arrow {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v1 .deck-v1-demo-cta:hover .deck-v1-demo-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* Exit animation: CTA scales up + lifts off the page while the overlay
+   fades in to black behind it. */
+.deck-view-v1 .deck-v1-demo-cta.is-exiting {
+  transform: scale(1.08) translateY(-4px);
+  filter: brightness(1.15);
+  pointer-events: none;
+}
+
+.deck-view-v1 .deck-v1-demo-exit-overlay {
+  position: fixed;
+  inset: 0;
+  background: #050505;
+  opacity: 0;
+  z-index: 9999;
+  pointer-events: none;
+  animation: deck-v1-demo-exit 700ms cubic-bezier(0.6, 0.04, 0.98, 0.34) forwards;
+}
+@keyframes deck-v1-demo-exit {
+  0%   { opacity: 0; transform: scale(1.0); }
+  60%  { opacity: 0.85; }
+  100% { opacity: 1; transform: scale(1.04); }
+}
+
+/* Appendix indicator - small uppercase label + bouncing down arrow
+   docked at the bottom of the slide. Tells the audience "the main
+   pitch ends here; what follows is supporting material." */
+.deck-view-v1 .deck-v1-demo-appendix {
+  position: absolute;
+  bottom: clamp(24px, 4vh, 56px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.deck-view-v1 .deck-v1-demo-appendix-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.deck-view-v1 .deck-v1-demo-appendix-arrow {
+  animation: deck-v1-demo-appendix-bounce 1.8s ease-in-out infinite;
+}
+@keyframes deck-v1-demo-appendix-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50%      { transform: translateY(6px); opacity: 1; }
+}
+
+.light-mode .deck-view-v1 .deck-v1-demo-sub { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-demo-appendix { color: rgba(0, 0, 0, 0.5); }
+.light-mode .deck-view-v1 .deck-v1-demo-cta {
+  color: #0a0a0a;
+}
+.light-mode .deck-view-v1 .deck-v1-demo-exit-overlay { background: #fafafa; }

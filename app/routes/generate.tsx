@@ -12,6 +12,8 @@ import {
   createGeneration,
   nameLookForGeneration,
   deleteUserGeneration,
+  setGenerationPublished,
+  setGenerationFeedback,
   deleteUserUpload,
   getGeneration,
   getGenerationDetail,
@@ -585,6 +587,23 @@ export default function GeneratePage() {
   // optimistically so the result video re-renders with the new crop
   // immediately.
   const [cropOpen, setCropOpen] = useState(false);
+  // "How did I do?" feedback bar state. After generation completes the
+  // user picks one of three answers (love / off / delete). 'love'
+  // expands inline to keep-private vs publish-to-catalog; 'off'
+  // expands to a free-text reason; 'delete' fires a confirm + hard-
+  // delete. feedbackBusy guards double-click during the round-trip.
+  const [feedbackKind, setFeedbackKind] = useState<'love' | 'off' | null>(null);
+  const [feedbackReason, setFeedbackReason] = useState('');
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState<'kept' | 'published' | 'reported' | null>(null);
+  // Reset feedback state whenever the active generation changes so the
+  // bar doesn't show stale "Published!" UI on a fresh generation.
+  useEffect(() => {
+    setFeedbackKind(null);
+    setFeedbackReason('');
+    setFeedbackBusy(false);
+    setFeedbackDone(null);
+  }, [generation?.id]);
 
   const openPickerForSlot = (slotIndex: number) => {
     // If the user has any existing uploads, prefer the modal so they can
@@ -1348,49 +1367,46 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
               <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
-              <div className="gen-review-row"><span>Model</span><span style={{ textTransform: 'capitalize' }}>{model}</span></div>
-              <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
-            </div>
-
-            <div className="gen-sectionlabel">Model</div>
-            <div className="gen-lengthgrid">
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'fast' ? ' is-picked' : ''}`}
-                onClick={() => { setModel('fast'); setClipSeconds(5); }}
-                title="Fast: cheaper, ~3 min, 5-second output"
-              >
-                Fast
-              </button>
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
-                onClick={() => setModel('pro')}
-                title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
-              >
-                Pro
-              </button>
+              <div className="gen-review-row">
+                <span>Model</span>
+                <div className="gen-review-toggle">
+                  <button
+                    type="button"
+                    className={`gen-review-toggle-btn${model === 'fast' ? ' is-picked' : ''}`}
+                    onClick={() => { setModel('fast'); setClipSeconds(5); }}
+                    title="Fast: cheaper, ~3 min, 5-second output"
+                  >Fast</button>
+                  <button
+                    type="button"
+                    className={`gen-review-toggle-btn${model === 'pro' ? ' is-picked' : ''}`}
+                    onClick={() => setModel('pro')}
+                    title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
+                  >Pro</button>
+                </div>
+              </div>
+              <div className="gen-review-row">
+                <span>Length</span>
+                {model === 'pro' ? (
+                  <div className="gen-review-toggle">
+                    {[5, 10].map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
+                        onClick={() => setClipSeconds(sec as 5 | 10)}
+                      >{sec}s</button>
+                    ))}
+                  </div>
+                ) : (
+                  <span>{clipSeconds}s</span>
+                )}
+              </div>
             </div>
 
             {model === 'pro' && (
-              <>
-                <div className="gen-pro-preview-note">
-                  Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
-                </div>
-                <div className="gen-sectionlabel">Clip length</div>
-                <div className="gen-lengthgrid">
-                  {[5, 10].map(sec => (
-                    <button
-                      key={sec}
-                      type="button"
-                      className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
-                      onClick={() => setClipSeconds(sec as 5 | 10)}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
-                </div>
-              </>
+              <div className="gen-pro-preview-note">
+                Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
+              </div>
             )}
 
             <div className="gen-review-products">
@@ -1460,6 +1476,136 @@ export default function GeneratePage() {
                 </ul>
               </div>
             )}
+            {/* "How did I do?" feedback bar — only on the done state.
+                One of three answers expands inline:
+                  - love  → keep private / publish to catalog
+                  - off   → free-text reason
+                  - delete → confirm + hard delete (existing flow) */}
+            {generation?.status === 'done' && generation.video_url && !feedbackDone && (
+              <div className="gen-feedback">
+                <div className="gen-feedback-prompt">
+                  {feedbackKind === null && <span>Well, how did I do?</span>}
+                  {feedbackKind === 'love' && <span>Love it. Want others to see it too?</span>}
+                  {feedbackKind === 'off'  && <span>What was off?</span>}
+                </div>
+
+                {feedbackKind === null && (
+                  <div className="gen-feedback-options">
+                    <button
+                      type="button"
+                      className="gen-feedback-btn gen-feedback-btn-love"
+                      onClick={() => setFeedbackKind('love')}
+                    >
+                      It looks great!
+                    </button>
+                    <button
+                      type="button"
+                      className="gen-feedback-btn gen-feedback-btn-off"
+                      onClick={() => setFeedbackKind('off')}
+                    >
+                      Umm… this is not it
+                    </button>
+                    <button
+                      type="button"
+                      className="gen-feedback-btn gen-feedback-btn-delete"
+                      disabled={feedbackBusy}
+                      onClick={async () => {
+                        if (!confirm('Delete this look? This can\'t be undone.')) return;
+                        setFeedbackBusy(true);
+                        await deleteUserGeneration(generation.id);
+                        setFeedbackBusy(false);
+                        startNewLook();
+                      }}
+                    >
+                      Don&apos;t like — delete
+                    </button>
+                  </div>
+                )}
+
+                {feedbackKind === 'love' && (
+                  <div className="gen-feedback-options">
+                    <button
+                      type="button"
+                      className="gen-feedback-btn gen-feedback-btn-secondary"
+                      disabled={feedbackBusy}
+                      onClick={async () => {
+                        setFeedbackBusy(true);
+                        await setGenerationFeedback(generation.id, 'love');
+                        await setGenerationPublished(generation.id, false);
+                        setFeedbackBusy(false);
+                        setFeedbackDone('kept');
+                      }}
+                    >
+                      Keep private
+                    </button>
+                    <button
+                      type="button"
+                      className="gen-feedback-btn gen-feedback-btn-publish"
+                      disabled={feedbackBusy}
+                      onClick={async () => {
+                        setFeedbackBusy(true);
+                        await setGenerationFeedback(generation.id, 'love');
+                        await setGenerationPublished(generation.id, true);
+                        setFeedbackBusy(false);
+                        setFeedbackDone('published');
+                      }}
+                    >
+                      Publish to catalog &amp; make $$$
+                    </button>
+                    <button
+                      type="button"
+                      className="gen-feedback-btn-link"
+                      onClick={() => setFeedbackKind(null)}
+                    >
+                      ←
+                    </button>
+                  </div>
+                )}
+
+                {feedbackKind === 'off' && (
+                  <div className="gen-feedback-off">
+                    <textarea
+                      className="gen-feedback-textarea"
+                      placeholder="What was off about it? (face, fit, vibe, lighting…)"
+                      value={feedbackReason}
+                      onChange={(e) => setFeedbackReason(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="gen-feedback-options">
+                      <button
+                        type="button"
+                        className="gen-feedback-btn-link"
+                        onClick={() => { setFeedbackKind(null); setFeedbackReason(''); }}
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        className="gen-feedback-btn gen-feedback-btn-secondary"
+                        disabled={feedbackBusy || !feedbackReason.trim()}
+                        onClick={async () => {
+                          setFeedbackBusy(true);
+                          await setGenerationFeedback(generation.id, 'off', feedbackReason.trim());
+                          setFeedbackBusy(false);
+                          setFeedbackDone('reported');
+                        }}
+                      >
+                        Send feedback
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {feedbackDone && (
+              <div className={`gen-feedback-done gen-feedback-done-${feedbackDone}`}>
+                {feedbackDone === 'kept' && <span>Saved privately. You can publish anytime from your looks.</span>}
+                {feedbackDone === 'published' && <span>Published to the catalog. Earn when shoppers buy from this look.</span>}
+                {feedbackDone === 'reported' && <span>Got it — feedback saved. We&apos;ll tune the model.</span>}
+              </div>
+            )}
+
             {generation && (
               <div className="gen-result-actions">
                 <button className="gen-btn-secondary" onClick={startNewLook}>
