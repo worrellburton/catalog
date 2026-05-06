@@ -2,16 +2,14 @@
 --
 -- Bug 1 (critical): DISTINCT ON forces ORDER BY pc.product_id, which means
 -- LIMIT k returns k products sorted by UUID — not by similarity score.
--- Rows closest to the seed product can be discarded because their UUIDs
--- sort late. Fix: wrap the DISTINCT ON in a subquery so the outer query
--- can ORDER BY distance before applying LIMIT k.
+-- Fix: wrap the DISTINCT ON in a subquery so the outer query can
+-- ORDER BY distance before applying LIMIT k.
 --
--- Bug 2 (high): the cold-start fallback (no embedding) returns same-brand
--- products. But pickFrom() in ProductPage always strips same-brand items,
--- so that fallback is guaranteed to produce an empty rail, which then
--- shows the unrelated popular feed instead. Fix: cold-start returns
--- cross-brand creatives ordered by impressions desc (popular) so the
--- client filter has something useful to work with.
+-- Bug 2 (high): cold-start returned same-brand products, which pickFrom()
+-- always strips — guaranteed empty rail. Fix: return cross-brand popular
+-- creatives scoped to the seed product's type. If the type is so sparse
+-- that no other creatives exist in it (e.g. only 1 Decor product), relax
+-- the type filter so the rail always shows something.
 
 create or replace function find_similar_creatives(
   seed_id uuid,
@@ -29,6 +27,7 @@ declare
   seed_embedding vector(512);
   seed_brand     text;
   seed_type      text;
+  has_type_match bool := false;
 begin
   select pc.embedding, p.brand, p.type
     into seed_embedding, seed_brand, seed_type
@@ -38,10 +37,9 @@ begin
 
   if seed_embedding is not null then
     -- ── Embedding path ────────────────────────────────────────────────────
-    -- Inner query: DISTINCT ON picks the nearest creative per product.
-    -- ORDER BY must include pc.product_id first (required by DISTINCT ON).
-    -- Outer query: re-sorts the deduped rows by distance so LIMIT k keeps
-    -- the k most similar products, not the k with earliest UUIDs.
+    -- Inner DISTINCT ON picks the nearest creative per product.
+    -- Outer ORDER BY distance ensures LIMIT k keeps the k most similar,
+    -- not the k with earliest-sorting UUIDs.
     return query
       select ranked.*
       from (
@@ -65,11 +63,23 @@ begin
       limit k;
   else
     -- ── Cold-start path (no embedding yet) ───────────────────────────────
-    -- Previous version returned same-brand products, but the client always
-    -- filters same-brand out, producing an empty rail. Return cross-brand
-    -- popular creatives scoped to the same product type so a sweater
-    -- doesn't surface plants (Decor). If the seed has no type, no type
-    -- filter is applied.
+    -- Check whether any same-type cross-brand creatives exist. If so, scope
+    -- the results to that type (sweater → Tops only). If the category is
+    -- sparse and nothing else exists (e.g. only 1 Decor creative), relax
+    -- the type filter so the rail isn't empty.
+    if seed_type is not null then
+      select exists(
+        select 1
+        from product_creative pc2
+        join products p2 on p2.id = pc2.product_id
+        where pc2.id <> seed_id
+          and pc2.status = 'live'
+          and pc2.video_url is not null
+          and (seed_brand is null or p2.brand <> seed_brand)
+          and p2.type = seed_type
+      ) into has_type_match;
+    end if;
+
     return query
       select distinct on (pc.product_id)
         pc.id,
@@ -85,7 +95,7 @@ begin
         and pc.status = 'live'
         and pc.video_url is not null
         and (seed_brand is null or p.brand <> seed_brand)
-        and (seed_type is null or p.type = seed_type)
+        and (not has_type_match or p.type = seed_type)
       order by pc.product_id, pc.impressions desc, pc.created_at desc
       limit k;
   end if;
