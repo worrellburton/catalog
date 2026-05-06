@@ -5,6 +5,10 @@ import { nonProductUrlReason } from '~/utils/productUrl';
 // the 8am UTC daily cron. Gracefully no-ops if the env var isn't set.
 const MODAL_SCRAPER_URL = import.meta.env.VITE_MODAL_SCRAPER_URL || '';
 
+// Modal URL resolver endpoint — resolves Google Shopping URLs to direct merchant
+// URLs without running the full Playwright scraper. Gracefully no-ops if unset.
+const MODAL_URL_RESOLVER_URL = import.meta.env.VITE_MODAL_URL_RESOLVER_URL || '';
+
 async function _triggerScrape(productId: string, url: string): Promise<void> {
   if (!MODAL_SCRAPER_URL) return;
   try {
@@ -123,6 +127,7 @@ export interface ProductRow {
   scrape_status: 'pending' | 'processing' | 'done' | 'failed';
   scraped_at: string | null;
   scrape_error: string | null;
+  url_resolved: boolean | null;  // null=never attempted, true=resolved, false=failed
   created_at: string;
 }
 
@@ -139,7 +144,7 @@ export async function listProducts(options?: {
 
   let query = supabase
     .from('products')
-    .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at', { count: 'exact' })
+    .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, url_resolved, created_at', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (options?.status && options.status !== 'all') {
@@ -156,6 +161,25 @@ export async function listProducts(options?: {
   const { data, error, count } = await query;
   if (error) throw new Error(error.message);
   return { data: (data || []) as ProductRow[], count: count ?? 0 };
+}
+
+/**
+ * Dispatch the URL resolver agent for a product with a Google Shopping URL.
+ * Calls the Modal resolve-url endpoint which resolves the Google Shopping URL
+ * to a direct merchant PDP URL and writes it back to the products row.
+ * Fire-and-forget — non-fatal if the env var isn't set.
+ */
+export async function resolveProductUrl(productId: string, url: string): Promise<void> {
+  if (!MODAL_URL_RESOLVER_URL) return;
+  try {
+    await fetch(MODAL_URL_RESOLVER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId, url }),
+    });
+  } catch {
+    // Non-fatal - daily cron will pick it up
+  }
 }
 
 /**
