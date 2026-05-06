@@ -594,7 +594,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
-          <h2>Creators curate. AI indexes. Everyone wins.</h2>
+          <h2>Creators curate. AI indexes.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v1-compare-rows">
           {[
