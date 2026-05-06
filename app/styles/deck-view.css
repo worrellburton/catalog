@@ -6030,7 +6030,7 @@
 .deck-view-v1 .deck-v1-compare-row-head {
   display: flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: flex-start;
   gap: clamp(10px, 1vw, 16px);
   padding-left: 4px;
 }

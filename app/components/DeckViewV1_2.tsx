@@ -594,7 +594,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
-          <h2>Creators curate. AI indexes.<br />Everyone wins.</h2>
+          <h2>Creators curate.<br />AI indexes.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v1-compare-rows">
           {[
@@ -603,21 +603,21 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               role: 'Shoppers',
               word: 'Discovery',
               problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
-              solution: 'Curated by tastemakers they actually follow. No ads, no noise — just the looks they want.',
+              solution: 'Curated by AI and tastemakers they actually follow. No ads, no noise.',
             },
             {
               num: '02',
               role: 'Creators',
               word: 'Revenue',
-              problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
-              solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
+              problem: 'Disorganized payouts, scatter links, no home base.',
+              solution: 'Earn on daily engagement, instant payouts, compound income based on their catalog.',
             },
             {
               num: '03',
               role: 'Brands',
               word: 'Acquisition',
-              problem: 'Renting traffic from Meta and Amazon at rising CAC. No first-party top-of-funnel they own.',
-              solution: 'First-party demand pulled in by creators with real audiences. CAC trends to zero as the loop spins.',
+              problem: 'Legacy advertising. Renting attention from Meta and Amazon at rising CAC, no first-party top-of-funnel they own.',
+              solution: 'Performance-based ROAS. Modern, creator-driven distribution that compounds with every share.',
             },
           ].map(({ num, role, word, problem, solution }, rowIdx) => (
             <div
@@ -794,8 +794,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           <ul className="deck-v1-payouts-list">
             {[
-              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.' },
-              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links — transparent and fast.' },
+              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model, paid out daily.' },
+              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links, transparent and fast.' },
               { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
               { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
             ].map((item) => (
@@ -836,30 +836,30 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">LLMs</span>
               <ul>
-                <li><strong>Anthropic</strong> — Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
-                <li><strong>Google</strong> — Gemini Flash</li>
+                <li><strong>Anthropic</strong> · Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
+                <li><strong>Google</strong> · Gemini Flash</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Video</span>
               <ul>
-                <li><strong>Bytedance</strong> — Seedance 2.0 Pro &amp; Fast</li>
-                <li><strong>Google</strong> — Veo 3.1</li>
-                <li><strong>Tencent</strong> — Vidu</li>
+                <li><strong>Bytedance</strong> · Seedance 2.0 Pro &amp; Fast</li>
+                <li><strong>Google</strong> · Veo 3.1</li>
+                <li><strong>Tencent</strong> · Vidu</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
-                <li><strong>TwelveLabs</strong> — Marengo 3.0 video embeddings</li>
-                <li><strong>Postgres</strong> — pgvector storage</li>
+                <li><strong>TwelveLabs</strong> · Marengo 3.0 video embeddings</li>
+                <li><strong>Postgres</strong> · pgvector storage</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Compute</span>
               <ul>
-                <li><strong>Modal</strong> — serverless agents</li>
-                <li><strong>Fal.ai</strong> — video generation queue</li>
+                <li><strong>Modal</strong> · serverless agents</li>
+                <li><strong>Fal.ai</strong> · video generation queue</li>
               </ul>
             </div>
           </div>
