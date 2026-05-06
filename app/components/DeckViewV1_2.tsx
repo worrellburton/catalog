@@ -905,7 +905,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               <ul>
                 <li><strong>Bytedance</strong> · Seedance 2.0 Pro &amp; Fast</li>
                 <li><strong>Google</strong> · Veo 3.1</li>
-                <li><strong>Tencent</strong> · Vidu</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
