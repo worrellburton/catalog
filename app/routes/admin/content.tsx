@@ -1347,9 +1347,14 @@ export default function AdminContent() {
 
   const loadAdProductIds = useCallback(async () => {
     if (!supabase) return;
+    // ORDER BY sort_order so the per-product video tile ordering admins
+    // set via drag-and-drop survives reload. created_at is the
+    // tie-breaker for rows that haven't been reordered yet.
     const { data } = await supabase
       .from('product_creative')
-      .select('id, product_id, video_url, status, impressions, clicks, model, prompt');
+      .select('id, product_id, video_url, status, impressions, clicks, model, prompt, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
     if (data) {
       setAdProductIds(new Set(data.map(r => r.product_id)));
       const videoMap = new Map<string, string[]>();
@@ -1688,6 +1693,39 @@ export default function AdminContent() {
     }
     showToast('Creative deleted');
   }, [showToast, loadAdProductIds]);
+
+  // Drag-and-drop reorder of the per-product creative tiles. Updates the
+  // local adVideoMap optimistically so the UI is instant, then persists
+  // the new sort_order on each row in parallel. On error reloads the map
+  // so the UI catches up with reality.
+  const reorderCreatives = useCallback(async (productId: string, fromIndex: number, toIndex: number) => {
+    if (!supabase) return;
+    if (fromIndex === toIndex) return;
+    const current = adVideoMap.get(productId) || [];
+    if (fromIndex < 0 || fromIndex >= current.length) return;
+    if (toIndex < 0 || toIndex > current.length) return;
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved);
+    setAdVideoMap(prev => {
+      const m = new Map(prev);
+      m.set(productId, next);
+      return m;
+    });
+    // Persist: each row's sort_order = its new array index.
+    const updates = next
+      .map((url, i) => {
+        const meta = adMetaByUrl.get(url);
+        return meta ? supabase.from('product_creative').update({ sort_order: i }).eq('id', meta.id) : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => !!p);
+    const results = await Promise.all(updates);
+    const errored = results.find(r => r.error);
+    if (errored?.error) {
+      showToast(`Reorder failed: ${errored.error.message}`);
+      void loadAdProductIds();
+    }
+  }, [adVideoMap, adMetaByUrl, showToast, loadAdProductIds]);
 
   // Platform visibility toggle. Sister to toggleProductActive (which
   // governs the home grid). When false, the product is excluded from
@@ -3379,9 +3417,31 @@ export default function AdminContent() {
                                     ? `${modelLabel ?? 'Unknown model'}\n\nPrompt:\n${meta.prompt}`
                                     : (modelLabel ?? 'Model unknown');
                                   return (
-                                    <div key={vi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div
+                                      key={vi}
+                                      style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                                      // HTML5 drag-and-drop wires up the per-tile reorder.
+                                      // dataTransfer carries the source product id + index;
+                                      // drops on a tile from the same product land at that
+                                      // tile's index. Drops across products are rejected.
+                                      draggable={!!p.id && !!meta?.id}
+                                      onDragStart={(e) => {
+                                        if (!p.id) return;
+                                        e.dataTransfer.setData('text/plain', JSON.stringify({ pid: p.id, from: vi }));
+                                        e.dataTransfer.effectAllowed = 'move';
+                                      }}
+                                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        try {
+                                          const payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}') as { pid?: string; from?: number };
+                                          if (!p.id || payload.pid !== p.id || typeof payload.from !== 'number') return;
+                                          reorderCreatives(p.id, payload.from, vi);
+                                        } catch { /* malformed payload - ignore */ }
+                                      }}
+                                    >
                                       <div
-                                        style={{ position: 'relative', aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
+                                        style={{ position: 'relative', aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: meta?.id ? 'grab' : 'help' }}
                                         title={hoverTitle}
                                         onMouseEnter={(ev) => {
                                           // Hover preview shows the product photo (not
