@@ -6722,3 +6722,41 @@
     opacity: 0;
   }
 }
+
+/* V1.2 Payouts sublist - 2a / 2b under Affiliate sales. Indented
+   slightly with a smaller number badge so the hierarchy reads
+   "main item -> two ways inside it" without competing with the
+   parent item's chip. */
+.deck-view-v1 .deck-v1-payouts-sublist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-payouts-sub {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: clamp(12px, 0.95vw, 14px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+.deck-view-v1 .deck-v1-payouts-sub-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(74, 222, 128, 0.85);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  text-transform: lowercase;
+}
+.deck-view-v1 .deck-v1-payouts-sub strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-payouts-sub { color: rgba(0, 0, 0, 0.78); }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub strong { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub-num { color: #047857; }

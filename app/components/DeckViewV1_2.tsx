@@ -828,12 +828,25 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <h2>Post once.<br />Earn four ways.</h2>
           <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           <ul className="deck-v1-payouts-list">
-            {[
+            {([
               { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model, paid out daily.' },
-              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links, transparent and fast.' },
+              {
+                num: '02', title: 'Affiliate sales', chip: 'Pass-through',
+                desc: 'Two ways to earn on affiliate sales:',
+                subs: [
+                  { num: '2a', title: 'Our affiliate sales', desc: 'Users get a % of every Catalog-driven affiliate sale.' },
+                  { num: '2b', title: 'Their own links', desc: 'Bring your own affiliate link and Catalog passes the commissions through.' },
+                ],
+              },
               { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
               { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
-            ].map((item) => (
+            ] as Array<{
+              num: string;
+              title: string;
+              chip: string;
+              desc: string;
+              subs?: Array<{ num: string; title: string; desc: string }>;
+            }>).map((item) => (
               <li key={item.num} className="deck-v1-payouts-list-item">
                 <span className="deck-v1-payouts-num">{item.num}</span>
                 <div className="deck-v1-payouts-list-body">
@@ -842,6 +855,18 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                     <span className="deck-v1-payouts-chip">{item.chip}</span>
                   </div>
                   <p>{item.desc}</p>
+                  {item.subs && (
+                    <ul className="deck-v1-payouts-sublist">
+                      {item.subs.map((s) => (
+                        <li key={s.num} className="deck-v1-payouts-sub">
+                          <span className="deck-v1-payouts-sub-num">{s.num}</span>
+                          <div>
+                            <strong>{s.title}.</strong> <span>{s.desc}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </li>
             ))}
