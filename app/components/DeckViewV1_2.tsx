@@ -894,10 +894,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               are data-lookup services, not AI. */}
           <div className="deck-v1-tech-stack">
             <div className="deck-v1-tech-stack-group">
-              <span className="deck-v1-tech-stack-label">LLMs</span>
+              <span className="deck-v1-tech-stack-label">Reasoning</span>
               <ul>
-                <li><strong>Anthropic</strong> · Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
-                <li><strong>Google</strong> · Gemini Flash</li>
+                <li><strong>Anthropic</strong> · Claude Opus 4.7</li>
+                <li><strong>Google</strong> · Gemini</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
