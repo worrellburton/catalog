@@ -450,6 +450,303 @@ function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
   );
 }
 
+// ── Add Products Modal ────────────────────────────────────────────────────────
+// Extracted into its own component so typing in the query input only re-renders
+// this small component, not the massive AdminContent component.
+interface AddProductsModalProps {
+  onClose: () => void;
+  onIngested: (rows: CrawledProduct[]) => void;
+  showToast: (msg: string) => void;
+}
+
+function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalProps) {
+  const [researchQuery, setResearchQuery] = useState('');
+  const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
+  const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
+  const [researchLiveOnly, setResearchLiveOnly] = useState(true);
+  const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
+  const [researchError, setResearchError] = useState<string | null>(null);
+  const [ingesting, setIngesting] = useState(false);
+
+  const runResearch = useCallback(async () => {
+    if (!researchQuery.trim()) return;
+    setResearchLoading(true);
+    setResearchSelected(new Set());
+    setResearchError(null);
+    const { products, source, error } = await researchProducts(researchQuery, { liveOnly: researchLiveOnly });
+    setResearchResults(products);
+    setResearchSource(source);
+    setResearchError(error);
+    setResearchLoading(false);
+  }, [researchQuery, researchLiveOnly]);
+
+  const ingestSelectedProducts = useCallback(async () => {
+    if (!supabase || researchSelected.size === 0) return;
+    setIngesting(true);
+    const nowIso = new Date().toISOString();
+    const selectedItems = Array.from(researchSelected).map(i => researchResults[i]);
+    const rows = selectedItems
+      .filter(p => isLikelyProductUrl(p.url))
+      .map(p => ({
+        name: p.name,
+        brand: p.brand,
+        price: p.price,
+        url: p.url,
+        image_url: p.image_url,
+        images: p.image_urls || [p.image_url].filter(Boolean),
+        scrape_status: 'done',
+        scraped_at: nowIso,
+        type: inferProductType(p.name, p.brand),
+        gender: inferProductGenderFromName(p.name),
+        source: 'google_shopping',
+      }));
+    const skipped = selectedItems.length - rows.length;
+    if (rows.length === 0) {
+      setIngesting(false);
+      showToast(skipped > 0
+        ? `${skipped} product${skipped === 1 ? '' : 's'} skipped — no direct URL found`
+        : 'No valid product URLs in selection');
+      return;
+    }
+    const { data: inserted, error } = await supabase
+      .from('products')
+      .insert(rows)
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
+    setIngesting(false);
+    if (!error) {
+      const skipNote = skipped > 0 ? ` (${skipped} skipped — no URL)` : '';
+      showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}${skipNote}`);
+      onClose();
+      const newRows = (inserted || []).map(p => ({
+        ...p,
+        is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
+      })) as CrawledProduct[];
+      onIngested(newRows);
+    } else {
+      showToast(`Ingest failed: ${error.message}`);
+    }
+  }, [researchSelected, researchResults, onClose, onIngested, showToast]);
+
+  const visibleResearchResults = researchResults.filter(
+    p => researchGender === 'all' || p.gender === researchGender || p.gender === 'unisex'
+  );
+
+  return (
+    <div className="admin-modal-overlay" onClick={() => !ingesting && onClose()}>
+      <div
+        className="admin-modal"
+        style={{ width: 720, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '20px 24px 12px' }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add Products</h2>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
+            Describe what you want to add - Claude will research popular matching products.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              autoFocus
+              placeholder='e.g. "white shoes", "black dresses", "sunglasses"'
+              value={researchQuery}
+              onChange={e => setResearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runResearch(); }}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
+            />
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={runResearch}
+              disabled={researchLoading || !researchQuery.trim()}
+            >
+              {researchLoading ? 'Researching…' : 'Research'}
+            </button>
+          </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={researchLiveOnly}
+              onChange={e => setResearchLiveOnly(e.target.checked)}
+              style={{ margin: 0, cursor: 'pointer' }}
+            />
+            Only search Google Shopping API
+          </label>
+          {researchError && (
+            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+              <strong>Live search failed:</strong> {researchError}
+            </div>
+          )}
+          {researchResults.length > 0 && researchSource && (
+            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 999, background: researchSource === 'live' ? '#ecfdf5' : '#fffbeb', border: '1px solid', borderColor: researchSource === 'live' ? '#a7f3d0' : '#fde68a', fontSize: 11, fontWeight: 600, color: researchSource === 'live' ? '#047857' : '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: researchSource === 'live' ? '#10b981' : '#f59e0b' }} />
+              {researchSource === 'live' ? 'Live Google Shopping' : 'Seed (offline)'}
+            </div>
+          )}
+          {researchResults.length > 0 && (
+            <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{researchResults.length}</span>
+                  <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>
+                    {researchResults.reduce((sum, p) => sum + (p.image_urls?.length || 1), 0)}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thumbnails pulled</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>For</span>
+                {(['all', 'men', 'women', 'unisex'] as const).map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setResearchGender(g)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                      border: '1px solid',
+                      borderColor: researchGender === g ? '#111' : '#e2e8f0',
+                      background: researchGender === g ? '#111' : '#fff',
+                      color: researchGender === g ? '#fff' : '#111',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
+          {researchLoading ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              Researching popular products…
+            </div>
+          ) : researchResults.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              Type a query and press Research.
+            </div>
+          ) : visibleResearchResults.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              No results for that gender.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {visibleResearchResults.map(p => {
+                const idx = researchResults.indexOf(p);
+                const isSelected = researchSelected.has(idx);
+                const hasUrl = isLikelyProductUrl(p.url);
+                const scoreColor = p.thumbnailScore >= 85 ? '#16a34a' : p.thumbnailScore >= 70 ? '#ca8a04' : '#dc2626';
+                const scoreLabel = p.thumbnailScore >= 90 ? 'Excellent' : p.thumbnailScore >= 75 ? 'Good' : p.thumbnailScore >= 60 ? 'Fair' : 'Poor';
+                return (
+                  <div
+                    key={`${p.brand}-${p.name}-${idx}`}
+                    onClick={() => {
+                      if (!hasUrl) return;
+                      setResearchSelected(prev => {
+                        const next = new Set(prev);
+                        if (next.has(idx)) next.delete(idx); else next.add(idx);
+                        return next;
+                      });
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                      borderRadius: 8, cursor: hasUrl ? 'pointer' : 'not-allowed',
+                      background: isSelected ? '#f0f7ff' : hasUrl ? 'transparent' : '#fafafa',
+                      border: `1px solid ${isSelected ? '#3b82f6' : hasUrl ? '#eee' : '#f0f0f0'}`,
+                      opacity: hasUrl ? 1 : 0.6,
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 4,
+                      border: `2px solid ${isSelected ? '#3b82f6' : '#ccc'}`,
+                      background: isSelected ? '#3b82f6' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 3, flexShrink: 0, position: 'relative' }}>
+                      {(p.image_urls || [p.image_url]).slice(0, 4).map((u, ui) => (
+                        <img
+                          key={ui}
+                          src={u}
+                          alt=""
+                          onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                          style={{
+                            width: ui === 0 ? 48 : 28,
+                            height: 48,
+                            borderRadius: 6,
+                            objectFit: 'cover',
+                            background: '#f5f5f5',
+                            border: '1px solid #e5e7eb',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>
+                        {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
+                      </div>
+                      {!hasUrl ? (
+                        <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>
+                          No direct URL — cannot ingest
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
+                          {(p.image_urls || [p.image_url]).length} thumbnail{((p.image_urls || [p.image_url]).length === 1) ? '' : 's'} pulled
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: '#888' }}>Thumbnail</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor }}>{p.thumbnailScore}</span>
+                        <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: `${scoreColor}18`, color: scoreColor, fontWeight: 600 }}>{scoreLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#999' }}>{p.reason}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#888' }}>
+            {researchSelected.size > 0 ? `${researchSelected.size} selected` : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="admin-btn admin-btn-secondary" onClick={() => !ingesting && onClose()} disabled={ingesting}>
+              Cancel
+            </button>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={ingestSelectedProducts}
+              disabled={ingesting || researchSelected.size === 0}
+            >
+              {ingesting ? 'Ingesting…' : `Ingest ${researchSelected.size || ''}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminContent() {
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
   // is deep-linkable and the browser back button works like users expect.
@@ -856,16 +1153,6 @@ export default function AdminContent() {
   const [brandUrlInput, setBrandUrlInput] = useState('');
   const [brandUrlBusy, setBrandUrlBusy] = useState(false);
   const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
-  const [researchQuery, setResearchQuery] = useState('');
-  const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
-  const [researchLoading, setResearchLoading] = useState(false);
-  const [researchResults, setResearchResults] = useState<ResearchedProduct[]>([]);
-  const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
-  const [researchLiveOnly, setResearchLiveOnly] = useState(true);
-  const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
-  const [researchError, setResearchError] = useState<string | null>(null);
-  const [ingesting, setIngesting] = useState(false);
-
   // Stale product refresh
   const [refreshing, setRefreshing] = useState(false);
   const [auditingTypes, setAuditingTypes] = useState(false);
@@ -992,79 +1279,6 @@ export default function AdminContent() {
     }
   }, []);
 
-  const runResearch = useCallback(async () => {
-    if (!researchQuery.trim()) return;
-    setResearchLoading(true);
-    setResearchSelected(new Set());
-    setResearchError(null);
-    const { products, source, error } = await researchProducts(researchQuery, { liveOnly: researchLiveOnly });
-    setResearchResults(products);
-    setResearchSource(source);
-    setResearchError(error);
-    setResearchLoading(false);
-  }, [researchQuery, researchLiveOnly]);
-
-  const ingestSelectedProducts = useCallback(async () => {
-    if (!supabase || researchSelected.size === 0) return;
-    setIngesting(true);
-    const nowIso = new Date().toISOString();
-    const rows = Array.from(researchSelected)
-      .map(i => researchResults[i])
-      // Drop search-result / non-product URLs so they never end up in the
-      // products table where the scraper would chew on them forever.
-      .filter(p => isLikelyProductUrl(p.url))
-      .map(p => {
-      return {
-        name: p.name,
-        brand: p.brand,
-        price: p.price,
-        url: p.url,
-        image_url: p.image_url,
-        images: p.image_urls || [p.image_url].filter(Boolean),
-        scrape_status: 'done',
-        scraped_at: nowIso,
-        // Auto-infer type + gender at insert so we don't have to
-        // audit later. Either may be null when nothing matches; both
-        // columns accept null.
-        type: inferProductType(p.name, p.brand),
-        gender: inferProductGenderFromName(p.name),
-        source: 'google_shopping',
-      };
-    });
-    if (rows.length === 0) {
-      setIngesting(false);
-      showToast('No valid product URLs in selection');
-      return;
-    }
-    const { data: inserted, error } = await supabase
-      .from('products')
-      .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
-    setIngesting(false);
-    if (!error) {
-      showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
-      setShowAddProducts(false);
-      setResearchQuery('');
-      setResearchResults([]);
-      setResearchSelected(new Set());
-      // Prepend the newly ingested rows so they appear at the top of the list
-      // immediately, then reconcile with a full reload from the DB.
-      const newRows = (inserted || []).map((p) => ({
-        ...p,
-        is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
-      })) as CrawledProduct[];
-      setCrawledProducts(prev => [
-        ...newRows,
-        ...prev.filter(r => !newRows.some(n => n.id === r.id)),
-      ]);
-    } else {
-      showToast(`Ingest failed: ${error.message}`);
-    }
-  }, [researchSelected, researchResults]);
-
-  const visibleResearchResults = researchResults.filter(
-    p => researchGender === 'all' || p.gender === researchGender || p.gender === 'unisex'
-  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -4203,207 +4417,16 @@ export default function AdminContent() {
       )}
 
       {showAddProducts && (
-        <div className="admin-modal-overlay" onClick={() => !ingesting && setShowAddProducts(false)}>
-          <div
-            className="admin-modal"
-            style={{ width: 720, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ padding: '20px 24px 12px' }}>
-              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add Products</h2>
-              <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
-                Describe what you want to add - Claude will research popular matching products.
-              </p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder='e.g. "white shoes", "black dresses", "sunglasses"'
-                  value={researchQuery}
-                  onChange={e => setResearchQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') runResearch(); }}
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
-                />
-                <button
-                  className="admin-btn admin-btn-primary"
-                  onClick={runResearch}
-                  disabled={researchLoading || !researchQuery.trim()}
-                >
-                  {researchLoading ? 'Researching…' : 'Research'}
-                </button>
-              </div>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={researchLiveOnly}
-                  onChange={e => setResearchLiveOnly(e.target.checked)}
-                  style={{ margin: 0, cursor: 'pointer' }}
-                />
-                Only search Google Shopping API
-              </label>
-              {researchError && (
-                <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
-                  <strong>Live search failed:</strong> {researchError}
-                </div>
-              )}
-              {researchResults.length > 0 && researchSource && (
-                <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 999, background: researchSource === 'live' ? '#ecfdf5' : '#fffbeb', border: '1px solid', borderColor: researchSource === 'live' ? '#a7f3d0' : '#fde68a', fontSize: 11, fontWeight: 600, color: researchSource === 'live' ? '#047857' : '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: researchSource === 'live' ? '#10b981' : '#f59e0b' }} />
-                  {researchSource === 'live' ? 'Live Google Shopping' : 'Seed (offline)'}
-                </div>
-              )}
-              {researchResults.length > 0 && (
-                <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{researchResults.length}</span>
-                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>
-                        {researchResults.reduce((sum, p) => sum + (p.image_urls?.length || 1), 0)}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thumbnails pulled</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>For</span>
-                  {(['all', 'men', 'women', 'unisex'] as const).map(g => (
-                    <button
-                      key={g}
-                      onClick={() => setResearchGender(g)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                        border: '1px solid',
-                        borderColor: researchGender === g ? '#111' : '#e2e8f0',
-                        background: researchGender === g ? '#111' : '#fff',
-                        color: researchGender === g ? '#fff' : '#111',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
-              {researchLoading ? (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                  Researching popular products…
-                </div>
-              ) : researchResults.length === 0 ? (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                  Type a query and press Research.
-                </div>
-              ) : visibleResearchResults.length === 0 ? (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                  No results for that gender.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {visibleResearchResults.map(p => {
-                    const idx = researchResults.indexOf(p);
-                    const isSelected = researchSelected.has(idx);
-                    const scoreColor = p.thumbnailScore >= 85 ? '#16a34a' : p.thumbnailScore >= 70 ? '#ca8a04' : '#dc2626';
-                    const scoreLabel = p.thumbnailScore >= 90 ? 'Excellent' : p.thumbnailScore >= 75 ? 'Good' : p.thumbnailScore >= 60 ? 'Fair' : 'Poor';
-                    return (
-                      <div
-                        key={`${p.brand}-${p.name}-${idx}`}
-                        onClick={() => {
-                          setResearchSelected(prev => {
-                            const next = new Set(prev);
-                            if (next.has(idx)) next.delete(idx); else next.add(idx);
-                            return next;
-                          });
-                        }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
-                          borderRadius: 8, cursor: 'pointer',
-                          background: isSelected ? '#f0f7ff' : 'transparent',
-                          border: `1px solid ${isSelected ? '#3b82f6' : '#eee'}`,
-                        }}
-                      >
-                        <div style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          border: `2px solid ${isSelected ? '#3b82f6' : '#ccc'}`,
-                          background: isSelected ? '#3b82f6' : '#fff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
-                          {isSelected && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 3, flexShrink: 0, position: 'relative' }}>
-                          {(p.image_urls || [p.image_url]).slice(0, 4).map((u, ui) => (
-                            <img
-                              key={ui}
-                              src={u}
-                              alt=""
-                              onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                              style={{
-                                width: ui === 0 ? 48 : 28,
-                                height: 48,
-                                borderRadius: 6,
-                                objectFit: 'cover',
-                                background: '#f5f5f5',
-                                border: '1px solid #e5e7eb',
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.name}</div>
-                          <div style={{ fontSize: 11, color: '#888' }}>
-                            {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
-                          </div>
-                          <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
-                            {(p.image_urls || [p.image_url]).length} thumbnail{((p.image_urls || [p.image_url]).length === 1) ? '' : 's'} pulled
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 11, color: '#888' }}>Thumbnail</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor }}>{p.thumbnailScore}</span>
-                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: `${scoreColor}18`, color: scoreColor, fontWeight: 600 }}>{scoreLabel}</span>
-                          </div>
-                          <div style={{ fontSize: 10, color: '#999' }}>{p.reason}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: '#888' }}>
-                {researchSelected.size > 0 ? `${researchSelected.size} selected` : ''}
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="admin-btn admin-btn-secondary" onClick={() => !ingesting && setShowAddProducts(false)} disabled={ingesting}>
-                  Cancel
-                </button>
-                <button
-                  className="admin-btn admin-btn-primary"
-                  onClick={ingestSelectedProducts}
-                  disabled={ingesting || researchSelected.size === 0}
-                >
-                  {ingesting ? 'Ingesting…' : `Ingest ${researchSelected.size || ''}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddProductsModal
+          onClose={() => setShowAddProducts(false)}
+          onIngested={(newRows) => {
+            setCrawledProducts(prev => [
+              ...newRows,
+              ...prev.filter(r => !newRows.some(n => n.id === r.id)),
+            ]);
+          }}
+          showToast={showToast}
+        />
       )}
 
       {toast && (
