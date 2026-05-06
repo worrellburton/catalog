@@ -5,11 +5,11 @@
 -- Fix: wrap the DISTINCT ON in a subquery so the outer query can
 -- ORDER BY distance before applying LIMIT k.
 --
--- Bug 2 (high): cold-start returned same-brand products, which pickFrom()
+-- Bug 2 (high): cold-start returned same-brand products, which the client
 -- always strips — guaranteed empty rail. Fix: return cross-brand popular
--- creatives scoped to the seed product's type. If the type is so sparse
--- that no other creatives exist in it (e.g. only 1 Decor product), relax
--- the type filter so the rail always shows something.
+-- creatives, always scoped to the seed product's type. If nothing comes
+-- back (e.g. only one brand makes Decor items), the section hides on the
+-- client rather than falling back to unrelated fashion creatives.
 
 create or replace function find_similar_creatives(
   seed_id uuid,
@@ -27,7 +27,6 @@ declare
   seed_embedding vector(512);
   seed_brand     text;
   seed_type      text;
-  has_type_match bool := false;
 begin
   select pc.embedding, p.brand, p.type
     into seed_embedding, seed_brand, seed_type
@@ -63,23 +62,9 @@ begin
       limit k;
   else
     -- ── Cold-start path (no embedding yet) ───────────────────────────────
-    -- Check whether any same-type cross-brand creatives exist. If so, scope
-    -- the results to that type (sweater → Tops only). If the category is
-    -- sparse and nothing else exists (e.g. only 1 Decor creative), relax
-    -- the type filter so the rail isn't empty.
-    if seed_type is not null then
-      select exists(
-        select 1
-        from product_creative pc2
-        join products p2 on p2.id = pc2.product_id
-        where pc2.id <> seed_id
-          and pc2.status = 'live'
-          and pc2.video_url is not null
-          and (seed_brand is null or p2.brand <> seed_brand)
-          and p2.type = seed_type
-      ) into has_type_match;
-    end if;
-
+    -- Always scope to the seed product's type. If no cross-brand same-type
+    -- creatives exist (e.g. all Decor items are from one brand), 0 rows are
+    -- returned and the client hides the section entirely.
     return query
       select distinct on (pc.product_id)
         pc.id,
@@ -95,7 +80,7 @@ begin
         and pc.status = 'live'
         and pc.video_url is not null
         and (seed_brand is null or p.brand <> seed_brand)
-        and (not has_type_match or p.type = seed_type)
+        and (seed_type is null or p.type = seed_type)
       order by pc.product_id, pc.impressions desc, pc.created_at desc
       limit k;
   end if;
