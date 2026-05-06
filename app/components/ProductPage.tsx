@@ -428,8 +428,20 @@ export default function ProductPage({
       return out;
     };
     const fromSimilar = pickFrom(similarCreatives);
-    if (fromSimilar.length > 0) return fromSimilar;
-    return pickFrom(popularFallback);
+    const base = fromSimilar.length > 0 ? fromSimilar : pickFrom(popularFallback);
+    // Always show at least 4 cards. If the de-duped set is short, cycle
+    // through the same rows again (with fresh keys via index suffix) until
+    // we hit 4 so the grid never looks half-empty.
+    if (base.length > 0 && base.length < 4) {
+      const filled = [...base];
+      let i = 0;
+      while (filled.length < 4) {
+        filled.push({ ...base[i % base.length], id: `${base[i % base.length].id}-dup-${filled.length}` });
+        i++;
+      }
+      return filled;
+    }
+    return base;
   }, [similarCreatives, popularFallback, product.brand, product.name, (product as Product & { id?: string }).id]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
