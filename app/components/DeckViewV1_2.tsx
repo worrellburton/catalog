@@ -821,7 +821,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
-                <li>TwelveLabs Marengo 3.0 — video similarity</li>
+                <li>TwelveLabs — video understanding platform</li>
+                <li>Marengo 3.0 — video embedding model</li>
                 <li>pgvector — vector storage in Postgres</li>
               </ul>
             </div>
@@ -958,17 +959,17 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <div className="deck-v8-ask-priorities deck-v8-ask-components">
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">01</span>
-              <h3>Creator supply</h3>
-              <p>Onboard the first wave of creators. Free tools, fast payouts, instant storefronts - the side of the loop the round seeds.</p>
+              <h3>Product Seeding</h3>
+              <p>Autonomous product sync, AI creative generation, vector indexing &mdash; Catalog launches with inventory built in, no cold start.</p>
             </div>
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">02</span>
-              <h3>Product depth</h3>
-              <p>Tagging infrastructure, native mobile app, creator analytics. Make Catalog the default tool so taste compounds inside the platform.</p>
+              <h3>Go to Market</h3>
+              <p>Onboard the first wave of creators with free tools, fast payouts, and instant storefronts. Public launch with proven unit economics.</p>
             </div>
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">03</span>
-              <h3>Brand pull</h3>
+              <h3>Brand Pull</h3>
               <p>Launch the fixed-ROAS model with early brand partners. Prove the economics that make the marketplace self-sustaining.</p>
             </div>
           </div>
