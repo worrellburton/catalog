@@ -1859,19 +1859,21 @@ export default function AdminContent() {
             height: 290,
             borderRadius: 8,
             overflow: 'hidden',
-            background: '#000',
+            background: '#fff',
             boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
             zIndex: 9999,
             pointerEvents: 'none',
+            border: '1px solid rgba(0,0,0,0.08)',
           }}
         >
-          <video
+          {/* Product photo preview - hovering a generated-creative tile
+              flashes the source product image so admins can compare the
+              AI rendition against the canonical product shot at a glance. */}
+          <img
             src={hoverPreview.url}
-            autoPlay
-            muted
-            loop
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
         </div>
       )}
@@ -3382,8 +3384,14 @@ export default function AdminContent() {
                                         style={{ position: 'relative', aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
                                         title={hoverTitle}
                                         onMouseEnter={(ev) => {
+                                          // Hover preview shows the product photo (not
+                                          // the video itself) - admins can flash between
+                                          // the AI render and the canonical product
+                                          // image to spot styling drift at a glance.
+                                          const photo = rowImages[0];
+                                          if (!photo) return;
                                           const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                                          setHoverPreview({ url: v, x: r.right + 8, y: r.top });
+                                          setHoverPreview({ url: photo, x: r.right + 8, y: r.top });
                                         }}
                                         onMouseLeave={() => setHoverPreview(null)}
                                       >
