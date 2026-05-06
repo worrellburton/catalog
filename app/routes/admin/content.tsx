@@ -7,7 +7,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl } from '~/services/scrape-product';
+import { addProductUrl, triggerScrape } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -522,6 +522,13 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
         is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
       })) as CrawledProduct[];
       onIngested(newRows);
+      // Immediately kick off the scraper for any pending rows so they don't
+      // wait for the 8am UTC daily cron.
+      for (const row of inserted || []) {
+        if (row.scrape_status === 'pending' && row.url) {
+          triggerScrape(row.id, row.url);
+        }
+      }
     } else {
       showToast(`Ingest failed: ${error.message}`);
     }
