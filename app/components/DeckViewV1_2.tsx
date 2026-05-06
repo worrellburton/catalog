@@ -411,7 +411,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'The Ask',
     'Demo',
     // Appendix (everything below Demo is supplementary)
-    'Traction',
     'Roadmap',
     'Projections',
     'Closing',
@@ -1102,54 +1101,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         {demoExiting && <div className="deck-v1-demo-exit-overlay" aria-hidden="true" />}
       </div>
 
-      {/* Slide 11: Traction */}
-      <div className="deck-slide deck-v8-traction">
-        <span className="deck-label">Traction</span>
-        <h2>Early momentum.</h2>
-        <div className="deck-v8-phone-marquee" aria-hidden="true">
-          <div className="deck-v8-phone-track">
-            {/* Phones list, duplicated for a seamless infinite loop */}
-            {[...Array(2)].map((_, loopIdx) => (
-              <React.Fragment key={loopIdx}>
-                {[
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                  'guy.mp4',
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                  'guy.mp4',
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                ].map((src, i) => (
-                  <div key={`${loopIdx}-${i}`} className="deck-app-frame deck-v8-marquee-phone">
-                    <video src={`${basePath}/${src}`} autoPlay loop muted playsInline className="deck-app-video" />
-                  </div>
-                ))}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-        <div className="deck-v8-traction-stats">
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">V1</span>
-            <span className="deck-v8-traction-label">Product live and functional</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">42</span>
-            <span className="deck-v8-traction-label">Active creators</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">318</span>
-            <span className="deck-v8-traction-label">Looks published</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">12</span>
-            <span className="deck-v8-traction-label">Brands integrated</span>
-          </div>
-        </div>
-        <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
-      </div>
-
       {/* Slide 11: Roadmap timeline */}
       <div className="deck-slide deck-v8-roadmap">
         <span className="deck-label">Roadmap</span>
@@ -1265,14 +1216,28 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         )}
       </div>
 
-      {/* Slide 13: Final */}
-      <div className="deck-slide deck-cover">
-        <CatalogLogo className="deck-logo" />
-        <p className="deck-subtitle">Human Taste, Powered by AI</p>
-        <div className="deck-end-actions">
-          <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
-          <button className="deck-website-btn" id="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
-          <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
+      {/* Closing - mirrors the opening (Cover + Dream combined) so the
+          deck closes the way it opened. Adds the action buttons + the
+          Trademark link. */}
+      <div className="deck-slide deck-cover deck-slide-intro deck-v8-cover-intro deck-v8-intro deck-v1-cover-combined">
+        <div className="deck-intro-svgs" aria-hidden="true">
+          <svg className="deck-intro-icon deck-intro-icon-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
+          <svg className="deck-intro-icon deck-intro-icon-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
+          <svg className="deck-intro-icon deck-intro-icon-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
+          <svg className="deck-intro-icon deck-intro-icon-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
+          <svg className="deck-intro-icon deck-intro-icon-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
+          <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+        </div>
+        <CatalogLogo className="deck-logo deck-v8-cover-logo deck-v8-reveal deck-v8-reveal-1" />
+        <div className="deck-intro-content">
+          <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Thank you</span>
+          <h2 className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-h2">The AI for Shopping</h2>
+          <p className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-sub">Human Taste, Powered by AI.</p>
+          <div className="deck-end-actions">
+            <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
+            <button className="deck-website-btn" id="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
+            <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
+          </div>
         </div>
       </div>
     </div>
