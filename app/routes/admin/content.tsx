@@ -1102,6 +1102,7 @@ export default function AdminContent() {
   const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
   // Which row's inline Links/affiliates dropdown is open.
   const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
+  const [resolvingProductId, setResolvingProductId] = useState<string | null>(null);
   // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
   const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
   // Which row's inline Creative+Photos dropdown is open.
@@ -3809,6 +3810,22 @@ export default function AdminContent() {
                                   >
                                     Copy
                                   </button>
+                                  {p.url && p.url.includes('google.com') && (
+                                    <button
+                                      className="admin-btn admin-btn-primary"
+                                      disabled={resolvingProductId === p.id}
+                                      style={{ fontSize: 11, padding: '6px 10px', opacity: resolvingProductId === p.id ? 0.6 : 1 }}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        setResolvingProductId(p.id);
+                                        await resolveProductUrl(p.id, p.url!);
+                                        setResolvingProductId(null);
+                                        showToast('Resolving URL — check back in a moment');
+                                      }}
+                                    >
+                                      {resolvingProductId === p.id ? 'Resolving…' : '🔗 Resolve URL'}
+                                    </button>
+                                  )}
                                   <button
                                     className="admin-btn admin-btn-primary"
                                     style={{ fontSize: 11, padding: '6px 10px' }}
