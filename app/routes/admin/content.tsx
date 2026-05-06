@@ -487,27 +487,26 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
     setIngesting(true);
     const nowIso = new Date().toISOString();
     const selectedItems = Array.from(researchSelected).map(i => researchResults[i]);
-    const rows = selectedItems
-      .filter(p => isLikelyProductUrl(p.url))
-      .map(p => ({
-        name: p.name,
-        brand: p.brand,
-        price: p.price,
-        url: p.url,
-        image_url: p.image_url,
-        images: p.image_urls || [p.image_url].filter(Boolean),
-        scrape_status: 'done',
-        scraped_at: nowIso,
-        type: inferProductType(p.name, p.brand),
-        gender: inferProductGenderFromName(p.name),
-        source: 'google_shopping',
-      }));
-    const skipped = selectedItems.length - rows.length;
+    // Include all selected products — even those with only a Google Shopping URL.
+    // The product scraper resolves the real merchant URL from any google.com/shopping
+    // link, so we don't need a direct PDP URL at ingest time.
+    const rows = selectedItems.map(p => ({
+      name: p.name,
+      brand: p.brand,
+      price: p.price,
+      url: p.url || null,
+      image_url: p.image_url,
+      images: p.image_urls || [p.image_url].filter(Boolean),
+      // Mark as 'pending' so the scraper picks it up when there's no direct URL.
+      scrape_status: isLikelyProductUrl(p.url) ? 'done' : 'pending',
+      scraped_at: isLikelyProductUrl(p.url) ? nowIso : null,
+      type: inferProductType(p.name, p.brand),
+      gender: inferProductGenderFromName(p.name),
+      source: 'google_shopping',
+    }));
     if (rows.length === 0) {
       setIngesting(false);
-      showToast(skipped > 0
-        ? `${skipped} product${skipped === 1 ? '' : 's'} skipped — no direct URL found`
-        : 'No valid product URLs in selection');
+      showToast('Nothing selected');
       return;
     }
     const { data: inserted, error } = await supabase
@@ -516,8 +515,7 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
       .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
     setIngesting(false);
     if (!error) {
-      const skipNote = skipped > 0 ? ` (${skipped} skipped — no URL)` : '';
-      showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}${skipNote}`);
+      showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
       onClose();
       const newRows = (inserted || []).map(p => ({
         ...p,
@@ -642,14 +640,13 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
               {visibleResearchResults.map(p => {
                 const idx = researchResults.indexOf(p);
                 const isSelected = researchSelected.has(idx);
-                const hasUrl = isLikelyProductUrl(p.url);
+                const hasDirect = isLikelyProductUrl(p.url);
                 const scoreColor = p.thumbnailScore >= 85 ? '#16a34a' : p.thumbnailScore >= 70 ? '#ca8a04' : '#dc2626';
                 const scoreLabel = p.thumbnailScore >= 90 ? 'Excellent' : p.thumbnailScore >= 75 ? 'Good' : p.thumbnailScore >= 60 ? 'Fair' : 'Poor';
                 return (
                   <div
                     key={`${p.brand}-${p.name}-${idx}`}
                     onClick={() => {
-                      if (!hasUrl) return;
                       setResearchSelected(prev => {
                         const next = new Set(prev);
                         if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -658,10 +655,9 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
                     }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
-                      borderRadius: 8, cursor: hasUrl ? 'pointer' : 'not-allowed',
-                      background: isSelected ? '#f0f7ff' : hasUrl ? 'transparent' : '#fafafa',
-                      border: `1px solid ${isSelected ? '#3b82f6' : hasUrl ? '#eee' : '#f0f0f0'}`,
-                      opacity: hasUrl ? 1 : 0.6,
+                      borderRadius: 8, cursor: 'pointer',
+                      background: isSelected ? '#f0f7ff' : 'transparent',
+                      border: `1px solid ${isSelected ? '#3b82f6' : '#eee'}`,
                     }}
                   >
                     <div style={{
@@ -700,9 +696,9 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
                       <div style={{ fontSize: 11, color: '#888' }}>
                         {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
                       </div>
-                      {!hasUrl ? (
-                        <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2, fontWeight: 600 }}>
-                          No direct URL — cannot ingest
+                      {!hasDirect ? (
+                        <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 2, fontWeight: 600 }}>
+                          Scraper will resolve URL
                         </div>
                       ) : (
                         <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
