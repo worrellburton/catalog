@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, resolveProductUrl, type ProductRow } from '~/services/scrape-product';
+import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, triggerScrape, type ProductRow } from '~/services/scrape-product';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
 import { isStuck } from '~/utils/aiBudget';
@@ -240,13 +240,9 @@ export default function ProductCrawlsPanel() {
   const handleResolveUrl = async (id: string, url: string) => {
     setResolving(id);
     try {
-      await resolveProductUrl(id, url);
-      // Optimistically mark as resolving — the agent writes back async
-      setRows((prev) =>
-        prev.map((r) => r.id === id ? { ...r, url_resolved: null } : r)
-      );
+      await triggerScrape(id, url);
     } catch (e) {
-      console.error('Failed to trigger URL resolution:', e);
+      console.error('Failed to trigger scrape:', e);
     } finally {
       setResolving(null);
     }
@@ -477,7 +473,7 @@ export default function ProductCrawlsPanel() {
                     <td className="admin-cell-muted">{timeAgo(r.created_at)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        {r.url && /google\.com/i.test(r.url) && r.url_resolved !== true && (
+                        {r.url && /google\.com/i.test(r.url) && r.scrape_status !== 'pending' && r.scrape_status !== 'processing' && (
                           <button
                             className="admin-btn admin-btn-secondary"
                             disabled={resolving === r.id}
