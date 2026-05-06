@@ -130,7 +130,7 @@ def scrape_and_update(product_id: str, url: str):
     import os
     from datetime import datetime, timezone
     from supabase import create_client
-    from agent import run_agent
+    from agent import run_agent, _is_google_shopping_url, BrowserSession
 
     sb_url = os.environ["SUPABASE_URL"]
     sb_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -138,6 +138,58 @@ def scrape_and_update(product_id: str, url: str):
 
     # Mark as processing
     supabase.table("products").update({"scrape_status": "processing"}).eq("id", product_id).execute()
+
+    # Google Shopping fast path: always resolve the merchant URL up front and
+    # persist it on the row. Many merchant sites (e.g. shop.lululemon.com)
+    # reject Playwright with HTTP2 protocol errors, so the regular AI scrape
+    # would fail anyway -- but we can still recover the canonical merchant URL
+    # from Google's redirect, which is the most valuable piece of data.
+    #
+    # If the row already has name + description + images, skip the AI scrape
+    # entirely (nothing to gain). Otherwise, try to scrape the resolved URL,
+    # but if the merchant blocks us, keep the resolved URL and mark done.
+    google_shopping_resolved = False
+    if _is_google_shopping_url(url):
+        existing = (
+            supabase.table("products")
+            .select("name,description,images,image_url")
+            .eq("id", product_id)
+            .single()
+            .execute()
+        )
+        row = existing.data or {}
+        has_images = bool(row.get("images")) or bool(row.get("image_url"))
+        has_details = bool(row.get("name")) and bool(row.get("description"))
+
+        print(f"🛒 [{product_id}] Google Shopping URL detected — resolving merchant URL")
+        browser = BrowserSession(use_stealth=False, proxy=None)
+        resolved = None
+        try:
+            browser.start()
+            resolved = browser.resolve_google_shopping(url)
+        except Exception as e:
+            print(f"  ⚠️  [{product_id}] Failed to resolve Google Shopping URL: {e}")
+        finally:
+            try:
+                browser.stop()
+            except Exception:
+                pass
+
+        if resolved:
+            supabase.table("products").update({"url": resolved}).eq("id", product_id).execute()
+            print(f"  🔗 [{product_id}] URL replaced: {resolved}")
+            url = resolved
+            google_shopping_resolved = True
+
+            # Skip full scrape if row already enriched.
+            if has_images and has_details:
+                supabase.table("products").update({
+                    "scrape_status": "done",
+                    "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    "scrape_error": None,
+                }).eq("id", product_id).execute()
+                print(f"✅ [{product_id}] Already enriched — skipping AI scrape")
+                return
 
     saved_product_data = None  # Store for enrichment
 
@@ -223,10 +275,25 @@ def scrape_and_update(product_id: str, url: str):
                 print(f"  ⚠️  [{product_id}] Enrichment failed, keeping original description")
 
     except Exception as e:
+        # If we already resolved a Google Shopping URL but the merchant page
+        # itself is unscrapeable (HTTP2 block / SITE_BLOCKED), don't mark the
+        # row as failed -- the resolved URL is still useful and saved. Mark
+        # the row as done with a soft note instead so it doesn't get retried.
+        err_msg = str(e)
+        is_blocked = "SITE_BLOCKED" in err_msg or "ERR_HTTP2_PROTOCOL_ERROR" in err_msg
+        if google_shopping_resolved and is_blocked:
+            supabase.table("products").update({
+                "scrape_status": "done",
+                "scraped_at": datetime.now(timezone.utc).isoformat(),
+                "scrape_error": f"Merchant site blocked scrape; URL resolved only: {err_msg[:300]}",
+            }).eq("id", product_id).execute()
+            print(f"⚠️  [{product_id}] Merchant blocked scrape, but URL was resolved — marking done")
+            return
+
         supabase.table("products").update({
             "scrape_status": "failed",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
-            "scrape_error": str(e)[:500],
+            "scrape_error": err_msg[:500],
         }).eq("id", product_id).execute()
         print(f"❌ [{product_id}] {e}")
         raise

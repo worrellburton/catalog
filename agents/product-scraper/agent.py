@@ -793,13 +793,31 @@ class BrowserSession:
                 f"Could not find a merchant offer link on Google Shopping page: {url}"
             )
 
-        # Follow the candidate URL -- Google's /url? and /aclk? endpoints
-        # redirect to the real merchant URL. A direct merchant URL just
-        # navigates straight there.
+        # If the candidate is already a direct merchant URL (not a Google
+        # redirect), return it without navigating -- many merchant sites
+        # (e.g. shop.lululemon.com) reject Playwright with HTTP2 protocol
+        # errors, but we already have the canonical URL we need.
+        candidate_host = (urlparse(candidate).hostname or "").lower()
+        is_google_redirect = (
+            "google.com" in candidate_host
+            and ("/url" in candidate or "/aclk" in candidate)
+        )
+        if not is_google_redirect:
+            return candidate
+
+        # Follow Google's /url? or /aclk? redirect to resolve the real
+        # merchant URL.
         try:
             self.page.goto(candidate, wait_until="domcontentloaded", timeout=60_000)
             self.page.wait_for_timeout(2000)
         except Exception as e:
+            # Navigation failed (often HTTP2 / bot protection on the merchant
+            # site). Fall back to the candidate URL if it already resolved
+            # away from google.com via the redirect chain.
+            current_url = self.page.url
+            current_host = (urlparse(current_url).hostname or "").lower()
+            if current_url and "google.com" not in current_host:
+                return current_url
             raise RuntimeError(
                 f"Failed to follow Google Shopping merchant link {candidate}: {e}"
             )

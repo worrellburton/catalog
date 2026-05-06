@@ -71,7 +71,7 @@ const PROVIDERS: ApiProvider[] = [
     scope: 'worker',
     secretKey: 'FAL_KEY',
     envName: 'Modal worker env',
-    status: 'partial',
+    status: 'connected',
     purpose: 'Seedance, Kling, Sora, PixVerse, Hailuo, Wan, LTX, Vidu (multi-image) video models',
     usedBy: ['agents/video-generator'],
     dashboard: 'https://fal.ai/dashboard/keys',
@@ -123,6 +123,33 @@ const PROVIDERS: ApiProvider[] = [
     purpose: 'Image CDN + transforms',
     usedBy: [],
     dashboard: 'https://cloudinary.com/console',
+  },
+  {
+    id: 'modal',
+    name: 'Modal',
+    category: 'infra',
+    scope: 'worker',
+    secretKey: 'VITE_MODAL_*_URL (×4)',
+    envName: 'VITE env vars (.env / Vercel)',
+    status: 'connected',
+    purpose: 'Serverless Python workers — site crawler, profile crawler, product scraper, URL resolver',
+    usedBy: ['agents/site-crawler', 'agents/product-scraper', 'agents/url-resolver'],
+    dashboard: 'https://modal.com/apps',
+    docs: 'https://modal.com/docs',
+    notes: 'VITE_MODAL_CRAWLER_URL · VITE_MODAL_SCRAPER_URL · VITE_MODAL_URL_RESOLVER_URL · VITE_MODAL_PROFILE_CRAWLER_URL',
+  },
+  {
+    id: 'spotify',
+    name: 'Spotify',
+    category: 'data',
+    scope: 'client',
+    secretKey: 'VITE_SPOTIFY_CLIENT_ID',
+    envName: 'VITE env var (.env / Vercel)',
+    status: 'connected',
+    purpose: 'Music metadata for looks and creator profile songs',
+    usedBy: ['app/components/'],
+    dashboard: 'https://developer.spotify.com/dashboard',
+    docs: 'https://developer.spotify.com/documentation/web-api',
   },
   {
     id: 'supabase',
@@ -288,7 +315,10 @@ export default function AdminApis() {
                     <div style={{ fontFamily: 'ui-monospace, monospace', color: '#0f172a' }}>{p.secretKey}</div>
                     <div style={{ fontSize: 10, color: '#94a3b8' }}>{p.envName}</div>
                   </td>
-                  <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>{p.purpose}</td>
+                  <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
+                    {p.purpose}
+                    {p.notes && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>{p.notes}</div>}
+                  </td>
                   <td style={{ textAlign: 'left', fontSize: 11, color: '#64748b' }}>
                     {p.usedBy.length === 0 ? (
                       <em style={{ color: '#94a3b8' }}> - </em>
@@ -298,7 +328,7 @@ export default function AdminApis() {
                       </div>
                     )}
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     <a
                       href={p.dashboard}
                       target="_blank"
@@ -308,6 +338,16 @@ export default function AdminApis() {
                     >
                       Dashboard ↗
                     </a>
+                    {p.docs && (
+                      <a
+                        href={p.docs}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: 11, marginLeft: 6, color: '#64748b', textDecoration: 'none' }}
+                      >
+                        Docs ↗
+                      </a>
+                    )}
                   </td>
                 </tr>
               );

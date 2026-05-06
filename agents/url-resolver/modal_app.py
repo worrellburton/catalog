@@ -1,9 +1,10 @@
 """
 Modal deployment for the URL Resolver Agent.
 
-Resolves Google Shopping URLs to direct merchant product URLs using SerpAPI.
-This is a lightweight agent — no Playwright, no Claude AI — just a SerpAPI
-google_product lookup against the numeric product ID in the URL.
+Resolves Google Shopping URLs to direct merchant product page URLs using
+Playwright. Visits the Google Shopping page in a real headless browser,
+finds the first merchant offer link in the buying-options panel, follows
+any Google redirect, and returns the final merchant PDP URL.
 
 Entry points:
   1. HTTP endpoint  — POST /resolve-url      (on-demand, called from admin panel)
@@ -12,13 +13,8 @@ Entry points:
 Deploy:
     modal deploy modal_app.py
 
-Test locally:
-    modal run modal_app.py::resolve_pending   # run batch manually
-    modal serve modal_app.py                  # serve endpoint with live reload
-
-Secrets — reuses the existing scraper-secrets (already has SUPABASE_* + SERPAPI_KEY):
+Secrets — reuses scraper-secrets (only needs SUPABASE_* — no SERPAPI_KEY):
     modal secret create scraper-secrets \\
-        SERPAPI_KEY=... \\
         SUPABASE_URL=... \\
         SUPABASE_SERVICE_ROLE_KEY=...
 """
@@ -26,15 +22,16 @@ Secrets — reuses the existing scraper-secrets (already has SUPABASE_* + SERPAP
 import modal
 
 # ─── Image ─────────────────────────────────────────────────────────────
-# Minimal image — no Playwright needed; just requests + supabase client.
+# Uses Playwright + Chromium to headlessly browse Google Shopping pages.
 
 resolver_image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
+        "playwright==1.44.0",
         "supabase>=2.10.0",
-        "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
     )
+    .run_commands("playwright install chromium --with-deps")
     .add_local_file("agent.py", "/root/agent.py")
 )
 
@@ -42,7 +39,7 @@ resolver_image = (
 
 app = modal.App("url-resolver")
 
-# Reuse the same secret group as the product-scraper (SERPAPI_KEY is already there).
+# Only needs Supabase credentials — no SERPAPI_KEY required.
 secrets = [modal.Secret.from_name("scraper-secrets")]
 
 
@@ -51,7 +48,7 @@ secrets = [modal.Secret.from_name("scraper-secrets")]
 @app.function(
     image=resolver_image,
     secrets=secrets,
-    timeout=60,        # SerpAPI call is fast — 60s is plenty
+    timeout=120,       # Playwright browser navigation needs more time than SerpAPI
     retries=1,
     max_containers=5,  # allow up to 5 concurrent resolutions
 )

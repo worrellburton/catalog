@@ -2,151 +2,230 @@
 """
 URL Resolver Agent
 
-Resolves Google Shopping URLs to direct merchant product URLs using SerpAPI's
-google_product engine. This is a lightweight agent — no browser, no Claude AI —
-just a SerpAPI call to fetch the merchant's direct link from the product's
-online sellers list.
+Resolves Google Shopping URLs to direct merchant product page URLs using
+Playwright. Visits the Google Shopping product page in a headless browser,
+finds the first merchant offer link in the buying-options panel, follows
+any Google redirect (/url?q=, /aclk?) to the final merchant URL.
 
 Google Shopping URLs stored in the products table look like:
   https://www.google.com/shopping/product/1234567890
-  https://www.google.com/shopping/product/1234567890/specs?...
+  https://www.google.com/search?ibp=oshop&q=...&prds=...gpcid:XXX...
 
-The agent extracts the numeric product ID and calls SerpAPI's google_product
-engine, which returns a sellers list with direct merchant URLs.
+The search-panel URL is normalised to a /shopping/product/{gpcid} URL before
+visiting, which has a more predictable layout.
 
 Usage:
-    python agent.py "https://www.google.com/shopping/product/1234567890"
-    python agent.py "https://www.google.com/shopping/product/1234567890/specs"
+    python agent.py "https://www.google.com/search?ibp=oshop&..."
 
 Returns:
     str | None  — the resolved merchant URL, or None if not resolvable.
+
+Env vars (optional):
+    SCRAPER_PROXY_SERVER     e.g. "http://198.23.239.134:6540"
+    SCRAPER_PROXY_USERNAME
+    SCRAPER_PROXY_PASSWORD
 """
 
 import os
 import re
-import json
-import urllib.request
-import urllib.parse
-from dotenv import load_dotenv
+import sys
+from urllib.parse import urlparse, parse_qs
 
-load_dotenv()
-
-SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
-SERPAPI_URL = "https://serpapi.com/search.json"
+from playwright.sync_api import sync_playwright
 
 
-def is_google_url(url: str) -> bool:
-    return bool(re.search(r'google\.com', url, re.IGNORECASE))
+# JS snippet that finds the first valid merchant offer link on the page.
+# Raw string so Python does not misinterpret JS regex escapes like \s, \d.
+_FIND_OFFER_LINK_JS = r"""
+() => {
+    const isOffsite = (h) => {
+        if (!h) return false;
+        if (h.startsWith('/url?') || h.startsWith('/aclk?')) return true;
+        try {
+            const u = new URL(h, location.href);
+            if (!u.protocol.startsWith('http')) return false;
+            if (u.hostname.endsWith('google.com')) {
+                return u.pathname === '/url' || u.pathname === '/aclk';
+            }
+            return true;
+        } catch { return false; }
+    };
+    const priceRe = /[$\u00a3\u20ac\u00a5]\s?\d/;
+    const blocklist = ['terms', 'privacy', 'help', 'feedback',
+        'sign in', 'about', 'sponsored', 'ads by google',
+        'send feedback', 'how search works'];
+    const anchors = Array.from(document.querySelectorAll('a[href]'));
+    const candidates = [];
+    for (const a of anchors) {
+        const href = a.getAttribute('href') || '';
+        if (!isOffsite(href)) continue;
+        const txt = (a.innerText || '').toLowerCase().trim();
+        if (blocklist.some(b => txt === b)) continue;
+        const rect = a.getBoundingClientRect();
+        if (rect.width < 5 || rect.height < 5) continue;
+        let el = a;
+        let depth = -1;
+        for (let i = 0; i < 6 && el; i++) {
+            if (priceRe.test(el.innerText || '')) { depth = i; break; }
+            el = el.parentElement;
+        }
+        if (depth < 0) continue;
+        candidates.push({ href: a.href, depth, top: rect.top });
+    }
+    candidates.sort((a, b) => a.depth - b.depth || a.top - b.top);
+    return candidates[0]?.href || null;
+}
+"""
 
 
-def extract_product_id(google_shopping_url: str) -> str | None:
+def _normalise_google_url(url: str) -> str:
     """
-    Extract the numeric product ID from a Google Shopping or Google Search URL.
+    Convert a Google Shopping search-panel URL to a canonical product page URL.
 
-    Handles:
-      https://www.google.com/shopping/product/12345678901234567
-      https://google.com/shopping/product/12345678901234567/specs?q=...
-      https://www.google.com/search?...&prds=...productid:5090483061890654859,...
+    https://www.google.com/search?ibp=oshop&prds=...gpcid:16036284921817255101,...
+    -> https://www.google.com/shopping/product/16036284921817255101
+
+    If already a /shopping/product/ URL, returns unchanged.
     """
-    # Standard Google Shopping product page URL
-    match = re.search(r'/shopping/product/(\d+)', google_shopping_url)
+    parsed = urlparse(url)
+    if parsed.path.startswith("/shopping/product/"):
+        return url
+
+    qs = parse_qs(parsed.query)
+    prds = qs.get("prds", [""])[0]
+
+    # gpcid is the Google Product Cluster ID
+    match = re.search(r'gpcid:(\d+)', prds)
     if match:
-        return match.group(1)
+        return f"https://www.google.com/shopping/product/{match.group(1)}"
 
-    # Google Search URL with prds=...productid:XXXX... or gpcid:XXXX
-    match = re.search(r'[,?&]productid:(\d+)', google_shopping_url)
+    match = re.search(r'productid:(\d+)', prds)
     if match:
-        return match.group(1)
+        return f"https://www.google.com/shopping/product/{match.group(1)}"
 
-    # Fallback: gpcid param (Google Product Catalog ID)
-    match = re.search(r'[,?&]gpcid:(\d+)', google_shopping_url)
-    if match:
-        return match.group(1)
-
-    return None
+    return url
 
 
-def resolve_via_serpapi(product_id: str) -> str | None:
-    """
-    Call SerpAPI google_product engine with the product ID and return the first
-    direct merchant URL found in the online sellers list.
-    """
-    if not SERPAPI_KEY:
-        raise RuntimeError("SERPAPI_KEY is not set")
+def _get_proxy() -> dict | None:
+    """Read proxy config from env vars (shared with product-scraper)."""
+    server = os.environ.get("SCRAPER_PROXY_SERVER", "").strip()
+    if not server:
+        return None
+    proxy: dict = {"server": server}
+    user = os.environ.get("SCRAPER_PROXY_USERNAME", "").strip()
+    pwd = os.environ.get("SCRAPER_PROXY_PASSWORD", "").strip()
+    if user:
+        proxy["username"] = user
+    if pwd:
+        proxy["password"] = pwd
+    return proxy
 
-    params = urllib.parse.urlencode({
-        "engine": "google_product",
-        "product_id": product_id,
-        "api_key": SERPAPI_KEY,
-        "gl": "us",
-        "hl": "en",
-    })
-    url = f"{SERPAPI_URL}?{params}"
 
-    req = urllib.request.Request(url, headers={"User-Agent": "catalog-url-resolver/1.0"})
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        data = json.loads(resp.read())
-
-    # SerpAPI schema varies — walk all known seller list locations
-    type Sellers = list[dict]
-    seller_lists: list[Sellers] = [
-        data.get("sellers_results", {}).get("online_sellers", []),
-        data.get("online_sellers", []),
-        data.get("stores", []),
-        data.get("product_results", {}).get("online_sellers", []),
-    ]
-
-    for sellers in seller_lists:
-        if not isinstance(sellers, list):
-            continue
-        for seller in sellers:
-            for key in ("direct_link", "link", "base_price_link"):
-                candidate = str(seller.get(key) or "").strip()
-                if candidate and candidate.startswith("https://") and not is_google_url(candidate):
-                    return candidate
-
-    # Fallback: top-level product link
-    top_link = str(data.get("product_results", {}).get("link") or "").strip()
-    if top_link and top_link.startswith("https://") and not is_google_url(top_link):
-        return top_link
-
-    return None
+def _accept_google_consent(page) -> None:
+    """Accept Google cookie consent banner if present."""
+    try:
+        # "Accept all" button text varies by locale
+        for selector in [
+            'button:has-text("Accept all")',
+            'button:has-text("I agree")',
+            'button:has-text("Agree")',
+            '[aria-label="Accept all"]',
+        ]:
+            btn = page.query_selector(selector)
+            if btn:
+                btn.click()
+                page.wait_for_timeout(1500)
+                print("  Accepted Google consent banner")
+                return
+    except Exception:
+        pass
 
 
 def resolve_url(google_shopping_url: str) -> str | None:
     """
-    Main entry point. Given a Google Shopping URL, return a direct merchant
-    product URL or None if resolution fails.
+    Visit a Google Shopping URL with a real browser and return the first
+    direct merchant product URL found in the offers panel.
+
+    Returns None if no merchant link can be found.
     """
-    product_id = extract_product_id(google_shopping_url)
-    if not product_id:
-        print(f"  ⚠️  Cannot extract product ID from: {google_shopping_url}")
-        return None
+    target_url = _normalise_google_url(google_shopping_url)
+    if target_url != google_shopping_url:
+        print(f"  Normalised URL -> {target_url}")
 
-    print(f"  🔍 Product ID: {product_id}")
-    try:
-        resolved = resolve_via_serpapi(product_id)
-    except Exception as e:
-        print(f"  ❌ SerpAPI error: {e}")
-        return None
+    proxy = _get_proxy()
+    if proxy:
+        print(f"  Using proxy: {proxy['server']}")
 
-    if resolved:
-        print(f"  ✅ Resolved: {resolved}")
-    else:
-        print(f"  ⚠️  No direct merchant URL found for product ID {product_id}")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            headless=True,
+            proxy=proxy,
+        )
+        ctx = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            viewport={"width": 1280, "height": 900},
+        )
+        page = ctx.new_page()
 
-    return resolved
+        try:
+            print(f"  Loading: {target_url}")
+            page.goto(target_url, wait_until="domcontentloaded", timeout=60_000)
+            page.wait_for_timeout(2_000)
+
+            # Accept cookie consent if Google shows it
+            _accept_google_consent(page)
+
+            # Log page title for diagnostics
+            title = page.title()
+            current_url = page.url
+            print(f"  Page title: {title!r}")
+            print(f"  Current URL: {current_url}")
+
+            page.wait_for_timeout(2_000)
+
+            candidate = page.evaluate(_FIND_OFFER_LINK_JS)
+
+            if not candidate:
+                print("  No merchant offer link found — page may be a captcha or consent screen")
+                # Log some page text for diagnosis
+                body_text = page.evaluate("() => document.body?.innerText?.slice(0, 300) || ''")
+                print(f"  Page text preview: {body_text!r}")
+                return None
+
+            print(f"  Found offer link: {candidate}")
+
+            # Follow the link — Google /url? and /aclk? redirect to merchant PDP
+            page.goto(candidate, wait_until="domcontentloaded", timeout=60_000)
+            page.wait_for_timeout(2_000)
+
+            final_url = page.url
+            final_host = (urlparse(final_url).hostname or "").lower()
+
+            if not final_url or "google.com" in final_host:
+                print(f"  Link did not leave google.com (landed on {final_url})")
+                return None
+
+            print(f"  Resolved: {final_url}")
+            return final_url
+
+        except Exception as e:
+            print(f"  Browser error: {e}")
+            return None
+        finally:
+            browser.close()
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Resolve a Google Shopping URL to a merchant PDP URL")
-    parser.add_argument("url", help="Google Shopping URL (e.g. https://www.google.com/shopping/product/1234)")
-    args = parser.parse_args()
-
-    result = resolve_url(args.url)
-    if result:
-        print(f"\nDirect URL: {result}")
-    else:
-        print("\nCould not resolve to a direct URL.")
+    if len(sys.argv) < 2:
+        print("Usage: python agent.py <google-shopping-url>")
+        sys.exit(1)
+    result = resolve_url(sys.argv[1])
+    if not result:
+        print("Could not resolve to a direct URL.")
+        sys.exit(1)
+    print(f"\nMerchant URL: {result}")

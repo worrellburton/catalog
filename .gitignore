@@ -56,3 +56,4 @@ venv/
 # misc
 trademark.pdf
 supabase/.temp/
+.vercel
