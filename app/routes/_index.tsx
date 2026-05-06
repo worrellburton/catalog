@@ -811,13 +811,16 @@ export default function Home() {
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
-    // Don't blank the rail state here - that would unmount the tapped rail
-    // card the very moment Framer Motion is reading its layoutId for the
-    // morph, which produces a glitched/jumping transition. Keep the old
-    // rails visible; the .then() handlers below overwrite once new data
-    // arrives. If the prefetch was already done (likely, because tapping
-    // the card means the user hovered/touched it which fired prefetch),
-    // the swap is effectively instant.
+    // Allow the Framer Motion morph one frame to read the old layoutId
+    // before wiping rail state. After 150 ms (well past the morph) clear
+    // stale results so a product opened from a different category (e.g.
+    // plant → clothing) never shows the previous page's rail. The timer
+    // is cancelled if the prefetch resolves first, keeping the instant
+    // swap for cards that were already hovered/prefetched.
+    const staleTimer = window.setTimeout(() => {
+      setSimilarCreatives(null);
+      setBrandCreatives(null);
+    }, 150);
 
     // Three lookups, all eager. Each is independently primed so the user's
     // hover often resolves them before they actually tap.
@@ -831,12 +834,13 @@ export default function Home() {
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
 
-    // Overwrite when data arrives. No intermediate null state - old rail
-    // content stays put through the morph and gets replaced atomically.
+    // Overwrite when data arrives; cancel the stale-clear timer if it
+    // arrives before the 150 ms window expires (prefetch cache hit).
     similarP.then(rows => {
+      clearTimeout(staleTimer);
       primeTrailAssets(rows);
       setSimilarCreatives(rows);
-    }).catch(() => { /* keep rail empty rather than throw */ });
+    }).catch(() => { clearTimeout(staleTimer); /* keep rail empty rather than throw */ });
 
     brandP.then(rows => {
       primeTrailAssets(rows);
