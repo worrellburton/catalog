@@ -37,10 +37,6 @@ interface ProductPageProps {
   /** Other live creatives from the same brand. Rendered as the
    *  "More from <brand>" rail in the desktop info column. */
   brandCreatives?: ProductAd[];
-  /** Popular live creatives - used to fill the "More like this" grid
-   *  when find_similar_creatives returns nothing for the active product
-   *  (cold-start, missing embedding, etc.). */
-  popularFallback?: ProductAd[];
   /** Editorial fashion looks (Look[]) - drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
@@ -215,8 +211,8 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       type="button"
       className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
       onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
-      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
-      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
+      onMouseEnter={() => prefetchSimilarCreatives(creative.product?.id || '', 18)}
+      onTouchStart={() => prefetchSimilarCreatives(creative.product?.id || '', 18)}
     >
       {posterUrl && (
         <img
@@ -365,7 +361,6 @@ export default function ProductPage({
   creative,
   similarCreatives,
   brandCreatives,
-  popularFallback,
   lookCreatives,
   bookmarks,
   navKey = 0,
@@ -373,56 +368,47 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
-  // "More like this" rail. Filter to cross-brand only and cap at 16.
-  // If find_similar_creatives returns nothing, the section is hidden.
+  // "More like this" rail. find_similar_products already returns
+  // type-matched, cross-product candidates; we only need light
+  // client-side hygiene (drop same-brand duplicates of the seed,
+  // dedupe by product_id, cap at 16). When the rail returns 1–3 items
+  // we duplicate them up to a minimum of 4 so the grid never looks
+  // half-empty. When it returns 0, the section hides entirely.
   const moreLikeThis = useMemo(() => {
     const ownBrand = (product.brand || '').trim().toLowerCase();
     const ownProductId = (product as Product & { id?: string }).id || '';
-    // Resolve the seed product's gender from the similarCreatives rows
-    // (joined from products.gender). Falls back to undefined when the
-    // seed isn't in the list — no gender filter applied in that case.
-    const findSeed = (rows: ProductAd[] | undefined): { gender?: string | null } | null => {
-      if (!rows) return null;
-      for (const c of rows) {
-        if (ownProductId && c.product_id === ownProductId) return c.product || null;
-        const cName = (c.product?.name || '').trim().toLowerCase();
-        const cBrand = (c.product?.brand || '').trim().toLowerCase();
-        if (cBrand === ownBrand && cName === (product.name || '').trim().toLowerCase()) {
-          return c.product || null;
-        }
-      }
-      return null;
-    };
-    const seedProduct = findSeed(similarCreatives);
-    const seedGender = (seedProduct?.gender || '').toLowerCase();
-    const genderMatches = (otherGender: string | null | undefined): boolean => {
-      // Seed is unknown - don't filter by gender.
-      if (!seedGender || seedGender === 'unisex') return true;
-      const g = (otherGender || '').toLowerCase();
-      // Match own gender + unisex. Untagged candidates pass too (we
-      // don't have enough info to exclude them).
-      if (!g) return true;
-      if (g === 'unisex') return true;
-      return g === seedGender;
-    };
-    const pickFrom = (rows: ProductAd[] | undefined): ProductAd[] => {
-      if (!rows || rows.length === 0) return [];
-      const seenProductIds = new Set<string>();
-      const out: ProductAd[] = [];
-      for (const c of rows) {
-        const otherBrand = (c.product?.brand || '').trim().toLowerCase();
-        if (ownBrand && otherBrand === ownBrand) continue;
-        if (ownProductId && c.product_id === ownProductId) continue;
-        if (seenProductIds.has(c.product_id)) continue;
-        if (!genderMatches(c.product?.gender)) continue;
-        seenProductIds.add(c.product_id);
-        out.push(c);
-        if (out.length >= 16) break;
-      }
-      return out;
-    };
-    return pickFrom(similarCreatives);
-  }, [similarCreatives, product.brand, product.name, (product as Product & { id?: string }).id]);
+    const rows = similarCreatives;
+    if (!rows || rows.length === 0) return [];
+    const seenProductIds = new Set<string>();
+    const out: ProductAd[] = [];
+    for (const c of rows) {
+      const otherBrand = (c.product?.brand || '').trim().toLowerCase();
+      if (ownProductId && c.product_id === ownProductId) continue;
+      if (ownBrand && otherBrand === ownBrand) continue;
+      if (seenProductIds.has(c.product_id)) continue;
+      seenProductIds.add(c.product_id);
+      out.push(c);
+      if (out.length >= 16) break;
+    }
+    return out;
+  }, [similarCreatives, product.brand, (product as Product & { id?: string }).id]);
+
+  // Duplicate to a minimum of 4 tiles when we have between 1 and 3 unique
+  // results so the grid renders a complete row. React keys are suffixed
+  // with the cycle index so the underlying creative reference stays the
+  // same (clicks still route to the same product).
+  const moreLikeThisDisplay = useMemo<Array<{ creative: ProductAd; key: string }>>(() => {
+    if (moreLikeThis.length === 0) return [];
+    if (moreLikeThis.length >= 4) {
+      return moreLikeThis.map(c => ({ creative: c, key: c.id }));
+    }
+    const out: Array<{ creative: ProductAd; key: string }> = [];
+    for (let i = 0; out.length < 4; i++) {
+      const src = moreLikeThis[i % moreLikeThis.length];
+      out.push({ creative: src, key: `${src.id}-${i}` });
+    }
+    return out;
+  }, [moreLikeThis]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -768,15 +754,15 @@ export default function ProductPage({
         </section>
         </div>
 
-        {moreLikeThis.length > 0 && (
+        {moreLikeThisDisplay.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
-              {moreLikeThis.map(c => (
+              {moreLikeThisDisplay.map(({ creative: c, key }) => (
                 <CreativeCard
-                  key={c.id}
+                  key={key}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
