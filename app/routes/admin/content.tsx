@@ -51,7 +51,13 @@ function formatDateAdded(iso: string | null | undefined): string {
   if (!iso) return ' - ';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return ' - ';
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  // DD/MM/YY (e.g. 05/05/26). Manual padding because toLocaleDateString
+  // can't emit a 2-digit year + 2-digit month + 2-digit day combo
+  // consistently across runtimes.
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
@@ -2850,7 +2856,7 @@ export default function AdminContent() {
                     className="admin-stats-col"
                     style={{ textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
                     onClick={() => setStatsExpanded(true)}
-                    title="Show In Looks, Creators, Impressions, Saves, Clicks, Date Added"
+                    title="Show In Looks, Creators, Impressions, Saves, Clicks"
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       Stats
@@ -2870,9 +2876,13 @@ export default function AdminContent() {
                     <SortableTh className="admin-stats-col" label="Impressions" sortKey="impressions" currentSort={productTable.sort} onSort={productTable.handleSort} />
                     <SortableTh className="admin-stats-col" label="Saves" sortKey="saves" currentSort={productTable.sort} onSort={productTable.handleSort} />
                     <SortableTh className="admin-stats-col" label="Clicks" sortKey="clicks" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                    <SortableTh className="admin-stats-col" label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                   </>
                 )}
+                {/* Date Added is now its own untinted column, sitting
+                    next to Method instead of inside the Stats group -
+                    Date is metadata, not engagement, so it shouldn't
+                    share the indigo Stats tint. */}
+                <SortableTh label="Date Added" sortKey="created_at" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
@@ -3170,11 +3180,11 @@ export default function AdminContent() {
                       <td className="admin-stats-col">{p.impressions > 0 ? p.impressions.toLocaleString() : ' - '}</td>
                       <td className="admin-stats-col">{p.saves}</td>
                       <td className="admin-stats-col">{p.clicks}</td>
-                      <td className="admin-stats-col" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
-                        {formatDateAdded(p.created_at)}
-                      </td>
                     </>
                   )}
+                  <td className="admin-cell-muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                    {formatDateAdded(p.created_at)}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {p.source ? (
                       <span style={{

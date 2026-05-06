@@ -403,13 +403,14 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'The Dream',
     'Problem & Solution',
     'Market Opportunity',
-    'Projections',
     'Technology',
     'Seed Product',
+    'Start the Flywheel',
     'Creator Flywheel',
     'Payouts',
     'Traction',
     'Roadmap',
+    'Projections',
     'The Ask',
     'Closing',
   ];
@@ -487,7 +488,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               feed (8% featured 2x2, 14% wide 2x1, 14% tall 1x2, 64%
               normal 1x1) so the background reads as the actual product
               feed - not a perfect-square wallpaper. */}
-          {Array.from({ length: Math.min(40, homeFeed.length) }).map((_, i) => {
+          {Array.from({ length: Math.min(48, homeFeed.length) }).map((_, i) => {
             const clip = homeFeed[i % homeFeed.length];
             // Same hash FeedSection.tsx uses, with a fixed layoutMode of
             // 0 since the deck doesn't expose a Remix button.
@@ -570,11 +571,14 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
 
       {/* Slide 3: Problem & Solution side-by-side. Three stakeholders down
           the left rail; broken experience on the left, win on the right
-          for each row, so the eye reads "this → fixed by us" three times. */}
-      <div className="deck-slide deck-v1-compare-slide">
+          for each row, so the eye reads "this → fixed by us" three times.
+          Class also carries .deck-v8-problem so the existing X / check
+          icon animations (defined for the v8 problem/solution layout)
+          fire when the slide enters the viewport. */}
+      <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
-          <h2>Three broken experiences.<br />One platform that fixes them.</h2>
+          <h2>Three broken experiences. One platform that fixes them.</h2>
         </div>
         <div className="deck-v1-compare-grid">
           <div className="deck-v1-compare-col deck-v1-compare-col-problem">
@@ -604,7 +608,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             },
           ].map(({ num, role, problem, solution }) => (
             <div key={num} className="deck-v1-compare-row">
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-problem">
+              <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
                 <div className="deck-v9-problem-body">
                   <div className="deck-v9-problem-headline">
                     <span className="deck-v9-problem-role">{role}</span>
@@ -621,7 +625,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                   <p>{problem.sub}</p>
                 </div>
               </div>
-              <div className="deck-v1-compare-cell deck-v1-compare-cell-solution">
+              <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
                 <div className="deck-v9-problem-body">
                   <div className="deck-v9-problem-headline">
                     <span className="deck-v9-problem-role">{role}</span>
@@ -760,49 +764,14 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <p className="deck-note deck-v8-market-note">Catalog is the commerce layer connecting creators directly to purchase.</p>
       </div>
 
-      {/* Projections - 16-month revenue model wired live to the assumptions
-          stored on /admin/projections. Hover any month for the funnel
-          breakdown (MAU, sessions, impressions, sales, revenue, MoM/YoY). */}
-      <div className="deck-slide deck-v1-projections-slide">
-        <div className="deck-v1-projections-head">
-          <span className="deck-label">Projections</span>
-          <h2>16 months from one sale to a run-rate.</h2>
-          <p className="deck-v1-projections-sub">
-            Live from the model on /admin/projections. Hover any month for the funnel breakdown.
-          </p>
-        </div>
-        {projAssumptions && projSeries && (
-          <>
-            <div className="deck-v1-projections-summary">
-              <div className="deck-v1-projections-stat">
-                <span className="deck-v1-projections-stat-label">{PROJ_MONTHS}-mo total</span>
-                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.total)}</span>
-              </div>
-              <div className="deck-v1-projections-stat">
-                <span className="deck-v1-projections-stat-label">Final month</span>
-                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalMonth)}</span>
-              </div>
-              <div className="deck-v1-projections-stat">
-                <span className="deck-v1-projections-stat-label">Exit run-rate (ARR)</span>
-                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalRunRate)}</span>
-              </div>
-              <div className="deck-v1-projections-stat">
-                <span className="deck-v1-projections-stat-label">Implied CAGR</span>
-                <span className="deck-v1-projections-stat-value">{fmtPercent(projSummary!.cagrEquivalent, 0)}</span>
-              </div>
-            </div>
-            <ProjectionsChart series={projSeries} />
-            <p className="deck-v1-projections-formula">
-              Revenue = MAU × sessions/user × impressions/session × conversion × avg sale × commission &nbsp;·&nbsp;
-              MAU growth tapers <strong>{fmtPercent(projAssumptions.mauGrowthStart)}</strong> → <strong>{fmtPercent(projAssumptions.mauGrowthEnd)}</strong> MoM
-            </p>
-          </>
-        )}
-      </div>
+      {/* (Projections slide moved further down - now sits as the
+          third-to-last slide so the curve is the last thing investors
+          see before The Ask.) */}
 
-      {/* Slide 9: Technology - vector DB visual discovery demo. Lifted up
-          to come right after Projections so the conversation goes
-          "here's the curve, here's the engine driving it". */}
+      {/* Slide 9: Technology - vector DB visual discovery demo.
+          Conversation arrives here from Market Opportunity: "here's the
+          space, here's the engine that owns it." The Projections curve
+          comes much later, just before The Ask. */}
       <div className="deck-slide deck-v9-tech">
         <div className="deck-v9-tech-left">
           <span className="deck-label">Technology</span>
@@ -949,6 +918,32 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
       </div>
 
+      {/* Start the flywheel - the three priorities the round funds.
+          Lifted out of the Ask slide so the conversation arrives at the
+          mechanics ("how the flywheel actually starts") right before
+          the visual flywheel slide that follows. */}
+      <div className="deck-slide deck-v1-start-flywheel-slide">
+        <span className="deck-label">Start the flywheel</span>
+        <h2>Three priorities to ignite the loop.</h2>
+        <div className="deck-v8-ask-priorities deck-v1-start-flywheel-cards">
+          <div className="deck-v8-ask-priority">
+            <span className="deck-v8-ask-priority-num">01</span>
+            <h3>Seed the creator side</h3>
+            <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
+          </div>
+          <div className="deck-v8-ask-priority">
+            <span className="deck-v8-ask-priority-num">02</span>
+            <h3>Deepen the product</h3>
+            <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
+          </div>
+          <div className="deck-v8-ask-priority">
+            <span className="deck-v8-ask-priority-num">03</span>
+            <h3>Bring brands on board</h3>
+            <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
+          </div>
+        </div>
+      </div>
+
       {/* Slide 9b: Creator Flywheel */}
       <div
         className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
@@ -1025,21 +1020,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           </ul>
         </div>
         <div className="deck-v1-payouts-split-right" aria-hidden="true">
-          <div className="deck-v1-payouts-center">
-            <svg className="deck-v1-payouts-creator" viewBox="0 0 107 107">
-                <defs>
-                  <radialGradient id="v1CreatorBg" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(74,222,128,0.25)" />
-                    <stop offset="100%" stopColor="rgba(74,222,128,0)" />
-                  </radialGradient>
-                </defs>
-                <circle cx="53.5" cy="53.5" r="53" fill="url(#v1CreatorBg)" />
-                <path d="M54.0845 6.5C53.7766 6.5 53.4687 6.5 53.1515 6.5C40.7788 6.5 28.9129 11.4151 20.1641 20.1639C11.4153 28.9128 6.5001 40.7787 6.5001 53.1514C6.4873 59.3614 7.7193 65.511 10.1231 71.2368C12.5269 76.9627 16.0537 82.1487 20.4955 86.4886C29.2082 95.0456 40.9395 99.8286 53.1515 99.8029C65.3635 99.8286 77.0948 95.0456 85.8075 86.4886C90.2493 82.1487 93.7761 76.9627 96.1799 71.2368C98.5837 65.511 99.8157 59.3614 99.8029 53.1514C99.8029 52.7782 99.8029 52.4143 99.8029 52.0411" stroke="#4ade80" strokeWidth="9" strokeLinecap="square" strokeLinejoin="round" fill="none" />
-                <path d="M26.1079 88.7464C27.2103 82.1192 30.6287 76.0981 35.7544 71.7549C40.8801 67.4118 47.3805 65.0283 54.0988 65.0288C60.8171 65.0283 67.3175 67.4118 72.4432 71.7549C77.5689 76.0981 80.9873 82.1192 82.0897 88.7464" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                <path d="M53.8274 64.1333C62.639 64.1333 69.7822 56.99 69.7822 48.1784C69.7822 39.3668 62.639 32.2236 53.8274 32.2236C45.0158 32.2236 37.8726 39.3668 37.8726 48.1784C37.8726 56.99 45.0158 64.1333 53.8274 64.1333Z" stroke="#4ade80" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                <path d="M89.5453 27.1831L80.1952 32.0835C80.0945 32.1374 79.9804 32.162 79.8661 32.1544C79.7518 32.1468 79.6421 32.1074 79.5496 32.0407C79.4571 31.974 79.3854 31.8827 79.3434 31.7775C79.3013 31.6724 79.2903 31.5576 79.3116 31.4464L81.0983 21.1555C81.1127 21.0596 81.1042 20.9618 81.0731 20.8698C81.0421 20.7779 80.9895 20.6944 80.9197 20.6263L73.3461 13.3442C73.2661 13.265 73.21 13.1656 73.1835 13.0568C73.1571 12.948 73.1615 12.8342 73.1964 12.7278C73.2313 12.6214 73.2953 12.5265 73.3813 12.4537C73.4673 12.3809 73.5719 12.3329 73.6837 12.3151L84.1456 10.8058C84.2446 10.7947 84.3392 10.7592 84.4207 10.7027C84.5022 10.6462 84.568 10.5705 84.6121 10.4823L89.2872 1.1225C89.3366 1.02089 89.414 0.935117 89.5106 0.875086C89.6072 0.815055 89.719 0.783203 89.8332 0.783203C89.9473 0.783203 90.0591 0.815055 90.1557 0.875086C90.2523 0.935117 90.3298 1.02089 90.3791 1.1225L95.0542 10.4823C95.0984 10.5705 95.1641 10.6462 95.2456 10.7027C95.3271 10.7592 95.4217 10.7947 95.5207 10.8058L105.983 12.3151C106.094 12.3329 106.199 12.3809 106.285 12.4537C106.371 12.5265 106.435 12.6214 106.47 12.7278C106.505 12.8342 106.509 12.948 106.483 13.0568C106.456 13.1656 106.4 13.265 106.32 13.3442L98.7466 20.6263C98.6769 20.6944 98.6243 20.7779 98.5932 20.8698C98.5622 20.9618 98.5536 21.0596 98.568 21.1555L100.355 31.4464C100.376 31.5576 100.365 31.6724 100.323 31.7775C100.281 31.8827 100.209 31.974 100.117 32.0407C100.024 32.1074 99.9146 32.1468 99.8003 32.1544C99.686 32.162 99.5719 32.1374 99.4712 32.0835L90.1211 27.1831C90.0314 27.1398 89.9329 27.1172 89.8332 27.1172C89.7334 27.1172 89.6349 27.1398 89.5453 27.1831Z" fill="#4ade80"/>
-            </svg>
-          </div>
+          {/* Decorative graphic removed - the four-stream payout list on
+              the left carries the slide on its own. */}
         </div>
       </div>
 
@@ -1165,6 +1147,47 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <p className="deck-v8-roadmap-note">A focused 16-month plan to ignite supply, prove demand, and lock the fixed-ROAS economics.</p>
       </div>
 
+      {/* Projections - 16-month revenue model wired live to the
+          assumptions stored on /admin/projections. Sits as the
+          third-to-last slide (right before The Ask) so the curve is
+          the closing economic argument before the round size. */}
+      <div className="deck-slide deck-v1-projections-slide">
+        <div className="deck-v1-projections-head">
+          <span className="deck-label">Projections</span>
+          <h2>16 months from one sale to a run-rate.</h2>
+          <p className="deck-v1-projections-sub">
+            Live from the model on /admin/projections. Hover any month for the funnel breakdown.
+          </p>
+        </div>
+        {projAssumptions && projSeries && (
+          <>
+            <div className="deck-v1-projections-summary">
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">{PROJ_MONTHS}-mo total</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.total)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Final month</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalMonth)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Exit run-rate (ARR)</span>
+                <span className="deck-v1-projections-stat-value">{fmtCurrency(projSummary!.finalRunRate)}</span>
+              </div>
+              <div className="deck-v1-projections-stat">
+                <span className="deck-v1-projections-stat-label">Implied CAGR</span>
+                <span className="deck-v1-projections-stat-value">{fmtPercent(projSummary!.cagrEquivalent, 0)}</span>
+              </div>
+            </div>
+            <ProjectionsChart series={projSeries} />
+            <p className="deck-v1-projections-formula">
+              Revenue = MAU × sessions/user × impressions/session × conversion × avg sale × commission &nbsp;·&nbsp;
+              MAU growth tapers <strong>{fmtPercent(projAssumptions.mauGrowthStart)}</strong> → <strong>{fmtPercent(projAssumptions.mauGrowthEnd)}</strong> MoM
+            </p>
+          </>
+        )}
+      </div>
+
       {/* Slide 12: The Ask */}
       <div className="deck-slide deck-v8-ask">
         <span className="deck-label">The Ask</span>
@@ -1216,23 +1239,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <circle className="deck-v8-ask-flow-dot deck-v8-ask-flow-dot-3" cx="830" cy="230" r="3.2" fill="#f5c542" filter="url(#v8AskFlowGlow)" />
           </svg>
 
-          <div className="deck-v8-ask-priorities">
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">01</span>
-              <h3>Seed the creator side</h3>
-              <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
-            </div>
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">02</span>
-              <h3>Deepen the product</h3>
-              <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
-            </div>
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">03</span>
-              <h3>Bring brands on board</h3>
-              <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
-            </div>
-          </div>
         </div>
       </div>
 
