@@ -41,14 +41,29 @@ def is_google_url(url: str) -> bool:
 
 def extract_product_id(google_shopping_url: str) -> str | None:
     """
-    Extract the numeric product ID from a Google Shopping URL.
+    Extract the numeric product ID from a Google Shopping or Google Search URL.
 
     Handles:
       https://www.google.com/shopping/product/12345678901234567
       https://google.com/shopping/product/12345678901234567/specs?q=...
+      https://www.google.com/search?...&prds=...productid:5090483061890654859,...
     """
+    # Standard Google Shopping product page URL
     match = re.search(r'/shopping/product/(\d+)', google_shopping_url)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1)
+
+    # Google Search URL with prds=...productid:XXXX... or gpcid:XXXX
+    match = re.search(r'[,?&]productid:(\d+)', google_shopping_url)
+    if match:
+        return match.group(1)
+
+    # Fallback: gpcid param (Google Product Catalog ID)
+    match = re.search(r'[,?&]gpcid:(\d+)', google_shopping_url)
+    if match:
+        return match.group(1)
+
+    return None
 
 
 def resolve_via_serpapi(product_id: str) -> str | None:
