@@ -624,9 +624,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             >
               <div className="deck-v1-compare-row-head">
                 <span className="deck-v1-compare-row-num">{num}</span>
-                <span className="deck-v1-compare-row-role">{role}</span>
-                <span className="deck-v1-compare-row-dot" aria-hidden="true">·</span>
-                <h3 className="deck-v1-compare-row-word">{word}.</h3>
+                <h3 className="deck-v1-compare-row-role">{role}</h3>
+                <span className="deck-v1-compare-row-word">{word}.</span>
               </div>
               <div className="deck-v1-compare-row-cells">
                 <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
@@ -659,7 +658,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       {/* Slide 6: Market Opportunity */}
       <div className="deck-slide deck-v8-market">
         <span className="deck-label">Market Opportunity</span>
-        <h2>Social commerce: three curves, one window.</h2>
+        <h2>Trust is the market: three curves, one window.</h2>
         <div className="deck-v8-market-grid">
           {([
             {
@@ -682,18 +681,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               sourceUrl: 'https://www.goldmansachs.com/insights/articles/the-creator-economy-could-approach-half-a-trillion-dollars-by-2027',
             },
             {
-              key: 'trust',
-              value: '94%',
-              label: 'Shoppers trust creators over ads by 2035',
-              growth: '+12% YoY',
-              points: '20,108 42,100 64,92 85,82 107,72 129,62 150,54 172,46 194,38 216,30 238,24 260,20',
-              source: 'Matter Communications, 2024',
-              sourceUrl: 'https://www.matternow.com/blog/new-consumer-survey-81-increase-their-trust-in-brand-through-influencer-marketing/',
-            },
-            {
-              // Market-side companion to the trust stat - gives the
-              // recommendation-driven slice of retail a dollar value so
-              // the slide reads as four market curves, not three.
+              // Trust-anchored market figure: the recommendation-driven
+              // slice of retail. Three curves on this slide all live
+              // downstream of trust - this one names the dollar value
+              // explicitly.
               key: 'recommendation',
               value: '$1.0T',
               label: 'Recommendation-driven retail by 2035',
@@ -801,29 +792,54 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <p className="deck-v9-tech-lede">
             Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
           </p>
-          <ul className="deck-v9-tech-points">
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Visual embeddings.</strong>
-                <span>Each look becomes a 1024-dim vector capturing composition, garment, color, and mood.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Nearest-neighbor search.</strong>
-                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
-              </div>
-            </li>
-            <li>
-              <span className="deck-v9-tech-bullet" aria-hidden="true" />
-              <div>
-                <strong>Discovery that compounds.</strong>
-                <span>Every interaction sharpens the model. The feed gets smarter with every shopper.</span>
-              </div>
-            </li>
-          </ul>
+          {/* AI stack inventory - every model wired into Catalog,
+              grouped by category. Sourced from edge functions
+              (supabase/functions/*), Modal agents (agents/*), and the
+              service layer. Update this list whenever a new model is
+              swapped in; investors love seeing the breadth of the
+              underlying stack. */}
+          <div className="deck-v1-tech-stack">
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">LLMs</span>
+              <ul>
+                <li>Claude Sonnet 4.5 — site crawler &amp; product scraper</li>
+                <li>Claude Sonnet 4.6 — catalog query brainstorming</li>
+                <li>Claude Haiku 4.5 — taxonomy &amp; synonym generation</li>
+                <li>Claude 3.5 Haiku — catalog name generation</li>
+                <li>Gemini Flash — Veo prompt refinement</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Video</span>
+              <ul>
+                <li>Bytedance Seedance 2.0 Pro — premium reference-to-video</li>
+                <li>Bytedance Seedance 2.0 Fast — at-scale generation</li>
+                <li>Google Veo 3.1 — image-to-video fallback</li>
+                <li>Tencent Vidu — alt reference-to-video</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
+              <ul>
+                <li>TwelveLabs Marengo 3.0 — video similarity</li>
+                <li>pgvector — vector storage in Postgres</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Search &amp; Data</span>
+              <ul>
+                <li>SerpAPI — Google Shopping</li>
+                <li>Rainforest API — Amazon product lookup</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Compute</span>
+              <ul>
+                <li>Modal — serverless agents (scraper, crawler, video gen)</li>
+                <li>Fal.ai — distributed video generation queue</li>
+              </ul>
+            </div>
+          </div>
         </div>
         <div className="deck-v9-tech-right">
           <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>

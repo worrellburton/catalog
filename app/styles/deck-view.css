@@ -1932,17 +1932,17 @@
 
 .deck-view-v8 .deck-v8-market-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
   margin: 36px auto 0;
   width: 100%;
-  max-width: 1480px;
+  max-width: 1280px;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 980px) {
   .deck-view-v8 .deck-v8-market-grid {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 980px;
+    grid-template-columns: 1fr;
+    max-width: 540px;
   }
 }
 
@@ -5979,8 +5979,12 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  padding: clamp(40px, 4.5vh, 80px) clamp(40px, 5vw, 120px) !important;
-  gap: clamp(20px, 2.6vh, 36px);
+  padding: clamp(32px, 3.5vh, 56px) clamp(40px, 5vw, 120px) !important;
+  gap: clamp(16px, 2vh, 24px);
+  /* min-height ensures the flex container is at least viewport-tall so
+     justify-content: center has space to work even when content is
+     compact. */
+  min-height: 100vh;
 }
 
 .deck-view-v1 .deck-v1-compare-head {
@@ -6001,13 +6005,13 @@
 .deck-view-v1 .deck-v1-compare-rows {
   display: flex;
   flex-direction: column;
-  gap: clamp(16px, 2.2vh, 30px);
+  gap: clamp(12px, 1.6vh, 22px);
 }
 
 .deck-view-v1 .deck-v1-compare-row {
   display: flex;
   flex-direction: column;
-  gap: clamp(10px, 1.2vh, 16px);
+  gap: clamp(6px, 0.9vh, 12px);
 }
 
 .deck-view-v1 .deck-v1-compare-row-head {
@@ -6022,29 +6026,25 @@
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.45);
   font-variant-numeric: tabular-nums;
-  padding-top: 4px;
+  align-self: center;
 }
+/* Stakeholder name is the primary heading (Shoppers / Creators /
+   Brands). Word that follows is the secondary subhead. */
 .deck-view-v1 .deck-v1-compare-row-role {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-  padding-top: 4px;
-}
-.deck-view-v1 .deck-v1-compare-row-dot {
-  font-size: 18px;
-  color: rgba(255, 255, 255, 0.35);
-  line-height: 1;
-  padding-top: 2px;
-}
-.deck-view-v1 .deck-v1-compare-row-word {
   font-size: clamp(22px, 2.4vw, 34px);
   line-height: 1.05;
   letter-spacing: -0.018em;
   color: #fff;
   margin: 0;
   font-weight: 700;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  font-size: clamp(14px, 1.3vw, 19px);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  align-self: center;
 }
 
 .deck-view-v1 .deck-v1-compare-row-cells {
@@ -6054,13 +6054,13 @@
 }
 
 .deck-view-v1 .deck-v1-compare-cell {
-  border-radius: 18px;
-  padding: clamp(14px, 1.4vw, 20px) clamp(16px, 1.6vw, 22px);
+  border-radius: 16px;
+  padding: clamp(10px, 1.1vw, 16px) clamp(14px, 1.4vw, 20px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 .deck-view-v1 .deck-v1-compare-cell-problem {
   border-color: rgba(248, 113, 113, 0.16);
@@ -6138,12 +6138,11 @@
 }
 
 /* Light mode mirrors */
-.light-mode .deck-view-v1 .deck-v1-compare-row-num,
-.light-mode .deck-view-v1 .deck-v1-compare-row-role {
+.light-mode .deck-view-v1 .deck-v1-compare-row-num {
   color: rgba(0, 0, 0, 0.55);
 }
-.light-mode .deck-view-v1 .deck-v1-compare-row-dot { color: rgba(0, 0, 0, 0.35); }
-.light-mode .deck-view-v1 .deck-v1-compare-row-word { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-compare-row-role { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-compare-row-word { color: rgba(0, 0, 0, 0.55); }
 .light-mode .deck-view-v1 .deck-v1-compare-cell {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.005));
   border-color: rgba(0, 0, 0, 0.08);
@@ -6439,6 +6438,51 @@
 
 @media (max-width: 980px) {
   .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* V1.2 Technology slide - AI stack inventory.
+   2-col grid of categories on the left side of the tech slide. Each
+   group has a small uppercase label + a tight list of model names
+   with a one-line "what we use it for" suffix. */
+.deck-view-v1 .deck-v1-tech-stack {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(14px, 1.6vw, 22px) clamp(20px, 2vw, 32px);
+  margin-top: clamp(14px, 1.6vh, 22px);
+}
+.deck-view-v1 .deck-v1-tech-stack-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-tech-stack-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.deck-view-v1 .deck-v1-tech-stack-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.deck-view-v1 .deck-v1-tech-stack-group li {
+  font-size: clamp(11px, 0.95vw, 14px);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.light-mode .deck-view-v1 .deck-v1-tech-stack-label { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-tech-stack-group li { color: rgba(0, 0, 0, 0.78); }
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-tech-stack {
     grid-template-columns: 1fr;
   }
 }
