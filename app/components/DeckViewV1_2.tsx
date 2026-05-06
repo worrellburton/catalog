@@ -793,7 +793,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                   { num: '2b', title: 'Their own links', desc: 'Bring your own affiliate link and Catalog passes the commissions through.' },
                 ],
               },
-              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
+              { num: '3c', title: 'Shopify connected brand sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
               { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
             ] as Array<{
               num: string;
@@ -1019,7 +1019,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <div className="deck-slide deck-v1-demo-slide">
         <span className="deck-label">Demo</span>
         <h2 className="deck-v1-demo-h2">See it for yourself.</h2>
-        <p className="deck-v1-demo-sub">The pitch is the product. Press play.</p>
         <button
           type="button"
           className={`deck-v1-demo-cta${demoExiting ? ' is-exiting' : ''}`}

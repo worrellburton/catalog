@@ -6550,15 +6550,25 @@
   font-size: clamp(22px, 2.4vw, 36px);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #0a0a0a;
-  background: linear-gradient(135deg, #fff 0%, #fde047 60%, #f59e0b 100%);
-  border: none;
+  color: #ffffff;
+  background: linear-gradient(180deg, #1a1a1a 0%, #050505 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   cursor: pointer;
+  /* Subtle bevel/emboss on the text via paired drop-shadows: a dark
+     shadow below for depth and a light highlight above for the lifted
+     edge. Glow comes from the box-shadow stack: tight inner ring + soft
+     outer halo on white. */
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18),
+    0 -1px 0 rgba(0, 0, 0, 0.55);
   box-shadow:
-    0 18px 60px rgba(245, 197, 66, 0.45),
-    0 6px 20px rgba(245, 197, 66, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 24px rgba(255, 255, 255, 0.18),
+    0 0 60px rgba(255, 255, 255, 0.12),
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.5s ease,
@@ -6567,9 +6577,12 @@
 .deck-view-v1 .deck-v1-demo-cta:hover {
   transform: translateY(-2px) scale(1.015);
   box-shadow:
-    0 18px 56px rgba(245, 197, 66, 0.5),
-    0 6px 20px rgba(245, 197, 66, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 32px rgba(255, 255, 255, 0.28),
+    0 0 80px rgba(255, 255, 255, 0.18),
+    0 22px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
 }
 .deck-view-v1 .deck-v1-demo-cta:active { transform: translateY(0) scale(1); }
 
@@ -6635,7 +6648,7 @@
 .light-mode .deck-view-v1 .deck-v1-demo-sub { color: rgba(0, 0, 0, 0.6); }
 .light-mode .deck-view-v1 .deck-v1-demo-appendix { color: rgba(0, 0, 0, 0.5); }
 .light-mode .deck-view-v1 .deck-v1-demo-cta {
-  color: #0a0a0a;
+  color: #ffffff;
 }
 .light-mode .deck-view-v1 .deck-v1-demo-exit-overlay { background: #fafafa; }
 
