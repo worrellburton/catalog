@@ -7,7 +7,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl, resolveProductUrl } from '~/services/scrape-product';
+import { addProductUrl, triggerScrape } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -497,12 +497,10 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
       url: p.url || null,
       image_url: p.image_url,
       images: p.image_urls || [p.image_url].filter(Boolean),
-      // Mark as 'pending' so the scraper picks it up when there's no direct URL.
-      // Google Shopping already provides all product data (name, brand, price, images).
-      // No need to run the full scraper. URL resolution (google → merchant PDP) is
-      // handled by a separate lightweight URL-resolver agent.
-      scrape_status: 'done',
-      scraped_at: nowIso,
+      // Set to pending so the product scraper resolves the Google Shopping URL
+      // to a direct merchant PDP and scrapes any missing product data.
+      scrape_status: 'pending',
+      scraped_at: null,
       type: inferProductType(p.name, p.brand),
       gender: inferProductGenderFromName(p.name),
       source: 'google_shopping',
@@ -525,11 +523,11 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
         is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
       })) as CrawledProduct[];
       onIngested(newRows);
-      // Fire URL resolver for any rows that only have a Google Shopping URL.
-      // Non-blocking — failures are handled by the daily cron.
+      // Immediately trigger the scraper for Google Shopping URLs so it resolves
+      // the URL to a direct merchant PDP without waiting for the daily cron.
       for (const p of (inserted || [])) {
         if (p.url && p.url.includes('google.com')) {
-          resolveProductUrl(p.id, p.url);
+          triggerScrape(p.id, p.url);
         }
       }
     } else {
@@ -1102,7 +1100,7 @@ export default function AdminContent() {
   const [genJobs, setGenJobs] = useState<Map<string, GenJob>>(new Map());
   // Which row's inline Links/affiliates dropdown is open.
   const [openLinksRow, setOpenLinksRow] = useState<string | null>(null);
-  const [resolvingProductId, setResolvingProductId] = useState<string | null>(null);
+
   // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
   const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
   // Which row's inline Creative+Photos dropdown is open.
@@ -3810,22 +3808,7 @@ export default function AdminContent() {
                                   >
                                     Copy
                                   </button>
-                                  {p.url && p.url.includes('google.com') && (
-                                    <button
-                                      className="admin-btn admin-btn-primary"
-                                      disabled={resolvingProductId === p.id}
-                                      style={{ fontSize: 11, padding: '6px 10px', opacity: resolvingProductId === p.id ? 0.6 : 1 }}
-                                      onClick={async (e) => {
-                                        e.stopPropagation();
-                                        setResolvingProductId(p.id);
-                                        await resolveProductUrl(p.id, p.url!);
-                                        setResolvingProductId(null);
-                                        showToast('Resolving URL — check back in a moment');
-                                      }}
-                                    >
-                                      {resolvingProductId === p.id ? 'Resolving…' : '🔗 Resolve URL'}
-                                    </button>
-                                  )}
+
                                   <button
                                     className="admin-btn admin-btn-primary"
                                     style={{ fontSize: 11, padding: '6px 10px' }}
