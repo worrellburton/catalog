@@ -776,45 +776,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
 
       {/* Payouts - how creators earn across four streams. Sits right
           after Market Opportunity so the conversation goes "here's the
-          market" -> "here's how creators get paid for it". When the
-          slide enters the viewport, a swarm of money emoji float up
-          from the bottom (deck-v1-money-burst) - the literal "money
-          flies everywhere" gag the deck calls for. */}
+          market" -> "here's how creators get paid for it". */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
-        {/* Money fly-up overlay. 36 emoji flakes scatter across the
-            slide with deterministic random positions/delays so the
-            burst feels chaotic without being repetitive. Container
-            covers the slide; pointer-events: none so it never blocks
-            the underlying list copy. */}
-        <div className="deck-v1-money-burst" aria-hidden="true">
-          {Array.from({ length: 36 }).map((_, i) => {
-            const emojis = ['💵', '💸', '💰', '🪙', '💴', '💶'];
-            // Pseudo-random spread using small primes so the swarm
-            // looks scattered rather than gridded.
-            const left = (i * 37 + 11) % 100;
-            const delay = ((i * 0.17) % 2.4).toFixed(2);
-            const dur = (4.5 + (i * 0.31) % 3).toFixed(2);
-            const rotEnd = ((i * 73) % 720) - 360;
-            const driftX = ((i * 53) % 60) - 30;
-            const size = 22 + (i * 7) % 18;
-            return (
-              <span
-                key={i}
-                className="deck-v1-money-flake"
-                style={{
-                  left: `${left}%`,
-                  fontSize: `${size}px`,
-                  ['--money-delay' as string]: `${delay}s`,
-                  ['--money-dur' as string]: `${dur}s`,
-                  ['--money-rot' as string]: `${rotEnd}deg`,
-                  ['--money-drift' as string]: `${driftX}vw`,
-                }}
-              >
-                {emojis[i % emojis.length]}
-              </span>
-            );
-          })}
-        </div>
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
           <h2>Post once.<br />Earn four ways.</h2>
