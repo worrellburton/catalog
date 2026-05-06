@@ -485,13 +485,19 @@ class BrowserSession:
         # Imported lazily so the package is only required when actually used.
         if self.use_stealth:
             try:
-                from playwright_stealth import stealth_sync  # type: ignore
-                stealth_sync(self.page)
+                # playwright-stealth v2 uses Stealth().apply_stealth_sync(page)
+                # v1 used stealth_sync(page) -- handle both for compatibility.
+                try:
+                    from playwright_stealth import Stealth  # type: ignore
+                    Stealth().apply_stealth_sync(self.page)
+                except (ImportError, AttributeError):
+                    from playwright_stealth import stealth_sync  # type: ignore
+                    stealth_sync(self.page)
                 print("  🥷 playwright-stealth applied")
             except ImportError:
                 print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
             except Exception as e:
-                print(f"  ⚠️  stealth_sync failed: {e}")
+                print(f"  ⚠️  stealth apply failed: {e}")
 
     def stop(self):
         if self.browser:
