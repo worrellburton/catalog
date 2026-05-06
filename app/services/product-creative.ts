@@ -107,7 +107,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean; gender?: string | null; type?: string | null };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -1142,35 +1142,43 @@ const similarCache = new Map<string, Promise<ProductAd[]>>();
 
 /** Idempotent prefetch - call from hover, tap, anywhere. Returns the same
  *  cached promise on subsequent calls so consumers can `await` and get an
- *  instant resolve once the first call has finished. Seeded by product_id
- *  (not creative id) so the same product opened from different creatives
- *  shares one cached result. */
-export function prefetchSimilarCreatives(seedProductId: string, k = 12): Promise<ProductAd[]> {
-  if (!seedProductId) return Promise.resolve([]);
-  const key = `${seedProductId}|${k}`;
+ *  instant resolve once the first call has finished. */
+export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
+  const key = `${seedId}|${k}`;
   const cached = similarCache.get(key);
   if (cached) return cached;
-  const p = getSimilarCreatives(seedProductId, k);
+  const p = getSimilarCreatives(seedId, k);
   similarCache.set(key, p);
   // If it errors, drop the cache so the next call retries.
   p.catch(() => similarCache.delete(key));
   return p;
 }
 
-// Returns the K most-similar product creatives to the seed product,
-// deduped by product. Backed by find_similar_products() - uses the same
-// 384-dim text embedding the search bar uses (products.embedding from
-// gte-small over name/brand/type/description) and hard-filters by
-// products.type so the rail stays on-category across all verticals
-// (fashion, beauty, home, tech, lifestyle), not just apparel.
-export async function getSimilarCreatives(seedProductId: string, k = 12): Promise<ProductAd[]> {
-  if (!supabase || !seedProductId) return [];
-  // Pull a margin so the shopper-gender post-filter doesn't leave the rail short.
+// Returns the K visually-nearest creatives to the seed, deduped by product.
+// Backed by find_similar_creatives() - uses Marengo 3.0 cosine distance when
+// the seed has an embedding, otherwise falls back to same-brand → newest.
+export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  // Pull a margin so the gender post-filter doesn't leave the rail short.
   const fetchK = shopperGender === 'unknown' ? k : Math.min(k * 2, 48);
-  const { data, error } = await supabase.rpc('find_similar_products', { seed_product_id: seedProductId, k: fetchK });
+  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK });
   if (error || !data) {
     if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
     return [];
+  }
+  // The RPC doesn't return product.gender, so when a gender scope is
+  // active we hydrate the missing column with one batched lookup
+  // before post-filtering. Untagged products stay visible.
+  let genderById: Map<string, string | null> | null = null;
+  if (shopperGender !== 'unknown') {
+    const ids = Array.from(new Set((data as Array<{ product_id: string }>).map(r => r.product_id))).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, gender')
+        .in('id', ids);
+      genderById = new Map((prods || []).map((p: { id: string; gender: string | null }) => [p.id, p.gender]));
+    }
   }
   const mapped = (data as Array<{
     id: string;
@@ -1179,11 +1187,6 @@ export async function getSimilarCreatives(seedProductId: string, k = 12): Promis
     thumbnail_url: string | null;
     product_name: string | null;
     product_brand: string | null;
-    product_image_url: string | null;
-    product_price: string | null;
-    product_url: string | null;
-    product_type: string | null;
-    product_gender: string | null;
     distance: number;
   }>).map(row => ({
     id: row.id,
@@ -1215,15 +1218,14 @@ export async function getSimilarCreatives(seedProductId: string, k = 12): Promis
       id: row.product_id,
       name: row.product_name,
       brand: row.product_brand,
-      price: row.product_price,
-      image_url: row.product_image_url,
-      url: row.product_url,
-      gender: row.product_gender,
+      price: null,
+      image_url: null,
+      url: null,
     },
   } as ProductAd));
-  if (shopperGender === 'unknown') return mapped.slice(0, k);
+  if (!genderById) return mapped.slice(0, k);
   return mapped
-    .filter(ad => passesGenderFilter({ gender: ad.product?.gender ?? null }))
+    .filter(ad => passesGenderFilter({ gender: genderById!.get(ad.product_id) ?? null }))
     .slice(0, k);
 }
 
