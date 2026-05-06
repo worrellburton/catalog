@@ -772,10 +772,25 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
+    // Seed "More like this" by finding any live creative for this product
+    // in the home feed cache (matched by brand + name). Falls back to
+    // nothing if the home feed hasn't loaded yet or the product has no
+    // live creatives — the section stays hidden in that case.
+    const seedCreative = popularFallback.find(ad => {
+      const b = (ad.product?.brand || '').trim().toLowerCase();
+      const n = (ad.product?.name || '').trim().toLowerCase();
+      return b === (product.brand || '').trim().toLowerCase()
+          && n === (product.name || '').trim().toLowerCase();
+    });
+    if (seedCreative) {
+      prefetchSimilarCreatives(seedCreative.id, 18)
+        .then(rows => { primeTrailAssets(rows); setSimilarCreatives(rows); })
+        .catch(() => {});
+    }
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
-      // Same data the brand rail uses to fill "More from <Brand>"  - 
+      // Same data the brand rail uses to fill "More from <Brand>"  -
       // without this, products opened from a Look, search, or recents
       // see an empty rail.
       prefetchCreativesByBrand(product.brand, null, 12)
@@ -785,7 +800,7 @@ export default function Home() {
         })
         .catch(() => { /* leave rail empty rather than throw */ });
     }
-  }, [fetchSimilarProducts, pushRecent, selectedLook]);
+  }, [fetchSimilarProducts, pushRecent, selectedLook, popularFallback]);
 
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {

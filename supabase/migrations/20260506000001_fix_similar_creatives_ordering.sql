@@ -79,7 +79,7 @@ begin
       where pc.id <> seed_id
         and pc.status = 'live'
         and pc.video_url is not null
-        and (seed_brand is null or p.brand <> seed_brand)
+        and (seed_brand is null or lower(p.brand) <> lower(seed_brand))
         and (seed_type is null or p.type = seed_type)
       order by pc.product_id, pc.impressions desc, pc.created_at desc
       limit k;
