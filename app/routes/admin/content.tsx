@@ -7,7 +7,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl, triggerScrape } from '~/services/scrape-product';
+import { addProductUrl } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -498,8 +498,11 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
       image_url: p.image_url,
       images: p.image_urls || [p.image_url].filter(Boolean),
       // Mark as 'pending' so the scraper picks it up when there's no direct URL.
-      scrape_status: isLikelyProductUrl(p.url) ? 'done' : 'pending',
-      scraped_at: isLikelyProductUrl(p.url) ? nowIso : null,
+      // Google Shopping already provides all product data (name, brand, price, images).
+      // No need to run the full scraper. URL resolution (google → merchant PDP) is
+      // handled by a separate lightweight URL-resolver agent.
+      scrape_status: 'done',
+      scraped_at: nowIso,
       type: inferProductType(p.name, p.brand),
       gender: inferProductGenderFromName(p.name),
       source: 'google_shopping',
@@ -522,13 +525,6 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
         is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
       })) as CrawledProduct[];
       onIngested(newRows);
-      // Immediately kick off the scraper for any pending rows so they don't
-      // wait for the 8am UTC daily cron.
-      for (const row of inserted || []) {
-        if (row.scrape_status === 'pending' && row.url) {
-          triggerScrape(row.id, row.url);
-        }
-      }
     } else {
       showToast(`Ingest failed: ${error.message}`);
     }
