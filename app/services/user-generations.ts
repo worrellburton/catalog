@@ -550,6 +550,43 @@ export async function deleteUserGeneration(id: string): Promise<{ error: string 
 }
 
 /**
+ * Flip is_published on a generation. The consumer feed (when wired to
+ * surface user-generated looks) filters on this column so a generation
+ * only goes public after the user explicitly opts in via the "How did I
+ * do?" feedback bar on the result step.
+ */
+export async function setGenerationPublished(
+  id: string,
+  isPublished: boolean,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ is_published: isPublished })
+    .eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Persist the user's "How did I do?" feedback. `kind` is 'love' (looks
+ * great) or 'off' (this is not it); reason is the optional free-text
+ * the user typed when picking 'off'. Doesn't write a row for the
+ * delete path because the row is gone by then.
+ */
+export async function setGenerationFeedback(
+  id: string,
+  kind: 'love' | 'off',
+  reason?: string,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ feedback_kind: kind, feedback_reason: reason ?? null })
+    .eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/**
  * Persist the display-time crop transform for a generation. Clamps
  * to the column check constraints so a slipped slider can't poison
  * the row.

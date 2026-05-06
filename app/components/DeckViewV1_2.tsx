@@ -333,6 +333,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [bgRevealed, setBgRevealed] = useState(false);
   const [techActiveSeed] = useState<number | null>(0);
+  // Exit transition for the Demo slide CTA. Set to true on click; the
+  // overlay fades in + the slide scales down for ~700ms, then we
+  // navigate to catalog.shop.
+  const [demoExiting, setDemoExiting] = useState(false);
   const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
   // Deck v1.2 differentiator: the background grid mirrors the consumer
   // home feed - every product with the Home toggle on in /admin/content.
@@ -403,11 +407,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'The Dream',
     'Problem & Solution',
     'Market Opportunity',
+    'Payouts',
     'Technology',
     'The Ask',
-    'Step Zero · Start the Flywheel',
-    'Creator Flywheel',
-    'Payouts',
+    'Demo',
+    // Appendix (everything below Demo is supplementary)
     'Traction',
     'Roadmap',
     'Projections',
@@ -781,6 +785,39 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           third-to-last slide so the curve is the last thing investors
           see before The Ask.) */}
 
+      {/* Payouts - how creators earn across four streams. Sits right
+          after Market Opportunity so the conversation goes "here's the
+          market" -> "here's how creators get paid for it". */}
+      <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
+        <div className="deck-v1-payouts-split-left">
+          <span className="deck-label">Payouts</span>
+          <h2>Post once.<br />Earn four ways.</h2>
+          <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
+          <ul className="deck-v1-payouts-list">
+            {[
+              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.' },
+              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links — transparent and fast.' },
+              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
+              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
+            ].map((item) => (
+              <li key={item.num} className="deck-v1-payouts-list-item">
+                <span className="deck-v1-payouts-num">{item.num}</span>
+                <div className="deck-v1-payouts-list-body">
+                  <div className="deck-v1-payouts-list-head">
+                    <h3>{item.title}</h3>
+                    <span className="deck-v1-payouts-chip">{item.chip}</span>
+                  </div>
+                  <p>{item.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="deck-v1-payouts-split-right" aria-hidden="true">
+          {/* Decorative graphic removed. */}
+        </div>
+      </div>
+
       {/* Slide 9: Technology - vector DB visual discovery demo.
           Conversation arrives here from Market Opportunity: "here's the
           space, here's the engine that owns it." The Projections curve
@@ -792,52 +829,38 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <p className="deck-v9-tech-lede">
             Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
           </p>
-          {/* AI stack inventory - every model wired into Catalog,
-              grouped by category. Sourced from edge functions
-              (supabase/functions/*), Modal agents (agents/*), and the
-              service layer. Update this list whenever a new model is
-              swapped in; investors love seeing the breadth of the
-              underlying stack. */}
+          {/* AI partners we wire into Catalog. Each line names the
+              company first, then the model + use case in one breath.
+              Search & Data (SerpAPI / Rainforest) was removed - those
+              are data-lookup services, not AI. */}
           <div className="deck-v1-tech-stack">
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">LLMs</span>
               <ul>
-                <li>Claude Sonnet 4.5 — site crawler &amp; product scraper</li>
-                <li>Claude Sonnet 4.6 — catalog query brainstorming</li>
-                <li>Claude Haiku 4.5 — taxonomy &amp; synonym generation</li>
-                <li>Claude 3.5 Haiku — catalog name generation</li>
-                <li>Gemini Flash — Veo prompt refinement</li>
+                <li><strong>Anthropic</strong> — Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
+                <li><strong>Google</strong> — Gemini Flash</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Video</span>
               <ul>
-                <li>Bytedance Seedance 2.0 Pro — premium reference-to-video</li>
-                <li>Bytedance Seedance 2.0 Fast — at-scale generation</li>
-                <li>Google Veo 3.1 — image-to-video fallback</li>
-                <li>Tencent Vidu — alt reference-to-video</li>
+                <li><strong>Bytedance</strong> — Seedance 2.0 Pro &amp; Fast</li>
+                <li><strong>Google</strong> — Veo 3.1</li>
+                <li><strong>Tencent</strong> — Vidu</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
-                <li>TwelveLabs — video understanding platform</li>
-                <li>Marengo 3.0 — video embedding model</li>
-                <li>pgvector — vector storage in Postgres</li>
-              </ul>
-            </div>
-            <div className="deck-v1-tech-stack-group">
-              <span className="deck-v1-tech-stack-label">Search &amp; Data</span>
-              <ul>
-                <li>SerpAPI — Google Shopping</li>
-                <li>Rainforest API — Amazon product lookup</li>
+                <li><strong>TwelveLabs</strong> — Marengo 3.0 video embeddings</li>
+                <li><strong>Postgres</strong> — pgvector storage</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Compute</span>
               <ul>
-                <li>Modal — serverless agents (scraper, crawler, video gen)</li>
-                <li>Fal.ai — distributed video generation queue</li>
+                <li><strong>Modal</strong> — serverless agents</li>
+                <li><strong>Fal.ai</strong> — video generation queue</li>
               </ul>
             </div>
           </div>
@@ -976,177 +999,49 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
       </div>
 
-      {/* Step Zero + Start the Flywheel - combined into one slide so the
-          "build the inventory" mechanics sit next to the "ignite the
-          loop" priorities. The split-layout block (3 steps + pipeline
-          diagram) is the seed; the 3 priority cards below show the
-          flywheel ignition steps the round funds. */}
-      <div className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide deck-v1-step-zero-combined">
-        <div className="deck-v1-fw-view deck-v1-fw-view-seed">
-          <div className="flywheel-left">
-            <span className="deck-label">Step Zero · Start the Flywheel</span>
-            <h2>Build and seed product.</h2>
-            <div className="deck-v1-seed-steps">
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">01</span>
-                <p><strong>Autonomous Product Sync.</strong> Agent-driven pipeline connects to brand stores and pulls product data, imagery, and pricing in real time.</p>
-              </div>
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">02</span>
-                <p><strong>AI creative via Seedance, Grok &amp; Veo.</strong> Static product shots are automatically transformed into editorial imagery and short-form video using frontier generative models.</p>
-              </div>
-              <div className="deck-v1-seed-step">
-                <span className="deck-v1-seed-step-num">03</span>
-                <p><strong>Index elegantly.</strong> Every look is vectorised and indexed &mdash; ready for the feed before a single creator arrives.</p>
-              </div>
-            </div>
-            <p>Catalog launches with inventory built in &mdash; no cold start. The creator flywheel compounds on top.</p>
-          </div>
-          <div className="flywheel-right">
-            <div className="deck-v1-seed-pipeline">
-              <div className="deck-v1-seed-pipeline-stage">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h.01M15 9h.01M9 15h6" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Autonomous Product Sync</span>
-                <span className="deck-v1-seed-pipeline-hint">Agent-driven ingest pipeline</span>
-              </div>
-              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                <span className="deck-v1-seed-pipeline-dot" />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.8s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.6s' }} />
-              </div>
-              <div className="deck-v1-seed-pipeline-stage">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 11.5 8 14.5l1.5-4.5L6 7.5h4.5z" /><rect x="3" y="17" width="18" height="4" rx="1" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Seedance · Grok · Veo</span>
-                <span className="deck-v1-seed-pipeline-hint">AI-generated imagery &amp; video</span>
-              </div>
-              <div className="deck-v1-seed-pipeline-flow" aria-hidden="true">
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '0.4s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '1.2s' }} />
-                <span className="deck-v1-seed-pipeline-dot" style={{ animationDelay: '2.0s' }} />
-              </div>
-              <div className="deck-v1-seed-pipeline-stage deck-v1-seed-pipeline-stage-terminal">
-                <div className="deck-v1-seed-pipeline-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                </div>
-                <span className="deck-v1-seed-pipeline-label">Indexed elegantly</span>
-                <span className="deck-v1-seed-pipeline-hint">Vector DB &middot; ready for feed</span>
-              </div>
-            </div>
-          </div>
+      {/* Demo - the dramatic close of the main pitch. CTA shoots the
+          investor over to catalog.shop with a fade-to-black exit. The
+          appendix arrow at the bottom signals that everything below
+          this slide is supporting material. */}
+      <div className="deck-slide deck-v1-demo-slide">
+        <span className="deck-label">Demo</span>
+        <h2 className="deck-v1-demo-h2">See it for yourself.</h2>
+        <p className="deck-v1-demo-sub">The pitch is the product. Press play.</p>
+        <button
+          type="button"
+          className={`deck-v1-demo-cta${demoExiting ? ' is-exiting' : ''}`}
+          disabled={demoExiting}
+          onClick={() => {
+            if (demoExiting) return;
+            setDemoExiting(true);
+            // Cool exit: 700ms fade-to-black + scale, then jump.
+            window.setTimeout(() => {
+              window.location.href = 'https://catalog.shop';
+            }, 700);
+          }}
+        >
+          <span className="deck-v1-demo-cta-label">Let&apos;s see the demo</span>
+          <svg className="deck-v1-demo-cta-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="13 6 19 12 13 18" />
+          </svg>
+        </button>
+
+        {/* Appendix indicator - everything below this slide is supporting
+            material. Down-arrow + label cue the audience that the deck
+            isn't over but the main pitch is. */}
+        <div className="deck-v1-demo-appendix" aria-hidden="true">
+          <span className="deck-v1-demo-appendix-label">Appendix</span>
+          <svg className="deck-v1-demo-appendix-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="6 13 12 19 18 13" />
+          </svg>
         </div>
 
-        {/* Start the flywheel - the three priorities the round ignites
-            once the seed inventory is in. Sits inside the same slide so
-            the conversation arrives at "build → ignite" without a
-            slide break in between. */}
-        <div className="deck-v1-step-zero-priorities">
-          <div className="deck-v1-step-zero-priorities-head">
-            <span className="deck-label">Then ignite the loop</span>
-            <h3>Three priorities the round funds.</h3>
-          </div>
-          <div className="deck-v8-ask-priorities deck-v1-start-flywheel-cards">
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">01</span>
-              <h3>Seed the creator side</h3>
-              <p>Onboard the first wave of creators and build the content supply that drives organic demand and distribution.</p>
-            </div>
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">02</span>
-              <h3>Deepen the product</h3>
-              <p>Build product tagging infrastructure, native mobile app, and creator analytics that make Catalog the default tool.</p>
-            </div>
-            <div className="deck-v8-ask-priority">
-              <span className="deck-v8-ask-priority-num">03</span>
-              <h3>Bring brands on board</h3>
-              <p>Launch the fixed-ROAS model with early brand partners and prove the economics that make the marketplace self-sustaining.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Slide 9b: Creator Flywheel */}
-      <div
-        className="deck-slide deck-slide-flywheel-split deck-v1-flywheel-slide"
-        data-active-step={activeFlywheelStep ?? undefined}
-      >
-        <div className="deck-v1-fw-view deck-v1-fw-view-wheel">
-          <div className="flywheel-left">
-            <span className="deck-label">Creator Flywheel</span>
-            <h2>Build supply first.<br />Demand follows trust.</h2>
-            <div className="flywheel-labels">
-              {flywheelSteps.map(({ n, label, icon }) => (
-                <div
-                  key={n}
-                  className="flywheel-label-item"
-                  onMouseEnter={() => setActiveFlywheelStep(n)}
-                  onMouseLeave={() => setActiveFlywheelStep(null)}
-                >
-                  <span className="fl-num">{icon}</span>
-                  <div className="fl-text">
-                    <p className="fl-label">{label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p>Every rotation makes the next one cheaper as creators bring free distribution, sales teach the feed, and earnings pull top creators back in, accelerating the wheel.</p>
-          </div>
-          <div className="flywheel-right">
-            <div className="flywheel-center">
-              <svg className="flywheel-circle-svg" viewBox="0 0 300 300">
-                <circle cx="150" cy="150" r="130" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2" />
-                <circle className="flywheel-orbit" cx="150" cy="150" r="130" fill="none" stroke="rgba(74,222,128,0.3)" strokeWidth="2" strokeDasharray="817" strokeDashoffset="817" strokeLinecap="round" />
-              </svg>
-              {flywheelSteps.map(({ n, angle, icon }) => (
-                <div
-                  key={n}
-                  className="flywheel-node"
-                  style={{ '--angle': angle } as React.CSSProperties}
-                  onMouseEnter={() => setActiveFlywheelStep(n)}
-                  onMouseLeave={() => setActiveFlywheelStep(null)}
-                >
-                  <span>{icon}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Slide 10: Payouts - how creators earn across four streams */}
-      <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
-        <div className="deck-v1-payouts-split-left">
-          <span className="deck-label">Payouts</span>
-          <h2>Post once.<br />Earn four ways.</h2>
-          <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
-          <ul className="deck-v1-payouts-list">
-            {[
-              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube\u2019s ad-revenue model \u2014 paid out daily.' },
-              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator\u2019s own affiliate links \u2014 transparent and fast.' },
-              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator\u2019s look. Direct, no shared pool.' },
-              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
-            ].map((item) => (
-              <li key={item.num} className="deck-v1-payouts-list-item">
-                <span className="deck-v1-payouts-num">{item.num}</span>
-                <div className="deck-v1-payouts-list-body">
-                  <div className="deck-v1-payouts-list-head">
-                    <h3>{item.title}</h3>
-                    <span className="deck-v1-payouts-chip">{item.chip}</span>
-                  </div>
-                  <p>{item.desc}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="deck-v1-payouts-split-right" aria-hidden="true">
-          {/* Decorative graphic removed - the four-stream payout list on
-              the left carries the slide on its own. */}
-        </div>
+        {/* Full-screen exit overlay - fades in over the slide while we
+            wait for window.location.href to load catalog.shop. Sits
+            above every other element on the slide. */}
+        {demoExiting && <div className="deck-v1-demo-exit-overlay" aria-hidden="true" />}
       </div>
 
       {/* Slide 11: Traction */}
