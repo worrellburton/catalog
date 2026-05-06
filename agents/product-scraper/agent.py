@@ -223,6 +223,40 @@ _TRUSTED_CDN_DOMAINS = (
 # ─── URL pre-filter ───────────────────────────────────────────────────
 
 
+_BLOCK_PATTERNS = (
+    "access denied",
+    "you don't have permission to access",
+    "request blocked",
+    "pardon our interruption",  # Distil
+    "sorry, we just need to make sure",  # Amazon bot
+    "to discuss automated access",  # Amazon
+    "are you a robot",
+    "captcha",
+    "checking your browser before accessing",  # Cloudflare
+    "ddos protection by cloudflare",
+    "this website is using a security service to protect itself",  # Cloudflare
+    "reference #",  # Akamai/CloudFront block reference id
+    "akamai",
+    "incapsula incident id",  # Imperva
+    "perimeterx",
+)
+
+
+def _detect_block(status: int | None, title: str, body: str) -> str | None:
+    """Return a short reason if the response looks like a bot-protection
+    block page rather than a real product page; else None."""
+    title_l = (title or "").lower()
+    body_l = (body or "").lower()
+    if status in (401, 403, 429, 503):
+        return f"site returned HTTP {status} (likely bot-protection block)"
+    if "access denied" in title_l or "access denied" in body_l[:300]:
+        return "site returned an Access Denied page"
+    for pat in _BLOCK_PATTERNS:
+        if pat in body_l:
+            return f"site returned a bot-protection page ({pat!r})"
+    return None
+
+
 def _non_product_url_reason(raw_url: str) -> str | None:
     """Cheap check that mirrors app/utils/productUrl.ts. Returns a reason
     string when the URL clearly isn't a product page so the agent can
@@ -373,6 +407,7 @@ class BrowserSession:
     def __init__(self):
         self._pw = None
         self.browser: Browser | None = None
+        self.context = None
         self.page: Page | None = None
 
     def start(self):
@@ -385,13 +420,21 @@ class BrowserSession:
                 "--disable-dev-shm-usage",
             ],
         )
-        self.page = self.browser.new_page(
+        # Use a full browser context so we can pin locale/timezone/geolocation
+        # to the United States. Without this, sites that geo-detect via IP
+        # (Reiss, Zara, H&M, Adidas, etc.) return EUR / GBP / INR pricing
+        # depending on where the Modal worker happens to run.
+        self.context = self.browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 900},
+            locale="en-US",
+            timezone_id="America/New_York",
+            geolocation={"latitude": 40.7128, "longitude": -74.0060},  # NYC
+            permissions=["geolocation"],
             extra_http_headers={
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -401,8 +444,22 @@ class BrowserSession:
                 "Sec-Fetch-Site": "none",
                 "Sec-Fetch-User": "?1",
                 "Upgrade-Insecure-Requests": "1",
+                # Cloudflare / Akamai forward this to origin; some merchants
+                # use it as a hint for currency selection.
+                "CF-IPCountry": "US",
             },
         )
+        # Pre-seed currency / country cookies for merchants that store the
+        # locale on the cookie jar instead of the URL. Harmless on sites
+        # that don't read these names.
+        self.context.add_cookies([
+            {"name": "currency", "value": "USD", "domain": ".reiss.com", "path": "/"},
+            {"name": "country", "value": "US", "domain": ".reiss.com", "path": "/"},
+            {"name": "currency", "value": "USD", "domain": ".zara.com", "path": "/"},
+            {"name": "preferredCountry", "value": "US", "domain": ".hm.com", "path": "/"},
+            {"name": "i18n_redirected", "value": "en-us", "domain": ".adidas.com", "path": "/"},
+        ])
+        self.page = self.context.new_page()
         # Hide webdriver fingerprint to reduce bot-detection false positives
         self.page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -420,10 +477,27 @@ class BrowserSession:
     # ── Tools ──
 
     def visit(self, url: str) -> dict:
-        self.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+        response = self.page.goto(url, wait_until="domcontentloaded", timeout=60_000)
         self.page.wait_for_timeout(3000)  # let JS render
 
+        # Detect bot-protection / access-denied responses up front so the
+        # agent doesn't waste turns trying to extract a product from an
+        # Akamai / Cloudflare / Imperva block page (which has no product
+        # data and would otherwise be misclassified as NOT_A_PRODUCT_PAGE).
+        status = response.status if response is not None else None
         title = self.page.title()
+        body_snippet = ""
+        try:
+            body_snippet = self.page.evaluate(
+                "() => (document.body && document.body.innerText || '').slice(0, 800)"
+            )
+        except Exception:
+            pass
+        block_reason = _detect_block(status, title, body_snippet)
+        if block_reason:
+            raise RuntimeError(
+                f"SITE_BLOCKED: {block_reason} (HTTP {status}) at {self.page.url}"
+            )
 
         meta = self.page.evaluate(
             """() => {
@@ -918,6 +992,15 @@ DO NOT call save_product. Instead reply with plain text starting with
 "NOT_A_PRODUCT_PAGE:" followed by a short reason (e.g. the actual page type
 and the final URL). The orchestrator will mark the URL as failed.
 
+IMPORTANT -- blocked pages:
+If a tool returns an error containing "SITE_BLOCKED" (HTTP 403/429/503,
+"Access Denied", Cloudflare/Akamai/Imperva captcha pages, etc.), the site is
+actively blocking automated access. DO NOT keep retrying with other tools --
+the page has no product data to extract. Reply with plain text starting with
+"SITE_BLOCKED:" followed by the reason from the tool error and the URL. The
+orchestrator will mark the URL as failed with a "blocked" status so a human
+can decide whether to use a manual scrape / proxy.
+
 How to recognise a real product detail page:
 - It shows ONE specific product as the focus (not a grid/list of many).
 - It has at least one of: a price, an "Add to cart"/"Buy" button, a SKU/variant
@@ -1019,6 +1102,9 @@ def run_agent(
                 if "NOT_A_PRODUCT_PAGE" in reply_text.upper():
                     snippet = reply_text[:300].replace("\n", " ")
                     raise RuntimeError(f"Not a product page -- {snippet}")
+                if "SITE_BLOCKED" in reply_text.upper():
+                    snippet = reply_text[:300].replace("\n", " ")
+                    raise RuntimeError(f"SITE_BLOCKED: {snippet}")
 
                 if nudge_count >= MAX_NUDGES:
                     last_agent_reply = reply_text
