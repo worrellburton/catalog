@@ -7,7 +7,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl } from '~/services/scrape-product';
+import { addProductUrl, resolveProductUrl } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -525,6 +525,13 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
         is_crawled: p.scrape_status === 'done' || p.scraped_at !== null,
       })) as CrawledProduct[];
       onIngested(newRows);
+      // Fire URL resolver for any rows that only have a Google Shopping URL.
+      // Non-blocking — failures are handled by the daily cron.
+      for (const p of (inserted || [])) {
+        if (p.url && p.url.includes('google.com')) {
+          resolveProductUrl(p.id, p.url);
+        }
+      }
     } else {
       showToast(`Ingest failed: ${error.message}`);
     }
