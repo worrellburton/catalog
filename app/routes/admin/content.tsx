@@ -1303,7 +1303,7 @@ export default function AdminContent() {
   const [adVideoMap, setAdVideoMap] = useState<Map<string, string[]>>(new Map());
   // Model + prompt metadata keyed by video_url so each rendered thumb can
   // label the model used and surface the prompt on hover.
-  const [adMetaByUrl, setAdMetaByUrl] = useState<Map<string, { model: string | null; prompt: string | null }>>(new Map());
+  const [adMetaByUrl, setAdMetaByUrl] = useState<Map<string, { id: string; model: string | null; prompt: string | null }>>(new Map());
   const [adImpressionsMap, setAdImpressionsMap] = useState<Map<string, number>>(new Map());
   const [adClicksMap, setAdClicksMap] = useState<Map<string, number>>(new Map());
 
@@ -1349,19 +1349,20 @@ export default function AdminContent() {
     if (!supabase) return;
     const { data } = await supabase
       .from('product_creative')
-      .select('product_id, video_url, status, impressions, clicks, model, prompt');
+      .select('id, product_id, video_url, status, impressions, clicks, model, prompt');
     if (data) {
       setAdProductIds(new Set(data.map(r => r.product_id)));
       const videoMap = new Map<string, string[]>();
       const impMap = new Map<string, number>();
       const clkMap = new Map<string, number>();
-      const metaMap = new Map<string, { model: string | null; prompt: string | null }>();
+      const metaMap = new Map<string, { id: string; model: string | null; prompt: string | null }>();
       data.forEach(r => {
         if (r.video_url) {
           const existing = videoMap.get(r.product_id) || [];
           existing.push(r.video_url);
           videoMap.set(r.product_id, existing);
           metaMap.set(r.video_url, {
+            id: (r as { id: string }).id,
             model: (r as any).model ?? null,
             prompt: (r as any).prompt ?? null,
           });
@@ -1653,6 +1654,40 @@ export default function AdminContent() {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // Delete a single creative (one product_creative row) by id. Used by
+  // the X overlay on each video tile in the Products-row expanded view.
+  // Optimistic local update so the tile vanishes immediately; on failure
+  // we reload the ad map so the UI catches up with reality.
+  const deleteCreative = useCallback(async (creativeId: string, videoUrl: string, productId: string | undefined) => {
+    if (!supabase) return;
+    if (!confirm('Delete this creative? This removes the video from the product everywhere.')) return;
+    // Optimistic: drop the URL from adVideoMap + adMetaByUrl so the
+    // tile disappears the moment the user confirms. We also nuke the
+    // product_creative row server-side; a successful round-trip keeps
+    // local state in sync, a failure triggers a reload to roll back.
+    setAdVideoMap(prev => {
+      if (!productId) return prev;
+      const next = new Map(prev);
+      const list = (next.get(productId) || []).filter(u => u !== videoUrl);
+      if (list.length === 0) next.delete(productId);
+      else next.set(productId, list);
+      return next;
+    });
+    setAdMetaByUrl(prev => {
+      const next = new Map(prev);
+      next.delete(videoUrl);
+      return next;
+    });
+    const { error } = await supabase.from('product_creative').delete().eq('id', creativeId);
+    if (error) {
+      showToast(`Delete failed: ${error.message}`);
+      // Reload so the UI matches reality after a failed delete.
+      void loadAdProductIds();
+      return;
+    }
+    showToast('Creative deleted');
+  }, [showToast, loadAdProductIds]);
 
   // Platform visibility toggle. Sister to toggleProductActive (which
   // governs the home grid). When false, the product is excluded from
@@ -3344,7 +3379,7 @@ export default function AdminContent() {
                                   return (
                                     <div key={vi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                       <div
-                                        style={{ aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
+                                        style={{ position: 'relative', aspectRatio: '9 / 16', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'help' }}
                                         title={hoverTitle}
                                         onMouseEnter={(ev) => {
                                           const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
@@ -3353,6 +3388,27 @@ export default function AdminContent() {
                                         onMouseLeave={() => setHoverPreview(null)}
                                       >
                                         <video src={v} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        {meta?.id && (
+                                          <button
+                                            type="button"
+                                            aria-label="Delete this creative"
+                                            title="Delete this creative"
+                                            onClick={(e) => { e.stopPropagation(); deleteCreative(meta.id, v, p.id); }}
+                                            style={{
+                                              position: 'absolute', top: 4, right: 4,
+                                              width: 22, height: 22, borderRadius: 11,
+                                              background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.25)',
+                                              color: '#fff', display: 'inline-flex',
+                                              alignItems: 'center', justifyContent: 'center',
+                                              padding: 0, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                                            }}
+                                          >
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                              <line x1="18" y1="6" x2="6" y2="18" />
+                                              <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                          </button>
+                                        )}
                                       </div>
                                       <div
                                         title={hoverTitle}
