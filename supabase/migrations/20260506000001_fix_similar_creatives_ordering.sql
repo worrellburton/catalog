@@ -28,9 +28,10 @@ create or replace function find_similar_creatives(
 declare
   seed_embedding vector(512);
   seed_brand     text;
+  seed_type      text;
 begin
-  select pc.embedding, p.brand
-    into seed_embedding, seed_brand
+  select pc.embedding, p.brand, p.type
+    into seed_embedding, seed_brand, seed_type
     from product_creative pc
     join products p on p.id = pc.product_id
    where pc.id = seed_id;
@@ -66,8 +67,9 @@ begin
     -- ── Cold-start path (no embedding yet) ───────────────────────────────
     -- Previous version returned same-brand products, but the client always
     -- filters same-brand out, producing an empty rail. Return cross-brand
-    -- popular creatives instead so the rail shows variety while the
-    -- embedding pipeline catches up.
+    -- popular creatives scoped to the same product type so a sweater
+    -- doesn't surface plants (Decor). If the seed has no type, no type
+    -- filter is applied.
     return query
       select distinct on (pc.product_id)
         pc.id,
@@ -82,8 +84,8 @@ begin
       where pc.id <> seed_id
         and pc.status = 'live'
         and pc.video_url is not null
-        and pc.embedding is not null
         and (seed_brand is null or p.brand <> seed_brand)
+        and (seed_type is null or p.type = seed_type)
       order by pc.product_id, pc.impressions desc, pc.created_at desc
       limit k;
   end if;

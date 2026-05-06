@@ -524,6 +524,11 @@ export default function Home() {
     // exchange completes.
     if (window.location.hash.includes('access_token')) return;
     if (window.location.search.includes('code=')) return;
+    // Deep-linked paths (/p/<slug>, /l/<slug>, /b/<slug>) manage their
+    // own URL via replaceState. Don't clobber them with a hash — using
+    // a fragment-only string like '#app' keeps the current path and
+    // would produce /p/slug#app.
+    if (window.location.pathname !== '/') return;
 
     let hash = '';
     if (view === 'app') hash = 'app';
