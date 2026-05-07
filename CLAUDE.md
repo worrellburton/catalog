@@ -3,6 +3,7 @@
 > This file is the single source of truth for all AI tools (Claude Code, GitHub Copilot, etc.) working in this repo.
 > It is split into self-contained sections. Jump to the section relevant to your current task.
 
+
 ## Table of Contents
 
 0. [Session Startup Checklist](#section-0--session-startup-checklist)
