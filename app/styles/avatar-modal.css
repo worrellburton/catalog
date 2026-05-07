@@ -203,39 +203,35 @@
   touch-action: none;
   user-select: none;
   cursor: grab;
-  /* Subtle radial vignette behind the circle so the cropped region
-     pops against the rest of the modal. */
+  /* Clip anything past the 320×320 stage so a wide source image
+     doesn't bleed outside the cropping circle. The circle mask
+     dims the corners *within* the stage; this clips the rest. */
+  overflow: hidden;
+  border-radius: 24px;
   background:
     radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05), transparent 65%);
-  border-radius: 24px;
   animation: avatar-modal-fade-up 0.4s 0.12s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .avatar-modal-stage:active { cursor: grabbing; }
 
-/* The image lives inside a wrapper so we can transform it with
-   GPU-friendly translate3d + scale and never repaint the bitmap. */
-.avatar-modal-img-wrap {
+/* Image rendered at its natural intrinsic size, anchored at the
+   stage center via left/top: 50%. The transform on the element
+   composes as: scale around its own center (default
+   transform-origin), then translate by the user's drag offset,
+   then translate(-50%, -50%) to center it at the anchor. */
+.avatar-modal-img {
   position: absolute;
   left: 50%;
   top: 50%;
-  margin-left: 0;
-  margin-top: 0;
-  pointer-events: none;
-  transform-origin: 0 0;
-  transition: opacity 0.32s ease;
-}
-.avatar-modal-img {
   display: block;
-  /* Centered around the wrapper's origin (50%, 50% of stage). */
-  margin-left: calc(var(--img-anchor-w, 50%) * -1);
-  margin-top: calc(var(--img-anchor-h, 50%) * -1);
-  /* Without this, scaled bitmaps look soft on Chrome. */
+  pointer-events: none;
+  transform-origin: center center;
   image-rendering: -webkit-optimize-contrast;
-  /* Center the image around (0,0) of the wrapper - we use 50% anchors
-     because we don't know the dims at CSS time. */
-  position: relative;
-  left: -50%;
-  top: -50%;
+  transition: opacity 0.32s ease;
+  /* No max-width / object-fit - we want the natural intrinsic
+     dimensions so the scale math in the JS lines up. */
+  max-width: none;
+  max-height: none;
 }
 
 /* ── Circle mask + animated ring ─────────────────────────────────── */

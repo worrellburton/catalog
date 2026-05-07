@@ -284,7 +284,15 @@ export function AvatarCropModal({
   return createPortal(
     <div
       className={`avatar-modal-backdrop avatar-modal--${phase}`}
-      onClick={() => { if (!isBusy && phase === 'open') handleClose(); }}
+      // Only close when the click landed *directly* on the backdrop.
+      // A child element (image drag, slider, button) bubbling its
+      // click up to here would otherwise dismiss the modal — which
+      // matters most when the file dialog returns control via a
+      // synthesized click on whatever was beneath the user's finger.
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (!isBusy && phase === 'open') handleClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-label="Crop your avatar"
@@ -311,26 +319,24 @@ export function AvatarCropModal({
           onWheel={onWheel}
           aria-label="Drag to recenter, scroll to zoom"
         >
-          {/* Off-circle haze: image at full opacity but the visible
-              ring outside the circle is dimmed via the inset shadow
-              on the mask wrapper, so the user always sees the crop
-              region clearly. */}
-          <div
-            className="avatar-modal-img-wrap"
+          {/* The image sits at the stage center; offset + scale apply
+              via a single transform. Older variant wrapped the image
+              in a div + used relative positioning to center, which
+              broke when the natural image size > stage size — the
+              wrapper-percent math evaluated against the wrong box.
+              Direct transform on the <img> avoids that entirely. */}
+          <img
+            ref={imgElRef}
+            src={src}
+            alt=""
+            draggable={false}
+            onLoad={onImgLoad}
+            className="avatar-modal-img"
             style={{
-              transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${displayedScale})`,
+              transform: `translate(-50%, -50%) translate3d(${offset.x}px, ${offset.y}px, 0) scale(${displayedScale})`,
               opacity: imgDims ? 1 : 0,
             }}
-          >
-            <img
-              ref={imgElRef}
-              src={src}
-              alt=""
-              draggable={false}
-              onLoad={onImgLoad}
-              className="avatar-modal-img"
-            />
-          </div>
+          />
 
           {/* Circle mask + animated stroke ring that shimmers while
               the user is interacting. */}
@@ -628,7 +634,13 @@ function FileDropModal({
   return createPortal(
     <div
       className={`avatar-pick-backdrop avatar-pick--${phase}`}
-      onClick={close}
+      // Only close on a direct backdrop click. Opening the file
+      // dialog via the Browse button or clicking the drop zone
+      // shouldn't dismiss the modal even if the synthesized
+      // post-dialog click lands on something inside the panel.
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a profile photo"
