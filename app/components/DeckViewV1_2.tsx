@@ -600,17 +600,17 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           {[
             {
               num: '01',
-              role: 'Shoppers',
-              word: 'Discovery',
-              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
-              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
-            },
-            {
-              num: '02',
               role: 'Creators',
               word: 'Revenue',
               problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
               solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
+            },
+            {
+              num: '02',
+              role: 'Shoppers',
+              word: 'Discovery',
+              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
             },
           ].map(({ num, role, word, problem, solution }, rowIdx, arr) => (
             <React.Fragment key={num}>
@@ -648,17 +648,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                 </div>
               </div>
               {rowIdx < arr.length - 1 && (
-                <div className="deck-v1-compare-link" aria-hidden="true">
-                  <span className="deck-v1-compare-link-line" />
-                  <span className="deck-v1-compare-link-pill">
-                    <svg className="deck-v1-compare-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="17 1 21 5 17 9" />
-                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                      <polyline points="7 23 3 19 7 15" />
-                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                    </svg>
-                    <span>Two sides of the same loop</span>
-                  </span>
+                <div className="deck-v1-compare-link deck-v1-compare-link-bare" aria-hidden="true">
                   <span className="deck-v1-compare-link-line" />
                 </div>
               )}

@@ -6204,6 +6204,14 @@
     transparent 4px 8px
   );
 }
+/* Bare connector (no pill): single line spanning the full inter-row
+   gap so the rows still read as stitched without a labeled element. */
+.deck-view-v1 .deck-v1-compare-link-bare {
+  padding: 0;
+}
+.deck-view-v1 .deck-v1-compare-link-bare .deck-v1-compare-link-line {
+  height: clamp(28px, 3.4vh, 48px);
+}
 .deck-view-v1 .deck-v1-compare-link-pill {
   display: inline-flex;
   align-items: center;
