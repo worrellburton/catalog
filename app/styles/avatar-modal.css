@@ -1,0 +1,511 @@
+/* Avatar upload trigger + crop modal. Every interactive element has
+   an animation so the flow feels alive end-to-end. */
+
+/* ── Trigger: the avatar in UserMenu ─────────────────────────────── */
+
+.avatar-upload-trigger {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition:
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.avatar-upload-trigger:hover,
+.avatar-upload-trigger:focus-visible {
+  transform: scale(1.04);
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.35),
+    0 0 0 4px rgba(255, 255, 255, 0.05);
+}
+.avatar-upload-trigger:active {
+  transform: scale(0.97);
+  transition-duration: 0.08s;
+}
+.avatar-upload-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.avatar-upload-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hover overlay: a soft camera icon fades in over the avatar. */
+.avatar-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.9);
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+  border-radius: 50%;
+}
+.avatar-upload-overlay svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  transform: translateY(2px);
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.avatar-upload-trigger:hover .avatar-upload-overlay,
+.avatar-upload-trigger:focus-visible .avatar-upload-overlay {
+  opacity: 1;
+  transform: scale(1);
+}
+.avatar-upload-trigger:hover .avatar-upload-overlay svg {
+  transform: translateY(0) scale(1.06);
+}
+
+.avatar-upload-error {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(248, 113, 113, 0.95);
+  color: #1a0405;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 300;
+  animation: avatar-toast-in 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes avatar-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Crop modal ───────────────────────────────────────────────────── */
+
+.avatar-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 250;
+  opacity: 0;
+  transition: opacity 0.22s ease, backdrop-filter 0.22s ease;
+}
+.avatar-modal--open { opacity: 1; }
+.avatar-modal--saving { opacity: 1; }
+.avatar-modal--success { opacity: 1; }
+.avatar-modal--leave { opacity: 0; }
+
+.avatar-modal {
+  width: 100%;
+  max-width: 420px;
+  background: #141414;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+  /* Phase 8: scale-up entry, tucked-back exit. */
+  transform: scale(0.92) translateY(8px);
+  opacity: 0;
+  transition:
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.22s ease;
+}
+.avatar-modal--open .avatar-modal {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+.avatar-modal--leave .avatar-modal {
+  transform: scale(0.94);
+  opacity: 0;
+  transition-duration: 0.18s, 0.18s;
+}
+
+.avatar-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 8px;
+}
+.avatar-modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  /* Tiny entry slide for the title text. */
+  animation: avatar-modal-fade-up 0.36s 0.06s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  animation: avatar-modal-fade-up 0.36s 0.08s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-modal-close:hover { background: rgba(255, 255, 255, 0.18); transform: rotate(90deg); }
+.avatar-modal-close:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@keyframes avatar-modal-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Stage: the crop circle area ─────────────────────────────────── */
+
+.avatar-modal-stage {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  margin: 8px auto 4px;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  /* Subtle radial vignette behind the circle so the cropped region
+     pops against the rest of the modal. */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05), transparent 65%);
+  border-radius: 24px;
+  animation: avatar-modal-fade-up 0.4s 0.12s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-modal-stage:active { cursor: grabbing; }
+
+/* The image lives inside a wrapper so we can transform it with
+   GPU-friendly translate3d + scale and never repaint the bitmap. */
+.avatar-modal-img-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin-left: 0;
+  margin-top: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+  transition: opacity 0.32s ease;
+}
+.avatar-modal-img {
+  display: block;
+  /* Centered around the wrapper's origin (50%, 50% of stage). */
+  margin-left: calc(var(--img-anchor-w, 50%) * -1);
+  margin-top: calc(var(--img-anchor-h, 50%) * -1);
+  /* Without this, scaled bitmaps look soft on Chrome. */
+  image-rendering: -webkit-optimize-contrast;
+  /* Center the image around (0,0) of the wrapper - we use 50% anchors
+     because we don't know the dims at CSS time. */
+  position: relative;
+  left: -50%;
+  top: -50%;
+}
+
+/* ── Circle mask + animated ring ─────────────────────────────────── */
+
+.avatar-modal-circle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* The huge inset shadow blacks-out everything outside the circle.
+     Spread of 9999px guarantees coverage at any modal width. */
+  box-shadow: 0 0 0 9999px rgba(20, 20, 20, 0.78);
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 159px, black 161px);
+          mask: radial-gradient(circle at 50% 50%, transparent 159px, black 161px);
+}
+
+.avatar-modal-circle-stroke {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 320px;
+  height: 320px;
+  margin: -160px 0 0 -160px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+
+/* Soft conic-gradient ring that very slowly rotates so the modal
+   feels alive without being noisy. */
+.avatar-modal-circle-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.0) 0deg,
+    rgba(255, 255, 255, 0.18) 60deg,
+    rgba(255, 255, 255, 0.0) 120deg,
+    rgba(255, 255, 255, 0.0) 360deg
+  );
+  filter: blur(8px);
+  opacity: 0.5;
+  animation: avatar-modal-glow-spin 8s linear infinite;
+  pointer-events: none;
+  /* Mask to a thin ring so the conic only shows on the outline. */
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 158px, black 161px, black 168px, transparent 170px);
+          mask: radial-gradient(circle at 50% 50%, transparent 158px, black 161px, black 168px, transparent 170px);
+}
+@keyframes avatar-modal-glow-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Success ring + checkmark (Phase 10) ─────────────────────────── */
+
+.avatar-modal-success-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 320px;
+  height: 320px;
+  margin: -160px 0 0 -160px;
+  pointer-events: none;
+  fill: none;
+  stroke: #6ee7b7;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 12px rgba(110, 231, 183, 0.45));
+  opacity: 0;
+}
+.avatar-modal--saving .avatar-modal-success-ring,
+.avatar-modal--success .avatar-modal-success-ring {
+  opacity: 1;
+  animation: avatar-modal-ring-sweep 0.7s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes avatar-modal-ring-sweep {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.avatar-modal-success-check {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  pointer-events: none;
+  fill: none;
+  stroke: #6ee7b7;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  filter: drop-shadow(0 0 8px rgba(110, 231, 183, 0.6));
+}
+.avatar-modal--success .avatar-modal-success-check {
+  opacity: 1;
+  animation:
+    avatar-modal-check-draw 0.32s 0.4s cubic-bezier(0.65, 0, 0.35, 1) forwards,
+    avatar-modal-check-pop 0.28s 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes avatar-modal-check-draw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes avatar-modal-check-pop {
+  0%   { transform: scale(0.7); }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* While success is showing, the masked surrounding area dims further
+   so the green ring + check pop. */
+.avatar-modal--success .avatar-modal-circle {
+  box-shadow: 0 0 0 9999px rgba(20, 20, 20, 0.92);
+  transition: box-shadow 0.28s ease;
+}
+
+/* ── Zoom slider ─────────────────────────────────────────────────── */
+
+.avatar-modal-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px 10px;
+  animation: avatar-modal-fade-up 0.4s 0.18s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-modal-zoom input[type="range"] {
+  flex: 1 1 auto;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.12));
+  outline: none;
+  cursor: pointer;
+  transition: height 0.18s ease, background 0.22s ease;
+}
+.avatar-modal-zoom input[type="range"]:hover { height: 6px; }
+.avatar-modal-zoom input[type="range"]:focus-visible {
+  height: 6px;
+  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0.2));
+}
+.avatar-modal-zoom input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(255, 255, 255, 0.1);
+  cursor: grab;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
+}
+.avatar-modal-zoom input[type="range"]:hover::-webkit-slider-thumb,
+.avatar-modal-zoom input[type="range"]:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 0 6px rgba(255, 255, 255, 0.18);
+}
+.avatar-modal-zoom input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(255, 255, 255, 0.1);
+  cursor: grab;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.avatar-modal-zoom-icon {
+  color: rgba(255, 255, 255, 0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.18s ease, transform 0.22s ease;
+}
+.avatar-modal-zoom input[type="range"]:active + .avatar-modal-zoom-icon-max,
+.avatar-modal-zoom input[type="range"]:focus-visible + .avatar-modal-zoom-icon-max {
+  color: #fff;
+}
+
+/* ── Footer actions ──────────────────────────────────────────────── */
+
+.avatar-modal-foot {
+  display: flex;
+  gap: 8px;
+  padding: 8px 18px 18px;
+  animation: avatar-modal-fade-up 0.4s 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-modal-cancel,
+.avatar-modal-save {
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  transition: background 0.16s ease, transform 0.12s ease, opacity 0.18s ease;
+  position: relative;
+  overflow: hidden;
+}
+.avatar-modal-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.avatar-modal-cancel:hover { background: rgba(255, 255, 255, 0.14); }
+.avatar-modal-save {
+  background: #fff;
+  color: #050505;
+  /* Subtle gleam that runs across the button on hover. */
+  background-image: linear-gradient(
+    100deg,
+    #fff 30%,
+    rgba(255, 255, 255, 0.7) 50%,
+    #fff 70%
+  );
+  background-size: 200% 100%;
+  background-position: 100% 0;
+}
+.avatar-modal-save:hover { background-position: 0 0; }
+.avatar-modal-save:active { transform: translateY(1px); }
+.avatar-modal-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.avatar-modal-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.avatar-modal-save-spinner {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  border-top-color: rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.18s ease, transform 0.22s ease;
+}
+.avatar-modal-save.is-busy .avatar-modal-save-spinner {
+  opacity: 1;
+  transform: scale(1);
+  animation: avatar-modal-spinner-spin 0.7s linear infinite;
+}
+.avatar-modal-save.is-busy .avatar-modal-save-label { transform: translateX(-8px); }
+.avatar-modal-save-label { transition: transform 0.22s ease; }
+@keyframes avatar-modal-spinner-spin { to { transform: rotate(360deg); } }
