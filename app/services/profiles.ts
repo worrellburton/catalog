@@ -128,6 +128,55 @@ export async function updateUserHeightAge(
   return {};
 }
 
+/**
+ * Upload a JPEG blob to the avatars bucket and patch profiles.avatar_url
+ * to point at it. Returns the cache-busted public URL the caller should
+ * render immediately.
+ *
+ * Path convention: avatars/<userId>/<timestamp>.jpg. The timestamp keeps
+ * each upload unique so a re-upload doesn't get served from the
+ * browser's cached previous avatar - and lets us delete prior avatars
+ * later as a cleanup step without affecting the current one.
+ */
+export async function updateUserAvatar(
+  userId: string,
+  blob: Blob,
+): Promise<{ url?: string; error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const path = `${userId}/${Date.now()}.jpg`;
+  const { error: upErr } = await supabase.storage
+    .from('avatars')
+    .upload(path, blob, {
+      contentType: 'image/jpeg',
+      cacheControl: 'public, max-age=31536000, immutable',
+      upsert: false,
+    });
+  if (upErr) return { error: upErr.message };
+
+  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+  const url = urlData?.publicUrl ?? '';
+  if (!url) return { error: 'Avatar upload succeeded but URL was empty.' };
+
+  const { error: profErr } = await supabase
+    .from('profiles')
+    .update({ avatar_url: url })
+    .eq('id', userId);
+  if (profErr) return { error: profErr.message };
+
+  // Also write the URL onto the auth user's metadata so the next
+  // sign-in / session refresh surfaces the new avatar everywhere
+  // useAuth() is consumed (header, comment cards, etc.) without
+  // needing a separate profiles read on every consumer.
+  try {
+    await supabase.auth.updateUser({ data: { avatar_url: url } });
+  } catch {
+    /* metadata write is non-critical - the profiles row is the
+       source of truth and we already wrote that. */
+  }
+
+  return { url };
+}
+
 /** Read prior height + age picks so the wizard re-opens prefilled. */
 export async function getUserHeightAge(
   userId: string,
