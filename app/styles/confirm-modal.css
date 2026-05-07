@@ -1,0 +1,113 @@
+/* Branded confirm modal. Sits above everything (gen-modal, look-overlay,
+   product-page, etc.) so it can be invoked from any layer of the app
+   without z-index gymnastics. Visual language matches the gen-modal
+   (dark glass, soft border, generous spacing) so it feels native to
+   the rest of the dark surfaces. */
+
+.confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 200;
+  animation: confirm-modal-fade-in 0.16s ease-out;
+}
+
+@keyframes confirm-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-modal {
+  width: 100%;
+  max-width: 360px;
+  background: #141414;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+  animation: confirm-modal-pop 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.confirm-modal.is-destructive {
+  /* Subtle red glow so the destructive intent reads at a glance
+     without the whole modal flipping color schemes. */
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.25),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes confirm-modal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.confirm-modal-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.confirm-modal-body {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.5;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.confirm-modal-cancel,
+.confirm-modal-confirm {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  letter-spacing: -0.005em;
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.confirm-modal-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.confirm-modal-cancel:hover { background: rgba(255, 255, 255, 0.12); }
+
+.confirm-modal-confirm {
+  background: #ffffff;
+  color: #050505;
+}
+.confirm-modal-confirm:hover { background: rgba(255, 255, 255, 0.92); }
+
+.confirm-modal-confirm.is-destructive {
+  background: #f87171;
+  color: #1a0405;
+}
+.confirm-modal-confirm.is-destructive:hover { background: #fca5a5; }
+
+.confirm-modal-cancel:disabled,
+.confirm-modal-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.confirm-modal-cancel:active,
+.confirm-modal-confirm:active { transform: translateY(1px); }

@@ -2526,6 +2526,65 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-result-actions > .gen-btn-primary {
     grid-column: 1 / -1;
   }
+
+  /* Result-step layout: the video is the focal point. Drop the
+     "Your look" heading (the video itself is self-evidently the
+     result), tighten gaps, and convert the products list to a
+     horizontal scroller so the products row never pushes the
+     actions off-screen. */
+  .gen-step-result > h2 {
+    display: none;
+  }
+  .gen-step-result .gen-result-stage {
+    gap: 10px;
+  }
+  .gen-step-result .gen-build-frame {
+    width: min(78vw, calc((100dvh - 220px) * 9 / 16));
+    border-radius: 18px;
+  }
+  .gen-result-products {
+    max-width: 100%;
+    width: 100%;
+    margin: 6px 0 0;
+  }
+  .gen-result-products-label {
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  /* Horizontal-scroll product chips on mobile - one row, swipeable.
+     Each chip shrinks to a tight thumb + name so eight products fit
+     in a single overflow-x band without crowding. */
+  .gen-result-products-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 6px;
+    padding: 0 4px 4px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .gen-result-products-list::-webkit-scrollbar { display: none; }
+  .gen-result-product {
+    flex: 0 0 auto;
+    width: 160px;
+    padding: 6px;
+    gap: 8px;
+  }
+  .gen-result-product-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+  }
+  .gen-result-product-name {
+    font-size: 11px;
+  }
+  .gen-result-product-role {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+  .gen-result-product-price {
+    font-size: 10px;
+  }
 }
 .gen-feedback-btn {
   padding: 10px 14px;
