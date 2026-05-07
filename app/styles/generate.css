@@ -5,8 +5,10 @@
 .gen-page {
   width: 100%;
   margin: 0 auto;
-  /* Bottom padding clears the fixed footer (Back/Next) plus the
-     liquid-glass step dock stacked beneath it, plus iOS safe-area. */
+  /* min-height: 100vh + the page-level overflow defaults let the page
+     scroll naturally when its content (photos grid, saved-looks list,
+     etc.) overflows on small screens. The bottom padding clears the
+     fixed dock + iOS safe-area inset; horizontal padding stays generous. */
   padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
@@ -18,6 +20,16 @@
   font-feature-settings: 'ss01', 'cv11';
   letter-spacing: -0.005em;
 }
+
+/* Phone breakpoint: lock smooth touch scrolling on the page so the
+   photos grid + saved-looks list + height/age all reach without
+   getting stuck behind the fixed dock. */
+@media (max-width: 760px) {
+  .gen-page {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 
 /* When running inside the native app shell, push content below the status bar.
    --shell-sb is injected at AT_DOCUMENT_START by Flutter with the real
