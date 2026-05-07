@@ -222,7 +222,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Total Users</div>
           <div className="admin-stat-value">{totalUsers ?? '...'}</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
@@ -230,7 +230,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Creators</div>
           <div className="admin-stat-value">{creatorsCount}</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
@@ -238,7 +238,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Total Looks</div>
           <div className="admin-stat-value">{looksCount}</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
@@ -246,7 +246,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Products</div>
           <div className="admin-stat-value">{productsCount ?? '...'}</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
@@ -254,7 +254,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Searches Today</div>
           <div className="admin-stat-value">{searchesToday ?? '...'}</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon">
@@ -262,7 +262,7 @@ export default function AdminHome() {
           </div>
           <div className="admin-stat-label">Bookmarks</div>
           <div className="admin-stat-value">0</div>
-          <div className="admin-stat-change neutral">&mdash;</div>
+          <div className="admin-stat-change neutral">,</div>
         </div>
       </div>
 

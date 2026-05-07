@@ -603,7 +603,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               role: 'Shoppers',
               word: 'Discovery',
               problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
-              solution: 'Curated by tastemakers they actually follow. No ads, no noise — just the looks they want.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
             },
             {
               num: '02',
@@ -808,7 +808,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                 num: '01',
                 title: 'Engagement',
                 chip: 'Daily payouts',
-                desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.',
+                desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model, paid out daily.',
               },
               {
                 num: '02',
@@ -816,9 +816,9 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                 chip: '3 sources',
                 desc: 'Three layered affiliate streams, all flowing through the same creator.',
                 subs: [
-                  { num: '2a', title: 'Pass-through', desc: 'A creator’s own affiliate links pay full commission — transparent and fast.' },
+                  { num: '2a', title: 'Pass-through', desc: 'A creator’s own affiliate links pay full commission, transparent and fast.' },
                   { num: '2b', title: 'Catalog network', desc: 'We negotiate higher rates with affiliate networks so creators earn more on the same click.' },
-                  { num: '2c', title: 'Brand direct', desc: 'As an official Shopify app, we sign revshare deals straight with the brand — the highest take-rate tier.' },
+                  { num: '2c', title: 'Brand direct', desc: 'As an official Shopify app, we sign revshare deals straight with the brand, the highest take-rate tier.' },
                 ],
               },
               {
@@ -874,7 +874,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <span className="deck-label">Technology</span>
           <h2>Visual taste,<br />indexed by AI.</h2>
           <p className="deck-v9-tech-lede">
-            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
+            Every look is encoded into a vector database. Composition, color, garment, mood , all become coordinates a model can reason about.
           </p>
           {/* AI partners we wire into Catalog. Each line names the
               company first, then the model + use case in one breath.
@@ -884,30 +884,30 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">LLMs</span>
               <ul>
-                <li><strong>Anthropic</strong> — Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
-                <li><strong>Google</strong> — Gemini Flash</li>
+                <li><strong>Anthropic</strong>, Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
+                <li><strong>Google</strong>, Gemini Flash</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Video</span>
               <ul>
-                <li><strong>Bytedance</strong> — Seedance 2.0 Pro &amp; Fast</li>
-                <li><strong>Google</strong> — Veo 3.1</li>
-                <li><strong>Tencent</strong> — Vidu</li>
+                <li><strong>Bytedance</strong>, Seedance 2.0 Pro &amp; Fast</li>
+                <li><strong>Google</strong>, Veo 3.1</li>
+                <li><strong>Tencent</strong>, Vidu</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
-                <li><strong>TwelveLabs</strong> — Marengo 3.0 video embeddings</li>
-                <li><strong>Postgres</strong> — pgvector storage</li>
+                <li><strong>TwelveLabs</strong>, Marengo 3.0 video embeddings</li>
+                <li><strong>Postgres</strong>, pgvector storage</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Compute</span>
               <ul>
-                <li><strong>Modal</strong> — serverless agents</li>
-                <li><strong>Fal.ai</strong> — video generation queue</li>
+                <li><strong>Modal</strong>, serverless agents</li>
+                <li><strong>Fal.ai</strong>, video generation queue</li>
               </ul>
             </div>
           </div>
@@ -1030,7 +1030,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">01</span>
               <h3>Product Seeding</h3>
-              <p>Autonomous product sync, AI creative generation, vector indexing &mdash; Catalog launches with inventory built in, no cold start.</p>
+              <p>Autonomous product sync, AI creative generation, vector indexing , Catalog launches with inventory built in, no cold start.</p>
             </div>
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">02</span>
@@ -1068,8 +1068,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           this slide is supporting material. */}
       <div className="deck-slide deck-v1-demo-slide">
         <span className="deck-label">Demo</span>
-        <h2 className="deck-v1-demo-h2">See it for yourself.</h2>
-        <p className="deck-v1-demo-sub">The pitch is the product. Press play.</p>
+        <h2 className="deck-v1-demo-h2">Words won&apos;t do it justice.</h2>
+        <p className="deck-v1-demo-sub">Open the app. See it work.</p>
         <button
           type="button"
           className={`deck-v1-demo-cta${demoExiting ? ' is-exiting' : ''}`}
