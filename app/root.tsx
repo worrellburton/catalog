@@ -38,6 +38,7 @@ import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
 import "./styles/import.css";
 import "./styles/share-page.css";
+import "./styles/confirm-modal.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
