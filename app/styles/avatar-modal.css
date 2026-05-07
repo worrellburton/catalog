@@ -530,6 +530,7 @@
 .avatar-pick--leave { opacity: 0; }
 
 .avatar-pick {
+  position: relative;
   width: 100%;
   max-width: 380px;
   background: #141414;
@@ -537,10 +538,13 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 22px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
-  padding: 18px;
+  /* Even padding all four sides so the contents read symmetrically
+     centered. Header + drop-zone + or-divider + browse-button each
+     own a defined gap below for vertical rhythm. */
+  padding: 22px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   font-feature-settings: 'ss01', 'cv11';
   letter-spacing: -0.005em;
   transform: scale(0.94) translateY(8px);
@@ -559,34 +563,46 @@
   transition-duration: 0.16s, 0.16s;
 }
 
+/* Header: title is centered for visual balance. The close button
+   floats in the absolute corner so it doesn't pull the title left
+   the way a flex space-between layout used to. */
 .avatar-pick-head {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 4px 0;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0;
 }
 .avatar-pick-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  text-align: center;
   animation: avatar-modal-fade-up 0.36s 0.04s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .avatar-pick-head .avatar-modal-close {
+  position: absolute;
+  top: 0;
+  right: 0;
   animation: avatar-modal-fade-up 0.36s 0.06s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-/* The drop zone fills the modal body. Dashed-stroke ring sits behind
-   the icon + headline; the whole stack scales up subtly when a file
-   is being dragged over so the surface clearly reads as "active". */
+/* Drop zone: a proper square with the icon + headline + sub stacked
+   tight in the middle. aspect-ratio: 1/1 keeps the dashed ring
+   visually circular regardless of viewport width, which fixes the
+   wide-oval look the previous padding-only sizing produced. */
 .avatar-pick-drop {
   position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 30px 18px 24px;
+  gap: 10px;
+  padding: 24px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
@@ -608,10 +624,15 @@
 }
 
 .avatar-pick-ring {
+  /* True circle inset from the square drop zone. preserveAspectRatio
+     defaults to xMidYMid meet so the SVG circle stays round even
+     while the parent flexes. */
   position: absolute;
-  inset: 6px;
-  width: calc(100% - 12px);
-  height: calc(100% - 12px);
+  left: 50%;
+  top: 50%;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+  transform: translate(-50%, -50%);
   pointer-events: none;
   fill: none;
   stroke: rgba(255, 255, 255, 0.18);
@@ -619,7 +640,6 @@
   stroke-dasharray: 6 6;
   stroke-linecap: round;
   transition: stroke 0.22s ease, stroke-dasharray 0.32s ease;
-  /* Slow rotation while idle so the dashes feel alive. */
   animation: avatar-pick-ring-spin 22s linear infinite;
 }
 .avatar-pick-drop.is-over .avatar-pick-ring {
