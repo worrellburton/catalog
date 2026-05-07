@@ -800,7 +800,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
-          <h2>Post once.<br />Earn five ways.</h2>
+          <h2>Post once.<br />Earn three ways.</h2>
           <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           <ul className="deck-v1-payouts-list">
             {([
