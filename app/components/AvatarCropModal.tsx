@@ -64,8 +64,6 @@ export function AvatarCropModal({
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const imgElRef = useRef<HTMLImageElement | null>(null);
-  const dragState = useRef<{ x: number; y: number; ox: number; oy: number; pointerId: number } | null>(null);
-  const pinchState = useRef<{ startDist: number; startZoom: number; cx: number; cy: number } | null>(null);
 
   // Phase 8: open / leave animation drives via the className on the
   // wrapper. Set 'open' on the next frame so the CSS transition fires.
@@ -123,42 +121,44 @@ export function AvatarCropModal({
     setOffset((prev) => constrainedOffset(prev, baseScale * zoom));
   }, [zoom, baseScale, constrainedOffset]);
 
-  // ── Pointer drag pan + pinch zoom ─────────────────────────────────
+  // ── Pointer drag pan ──────────────────────────────────────────────
+  // Document-level pointermove + pointerup listeners are attached on
+  // pointerdown and torn down on pointerup. This is more robust than
+  // setPointerCapture + React handlers — capture can fail silently
+  // when the modal is mounted via createPortal, and React's synthetic
+  // events can drop pointer events past certain bubbling thresholds.
+  // Document listeners fire reliably even when the cursor leaves the
+  // stage, which is exactly the behavior a drag wants.
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (isBusy) return;
-      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-      dragState.current = {
-        x: e.clientX,
-        y: e.clientY,
-        ox: offset.x,
-        oy: offset.y,
-        pointerId: e.pointerId,
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startOx = offset.x;
+      const startOy = offset.y;
+      const pointerId = e.pointerId;
+
+      const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        const next = constrainedOffset(
+          { x: startOx + (ev.clientX - startX), y: startOy + (ev.clientY - startY) },
+          baseScale * zoom,
+        );
+        setOffset(next);
       };
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+      };
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
     },
-    [offset.x, offset.y, isBusy],
+    [offset.x, offset.y, baseScale, zoom, constrainedOffset, isBusy],
   );
-
-  const onPointerMove = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      const d = dragState.current;
-      if (!d || d.pointerId !== e.pointerId) return;
-      const next = constrainedOffset(
-        { x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y) },
-        baseScale * zoom,
-      );
-      setOffset(next);
-    },
-    [baseScale, zoom, constrainedOffset],
-  );
-
-  const onPointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    const d = dragState.current;
-    if (d && d.pointerId === e.pointerId) {
-      dragState.current = null;
-      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {/* noop */}
-    }
-  }, []);
 
   // Wheel zoom on desktop. We pin the zoom to cursor position so the
   // pixel under the cursor stays put as the user scrolls.
@@ -313,9 +313,6 @@ export function AvatarCropModal({
           ref={stageRef}
           className="avatar-modal-stage"
           onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
           onWheel={onWheel}
           aria-label="Drag to recenter, scroll to zoom"
         >
