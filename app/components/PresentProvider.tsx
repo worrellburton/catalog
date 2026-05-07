@@ -244,9 +244,90 @@ export default function PresentProvider() {
     <>
       <PresentRemoteCursors cursors={cursors} />
       <PresentClickRipples ripples={ripples} />
+      <BroadcastIndicator slug={slug ?? ''} viewerCount={cursors.length} />
     </>
   );
 }
+
+/**
+ * Floating "🔴 broadcasting" pill rendered in Robert's bottom-right
+ * while broadcast is active. Doubles as a quick reminder that the
+ * mirror is live and a one-click stop button.
+ */
+function BroadcastIndicator({ slug, viewerCount }: { slug: string; viewerCount: number }) {
+  return (
+    <div style={indicatorWrapStyle}>
+      <div style={indicatorStyle}>
+        <span style={indicatorDotStyle} />
+        <span style={indicatorLabelStyle}>BROADCASTING</span>
+        <span style={indicatorSlugStyle}>/present/{slug}</span>
+        {viewerCount > 0 && (
+          <span style={indicatorCountStyle}>
+            {viewerCount} {viewerCount === 1 ? 'viewer' : 'viewers'}
+          </span>
+        )}
+      </div>
+      <style>{`@keyframes present-broadcast-pulse {
+        0%, 100% { opacity: 1;   transform: scale(1); }
+        50%      { opacity: 0.5; transform: scale(0.7); }
+      }`}</style>
+    </div>
+  );
+}
+
+const indicatorWrapStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: 16,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 10001,
+  pointerEvents: 'none',
+};
+
+const indicatorStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 14px',
+  borderRadius: 999,
+  background: 'rgba(15, 5, 5, 0.85)',
+  border: '1px solid rgba(239, 68, 68, 0.42)',
+  boxShadow: '0 12px 32px rgba(239, 68, 68, 0.22)',
+  backdropFilter: 'blur(10px)',
+  fontFamily: 'Inter, sans-serif',
+};
+
+const indicatorDotStyle: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: '#ef4444',
+  boxShadow: '0 0 10px #ef4444',
+  animation: 'present-broadcast-pulse 1.4s ease-in-out infinite',
+};
+
+const indicatorLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.22em',
+  color: '#fecaca',
+};
+
+const indicatorSlugStyle: React.CSSProperties = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  fontSize: 11,
+  color: 'rgba(255,255,255,0.65)',
+};
+
+const indicatorCountStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  padding: '2px 8px',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.08)',
+  color: 'rgba(255,255,255,0.85)',
+  letterSpacing: '0.04em',
+};
 
 /**
  * Subscribe to the active presenter slug stored in localStorage.
