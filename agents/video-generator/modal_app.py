@@ -33,7 +33,10 @@ import modal
 
 generator_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("ffmpeg")
+    # libcairo2 + libpango1 are required by cairosvg's transitive
+    # dependencies (cairocffi -> cairo -> pango). Without them, the
+    # wordmark watermark rasterizer fails at import time.
+    .apt_install("ffmpeg", "libcairo2-dev", "libpango1.0-0")
     .pip_install(
         "google-genai>=1.0.0",
         "supabase>=2.10.0",
@@ -41,6 +44,10 @@ generator_image = (
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
         "fal-client>=0.4.0",
+        # Watermark renderer: cairosvg rasterizes the Catalog wordmark
+        # SVG path to a transparent PNG once per container, then
+        # ffmpeg overlays it onto the source MP4.
+        "cairosvg>=2.7.0",
     )
     .add_local_file("config.py", "/root/config.py")
     .add_local_file("prompts.py", "/root/prompts.py")
@@ -49,6 +56,7 @@ generator_image = (
     .add_local_file("video_crop.py", "/root/video_crop.py")
     .add_local_file("ad_generator.py", "/root/ad_generator.py")
     .add_local_file("agent.py", "/root/agent.py")
+    .add_local_file("watermark.py", "/root/watermark.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -165,6 +173,43 @@ def generate_webhook(body: dict):
     generate_and_update.spawn(product_id)
 
     return {"status": "queued", "product_id": product_id}
+
+
+# ─── Watermark a user_generation for the public share flow ────────────
+
+@app.function(
+    image=generator_image,
+    secrets=secrets,
+    timeout=300,
+    retries=1,
+)
+def watermark_share(share_id: str):
+    """Bake the Catalog wordmark onto the source generation video and
+    upload the result. Patches the look_shares row's status +
+    watermarked_video_url. Designed to be invoked from the share-look
+    edge function via .spawn() so the HTTP request returns
+    immediately and the user sees a 'rendering' state until this
+    finishes (~15-30s for a 5s clip)."""
+    import sys
+    sys.path.insert(0, "/root")
+    from watermark import watermark_one
+
+    return watermark_one(share_id)
+
+
+@app.function(image=generator_image, secrets=secrets)
+@modal.fastapi_endpoint(method="POST", label="watermark-share")
+def watermark_share_webhook(body: dict):
+    """POST /watermark-share — called by the share-look Supabase edge
+    function once it has inserted a look_shares row. Body shape:
+        { "share_id": "<uuid>" }
+    """
+    share_id = body.get("share_id")
+    if not share_id:
+        return {"error": "Missing share_id"}, 400
+
+    watermark_share.spawn(share_id)
+    return {"status": "queued", "share_id": share_id}
 
 
 # ─── Cron: retry pending/failed jobs every 30 min ─────────────────────
