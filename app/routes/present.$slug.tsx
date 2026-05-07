@@ -123,6 +123,25 @@ export default function PresentViewer() {
     return () => window.clearInterval(id);
   }, []);
 
+  // The consumer iframe shares localStorage with /present/ (same
+  // origin), so writing the access code + visited flag here unlocks
+  // it without ever showing the password gate or splash screen.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('catalog-access', '123');
+      window.localStorage.setItem('catalog:visited', '1');
+    } catch {
+      /* private mode — viewer will see the gate, oh well */
+    }
+  }, []);
+
+  // Iframe src tracks Robert's current route. We rebuild only on
+  // pathname changes (not on every search/hash tick) so cursors +
+  // overlays don't flash a full reload every time he scrolls or
+  // opens a look. Defaults to '/' until the first route event.
+  const iframePath = state.route?.pathname ?? '/';
+
   const lastEnv = state.eventsByType.heartbeat ?? state.lastAny;
   const sinceLastMs = lastEnv ? Math.max(0, now - lastEnv.sentAt) : null;
   const stale = sinceLastMs !== null && sinceLastMs > 5000;
@@ -164,10 +183,38 @@ export default function PresentViewer() {
       <ScrollProgress scroll={activeScroll} />
 
       <main style={mainStyle}>
-        {!state.lastAny ? (
-          <WaitingPanel slug={slug} />
-        ) : (
-          <NowShowingPanel state={state} />
+        {/* Real catalog rendered inside the page so viewers actually
+            see what Robert is browsing. Same-origin iframe shares
+            localStorage with this route, so the access code we
+            wrote above bypasses the password gate. PresentProvider
+            inside the frame detects window.self !== window.top and
+            short-circuits its broadcasting so we don't echo. */}
+        <iframe
+          src={iframePath}
+          title="Robert's session"
+          style={iframeStyle}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+        />
+        {/* Skinny overlay panel at the bottom for the route + last
+            event readout. Useful for confirming the mirror is live
+            without crowding out the actual catalog content. */}
+        {state.lastAny && (
+          <div style={overlayStripStyle}>
+            <span style={overlayStripLabelStyle}>route</span>
+            <code style={overlayStripCodeStyle}>
+              {state.route ? `${state.route.pathname}${state.route.search}${state.route.hash}` : '—'}
+            </code>
+            <span style={overlayStripDotStyle} />
+            <span style={overlayStripLabelStyle}>last</span>
+            <code style={overlayStripCodeStyle}>
+              {state.lastAny.type} #{state.lastAny.seq}
+            </code>
+          </div>
+        )}
+        {!state.lastAny && (
+          <div style={waitingWrapStyle}>
+            <WaitingPanel slug={slug} />
+          </div>
         )}
       </main>
 
@@ -673,11 +720,68 @@ const statValueStyle: React.CSSProperties = {
 
 const mainStyle: React.CSSProperties = {
   flex: 1,
+  position: 'relative',
+  display: 'flex',
+  overflow: 'hidden',
+};
+
+const iframeStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+  border: 'none',
+  background: '#0a0a0a',
+};
+
+const overlayStripStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: 16,
+  bottom: 16,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 14px',
+  borderRadius: 999,
+  background: 'rgba(0, 0, 0, 0.55)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  backdropFilter: 'blur(10px)',
+  fontFamily: 'Inter, sans-serif',
+  fontSize: 11,
+  color: 'rgba(255, 255, 255, 0.62)',
+  zIndex: 10,
+  pointerEvents: 'none',
+};
+
+const overlayStripLabelStyle: React.CSSProperties = {
+  fontWeight: 700,
+  letterSpacing: '0.18em',
+  textTransform: 'uppercase',
+  color: 'rgba(255, 255, 255, 0.42)',
+};
+
+const overlayStripCodeStyle: React.CSSProperties = {
+  fontFamily: 'ui-monospace, monospace',
+  fontSize: 11,
+  color: '#fff',
+};
+
+const overlayStripDotStyle: React.CSSProperties = {
+  width: 3,
+  height: 3,
+  borderRadius: 999,
+  background: 'rgba(255, 255, 255, 0.25)',
+};
+
+const waitingWrapStyle: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: 32,
-  overflow: 'auto',
+  background: 'rgba(7, 7, 7, 0.85)',
+  backdropFilter: 'blur(8px)',
+  zIndex: 5,
 };
 
 const emptyStyle: React.CSSProperties = {

@@ -43,7 +43,13 @@ import {
 export default function PresentProvider() {
   const slug = useActivePresentSlug();
   const location = useLocation();
-  const enabled = !!slug;
+  // Skip broadcasting when the consumer app is rendered inside an
+  // iframe (e.g. embedded in /present/<slug> as the viewer's content
+  // surface). Otherwise the iframe would re-emit cursor / route /
+  // overlay events and we'd get a feedback loop on the channel.
+  const inTopFrame =
+    typeof window === 'undefined' ? true : window.self === window.top;
+  const enabled = !!slug && inTopFrame;
 
   // ── Identity ───────────────────────────────────────────────────
   // ID is stable per tab (sessionStorage). Name is pulled from a
