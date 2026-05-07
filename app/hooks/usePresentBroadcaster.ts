@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from '~/utils/supabase';
+import { SUPABASE_ANON_KEY, supabase } from '~/utils/supabase';
 import {
   PRESENT_EVENT_NAME,
   channelNameFor,
@@ -73,7 +73,18 @@ export function usePresentBroadcaster({
     }
     if (typeof window === 'undefined') return;
 
+    // Pin the Realtime client to the anon key. The presenter usually
+    // has a real session, but the call is idempotent and matches the
+    // viewer side so the channel auth state is identical on both
+    // ends — easier to reason about when something stalls.
+    try {
+      supabase.realtime.setAuth(SUPABASE_ANON_KEY);
+    } catch (err) {
+      console.warn('[present] realtime.setAuth failed:', err);
+    }
+
     const channelName = channelNameFor(slug);
+    console.info('[present] broadcasting on', channelName);
     // self: false — the presenter doesn't need to receive its own
     // broadcasts, and self-echoes would inflate seq counters on the
     // wrong side.
@@ -82,7 +93,8 @@ export function usePresentBroadcaster({
     });
     channelRef.current = channel;
 
-    channel.subscribe(status => {
+    channel.subscribe((status, err) => {
+      console.info('[present] broadcaster status:', status, err ?? '');
       setIsConnected(status === 'SUBSCRIBED');
     });
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '~/utils/supabase';
+import { SUPABASE_ANON_KEY, supabase } from '~/utils/supabase';
 import {
   PRESENT_EVENT_NAME,
   channelNameFor,
@@ -80,10 +80,21 @@ export function usePresentSubscription({
     let retryTimer: number | null = null;
     let attempt = 0;
 
+    // Force the Realtime client onto the anon key before opening any
+    // channel. /present/ pages have no Supabase session, so without
+    // this the JWT can stay null and the channel sits in CHANNEL_JOIN
+    // forever (no SUBSCRIBED, no error — just stuck at "connecting").
+    try {
+      supabase.realtime.setAuth(SUPABASE_ANON_KEY);
+    } catch (err) {
+      console.warn('[present] realtime.setAuth failed:', err);
+    }
+
     const subscribe = () => {
       if (cancelled) return;
       setConnection('connecting');
       const channelName = channelNameFor(slug);
+      console.info('[present] subscribing to', channelName);
       const channel: PresentChannel = supabase.channel(channelName, {
         config: { broadcast: { self: false } },
       });
@@ -100,8 +111,11 @@ export function usePresentSubscription({
         }
       });
 
-      channel.subscribe(status => {
+      channel.subscribe((status, err) => {
         if (cancelled) return;
+        // Loud log so we can read it from the browser console while
+        // diagnosing stuck-connecting. Strip once stable.
+        console.info('[present] channel status:', status, err ?? '');
         if (status === 'SUBSCRIBED') {
           setConnection('connected');
           attempt = 0; // reset backoff on a successful connect
