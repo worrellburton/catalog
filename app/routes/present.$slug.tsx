@@ -5,6 +5,7 @@ import type {
   PresentEnvelope,
   PresentEventType,
   RoutePayload,
+  ScrollPayload,
 } from '~/services/present';
 
 /*
@@ -44,6 +45,10 @@ export default function PresentViewer() {
   const sinceLastMs = lastEnv ? Math.max(0, now - lastEnv.sentAt) : null;
   const stale = sinceLastMs !== null && sinceLastMs > 5000;
 
+  const activeScroll = state.lastScrollSelector
+    ? state.scrollBySelector[state.lastScrollSelector] ?? null
+    : null;
+
   return (
     <div style={pageStyle}>
       <div style={chromeStyle}>
@@ -61,6 +66,10 @@ export default function PresentViewer() {
           />
         </div>
       </div>
+      {/* Scroll progress bar — sits flush under the chrome and tracks
+          the most recently scrolled container on the presenter side.
+          Tweens smoothly even though the wire updates at ~20 Hz. */}
+      <ScrollProgress scroll={activeScroll} />
 
       <main style={mainStyle}>
         {!state.lastAny ? (
@@ -78,6 +87,15 @@ export default function PresentViewer() {
 interface PresentState {
   /** Current presenter route, set by 'route' events. */
   route: RoutePayload | null;
+  /**
+   * Latest scroll snapshot per scrollable container the presenter
+   * is using, keyed by selector ('window', '#grid-viewport', etc.).
+   * Phase 4 just stores + visualizes; Phase 7+ uses this to drive
+   * actual scroll on the rendered components.
+   */
+  scrollBySelector: Record<string, ScrollPayload>;
+  /** Selector of the most recently scrolled container. */
+  lastScrollSelector: string | null;
   /** Most recent envelope of any type. */
   lastAny: PresentEnvelope | null;
   /** Most recent envelope per type. Useful for the debug HUD. */
@@ -86,6 +104,8 @@ interface PresentState {
 
 const initialState: PresentState = {
   route: null,
+  scrollBySelector: {},
+  lastScrollSelector: null,
   lastAny: null,
   eventsByType: {},
 };
@@ -102,6 +122,17 @@ function presentReducer(state: PresentState, action: Action): PresentState {
   };
   if (env.type === 'route') {
     next.route = env.payload as RoutePayload;
+    // Reset scroll tracking when route changes — old container ids
+    // probably stop existing.
+    next.scrollBySelector = {};
+    next.lastScrollSelector = null;
+  } else if (env.type === 'scroll') {
+    const scroll = env.payload as ScrollPayload;
+    next.scrollBySelector = {
+      ...state.scrollBySelector,
+      [scroll.selector]: scroll,
+    };
+    next.lastScrollSelector = scroll.selector;
   }
   return next;
 }
@@ -184,6 +215,48 @@ function DebugPayload({ latest }: { latest: PresentEnvelope | null }) {
 }
 
 // ---------- Status pill + stats ----------
+
+function ScrollProgress({ scroll }: { scroll: ScrollPayload | null }) {
+  const ratio = scroll ? scroll.ratio : 0;
+  const pct = (ratio * 100).toFixed(1);
+  const label = scroll?.selector ?? null;
+  return (
+    <div style={{
+      position: 'relative',
+      height: 22,
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+      background: 'rgba(0,0,0,0.55)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: `linear-gradient(90deg, rgba(167,139,250,0.5), rgba(167,139,250,0.18))`,
+        width: `${ratio * 100}%`,
+        transition: 'width 200ms cubic-bezier(0.22, 1, 0.36, 1)',
+      }} />
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 16px',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.62)',
+        pointerEvents: 'none',
+      }}>
+        <span style={{ fontFamily: FONT_MONO, letterSpacing: 0, textTransform: 'none' }}>
+          {label ?? 'scroll —'}
+        </span>
+        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#fff' }}>{pct}%</span>
+      </div>
+    </div>
+  );
+}
 
 function ConnectionPill({
   state,

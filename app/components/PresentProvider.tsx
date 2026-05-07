@@ -1,10 +1,11 @@
 import { useLocation } from '@remix-run/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
 import {
   isBroadcastableRoute,
   readPresentSlug,
   type RoutePayload,
+  type ScrollPayload,
 } from '~/services/present';
 
 /*
@@ -44,6 +45,71 @@ export default function PresentProvider() {
     };
     broadcast('route', payload);
   }, [enabled, isConnected, location.pathname, location.hash, location.search, broadcast]);
+
+  // Scroll capture: scroll events do not bubble, so we listen with
+  // the capture phase on window to catch scroll on every container
+  // the consumer feed uses (#grid-viewport, look overlays, deck
+  // slides, etc.). Throttled to ~50 ms / 20 Hz so the wire stays
+  // light even during fast flick-scrolls. Skipped entirely when on
+  // private routes.
+  const lastScrollSentRef = useRef(0);
+  const lastScrollKeyRef = useRef('');
+  useEffect(() => {
+    if (!enabled || !isConnected) return;
+    if (!isBroadcastableRoute(location.pathname)) return;
+
+    const handleScroll = (e: Event) => {
+      const target = e.target as Element | Document | null;
+      if (!target) return;
+
+      // Pull dimensions from documentElement when scrolling the page,
+      // or from the element itself otherwise.
+      let element: Element;
+      let selector: string;
+      if (target instanceof Document) {
+        element = target.documentElement;
+        selector = 'window';
+      } else if (target instanceof Element) {
+        element = target;
+        // Prefer #id (cheap + stable). Fall back to tagName so we at
+        // least produce *something* on anonymous scrollers — viewer
+        // can decide whether to act on it.
+        selector = target.id ? `#${target.id}` : target.tagName.toLowerCase();
+      } else {
+        return;
+      }
+
+      const now = performance.now();
+      const key = selector;
+      const sameTarget = key === lastScrollKeyRef.current;
+      // 50ms throttle per-target. Switching targets resets the
+      // window so the first event on a new container fires
+      // immediately.
+      if (sameTarget && now - lastScrollSentRef.current < 50) return;
+      lastScrollSentRef.current = now;
+      lastScrollKeyRef.current = key;
+
+      const scrollTop = element.scrollTop;
+      const scrollHeight = element.scrollHeight;
+      const clientHeight = element.clientHeight;
+      const denom = Math.max(1, scrollHeight - clientHeight);
+      const ratio = Math.max(0, Math.min(1, scrollTop / denom));
+
+      const payload: ScrollPayload = {
+        selector,
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        ratio,
+      };
+      broadcast('scroll', payload);
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [enabled, isConnected, location.pathname, broadcast]);
 
   return null;
 }

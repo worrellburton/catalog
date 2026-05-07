@@ -65,6 +65,27 @@ export interface RoutePayload {
   search: string;
 }
 
+export interface ScrollPayload {
+  /**
+   * CSS-id selector for the scrollable container, or 'window' for
+   * documentElement scrolling. Lets the viewer find the equivalent
+   * element when it eventually mirrors the scroll position.
+   */
+  selector: string;
+  /** Pixel scroll offset on the presenter. */
+  scrollTop: number;
+  /** Total scrollable height of the container in px. */
+  scrollHeight: number;
+  /** Visible viewport height of the container in px. */
+  clientHeight: number;
+  /**
+   * Convenience: scrollTop / max(1, scrollHeight - clientHeight),
+   * clamped to [0, 1]. Lets the viewer render a progress bar
+   * without recomputing.
+   */
+  ratio: number;
+}
+
 // ---------- Privacy guard ----------
 
 /**
