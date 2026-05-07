@@ -1953,11 +1953,14 @@ export default function AdminContent() {
         <div
           style={{
             position: 'fixed',
-            left: Math.min(nodeHover.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 320),
+            // Anchor below the icon when going horizontal so the wide
+            // popover doesn't get pushed off the right edge of the page.
+            // Clamp to the viewport so the right edge always fits.
+            left: Math.max(8, Math.min(nodeHover.x - 60, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 660)),
             top: nodeHover.y,
-            width: 300,
+            width: 640,
             maxHeight: '80vh',
-            overflowY: 'auto',
+            overflow: 'hidden',
             borderRadius: 10,
             background: '#0f172a',
             color: '#e2e8f0',
@@ -1970,74 +1973,96 @@ export default function AdminContent() {
             lineHeight: 1.45,
           }}
         >
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>
             Generation graph
           </div>
 
-          {/* Node 1: Inputs (reference photos) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#059669', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>1</span>
-            <span style={{ fontWeight: 600 }}>Reference photos ({nodeHover.photos.length})</span>
-          </div>
-          {nodeHover.photos.length === 0 ? (
-            <div style={{ color: '#64748b', fontStyle: 'italic', marginLeft: 22, marginBottom: 10 }}>none recorded</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginLeft: 22, marginBottom: 10 }}>
-              {nodeHover.photos.slice(0, 6).map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt=""
-                  style={{ width: 40, height: 40, borderRadius: 4, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.08)', background: '#fff' }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
-                />
-              ))}
-              {nodeHover.photos.length > 6 && (
-                <span style={{ fontSize: 10, color: '#64748b', alignSelf: 'center' }}>+{nodeHover.photos.length - 6}</span>
+          {/* Three nodes side-by-side with arrow connectors. Each node
+              is a flex column so its body sits beneath the numbered
+              header. The Prompt column flexes to consume any extra
+              width and scrolls vertically when the prompt is long. */}
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
+            {/* Node 1: Inputs (reference photos) */}
+            <div style={{ flex: '0 0 180px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#059669', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flex: '0 0 16px' }}>1</span>
+                <span style={{ fontWeight: 600 }}>Photos ({nodeHover.photos.length})</span>
+              </div>
+              {nodeHover.photos.length === 0 ? (
+                <div style={{ color: '#64748b', fontStyle: 'italic' }}>none recorded</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {nodeHover.photos.slice(0, 8).map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt=""
+                      style={{ width: 38, height: 38, borderRadius: 4, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.08)', background: '#fff' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                    />
+                  ))}
+                  {nodeHover.photos.length > 8 && (
+                    <span style={{ fontSize: 10, color: '#64748b', alignSelf: 'center' }}>+{nodeHover.photos.length - 8}</span>
+                  )}
+                </div>
               )}
             </div>
-          )}
 
-          {/* Connector */}
-          <div style={{ marginLeft: 7, height: 8, borderLeft: '1px dashed rgba(255,255,255,0.2)', marginBottom: 2 }} />
-
-          {/* Node 2: Model + style + duration */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#7c3aed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>2</span>
-            <span style={{ fontWeight: 600 }}>Model</span>
-          </div>
-          <div style={{ marginLeft: 22, marginBottom: 10, color: '#cbd5e1' }}>
-            {nodeHover.meta?.model
-              ? (VIDEO_MODELS.find(m => m.value === nodeHover.meta?.model)?.label ?? nodeHover.meta.model)
-              : <span style={{ fontStyle: 'italic', color: '#64748b' }}>unknown</span>}
-            {(nodeHover.meta?.style || nodeHover.meta?.duration_seconds || nodeHover.meta?.aspect_ratio) && (
-              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-                {[
-                  nodeHover.meta.style && `style: ${nodeHover.meta.style}`,
-                  nodeHover.meta.duration_seconds && `${nodeHover.meta.duration_seconds}s`,
-                  nodeHover.meta.aspect_ratio && nodeHover.meta.aspect_ratio,
-                ].filter(Boolean).join(' • ')}
-              </div>
-            )}
-          </div>
-
-          {/* Connector */}
-          <div style={{ marginLeft: 7, height: 8, borderLeft: '1px dashed rgba(255,255,255,0.2)', marginBottom: 2 }} />
-
-          {/* Node 3: Prompt */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#0ea5e9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>3</span>
-            <span style={{ fontWeight: 600 }}>Prompt</span>
-          </div>
-          <div style={{ marginLeft: 22, marginBottom: 4, color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>
-            {nodeHover.meta?.prompt || <span style={{ fontStyle: 'italic', color: '#64748b' }}>(no prompt recorded)</span>}
-          </div>
-          {nodeHover.meta?.prompt_extra && (
-            <div style={{ marginLeft: 22, marginTop: 6, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.08)', color: '#94a3b8', fontSize: 11, whiteSpace: 'pre-wrap' }}>
-              <span style={{ fontWeight: 600, color: '#cbd5e1' }}>Extra: </span>
-              {nodeHover.meta.prompt_extra}
+            {/* Connector → */}
+            <div style={{ flex: '0 0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.25)' }}>
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="0" y1="5" x2="14" y2="5" />
+                <polyline points="10 1 14 5 10 9" />
+              </svg>
             </div>
-          )}
+
+            {/* Node 2: Model + style + duration */}
+            <div style={{ flex: '0 0 160px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#7c3aed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flex: '0 0 16px' }}>2</span>
+                <span style={{ fontWeight: 600 }}>Model</span>
+              </div>
+              <div style={{ color: '#cbd5e1' }}>
+                {nodeHover.meta?.model
+                  ? (VIDEO_MODELS.find(m => m.value === nodeHover.meta?.model)?.label ?? nodeHover.meta.model)
+                  : <span style={{ fontStyle: 'italic', color: '#64748b' }}>unknown</span>}
+                {(nodeHover.meta?.style || nodeHover.meta?.duration_seconds || nodeHover.meta?.aspect_ratio) && (
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                    {[
+                      nodeHover.meta.style && `style: ${nodeHover.meta.style}`,
+                      nodeHover.meta.duration_seconds && `${nodeHover.meta.duration_seconds}s`,
+                      nodeHover.meta.aspect_ratio && nodeHover.meta.aspect_ratio,
+                    ].filter(Boolean).join(' • ')}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Connector → */}
+            <div style={{ flex: '0 0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.25)' }}>
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="0" y1="5" x2="14" y2="5" />
+                <polyline points="10 1 14 5 10 9" />
+              </svg>
+            </div>
+
+            {/* Node 3: Prompt - flex grow + scroll for long text */}
+            <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#0ea5e9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flex: '0 0 16px' }}>3</span>
+                <span style={{ fontWeight: 600 }}>Prompt</span>
+              </div>
+              <div style={{ flex: '1 1 auto', maxHeight: '60vh', overflowY: 'auto', color: '#cbd5e1', whiteSpace: 'pre-wrap', wordBreak: 'break-word', paddingRight: 4 }}>
+                {nodeHover.meta?.prompt || <span style={{ fontStyle: 'italic', color: '#64748b' }}>(no prompt recorded)</span>}
+                {nodeHover.meta?.prompt_extra && (
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed rgba(255,255,255,0.08)', color: '#94a3b8', fontSize: 11 }}>
+                    <span style={{ fontWeight: 600, color: '#cbd5e1' }}>Extra: </span>
+                    {nodeHover.meta.prompt_extra}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
