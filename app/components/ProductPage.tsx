@@ -221,8 +221,8 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       type="button"
       className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
       onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
-      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
-      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
+      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
+      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
     >
       {posterUrl && (
         <img
@@ -278,7 +278,11 @@ function LookTile({
     if (!node) return;
     const obs = new IntersectionObserver(
       es => es.forEach(e => setInViewport(e.isIntersecting)),
-      { rootMargin: '400px' },
+      // Bumped from 400px to 800px so look-tile videos start streaming
+      // ~half a viewport before the user actually scrolls them into
+      // view; closes the perceived gap to product images, which paint
+      // instantly because they're way smaller.
+      { rootMargin: '800px' },
     );
     obs.observe(node);
     return () => obs.disconnect();
@@ -476,20 +480,13 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
-  // "More like this" rail. Filter to cross-brand only and cap at 16 so
-  // the grid is at most 4 rows on desktop (4 cols), 5 on tablet (3 cols),
-  // 8 on mobile (2 cols). When find_similar_creatives returns nothing
-  // for the seed (cold-start product, missing embedding), fall back to
-  // popularFallback so the section is never blank.
-  const moreLikeThis = useMemo(() => {
-    const ownBrand = (product.brand || '').trim().toLowerCase();
-    const ownProductId = (product as Product & { id?: string }).id || '';
-    // Resolve the seed product's gender so we can scope the rail to
-    // matching items + unisex. The Product type doesn't carry gender,
-    // but popularFallback / similarCreatives rows do (joined from
-    // products.gender), so we look up the seed by id or brand+name and
-    // grab whatever lands. Falls back to undefined when the seed isn't
-    // in either list - in that case we don't gender-filter at all.
+  // Shared derived values used by both rails below.
+  const ownBrand = (product.brand || '').trim().toLowerCase();
+  const ownProductId = (product as Product & { id?: string }).id || '';
+  const ownType = (product as Product & { type?: string | null }).type || null;
+
+  // Resolve seed gender from any available row so we can gender-scope rails.
+  const seedGender = useMemo(() => {
     const findSeed = (rows: ProductAd[] | undefined): { gender?: string | null } | null => {
       if (!rows) return null;
       for (const c of rows) {
@@ -502,38 +499,58 @@ export default function ProductPage({
       }
       return null;
     };
-    const seedProduct = findSeed(similarCreatives) || findSeed(popularFallback);
-    const seedGender = (seedProduct?.gender || '').toLowerCase();
-    const genderMatches = (otherGender: string | null | undefined): boolean => {
-      // Seed is unknown - don't filter by gender.
-      if (!seedGender || seedGender === 'unisex') return true;
-      const g = (otherGender || '').toLowerCase();
-      // Match own gender + unisex. Untagged candidates pass too (we
-      // don't have enough info to exclude them).
-      if (!g) return true;
-      if (g === 'unisex') return true;
-      return g === seedGender;
-    };
-    const pickFrom = (rows: ProductAd[] | undefined): ProductAd[] => {
-      if (!rows || rows.length === 0) return [];
-      const seenProductIds = new Set<string>();
-      const out: ProductAd[] = [];
-      for (const c of rows) {
-        const otherBrand = (c.product?.brand || '').trim().toLowerCase();
-        if (ownBrand && otherBrand === ownBrand) continue;
-        if (ownProductId && c.product_id === ownProductId) continue;
-        if (seenProductIds.has(c.product_id)) continue;
-        if (!genderMatches(c.product?.gender)) continue;
-        seenProductIds.add(c.product_id);
-        out.push(c);
-        if (out.length >= 16) break;
-      }
-      return out;
-    };
-    const fromSimilar = pickFrom(similarCreatives);
-    if (fromSimilar.length > 0) return fromSimilar;
-    return pickFrom(popularFallback);
-  }, [similarCreatives, popularFallback, product.brand, product.name, (product as Product & { id?: string }).id]);
+    const seed = findSeed(similarCreatives) || findSeed(popularFallback);
+    return (seed?.gender || '').toLowerCase();
+  }, [similarCreatives, popularFallback, ownBrand, ownProductId, product.name]);
+
+  const genderMatches = useCallback((otherGender: string | null | undefined): boolean => {
+    if (!seedGender || seedGender === 'unisex') return true;
+    const g = (otherGender || '').toLowerCase();
+    if (!g || g === 'unisex') return true;
+    return g === seedGender;
+  }, [seedGender]);
+
+  const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
+    if (!rows || rows.length === 0) return [];
+    const seenProductIds = new Set<string>();
+    const out: ProductAd[] = [];
+    for (const c of rows) {
+      const otherBrand = (c.product?.brand || '').trim().toLowerCase();
+      if (ownBrand && otherBrand === ownBrand) continue;
+      if (ownProductId && c.product_id === ownProductId) continue;
+      if (seenProductIds.has(c.product_id)) continue;
+      if (!genderMatches(c.product?.gender)) continue;
+      seenProductIds.add(c.product_id);
+      out.push(c);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }, [ownBrand, ownProductId, genderMatches]);
+
+  // "More like this" — only from the type-scoped similarity RPC.
+  // Empty when the RPC returns nothing; Popular section fills the gap instead.
+  const moreLikeThis = useMemo(
+    () => pickFrom(similarCreatives),
+    [similarCreatives, pickFrom],
+  );
+
+  // "Popular" — shown only when moreLikeThis is empty.
+  // Filtered to the same product type so we never show unrelated items.
+  const popularItems = useMemo((): ProductAd[] => {
+    if (moreLikeThis.length > 0) return [];
+    if (!popularFallback || popularFallback.length === 0) return [];
+    if (ownType) {
+      return pickFrom(
+        popularFallback.filter(c => c.product?.type === ownType),
+      );
+    }
+    // No type — show same-brand popular items as a last resort.
+    return pickFrom(
+      popularFallback.filter(
+        c => (c.product?.brand || '').trim().toLowerCase() === ownBrand,
+      ),
+    );
+  }, [moreLikeThis, popularFallback, ownType, ownBrand, pickFrom]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -922,6 +939,22 @@ export default function ProductPage({
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
               {moreLikeThis.map(c => (
+                <CreativeCard
+                  key={c.id}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {popularItems.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">Popular</h2>
+            <div className="pd-similar-grid">
+              {popularItems.map(c => (
                 <CreativeCard
                   key={c.id}
                   creative={c}

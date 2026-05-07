@@ -12,6 +12,7 @@
 // styling, not a critical path.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logAiUsage } from '../_shared/ai-usage.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -59,11 +60,11 @@ function buildPrompt(ctx: LookContext): string {
   ].filter(Boolean).join('\n');
 }
 
-async function callClaude(prompt: string): Promise<string | null> {
+async function callClaude(prompt: string): Promise<{ name: string | null; inputTokens: number | null; outputTokens: number | null }> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) {
     console.error('[name-look] ANTHROPIC_API_KEY not configured');
-    return null;
+    return { name: null, inputTokens: null, outputTokens: null };
   }
   try {
     const res = await fetch(ANTHROPIC_API, {
@@ -81,17 +82,19 @@ async function callClaude(prompt: string): Promise<string | null> {
     });
     if (!res.ok) {
       console.error('[name-look] Claude responded', res.status, await res.text());
-      return null;
+      return { name: null, inputTokens: null, outputTokens: null };
     }
-    const data = await res.json() as { content?: Array<{ type: string; text?: string }> };
+    const data = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = data.content?.find(c => c.type === 'text')?.text?.trim();
-    if (!text) return null;
+    const inputTokens = data.usage?.input_tokens ?? null;
+    const outputTokens = data.usage?.output_tokens ?? null;
+    if (!text) return { name: null, inputTokens, outputTokens };
     // Cap at 40 chars and strip stray quotes / trailing punctuation just in case.
     const cleaned = text.replace(/^["'`]+|["'`]+$/g, '').replace(/[.!?,;:]+$/g, '').slice(0, 40);
-    return cleaned || null;
+    return { name: cleaned || null, inputTokens, outputTokens };
   } catch (err) {
     console.error('[name-look] fetch threw', err);
-    return null;
+    return { name: null, inputTokens: null, outputTokens: null };
   }
 }
 
@@ -150,7 +153,17 @@ Deno.serve(async (req: Request) => {
   };
 
   const prompt = buildPrompt(ctx);
-  const name = await callClaude(prompt);
+  const { name, inputTokens, outputTokens } = await callClaude(prompt);
+  logAiUsage({
+    platform: 'anthropic',
+    operation: 'name-look',
+    model: ANTHROPIC_MODEL,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    status: name ? 'success' : 'error',
+    error_message: name ? null : 'Claude returned no name',
+    metadata: { generation_id: generationId },
+  });
   if (!name) {
     // Naming is decorative — never 4xx the client. Leave display_name null
     // so the LookCard falls back to the style preset, and return 200.

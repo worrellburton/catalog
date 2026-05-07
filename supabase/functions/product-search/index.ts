@@ -12,6 +12,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY   — for ingest path
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logAiUsage } from '../_shared/ai-usage.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -246,6 +247,15 @@ Deno.serve(async (req: Request) => {
     if (detailLimit > 20) detailLimit = 20;
 
     const products = await searchSerpApi(query, serpKey, detailLimit);
+
+    // Log the SerpAPI call (1 credit for the main search + up to detailLimit
+    // immersive lookups, each costing 1 credit too).
+    logAiUsage({
+      platform: 'serpapi',
+      operation: 'product-search',
+      units: 1 + Math.min(detailLimit, products.length),
+      metadata: { query, result_count: products.length, detail_limit: detailLimit },
+    });
 
     // ── Ingest path: persist + queue embeddings ─────────────────────────────
     let ingested: { id: string; name: string }[] = [];

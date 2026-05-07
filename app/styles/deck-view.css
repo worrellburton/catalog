@@ -6158,9 +6158,12 @@
 }
 
 .deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(22px, 2.4vw, 38px);
-  line-height: 1.12;
-  letter-spacing: -0.018em;
+  /* Match the cover slide's "The AI for Shopping" headline scale so the
+     opening punchline and the problem/solution punchline read with
+     the same weight in the deck's narrative arc. */
+  font-size: clamp(36px, 5.2vw, 72px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   margin: 0;
   font-weight: 600;
 }
@@ -6168,6 +6171,7 @@
 .deck-view-v1 .deck-v1-compare-rows {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: clamp(12px, 1.6vh, 22px);
 }
 
@@ -6181,7 +6185,9 @@
 .deck-view-v1 .deck-v1-compare-row {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: clamp(6px, 0.9vh, 12px);
+  width: 100%;
 }
 
 /* Inter-row connector: dashed verticals top + bottom with a small
@@ -6264,9 +6270,11 @@
 .deck-view-v1 .deck-v1-compare-row-head {
   display: flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: flex-start;
+  text-align: left;
   gap: clamp(10px, 1vw, 16px);
-  padding-left: 4px;
+  padding-left: 0;
+  width: 100%;
 }
 .deck-view-v1 .deck-v1-compare-row-num {
   font-size: 10px;
@@ -6771,9 +6779,9 @@
 .deck-view-v1 .deck-v1-demo-cta {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 32px;
-  font-size: clamp(16px, 1.4vw, 20px);
+  gap: 18px;
+  padding: 26px 56px;
+  font-size: clamp(22px, 2.4vw, 36px);
   font-weight: 700;
   letter-spacing: -0.005em;
   color: #fff;
@@ -6869,3 +6877,296 @@
   color: #fff;
 }
 .light-mode .deck-view-v1 .deck-v1-demo-exit-overlay { background: #fafafa; }
+
+/* V1.2 combined Cover + Dream slide. Catalog wordmark sits above the
+   THE DREAM label / AI-for-Shopping h2 / human-taste subtitle, all
+   centered, with the floating intro icons behind. Tighter vertical
+   gap so the wordmark + headline read as one composition rather than
+   two stacked blocks. */
+.deck-view-v1 .deck-v1-cover-combined {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 2.6vh, 36px);
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-logo {
+  margin: 0 auto;
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+/* V1.2 Payouts slide - money fly-up overlay. 36 emoji flakes scatter
+   from the bottom of the slide upward with randomized horizontal
+   drift, rotation, delay, and duration. Triggered when the slide
+   enters the viewport (.deck-slide.visible) so it doesn't burn
+   animation cycles off-screen. */
+.deck-view-v1 .deck-v1-money-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.deck-view-v1 .deck-v1-money-flake {
+  position: absolute;
+  bottom: -10vh;
+  width: auto;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(0, 0) rotate(0deg);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+  will-change: transform, opacity;
+}
+
+/* Only animate while the slide is in viewport. The .visible class is
+   added by the deck's IntersectionObserver. */
+.deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+  animation: deck-v1-money-fly var(--money-dur, 6s) cubic-bezier(0.25, 0.46, 0.45, 0.94) var(--money-delay, 0s) infinite;
+}
+
+@keyframes deck-v1-money-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--money-drift, 0), -120vh) rotate(var(--money-rot, 360deg));
+    opacity: 0;
+  }
+}
+
+/* Payouts content sits above the money layer. */
+.deck-view-v1 .deck-v1-payouts > *:not(.deck-v1-money-burst) {
+  position: relative;
+  z-index: 2;
+}
+
+/* Reduce motion - don't bombard accessibility-conscious users with
+   flying emoji. */
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* V1.2 Payouts sublist - 2a / 2b under Affiliate sales. Indented
+   slightly with a smaller number badge so the hierarchy reads
+   "main item -> two ways inside it" without competing with the
+   parent item's chip. */
+.deck-view-v1 .deck-v1-payouts-sublist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-payouts-sub {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: clamp(12px, 0.95vw, 14px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+.deck-view-v1 .deck-v1-payouts-sub-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(74, 222, 128, 0.85);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  text-transform: lowercase;
+}
+.deck-view-v1 .deck-v1-payouts-sub strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-payouts-sub { color: rgba(0, 0, 0, 0.78); }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub strong { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub-num { color: #047857; }
+
+/* ============================================================
+   V1.2 MOBILE PASS
+   Every slide collapses to a single-column, single-viewport
+   layout at <=768px. Side-by-side splits stack vertically, type
+   scales down, padding tightens. Goal: any slide a shopper opens
+   on a phone reads as one screen, no scroll, no overflow.
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Slide-level: every v1 slide is exactly 100dvh and clips overflow.
+     The slide-snap parent already snaps each slide to the viewport;
+     we just need to make sure content fits. */
+  .deck-view-v1 .deck-slide {
+    min-height: 100dvh;
+    height: auto;
+    padding: clamp(40px, 6vh, 64px) 20px !important;
+    box-sizing: border-box;
+  }
+
+  /* Cover + Dream combined slide */
+  .deck-view-v1 .deck-v1-cover-combined .deck-logo {
+    width: clamp(140px, 36vw, 220px);
+    height: auto;
+  }
+  .deck-view-v1 .deck-v1-dream-h2 {
+    font-size: clamp(34px, 9vw, 56px) !important;
+  }
+  .deck-view-v1 .deck-v1-dream-sub {
+    font-size: clamp(13px, 3.5vw, 17px);
+  }
+
+  /* Problem & Solution */
+  .deck-view-v1 .deck-v1-compare-slide {
+    padding: clamp(48px, 7vh, 72px) 18px !important;
+    gap: 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-head h2 {
+    font-size: clamp(28px, 8vw, 44px);
+  }
+  .deck-view-v1 .deck-v1-compare-rows {
+    gap: 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-row-cells {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .deck-view-v1 .deck-v1-compare-row-role {
+    font-size: clamp(20px, 6vw, 30px);
+  }
+  .deck-view-v1 .deck-v1-compare-row-word {
+    font-size: clamp(13px, 4vw, 18px);
+  }
+  .deck-view-v1 .deck-v1-compare-cell {
+    padding: 10px 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-cell-text {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  /* Market Opportunity */
+  .deck-view-v8 .deck-v8-market-grid {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    gap: 14px;
+  }
+  .deck-view-v8 .deck-v8-market-card {
+    padding: 16px 16px 14px;
+  }
+  .deck-view-v8 .deck-v8-market-chart { display: none; }
+
+  /* Payouts split -> stacked, list condensed */
+  .deck-view-v1 .deck-v1-payouts-split {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .deck-view-v1 .deck-v1-payouts-split-right { display: none; }
+  .deck-view-v1 .deck-v1-payouts-list-item {
+    padding: 8px 0;
+  }
+  .deck-view-v1 .deck-v1-payouts-list-body p {
+    font-size: 12px;
+  }
+
+  /* Technology - hide the vector-DB visual stage on mobile, AI stack
+     is the substance of the slide. */
+  .deck-view-v1 .deck-v9-tech-right { display: none; }
+  .deck-view-v1 .deck-v9-tech-left { width: 100%; }
+  .deck-view-v1 .deck-v1-tech-stack {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* The Ask - SVG flow + components stack */
+  .deck-view-v1 .deck-v8-ask-flow { display: none; }
+  .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .deck-view-v1 .deck-v8-ask-raise-row {
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  .deck-view-v1 .deck-v8-ask-raise-divider { display: none; }
+
+  /* Demo */
+  .deck-view-v1 .deck-v1-demo-h2 {
+    font-size: clamp(36px, 10vw, 60px) !important;
+  }
+  .deck-view-v1 .deck-v1-demo-cta {
+    padding: 18px 36px;
+    font-size: clamp(18px, 5vw, 28px);
+    gap: 12px;
+  }
+  .deck-view-v1 .deck-v1-demo-cta-arrow { width: 24px; height: 24px; }
+
+  /* Projections - stats wrap, chart shrinks */
+  .deck-view-v1 .deck-v1-projections-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .deck-view-v1 .deck-v1-projections-stat {
+    padding: 10px 12px;
+  }
+  .deck-view-v1 .deck-v1-projections-stat-value {
+    font-size: 18px;
+  }
+  .deck-view-v1 .deck-v1-projections-formula {
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* Roadmap - cap height + condense rows */
+  .deck-view-v8 .deck-v8-roadmap {
+    overflow-x: auto;
+  }
+
+  /* Closing slide actions stack */
+  .deck-view-v1 .deck-v1-cover-combined .deck-end-actions {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 320px;
+    margin: 16px auto 0;
+  }
+  .deck-view-v1 .deck-v1-cover-combined .deck-end-actions > * {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Slide nav dots - hide on phones, the side rail eats too much
+     of the narrow viewport. Slide-snap scrolling still works. */
+  .deck-view-v1 .deck-v9-nav { display: none; }
+}
+
+/* Even tighter at <=480px (small phones) */
+@media (max-width: 480px) {
+  .deck-view-v1 .deck-slide {
+    padding: clamp(36px, 5vh, 56px) 14px !important;
+  }
+  .deck-view-v1 .deck-v1-compare-slide {
+    padding: 48px 14px !important;
+  }
+  .deck-view-v1 .deck-v1-dream-h2 {
+    font-size: clamp(28px, 11vw, 44px) !important;
+  }
+  .deck-view-v1 .deck-v1-demo-h2 {
+    font-size: clamp(30px, 12vw, 48px) !important;
+  }
+}

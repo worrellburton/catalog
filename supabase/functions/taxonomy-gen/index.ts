@@ -4,6 +4,8 @@
 // Required Supabase secret:
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
 
+import { logAiUsage } from '../_shared/ai-usage.ts';
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -20,6 +22,7 @@ function jsonRes(data: unknown, status = 200) {
 
 interface ClaudeMessage {
   content?: Array<{ type: string; text?: string }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string };
 }
 
@@ -27,7 +30,7 @@ async function generateSynonyms(
   type: string,
   category: string | null,
   apiKey: string,
-): Promise<{ synonyms: string[]; keywords: string }> {
+): Promise<{ synonyms: string[]; keywords: string; inputTokens: number | null; outputTokens: number | null }> {
   const categoryHint = category ? ` (category: ${category})` : '';
   const prompt = `You are a catalog search expert. Generate synonyms and keywords for the product type "${type}"${categoryHint}.
 
@@ -70,7 +73,12 @@ Respond with ONLY the JSON object, no prose, no markdown fences.`;
     : [];
   const keywords = typeof raw.keywords === 'string' ? raw.keywords : '';
 
-  return { synonyms, keywords };
+  return {
+    synonyms,
+    keywords,
+    inputTokens: json.usage?.input_tokens ?? null,
+    outputTokens: json.usage?.output_tokens ?? null,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -91,7 +99,15 @@ Deno.serve(async (req: Request) => {
   if (!type?.trim()) return jsonRes({ ok: false, error: 'type required' }, 400);
 
   try {
-    const { synonyms, keywords } = await generateSynonyms(type.trim(), category ?? null, anthropicKey);
+    const { synonyms, keywords, inputTokens, outputTokens } = await generateSynonyms(type.trim(), category ?? null, anthropicKey);
+    logAiUsage({
+      platform: 'anthropic',
+      operation: 'taxonomy-gen',
+      model: 'claude-haiku-4-5-20251001',
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      metadata: { type: type.trim(), category: category ?? null },
+    });
 
     // Persist the result back to product_taxonomy using the service role key.
     // We do this server-side so the browser never needs the service key.
