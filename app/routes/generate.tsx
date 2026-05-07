@@ -106,7 +106,7 @@ const typicalSecondsFor = (durationSeconds?: number | null) =>
   TYPICAL_GENERATION_SECONDS_BY_DURATION[durationSeconds ?? 0]
   ?? TYPICAL_GENERATION_SECONDS_DEFAULT;
 
-type Step = 'photos' | 'products' | 'about' | 'style' | 'review' | 'result';
+type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
 
 // Age presets keep the picker compact - Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
@@ -183,7 +183,7 @@ function roleTagFromName(name: string | null): string | null {
   return null;
 }
 
-const STEP_VALUES: readonly Step[] = ['photos', 'products', 'about', 'style', 'review', 'result'];
+const STEP_VALUES: readonly Step[] = ['photos', 'products', 'style', 'review', 'result'];
 
 function readStepFromUrl(): Step {
   if (typeof window === 'undefined') return 'photos';
@@ -939,7 +939,6 @@ export default function GeneratePage() {
     // believable look, so we gate at the entry point.
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading && !!heightLabel && !!ageLabel;
     if (step === 'products') return picked.length > 0;
-    if (step === 'about') return !!heightLabel && !!ageLabel;
     if (step === 'style') return !!style;
     return true;
   }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
@@ -1168,37 +1167,10 @@ export default function GeneratePage() {
               </div>
             )}
 
-              <div className="gen-photos-meta">
-                <label className="gen-photos-meta-field">
-                  <span className="gen-photos-meta-label">Height</span>
-                  <select
-                    className="gen-photos-meta-select"
-                    value={heightCm}
-                    onChange={e => {
-                      const cm = Number(e.target.value);
-                      const opt = HEIGHT_OPTIONS.find(o => o.cm === cm);
-                      setHeightCm(cm);
-                      if (opt) setHeightLabel(opt.label);
-                    }}
-                  >
-                    {HEIGHT_OPTIONS.map(opt => (
-                      <option key={opt.cm} value={opt.cm}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="gen-photos-meta-field">
-                  <span className="gen-photos-meta-label">Age</span>
-                  <select
-                    className="gen-photos-meta-select"
-                    value={ageLabel}
-                    onChange={e => setAgeLabel(e.target.value)}
-                  >
-                    {AGE_PRESETS.map(opt => (
-                      <option key={opt.label} value={opt.label}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              {/* Height + age are read from the user's profile (set
+                  once, prefilled from getUserHeightAge on mount) so
+                  the wizard never asks twice. The values are still
+                  passed to the generation request below. */}
 
             </div>
 
@@ -1334,48 +1306,9 @@ export default function GeneratePage() {
           </section>
         )}
 
-        {step === 'about' && (
-          <section className="gen-step">
-            <h2>3. About you</h2>
-            <p>Pick a height and an age range. We pass both into the prompt so the proportions and look land where you want them.</p>
-
-            <div className="gen-aboutgroup">
-              <div className="gen-sectionlabel">Height</div>
-              <div className="gen-heightgrid">
-                {HEIGHT_OPTIONS.map(opt => (
-                  <button
-                    key={opt.cm}
-                    type="button"
-                    className={`gen-heightchip${heightLabel === opt.label ? ' is-picked' : ''}`}
-                    onClick={() => { setHeightCm(opt.cm); setHeightLabel(opt.label); }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="gen-aboutgroup">
-              <div className="gen-sectionlabel">Age</div>
-              <div className="gen-heightgrid">
-                {AGE_PRESETS.map(opt => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={`gen-heightchip${ageLabel === opt.label ? ' is-picked' : ''}`}
-                    onClick={() => setAgeLabel(opt.label)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
         {step === 'style' && (
           <section className="gen-step">
-            <h2>4. Style</h2>
+            <h2>3. Style</h2>
             <div className="gen-stylegrid">
               {STYLE_PRESETS.map(s => (
                 <button
@@ -1394,7 +1327,7 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step">
-            <h2>5. Review</h2>
+            <h2>4. Review</h2>
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
@@ -1782,7 +1715,7 @@ export default function GeneratePage() {
   );
 }
 
-const STEP_ORDER: Step[] = ['photos', 'products', 'about', 'style', 'review'];
+const STEP_ORDER: Step[] = ['photos', 'products', 'style', 'review'];
 
 function goNext(current: Step, set: (s: Step) => void) {
   const i = STEP_ORDER.indexOf(current);
@@ -2393,13 +2326,11 @@ function UploadPickerModal({
 }
 
 function StepRail({
-  step, photosCount, productsCount, heightLabel, ageLabel, style, embedded = false,
+  step, photosCount, productsCount, style, embedded = false,
 }: {
   step: Step;
   photosCount: number;
   productsCount: number;
-  heightLabel: string;
-  ageLabel: string;
   style: string;
   /** When true, the rail is being rendered as a row inside the unified
    *  gen-dock - drop the fixed positioning + glass background since
@@ -2409,7 +2340,6 @@ function StepRail({
   const filled = {
     photos: photosCount > 0,
     products: productsCount > 0,
-    about: !!heightLabel && !!ageLabel,
     style: !!style,
     review: false,
     result: false,
@@ -2417,7 +2347,6 @@ function StepRail({
   const items: { k: Step; label: string }[] = [
     { k: 'photos',   label: 'Photos' },
     { k: 'products', label: 'Products' },
-    { k: 'about',    label: 'About' },
     { k: 'style',    label: 'Style' },
     { k: 'review',   label: 'Review' },
   ];
