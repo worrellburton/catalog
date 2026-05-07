@@ -596,7 +596,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <span className="deck-label">The Problem &amp; The Solution</span>
           <h2>Creators curate. AI indexes.<br />Everyone wins.</h2>
         </div>
-        <div className="deck-v1-compare-rows">
+        <div className="deck-v1-compare-rows deck-v1-compare-rows-paired">
           {[
             {
               num: '01',
@@ -612,48 +612,57 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
               solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
             },
-            {
-              num: '03',
-              role: 'Brands',
-              word: 'Acquisition',
-              problem: 'Renting traffic from Meta and Amazon at rising CAC. No first-party top-of-funnel they own.',
-              solution: 'First-party demand pulled in by creators with real audiences. CAC trends to zero as the loop spins.',
-            },
-          ].map(({ num, role, word, problem, solution }, rowIdx) => (
-            <div
-              key={num}
-              className="deck-v1-compare-row"
-              style={{ ['--row-idx' as string]: rowIdx }}
-            >
-              <div className="deck-v1-compare-row-head">
-                <span className="deck-v1-compare-row-num">{num}</span>
-                <h3 className="deck-v1-compare-row-role">{role}</h3>
-                <span className="deck-v1-compare-row-word">{word}.</span>
-              </div>
-              <div className="deck-v1-compare-row-cells">
-                <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
-                  <div className="deck-v1-compare-cell-label-row">
-                    <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle className="broken-circle" cx="12" cy="12" r="10" />
-                      <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-                      <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-                    </svg>
-                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
-                  </div>
-                  <p className="deck-v1-compare-cell-text">{problem}</p>
+          ].map(({ num, role, word, problem, solution }, rowIdx, arr) => (
+            <React.Fragment key={num}>
+              <div
+                className="deck-v1-compare-row"
+                style={{ ['--row-idx' as string]: rowIdx }}
+              >
+                <div className="deck-v1-compare-row-head">
+                  <span className="deck-v1-compare-row-num">{num}</span>
+                  <h3 className="deck-v1-compare-row-role">{role}</h3>
+                  <span className="deck-v1-compare-row-word">{word}.</span>
                 </div>
-                <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
-                  <div className="deck-v1-compare-cell-label-row">
-                    <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle className="win-circle" cx="12" cy="12" r="10" />
-                      <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-                    </svg>
-                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
+                <div className="deck-v1-compare-row-cells">
+                  <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
+                    <div className="deck-v1-compare-cell-label-row">
+                      <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle className="broken-circle" cx="12" cy="12" r="10" />
+                        <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+                        <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+                      </svg>
+                      <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
+                    </div>
+                    <p className="deck-v1-compare-cell-text">{problem}</p>
                   </div>
-                  <p className="deck-v1-compare-cell-text">{solution}</p>
+                  <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
+                    <div className="deck-v1-compare-cell-label-row">
+                      <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle className="win-circle" cx="12" cy="12" r="10" />
+                        <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+                      </svg>
+                      <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
+                    </div>
+                    <p className="deck-v1-compare-cell-text">{solution}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+              {rowIdx < arr.length - 1 && (
+                <div className="deck-v1-compare-link" aria-hidden="true">
+                  <span className="deck-v1-compare-link-line" />
+                  <span className="deck-v1-compare-link-pill">
+                    <svg className="deck-v1-compare-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="17 1 21 5 17 9" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <polyline points="7 23 3 19 7 15" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                    <span>Two sides of the same loop</span>
+                  </span>
+                  <span className="deck-v1-compare-link-line" />
+                </div>
+              )}
+            </React.Fragment>
           ))}
         </div>
       </div>

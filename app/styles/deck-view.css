@@ -6021,10 +6021,86 @@
   gap: clamp(12px, 1.6vh, 22px);
 }
 
+/* Paired layout: only two stakeholders, so close the gap and let the
+   inter-row connector do the visual stitching. */
+.deck-view-v1 .deck-v1-compare-rows-paired {
+  gap: clamp(8px, 1vh, 14px);
+  max-width: 980px;
+}
+
 .deck-view-v1 .deck-v1-compare-row {
   display: flex;
   flex-direction: column;
   gap: clamp(6px, 0.9vh, 12px);
+}
+
+/* Inter-row connector: dashed verticals top + bottom with a small
+   uppercase pill in the middle so Shoppers and Creators read as the
+   two halves of the same circuit, not two parallel sections. */
+.deck-view-v1 .deck-v1-compare-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.deck-view-v1 .deck-v1-compare-link-line {
+  width: 1px;
+  height: clamp(14px, 1.6vh, 22px);
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0 4px,
+    transparent 4px 8px
+  );
+}
+.deck-view-v1 .deck-v1-compare-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+.deck-view-v1 .deck-v1-compare-link-icon {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.55);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-line {
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.22) 0 4px,
+    transparent 4px 8px
+  );
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-pill {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.005));
+  color: rgba(0, 0, 0, 0.6);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-icon {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Match the existing row reveal vocabulary so the connector glides in
+   between rows 1 and 2 instead of popping. */
+.deck-view-v1 .deck-v1-compare-link {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-link {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 1.05s;
 }
 
 .deck-view-v1 .deck-v1-compare-row-head {
