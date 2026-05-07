@@ -6,6 +6,23 @@ import { supabase } from '~/utils/supabase';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+// FAL /v1/models/usage — pre-aggregated by endpoint_id in the edge function
+interface FalModelUsage {
+  endpoint_id: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  cost: number;
+}
+
+interface FalUsageData {
+  [key: string]: unknown;
+}
+
+interface ExternalUsage {
+  fal: { data: FalModelUsage[] | null; error: string | null };
+}
+
 interface AiUsageLog {
   id: string;
   platform: string;
@@ -91,7 +108,7 @@ const PLATFORMS: PlatformDef[] = [
     name: 'FAL / Seedance',
     description: 'Serverless GPU inference',
     usedFor: 'ByteDance Seedance video generation',
-    tracked: 'dashboard',
+    tracked: 'live',
     dashboardUrl: 'https://fal.ai/dashboard/billing',
     emoji: '⚡',
     costNote: '~$0.05–0.20 / video',
@@ -179,43 +196,110 @@ const PLATFORM_COLORS: Record<string, string> = {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Period helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+type Period = 'this_month' | 'last_month' | 'last_3_months';
+
+const PERIOD_LABELS: Record<Period, string> = {
+  this_month:    'This Month',
+  last_month:    'Last Month',
+  last_3_months: 'Last 3 Months',
+};
+
+function getPeriodRange(p: Period): { start: Date; end: Date; label: string; startStr: string; endStr: string } {
+  const now = new Date();
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  if (p === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { start, end: now, startStr: fmt(start), endStr: fmt(now),
+      label: start.toLocaleString('default', { month: 'long', year: 'numeric' }) };
+  }
+  if (p === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { start, end, startStr: fmt(start), endStr: fmt(end),
+      label: start.toLocaleString('default', { month: 'long', year: 'numeric' }) };
+  }
+  // last_3_months
+  const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  return { start, end: now, startStr: fmt(start), endStr: fmt(now),
+    label: `${start.toLocaleString('default', { month: 'short' })}–${now.toLocaleString('default', { month: 'short', year: 'numeric' })}` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAL usage helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Rows are already aggregated by the edge function — just return as-is. */
+function parseFalRows(data: FalModelUsage[] | null): FalModelUsage[] {
+  if (!data || !Array.isArray(data)) return [];
+  return data;
+}
+
+function falTotalCost(rows: FalModelUsage[]): number {
+  return rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+}
+
+function falTotalRequests(rows: FalModelUsage[]): number {
+  // FAL bills by quantity (tokens / compute-seconds / images) not a request count
+  return rows.length;
+}
+
 export default function AdminAiUsage() {
   const [logs, setLogs] = useState<AiUsageLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [platformFilter, setPlatformFilter] = useState<string | null>(null);
+  const [external, setExternal] = useState<ExternalUsage | null>(null);
+  const [externalLoading, setExternalLoading] = useState(true);
+  const [period, setPeriod] = useState<Period>('this_month');
+
+  const periodRange = useMemo(() => getPeriodRange(period), [period]);
 
   const loadLogs = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
-
     const { data } = await supabase
       .from('ai_usage_logs')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
-
     setLogs((data as AiUsageLog[]) ?? []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadLogs(); }, [loadLogs]);
-
-  // Month stats — aggregate from all logs for the current calendar month.
-  const monthStart = useMemo(() => {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
+  const loadExternal = useCallback(async (startStr: string, endStr: string) => {
+    if (!supabase) return;
+    setExternalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-external-usage', {
+        body: { startDate: startStr, endDate: endStr },
+      });
+      if (!error && data) setExternal(data as ExternalUsage);
+    } catch {
+      // non-critical — UI shows error state
+    } finally {
+      setExternalLoading(false);
+    }
   }, []);
 
-  const monthLogs = useMemo(
-    () => logs.filter(l => new Date(l.created_at) >= monthStart),
-    [logs, monthStart],
+  useEffect(() => { loadLogs(); }, [loadLogs]);
+  useEffect(() => {
+    loadExternal(periodRange.startStr, periodRange.endStr);
+  }, [periodRange.startStr, periodRange.endStr, loadExternal]);
+
+  // Aggregate DB-tracked logs filtered to the selected period
+  const periodLogs = useMemo(
+    () => logs.filter(l => new Date(l.created_at) >= periodRange.start && new Date(l.created_at) <= periodRange.end),
+    [logs, periodRange],
   );
 
   const platformStats = useMemo<PlatformStat[]>(() => {
     const map: Record<string, PlatformStat> = {};
-    for (const l of monthLogs) {
+    for (const l of periodLogs) {
       if (!map[l.platform]) {
         map[l.platform] = { platform: l.platform, calls: 0, inputTokens: 0, outputTokens: 0, units: 0, estimatedCost: 0 };
       }
@@ -226,19 +310,19 @@ export default function AdminAiUsage() {
       map[l.platform].estimatedCost += l.estimated_cost_usd ?? 0;
     }
     return Object.values(map).sort((a, b) => b.estimatedCost - a.estimatedCost);
-  }, [monthLogs]);
+  }, [periodLogs]);
 
-  const totalCostMonth = useMemo(
+  const totalCostPeriod = useMemo(
     () => platformStats.reduce((s, p) => s + p.estimatedCost, 0),
     [platformStats],
   );
 
-  const totalCallsMonth = useMemo(
+  const totalCallsPeriod = useMemo(
     () => platformStats.reduce((s, p) => s + p.calls, 0),
     [platformStats],
   );
 
-  const totalTokensMonth = useMemo(
+  const totalTokensPeriod = useMemo(
     () => platformStats.reduce((s, p) => s + p.inputTokens + p.outputTokens, 0),
     [platformStats],
   );
@@ -267,9 +351,23 @@ export default function AdminAiUsage() {
           <h1>AI Usage</h1>
           <p className="admin-page-subtitle">API usage and estimated costs across all AI platforms</p>
         </div>
-        <button className="admin-btn admin-btn-secondary" onClick={loadLogs}>
-          Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <div className="admin-tabs" style={{ marginBottom: 0 }}>
+            {(Object.keys(PERIOD_LABELS) as Period[]).map(k => (
+              <button
+                key={k}
+                className={`admin-tab${period === k ? ' active' : ''}`}
+                style={{ fontSize: '12px', padding: '5px 12px' }}
+                onClick={() => setPeriod(k)}
+              >
+                {PERIOD_LABELS[k]}
+              </button>
+            ))}
+          </div>
+          <button className="admin-btn admin-btn-secondary" onClick={() => { loadLogs(); loadExternal(periodRange.startStr, periodRange.endStr); }}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* ── Platform Map ──────────────────────────────────────────────────── */}
@@ -306,23 +404,109 @@ export default function AdminAiUsage() {
           ))}
         </div>
       </section>
-
+      {/* ── FAL Live Usage ─────────────────────────────────────────────────── */}
+      <section style={{ marginTop: '28px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+          FAL / Seedance — {periodRange.label}
+        </h2>
+        {externalLoading ? (
+          <div className="admin-empty">Fetching FAL usage…</div>
+        ) : external?.fal.error === 'BILLING_KEY_REQUIRED' ? (
+          <div style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            padding: '14px 16px',
+            fontSize: '12px',
+            color: 'var(--muted)',
+            lineHeight: 1.6,
+          }}>
+            <strong style={{ color: 'var(--fg)' }}>Billing key required.</strong>{' '}
+            The <code>FAL_KEY</code> secret is an inference key and does not have permission to
+            query usage data. To enable live usage here, add a FAL billing/admin key as a
+            separate Supabase secret (<code>FAL_BILLING_KEY</code>) and update this function.
+            In the meantime, view usage directly on the FAL dashboard.
+            <div style={{ marginTop: '10px' }}>
+              <a
+                href="https://fal.ai/dashboard/billing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: '11px', textDecoration: 'none' }}
+              >
+                Open FAL Dashboard →
+              </a>
+            </div>
+          </div>
+        ) : external?.fal.error ? (
+          <div className="admin-empty" style={{ color: 'var(--danger, #e87a7a)' }}>
+            Could not load FAL data: {external.fal.error}
+          </div>
+        ) : (() => {
+          const rows = parseFalRows(external?.fal.data ?? null);
+          const totalCost = falTotalCost(rows);
+          const totalReqs = falTotalRequests(rows);
+          return (
+            <>
+              <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+                <div className="admin-stat-card">
+                  <span className="admin-stat-value">{rows.length}</span>
+                  <span className="admin-stat-label">Endpoints Used</span>
+                </div>
+                <div className="admin-stat-card">
+                  <span className="admin-stat-value">${totalCost.toFixed(2)}</span>
+                  <span className="admin-stat-label">Billed Cost (USD)</span>
+                </div>
+              </div>
+              {rows.length > 0 && (
+                <div className="admin-table-wrap" style={{ marginTop: '12px' }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Endpoint</th>
+                        <th style={{ textAlign: 'right' }}>Quantity</th>
+                        <th style={{ textAlign: 'right' }}>Unit</th>
+                        <th style={{ textAlign: 'right' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right' }}>Cost (USD)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i}>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{r.endpoint_id}</td>
+                          <td style={{ textAlign: 'right' }}>{Number(r.quantity).toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--muted)', fontSize: '11px' }}>{r.unit}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--muted)', fontSize: '11px' }}>${Number(r.unit_price).toFixed(5)}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 500 }}>${Number(r.cost).toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {rows.length === 0 && (
+                <div className="admin-empty">No FAL usage data returned for this billing period.</div>
+              )}
+            </>
+          );
+        })()}
+      </section>
       {/* ── Month Stats ───────────────────────────────────────────────────── */}
       <section style={{ marginTop: '28px' }}>
         <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
-          This Month (tracked platforms)
+          {periodRange.label} — Tracked Platforms
         </h2>
         <div className="admin-stats-grid">
           <div className="admin-stat-card">
-            <span className="admin-stat-value">{loading ? '—' : totalCallsMonth.toLocaleString()}</span>
+            <span className="admin-stat-value">{loading ? '—' : totalCallsPeriod.toLocaleString()}</span>
             <span className="admin-stat-label">Total API Calls</span>
           </div>
           <div className="admin-stat-card">
-            <span className="admin-stat-value">{loading ? '—' : totalTokensMonth.toLocaleString()}</span>
+            <span className="admin-stat-value">{loading ? '—' : totalTokensPeriod.toLocaleString()}</span>
             <span className="admin-stat-label">Total Tokens (LLM)</span>
           </div>
           <div className="admin-stat-card">
-            <span className="admin-stat-value">{loading ? '—' : `$${totalCostMonth.toFixed(4)}`}</span>
+            <span className="admin-stat-value">{loading ? '—' : `$${totalCostPeriod.toFixed(4)}`}</span>
             <span className="admin-stat-label">Estimated Cost (USD)</span>
           </div>
           <div className="admin-stat-card">
