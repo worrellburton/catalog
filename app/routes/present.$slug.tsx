@@ -140,7 +140,9 @@ export default function PresentViewer() {
   // pathname changes (not on every search/hash tick) so cursors +
   // overlays don't flash a full reload every time he scrolls or
   // opens a look. Defaults to '/' until the first route event.
-  const iframePath = state.route?.pathname ?? '/';
+  // ?viewer=1 makes _index skip the Google sign-in gate so guests
+  // see the public catalog feed without authenticating.
+  const iframePath = (state.route?.pathname ?? '/') + '?viewer=1';
 
   const lastEnv = state.eventsByType.heartbeat ?? state.lastAny;
   const sinceLastMs = lastEnv ? Math.max(0, now - lastEnv.sentAt) : null;

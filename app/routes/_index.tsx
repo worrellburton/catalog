@@ -186,7 +186,16 @@ function getRandomCatalogName(query?: string): string {
 }
 
 export default function Home() {
-  const [view, setView] = useState<AppView>('locked');
+  // Viewer mode: when /present/<slug> embeds this page in an iframe
+  // it appends ?viewer=1. We treat that as "skip the auth wall and
+  // show the public catalog feed read-only" so the live demo on the
+  // /present/ route doesn't ask anonymous guests to sign in. Read it
+  // once at mount; it never changes during the page's lifetime.
+  const viewerMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('viewer') === '1';
+  }, []);
+  const [view, setView] = useState<AppView>(viewerMode ? 'app' : 'locked');
   // First-visit splash: if the user has never been to catalog on this device,
   // show a branded splash before surfacing the gate / landing. The flag is
   // written once and never revisited so repeat visitors skip it.
@@ -1185,7 +1194,7 @@ export default function Home() {
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !authLoading && !user && <PasswordGate />}
+      {view === 'locked' && !authLoading && !user && !viewerMode && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
