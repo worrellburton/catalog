@@ -15,10 +15,14 @@ import {
   isBroadcastableRoute,
   readPresentName,
   readPresentSlug,
+  type BrowserStatePayload,
   type ClickPayload,
+  type OverlayPayload,
   type PresentEventType,
   type RoutePayload,
   type ScrollPayload,
+  type SearchPayload,
+  type SnapshotPayload,
 } from '~/services/present';
 
 /*
@@ -165,6 +169,12 @@ export default function PresentProvider() {
     };
   }, [enabled, isConnected, location.pathname, broadcast]);
 
+  // Snapshot accumulator — latest of each stateful payload type,
+  // refreshed by every emit. Periodic broadcasts of this aggregate
+  // let viewers catch up without an explicit request/response
+  // protocol.
+  const snapshotRef = useRef<SnapshotPayload>({});
+
   // Bridge: consumer routes dispatch 'present:emit' CustomEvents;
   // we forward them to broadcast() when connected. This lets _index
   // and other consumer surfaces push overlay/search/etc. payloads
@@ -179,12 +189,52 @@ export default function PresentProvider() {
         | undefined;
       if (!detail) return;
       if (!isBroadcastableRoute(location.pathname)) return;
+      // Update the snapshot accumulator before forwarding so
+      // late-fired snapshot timers always carry the latest values.
+      snapshotRef.current = mergeIntoSnapshot(
+        snapshotRef.current,
+        detail.type,
+        detail.payload,
+      );
       broadcast(detail.type, detail.payload);
     };
 
     window.addEventListener(PRESENT_EMIT_EVENT, handler);
     return () => window.removeEventListener(PRESENT_EMIT_EVENT, handler);
   }, [enabled, isConnected, location.pathname, broadcast]);
+
+  // Mirror route changes into the snapshot too (route is broadcast
+  // directly by this provider, not via emitPresentEvent).
+  useEffect(() => {
+    if (!isBroadcastableRoute(location.pathname)) return;
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      route: {
+        pathname: location.pathname,
+        hash: location.hash || '',
+        search: location.search || '',
+      },
+    };
+  }, [location.pathname, location.hash, location.search]);
+
+  // Periodic snapshot broadcast — every 3 s while connected. Sends
+  // the latest of every stateful sub-payload so a viewer that
+  // joins mid-session catches up within ~1 frame of arrival
+  // without an explicit request.
+  useEffect(() => {
+    if (!enabled || !isConnected) return;
+    const id = window.setInterval(() => {
+      const snap: SnapshotPayload = snapshotRef.current;
+      // Skip empty snapshots (haven't emitted anything yet) so
+      // viewers don't see a confusing "snapshot received but no
+      // route yet" state.
+      if (!snap.route && !snap.overlay && !snap.search && !snap.browser) {
+        return;
+      }
+      broadcast('snapshot', snap);
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [enabled, isConnected, broadcast]);
 
   // Render guest cursors + click ripples on Robert's screen.
   // Hidden when broadcast is off so the consumer app stays
@@ -221,6 +271,32 @@ function useActivePresentSlug(): string | null {
   }, []);
 
   return slug;
+}
+
+function mergeIntoSnapshot(
+  prev: SnapshotPayload,
+  type: PresentEventType,
+  payload: unknown,
+): SnapshotPayload {
+  switch (type) {
+    case 'overlay':
+      return { ...prev, overlay: payload as OverlayPayload };
+    case 'search':
+      return { ...prev, search: payload as SearchPayload };
+    case 'browser':
+      return { ...prev, browser: payload as BrowserStatePayload };
+    case 'scroll': {
+      const sp = payload as ScrollPayload;
+      const prevScroll = prev.scroll ?? [];
+      const filtered = prevScroll.filter(s => s.selector !== sp.selector);
+      return { ...prev, scroll: [...filtered, sp] };
+    }
+    default:
+      // route is captured directly from useLocation in the provider
+      // (separately). Cursor / click / hover / heartbeat are
+      // ephemeral and don't belong in a snapshot.
+      return prev;
+  }
 }
 
 // Re-export so callers (Phase 10 user-menu UI) can import it from

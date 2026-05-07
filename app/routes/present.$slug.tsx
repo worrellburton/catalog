@@ -21,6 +21,7 @@ import {
   type RoutePayload,
   type ScrollPayload,
   type SearchPayload,
+  type SnapshotPayload,
 } from '~/services/present';
 import InAppBrowser from '~/components/InAppBrowser';
 import LookOverlay from '~/components/LookOverlay';
@@ -192,9 +193,62 @@ export default function PresentViewer() {
       {/* Click ripples sit one z-index below cursors so the ring
           blooms behind the pointer that triggered it. */}
       <PresentClickRipples ripples={ripples} />
+
+      {/* Disconnect veil — shows during reconnect attempts so the
+          viewer knows the freeze isn't on Robert's end. The
+          subscription hook backs off exponentially and clears this
+          automatically once SUBSCRIBED comes back. */}
+      {connection === 'disconnected' && <ReconnectingVeil />}
+      <style>{`@keyframes present-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
+
+function ReconnectingVeil() {
+  return (
+    <div style={veilStyle}>
+      <div style={veilCardStyle}>
+        <span style={veilSpinnerStyle} />
+        Reconnecting…
+      </div>
+    </div>
+  );
+}
+
+const veilStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 10000,
+  background: 'rgba(7, 7, 7, 0.82)',
+  backdropFilter: 'blur(6px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  pointerEvents: 'none',
+};
+
+const veilCardStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '12px 18px',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  fontFamily: 'Inter, sans-serif',
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'rgba(255,255,255,0.9)',
+};
+
+const veilSpinnerStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  borderRadius: '50%',
+  border: '2px solid rgba(255,255,255,0.25)',
+  borderTopColor: '#fff',
+  animation: 'present-spin 0.8s linear infinite',
+};
 
 // ---------- State reducer ----------
 
@@ -268,6 +322,20 @@ function presentReducer(state: PresentState, action: Action): PresentState {
     next.search = env.payload as SearchPayload;
   } else if (env.type === 'browser') {
     next.browser = env.payload as BrowserStatePayload;
+  } else if (env.type === 'snapshot') {
+    // Replay the bundled latest-of-each so a viewer joining mid-
+    // session catches up without waiting for the next of every
+    // event type.
+    const snap = env.payload as SnapshotPayload;
+    if (snap.route) next.route = snap.route;
+    if (snap.overlay) next.overlay = snap.overlay;
+    if (snap.search) next.search = snap.search;
+    if (snap.browser) next.browser = snap.browser;
+    if (snap.scroll) {
+      const merged: Record<string, ScrollPayload> = { ...next.scrollBySelector };
+      for (const s of snap.scroll) merged[s.selector] = s;
+      next.scrollBySelector = merged;
+    }
   }
   return next;
 }

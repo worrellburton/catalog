@@ -75,37 +75,65 @@ export function usePresentSubscription({
     }
     if (typeof window === 'undefined') return;
 
-    setConnection('connecting');
-    const channelName = channelNameFor(slug);
-    const channel: PresentChannel = supabase.channel(channelName, {
-      config: { broadcast: { self: false } },
-    });
+    let cancelled = false;
+    let currentChannel: PresentChannel | null = null;
+    let retryTimer: number | null = null;
+    let attempt = 0;
 
-    channel.on('broadcast', { event: PRESENT_EVENT_NAME }, ({ payload }) => {
-      const env = payload as PresentEnvelope;
-      setLatest(env);
-      setEventsReceived(n => n + 1);
-      onEnvelopeRef.current?.(env);
-      if (env.type === 'heartbeat') {
-        const hb = env.payload as HeartbeatPayload;
-        setLatencyMs(Math.max(0, Date.now() - hb.ts));
-      }
-    });
+    const subscribe = () => {
+      if (cancelled) return;
+      setConnection('connecting');
+      const channelName = channelNameFor(slug);
+      const channel: PresentChannel = supabase.channel(channelName, {
+        config: { broadcast: { self: false } },
+      });
+      currentChannel = channel;
 
-    channel.subscribe(status => {
-      if (status === 'SUBSCRIBED') {
-        setConnection('connected');
-      } else if (
-        status === 'CHANNEL_ERROR' ||
-        status === 'CLOSED' ||
-        status === 'TIMED_OUT'
-      ) {
-        setConnection('disconnected');
-      }
-    });
+      channel.on('broadcast', { event: PRESENT_EVENT_NAME }, ({ payload }) => {
+        const env = payload as PresentEnvelope;
+        setLatest(env);
+        setEventsReceived(n => n + 1);
+        onEnvelopeRef.current?.(env);
+        if (env.type === 'heartbeat') {
+          const hb = env.payload as HeartbeatPayload;
+          setLatencyMs(Math.max(0, Date.now() - hb.ts));
+        }
+      });
+
+      channel.subscribe(status => {
+        if (cancelled) return;
+        if (status === 'SUBSCRIBED') {
+          setConnection('connected');
+          attempt = 0; // reset backoff on a successful connect
+        } else if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'CLOSED' ||
+          status === 'TIMED_OUT'
+        ) {
+          setConnection('disconnected');
+          // Exponential backoff capped at 8 s. Realtime's underlying
+          // socket auto-reconnects, but the channel binding can stay
+          // dead — recreating it forces a clean re-subscribe.
+          const wait = Math.min(8000, 500 * Math.pow(2, attempt));
+          attempt += 1;
+          if (currentChannel) {
+            supabase.removeChannel(currentChannel);
+            currentChannel = null;
+          }
+          retryTimer = window.setTimeout(subscribe, wait);
+        }
+      });
+    };
+
+    subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (retryTimer != null) window.clearTimeout(retryTimer);
+      if (currentChannel) {
+        supabase.removeChannel(currentChannel);
+        currentChannel = null;
+      }
       setConnection('idle');
     };
   }, [slug, enabled]);

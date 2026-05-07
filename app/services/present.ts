@@ -178,6 +178,21 @@ export interface BrowserOpenPayload {
 
 export type BrowserStatePayload = BrowserPayload | BrowserOpenPayload;
 
+/**
+ * Periodic full-state replay so a viewer joining mid-session can
+ * catch up immediately instead of waiting for the next route /
+ * scroll / overlay event. The payload bundles the latest of each
+ * stateful sub-payload — anything the viewer reduces into its
+ * state.
+ */
+export interface SnapshotPayload {
+  route?: RoutePayload;
+  scroll?: ScrollPayload[];
+  overlay?: OverlayPayload;
+  search?: SearchPayload;
+  browser?: BrowserStatePayload;
+}
+
 export interface ScrollPayload {
   /**
    * CSS-id selector for the scrollable container, or 'window' for
