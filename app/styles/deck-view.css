@@ -4051,6 +4051,86 @@
   line-height: 1.5;
 }
 
+/* Outcome callout below the three priorities. Vertical tick from the
+   priorities row down to a single gold-tinted pill so the slide
+   reads "three priorities -> one result: sustained growth". */
+.deck-view-v8 .deck-v8-ask-outcome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(18px, 2.2vh, 30px);
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-outcome {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 2.4s;
+}
+.deck-view-v8 .deck-v8-ask-outcome-tick {
+  width: 1px;
+  height: clamp(16px, 2vh, 22px);
+  background: linear-gradient(
+    180deg,
+    rgba(74, 222, 128, 0.45),
+    rgba(245, 197, 66, 0.55)
+  );
+}
+.deck-view-v8 .deck-v8-ask-outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 197, 66, 0.32);
+  background: linear-gradient(180deg, rgba(245, 197, 66, 0.1), rgba(245, 197, 66, 0.02));
+  box-shadow:
+    0 14px 36px rgba(245, 197, 66, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v8 .deck-v8-ask-outcome-icon {
+  flex: 0 0 auto;
+  color: rgba(253, 224, 130, 0.92);
+}
+.deck-view-v8 .deck-v8-ask-outcome-label {
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fde58a;
+}
+.deck-view-v8 .deck-v8-ask-outcome-sub {
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  padding-left: 12px;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-tick {
+  background: linear-gradient(
+    180deg,
+    rgba(22, 163, 74, 0.55),
+    rgba(202, 138, 4, 0.6)
+  );
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-pill {
+  border-color: rgba(202, 138, 4, 0.35);
+  background: linear-gradient(180deg, rgba(202, 138, 4, 0.08), rgba(202, 138, 4, 0.02));
+  box-shadow: 0 14px 36px rgba(202, 138, 4, 0.1);
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-label { color: #92580b; }
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-icon { color: rgba(146, 88, 11, 0.85); }
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-sub {
+  border-left-color: rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.6);
+}
+
 /* Light mode */
 .light-mode .deck-view-v8 .deck-v8-ask-raise-card {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.01) 100%);

@@ -1043,6 +1043,22 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               <p>Launch the fixed-ROAS model with early brand partners. Prove the economics that make the marketplace self-sustaining.</p>
             </div>
           </div>
+
+          {/* Outcome callout: the three priorities feed a single
+              result. Lands after the priority cards and connects up to
+              them with a thin vertical tick so the eye reads
+              "priorities -> sustained growth". */}
+          <div className="deck-v8-ask-outcome">
+            <span className="deck-v8-ask-outcome-tick" aria-hidden="true" />
+            <span className="deck-v8-ask-outcome-pill">
+              <svg className="deck-v8-ask-outcome-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 17l6-6 4 4 8-8" />
+                <polyline points="14 7 21 7 21 14" />
+              </svg>
+              <span className="deck-v8-ask-outcome-label">Sustained growth</span>
+              <span className="deck-v8-ask-outcome-sub">Flywheel spins on its own.</span>
+            </span>
+          </div>
         </div>
       </div>
 
