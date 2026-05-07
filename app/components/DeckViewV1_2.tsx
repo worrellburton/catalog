@@ -793,21 +793,47 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           third-to-last slide so the curve is the last thing investors
           see before The Ask.) */}
 
-      {/* Payouts - how creators earn across four streams. Sits right
-          after Market Opportunity so the conversation goes "here's the
-          market" -> "here's how creators get paid for it". */}
+      {/* Payouts - how creators earn. Engagement + three layered
+          affiliate sources + referrals. Sits right after Market
+          Opportunity so the conversation goes "here's the market" ->
+          "here's how creators get paid for it". */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
-          <h2>Post once.<br />Earn four ways.</h2>
+          <h2>Post once.<br />Earn five ways.</h2>
           <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           <ul className="deck-v1-payouts-list">
-            {[
-              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.' },
-              { num: '02', title: 'Affiliate links', chip: 'Pass-through', desc: 'Full commissions on sales driven through a creator’s own affiliate links — transparent and fast.' },
-              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
-              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
-            ].map((item) => (
+            {([
+              {
+                num: '01',
+                title: 'Engagement',
+                chip: 'Daily payouts',
+                desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model — paid out daily.',
+              },
+              {
+                num: '02',
+                title: 'Affiliate links',
+                chip: '3 sources',
+                desc: 'Three layered affiliate streams, all flowing through the same creator.',
+                subs: [
+                  { num: '2a', title: 'Pass-through', desc: 'A creator’s own affiliate links pay full commission — transparent and fast.' },
+                  { num: '2b', title: 'Catalog network', desc: 'We negotiate higher rates with affiliate networks so creators earn more on the same click.' },
+                  { num: '2c', title: 'Brand direct', desc: 'Revshare deals signed straight with the brand — the highest take-rate tier.' },
+                ],
+              },
+              {
+                num: '03',
+                title: 'Referrals',
+                chip: 'Lifetime',
+                desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.',
+              },
+            ] as Array<{
+              num: string;
+              title: string;
+              chip: string;
+              desc: string;
+              subs?: Array<{ num: string; title: string; desc: string }>;
+            }>).map((item) => (
               <li key={item.num} className="deck-v1-payouts-list-item">
                 <span className="deck-v1-payouts-num">{item.num}</span>
                 <div className="deck-v1-payouts-list-body">
@@ -816,6 +842,19 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                     <span className="deck-v1-payouts-chip">{item.chip}</span>
                   </div>
                   <p>{item.desc}</p>
+                  {item.subs && (
+                    <ul className="deck-v1-payouts-sublist">
+                      {item.subs.map((sub) => (
+                        <li key={sub.num} className="deck-v1-payouts-sublist-item">
+                          <span className="deck-v1-payouts-subnum">{sub.num}</span>
+                          <div className="deck-v1-payouts-sublist-body">
+                            <h4>{sub.title}</h4>
+                            <p>{sub.desc}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </li>
             ))}
