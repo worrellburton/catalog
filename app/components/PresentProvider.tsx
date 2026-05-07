@@ -4,6 +4,8 @@ import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
 import { usePresentSubscription } from '~/hooks/usePresentSubscription';
 import { usePresentCursorBroadcast } from '~/hooks/usePresentCursorBroadcast';
 import { usePresentCursors } from '~/hooks/usePresentCursors';
+import { usePresentInteractionBroadcast } from '~/hooks/usePresentInteractionBroadcast';
+import PresentClickRipples, { useClickRipples } from '~/components/PresentClickRipples';
 import PresentRemoteCursors from '~/components/PresentRemoteCursors';
 import {
   colorForId,
@@ -12,6 +14,7 @@ import {
   isBroadcastableRoute,
   readPresentName,
   readPresentSlug,
+  type ClickPayload,
   type RoutePayload,
   type ScrollPayload,
 } from '~/services/present';
@@ -51,15 +54,22 @@ export default function PresentProvider() {
   });
 
   // Inbound subscription: also listen for guest cursors so we can
-  // render them on Robert's screen alongside his own cursor.
+  // render them on Robert's screen alongside his own cursor, plus
+  // their clicks so guest taps bloom over Robert's view.
   const { ingest: ingestCursor, cursors } = usePresentCursors({
     selfId: id,
     enabled,
   });
+  const { ripples, pushClick } = useClickRipples();
   usePresentSubscription({
     slug: slug ?? '',
     enabled,
-    onEnvelope: ingestCursor,
+    onEnvelope: (env) => {
+      ingestCursor(env);
+      if (env.type === 'click') {
+        pushClick(env.payload as ClickPayload);
+      }
+    },
   });
 
   // Outbound cursor broadcasting at ~30 Hz.
@@ -70,6 +80,15 @@ export default function PresentProvider() {
     name: presenterName,
     color,
     role: 'presenter',
+    enabled,
+  });
+
+  // Click + hover broadcasting (Phase 6).
+  usePresentInteractionBroadcast({
+    broadcast,
+    isConnected,
+    id,
+    color,
     enabled,
   });
 
@@ -144,9 +163,16 @@ export default function PresentProvider() {
     };
   }, [enabled, isConnected, location.pathname, broadcast]);
 
-  // Render guest cursors on Robert's screen. Hidden when broadcast
-  // is off so the consumer app stays untouched for normal use.
-  return enabled ? <PresentRemoteCursors cursors={cursors} /> : null;
+  // Render guest cursors + click ripples on Robert's screen.
+  // Hidden when broadcast is off so the consumer app stays
+  // untouched for normal use.
+  if (!enabled) return null;
+  return (
+    <>
+      <PresentRemoteCursors cursors={cursors} />
+      <PresentClickRipples ripples={ripples} />
+    </>
+  );
 }
 
 /**

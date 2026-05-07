@@ -3,13 +3,17 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
 import { usePresentCursorBroadcast } from '~/hooks/usePresentCursorBroadcast';
 import { usePresentCursors } from '~/hooks/usePresentCursors';
+import { usePresentInteractionBroadcast } from '~/hooks/usePresentInteractionBroadcast';
 import { usePresentSubscription } from '~/hooks/usePresentSubscription';
+import PresentClickRipples, { useClickRipples } from '~/components/PresentClickRipples';
 import PresentRemoteCursors from '~/components/PresentRemoteCursors';
 import {
   colorForId,
   defaultGuestName,
   getOrCreatePresentId,
   readPresentName,
+  type ClickPayload,
+  type HoverPayload,
   type PresentEnvelope,
   type PresentEventType,
   type RoutePayload,
@@ -71,15 +75,32 @@ export default function PresentViewer() {
     enabled: true,
   });
 
+  // Guests also broadcast their clicks + hover, so the presenter
+  // sees ripples + the viewer can show "guest clicked X".
+  usePresentInteractionBroadcast({
+    broadcast,
+    isConnected,
+    id,
+    color,
+    enabled: true,
+  });
+
+  // Click ripples — visible bloom at every received click, regardless
+  // of who sent it (presenter or guest).
+  const { ripples, pushClick } = useClickRipples();
+
   // Single onEnvelope: dispatch for state reducer + ingest for
-  // cursor map. Keeping it stable lets the subscription resubscribe
-  // only when slug changes, not on every render.
+  // cursor map + push for click ripples. Keeping it stable lets the
+  // subscription resubscribe only when slug changes.
   const onEnvelope = useCallback(
     (env: PresentEnvelope) => {
       dispatch({ kind: 'envelope', env });
       ingestCursor(env);
+      if (env.type === 'click') {
+        pushClick(env.payload as ClickPayload);
+      }
     },
-    [ingestCursor],
+    [ingestCursor, pushClick],
   );
 
   const { connection, latencyMs, eventsReceived } = usePresentSubscription({
@@ -111,6 +132,7 @@ export default function PresentViewer() {
           <ConnectionPill state={connection} stale={stale} />
         </div>
         <div style={chromeRightStyle}>
+          <Stat label="Hover" value={state.hoverId ?? '—'} mono />
           <Stat label="Latency" value={latencyMs == null ? '—' : `${latencyMs} ms`} />
           <Stat label="Events" value={eventsReceived.toString()} />
           <Stat
@@ -136,6 +158,9 @@ export default function PresentViewer() {
           pointer events so it never steals clicks. Renders both the
           presenter and any other viewers currently on /present/. */}
       <PresentRemoteCursors cursors={cursors} />
+      {/* Click ripples sit one z-index below cursors so the ring
+          blooms behind the pointer that triggered it. */}
+      <PresentClickRipples ripples={ripples} />
     </div>
   );
 }
@@ -154,6 +179,8 @@ interface PresentState {
   scrollBySelector: Record<string, ScrollPayload>;
   /** Selector of the most recently scrolled container. */
   lastScrollSelector: string | null;
+  /** Most recently hovered element id (data-present-id), or null. */
+  hoverId: string | null;
   /** Most recent envelope of any type. */
   lastAny: PresentEnvelope | null;
   /** Most recent envelope per type. Useful for the debug HUD. */
@@ -164,6 +191,7 @@ const initialState: PresentState = {
   route: null,
   scrollBySelector: {},
   lastScrollSelector: null,
+  hoverId: null,
   lastAny: null,
   eventsByType: {},
 };
@@ -180,10 +208,11 @@ function presentReducer(state: PresentState, action: Action): PresentState {
   };
   if (env.type === 'route') {
     next.route = env.payload as RoutePayload;
-    // Reset scroll tracking when route changes — old container ids
-    // probably stop existing.
+    // Reset scroll + hover tracking when route changes — old
+    // container/element ids probably stop existing.
     next.scrollBySelector = {};
     next.lastScrollSelector = null;
+    next.hoverId = null;
   } else if (env.type === 'scroll') {
     const scroll = env.payload as ScrollPayload;
     next.scrollBySelector = {
@@ -191,6 +220,8 @@ function presentReducer(state: PresentState, action: Action): PresentState {
       [scroll.selector]: scroll,
     };
     next.lastScrollSelector = scroll.selector;
+  } else if (env.type === 'hover') {
+    next.hoverId = (env.payload as HoverPayload).id;
   }
   return next;
 }
@@ -348,11 +379,21 @@ function ConnectionPill({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div style={statStyle}>
       <span style={statLabelStyle}>{label}</span>
-      <span style={statValueStyle}>{value}</span>
+      <span
+        style={{
+          ...statValueStyle,
+          maxWidth: mono ? 180 : undefined,
+          overflow: mono ? 'hidden' : undefined,
+          textOverflow: mono ? 'ellipsis' : undefined,
+          whiteSpace: mono ? 'nowrap' : undefined,
+        }}
+      >
+        {value}
+      </span>
     </div>
   );
 }

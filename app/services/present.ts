@@ -87,6 +87,27 @@ export interface CursorLeavePayload {
   id: string;
 }
 
+export interface ClickPayload {
+  /** Viewport-relative x (0..1). */
+  x: number;
+  /** Viewport-relative y (0..1). */
+  y: number;
+  /** Hex color so the ripple matches the clicker's cursor. */
+  color: string;
+  /** Sender id so the viewer can de-dupe / animate per source. */
+  sourceId: string;
+  /** Stable element id (data-present-id) the click landed on, if any. */
+  targetId: string | null;
+}
+
+export interface HoverPayload {
+  /**
+   * Stable element id the presenter is now hovering, or null when
+   * the pointer leaves all hoverable surfaces.
+   */
+  id: string | null;
+}
+
 export interface ScrollPayload {
   /**
    * CSS-id selector for the scrollable container, or 'window' for

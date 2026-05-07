@@ -106,6 +106,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     <div
       ref={cardRef}
       className={`${className} ${loaded ? 'loaded' : ''}`}
+      data-present-id={`card:${look.id}`}
       onClick={(e) => {
         if (longPressFired.current) {
           longPressFired.current = false;
