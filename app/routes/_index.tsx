@@ -1030,6 +1030,29 @@ export default function Home() {
     });
   }, [selectedLook]);
 
+  // Mirror search + filter chips. Throttled to React's render
+  // cadence — every keystroke fires, but Realtime backpressures and
+  // we already debounce the URL push above so the wire load stays
+  // tame.
+  useEffect(() => {
+    emitPresentEvent('search', { searchQuery, activeFilter });
+  }, [searchQuery, activeFilter]);
+
+  // Mirror the in-app browser iframe so viewers see the same product
+  // page the presenter is reading.
+  useEffect(() => {
+    if (!browserState) {
+      emitPresentEvent('browser', { open: false });
+    } else {
+      emitPresentEvent('browser', {
+        open: true,
+        url: browserState.url,
+        title: browserState.title,
+        product: browserState.product ?? null,
+      });
+    }
+  }, [browserState]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!brandFilter) return;

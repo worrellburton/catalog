@@ -25,7 +25,8 @@ export type PresentEventType =
   | 'click'        // click ripple (Phase 6)
   | 'hover'        // hover indicator (Phase 6)
   | 'overlay'      // look/bookmarks/creator overlay state (Phase 7)
-  | 'search';      // search/filter state (Phase 8)
+  | 'search'       // search/filter state (Phase 8)
+  | 'browser';     // in-app browser iframe state (Phase 8)
 
 export interface PresentEnvelope<T = unknown> {
   /** Monotonic counter so the viewer can detect dropped/reordered events. */
@@ -151,6 +152,31 @@ export interface OverlayPayload {
    *  when kind === 'look'. Null when overlay is closed. */
   look: unknown;
 }
+
+export interface SearchPayload {
+  /** Live search query as the presenter types it. */
+  searchQuery: string;
+  /** Active gender chip on the consumer feed. */
+  activeFilter: 'all' | 'men' | 'women';
+}
+
+export interface BrowserPayload {
+  /** When null, the in-app browser is closed on the presenter. */
+  open: false;
+  url?: never;
+  title?: never;
+  product?: never;
+}
+
+export interface BrowserOpenPayload {
+  open: true;
+  url: string;
+  title: string;
+  /** Optional product the browser was opened for; cast to ~/data/looks `Product`. */
+  product?: unknown;
+}
+
+export type BrowserStatePayload = BrowserPayload | BrowserOpenPayload;
 
 export interface ScrollPayload {
   /**

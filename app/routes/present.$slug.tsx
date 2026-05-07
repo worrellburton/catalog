@@ -12,6 +12,7 @@ import {
   defaultGuestName,
   getOrCreatePresentId,
   readPresentName,
+  type BrowserStatePayload,
   type ClickPayload,
   type HoverPayload,
   type OverlayPayload,
@@ -19,7 +20,9 @@ import {
   type PresentEventType,
   type RoutePayload,
   type ScrollPayload,
+  type SearchPayload,
 } from '~/services/present';
+import InAppBrowser from '~/components/InAppBrowser';
 import LookOverlay from '~/components/LookOverlay';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import type { Look, Product } from '~/data/looks';
@@ -136,6 +139,15 @@ export default function PresentViewer() {
           <ConnectionPill state={connection} stale={stale} />
         </div>
         <div style={chromeRightStyle}>
+          {state.search && (
+            <Stat
+              label="Filter"
+              value={state.search.activeFilter}
+            />
+          )}
+          {state.search?.searchQuery ? (
+            <Stat label="Query" value={`"${state.search.searchQuery}"`} mono />
+          ) : null}
           <Stat label="Hover" value={state.hoverId ?? '—'} mono />
           <Stat label="Latency" value={latencyMs == null ? '—' : `${latencyMs} ms`} />
           <Stat label="Events" value={eventsReceived.toString()} />
@@ -164,6 +176,13 @@ export default function PresentViewer() {
           Robert drives. */}
       {state.overlay?.kind === 'look' && state.overlay.look && (
         <ViewerOverlayLayer look={state.overlay.look as Look} />
+      )}
+
+      {/* In-app browser mirror — same component the consumer uses,
+          driven by broadcast url/title/product. Viewer can scroll
+          inside the iframe locally; close action is a no-op. */}
+      {state.browser?.open && (
+        <ViewerBrowserLayer browser={state.browser} />
       )}
 
       {/* Live cursors layer — sits above everything else, ignores
@@ -195,6 +214,10 @@ interface PresentState {
   hoverId: string | null;
   /** Open overlay snapshot from the presenter, if any. */
   overlay: OverlayPayload | null;
+  /** Live search + filter state from the consumer feed. */
+  search: SearchPayload | null;
+  /** Open in-app browser snapshot, if any. */
+  browser: BrowserStatePayload | null;
   /** Most recent envelope of any type. */
   lastAny: PresentEnvelope | null;
   /** Most recent envelope per type. Useful for the debug HUD. */
@@ -207,6 +230,8 @@ const initialState: PresentState = {
   lastScrollSelector: null,
   hoverId: null,
   overlay: null,
+  search: null,
+  browser: null,
   lastAny: null,
   eventsByType: {},
 };
@@ -239,6 +264,10 @@ function presentReducer(state: PresentState, action: Action): PresentState {
     next.hoverId = (env.payload as HoverPayload).id;
   } else if (env.type === 'overlay') {
     next.overlay = env.payload as OverlayPayload;
+  } else if (env.type === 'search') {
+    next.search = env.payload as SearchPayload;
+  } else if (env.type === 'browser') {
+    next.browser = env.payload as BrowserStatePayload;
   }
   return next;
 }
@@ -354,6 +383,26 @@ function ViewerOverlayLayer({ look }: { look: Look }) {
 }
 
 function noop() { /* viewer-side read-only stub */ }
+
+function ViewerBrowserLayer({ browser }: { browser: BrowserStatePayload }) {
+  if (!browser.open) return null;
+  return (
+    <div style={browserLayerStyle}>
+      <InAppBrowser
+        url={browser.url}
+        title={browser.title}
+        product={(browser.product ?? undefined) as Product | undefined}
+        onClose={noop}
+      />
+    </div>
+  );
+}
+
+const browserLayerStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 1100,
+};
 
 const overlayLayerStyle: React.CSSProperties = {
   position: 'fixed',
