@@ -6,6 +6,8 @@
 // Required Supabase secret (optional — falls back to heuristic queries):
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
 
+import { logAiUsage } from '../_shared/ai-usage.ts';
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -22,10 +24,17 @@ function jsonRes(data: unknown, status = 200) {
 
 interface ClaudeResponse {
   content?: Array<{ type: string; text?: string }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string };
 }
 
-async function brainstormWithClaude(catalog: string, count: number, apiKey: string): Promise<string[]> {
+interface BrainstormResult {
+  queries: string[];
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
+async function brainstormWithClaude(catalog: string, count: number, apiKey: string): Promise<BrainstormResult> {
   const prompt = `You are a creative merchandiser building a shoppable fashion catalog.
 The catalog is titled: "${catalog}".
 
@@ -84,7 +93,11 @@ fences, no keys. Example:
   if (start < 0 || end <= start) throw new Error(`No JSON array in Claude response: ${cleaned.slice(0, 200)}`);
   const parsed = JSON.parse(cleaned.slice(start, end + 1));
   if (!Array.isArray(parsed)) throw new Error('Parsed value is not an array');
-  return parsed.map(String).map(s => s.trim()).filter(Boolean).slice(0, count);
+  return {
+    queries: parsed.map(String).map(s => s.trim()).filter(Boolean).slice(0, count),
+    inputTokens: json.usage?.input_tokens ?? null,
+    outputTokens: json.usage?.output_tokens ?? null,
+  };
 }
 
 // Deterministic fallback used when ANTHROPIC_API_KEY isn't configured or the
@@ -130,11 +143,25 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      const queries = await brainstormWithClaude(catalog, count, apiKey);
+      const { queries, inputTokens, outputTokens } = await brainstormWithClaude(catalog, count, apiKey);
       if (queries.length === 0) throw new Error('Claude returned empty list');
+      logAiUsage({
+        platform: 'anthropic',
+        operation: 'brainstorm',
+        model: 'claude-sonnet-4-6',
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+      });
       return jsonRes({ success: true, queries, source: 'claude' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      logAiUsage({
+        platform: 'anthropic',
+        operation: 'brainstorm',
+        model: 'claude-sonnet-4-6',
+        status: 'error',
+        error_message: msg.slice(0, 500),
+      });
       return jsonRes({
         success: true,
         queries: heuristicQueries(catalog, count),
