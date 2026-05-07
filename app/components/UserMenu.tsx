@@ -5,8 +5,10 @@ import { USER_ROLE_LABELS } from '~/types/roles';
 import type { Look, Product } from '~/data/looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import PresentMenuSection from './PresentMenuSection';
+import { AvatarUpload } from './AvatarCropModal';
 
 interface UserMenuUser {
+  id?: string;
   displayName?: string;
   email?: string;
   avatarUrl?: string;
@@ -68,6 +70,12 @@ function UserMenu({
   const [open, setOpen] = useState(false);
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
+  // Local override for the avatar URL so a fresh upload renders in
+  // the menu without waiting for the next auth-session refresh.
+  // Phase 10: a key change on the rendered <img> drives a flip-in
+  // animation defined in user-menu.css.
+  const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
+  const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
   // Brief grace period after closing during which the scrim stays
   // mounted, even though the popout is gone. Catches the phantom click
   // iOS Safari dispatches after touchend (typically 0-300ms later) on
@@ -132,9 +140,14 @@ function UserMenu({
             {user && (
               <>
                 <div className="user-menu-header">
-                  {user.avatarUrl && (
-                    <img src={user.avatarUrl} alt="" className="user-menu-avatar" />
-                  )}
+                  <div className="user-menu-avatar-wrap" key={renderedAvatarUrl || 'placeholder'}>
+                    <AvatarUpload
+                      userId={user.id}
+                      currentUrl={renderedAvatarUrl}
+                      fallbackInitial={user.displayName?.charAt(0) || user.email?.charAt(0)}
+                      onUploaded={setAvatarOverride}
+                    />
+                  </div>
                   <div className="user-menu-identity">
                     {user.displayName && <span className="user-menu-name">{user.displayName}</span>}
                     {user.email && <span className="user-menu-email">{user.email}</span>}
