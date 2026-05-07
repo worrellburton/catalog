@@ -30,6 +30,7 @@ import {
 } from '~/services/user-generations';
 import { getUserGender, type UserGender } from '~/services/genders';
 import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
+import { ConfirmModal, useConfirm } from '~/components/ConfirmModal';
 import {
   createLookShare,
   getLookShare,
@@ -204,6 +205,12 @@ export default function GeneratePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>(() => readStepFromUrl());
+  // Branded confirm modal — drop-in replacement for window.confirm()
+  // across the three destructive sites in this page (feedback delete,
+  // saved-look delete, upload delete). Render `confirmHostModal` once
+  // near the page root and call `await confirmAction(...)` anywhere a
+  // yes/no decision is needed.
+  const { confirm: confirmAction, modal: confirmHostModal } = useConfirm();
 
   // Two-way bind ?step= against the wizard's internal step. Pushing a
   // history entry on every step change means the browser back button
@@ -1079,6 +1086,7 @@ export default function GeneratePage() {
 
   return (
     <div className="gen-page">
+      {confirmHostModal}
       <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
         <button
           className="gen-back"
@@ -1566,7 +1574,13 @@ export default function GeneratePage() {
                       className="gen-feedback-btn gen-feedback-btn-delete"
                       disabled={feedbackBusy}
                       onClick={async () => {
-                        if (!confirm('Delete this look? This can\'t be undone.')) return;
+                        const ok = await confirmAction({
+                          title: 'Delete this look?',
+                          body: 'This can’t be undone.',
+                          confirmLabel: 'Delete',
+                          destructive: true,
+                        });
+                        if (!ok) return;
                         setFeedbackBusy(true);
                         await deleteUserGeneration(generation.id);
                         setFeedbackBusy(false);
@@ -2406,6 +2420,7 @@ function LookCard({
   onRegenerate: () => void;
   onDelete: () => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const style = STYLE_PRESETS.find(s => s.value === generation.style);
   const isDone = generation.status === 'done' && generation.video_url;
   const isFailed = generation.status === 'failed';
@@ -2473,11 +2488,20 @@ function LookCard({
           className="gen-lookcard-delete"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm('Delete this look?')) onDelete();
+            setConfirmOpen(true);
           }}
           aria-label="Delete look"
           title="Delete look"
         >×</button>
+        <ConfirmModal
+          open={confirmOpen}
+          title="Delete this look?"
+          body="This can’t be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { setConfirmOpen(false); onDelete(); }}
+          onCancel={() => setConfirmOpen(false)}
+        />
       </div>
       <div className="gen-lookcard-foot">
         <span className="gen-lookcard-label">{generation.display_name || style?.label || generation.style}</span>
@@ -2513,6 +2537,11 @@ function UploadPickerModal({
   onUploadNew: () => void;
 }) {
   // Close on Escape so the modal feels like a normal dialog.
+  // Per-thumbnail confirm state. We hold the upload object while the
+  // user decides so the inner ConfirmModal can show "Delete this
+  // upload?" without us having to re-find the upload by id.
+  const [pendingDelete, setPendingDelete] = useState<UserUpload | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -2527,6 +2556,19 @@ function UploadPickerModal({
         aria-label={`Choose photo for slot ${slot + 1}`}
         onClick={(e) => e.stopPropagation()}
       >
+        <ConfirmModal
+          open={!!pendingDelete}
+          title="Delete this upload?"
+          body="It will be removed from your photo library."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => {
+            const u = pendingDelete;
+            setPendingDelete(null);
+            if (u) onDelete(u);
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
         <header className="gen-modal-head">
           <div>
             <h3 className="gen-modal-title">Choose a photo</h3>
@@ -2573,7 +2615,7 @@ function UploadPickerModal({
                     className="gen-modal-thumb-del"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm('Delete this upload?')) onDelete(u);
+                      setPendingDelete(u);
                     }}
                     aria-label="Delete photo"
                     title="Delete photo"
