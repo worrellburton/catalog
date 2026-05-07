@@ -104,6 +104,13 @@ export function usePresentSubscription({
         const env = payload as PresentEnvelope;
         setLatest(env);
         setEventsReceived(n => n + 1);
+        // Receiving any event is proof the channel is live. supabase-js
+        // sometimes never fires the SUBSCRIBED callback when two
+        // channels share a name on one client (this page opens both a
+        // broadcaster and a subscriber to send + receive cursor data),
+        // leaving the pill stuck at "connecting" even while messages
+        // flow. Promote on the first event so the UI tells the truth.
+        setConnection(c => (c === 'connected' ? c : 'connected'));
         onEnvelopeRef.current?.(env);
         if (env.type === 'heartbeat') {
           const hb = env.payload as HeartbeatPayload;
