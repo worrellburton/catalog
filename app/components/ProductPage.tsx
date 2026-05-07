@@ -536,7 +536,28 @@ export default function ProductPage({
     };
     const fromSimilar = pickFrom(similarCreatives);
     if (fromSimilar.length > 0) return fromSimilar;
-    return pickFrom(popularFallback);
+
+    // When the RPC returns nothing (sparse type / cold-start), filter
+    // popularFallback to the same product type before showing anything.
+    // Showing shoes and jeans below a houseplant is worse than no section.
+    const ownType = (product as Product & { type?: string | null }).type || null;
+    if (ownType) {
+      const typedFallback = (popularFallback || []).filter(
+        c => c.product?.type === ownType
+      );
+      const fromTyped = pickFrom(typedFallback);
+      // If there are same-type items, show them; otherwise hide the section.
+      return fromTyped;
+    }
+
+    // No type info on the seed — fall back to same-brand popular items
+    // rather than the entire untyped catalog.
+    const brandFallback = (popularFallback || []).filter(
+      c => (c.product?.brand || '').trim().toLowerCase() !== ownBrand
+        ? false
+        : true
+    );
+    return pickFrom(brandFallback);
   }, [similarCreatives, popularFallback, product.brand, product.name, (product as Product & { id?: string }).id]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout

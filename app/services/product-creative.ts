@@ -107,7 +107,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; catalog_tags?: string[] | null; is_elite?: boolean };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
