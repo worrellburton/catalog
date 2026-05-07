@@ -6737,6 +6737,43 @@
 .light-mode .deck-view-v1 .deck-v1-tech-stack-label { color: rgba(0, 0, 0, 0.55); }
 .light-mode .deck-view-v1 .deck-v1-tech-stack-group li { color: rgba(0, 0, 0, 0.78); }
 
+/* Cinematic reveal for the Tech slide so the label / headline /
+   lede / stack groups land on a stagger instead of all-at-once like
+   a static dump. Mirrors the deck-wide v8 reveal vocabulary
+   (1.2s cubic-bezier, 18 px translateY) so it feels native. */
+.deck-view-v1 .deck-v9-tech .deck-label,
+.deck-view-v1 .deck-v9-tech h2,
+.deck-view-v1 .deck-v9-tech-lede,
+.deck-view-v1 .deck-v1-tech-stack-group {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.deck-view-v1 .deck-v9-tech h2 {
+  filter: blur(6px);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech .deck-label,
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2,
+.deck-view-v8 .deck-slide.visible .deck-v9-tech-lede,
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group {
+  opacity: 1;
+  transform: translateY(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2 {
+  filter: blur(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech .deck-label { transition-delay: 0.15s; }
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2 { transition-delay: 0.35s; }
+.deck-view-v8 .deck-slide.visible .deck-v9-tech-lede { transition-delay: 0.65s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(1) { transition-delay: 0.95s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(2) { transition-delay: 1.10s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(3) { transition-delay: 1.25s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(4) { transition-delay: 1.40s; }
+
 @media (max-width: 980px) {
   .deck-view-v1 .deck-v1-tech-stack {
     grid-template-columns: 1fr;
@@ -6779,7 +6816,7 @@
 .deck-view-v1 .deck-v1-demo-cta {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
+  gap: 22px;
   padding: 26px 56px;
   font-size: clamp(22px, 2.4vw, 36px);
   font-weight: 700;
@@ -6789,26 +6826,59 @@
   border: none;
   border-radius: 999px;
   cursor: pointer;
+  position: relative;
   text-shadow:
     0 -1px 0 rgba(0, 0, 0, 0.65),
     0 1px 0 rgba(255, 255, 255, 0.18);
   box-shadow:
+    0 0 80px rgba(255, 255, 255, 0.18),
+    0 0 28px rgba(255, 255, 255, 0.12),
     0 12px 40px rgba(0, 0, 0, 0.55),
     0 4px 14px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  animation: deck-v1-demo-cta-pulse 3.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.5s ease,
               filter 0.5s ease;
 }
+@keyframes deck-v1-demo-cta-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 80px rgba(255, 255, 255, 0.18),
+      0 0 28px rgba(255, 255, 255, 0.12),
+      0 12px 40px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 110px rgba(255, 255, 255, 0.3),
+      0 0 44px rgba(255, 255, 255, 0.22),
+      0 14px 44px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  }
+}
 .deck-view-v1 .deck-v1-demo-cta:hover {
   transform: translateY(-2px) scale(1.015);
+  animation-play-state: paused;
   box-shadow:
+    0 0 130px rgba(255, 255, 255, 0.36),
+    0 0 56px rgba(255, 255, 255, 0.26),
     0 18px 56px rgba(0, 0, 0, 0.65),
     0 6px 20px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
     inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+.deck-view-v1 .deck-v1-demo-cta-logo {
+  height: clamp(20px, 2vw, 28px);
+  width: auto;
+  color: #fff;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5));
 }
 .deck-view-v1 .deck-v1-demo-cta:active { transform: translateY(0) scale(1); }
 
