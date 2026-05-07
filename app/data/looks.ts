@@ -39,6 +39,10 @@ export interface Look {
    *  backfill job for legacy rows. Omitted means we fall back to the
    *  cover image (or nothing). */
   thumbnail_url?: string;
+  /** Mobile-optimized variant of the look video (480p H.264 ~600kbps).
+   *  Renderer picks this on narrow viewports / slow connections, same
+   *  contract as ProductAd.mobile_video_url. */
+  mobile_video_url?: string;
   /** Static cover image - alternative to thumbnail_url, used by some
    *  legacy looks. Lower priority than thumbnail_url because it's
    *  often a product still rather than a video frame. */

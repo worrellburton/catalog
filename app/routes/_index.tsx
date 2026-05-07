@@ -831,7 +831,7 @@ export default function Home() {
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
-    const similarP = prefetchSimilarCreatives(creative.id, 18);
+    const similarP = prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null);
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
@@ -898,7 +898,9 @@ export default function Home() {
       seenIds.add(idKey);
       seenCreatorVideo.add(creatorVideoKey);
       out.push(l);
-      if (out.length >= 12) break;
+      // Bumped from 12 to 24 so the "Featured in these looks" rail
+      // surfaces the full published-look feed, not a curated subset.
+      if (out.length >= 24) break;
     }
     return out;
   }, [liveLooks]);

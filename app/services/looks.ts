@@ -23,6 +23,7 @@ interface SupabaseLook {
   looks_creative: {
     video_url: string | null;
     thumbnail_url: string | null;
+    mobile_video_url: string | null;
     is_primary: boolean;
   }[];
   look_products: {
@@ -57,6 +58,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       looks_creative!inner (
         video_url,
         thumbnail_url,
+        mobile_video_url,
         is_primary
       ),
       look_products (
@@ -146,6 +148,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       uuid: row.id,
       title: row.title,
       video: primary.video_url || '',
+      thumbnail_url: primary.thumbnail_url || undefined,
+      mobile_video_url: primary.mobile_video_url || undefined,
       gender: (row.gender as 'men' | 'women') || 'women',
       // Synthetic key so the creators-map lookup misses cleanly and
       // the consumer falls back to creatorDisplayName / Avatar below.

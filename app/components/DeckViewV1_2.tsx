@@ -403,7 +403,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     }
   };
   const slideTitles = [
-    'Cover',
     'The Dream',
     'Problem & Solution',
     'Market Opportunity',
@@ -412,7 +411,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
     'The Ask',
     'Demo',
     // Appendix (everything below Demo is supplementary)
-    'Traction',
     'Roadmap',
     'Projections',
     'Closing',
@@ -526,13 +524,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <button className="deck-back-btn" onClick={onBack} aria-label="Back to decks">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
-      <button className="deck-theme-toggle" onClick={onToggleTheme}>
-        {isLightMode ? (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-        ) : (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
-        )}
-      </button>
 
       {/* Left-side nav dots with hover-reveal slide labels */}
       <nav className="deck-v9-nav" aria-label="Deck navigation">
@@ -555,13 +546,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         ))}
       </nav>
 
-      {/* Slide 1: Cover */}
-      <div className="deck-slide deck-cover deck-v8-cover-intro">
-        <CatalogLogo className="deck-logo deck-v8-cover-logo" />
-      </div>
-
-      {/* Slide 2: Intro: catalog nostalgia + SVG animations */}
-      <div className="deck-slide deck-slide-intro deck-v8-intro">
+      {/* Slide 1: Cover + The Dream merged into one opening slide.
+          Catalog wordmark sits at the top; "THE DREAM" label, the
+          AI-for-Shopping headline, and the human-taste subtitle land
+          below. The animated catalog/book icons float behind. */}
+      <div className="deck-slide deck-cover deck-slide-intro deck-v8-cover-intro deck-v8-intro deck-v1-cover-combined">
         <div className="deck-intro-svgs" aria-hidden="true">
           {/* Animated floating catalog/book icons */}
           <svg className="deck-intro-icon deck-intro-icon-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
@@ -571,6 +560,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <svg className="deck-intro-icon deck-intro-icon-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
           <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
         </div>
+        <CatalogLogo className="deck-logo deck-v8-cover-logo deck-v8-reveal deck-v8-reveal-1" />
         <div className="deck-intro-content">
           <span className="deck-label deck-v8-reveal deck-v8-reveal-1">The Dream</span>
           <h2 className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-h2">The AI for Shopping</h2>
@@ -594,7 +584,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
       <div className="deck-slide deck-v8-problem deck-v1-compare-slide">
         <div className="deck-v1-compare-head">
           <span className="deck-label">The Problem &amp; The Solution</span>
-          <h2>Creators curate. AI indexes.<br />Everyone wins.</h2>
+          <h2>Creators curate.<br />AI indexes.<br />Everyone wins.</h2>
         </div>
         <div className="deck-v1-compare-rows deck-v1-compare-rows-paired">
           {[
@@ -609,8 +599,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               num: '02',
               role: 'Creators',
               word: 'Revenue',
-              problem: 'Single-digit commissions, disorganized payouts, audiences they rent from someone else.',
-              solution: 'Real take-rate, audience they own, paid in days. Their taste compounds inside their storefront.',
+              problem: 'Disorganized payouts, scatter links, no home base.',
+              solution: 'Earn on daily engagement, instant payouts, compound income based on their catalog.',
             },
           ].map(({ num, role, word, problem, solution }, rowIdx, arr) => (
             <React.Fragment key={num}>
@@ -798,6 +788,40 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           Opportunity so the conversation goes "here's the market" ->
           "here's how creators get paid for it". */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
+        {/* Money fly-up overlay. 36 emoji flakes scatter across the
+            slide with deterministic random positions/delays so the
+            burst feels chaotic without being repetitive. Container
+            covers the slide; pointer-events: none so it never blocks
+            the underlying list copy. */}
+        <div className="deck-v1-money-burst" aria-hidden="true">
+          {Array.from({ length: 36 }).map((_, i) => {
+            const emojis = ['💵', '💸', '💰', '🪙', '💴', '💶'];
+            // Pseudo-random spread using small primes so the swarm
+            // looks scattered rather than gridded.
+            const left = (i * 37 + 11) % 100;
+            const delay = ((i * 0.17) % 2.4).toFixed(2);
+            const dur = (4.5 + (i * 0.31) % 3).toFixed(2);
+            const rotEnd = ((i * 73) % 720) - 360;
+            const driftX = ((i * 53) % 60) - 30;
+            const size = 22 + (i * 7) % 18;
+            return (
+              <span
+                key={i}
+                className="deck-v1-money-flake"
+                style={{
+                  left: `${left}%`,
+                  fontSize: `${size}px`,
+                  ['--money-delay' as string]: `${delay}s`,
+                  ['--money-dur' as string]: `${dur}s`,
+                  ['--money-rot' as string]: `${rotEnd}deg`,
+                  ['--money-drift' as string]: `${driftX}vw`,
+                }}
+              >
+                {emojis[i % emojis.length]}
+              </span>
+            );
+          })}
+        </div>
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
           <h2>Post once.<br />Earn three ways.</h2>
@@ -882,7 +906,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               are data-lookup services, not AI. */}
           <div className="deck-v1-tech-stack">
             <div className="deck-v1-tech-stack-group">
-              <span className="deck-v1-tech-stack-label">LLMs</span>
+              <span className="deck-v1-tech-stack-label">Reasoning</span>
               <ul>
                 <li><strong>Anthropic</strong>, Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
                 <li><strong>Google</strong>, Gemini Flash</li>
@@ -1105,54 +1129,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             wait for window.location.href to load catalog.shop. Sits
             above every other element on the slide. */}
         {demoExiting && <div className="deck-v1-demo-exit-overlay" aria-hidden="true" />}
-      </div>
-
-      {/* Slide 11: Traction */}
-      <div className="deck-slide deck-v8-traction">
-        <span className="deck-label">Traction</span>
-        <h2>Early momentum.</h2>
-        <div className="deck-v8-phone-marquee" aria-hidden="true">
-          <div className="deck-v8-phone-track">
-            {/* Phones list, duplicated for a seamless infinite loop */}
-            {[...Array(2)].map((_, loopIdx) => (
-              <React.Fragment key={loopIdx}>
-                {[
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                  'guy.mp4',
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                  'guy.mp4',
-                  'girl2.mp4',
-                  'Untitled.mp4',
-                ].map((src, i) => (
-                  <div key={`${loopIdx}-${i}`} className="deck-app-frame deck-v8-marquee-phone">
-                    <video src={`${basePath}/${src}`} autoPlay loop muted playsInline className="deck-app-video" />
-                  </div>
-                ))}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-        <div className="deck-v8-traction-stats">
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">V1</span>
-            <span className="deck-v8-traction-label">Product live and functional</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">42</span>
-            <span className="deck-v8-traction-label">Active creators</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">318</span>
-            <span className="deck-v8-traction-label">Looks published</span>
-          </div>
-          <div className="deck-v8-traction-stat">
-            <span className="deck-v8-traction-num">12</span>
-            <span className="deck-v8-traction-label">Brands integrated</span>
-          </div>
-        </div>
-        <p className="deck-v8-traction-note">* Demo data. Live numbers updated as the beta scales.</p>
       </div>
 
       {/* Slide 11: Roadmap timeline */}

@@ -14,6 +14,7 @@
 //   TWELVELABS_API_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logAiUsage } from '../_shared/ai-usage.ts';
 
 const TL_BASE = 'https://api.twelvelabs.io/v1.3';
 const TL_MODEL = 'marengo3.0';
@@ -101,6 +102,14 @@ Deno.serve(async (req: Request) => {
     .update({ embedding_task_id: taskId })
     .eq('id', id);
   if (updErr) return jsonRes({ ok: false, stage: 'update', error: updErr.message }, 500);
+
+  logAiUsage({
+    platform: 'twelvelabs',
+    operation: 'video-embed',
+    model: TL_MODEL,
+    units: 1,
+    metadata: { creative_id: id, asset_id: assetId, task_id: taskId },
+  });
 
   return jsonRes({ ok: true, task_id: taskId, asset_id: assetId });
 });

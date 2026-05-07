@@ -9,6 +9,8 @@
 // We don't further restrict to signed-in users here — the admin UI gates
 // access, and the Rainforest key stays server-side.
 
+import { logAiUsage } from '../_shared/ai-usage.ts';
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -98,6 +100,7 @@ Deno.serve(async (req: Request) => {
     const payload = await res.json() as { request_info?: { success?: boolean; message?: string }; search_results?: RainforestSearchResult[] };
     if (payload.request_info?.success === false) return errorRes(`Rainforest error: ${payload.request_info.message ?? 'unknown'}`, 502);
     const results = (payload.search_results ?? []).slice(0, limit).map(normalizeSearchResult).filter(p => p.name && p.url);
+    logAiUsage({ platform: 'rainforest', operation: 'product-search', units: 1, metadata: { keyword, result_count: results.length } });
     return jsonRes({ success: true, products: results });
   }
 
@@ -112,5 +115,6 @@ Deno.serve(async (req: Request) => {
   const payload = await res.json() as { request_info?: { success?: boolean; message?: string }; product?: RainforestProduct };
   if (payload.request_info?.success === false) return errorRes(`Rainforest error: ${payload.request_info.message ?? 'unknown'}`, 502);
   if (!payload.product) return errorRes('Rainforest returned no product');
+  logAiUsage({ platform: 'rainforest', operation: 'product-lookup', units: 1, metadata: { asin: asin ?? null, url: url ?? null } });
   return jsonRes({ success: true, product: normalizeProduct(payload.product) });
 });
