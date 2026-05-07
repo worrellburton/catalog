@@ -1,6 +1,11 @@
 import { useParams } from '@remix-run/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { usePresentSubscription } from '~/hooks/usePresentSubscription';
+import type {
+  PresentEnvelope,
+  PresentEventType,
+  RoutePayload,
+} from '~/services/present';
 
 /*
  * Public live-mirror viewer at /present/<slug>.
@@ -12,25 +17,31 @@ import { usePresentSubscription } from '~/hooks/usePresentSubscription';
  * private data only appears on screen when the presenter chooses to
  * broadcast it.
  *
- * Phase 2 ships the stub shell: connection pill, latency, event
- * counter, and a JSON dump of the latest envelope. Phase 3 onward
- * fills in the real route/cursor/overlay rendering.
+ * Phase 3 adds route reduction: the viewer now tracks the
+ * presenter's current route and shows a styled "now showing" panel.
+ * Phases 4-8 fill in scroll, cursor, overlay, search rendering on
+ * top of the same envelope stream.
  */
 export default function PresentViewer() {
   const params = useParams();
   const slug = params.slug ?? '';
 
-  const { connection, latest, latencyMs, eventsReceived } = usePresentSubscription({ slug });
+  const [state, dispatch] = useReducer(presentReducer, initialState);
 
-  // Tick a counter once a second so "last event Xs ago" stays fresh
-  // even when the channel goes quiet.
+  const { connection, latencyMs, eventsReceived } = usePresentSubscription({
+    slug,
+    onEnvelope: (env) => dispatch({ kind: 'envelope', env }),
+  });
+
+  // Tick once a second so "last event Xs ago" stays fresh.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  const sinceLastMs = latest ? Math.max(0, now - latest.sentAt) : null;
+  const lastEnv = state.eventsByType.heartbeat ?? state.lastAny;
+  const sinceLastMs = lastEnv ? Math.max(0, now - lastEnv.sentAt) : null;
   const stale = sinceLastMs !== null && sinceLastMs > 5000;
 
   return (
@@ -52,26 +63,127 @@ export default function PresentViewer() {
       </div>
 
       <main style={mainStyle}>
-        {!latest ? (
-          <div style={emptyStyle}>
-            <div style={emptyTitleStyle}>Waiting for presenter…</div>
-            <div style={emptySubStyle}>
-              Channel <code style={codeStyle}>present:{slug}</code>
-            </div>
-          </div>
+        {!state.lastAny ? (
+          <WaitingPanel slug={slug} />
         ) : (
-          <div style={payloadCardStyle}>
-            <div style={payloadHeadStyle}>
-              <span style={payloadTypeStyle}>{latest.type}</span>
-              <span style={payloadSeqStyle}>#{latest.seq}</span>
-            </div>
-            <pre style={payloadJsonStyle}>{JSON.stringify(latest.payload, null, 2)}</pre>
-          </div>
+          <NowShowingPanel state={state} />
         )}
       </main>
     </div>
   );
 }
+
+// ---------- State reducer ----------
+
+interface PresentState {
+  /** Current presenter route, set by 'route' events. */
+  route: RoutePayload | null;
+  /** Most recent envelope of any type. */
+  lastAny: PresentEnvelope | null;
+  /** Most recent envelope per type. Useful for the debug HUD. */
+  eventsByType: Partial<Record<PresentEventType, PresentEnvelope>>;
+}
+
+const initialState: PresentState = {
+  route: null,
+  lastAny: null,
+  eventsByType: {},
+};
+
+type Action = { kind: 'envelope'; env: PresentEnvelope };
+
+function presentReducer(state: PresentState, action: Action): PresentState {
+  if (action.kind !== 'envelope') return state;
+  const env = action.env;
+  const next: PresentState = {
+    ...state,
+    lastAny: env,
+    eventsByType: { ...state.eventsByType, [env.type]: env },
+  };
+  if (env.type === 'route') {
+    next.route = env.payload as RoutePayload;
+  }
+  return next;
+}
+
+// ---------- Panels ----------
+
+function WaitingPanel({ slug }: { slug: string }) {
+  return (
+    <div style={emptyStyle}>
+      <div style={emptyTitleStyle}>Waiting for presenter…</div>
+      <div style={emptySubStyle}>
+        Channel <code style={codeStyle}>present:{slug}</code>
+      </div>
+    </div>
+  );
+}
+
+function NowShowingPanel({ state }: { state: PresentState }) {
+  const route = state.route;
+  const fullRoute = route ? `${route.pathname}${route.search}${route.hash}` : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '100%', maxWidth: 720 }}>
+      {/* Now showing — Phase 3 lands the route, future phases fill in
+          the actual rendered content. */}
+      <div style={{
+        ...payloadCardStyle,
+        background: 'linear-gradient(180deg, rgba(167,139,250,0.06), rgba(167,139,250,0.01))',
+        borderColor: 'rgba(167,139,250,0.18)',
+      }}>
+        <div style={payloadHeadStyle}>
+          <span style={{ ...payloadTypeStyle, color: '#c4b5fd' }}>Now showing</span>
+          {route && <span style={payloadSeqStyle}>route</span>}
+        </div>
+        {fullRoute ? (
+          <div style={{
+            fontFamily: FONT_MONO,
+            fontSize: 18,
+            color: '#fff',
+            wordBreak: 'break-word',
+            lineHeight: 1.5,
+          }}>
+            {fullRoute}
+          </div>
+        ) : (
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>
+            No route received yet — presenter will appear here once they navigate.
+          </div>
+        )}
+      </div>
+
+      {/* Debug payload — last event of any type, raw. */}
+      <DebugPayload latest={state.lastAny} />
+    </div>
+  );
+}
+
+function DebugPayload({ latest }: { latest: PresentEnvelope | null }) {
+  if (!latest) return null;
+  return (
+    <details style={{ ...payloadCardStyle, padding: '14px 18px' }}>
+      <summary style={{
+        cursor: 'pointer',
+        listStyle: 'none',
+        outline: 'none',
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        userSelect: 'none',
+      }}>
+        Last event ({latest.type} · #{latest.seq})
+      </summary>
+      <pre style={{ ...payloadJsonStyle, marginTop: 12 }}>
+        {JSON.stringify(latest.payload, null, 2)}
+      </pre>
+    </details>
+  );
+}
+
+// ---------- Status pill + stats ----------
 
 function ConnectionPill({
   state,
@@ -113,6 +225,8 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// ---------- Styles ----------
 
 const FONT_MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
@@ -245,7 +359,6 @@ const codeStyle: React.CSSProperties = {
 
 const payloadCardStyle: React.CSSProperties = {
   width: '100%',
-  maxWidth: 720,
   background: 'rgba(255,255,255,0.02)',
   border: '1px solid rgba(255,255,255,0.08)',
   borderRadius: 16,

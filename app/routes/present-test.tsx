@@ -1,21 +1,70 @@
-import { useState } from 'react';
-import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
+import { useEffect, useState } from 'react';
+import {
+  PRESENT_SLUG_STORAGE_KEY,
+  readPresentSlug,
+  writePresentSlug,
+} from '~/services/present';
 
 /*
  * Temporary dev harness for the /present/ live-mirror feature.
  *
- * Phase 2 needs *something* on the network for /present/<slug> to
- * subscribe to. The eventual home for these controls is Phase 10's
- * presenter HUD (start/stop broadcast, route allowlist, etc.). This
- * route is the throwaway that lets us verify Phase 1 + Phase 2 end-
- * to-end: open /present-test in one tab, /present/<slug> in another,
- * and watch the heartbeats flow.
+ * Phase 3 wires the broadcaster into the consumer app via
+ * localStorage('present:slug'). This page is the throwaway UI for
+ * setting/clearing that flag and grabbing the share link. Phase 10
+ * replaces it with a real toggle inside Robert's user menu.
+ *
+ * Usage:
+ *   1. Visit /present-test, type a slug, click Start.
+ *   2. Navigate the consumer app normally (/, /l/<slug>, /b/<slug>).
+ *   3. Open the shareable link (or /present/<slug>) in another tab
+ *      / device / incognito to watch the live feed.
  */
 export default function PresentTest() {
   const [slug, setSlug] = useState('robert-burton');
-  const [enabled, setEnabled] = useState(true);
-  const [counter, setCounter] = useState(0);
-  const { isConnected, broadcast } = usePresentBroadcaster({ slug, enabled });
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Sync activeSlug with localStorage on mount + whenever the flag
+  // changes (storage event from another tab, custom event from this
+  // tab via writePresentSlug).
+  useEffect(() => {
+    const refresh = () => setActiveSlug(readPresentSlug());
+    refresh();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PRESENT_SLUG_STORAGE_KEY) refresh();
+    };
+    const onCustom = () => refresh();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('present:slug-changed', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('present:slug-changed', onCustom);
+    };
+  }, []);
+
+  const isBroadcasting = activeSlug !== null;
+  const shareUrl = activeSlug && typeof window !== 'undefined'
+    ? `${window.location.origin}/present/${activeSlug}`
+    : null;
+
+  const handleStart = () => {
+    const next = slug.trim();
+    if (!next) return;
+    writePresentSlug(next);
+  };
+
+  const handleStop = () => writePresentSlug(null);
+
+  const handleCopy = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* user denied clipboard, no-op */
+    }
+  };
 
   return (
     <div style={{
@@ -56,35 +105,70 @@ export default function PresentTest() {
           onChange={e => setSlug(e.target.value)}
           style={inputStyle}
           spellCheck={false}
+          disabled={isBroadcasting}
         />
 
         <label style={{ ...labelStyle, marginTop: 16 }}>Status</label>
         <div style={{
           fontSize: 13,
-          color: isConnected ? '#4ade80' : 'rgba(255,255,255,0.6)',
+          color: isBroadcasting ? '#4ade80' : 'rgba(255,255,255,0.6)',
           fontFamily: 'ui-monospace, monospace',
         }}>
-          {isConnected ? 'connected · heartbeat 1Hz' : 'connecting…'}
+          {isBroadcasting
+            ? `broadcasting as "${activeSlug}"`
+            : 'idle — broadcaster not mounted'}
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-          <button
-            onClick={() => setEnabled(v => !v)}
-            style={{ ...btnStyle, ...(enabled ? btnDangerStyle : btnPrimaryStyle) }}
-          >
-            {enabled ? 'Stop broadcasting' : 'Start broadcasting'}
-          </button>
-          <button
-            onClick={() => {
-              const seq = broadcast('heartbeat', { ts: Date.now(), manual: true, n: counter + 1 });
-              if (seq != null) setCounter(c => c + 1);
-            }}
-            style={{ ...btnStyle, ...btnSecondaryStyle }}
-            disabled={!isConnected}
-          >
-            Send manual ping ({counter})
-          </button>
+          {!isBroadcasting ? (
+            <button onClick={handleStart} style={{ ...btnStyle, ...btnPrimaryStyle }}>
+              Start broadcasting
+            </button>
+          ) : (
+            <button onClick={handleStop} style={{ ...btnStyle, ...btnDangerStyle }}>
+              Stop broadcasting
+            </button>
+          )}
         </div>
+
+        {shareUrl && (
+          <div style={{ marginTop: 22 }}>
+            <label style={labelStyle}>Share link</label>
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'stretch',
+            }}>
+              <code style={{
+                flex: 1,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                fontFamily: 'ui-monospace, monospace',
+                fontSize: 12,
+                color: '#a78bfa',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {shareUrl}
+              </code>
+              <button
+                onClick={handleCopy}
+                style={{
+                  ...btnStyle,
+                  flex: '0 0 auto',
+                  padding: '0 14px',
+                  ...btnSecondaryStyle,
+                  minWidth: 80,
+                }}
+              >
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{
           marginTop: 22,
@@ -96,8 +180,10 @@ export default function PresentTest() {
           color: 'rgba(255,255,255,0.55)',
           lineHeight: 1.6,
         }}>
-          Open <code style={{ color: '#a78bfa' }}>/present/{slug || '<slug>'}</code>{' '}
-          in another tab (or device, or incognito) to watch the live feed.
+          The slug stays set across reloads. As you navigate the
+          consumer app (/, /l/&lt;slug&gt;, /b/&lt;slug&gt;), the
+          PresentProvider broadcasts route events to{' '}
+          <code style={{ color: '#a78bfa' }}>present:{activeSlug || slug || '<slug>'}</code>.
         </div>
       </div>
     </div>

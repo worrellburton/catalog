@@ -53,3 +53,66 @@ export function channelNameFor(slug: string): string {
 }
 
 export type PresentChannel = RealtimeChannel;
+
+// ---------- Payload types ----------
+
+export interface RoutePayload {
+  /** Route the presenter is currently viewing, e.g. '/' or '/l/abc-123'. */
+  pathname: string;
+  /** Hash portion including the leading '#', or empty string. */
+  hash: string;
+  /** Search portion including the leading '?', or empty string. */
+  search: string;
+}
+
+// ---------- Privacy guard ----------
+
+/**
+ * Routes that must never be broadcast. Admin tooling stays private,
+ * and /present(/-test) routes would create feedback loops if they
+ * showed up in the mirror.
+ */
+const NEVER_BROADCAST_PREFIXES = [
+  '/admin',
+  '/present',
+];
+
+export function isBroadcastableRoute(pathname: string): boolean {
+  for (const prefix of NEVER_BROADCAST_PREFIXES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
+  }
+  return true;
+}
+
+// ---------- Presenter config (shared between menu toggle + provider) ----------
+
+/**
+ * localStorage key that holds the active presenter slug. When set,
+ * the consumer app's PresentProvider mounts the broadcaster and
+ * pushes events. Cleared = no broadcast. Single source of truth so
+ * the menu toggle (Phase 10) and the dev test harness write to the
+ * same place.
+ */
+export const PRESENT_SLUG_STORAGE_KEY = 'present:slug';
+
+export function readPresentSlug(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(PRESENT_SLUG_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writePresentSlug(slug: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (slug) window.localStorage.setItem(PRESENT_SLUG_STORAGE_KEY, slug);
+    else window.localStorage.removeItem(PRESENT_SLUG_STORAGE_KEY);
+    // Custom event so listeners in the same tab pick up the change
+    // (the native 'storage' event only fires across tabs).
+    window.dispatchEvent(new CustomEvent('present:slug-changed', { detail: { slug } }));
+  } catch {
+    /* quota / private mode — broadcast just won't start */
+  }
+}
