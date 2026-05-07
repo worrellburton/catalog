@@ -1,8 +1,16 @@
 import { useLocation } from '@remix-run/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
+import { usePresentSubscription } from '~/hooks/usePresentSubscription';
+import { usePresentCursorBroadcast } from '~/hooks/usePresentCursorBroadcast';
+import { usePresentCursors } from '~/hooks/usePresentCursors';
+import PresentRemoteCursors from '~/components/PresentRemoteCursors';
 import {
+  colorForId,
+  defaultGuestName,
+  getOrCreatePresentId,
   isBroadcastableRoute,
+  readPresentName,
   readPresentSlug,
   type RoutePayload,
   type ScrollPayload,
@@ -17,18 +25,51 @@ import {
  * Wired into app/root.tsx so it sees every navigation and sits above
  * all routes. The consumer feed never has to know about it.
  *
- * Phase 3: emits 'route' events on every navigation (Remix
- * useLocation). Future phases (cursor / overlay / scroll / search)
- * will register additional effects against the same broadcast()
- * function exposed by usePresentBroadcaster.
+ * Phase 3: route events on every nav.
+ * Phase 4: throttled scroll events.
+ * Phase 5: bidirectional cursors — Robert broadcasts his pointer and
+ *          subscribes back to see guest viewers on /present/<slug>.
+ *          Both renderings share the same channel.
  */
 export default function PresentProvider() {
   const slug = useActivePresentSlug();
   const location = useLocation();
   const enabled = !!slug;
 
+  // ── Identity ───────────────────────────────────────────────────
+  // ID is stable per tab (sessionStorage). Name is pulled from a
+  // user-controlled localStorage key, falling back to "Robert" for
+  // the presenter (since this provider only runs in the broadcasting
+  // session) so guests see a recognizable label out of the box.
+  const id = useMemo(() => getOrCreatePresentId(), []);
+  const presenterName = useMemo(() => readPresentName() ?? 'Robert', []);
+  const color = useMemo(() => colorForId(id), [id]);
+
   const { broadcast, isConnected } = usePresentBroadcaster({
     slug: slug ?? '',
+    enabled,
+  });
+
+  // Inbound subscription: also listen for guest cursors so we can
+  // render them on Robert's screen alongside his own cursor.
+  const { ingest: ingestCursor, cursors } = usePresentCursors({
+    selfId: id,
+    enabled,
+  });
+  usePresentSubscription({
+    slug: slug ?? '',
+    enabled,
+    onEnvelope: ingestCursor,
+  });
+
+  // Outbound cursor broadcasting at ~30 Hz.
+  usePresentCursorBroadcast({
+    broadcast,
+    isConnected,
+    id,
+    name: presenterName,
+    color,
+    role: 'presenter',
     enabled,
   });
 
@@ -62,8 +103,6 @@ export default function PresentProvider() {
       const target = e.target as Element | Document | null;
       if (!target) return;
 
-      // Pull dimensions from documentElement when scrolling the page,
-      // or from the element itself otherwise.
       let element: Element;
       let selector: string;
       if (target instanceof Document) {
@@ -71,9 +110,6 @@ export default function PresentProvider() {
         selector = 'window';
       } else if (target instanceof Element) {
         element = target;
-        // Prefer #id (cheap + stable). Fall back to tagName so we at
-        // least produce *something* on anonymous scrollers — viewer
-        // can decide whether to act on it.
         selector = target.id ? `#${target.id}` : target.tagName.toLowerCase();
       } else {
         return;
@@ -82,9 +118,6 @@ export default function PresentProvider() {
       const now = performance.now();
       const key = selector;
       const sameTarget = key === lastScrollKeyRef.current;
-      // 50ms throttle per-target. Switching targets resets the
-      // window so the first event on a new container fires
-      // immediately.
       if (sameTarget && now - lastScrollSentRef.current < 50) return;
       lastScrollSentRef.current = now;
       lastScrollKeyRef.current = key;
@@ -111,7 +144,9 @@ export default function PresentProvider() {
     };
   }, [enabled, isConnected, location.pathname, broadcast]);
 
-  return null;
+  // Render guest cursors on Robert's screen. Hidden when broadcast
+  // is off so the consumer app stays untouched for normal use.
+  return enabled ? <PresentRemoteCursors cursors={cursors} /> : null;
 }
 
 /**
@@ -138,3 +173,7 @@ function useActivePresentSlug(): string | null {
 
   return slug;
 }
+
+// Re-export so callers (Phase 10 user-menu UI) can import it from
+// here without having to know about the internal slug-change wiring.
+export { defaultGuestName };

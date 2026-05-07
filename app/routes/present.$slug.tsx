@@ -1,11 +1,19 @@
 import { useParams } from '@remix-run/react';
-import { useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { usePresentBroadcaster } from '~/hooks/usePresentBroadcaster';
+import { usePresentCursorBroadcast } from '~/hooks/usePresentCursorBroadcast';
+import { usePresentCursors } from '~/hooks/usePresentCursors';
 import { usePresentSubscription } from '~/hooks/usePresentSubscription';
-import type {
-  PresentEnvelope,
-  PresentEventType,
-  RoutePayload,
-  ScrollPayload,
+import PresentRemoteCursors from '~/components/PresentRemoteCursors';
+import {
+  colorForId,
+  defaultGuestName,
+  getOrCreatePresentId,
+  readPresentName,
+  type PresentEnvelope,
+  type PresentEventType,
+  type RoutePayload,
+  type ScrollPayload,
 } from '~/services/present';
 
 /*
@@ -29,9 +37,54 @@ export default function PresentViewer() {
 
   const [state, dispatch] = useReducer(presentReducer, initialState);
 
+  // ── Guest identity ─────────────────────────────────────────────
+  // Stable per-tab id, hashed color, name override from
+  // localStorage (so the same person can pick a name once and keep
+  // it across tabs/days). Defaults to "Guest XXXX" using a 4-char
+  // signature of the id.
+  const id = useMemo(() => getOrCreatePresentId(), []);
+  const name = useMemo(() => readPresentName() ?? defaultGuestName(id), [id]);
+  const color = useMemo(() => colorForId(id), [id]);
+
+  // Bidirectional broadcaster: we both send our cursor and receive
+  // everyone else's via the same channel.
+  const { broadcast, isConnected } = usePresentBroadcaster({
+    slug,
+    enabled: true,
+    // Guests don't need a heartbeat — the presenter side already
+    // emits one and our subscription picks it up.
+    heartbeatIntervalMs: 0,
+  });
+
+  const { ingest: ingestCursor, cursors } = usePresentCursors({
+    selfId: id,
+    enabled: true,
+  });
+
+  usePresentCursorBroadcast({
+    broadcast,
+    isConnected,
+    id,
+    name,
+    color,
+    role: 'guest',
+    enabled: true,
+  });
+
+  // Single onEnvelope: dispatch for state reducer + ingest for
+  // cursor map. Keeping it stable lets the subscription resubscribe
+  // only when slug changes, not on every render.
+  const onEnvelope = useCallback(
+    (env: PresentEnvelope) => {
+      dispatch({ kind: 'envelope', env });
+      ingestCursor(env);
+    },
+    [ingestCursor],
+  );
+
   const { connection, latencyMs, eventsReceived } = usePresentSubscription({
     slug,
-    onEnvelope: (env) => dispatch({ kind: 'envelope', env }),
+    onEnvelope,
   });
 
   // Tick once a second so "last event Xs ago" stays fresh.
@@ -78,6 +131,11 @@ export default function PresentViewer() {
           <NowShowingPanel state={state} />
         )}
       </main>
+
+      {/* Live cursors layer — sits above everything else, ignores
+          pointer events so it never steals clicks. Renders both the
+          presenter and any other viewers currently on /present/. */}
+      <PresentRemoteCursors cursors={cursors} />
     </div>
   );
 }

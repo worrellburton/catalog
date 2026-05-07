@@ -16,15 +16,16 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export type PresentEventType =
-  | 'heartbeat' // 1 Hz keep-alive + latency check (Phase 1)
-  | 'snapshot'  // full state, periodic + on viewer connect (Phase 9)
-  | 'route'     // current pathname/hash (Phase 3)
-  | 'scroll'    // viewport-relative scroll % (Phase 4)
-  | 'cursor'    // viewport-relative pointer coords (Phase 5)
-  | 'click'     // click ripple (Phase 6)
-  | 'hover'     // hover indicator (Phase 6)
-  | 'overlay'   // look/bookmarks/creator overlay state (Phase 7)
-  | 'search';   // search/filter state (Phase 8)
+  | 'heartbeat'    // 1 Hz keep-alive + latency check (Phase 1)
+  | 'snapshot'     // full state, periodic + on viewer connect (Phase 9)
+  | 'route'        // current pathname/hash (Phase 3)
+  | 'scroll'       // viewport-relative scroll % (Phase 4)
+  | 'cursor'       // viewport-relative pointer coords (Phase 5)
+  | 'cursor-leave' // participant left, prune their cursor (Phase 5)
+  | 'click'        // click ripple (Phase 6)
+  | 'hover'        // hover indicator (Phase 6)
+  | 'overlay'      // look/bookmarks/creator overlay state (Phase 7)
+  | 'search';      // search/filter state (Phase 8)
 
 export interface PresentEnvelope<T = unknown> {
   /** Monotonic counter so the viewer can detect dropped/reordered events. */
@@ -63,6 +64,27 @@ export interface RoutePayload {
   hash: string;
   /** Search portion including the leading '?', or empty string. */
   search: string;
+}
+
+export type PresentRole = 'presenter' | 'guest';
+
+export interface CursorPayload {
+  /** Stable per-tab identity. */
+  id: string;
+  /** Display name shown next to the cursor. */
+  name: string;
+  /** Hex color for the cursor + name pill. */
+  color: string;
+  /** Distinguishes Robert's cursor from any guest viewer's. */
+  role: PresentRole;
+  /** Viewport-relative x (0 left, 1 right). */
+  x: number;
+  /** Viewport-relative y (0 top, 1 bottom). */
+  y: number;
+}
+
+export interface CursorLeavePayload {
+  id: string;
 }
 
 export interface ScrollPayload {
@@ -123,6 +145,73 @@ export function readPresentSlug(): string | null {
   } catch {
     return null;
   }
+}
+
+// ---------- Cursor identity ----------
+
+const CURSOR_PALETTE = [
+  '#ef4444', '#f97316', '#f59e0b', '#10b981',
+  '#06b6d4', '#3b82f6', '#a78bfa', '#ec4899',
+  '#84cc16', '#14b8a6', '#0ea5e9', '#d946ef',
+];
+
+const PRESENT_ID_STORAGE_KEY = 'present:id';
+const PRESENT_NAME_STORAGE_KEY = 'present:name';
+
+/** Deterministic hashed-color picker from a string id. */
+export function colorForId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  }
+  return CURSOR_PALETTE[Math.abs(hash) % CURSOR_PALETTE.length];
+}
+
+/**
+ * Returns a stable per-tab participant ID. Persists in sessionStorage
+ * so reloads keep the same identity, but a new tab gets a fresh one
+ * (so guests opening multiple windows show up as separate cursors,
+ * which is the right mental model).
+ */
+export function getOrCreatePresentId(): string {
+  if (typeof window === 'undefined') return 'anon';
+  try {
+    const existing = window.sessionStorage.getItem(PRESENT_ID_STORAGE_KEY);
+    if (existing) return existing;
+    const fresh = `p-${Math.random().toString(36).slice(2, 10)}`;
+    window.sessionStorage.setItem(PRESENT_ID_STORAGE_KEY, fresh);
+    return fresh;
+  } catch {
+    return `p-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+/** Read presenter/guest display name from localStorage, or null if unset. */
+export function readPresentName(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(PRESENT_NAME_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writePresentName(name: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (name) window.localStorage.setItem(PRESENT_NAME_STORAGE_KEY, name);
+    else window.localStorage.removeItem(PRESENT_NAME_STORAGE_KEY);
+  } catch {
+    /* quota — fall back to generated name */
+  }
+}
+
+/** Pick a friendly default name for a guest with no override. */
+export function defaultGuestName(id: string): string {
+  // Pull a 4-digit signature from the id so guests in the same room
+  // can be told apart at a glance.
+  const sig = id.replace(/[^a-z0-9]/gi, '').slice(-4).toUpperCase() || 'XXXX';
+  return `Guest ${sig}`;
 }
 
 export function writePresentSlug(slug: string | null): void {
