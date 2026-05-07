@@ -540,7 +540,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
           <span className="deck-label">Technology</span>
           <h2>Visual taste,<br />indexed by AI.</h2>
           <p className="deck-v9-tech-lede">
-            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
+            Every look is encoded into a vector database. Composition, color, garment, mood , all become coordinates a model can reason about.
           </p>
           <ul className="deck-v9-tech-points">
             <li>
@@ -554,7 +554,7 @@ const DeckViewV9: React.FC<DeckViewV9Props> = ({
               <span className="deck-v9-tech-bullet" aria-hidden="true" />
               <div>
                 <strong>Nearest-neighbor search.</strong>
-                <span>One tap surfaces the next five looks a shopper is most likely to love &mdash; in milliseconds.</span>
+                <span>One tap surfaces the next five looks a shopper is most likely to love , in milliseconds.</span>
               </div>
             </li>
             <li>

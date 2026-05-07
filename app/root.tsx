@@ -7,6 +7,7 @@ import {
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
 import TypeAnywhere from "~/components/TypeAnywhere";
+import PresentProvider from "~/components/PresentProvider";
 
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
@@ -134,6 +135,10 @@ export default function App() {
           query applied. Component is desktop-only and ignores
           keys when focus is in another input. */}
       <TypeAnywhere />
+      {/* Mirrors this session to /present/<slug> when the user
+          enables broadcast in their menu. Idle (zero network) when
+          no slug is stored. */}
+      <PresentProvider />
       <Outlet />
     </>
   );

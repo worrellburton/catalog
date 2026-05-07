@@ -586,14 +586,14 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <span className="deck-label">The Problem &amp; The Solution</span>
           <h2>Creators curate.<br />AI indexes.<br />Everyone wins.</h2>
         </div>
-        <div className="deck-v1-compare-rows">
+        <div className="deck-v1-compare-rows deck-v1-compare-rows-paired">
           {[
             {
               num: '01',
               role: 'Shoppers',
               word: 'Discovery',
               problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
-              solution: 'Curated by AI and tastemakers they actually follow. No ads, no noise.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
             },
             {
               num: '02',
@@ -602,48 +602,57 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               problem: 'Disorganized payouts, scatter links, no home base.',
               solution: 'Earn on daily engagement, instant payouts, compound income based on their catalog.',
             },
-            {
-              num: '03',
-              role: 'Brands',
-              word: 'Acquisition',
-              problem: 'Legacy advertising. Renting attention from Meta and Amazon at rising CAC, no first-party top-of-funnel they own.',
-              solution: 'Performance-based ROAS. Modern, creator-driven distribution that compounds with every share.',
-            },
-          ].map(({ num, role, word, problem, solution }, rowIdx) => (
-            <div
-              key={num}
-              className="deck-v1-compare-row"
-              style={{ ['--row-idx' as string]: rowIdx }}
-            >
-              <div className="deck-v1-compare-row-head">
-                <span className="deck-v1-compare-row-num">{num}</span>
-                <h3 className="deck-v1-compare-row-role">{role}</h3>
-                <span className="deck-v1-compare-row-word">{word}.</span>
-              </div>
-              <div className="deck-v1-compare-row-cells">
-                <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
-                  <div className="deck-v1-compare-cell-label-row">
-                    <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle className="broken-circle" cx="12" cy="12" r="10" />
-                      <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
-                      <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
-                    </svg>
-                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
-                  </div>
-                  <p className="deck-v1-compare-cell-text">{problem}</p>
+          ].map(({ num, role, word, problem, solution }, rowIdx, arr) => (
+            <React.Fragment key={num}>
+              <div
+                className="deck-v1-compare-row"
+                style={{ ['--row-idx' as string]: rowIdx }}
+              >
+                <div className="deck-v1-compare-row-head">
+                  <span className="deck-v1-compare-row-num">{num}</span>
+                  <h3 className="deck-v1-compare-row-role">{role}</h3>
+                  <span className="deck-v1-compare-row-word">{word}.</span>
                 </div>
-                <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
-                  <div className="deck-v1-compare-cell-label-row">
-                    <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle className="win-circle" cx="12" cy="12" r="10" />
-                      <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
-                    </svg>
-                    <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
+                <div className="deck-v1-compare-row-cells">
+                  <div className="deck-v1-compare-cell deck-v1-compare-cell-problem deck-v8-problem-item">
+                    <div className="deck-v1-compare-cell-label-row">
+                      <svg className="deck-v8-broken-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle className="broken-circle" cx="12" cy="12" r="10" />
+                        <line className="broken-x broken-x-1" x1="8.5" y1="8.5" x2="15.5" y2="15.5" />
+                        <line className="broken-x broken-x-2" x1="15.5" y1="8.5" x2="8.5" y2="15.5" />
+                      </svg>
+                      <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-problem">Today</span>
+                    </div>
+                    <p className="deck-v1-compare-cell-text">{problem}</p>
                   </div>
-                  <p className="deck-v1-compare-cell-text">{solution}</p>
+                  <div className="deck-v1-compare-cell deck-v1-compare-cell-solution deck-v8-problem-item">
+                    <div className="deck-v1-compare-cell-label-row">
+                      <svg className="deck-v8-win-icon deck-v1-compare-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle className="win-circle" cx="12" cy="12" r="10" />
+                        <polyline className="win-check" points="7.5 12.5 10.5 15.5 16.5 9" />
+                      </svg>
+                      <span className="deck-v1-compare-cell-label deck-v1-compare-cell-label-solution">With Catalog</span>
+                    </div>
+                    <p className="deck-v1-compare-cell-text">{solution}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+              {rowIdx < arr.length - 1 && (
+                <div className="deck-v1-compare-link" aria-hidden="true">
+                  <span className="deck-v1-compare-link-line" />
+                  <span className="deck-v1-compare-link-pill">
+                    <svg className="deck-v1-compare-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="17 1 21 5 17 9" />
+                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                      <polyline points="7 23 3 19 7 15" />
+                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                    <span>Two sides of the same loop</span>
+                  </span>
+                  <span className="deck-v1-compare-link-line" />
+                </div>
+              )}
+            </React.Fragment>
           ))}
         </div>
       </div>
@@ -774,12 +783,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           third-to-last slide so the curve is the last thing investors
           see before The Ask.) */}
 
-      {/* Payouts - how creators earn across four streams. Sits right
-          after Market Opportunity so the conversation goes "here's the
-          market" -> "here's how creators get paid for it". When the
-          slide enters the viewport, a swarm of money emoji float up
-          from the bottom (deck-v1-money-burst) - the literal "money
-          flies everywhere" gag the deck calls for. */}
+      {/* Payouts - how creators earn. Engagement + three layered
+          affiliate sources + referrals. Sits right after Market
+          Opportunity so the conversation goes "here's the market" ->
+          "here's how creators get paid for it". */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
         {/* Money fly-up overlay. 36 emoji flakes scatter across the
             slide with deterministic random positions/delays so the
@@ -817,21 +824,33 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         </div>
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
-          <h2>Post once.<br />Earn four ways.</h2>
+          <h2>Post once.<br />Earn three ways.</h2>
           <p className="deck-v1-payouts-subtitle">Post authentically, earn daily.</p>
           <ul className="deck-v1-payouts-list">
             {([
-              { num: '01', title: 'Engagement', chip: 'Daily payouts', desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model, paid out daily.' },
               {
-                num: '02', title: 'Affiliate sales', chip: 'Pass-through',
-                desc: 'Two ways to earn on affiliate sales:',
+                num: '01',
+                title: 'Engagement',
+                chip: 'Daily payouts',
+                desc: 'Every click is valuable. Share of total platform clicks equals share of the daily payout pool. Like YouTube’s ad-revenue model, paid out daily.',
+              },
+              {
+                num: '02',
+                title: 'Affiliate links',
+                chip: '3 sources',
+                desc: 'Three layered affiliate streams, all flowing through the same creator.',
                 subs: [
-                  { num: '2a', title: 'Our affiliate sales', desc: 'Users get a % of every Catalog-driven affiliate sale.' },
-                  { num: '2b', title: 'Their own links', desc: 'Bring your own affiliate link and Catalog passes the commissions through.' },
+                  { num: '2a', title: 'Pass-through', desc: 'A creator’s own affiliate links pay full commission, transparent and fast.' },
+                  { num: '2b', title: 'Catalog network', desc: 'We negotiate higher rates with affiliate networks so creators earn more on the same click.' },
+                  { num: '2c', title: 'Brand direct', desc: 'As an official Shopify app, we sign revshare deals straight with the brand, the highest take-rate tier.' },
                 ],
               },
-              { num: '03', title: 'Catalog sales', chip: 'Rev share', desc: 'Revenue share on every Catalog-attributed sale driven by a creator’s look. Direct, no shared pool.' },
-              { num: '04', title: 'Referrals', chip: 'Lifetime', desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.' },
+              {
+                num: '03',
+                title: 'Referrals',
+                chip: 'Lifetime',
+                desc: 'Bringing new shoppers onto Catalog earns ongoing rev-share on the sales those users make.',
+              },
             ] as Array<{
               num: string;
               title: string;
@@ -849,11 +868,12 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                   <p>{item.desc}</p>
                   {item.subs && (
                     <ul className="deck-v1-payouts-sublist">
-                      {item.subs.map((s) => (
-                        <li key={s.num} className="deck-v1-payouts-sub">
-                          <span className="deck-v1-payouts-sub-num">{s.num}</span>
-                          <div>
-                            <strong>{s.title}.</strong> <span>{s.desc}</span>
+                      {item.subs.map((sub) => (
+                        <li key={sub.num} className="deck-v1-payouts-sublist-item">
+                          <span className="deck-v1-payouts-subnum">{sub.num}</span>
+                          <div className="deck-v1-payouts-sublist-body">
+                            <h4>{sub.title}</h4>
+                            <p>{sub.desc}</p>
                           </div>
                         </li>
                       ))}
@@ -878,7 +898,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           <span className="deck-label">Technology</span>
           <h2>Visual taste,<br />indexed by AI.</h2>
           <p className="deck-v9-tech-lede">
-            Every look is encoded into a vector database. Composition, color, garment, mood &mdash; all become coordinates a model can reason about.
+            Every look is encoded into a vector database. Composition, color, garment, mood , all become coordinates a model can reason about.
           </p>
           {/* AI partners we wire into Catalog. Each line names the
               company first, then the model + use case in one breath.
@@ -888,29 +908,30 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Reasoning</span>
               <ul>
-                <li><strong>Anthropic</strong> · Claude Opus 4.7</li>
-                <li><strong>Google</strong> · Gemini</li>
+                <li><strong>Anthropic</strong>, Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
+                <li><strong>Google</strong>, Gemini Flash</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Video</span>
               <ul>
-                <li><strong>Bytedance</strong> · Seedance 2.0 Pro &amp; Fast</li>
-                <li><strong>Google</strong> · Veo 3.1</li>
+                <li><strong>Bytedance</strong>, Seedance 2.0 Pro &amp; Fast</li>
+                <li><strong>Google</strong>, Veo 3.1</li>
+                <li><strong>Tencent</strong>, Vidu</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
-                <li><strong>TwelveLabs</strong> · Marengo 3.0 video embeddings</li>
-                <li><strong>Postgres</strong> · pgvector storage</li>
+                <li><strong>TwelveLabs</strong>, Marengo 3.0 video embeddings</li>
+                <li><strong>Postgres</strong>, pgvector storage</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Compute</span>
               <ul>
-                <li><strong>Modal</strong> · serverless agents</li>
-                <li><strong>Fal.ai</strong> · video generation queue</li>
+                <li><strong>Modal</strong>, serverless agents</li>
+                <li><strong>Fal.ai</strong>, video generation queue</li>
               </ul>
             </div>
           </div>
@@ -1033,7 +1054,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">01</span>
               <h3>Product Seeding</h3>
-              <p>Autonomous product sync, AI creative generation, vector indexing &mdash; Catalog launches with inventory built in, no cold start.</p>
+              <p>Autonomous product sync, AI creative generation, vector indexing , Catalog launches with inventory built in, no cold start.</p>
             </div>
             <div className="deck-v8-ask-priority">
               <span className="deck-v8-ask-priority-num">02</span>
@@ -1046,6 +1067,22 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               <p>Launch the fixed-ROAS model with early brand partners. Prove the economics that make the marketplace self-sustaining.</p>
             </div>
           </div>
+
+          {/* Outcome callout: the three priorities feed a single
+              result. Lands after the priority cards and connects up to
+              them with a thin vertical tick so the eye reads
+              "priorities -> sustained growth". */}
+          <div className="deck-v8-ask-outcome">
+            <span className="deck-v8-ask-outcome-tick" aria-hidden="true" />
+            <span className="deck-v8-ask-outcome-pill">
+              <svg className="deck-v8-ask-outcome-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 17l6-6 4 4 8-8" />
+                <polyline points="14 7 21 7 21 14" />
+              </svg>
+              <span className="deck-v8-ask-outcome-label">Sustained growth</span>
+              <span className="deck-v8-ask-outcome-sub">Flywheel spins on its own.</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1055,8 +1092,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           this slide is supporting material. */}
       <div className="deck-slide deck-v1-demo-slide">
         <span className="deck-label">Demo</span>
-        <h2 className="deck-v1-demo-h2">See it for yourself.</h2>
-        <p className="deck-v1-demo-sub">The pitch is the product. Press play.</p>
+        <h2 className="deck-v1-demo-h2">Words won&apos;t do it justice.</h2>
+        <p className="deck-v1-demo-sub">Open the app. See it work.</p>
         <button
           type="button"
           className={`deck-v1-demo-cta${demoExiting ? ' is-exiting' : ''}`}
@@ -1070,8 +1107,8 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             }, 700);
           }}
         >
-          <span className="deck-v1-demo-cta-label">Enter Catalog</span>
-          <svg className="deck-v1-demo-cta-arrow" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <span className="deck-v1-demo-cta-label">Catalog</span>
+          <svg className="deck-v1-demo-cta-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="5" y1="12" x2="19" y2="12" />
             <polyline points="13 6 19 12 13 18" />
           </svg>
@@ -1209,28 +1246,13 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         )}
       </div>
 
-      {/* Closing - mirrors the opening (Cover + Dream combined) so the
-          deck closes the way it opened. Adds the action buttons + the
-          Trademark link. */}
-      <div className="deck-slide deck-cover deck-slide-intro deck-v8-cover-intro deck-v8-intro deck-v1-cover-combined">
-        <div className="deck-intro-svgs" aria-hidden="true">
-          <svg className="deck-intro-icon deck-intro-icon-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-          <svg className="deck-intro-icon deck-intro-icon-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
-          <svg className="deck-intro-icon deck-intro-icon-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
-          <svg className="deck-intro-icon deck-intro-icon-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
-          <svg className="deck-intro-icon deck-intro-icon-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
-          <svg className="deck-intro-icon deck-intro-icon-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-        </div>
-        <CatalogLogo className="deck-logo deck-v8-cover-logo deck-v8-reveal deck-v8-reveal-1" />
-        <div className="deck-intro-content">
-          <span className="deck-label deck-v8-reveal deck-v8-reveal-1">Thank you</span>
-          <h2 className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-h2">The AI for Shopping</h2>
-          <p className="deck-v8-reveal deck-v8-reveal-2 deck-v1-dream-sub">Human Taste, Powered by AI.</p>
-          <div className="deck-end-actions">
-            <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
-            <button className="deck-website-btn" id="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
-            <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
-          </div>
+      {/* Slide 13: Final */}
+      <div className="deck-slide deck-cover">
+        <CatalogLogo className="deck-logo" />
+        <p className="deck-subtitle">Human Taste, Powered by AI</p>
+        <div className="deck-end-actions">
+          <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
+          <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
         </div>
       </div>
     </div>

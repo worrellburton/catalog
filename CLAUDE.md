@@ -49,7 +49,13 @@ A visual lookbook webapp for browsing fashion "looks" — short video clips pair
 
 | Environment | URL |
 |---|---|
-| Production / Dev | https://catalogdev.vercel.app |
+| Production | https://catalog.shop |
+| Dev preview | https://catalogdev.vercel.app |
+
+`catalog.shop` is the canonical production domain — it deploys from
+`main`. `catalogdev.vercel.app` is the Vercel-default preview host
+that builds from `dev`. Treat `catalog.shop` as the default URL when
+referring to the live app.
 
 (GitHub Pages at `worrellburton.github.io/catalog/` was the previous host
 and has been retired — see "Deployment" below. If you find a `gh-pages`
@@ -107,7 +113,7 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 |---|---|---|
 | `dev` | Active development, all new work goes here first | Vercel preview (per-branch URL) |
 | `staging` | Pre-release testing and QA | Vercel preview (per-branch URL) |
-| `main` | Production-ready code only | Production at https://catalogdev.vercel.app |
+| `main` | Production-ready code only | Production at https://catalog.shop |
 
 ### Rules
 
