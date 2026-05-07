@@ -509,3 +509,217 @@
 .avatar-modal-save.is-busy .avatar-modal-save-label { transform: translateX(-8px); }
 .avatar-modal-save-label { transition: transform 0.22s ease; }
 @keyframes avatar-modal-spinner-spin { to { transform: rotate(360deg); } }
+
+/* ── File picker modal (drag-and-drop or browse) ─────────────────── */
+
+.avatar-pick-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 240;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.avatar-pick--open { opacity: 1; }
+.avatar-pick--leave { opacity: 0; }
+
+.avatar-pick {
+  width: 100%;
+  max-width: 380px;
+  background: #141414;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+  transition:
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.22s ease;
+}
+.avatar-pick--open .avatar-pick {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+.avatar-pick--leave .avatar-pick {
+  transform: scale(0.96);
+  opacity: 0;
+  transition-duration: 0.16s, 0.16s;
+}
+
+.avatar-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 0;
+}
+.avatar-pick-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  animation: avatar-modal-fade-up 0.36s 0.04s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-pick-head .avatar-modal-close {
+  animation: avatar-modal-fade-up 0.36s 0.06s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* The drop zone fills the modal body. Dashed-stroke ring sits behind
+   the icon + headline; the whole stack scales up subtly when a file
+   is being dragged over so the surface clearly reads as "active". */
+.avatar-pick-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px 18px 24px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  text-align: center;
+  outline: none;
+  transition:
+    background 0.22s ease,
+    transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: avatar-modal-fade-up 0.4s 0.1s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-pick-drop:hover { background: rgba(255, 255, 255, 0.05); }
+.avatar-pick-drop:focus-visible {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+.avatar-pick-drop.is-over {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.015);
+}
+
+.avatar-pick-ring {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  pointer-events: none;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 6;
+  stroke-linecap: round;
+  transition: stroke 0.22s ease, stroke-dasharray 0.32s ease;
+  /* Slow rotation while idle so the dashes feel alive. */
+  animation: avatar-pick-ring-spin 22s linear infinite;
+}
+.avatar-pick-drop.is-over .avatar-pick-ring {
+  stroke: rgba(110, 231, 183, 0.55);
+  stroke-dasharray: 1 0;
+  filter: drop-shadow(0 0 8px rgba(110, 231, 183, 0.35));
+}
+@keyframes avatar-pick-ring-spin {
+  to { stroke-dashoffset: 200; }
+}
+
+.avatar-pick-icon {
+  position: relative;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.22s ease;
+  /* Gentle bob so the surface is never visually still. */
+  animation: avatar-pick-icon-bob 3.2s ease-in-out infinite;
+}
+.avatar-pick-drop:hover .avatar-pick-icon { background: rgba(255, 255, 255, 0.12); }
+.avatar-pick-drop.is-over .avatar-pick-icon {
+  transform: scale(1.18) translateY(-2px);
+  background: rgba(110, 231, 183, 0.2);
+  color: #6ee7b7;
+  animation-play-state: paused;
+}
+@keyframes avatar-pick-icon-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+.avatar-pick-headline {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.005em;
+  transition: color 0.22s ease;
+}
+.avatar-pick-drop.is-over .avatar-pick-headline { color: #6ee7b7; }
+
+.avatar-pick-sub {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.01em;
+}
+
+.avatar-pick-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  animation: avatar-modal-fade-up 0.4s 0.16s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.avatar-pick-or::before,
+.avatar-pick-or::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.avatar-pick-browse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #fff;
+  color: #050505;
+  letter-spacing: -0.005em;
+  transition: transform 0.12s ease, background 0.16s ease, box-shadow 0.16s ease;
+  animation: avatar-modal-fade-up 0.4s 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  position: relative;
+  overflow: hidden;
+}
+.avatar-pick-browse:hover {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.avatar-pick-browse:active { transform: translateY(1px); }
+.avatar-pick-browse svg { transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.avatar-pick-browse:hover svg { transform: translateY(-1px) rotate(-3deg); }

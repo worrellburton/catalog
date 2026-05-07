@@ -421,20 +421,25 @@ export function AvatarUpload({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [originRect, setOriginRect] = useState<DOMRect | null>(null);
+  // Drop-modal toggle. Clicking the avatar opens this; the user
+  // either drops a file onto the zone or picks one through the
+  // browser's file dialog. Either path funnels through processFile().
+  const [pickerOpen, setPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   const handleClick = useCallback(() => {
     if (!userId) return;
-    fileInputRef.current?.click();
+    if (buttonRef.current) {
+      setOriginRect(buttonRef.current.getBoundingClientRect());
+    }
+    setPickerOpen(true);
   }, [userId]);
 
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file
-    if (!file) return;
-
-    // Phase 5: validate.
+  // Shared file-handling pipeline used by both drag-drop and file-input
+  // paths inside the drop modal. Validates → HEIC-decodes if needed →
+  // creates the object URL → flips state so the crop modal renders.
+  const processFile = useCallback(async (file: File) => {
     const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type)
       || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name);
     if (!ok) {
@@ -448,7 +453,6 @@ export function AvatarUpload({
       return;
     }
 
-    // Lazy-load heic2any only when needed - keeps the main bundle slim.
     let blob: Blob = file;
     if (
       file.type === 'image/heic' ||
@@ -466,11 +470,16 @@ export function AvatarUpload({
       }
     }
 
-    if (buttonRef.current) {
-      setOriginRect(buttonRef.current.getBoundingClientRect());
-    }
     setPickedSrc(URL.createObjectURL(blob));
+    setPickerOpen(false);
   }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    await processFile(file);
+  }, [processFile]);
 
   const handleSave = useCallback(
     async (cropped: Blob) => {
@@ -532,6 +541,13 @@ export function AvatarUpload({
         hidden
         onChange={handleFileChange}
       />
+      {pickerOpen && (
+        <FileDropModal
+          onPick={() => fileInputRef.current?.click()}
+          onFile={processFile}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
       {pickedSrc && (
         <AvatarCropModal
           src={pickedSrc}
@@ -545,5 +561,140 @@ export function AvatarUpload({
         <div className="avatar-upload-error" role="alert">{error}</div>
       )}
     </>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────
+// FileDropModal - the popup that sits between the avatar tap and the
+// crop modal. Drag-and-drop zone in the body + "Browse files" button
+// underneath. The drop zone highlights while a drag is hovering and
+// the icon scales up subtly so the user knows the surface is live.
+// ───────────────────────────────────────────────────────────────────
+
+function FileDropModal({
+  onPick,
+  onFile,
+  onClose,
+}: {
+  /** Open the browser's native file dialog. */
+  onPick: () => void;
+  /** Caller takes ownership of the dropped file (validation, decode,
+   *  etc.) - same pipeline as the file-input change handler. */
+  onFile: (file: File) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const [phase, setPhase] = useState<'enter' | 'open' | 'leave'>('enter');
+  const [dragOver, setDragOver] = useState(false);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setPhase('open'), 16);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const close = useCallback(() => {
+    setPhase('leave');
+    window.setTimeout(onClose, 180);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [close]);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragOver(true);
+  }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear when leaving the drop zone itself, not when crossing
+    // an interior child element boundary.
+    if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
+    setDragOver(false);
+  }, []);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) void onFile(file);
+    },
+    [onFile],
+  );
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className={`avatar-pick-backdrop avatar-pick--${phase}`}
+      onClick={close}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose a profile photo"
+    >
+      <div className="avatar-pick" onClick={(e) => e.stopPropagation()}>
+        <header className="avatar-pick-head">
+          <h2>Change profile photo</h2>
+          <button
+            className="avatar-modal-close"
+            onClick={close}
+            aria-label="Close"
+          >×</button>
+        </header>
+
+        <div
+          className={`avatar-pick-drop${dragOver ? ' is-over' : ''}`}
+          onDragOver={onDragOver}
+          onDragEnter={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={onPick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onPick();
+            }
+          }}
+        >
+          {/* Animated dashed ring + cloud-up glyph. The ring rotates
+              very slowly when idle and snaps tight on dragOver. */}
+          <svg className="avatar-pick-ring" viewBox="0 0 200 200" aria-hidden="true">
+            <circle cx="100" cy="100" r="92" />
+          </svg>
+          <div className="avatar-pick-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </div>
+          <div className="avatar-pick-headline">
+            {dragOver ? 'Drop to use it' : 'Drag a photo here'}
+          </div>
+          <div className="avatar-pick-sub">
+            JPEG, PNG, WebP, or HEIC · up to 10 MB
+          </div>
+        </div>
+
+        <div className="avatar-pick-or" aria-hidden="true">
+          <span>or</span>
+        </div>
+
+        <button
+          className="avatar-pick-browse"
+          onClick={onPick}
+          type="button"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>Browse files</span>
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 }
