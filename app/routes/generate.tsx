@@ -29,6 +29,7 @@ import {
   type GenerationProductDetail,
 } from '~/services/user-generations';
 import { getUserGender, type UserGender } from '~/services/genders';
+import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
 
 /* -----------------------------------------------------------
    Generate flow - shopper-facing, multi-step wizard.
@@ -374,6 +375,36 @@ export default function GeneratePage() {
     getUserGender(user.id).then(setUserGender);
   }, [user?.id]);
 
+  // Prefill height + age from the user's profile so they don't have
+  // to re-enter on every wizard open. Set a flag once the prefill has
+  // landed so the persist-on-change effect below doesn't write the
+  // initial defaults back over the saved values during hydration.
+  const heightAgeHydrated = useRef(false);
+  useEffect(() => {
+    if (!user?.id) { heightAgeHydrated.current = true; return; }
+    let cancelled = false;
+    getUserHeightAge(user.id).then(saved => {
+      if (cancelled) return;
+      if (saved.heightCm)    setHeightCm(saved.heightCm);
+      if (saved.heightLabel) setHeightLabel(saved.heightLabel);
+      if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
+      heightAgeHydrated.current = true;
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Persist height + age on change. Debounced so dragging the height
+  // slider doesn't fire one PATCH per cm. The hydrated guard prevents
+  // writing the local defaults back over the user's saved values
+  // before the prefill has landed.
+  useEffect(() => {
+    if (!user?.id || !heightAgeHydrated.current) return;
+    const handle = window.setTimeout(() => {
+      updateUserHeightAge(user.id, { heightCm, heightLabel, ageLabel }).catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(handle);
+  }, [user?.id, heightCm, heightLabel, ageLabel]);
+
   // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -491,15 +522,18 @@ export default function GeneratePage() {
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);
-      // Gender filter: a male shopper only sees male + unisex +
-      // untagged products. Female mirrors. 'unknown' disables the
-      // filter so we never hide the catalog from someone we can't
-      // tag. Untagged (gender is null) products stay visible to all
-      // genders -- the audit button on /admin/content backfills.
+      // Gender filter: a male shopper only sees male + unisex; a
+      // female shopper only sees female + unisex. 'unknown' disables
+      // the filter so we never hide the catalog from someone whose
+      // gender we can't tag. Untagged (gender is null) products are
+      // explicitly excluded for tagged users — the user's preference
+      // is "only show products for that user's gender + unisex," so
+      // untagged rows need a gender backfill before they show up.
+      // Use the audit button on /admin/content to backfill.
       if (userGender === 'male') {
-        query = query.or('gender.eq.male,gender.eq.unisex,gender.is.null');
+        query = query.or('gender.eq.male,gender.eq.unisex');
       } else if (userGender === 'female') {
-        query = query.or('gender.eq.female,gender.eq.unisex,gender.is.null');
+        query = query.or('gender.eq.female,gender.eq.unisex');
       }
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
