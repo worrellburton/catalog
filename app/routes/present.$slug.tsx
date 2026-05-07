@@ -14,11 +14,15 @@ import {
   readPresentName,
   type ClickPayload,
   type HoverPayload,
+  type OverlayPayload,
   type PresentEnvelope,
   type PresentEventType,
   type RoutePayload,
   type ScrollPayload,
 } from '~/services/present';
+import LookOverlay from '~/components/LookOverlay';
+import { TrailVideoHost } from '~/components/TrailVideoHost';
+import type { Look, Product } from '~/data/looks';
 
 /*
  * Public live-mirror viewer at /present/<slug>.
@@ -154,6 +158,14 @@ export default function PresentViewer() {
         )}
       </main>
 
+      {/* Overlay mirror — when the presenter has a Look open, mount
+          the same LookOverlay component fed by broadcast data. No
+          Supabase fetches; viewer interactions are no-ops since
+          Robert drives. */}
+      {state.overlay?.kind === 'look' && state.overlay.look && (
+        <ViewerOverlayLayer look={state.overlay.look as Look} />
+      )}
+
       {/* Live cursors layer — sits above everything else, ignores
           pointer events so it never steals clicks. Renders both the
           presenter and any other viewers currently on /present/. */}
@@ -181,6 +193,8 @@ interface PresentState {
   lastScrollSelector: string | null;
   /** Most recently hovered element id (data-present-id), or null. */
   hoverId: string | null;
+  /** Open overlay snapshot from the presenter, if any. */
+  overlay: OverlayPayload | null;
   /** Most recent envelope of any type. */
   lastAny: PresentEnvelope | null;
   /** Most recent envelope per type. Useful for the debug HUD. */
@@ -192,6 +206,7 @@ const initialState: PresentState = {
   scrollBySelector: {},
   lastScrollSelector: null,
   hoverId: null,
+  overlay: null,
   lastAny: null,
   eventsByType: {},
 };
@@ -222,6 +237,8 @@ function presentReducer(state: PresentState, action: Action): PresentState {
     next.lastScrollSelector = scroll.selector;
   } else if (env.type === 'hover') {
     next.hoverId = (env.payload as HoverPayload).id;
+  } else if (env.type === 'overlay') {
+    next.overlay = env.payload as OverlayPayload;
   }
   return next;
 }
@@ -304,6 +321,49 @@ function DebugPayload({ latest }: { latest: PresentEnvelope | null }) {
 }
 
 // ---------- Status pill + stats ----------
+
+// ---------- Viewer-side overlay mirror ----------
+
+const NOOP_BOOKMARKS = {
+  isLookBookmarked: () => false,
+  toggleLookBookmark: () => { /* read-only mirror */ },
+  isProductBookmarked: (_p: Product) => false,
+  toggleProductBookmark: (_p: Product) => { /* read-only mirror */ },
+};
+
+function ViewerOverlayLayer({ look }: { look: Look }) {
+  // The full LookOverlay expects to live inside a TrailVideoHost
+  // (the shared <video> singleton). Re-mount one here so the
+  // overlay's useTrailVideo finds its provider.
+  return (
+    <div style={overlayLayerStyle}>
+      <TrailVideoHost>
+        <LookOverlay
+          look={look}
+          bookmarks={NOOP_BOOKMARKS}
+          onClose={noop}
+          onOpenCreator={noop}
+          onOpenBrowser={noop}
+          onOpenProduct={noop}
+          onCreateCatalog={noop}
+          onOpenLook={noop}
+        />
+      </TrailVideoHost>
+    </div>
+  );
+}
+
+function noop() { /* viewer-side read-only stub */ }
+
+const overlayLayerStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 1000,
+  // Viewer can scroll within the overlay locally, but their clicks
+  // hit no-op callbacks so the broadcast state stays Robert-driven.
+  // The cursor + ripple layers sit at higher z-indexes (9998+) so
+  // they paint on top regardless.
+};
 
 function ScrollProgress({ scroll }: { scroll: ScrollPayload | null }) {
   const ratio = scroll ? scroll.ratio : 0;

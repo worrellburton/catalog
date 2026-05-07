@@ -83,6 +83,7 @@ import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, s
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { emitPresentEvent } from '~/services/present';
 import { supabase } from '~/utils/supabase';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
@@ -1016,6 +1017,17 @@ export default function Home() {
     if (window.location.pathname !== target) {
       window.history.replaceState({}, '', target);
     }
+  }, [selectedLook]);
+
+  // Mirror overlay state to /present/<slug>. Fires when a Look opens
+  // or closes; the full Look object travels in the payload so the
+  // viewer never has to fetch from Supabase. No-op when broadcasting
+  // is off — emitPresentEvent silently goes nowhere.
+  useEffect(() => {
+    emitPresentEvent('overlay', {
+      kind: selectedLook ? 'look' : null,
+      look: selectedLook ?? null,
+    });
   }, [selectedLook]);
 
   useEffect(() => {

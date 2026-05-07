@@ -53,6 +53,31 @@ export function channelNameFor(slug: string): string {
   return `${PRESENT_CHANNEL_PREFIX}${slug}`;
 }
 
+// ---------- Emit bridge (consumer routes -> PresentProvider) ----------
+//
+// The consumer routes shouldn't have to know whether broadcasting is
+// active or how to reach the channel. They dispatch a CustomEvent;
+// PresentProvider listens and forwards to broadcast() if connected.
+// When broadcasting is off, events are no-ops.
+
+export const PRESENT_EMIT_EVENT = 'present:emit';
+
+interface PresentEmitDetail {
+  type: PresentEventType;
+  payload: unknown;
+}
+
+/**
+ * Tell the (possibly-active) PresentProvider to broadcast an event.
+ * Safe to call from anywhere in the consumer app — when no broadcast
+ * is active, the event has no listeners and silently goes nowhere.
+ */
+export function emitPresentEvent(type: PresentEventType, payload: unknown): void {
+  if (typeof window === 'undefined') return;
+  const detail: PresentEmitDetail = { type, payload };
+  window.dispatchEvent(new CustomEvent(PRESENT_EMIT_EVENT, { detail }));
+}
+
 export type PresentChannel = RealtimeChannel;
 
 // ---------- Payload types ----------
@@ -106,6 +131,25 @@ export interface HoverPayload {
    * the pointer leaves all hoverable surfaces.
    */
   id: string | null;
+}
+
+/**
+ * Snapshot of the consumer-feed look overlay. Sent from _index.tsx
+ * whenever the user opens / closes / changes the open look. Carries
+ * the full Look payload so /present/<slug> can render the overlay
+ * without ever fetching from Supabase.
+ *
+ * Typed as `unknown` here to avoid pulling the Look interface into
+ * services/present.ts (which is intentionally framework-light). The
+ * consumer route + viewer cast at the boundary.
+ */
+export interface OverlayPayload {
+  /** 'look' | 'creator' | 'bookmarks' | 'product' — discriminator for
+   *  the kind of overlay that's open. */
+  kind: 'look' | null;
+  /** Full Look object (cast to ~/data/looks `Look` at the boundary)
+   *  when kind === 'look'. Null when overlay is closed. */
+  look: unknown;
 }
 
 export interface ScrollPayload {

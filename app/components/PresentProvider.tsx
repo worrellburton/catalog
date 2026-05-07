@@ -8,6 +8,7 @@ import { usePresentInteractionBroadcast } from '~/hooks/usePresentInteractionBro
 import PresentClickRipples, { useClickRipples } from '~/components/PresentClickRipples';
 import PresentRemoteCursors from '~/components/PresentRemoteCursors';
 import {
+  PRESENT_EMIT_EVENT,
   colorForId,
   defaultGuestName,
   getOrCreatePresentId,
@@ -15,6 +16,7 @@ import {
   readPresentName,
   readPresentSlug,
   type ClickPayload,
+  type PresentEventType,
   type RoutePayload,
   type ScrollPayload,
 } from '~/services/present';
@@ -161,6 +163,27 @@ export default function PresentProvider() {
     return () => {
       window.removeEventListener('scroll', handleScroll, { capture: true });
     };
+  }, [enabled, isConnected, location.pathname, broadcast]);
+
+  // Bridge: consumer routes dispatch 'present:emit' CustomEvents;
+  // we forward them to broadcast() when connected. This lets _index
+  // and other consumer surfaces push overlay/search/etc. payloads
+  // without holding a reference to the broadcast channel.
+  useEffect(() => {
+    if (!enabled || !isConnected) return;
+    if (typeof window === 'undefined') return;
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { type: PresentEventType; payload: unknown }
+        | undefined;
+      if (!detail) return;
+      if (!isBroadcastableRoute(location.pathname)) return;
+      broadcast(detail.type, detail.payload);
+    };
+
+    window.addEventListener(PRESENT_EMIT_EVENT, handler);
+    return () => window.removeEventListener(PRESENT_EMIT_EVENT, handler);
   }, [enabled, isConnected, location.pathname, broadcast]);
 
   // Render guest cursors + click ripples on Robert's screen.
