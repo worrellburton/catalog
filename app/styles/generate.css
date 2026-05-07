@@ -1482,7 +1482,55 @@ html[data-shell="catalog-app"] .gen-page {
    wait feels like something is happening.
    ───────────────────────────────────────────────────────────────── */
 
-.gen-step-result { text-align: center; }
+.gen-step-result {
+  text-align: center;
+  /* Result step is locked to one viewport - no scroll, no overflow
+     past the dock. The phone frame sits flex-grow inside the stage
+     and shrinks to fit between heading + the actions row, so the
+     entire compose-progress UI is always above the fold. */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gen-step-result .gen-result-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Inside the stage: the phone-frame block flex-grows to consume the
+   remaining height, while the actions row + feedback stay fixed-size
+   at the bottom of the stage. */
+.gen-step-result .gen-build,
+.gen-step-result .gen-build-done {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gen-step-result .gen-build-frame {
+  /* Use whichever of width-based / height-based sizing produces the
+     smaller box, so the 9:16 frame always fits inside the available
+     space. min(360px, 80vw) is the existing width clamp; we add a
+     max-height that's bounded by the stage's flex height. */
+  width: min(360px, 80vw, calc((100dvh - 240px) * 9 / 16));
+  max-height: 100%;
+}
+
+.gen-step-result .gen-result-actions {
+  flex: 0 0 auto;
+}
 
 /* Desktop two-column layout for the result step. Left column owns
    the phone mockup + actions; right column surfaces the user's
@@ -2364,6 +2412,44 @@ html[data-shell="catalog-app"] .gen-page {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+/* Mobile cleanup for the result step. The feedback options + the
+   New look / Crop / Edit & regenerate row both got noisy on
+   narrow viewports - buttons wrapped raggedly, sometimes leaving
+   a single button alone on the next line. Lock both into tidy
+   grids so the layout always reads as deliberate. */
+@media (max-width: 760px) {
+  .gen-feedback-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  /* The "Don't like - delete" button spans both columns underneath,
+     so the destructive option is always visually separated from the
+     two positive options above. */
+  .gen-feedback-options > .gen-feedback-btn-delete {
+    grid-column: 1 / -1;
+  }
+  .gen-feedback-btn {
+    width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gen-result-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+  }
+  /* Primary CTA spans the full row so "Get a new look going" reads
+     as the headline action and the secondary chips sit below it. */
+  .gen-result-actions > .gen-btn-primary {
+    grid-column: 1 / -1;
+  }
 }
 .gen-feedback-btn {
   padding: 10px 14px;

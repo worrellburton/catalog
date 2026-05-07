@@ -320,6 +320,22 @@ export default function GeneratePage() {
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
+  // Count of consecutive failed generations at the head of the list.
+  // The streak resets the moment we hit a 'done'. Used to gate the
+  // "These photos may be rejected" warning so it only fires after the
+  // user's actually hit the wall three times in a row, not on the
+  // first photo-check blip.
+  const consecutiveFailures = useMemo(() => {
+    let count = 0;
+    for (const g of generations) {
+      if (g.status === 'failed') count++;
+      else if (g.status === 'done') break;
+      // pending/generating rows are still in-flight - skip without
+      // counting or breaking the streak.
+    }
+    return count;
+  }, [generations]);
+
   // Phase 8 - products
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PickedProduct[]>([]);
@@ -1079,7 +1095,18 @@ export default function GeneratePage() {
                 const isUploadingHere = uploadProgress?.slot === i;
                 const pctHere = isUploadingHere ? Math.round(uploadProgress!.pct * 100) : 0;
                 const isDragging = dragSlots.has(i);
-                const checkState = slotChecks[i];
+                // Same 3-strike gate as the warning banner. The
+                // pre-validator's blocked signal is noisy enough
+                // (false positives on perfectly-fine selfies) that
+                // we don't trust it on its own — only after the
+                // user has actually hit the wall three times in a
+                // row do we paint the slot's red ! badge. Once a
+                // generation succeeds, the streak is 0 and the
+                // badges clear automatically.
+                const rawCheckState = slotChecks[i];
+                const checkState = rawCheckState === 'blocked' && consecutiveFailures < 3
+                  ? 'ok'
+                  : rawCheckState;
                 return (
                   <div
                     key={i}
@@ -1155,7 +1182,12 @@ export default function GeneratePage() {
             </div>
 
             {uploadError && <div className="gen-error">{uploadError}</div>}
-            {!uploadError && photoCheckReason && slotChecks.some(c => c === 'blocked') && (
+            {/* Warning gated on 3 consecutive failed generations. Photo-check
+                blocks alone aren't a strong-enough signal (false positives are
+                common in the validator); we surface the rejection warning
+                only after the user has hit the wall three times in a row so
+                we're confident the photo set really is the bottleneck. */}
+            {!uploadError && photoCheckReason && slotChecks.some(c => c === 'blocked') && consecutiveFailures >= 3 && (
               <div className="gen-photo-warn">
                 {photoCheckReason === 'partner_validation_failed'
                   ? '⚠ ByteDance’s safety filter rejected this photo set. Try replacing one with a different selfie, or use a single photo instead of all three.'
@@ -1243,7 +1275,7 @@ export default function GeneratePage() {
 
         {step === 'products' && (
           <section className="gen-step gen-step-products">
-            <h2>2. Pick your products</h2>
+            <h2>Pick your products</h2>
             {/* Picked-products preview moved into the unified gen-dock at
                 the bottom (see render below) so the three previously
                 separate fixed elements (picks, Back/Next, step rail)
@@ -1308,7 +1340,7 @@ export default function GeneratePage() {
 
         {step === 'style' && (
           <section className="gen-step">
-            <h2>3. Style</h2>
+            <h2>Style</h2>
             <div className="gen-stylegrid">
               {STYLE_PRESETS.map(s => (
                 <button
@@ -1327,7 +1359,7 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step">
-            <h2>4. Review</h2>
+            <h2>Review</h2>
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
@@ -1463,14 +1495,14 @@ export default function GeneratePage() {
                       className="gen-feedback-btn gen-feedback-btn-love"
                       onClick={() => setFeedbackKind('love')}
                     >
-                      It looks great!
+                      It looks great!!
                     </button>
                     <button
                       type="button"
                       className="gen-feedback-btn gen-feedback-btn-off"
                       onClick={() => setFeedbackKind('off')}
                     >
-                      Umm… this is not it
+                      It&apos;s okay…
                     </button>
                     <button
                       type="button"
@@ -1575,23 +1607,29 @@ export default function GeneratePage() {
 
             {generation && (
               <div className="gen-result-actions">
-                <button className="gen-btn-secondary" onClick={startNewLook}>
-                  New look
+                <button className="gen-btn-primary" onClick={startNewLook}>
+                  Get a new look going
                 </button>
                 {generation.status === 'done' && generation.video_url && (
-                  <button
-                    className="gen-btn-secondary"
-                    onClick={() => setCropOpen(true)}
-                  >
-                    Crop
-                  </button>
+                  <>
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={() => setCropOpen(true)}
+                    >
+                      Crop
+                    </button>
+                    {/* Edit & regenerate is only meaningful once the
+                        current look has finished rendering — there's
+                        nothing to "edit" while the pipeline is still
+                        working on it. */}
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={() => editGeneration(generation.id)}
+                    >
+                      Edit &amp; regenerate
+                    </button>
+                  </>
                 )}
-                <button
-                  className="gen-btn-primary"
-                  onClick={() => editGeneration(generation.id)}
-                >
-                  Edit &amp; regenerate
-                </button>
               </div>
             )}
 
@@ -1675,7 +1713,11 @@ export default function GeneratePage() {
           </div>
         )}
         <aside className="gen-dock" aria-label="Step controls">
-          {step === 'products' && picked.length > 0 && (
+          {/* Picked-products strip stays visible across products → style →
+              review so the user always sees what they're building. The
+              tap-to-remove × is still wired so they can tweak the lineup
+              without scrolling back to the products step. */}
+          {picked.length > 0 && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
               {picked.map(p => (
                 <div key={p.id} className="gen-dock-pick">
