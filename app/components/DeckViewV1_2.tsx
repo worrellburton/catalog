@@ -818,7 +818,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                 subs: [
                   { num: '2a', title: 'Pass-through', desc: 'A creator’s own affiliate links pay full commission — transparent and fast.' },
                   { num: '2b', title: 'Catalog network', desc: 'We negotiate higher rates with affiliate networks so creators earn more on the same click.' },
-                  { num: '2c', title: 'Brand direct', desc: 'Revshare deals signed straight with the brand — the highest take-rate tier.' },
+                  { num: '2c', title: 'Brand direct', desc: 'As an official Shopify app, we sign revshare deals straight with the brand — the highest take-rate tier.' },
                 ],
               },
               {
@@ -1276,7 +1276,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <p className="deck-subtitle">Human Taste, Powered by AI</p>
         <div className="deck-end-actions">
           <button className="deck-mvp-btn" id="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
-          <button className="deck-website-btn" id="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
           <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
         </div>
       </div>
