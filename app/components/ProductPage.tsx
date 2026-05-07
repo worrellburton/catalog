@@ -788,7 +788,7 @@ export default function ProductPage({
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
-            <h2 className="pd-feed-title">You might also like</h2>
+            <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
               {lookCreatives.slice(0, 12).map(l => (
                 <LookTile key={l.id} look={l} onOpen={onOpenLook} />
