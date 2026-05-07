@@ -30,6 +30,12 @@ import {
 } from '~/services/user-generations';
 import { getUserGender, type UserGender } from '~/services/genders';
 import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
+import {
+  createLookShare,
+  getLookShare,
+  shareUrlFor,
+  type LookShare,
+} from '~/services/look-shares';
 
 /* -----------------------------------------------------------
    Generate flow - shopper-facing, multi-step wizard.
@@ -637,6 +643,14 @@ export default function GeneratePage() {
   // optimistically so the result video re-renders with the new crop
   // immediately.
   const [cropOpen, setCropOpen] = useState(false);
+  // Export-share state. exportShare holds the look_shares row once
+  // the share-look edge fn has minted it; we then poll until the
+  // Modal worker fills in watermarked_video_url.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportShare, setExportShare] = useState<LookShare | null>(null);
+  const [exportSlug, setExportSlug] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSubmitting, setExportSubmitting] = useState(false);
   // "How did I do?" feedback bar state. After generation completes the
   // user picks one of three answers (love / off / delete). 'love'
   // expands inline to keep-private vs publish-to-catalog; 'off'
@@ -946,6 +960,49 @@ export default function GeneratePage() {
     setPicked([]);
     setStep('photos');
   };
+
+  // Export the current generation: mint a public share + open the
+  // share modal. The Modal worker fills in the watermarked URL
+  // asynchronously; the modal polls via getLookShare on a 2 s
+  // interval until status === 'done' or 'failed'.
+  const handleExportShare = useCallback(async () => {
+    if (!generation || generation.status !== 'done') return;
+    setExportError(null);
+    setExportSubmitting(true);
+    setExportOpen(true);
+    const resp = await createLookShare(generation.id);
+    setExportSubmitting(false);
+    if (resp.error || !resp.slug) {
+      setExportError(resp.error || 'Couldn’t create share. Try again.');
+      return;
+    }
+    setExportSlug(resp.slug);
+    setExportShare({
+      id: resp.share_id,
+      slug: resp.slug,
+      generation_id: generation.id,
+      created_by: '',
+      watermarked_video_url: resp.watermarked_video_url ?? null,
+      watermarked_storage_path: null,
+      status: resp.status,
+      error: null,
+      created_at: new Date().toISOString(),
+      rendered_at: null,
+    });
+  }, [generation]);
+
+  // Poll the share row until the watermark renders or fails. Stops
+  // the moment the modal closes or a terminal status lands.
+  useEffect(() => {
+    if (!exportOpen || !exportShare?.id) return;
+    if (exportShare.status === 'done' || exportShare.status === 'failed') return;
+    const tick = window.setInterval(async () => {
+      const fresh = await getLookShare(exportShare.id);
+      if (!fresh) return;
+      setExportShare(fresh);
+    }, 2000);
+    return () => window.clearInterval(tick);
+  }, [exportOpen, exportShare?.id, exportShare?.status]);
 
   const canAdvance = useMemo(() => {
     // Photos step now also requires height + age. Without this, a user
@@ -1618,6 +1675,15 @@ export default function GeneratePage() {
                     >
                       Crop
                     </button>
+                    {/* Export bakes the Catalog wordmark onto the video
+                        and mints a public /s/:slug share link via the
+                        share-look edge function + Modal worker. */}
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={handleExportShare}
+                    >
+                      Export
+                    </button>
                     {/* Edit & regenerate is only meaningful once the
                         current look has finished rendering — there's
                         nothing to "edit" while the pipeline is still
@@ -1650,6 +1716,19 @@ export default function GeneratePage() {
                       : g));
                   setCropOpen(false);
                   await updateGenerationCrop(generation.id, crop);
+                }}
+              />
+            )}
+
+            {exportOpen && (
+              <ExportShareModal
+                share={exportShare}
+                slug={exportSlug}
+                submitting={exportSubmitting}
+                error={exportError}
+                onClose={() => {
+                  setExportOpen(false);
+                  setExportError(null);
                 }}
               />
             )}
@@ -2042,6 +2121,148 @@ function cropTransformStyle(
 }
 
 interface Crop { scale: number; x: number; y: number }
+
+/**
+ * ExportShareModal - opens after the user taps Export. Shows a copy-
+ * link affordance with the public /s/:slug URL, plus a small status
+ * line that flips from "Watermarking..." to "Ready" once the Modal
+ * worker finishes baking the wordmark onto the video. The native
+ * share sheet button uses navigator.share when available and falls
+ * back to copy-to-clipboard.
+ */
+function ExportShareModal({
+  share,
+  slug,
+  submitting,
+  error,
+  onClose,
+}: {
+  share: LookShare | null;
+  slug: string | null;
+  submitting: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const url = slug ? shareUrlFor(slug) : '';
+  const isReady = share?.status === 'done' && !!share?.watermarked_video_url;
+  const isFailed = share?.status === 'failed';
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const handleCopy = useCallback(async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard API gated on https in some browsers - silently fail */
+    }
+  }, [url]);
+
+  const handleNativeShare = useCallback(async () => {
+    if (!url) return;
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({
+          title: 'My Catalog look',
+          text: 'Made with Catalog',
+          url,
+        });
+        return;
+      } catch {
+        /* user cancelled - fall through to copy */
+      }
+    }
+    await handleCopy();
+  }, [url, handleCopy]);
+
+  return (
+    <div className="gen-modal-backdrop" onClick={onClose}>
+      <div className="gen-modal gen-export-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="gen-modal-head">
+          <div>
+            <h2 className="gen-modal-title">Export this look</h2>
+            <p className="gen-modal-sub">
+              Share a public link to this look. The Catalog wordmark is
+              baked onto the video so it travels with every save and re-share.
+            </p>
+          </div>
+          <button className="gen-modal-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        <div className="gen-export-body">
+          {error && <div className="gen-error">{error}</div>}
+
+          {!error && (
+            <>
+              <div className="gen-export-status">
+                {submitting && <span>Creating share…</span>}
+                {!submitting && share && !isReady && !isFailed && (
+                  <span>
+                    <span className="gen-export-spinner" aria-hidden="true" />
+                    Watermarking your video…
+                  </span>
+                )}
+                {!submitting && isReady && <span className="gen-export-status-done">Ready to share</span>}
+                {!submitting && isFailed && (
+                  <span className="gen-export-status-failed">
+                    Watermark failed{share?.error ? `: ${share.error}` : '.'} You can still share the link below.
+                  </span>
+                )}
+              </div>
+
+              {url && (
+                <>
+                  <div className="gen-export-link" role="region" aria-label="Share link">
+                    <input
+                      type="text"
+                      readOnly
+                      value={url}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="gen-export-link-input"
+                    />
+                    <button
+                      type="button"
+                      className="gen-export-link-copy"
+                      onClick={handleCopy}
+                    >
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+
+                  <div className="gen-export-actions">
+                    <button
+                      type="button"
+                      className="gen-btn-primary"
+                      onClick={handleNativeShare}
+                    >
+                      Share link
+                    </button>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gen-btn-secondary gen-export-open"
+                    >
+                      Open
+                    </a>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * CropModal - drag to pan + slider to zoom. Output stays 9:16 (the
