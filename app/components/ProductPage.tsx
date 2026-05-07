@@ -221,8 +221,8 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       type="button"
       className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
       onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
-      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18)}
-      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18)}
+      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
+      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
     >
       {posterUrl && (
         <img

@@ -1077,11 +1077,11 @@ const similarCache = new Map<string, Promise<ProductAd[]>>();
 /** Idempotent prefetch - call from hover, tap, anywhere. Returns the same
  *  cached promise on subsequent calls so consumers can `await` and get an
  *  instant resolve once the first call has finished. */
-export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
-  const key = `${seedId}|${k}`;
+export function prefetchSimilarCreatives(seedId: string, k = 12, productType?: string | null): Promise<ProductAd[]> {
+  const key = `${seedId}|${k}|${productType ?? ''}`;
   const cached = similarCache.get(key);
   if (cached) return cached;
-  const p = getSimilarCreatives(seedId, k);
+  const p = getSimilarCreatives(seedId, k, productType);
   similarCache.set(key, p);
   // If it errors, drop the cache so the next call retries.
   p.catch(() => similarCache.delete(key));
@@ -1090,12 +1090,13 @@ export function prefetchSimilarCreatives(seedId: string, k = 12): Promise<Produc
 
 // Returns the K visually-nearest creatives to the seed, deduped by product.
 // Backed by find_similar_creatives() - uses Marengo 3.0 cosine distance when
-// the seed has an embedding, otherwise falls back to same-brand → newest.
-export async function getSimilarCreatives(seedId: string, k = 12): Promise<ProductAd[]> {
+// the seed has an embedding, otherwise falls back to same-type → newest.
+// productType scopes results to the same product category (e.g. 'Top', 'Shorts').
+export async function getSimilarCreatives(seedId: string, k = 12, productType?: string | null): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Pull a margin so the gender post-filter doesn't leave the rail short.
   const fetchK = shopperGender === 'unknown' ? k : Math.min(k * 2, 48);
-  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK });
+  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK, seed_type: productType ?? null });
   if (error || !data) {
     if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
     return [];

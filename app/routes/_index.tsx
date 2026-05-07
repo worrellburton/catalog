@@ -821,7 +821,7 @@ export default function Home() {
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
-    const similarP = prefetchSimilarCreatives(creative.id, 18);
+    const similarP = prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null);
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
