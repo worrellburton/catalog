@@ -5,12 +5,13 @@
 .gen-page {
   width: 100%;
   margin: 0 auto;
-  /* Single-viewport contract: the entire wizard fits within the dynamic
-     viewport. height (100dvh, falls back to vh) so step content never
-     scrolls. Bottom padding still clears the fixed dock + safe-area
-     inset; horizontal padding stays generous. Inner step content uses
-     min-height: 0 + overflow: hidden to shrink to fit instead of
-     spilling past the dock. */
+  /* Desktop contract: the entire wizard tries to fit within the dynamic
+     viewport so the dock + step + header all stay visible at once.
+     Mobile reality: photos grid + height/age + saved-looks list often
+     overflows on a phone, so we relax to overflow-y: auto on narrow
+     viewports (see media query below) and let the step scroll.
+     Bottom padding still clears the fixed dock + safe-area inset;
+     horizontal padding stays generous. */
   padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
@@ -29,15 +30,42 @@
 
 /* Step container fills the remaining viewport space below the header
    and above the docked rail. min-height: 0 lets flex children shrink
-   inside it; overflow: hidden enforces the no-scroll contract. */
+   inside it; overflow-y: auto so content that's taller than the
+   available space scrolls inside the step rather than getting clipped
+   off the bottom. The page itself stays overflow: hidden so the dock
+   still pins to the bottom. */
 .gen-page > .gen-step {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Hide the scrollbar visually on desktop - the step still scrolls,
+     but no chrome competes with the dark background. */
+  scrollbar-width: none;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
+}
+.gen-page > .gen-step::-webkit-scrollbar { display: none; }
+
+/* Phone breakpoint: the entire page scrolls vertically. The mobile
+   dock sits in the normal flow at the bottom of the page (gen-rail's
+   fixed positioning still pins it to the viewport, so it stays put
+   while content scrolls underneath). */
+@media (max-width: 760px) {
+  .gen-page {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .gen-page > .gen-step {
+    overflow: visible;
+    flex: 0 0 auto;
+  }
 }
 
 /* Result step's phone-frame video is the tallest single element on the
@@ -1294,6 +1322,82 @@ html[data-shell="catalog-app"] .gen-page {
   flex-shrink: 0;
 }
 .gen-modal-close:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* Export share modal - sized smaller than the upload picker so the
+   copy-link row reads as the focal point. */
+.gen-export-modal {
+  max-width: 460px;
+}
+.gen-export-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.gen-export-status {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gen-export-status-done { color: #6ee7b7; font-weight: 600; }
+.gen-export-status-failed { color: #fca5a5; font-weight: 500; }
+.gen-export-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  animation: gen-spin 0.8s linear infinite;
+  display: inline-block;
+}
+@keyframes gen-spin { to { transform: rotate(360deg); } }
+.gen-export-link {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.gen-export-link-input {
+  flex: 1 1 auto;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  padding: 10px 12px;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+}
+.gen-export-link-copy {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 14px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+.gen-export-link-copy:hover { background: rgba(255, 255, 255, 0.14); }
+.gen-export-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.gen-export-actions > .gen-btn-primary { flex: 1 1 auto; }
+.gen-export-open {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .gen-modal-upload {
   display: flex;
   align-items: center;
@@ -1454,7 +1558,55 @@ html[data-shell="catalog-app"] .gen-page {
    wait feels like something is happening.
    ───────────────────────────────────────────────────────────────── */
 
-.gen-step-result { text-align: center; }
+.gen-step-result {
+  text-align: center;
+  /* Result step is locked to one viewport - no scroll, no overflow
+     past the dock. The phone frame sits flex-grow inside the stage
+     and shrinks to fit between heading + the actions row, so the
+     entire compose-progress UI is always above the fold. */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gen-step-result .gen-result-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Inside the stage: the phone-frame block flex-grows to consume the
+   remaining height, while the actions row + feedback stay fixed-size
+   at the bottom of the stage. */
+.gen-step-result .gen-build,
+.gen-step-result .gen-build-done {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gen-step-result .gen-build-frame {
+  /* Use whichever of width-based / height-based sizing produces the
+     smaller box, so the 9:16 frame always fits inside the available
+     space. min(360px, 80vw) is the existing width clamp; we add a
+     max-height that's bounded by the stage's flex height. */
+  width: min(360px, 80vw, calc((100dvh - 240px) * 9 / 16));
+  max-height: 100%;
+}
+
+.gen-step-result .gen-result-actions {
+  flex: 0 0 auto;
+}
 
 /* Desktop two-column layout for the result step. Left column owns
    the phone mockup + actions; right column surfaces the user's
@@ -2336,6 +2488,44 @@ html[data-shell="catalog-app"] .gen-page {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+/* Mobile cleanup for the result step. The feedback options + the
+   New look / Crop / Edit & regenerate row both got noisy on
+   narrow viewports - buttons wrapped raggedly, sometimes leaving
+   a single button alone on the next line. Lock both into tidy
+   grids so the layout always reads as deliberate. */
+@media (max-width: 760px) {
+  .gen-feedback-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  /* The "Don't like - delete" button spans both columns underneath,
+     so the destructive option is always visually separated from the
+     two positive options above. */
+  .gen-feedback-options > .gen-feedback-btn-delete {
+    grid-column: 1 / -1;
+  }
+  .gen-feedback-btn {
+    width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gen-result-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+  }
+  /* Primary CTA spans the full row so "Get a new look going" reads
+     as the headline action and the secondary chips sit below it. */
+  .gen-result-actions > .gen-btn-primary {
+    grid-column: 1 / -1;
+  }
 }
 .gen-feedback-btn {
   padding: 10px 14px;

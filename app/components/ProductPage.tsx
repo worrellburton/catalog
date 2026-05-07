@@ -5,7 +5,13 @@ import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
-import { pickVideoUrl, pickPosterUrl, prefetchVideoBytes } from '~/services/video-loading';
+import {
+  pickVideoUrl,
+  pickPosterUrl,
+  prefetchVideoBytes,
+  isMobileViewport,
+  markFeedMilestone,
+} from '~/services/video-loading';
 
 interface ProductPageCreative {
   /** The product_creative.id - used to resolve the shared <video> element
@@ -236,15 +242,36 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
   );
 }
 
-/** Look-creative tile for the "You might also like" grid. Looks have video
+/** Look-creative tile for the "Featured in Looks" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video. */
-function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
+function LookTile({
+  look,
+  index,
+  onOpen,
+}: {
+  look: Look;
+  index: number;
+  onOpen: (l: Look) => void;
+}) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inViewport, setInViewport] = useState(false);
+  const [renderReady, setRenderReady] = useState(index < 4);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Phase 6: route through the shared pickVideoUrl helper so save-data
+  // and slow-connection users get the small variant even on a wider
+  // viewport. The helper expects video_url / mobile_video_url, which
+  // matches ProductAd's shape; Look stores the full-res URL on `video`.
+  const rawVideo = pickVideoUrl({
+    video_url: look.video,
+    mobile_video_url: look.mobile_video_url ?? null,
+  });
+  const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
+  // Full-res URL used for Phase 4 background prefetch. Skip the
+  // prefetch when it equals the playable URL (desktop) - that file is
+  // already streaming.
+  const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
 
   useEffect(() => {
     const node = wrapRef.current;
@@ -257,6 +284,47 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
     return () => obs.disconnect();
   }, []);
 
+  // Phase 5: stagger the request waterfall. The browser caps to ~6
+  // concurrent media downloads per origin; an 8-tile rail saturates
+  // that and the last 2 sit in queue. Tiles 0-3 render <video>
+  // immediately, 4-7 wait a tick, 8+ wait for idle. By the time the
+  // first batch has its moov atom + first GOP, the next batch's
+  // sockets are free.
+  useEffect(() => {
+    if (renderReady) return;
+    if (typeof window === 'undefined') return;
+    const delay = index < 8 ? 200 : 400 + (index - 8) * 100;
+    const ric = (window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (ric) {
+      const handle = ric(() => setRenderReady(true), { timeout: delay + 500 });
+      return () => {
+        const cic = (window as Window & {
+          cancelIdleCallback?: (h: number) => void;
+        }).cancelIdleCallback;
+        if (cic) cic(handle);
+      };
+    }
+    const t = window.setTimeout(() => setRenderReady(true), delay);
+    return () => window.clearTimeout(t);
+  }, [index, renderReady]);
+
+  // Phase 4: once a tile has been visible ~600ms on mobile, warm the
+  // first 256 KB of the full-res clip. Same Phase-8 contract as
+  // CreativeCard - by the time the user taps in, the LookOverlay
+  // hero gets a cache hit and paints near-instantly.
+  useEffect(() => {
+    if (!inViewport) return;
+    if (!isMobileViewport()) return;
+    if (!fullResVideoUrl) return;
+    if (fullResVideoUrl === videoUrl) return; // already streaming this URL
+    const t = window.setTimeout(() => {
+      prefetchVideoBytes(fullResVideoUrl);
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [inViewport, fullResVideoUrl, videoUrl]);
+
   // Belt-and-suspenders: force play() once frames decode + on every
   // visibility return. Mobile Safari pauses videos on tab background
   // and the muted-autoplay flag can fail to evaluate when the element
@@ -268,21 +336,31 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
     const v = videoRef.current;
     if (!v) return;
     const kick = () => { if (v.paused) void v.play().catch(() => {}); };
-    if (v.readyState >= 2) kick();
-    v.addEventListener('loadeddata', kick);
-    v.addEventListener('canplay', kick);
+    // Phase 1: capture the moment the first frame decodes so the
+    // before/after of the rest of the perf work is measurable. Only
+    // marks once per tile (the one-shot guard is a closure boolean).
+    let marked = false;
+    const markFirstFrame = () => {
+      if (marked) return;
+      marked = true;
+      markFeedMilestone(`look-first-frame:${look.id}`);
+    };
+    if (v.readyState >= 2) { kick(); markFirstFrame(); }
+    const onLoaded = () => { kick(); markFirstFrame(); };
+    v.addEventListener('loadeddata', onLoaded);
+    v.addEventListener('canplay', onLoaded);
     const onVis = () => { if (!document.hidden) kick(); };
     document.addEventListener('visibilitychange', onVis);
     const interval = window.setInterval(kick, 1000);
     const stopAt = window.setTimeout(() => window.clearInterval(interval), 8000);
     return () => {
-      v.removeEventListener('loadeddata', kick);
-      v.removeEventListener('canplay', kick);
+      v.removeEventListener('loadeddata', onLoaded);
+      v.removeEventListener('canplay', onLoaded);
       document.removeEventListener('visibilitychange', onVis);
       window.clearInterval(interval);
       window.clearTimeout(stopAt);
     };
-  }, [inViewport, videoUrl]);
+  }, [inViewport, videoUrl, look.id]);
 
   // Resolve creator identity in priority order:
   //   1. Static creators map (real handles like @lilywittman/@garrett)
@@ -304,19 +382,44 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
   // viewport prep band.
   const tilePoster = look.thumbnail_url || look.cover || '';
 
+  // Phase 2: the first 8 tiles (one row on desktop, four rows on
+  // mobile) get eager + high-priority poster fetch so the rail paints
+  // an image the instant it scrolls into view. Later tiles stay lazy
+  // so we don't burn bytes on posters the user may never reach.
+  const eagerPoster = index < 8;
+
+  // Phase 10: intent-based prefetch. Hover or first-touch = the user
+  // is about to tap, so kick the full-res byte fetch immediately.
+  // Idempotent via the prefetchedHighResUrls set in video-loading.ts,
+  // so this is free if Phase 4 already ran or if the bytes are
+  // cached. Closes the cold-cache gap for staggered tiles whose
+  // <video> hasn't rendered yet when the tap lands.
+  const handleIntent = useCallback(() => {
+    if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
+  }, [fullResVideoUrl]);
+
   return (
-    <button type="button" className="pd-look-tile" onClick={() => onOpen(look)} ref={wrapRef}>
+    <button
+      type="button"
+      className="pd-look-tile"
+      onClick={() => onOpen(look)}
+      onMouseEnter={handleIntent}
+      onTouchStart={handleIntent}
+      ref={wrapRef}
+    >
       {tilePoster && (
         <img
           src={tilePoster}
           alt=""
           aria-hidden="true"
           className="pd-look-tile-video"
-          loading="lazy"
+          loading={eagerPoster ? 'eager' : 'lazy'}
+          fetchPriority={eagerPoster ? 'high' : 'auto'}
+          decoding="async"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
         />
       )}
-      {videoUrl && inViewport && (
+      {videoUrl && inViewport && renderReady && (
         <video
           ref={videoRef}
           className="pd-look-tile-video"
@@ -332,7 +435,7 @@ function LookTile({ look, onOpen }: { look: Look; onOpen: (l: Look) => void }) {
           style={{ position: 'relative', zIndex: 1 }}
         />
       )}
-      {(!videoUrl || !inViewport) && (
+      {(!videoUrl || !inViewport || !renderReady) && (
         <div className="pd-look-tile-video" data-trail-id={trailId} />
       )}
 
@@ -588,6 +691,42 @@ export default function ProductPage({
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
   }, [creative?.id, creative?.videoUrl]);
 
+  // Prewarm "Featured in Looks" poster images. Each look that's
+  // about to render a tile gets its poster jpeg pulled into the
+  // browser image cache while the user is still reading the hero.
+  // Posters are tiny (~30 KB) so the cost is negligible and the
+  // payoff is the rail painting instantly the moment it scrolls
+  // into view - same first-paint cadence as the product images
+  // around it.
+  //
+  // Phase 3: also fire a Range-bounded byte prefetch on the first 4
+  // look videos. ~256 KB × 4 ≈ 1 MB total, paid silently while the
+  // user reads the hero, so by the time they scroll the rail into
+  // view the moov atom + first GOP are already in the HTTP cache and
+  // <video> decodes its first frame on the very next event loop tick
+  // instead of waiting for a cold round-trip to Supabase storage.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!lookCreatives || lookCreatives.length === 0) return;
+    const tiles = lookCreatives.slice(0, 12);
+    for (const l of tiles) {
+      const url = l.thumbnail_url;
+      if (!url) continue;
+      try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
+      } catch { /* ignore */ }
+    }
+    const mobile = isMobileViewport();
+    for (const l of tiles.slice(0, 4)) {
+      const videoUrl = (mobile && l.mobile_video_url) || l.video;
+      if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
+        prefetchVideoBytes(videoUrl);
+      }
+    }
+  }, [lookCreatives]);
+
   return (
     <div
       ref={overlayRef}
@@ -796,10 +935,10 @@ export default function ProductPage({
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
-            <h2 className="pd-feed-title">You might also like</h2>
+            <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
-              {lookCreatives.slice(0, 12).map(l => (
-                <LookTile key={l.id} look={l} onOpen={onOpenLook} />
+              {lookCreatives.slice(0, 24).map((l, i) => (
+                <LookTile key={l.id} look={l} index={i} onOpen={onOpenLook} />
               ))}
             </div>
           </section>

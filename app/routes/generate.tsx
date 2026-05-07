@@ -29,6 +29,13 @@ import {
   type GenerationProductDetail,
 } from '~/services/user-generations';
 import { getUserGender, type UserGender } from '~/services/genders';
+import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
+import {
+  createLookShare,
+  getLookShare,
+  shareUrlFor,
+  type LookShare,
+} from '~/services/look-shares';
 
 /* -----------------------------------------------------------
    Generate flow - shopper-facing, multi-step wizard.
@@ -105,7 +112,7 @@ const typicalSecondsFor = (durationSeconds?: number | null) =>
   TYPICAL_GENERATION_SECONDS_BY_DURATION[durationSeconds ?? 0]
   ?? TYPICAL_GENERATION_SECONDS_DEFAULT;
 
-type Step = 'photos' | 'products' | 'about' | 'style' | 'review' | 'result';
+type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
 
 // Age presets keep the picker compact - Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
@@ -182,7 +189,7 @@ function roleTagFromName(name: string | null): string | null {
   return null;
 }
 
-const STEP_VALUES: readonly Step[] = ['photos', 'products', 'about', 'style', 'review', 'result'];
+const STEP_VALUES: readonly Step[] = ['photos', 'products', 'style', 'review', 'result'];
 
 function readStepFromUrl(): Step {
   if (typeof window === 'undefined') return 'photos';
@@ -319,6 +326,22 @@ export default function GeneratePage() {
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
+  // Count of consecutive failed generations at the head of the list.
+  // The streak resets the moment we hit a 'done'. Used to gate the
+  // "These photos may be rejected" warning so it only fires after the
+  // user's actually hit the wall three times in a row, not on the
+  // first photo-check blip.
+  const consecutiveFailures = useMemo(() => {
+    let count = 0;
+    for (const g of generations) {
+      if (g.status === 'failed') count++;
+      else if (g.status === 'done') break;
+      // pending/generating rows are still in-flight - skip without
+      // counting or breaking the streak.
+    }
+    return count;
+  }, [generations]);
+
   // Phase 8 - products
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState<PickedProduct[]>([]);
@@ -373,6 +396,36 @@ export default function GeneratePage() {
     if (!user?.id) { setUserGender('unknown'); return; }
     getUserGender(user.id).then(setUserGender);
   }, [user?.id]);
+
+  // Prefill height + age from the user's profile so they don't have
+  // to re-enter on every wizard open. Set a flag once the prefill has
+  // landed so the persist-on-change effect below doesn't write the
+  // initial defaults back over the saved values during hydration.
+  const heightAgeHydrated = useRef(false);
+  useEffect(() => {
+    if (!user?.id) { heightAgeHydrated.current = true; return; }
+    let cancelled = false;
+    getUserHeightAge(user.id).then(saved => {
+      if (cancelled) return;
+      if (saved.heightCm)    setHeightCm(saved.heightCm);
+      if (saved.heightLabel) setHeightLabel(saved.heightLabel);
+      if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
+      heightAgeHydrated.current = true;
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Persist height + age on change. Debounced so dragging the height
+  // slider doesn't fire one PATCH per cm. The hydrated guard prevents
+  // writing the local defaults back over the user's saved values
+  // before the prefill has landed.
+  useEffect(() => {
+    if (!user?.id || !heightAgeHydrated.current) return;
+    const handle = window.setTimeout(() => {
+      updateUserHeightAge(user.id, { heightCm, heightLabel, ageLabel }).catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(handle);
+  }, [user?.id, heightCm, heightLabel, ageLabel]);
 
   // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -491,15 +544,18 @@ export default function GeneratePage() {
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);
-      // Gender filter: a male shopper only sees male + unisex +
-      // untagged products. Female mirrors. 'unknown' disables the
-      // filter so we never hide the catalog from someone we can't
-      // tag. Untagged (gender is null) products stay visible to all
-      // genders -- the audit button on /admin/content backfills.
+      // Gender filter: a male shopper only sees male + unisex; a
+      // female shopper only sees female + unisex. 'unknown' disables
+      // the filter so we never hide the catalog from someone whose
+      // gender we can't tag. Untagged (gender is null) products are
+      // explicitly excluded for tagged users — the user's preference
+      // is "only show products for that user's gender + unisex," so
+      // untagged rows need a gender backfill before they show up.
+      // Use the audit button on /admin/content to backfill.
       if (userGender === 'male') {
-        query = query.or('gender.eq.male,gender.eq.unisex,gender.is.null');
+        query = query.or('gender.eq.male,gender.eq.unisex');
       } else if (userGender === 'female') {
-        query = query.or('gender.eq.female,gender.eq.unisex,gender.is.null');
+        query = query.or('gender.eq.female,gender.eq.unisex');
       }
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
@@ -587,6 +643,14 @@ export default function GeneratePage() {
   // optimistically so the result video re-renders with the new crop
   // immediately.
   const [cropOpen, setCropOpen] = useState(false);
+  // Export-share state. exportShare holds the look_shares row once
+  // the share-look edge fn has minted it; we then poll until the
+  // Modal worker fills in watermarked_video_url.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportShare, setExportShare] = useState<LookShare | null>(null);
+  const [exportSlug, setExportSlug] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSubmitting, setExportSubmitting] = useState(false);
   // "How did I do?" feedback bar state. After generation completes the
   // user picks one of three answers (love / off / delete). 'love'
   // expands inline to keep-private vs publish-to-catalog; 'off'
@@ -897,6 +961,49 @@ export default function GeneratePage() {
     setStep('photos');
   };
 
+  // Export the current generation: mint a public share + open the
+  // share modal. The Modal worker fills in the watermarked URL
+  // asynchronously; the modal polls via getLookShare on a 2 s
+  // interval until status === 'done' or 'failed'.
+  const handleExportShare = useCallback(async () => {
+    if (!generation || generation.status !== 'done') return;
+    setExportError(null);
+    setExportSubmitting(true);
+    setExportOpen(true);
+    const resp = await createLookShare(generation.id);
+    setExportSubmitting(false);
+    if (resp.error || !resp.slug) {
+      setExportError(resp.error || 'Couldn’t create share. Try again.');
+      return;
+    }
+    setExportSlug(resp.slug);
+    setExportShare({
+      id: resp.share_id,
+      slug: resp.slug,
+      generation_id: generation.id,
+      created_by: '',
+      watermarked_video_url: resp.watermarked_video_url ?? null,
+      watermarked_storage_path: null,
+      status: resp.status,
+      error: null,
+      created_at: new Date().toISOString(),
+      rendered_at: null,
+    });
+  }, [generation]);
+
+  // Poll the share row until the watermark renders or fails. Stops
+  // the moment the modal closes or a terminal status lands.
+  useEffect(() => {
+    if (!exportOpen || !exportShare?.id) return;
+    if (exportShare.status === 'done' || exportShare.status === 'failed') return;
+    const tick = window.setInterval(async () => {
+      const fresh = await getLookShare(exportShare.id);
+      if (!fresh) return;
+      setExportShare(fresh);
+    }, 2000);
+    return () => window.clearInterval(tick);
+  }, [exportOpen, exportShare?.id, exportShare?.status]);
+
   const canAdvance = useMemo(() => {
     // Photos step now also requires height + age. Without this, a user
     // could skip the About step's prereqs (only validated when the
@@ -905,7 +1012,6 @@ export default function GeneratePage() {
     // believable look, so we gate at the entry point.
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading && !!heightLabel && !!ageLabel;
     if (step === 'products') return picked.length > 0;
-    if (step === 'about') return !!heightLabel && !!ageLabel;
     if (step === 'style') return !!style;
     return true;
   }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
@@ -1046,7 +1152,18 @@ export default function GeneratePage() {
                 const isUploadingHere = uploadProgress?.slot === i;
                 const pctHere = isUploadingHere ? Math.round(uploadProgress!.pct * 100) : 0;
                 const isDragging = dragSlots.has(i);
-                const checkState = slotChecks[i];
+                // Same 3-strike gate as the warning banner. The
+                // pre-validator's blocked signal is noisy enough
+                // (false positives on perfectly-fine selfies) that
+                // we don't trust it on its own — only after the
+                // user has actually hit the wall three times in a
+                // row do we paint the slot's red ! badge. Once a
+                // generation succeeds, the streak is 0 and the
+                // badges clear automatically.
+                const rawCheckState = slotChecks[i];
+                const checkState = rawCheckState === 'blocked' && consecutiveFailures < 3
+                  ? 'ok'
+                  : rawCheckState;
                 return (
                   <div
                     key={i}
@@ -1122,7 +1239,12 @@ export default function GeneratePage() {
             </div>
 
             {uploadError && <div className="gen-error">{uploadError}</div>}
-            {!uploadError && photoCheckReason && slotChecks.some(c => c === 'blocked') && (
+            {/* Warning gated on 3 consecutive failed generations. Photo-check
+                blocks alone aren't a strong-enough signal (false positives are
+                common in the validator); we surface the rejection warning
+                only after the user has hit the wall three times in a row so
+                we're confident the photo set really is the bottleneck. */}
+            {!uploadError && photoCheckReason && slotChecks.some(c => c === 'blocked') && consecutiveFailures >= 3 && (
               <div className="gen-photo-warn">
                 {photoCheckReason === 'partner_validation_failed'
                   ? '⚠ ByteDance’s safety filter rejected this photo set. Try replacing one with a different selfie, or use a single photo instead of all three.'
@@ -1134,37 +1256,10 @@ export default function GeneratePage() {
               </div>
             )}
 
-              <div className="gen-photos-meta">
-                <label className="gen-photos-meta-field">
-                  <span className="gen-photos-meta-label">Height</span>
-                  <select
-                    className="gen-photos-meta-select"
-                    value={heightCm}
-                    onChange={e => {
-                      const cm = Number(e.target.value);
-                      const opt = HEIGHT_OPTIONS.find(o => o.cm === cm);
-                      setHeightCm(cm);
-                      if (opt) setHeightLabel(opt.label);
-                    }}
-                  >
-                    {HEIGHT_OPTIONS.map(opt => (
-                      <option key={opt.cm} value={opt.cm}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="gen-photos-meta-field">
-                  <span className="gen-photos-meta-label">Age</span>
-                  <select
-                    className="gen-photos-meta-select"
-                    value={ageLabel}
-                    onChange={e => setAgeLabel(e.target.value)}
-                  >
-                    {AGE_PRESETS.map(opt => (
-                      <option key={opt.label} value={opt.label}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              {/* Height + age are read from the user's profile (set
+                  once, prefilled from getUserHeightAge on mount) so
+                  the wizard never asks twice. The values are still
+                  passed to the generation request below. */}
 
             </div>
 
@@ -1237,7 +1332,7 @@ export default function GeneratePage() {
 
         {step === 'products' && (
           <section className="gen-step gen-step-products">
-            <h2>2. Pick your products</h2>
+            <h2>Pick your products</h2>
             {/* Picked-products preview moved into the unified gen-dock at
                 the bottom (see render below) so the three previously
                 separate fixed elements (picks, Back/Next, step rail)
@@ -1300,48 +1395,9 @@ export default function GeneratePage() {
           </section>
         )}
 
-        {step === 'about' && (
-          <section className="gen-step">
-            <h2>3. About you</h2>
-            <p>Pick a height and an age range. We pass both into the prompt so the proportions and look land where you want them.</p>
-
-            <div className="gen-aboutgroup">
-              <div className="gen-sectionlabel">Height</div>
-              <div className="gen-heightgrid">
-                {HEIGHT_OPTIONS.map(opt => (
-                  <button
-                    key={opt.cm}
-                    type="button"
-                    className={`gen-heightchip${heightLabel === opt.label ? ' is-picked' : ''}`}
-                    onClick={() => { setHeightCm(opt.cm); setHeightLabel(opt.label); }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="gen-aboutgroup">
-              <div className="gen-sectionlabel">Age</div>
-              <div className="gen-heightgrid">
-                {AGE_PRESETS.map(opt => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={`gen-heightchip${ageLabel === opt.label ? ' is-picked' : ''}`}
-                    onClick={() => setAgeLabel(opt.label)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
         {step === 'style' && (
           <section className="gen-step">
-            <h2>4. Style</h2>
+            <h2>Style</h2>
             <div className="gen-stylegrid">
               {STYLE_PRESETS.map(s => (
                 <button
@@ -1360,7 +1416,7 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step">
-            <h2>5. Review</h2>
+            <h2>Review</h2>
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
@@ -1496,14 +1552,14 @@ export default function GeneratePage() {
                       className="gen-feedback-btn gen-feedback-btn-love"
                       onClick={() => setFeedbackKind('love')}
                     >
-                      It looks great!
+                      It looks great!!
                     </button>
                     <button
                       type="button"
                       className="gen-feedback-btn gen-feedback-btn-off"
                       onClick={() => setFeedbackKind('off')}
                     >
-                      Umm… this is not it
+                      It&apos;s okay…
                     </button>
                     <button
                       type="button"
@@ -1608,23 +1664,38 @@ export default function GeneratePage() {
 
             {generation && (
               <div className="gen-result-actions">
-                <button className="gen-btn-secondary" onClick={startNewLook}>
-                  New look
+                <button className="gen-btn-primary" onClick={startNewLook}>
+                  Get a new look going
                 </button>
                 {generation.status === 'done' && generation.video_url && (
-                  <button
-                    className="gen-btn-secondary"
-                    onClick={() => setCropOpen(true)}
-                  >
-                    Crop
-                  </button>
+                  <>
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={() => setCropOpen(true)}
+                    >
+                      Crop
+                    </button>
+                    {/* Export bakes the Catalog wordmark onto the video
+                        and mints a public /s/:slug share link via the
+                        share-look edge function + Modal worker. */}
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={handleExportShare}
+                    >
+                      Export
+                    </button>
+                    {/* Edit & regenerate is only meaningful once the
+                        current look has finished rendering — there's
+                        nothing to "edit" while the pipeline is still
+                        working on it. */}
+                    <button
+                      className="gen-btn-secondary"
+                      onClick={() => editGeneration(generation.id)}
+                    >
+                      Edit &amp; regenerate
+                    </button>
+                  </>
                 )}
-                <button
-                  className="gen-btn-primary"
-                  onClick={() => editGeneration(generation.id)}
-                >
-                  Edit &amp; regenerate
-                </button>
               </div>
             )}
 
@@ -1645,6 +1716,19 @@ export default function GeneratePage() {
                       : g));
                   setCropOpen(false);
                   await updateGenerationCrop(generation.id, crop);
+                }}
+              />
+            )}
+
+            {exportOpen && (
+              <ExportShareModal
+                share={exportShare}
+                slug={exportSlug}
+                submitting={exportSubmitting}
+                error={exportError}
+                onClose={() => {
+                  setExportOpen(false);
+                  setExportError(null);
                 }}
               />
             )}
@@ -1708,7 +1792,11 @@ export default function GeneratePage() {
           </div>
         )}
         <aside className="gen-dock" aria-label="Step controls">
-          {step === 'products' && picked.length > 0 && (
+          {/* Picked-products strip stays visible across products → style →
+              review so the user always sees what they're building. The
+              tap-to-remove × is still wired so they can tweak the lineup
+              without scrolling back to the products step. */}
+          {picked.length > 0 && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
               {picked.map(p => (
                 <div key={p.id} className="gen-dock-pick">
@@ -1748,7 +1836,7 @@ export default function GeneratePage() {
   );
 }
 
-const STEP_ORDER: Step[] = ['photos', 'products', 'about', 'style', 'review'];
+const STEP_ORDER: Step[] = ['photos', 'products', 'style', 'review'];
 
 function goNext(current: Step, set: (s: Step) => void) {
   const i = STEP_ORDER.indexOf(current);
@@ -2033,6 +2121,148 @@ function cropTransformStyle(
 }
 
 interface Crop { scale: number; x: number; y: number }
+
+/**
+ * ExportShareModal - opens after the user taps Export. Shows a copy-
+ * link affordance with the public /s/:slug URL, plus a small status
+ * line that flips from "Watermarking..." to "Ready" once the Modal
+ * worker finishes baking the wordmark onto the video. The native
+ * share sheet button uses navigator.share when available and falls
+ * back to copy-to-clipboard.
+ */
+function ExportShareModal({
+  share,
+  slug,
+  submitting,
+  error,
+  onClose,
+}: {
+  share: LookShare | null;
+  slug: string | null;
+  submitting: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const url = slug ? shareUrlFor(slug) : '';
+  const isReady = share?.status === 'done' && !!share?.watermarked_video_url;
+  const isFailed = share?.status === 'failed';
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const handleCopy = useCallback(async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard API gated on https in some browsers - silently fail */
+    }
+  }, [url]);
+
+  const handleNativeShare = useCallback(async () => {
+    if (!url) return;
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({
+          title: 'My Catalog look',
+          text: 'Made with Catalog',
+          url,
+        });
+        return;
+      } catch {
+        /* user cancelled - fall through to copy */
+      }
+    }
+    await handleCopy();
+  }, [url, handleCopy]);
+
+  return (
+    <div className="gen-modal-backdrop" onClick={onClose}>
+      <div className="gen-modal gen-export-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="gen-modal-head">
+          <div>
+            <h2 className="gen-modal-title">Export this look</h2>
+            <p className="gen-modal-sub">
+              Share a public link to this look. The Catalog wordmark is
+              baked onto the video so it travels with every save and re-share.
+            </p>
+          </div>
+          <button className="gen-modal-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        <div className="gen-export-body">
+          {error && <div className="gen-error">{error}</div>}
+
+          {!error && (
+            <>
+              <div className="gen-export-status">
+                {submitting && <span>Creating share…</span>}
+                {!submitting && share && !isReady && !isFailed && (
+                  <span>
+                    <span className="gen-export-spinner" aria-hidden="true" />
+                    Watermarking your video…
+                  </span>
+                )}
+                {!submitting && isReady && <span className="gen-export-status-done">Ready to share</span>}
+                {!submitting && isFailed && (
+                  <span className="gen-export-status-failed">
+                    Watermark failed{share?.error ? `: ${share.error}` : '.'} You can still share the link below.
+                  </span>
+                )}
+              </div>
+
+              {url && (
+                <>
+                  <div className="gen-export-link" role="region" aria-label="Share link">
+                    <input
+                      type="text"
+                      readOnly
+                      value={url}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="gen-export-link-input"
+                    />
+                    <button
+                      type="button"
+                      className="gen-export-link-copy"
+                      onClick={handleCopy}
+                    >
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+
+                  <div className="gen-export-actions">
+                    <button
+                      type="button"
+                      className="gen-btn-primary"
+                      onClick={handleNativeShare}
+                    >
+                      Share link
+                    </button>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gen-btn-secondary gen-export-open"
+                    >
+                      Open
+                    </a>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * CropModal - drag to pan + slider to zoom. Output stays 9:16 (the
@@ -2359,13 +2589,11 @@ function UploadPickerModal({
 }
 
 function StepRail({
-  step, photosCount, productsCount, heightLabel, ageLabel, style, embedded = false,
+  step, photosCount, productsCount, style, embedded = false,
 }: {
   step: Step;
   photosCount: number;
   productsCount: number;
-  heightLabel: string;
-  ageLabel: string;
   style: string;
   /** When true, the rail is being rendered as a row inside the unified
    *  gen-dock - drop the fixed positioning + glass background since
@@ -2375,7 +2603,6 @@ function StepRail({
   const filled = {
     photos: photosCount > 0,
     products: productsCount > 0,
-    about: !!heightLabel && !!ageLabel,
     style: !!style,
     review: false,
     result: false,
@@ -2383,7 +2610,6 @@ function StepRail({
   const items: { k: Step; label: string }[] = [
     { k: 'photos',   label: 'Photos' },
     { k: 'products', label: 'Products' },
-    { k: 'about',    label: 'About' },
     { k: 'style',    label: 'Style' },
     { k: 'review',   label: 'Review' },
   ];
