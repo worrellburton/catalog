@@ -629,6 +629,16 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-clickable-row {
   cursor: pointer;
+  /* Pass 7: rows fade-up on first paint so realtime inserts /
+     reorderings don't pop. We key the table rows on user.id, so
+     when a user moves between tabs (e.g. promoted to admin) the
+     row in the destination tab mounts fresh and runs this. */
+  animation: admin-row-fade-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes admin-row-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .admin-clickable-row:hover td {
