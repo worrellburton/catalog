@@ -483,7 +483,6 @@ export default function ProductPage({
   // Shared derived values used by both rails below.
   const ownBrand = (product.brand || '').trim().toLowerCase();
   const ownProductId = (product as Product & { id?: string }).id || '';
-  const ownType = (product as Product & { type?: string | null }).type || null;
 
   // Resolve seed gender from any available row so we can gender-scope rails.
   const seedGender = useMemo(() => {
@@ -536,21 +535,14 @@ export default function ProductPage({
 
   // "Popular" — shown only when moreLikeThis is empty.
   // Filtered to the same product type so we never show unrelated items.
+  // "Popular" rail — shown only when "More like this" has no results.
+  // No type filter: the whole point is to surface something when similarity
+  // returns nothing, so we show the full popular feed (cross-brand, gender-
+  // scoped as usual via pickFrom).
   const popularItems = useMemo((): ProductAd[] => {
     if (moreLikeThis.length > 0) return [];
-    if (!popularFallback || popularFallback.length === 0) return [];
-    if (ownType) {
-      return pickFrom(
-        popularFallback.filter(c => c.product?.type === ownType),
-      );
-    }
-    // No type — show same-brand popular items as a last resort.
-    return pickFrom(
-      popularFallback.filter(
-        c => (c.product?.brand || '').trim().toLowerCase() === ownBrand,
-      ),
-    );
-  }, [moreLikeThis, popularFallback, ownType, ownBrand, pickFrom]);
+    return pickFrom(popularFallback);
+  }, [moreLikeThis, popularFallback, pickFrom]);
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer

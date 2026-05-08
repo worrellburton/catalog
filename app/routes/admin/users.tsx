@@ -509,6 +509,104 @@ export default function AdminUsers() {
     };
   }, []);
 
+  // Pass 3: realtime — listen to the profiles table so any row that
+  // another admin (or this admin in another tab) updates lands here
+  // within ~50ms. Updates merge into allUsers; deletes drop the row;
+  // inserts append. Each remote change drops a toast so the admin
+  // sees who/what changed without having to reload.
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin-users-profiles')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const fresh = profileToRow(payload.new as Profile);
+            setAllUsers(prev => {
+              if (prev.some(u => u.id === fresh.id)) return prev;
+              return [...prev, { ...fresh, looksCount: 0 }];
+            });
+            return;
+          }
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id?: string }).id;
+            if (!id) return;
+            let removed: UserRow | undefined;
+            setAllUsers(prev => {
+              removed = prev.find(u => u.id === id);
+              return prev.filter(u => u.id !== id);
+            });
+            if (removed) showToast(`${removed.name} was removed`, 'warning');
+            return;
+          }
+          if (payload.eventType === 'UPDATE') {
+            const fresh = profileToRow(payload.new as Profile);
+            setAllUsers(prev => {
+              const target = prev.find(u => u.id === fresh.id);
+              if (!target) return prev;
+              // Only emit a remote-change toast when the fields we
+              // surface actually changed; otherwise irrelevant churn
+              // (last_sign_in_at ticking on session refresh, etc.)
+              // would spam the admin.
+              const fieldsChanged =
+                target.role !== fresh.role
+                || target.isAdmin !== fresh.isAdmin
+                || target.gender !== fresh.gender
+                || target.name !== fresh.name;
+              if (fieldsChanged) {
+                const what =
+                  target.role !== fresh.role
+                    ? `role -> ${USER_ROLE_LABELS[fresh.role]}`
+                    : target.isAdmin !== fresh.isAdmin
+                      ? (fresh.isAdmin ? 'made admin' : 'admin revoked')
+                      : 'updated';
+                showToast(`${fresh.name}: ${what}`, 'success');
+              }
+              return prev.map(u => u.id === fresh.id
+                ? { ...u, ...fresh, looksCount: u.looksCount }
+                : u);
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase!.removeChannel(channel);
+    };
+  }, [showToast]);
+
+  // Pass 4: refetch on tab focus + soft 30s interval. The realtime
+  // sub above is the hot path, but a periodic re-read catches missed
+  // events (websocket drops, network blips, etc.) and the focus-
+  // refetch covers tabs that were backgrounded across a change. Both
+  // are best-effort: failures are silent.
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const profiles = await getProfiles();
+      if (cancelled) return;
+      setAllUsers(prev => {
+        const byId = new Map(prev.map(u => [u.id, u]));
+        return profiles.map(p => {
+          const row = profileToRow(p);
+          const prevRow = byId.get(p.id);
+          return { ...row, looksCount: prevRow?.looksCount ?? 0 };
+        });
+      });
+    };
+    const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onFocus);
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onFocus);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const handleRoleChange = useCallback((userId: string, newRole: UserRole, error?: string) => {
     if (error) {
       showToast(`Failed to change role: ${error}`, 'warning');
