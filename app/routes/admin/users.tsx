@@ -84,7 +84,7 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'shoppers' | 'shoppers-waitlist' | 'creators' | 'creators-incoming' | 'admins' | 'super-admins';
+type Tab = 'waitlist' | 'users' | 'admins' | 'super-admins';
 
 type ToastType = 'success' | 'info' | 'warning';
 
@@ -317,7 +317,7 @@ function writeDeletedContentCreators(set: Set<string>) {
 }
 
 export default function AdminUsers() {
-  const [activeTab, setActiveTab] = useState<Tab>('shoppers');
+  const [activeTab, setActiveTab] = useState<Tab>('users');
   // Pass 2: seed from module cache so re-entering the page paints
   // with data immediately. Realtime + initial fetch refresh in place.
   const [allUsers, setAllUsers] = useState<UserRow[]>(() => cachedUsers ?? []);
@@ -648,18 +648,23 @@ export default function AdminUsers() {
   // on every render — including every toast tick — was needless work
   // and made each toggle feel less crisp. Keys: allUsers, waitlistIds,
   // and deletedContentCreators (the only inputs that mutate the slices).
-  const shoppers = useMemo(
-    () => allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id)),
+  //
+  // Users tab combines shoppers + creators into one list. Anyone in
+  // the waitlist OR currently elevated to admin/super_admin is filtered
+  // out — admins live on their own tab and waitlisters live on theirs.
+  // Seed-data creators from app/data/looks.ts are folded in too so
+  // every person who shows up in the consumer feed has a row here.
+  const dbUsers = useMemo(
+    () => allUsers.filter(u =>
+      (u.role === 'shopper' || u.role === 'creator')
+      && !waitlistIds.has(u.id)
+      && !u.isAdmin
+    ),
     [allUsers, waitlistIds],
   );
-  const dbCreators = useMemo(
-    () => allUsers.filter(u => u.role === 'creator'),
-    [allUsers],
-  );
 
-  // Merge content creators from looks data with DB creators
   const contentCreators: UserRow[] = useMemo(() => {
-    const dbNames = new Set(dbCreators.map(c => c.name.toLowerCase()));
+    const dbNames = new Set(dbUsers.map(c => c.name.toLowerCase()));
     return Object.values(lookCreators)
       .filter(c => !dbNames.has(c.displayName.toLowerCase()))
       .filter(c => !deletedContentCreators.has(c.name))
@@ -681,9 +686,9 @@ export default function AdminUsers() {
         followings: 0,
         creator: '-',
       }));
-  }, [dbCreators, deletedContentCreators]);
+  }, [dbUsers, deletedContentCreators]);
 
-  const creators = useMemo(() => [...dbCreators, ...contentCreators], [dbCreators, contentCreators]);
+  const users = useMemo(() => [...dbUsers, ...contentCreators], [dbUsers, contentCreators]);
   // Admins tab: a user counts as an admin when EITHER the explicit
   // is_admin flag is true OR their primary role is admin / super_admin.
   // Either dimension alone used to be enough to make a user "vanish":
@@ -705,7 +710,7 @@ export default function AdminUsers() {
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
   // their generated_videos / user_generations. Seed-data ("content-*")
   // creators → mark the handle deleted in localStorage so the
-  // Creators tab filters them out, and add their bundled look ids to
+  // Users tab filters them out, and add their bundled look ids to
   // admin_hidden_looks (or the local mirror) so the published feed
   // drops the looks too. The confirm copy reports the look count
   // we're about to take down with them.
@@ -886,8 +891,7 @@ export default function AdminUsers() {
     release(key);
   }, [allUsers, showToast, tryClaim, release]);
 
-  const shopperTable = useSortableTable(shoppers);
-  const creatorTable = useSortableTable(creators);
+  const userTable = useSortableTable(users);
   const adminTable = useSortableTable(admins);
   const superAdminTable = useSortableTable(superAdmins);
 
@@ -895,11 +899,12 @@ export default function AdminUsers() {
     data: UserRow[],
     table: ReturnType<typeof useSortableTable<UserRow>>,
     labelCol: string,
-    showSuperToggle: boolean = false,
+    options: { showSuperToggle?: boolean; showAdminToggle?: boolean; showPromoteButton?: boolean } = {},
   ) => {
+    const { showSuperToggle = false, showAdminToggle = true, showPromoteButton = false } = options;
     if (data.length === 0) {
       // Pass 3: distinguish "still loading the first time" from
-      // "loaded, but this slice is empty". The flash of "No shoppers
+      // "loaded, but this slice is empty". The flash of "No users
       // yet" while the network is still in flight read like a bug —
       // worse on slow connections — and made promotions feel less
       // stable since the list rebuilds after the optimistic write.
@@ -915,7 +920,9 @@ export default function AdminUsers() {
             <tr>
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
-              <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
+              {showAdminToggle && (
+                <SortableTh label="Admin" sortKey="isAdmin" currentSort={table.sort} onSort={table.handleSort} />
+              )}
               {showSuperToggle && (
                 <SortableTh label="Super" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               )}
@@ -928,7 +935,7 @@ export default function AdminUsers() {
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Via Creator" sortKey="creator" currentSort={table.sort} onSort={table.handleSort} />
-              <th style={{ width: 80 }}>Actions</th>
+              <th style={{ width: showPromoteButton ? 180 : 80 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -945,16 +952,18 @@ export default function AdminUsers() {
                 <td onClick={(e) => e.stopPropagation()}>
                   <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <label className="admin-toggle" title={u.isAdmin ? 'Revoke admin' : 'Make admin'}>
-                    <input
-                      type="checkbox"
-                      checked={u.isAdmin}
-                      onChange={(e) => handleAdminToggle(u.id, e.target.checked)}
-                    />
-                    <span className="admin-toggle-track" />
-                  </label>
-                </td>
+                {showAdminToggle && (
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <label className="admin-toggle" title={u.isAdmin ? 'Revoke admin' : 'Make admin'}>
+                      <input
+                        type="checkbox"
+                        checked={u.isAdmin}
+                        onChange={(e) => handleAdminToggle(u.id, e.target.checked)}
+                      />
+                      <span className="admin-toggle-track" />
+                    </label>
+                  </td>
+                )}
                 {showSuperToggle && (
                   <td onClick={(e) => e.stopPropagation()}>
                     <label className="admin-toggle" title={u.role === 'super_admin' ? 'Revoke super admin' : 'Make super admin'}>
@@ -985,20 +994,38 @@ export default function AdminUsers() {
                 <td>{u.followings}</td>
                 <td className="admin-cell-muted">{u.creator}</td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className="admin-row-delete"
-                    onClick={() => handleDelete(u.id)}
-                    aria-label={`Delete ${u.name}`}
-                    title="Delete"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6M14 11v6" />
-                      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                    {showPromoteButton && (
+                      // "Move to admin" — single-click promote. Skips
+                      // the seed-data ("content-*") rows since those
+                      // aren't real auth users and have nothing to
+                      // promote in the DB.
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-secondary admin-row-promote"
+                        onClick={() => handleAdminToggle(u.id, true)}
+                        disabled={u.id.startsWith('content-')}
+                        title={u.id.startsWith('content-') ? 'Seed creator — sign-up required first' : `Move ${u.name} to admin`}
+                        aria-label={`Move ${u.name} to admin`}
+                      >
+                        Move to admin
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="admin-row-delete"
+                      onClick={() => handleDelete(u.id)}
+                      aria-label={`Delete ${u.name}`}
+                      title="Delete"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1013,7 +1040,7 @@ export default function AdminUsers() {
       <div className="admin-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Users</h1>
-          <p className="admin-page-subtitle">Manage shoppers and creators</p>
+          <p className="admin-page-subtitle">Manage users and admins</p>
         </div>
         <button
           className="admin-btn admin-btn-secondary"
@@ -1041,21 +1068,22 @@ export default function AdminUsers() {
           {auditingGender ? 'Auditing…' : 'Gender audit'}
         </button>
       </div>
+      {/* Order: Waitlist > Users > Admins > Super Admins. The
+          previous Shoppers/Creators split was a false dichotomy —
+          a "shopper" who publishes a look becomes a "creator" with
+          no other state change, so showing them in two tables made
+          the same person appear/disappear on role flips. One Users
+          tab owns everyone who isn't elevated. The Incoming tab was
+          a placeholder for a feature that never shipped — dropped. */}
       <div className="admin-tabs">
         <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>
-            Shoppers{shoppers.length > 0 && <span className="admin-tab-count">{shoppers.length}</span>}
-          </button>
-          <button className={`admin-tab admin-tab-sub ${activeTab === 'shoppers-waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers-waitlist')}>
-            Waitlist
+          <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
+            Waitlist{waitlistIds.size > 0 && <span className="admin-tab-count">{waitlistIds.size}</span>}
           </button>
         </div>
         <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'creators' ? 'active' : ''}`} onClick={() => setActiveTab('creators')}>
-            Creators{creators.length > 0 && <span className="admin-tab-count">{creators.length}</span>}
-          </button>
-          <button className={`admin-tab admin-tab-sub ${activeTab === 'creators-incoming' ? 'active' : ''}`} onClick={() => setActiveTab('creators-incoming')}>
-            Incoming
+          <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+            Users{users.length > 0 && <span className="admin-tab-count">{users.length}</span>}
           </button>
         </div>
         <div className="admin-tab-group">
@@ -1068,12 +1096,10 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {activeTab === 'shoppers' && renderTable(shoppers, shopperTable, 'Shopper')}
-      {activeTab === 'shoppers-waitlist' && <AdminWaitlistPanel />}
-      {activeTab === 'creators' && renderTable(creators, creatorTable, 'Creator')}
-      {activeTab === 'creators-incoming' && <p className="admin-detail-empty">No incoming creator applications</p>}
-      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', true)}
-      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', true)}
+      {activeTab === 'waitlist' && <AdminWaitlistPanel />}
+      {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
+      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}
+      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', { showSuperToggle: true })}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
