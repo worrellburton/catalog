@@ -278,6 +278,15 @@ function RoleBadge({ role, userId, onRoleChange }: { role: UserRole; userId: str
   );
 }
 
+// Pass 2: module-scope cache. The admin re-enters /admin/users many
+// times per session (deep links from creator/shopper detail pages,
+// tab nav, etc.). Caching the last-seen rows here means the page
+// paints with data on the next visit instead of flashing empty
+// tables while the network round-trips. Realtime + focus refetch
+// keep it honest.
+let cachedUsers: UserRow[] | null = null;
+let cachedWaitlistIds: Set<string> | null = null;
+
 // Seed-data creators come from app/data/looks.ts so the row can't be
 // removed from the bundle, but the admin still needs delete semantics.
 // We persist a localStorage set of "deleted" handles and filter them
@@ -309,13 +318,45 @@ function writeDeletedContentCreators(set: Set<string>) {
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState<Tab>('shoppers');
-  const [allUsers, setAllUsers] = useState<UserRow[]>([]);
-  const [waitlistIds, setWaitlistIds] = useState<Set<string>>(new Set());
+  // Pass 2: seed from module cache so re-entering the page paints
+  // with data immediately. Realtime + initial fetch refresh in place.
+  const [allUsers, setAllUsers] = useState<UserRow[]>(() => cachedUsers ?? []);
+  const [waitlistIds, setWaitlistIds] = useState<Set<string>>(() => cachedWaitlistIds ?? new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [loaded, setLoaded] = useState<boolean>(() => cachedUsers !== null);
   const [auditingGender, setAuditingGender] = useState(false);
   const [deletedContentCreators, setDeletedContentCreators] = useState<Set<string>>(() => readDeletedContentCreators());
   const toastIdRef = useRef(0);
+  const lastToastRef = useRef<{ message: string; ts: number } | null>(null);
   const navigate = useNavigate();
+
+  // Pass 1: declare toast helpers BEFORE any useEffect that closes
+  // over them. Previously the realtime subscription effect listed
+  // `showToast` in its deps array but `showToast` was declared lower
+  // in the function body — a TDZ violation that threw at render
+  // time, which is what made the page feel broken. Order matters.
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+    window.setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 240);
+  }, []);
+
+  const showToast = useCallback((message: string, type: ToastType) => {
+    // Pass 5: dedupe identical messages fired within 500ms. Optimistic
+    // local toasts and the realtime subscription can both fire for
+    // the same change — we only want to show it once.
+    const now = Date.now();
+    const last = lastToastRef.current;
+    if (last && last.message === message && now - last.ts < 500) return;
+    lastToastRef.current = { message, ts: now };
+    toastIdRef.current += 1;
+    const id = toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    window.setTimeout(() => {
+      dismissToast(id);
+    }, 4000);
+  }, [dismissToast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -331,10 +372,11 @@ export default function AdminUsers() {
       ]);
       if (cancelled) return;
       setWaitlistIds(ids);
+      cachedWaitlistIds = ids;
       const counts = new Map<string, number>();
       const rows = ((genRowsRes as { data: { user_id: string }[] | null }).data) || [];
       for (const r of rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
-      setAllUsers(profiles.map(p => {
+      const next = profiles.map(p => {
         const row = profileToRow(p);
         // Two sources contribute: (a) generated looks owned by the
         // auth user, (b) seed-data look authorship matched by name.
@@ -343,7 +385,10 @@ export default function AdminUsers() {
         )?.name;
         const seedCount = seedHandle ? (looksPerCreator[seedHandle] || 0) : 0;
         return { ...row, looksCount: (counts.get(p.id) || 0) + seedCount };
-      }));
+      });
+      setAllUsers(next);
+      cachedUsers = next;
+      setLoaded(true);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -351,8 +396,10 @@ export default function AdminUsers() {
   // Pass 3: realtime — listen to the profiles table so any row that
   // another admin (or this admin in another tab) updates lands here
   // within ~50ms. Updates merge into allUsers; deletes drop the row;
-  // inserts append. Each remote change drops a toast so the admin
-  // sees who/what changed without having to reload.
+  // inserts append. Each meaningful remote change drops a toast so
+  // the admin sees who/what changed without having to reload. Pass 5
+  // dedupe collapses the duplicate toast that fires when a local
+  // optimistic change is echoed back over the realtime channel.
   useEffect(() => {
     if (!supabase) return;
     const channel = supabase
@@ -365,8 +412,11 @@ export default function AdminUsers() {
             const fresh = profileToRow(payload.new as Profile);
             setAllUsers(prev => {
               if (prev.some(u => u.id === fresh.id)) return prev;
-              return [...prev, { ...fresh, looksCount: 0 }];
+              const next = [...prev, { ...fresh, looksCount: 0 }];
+              cachedUsers = next;
+              return next;
             });
+            showToast(`${fresh.name} joined`, 'info');
             return;
           }
           if (payload.eventType === 'DELETE') {
@@ -375,7 +425,9 @@ export default function AdminUsers() {
             let removed: UserRow | undefined;
             setAllUsers(prev => {
               removed = prev.find(u => u.id === id);
-              return prev.filter(u => u.id !== id);
+              const next = prev.filter(u => u.id !== id);
+              cachedUsers = next;
+              return next;
             });
             if (removed) showToast(`${removed.name} was removed`, 'warning');
             return;
@@ -384,11 +436,17 @@ export default function AdminUsers() {
             const fresh = profileToRow(payload.new as Profile);
             setAllUsers(prev => {
               const target = prev.find(u => u.id === fresh.id);
-              if (!target) return prev;
+              if (!target) {
+                const next = [...prev, { ...fresh, looksCount: 0 }];
+                cachedUsers = next;
+                return next;
+              }
               // Only emit a remote-change toast when the fields we
               // surface actually changed; otherwise irrelevant churn
               // (last_sign_in_at ticking on session refresh, etc.)
-              // would spam the admin.
+              // would spam the admin. Pass 5 dedupe handles the case
+              // where the optimistic toast already fired for the same
+              // message text within the last 500ms.
               const fieldsChanged =
                 target.role !== fresh.role
                 || target.isAdmin !== fresh.isAdmin
@@ -397,15 +455,17 @@ export default function AdminUsers() {
               if (fieldsChanged) {
                 const what =
                   target.role !== fresh.role
-                    ? `role -> ${USER_ROLE_LABELS[fresh.role]}`
+                    ? `role changed to ${USER_ROLE_LABELS[fresh.role]}`
                     : target.isAdmin !== fresh.isAdmin
-                      ? (fresh.isAdmin ? 'made admin' : 'admin revoked')
+                      ? (fresh.isAdmin ? 'is now an admin' : 'is no longer an admin')
                       : 'updated';
-                showToast(`${fresh.name}: ${what}`, 'success');
+                showToast(`${fresh.name} ${what}`, 'success');
               }
-              return prev.map(u => u.id === fresh.id
+              const next = prev.map(u => u.id === fresh.id
                 ? { ...u, ...fresh, looksCount: u.looksCount }
                 : u);
+              cachedUsers = next;
+              return next;
             });
           }
         },
@@ -416,11 +476,12 @@ export default function AdminUsers() {
     };
   }, [showToast]);
 
-  // Pass 4: refetch on tab focus + soft 30s interval. The realtime
-  // sub above is the hot path, but a periodic re-read catches missed
-  // events (websocket drops, network blips, etc.) and the focus-
-  // refetch covers tabs that were backgrounded across a change. Both
-  // are best-effort: failures are silent.
+  // Pass 4 + 7: refetch on tab focus + soft 60s interval. Realtime
+  // is the hot path; this is the safety net for missed events
+  // (websocket drops, backgrounded tabs, etc.). The poll interval
+  // dropped from 30s -> 60s since realtime + focus cover the common
+  // cases and 30s was unnecessary network churn. Both refreshes are
+  // best-effort: failures are silent.
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -429,38 +490,24 @@ export default function AdminUsers() {
       if (cancelled) return;
       setAllUsers(prev => {
         const byId = new Map(prev.map(u => [u.id, u]));
-        return profiles.map(p => {
+        const next = profiles.map(p => {
           const row = profileToRow(p);
           const prevRow = byId.get(p.id);
           return { ...row, looksCount: prevRow?.looksCount ?? 0 };
         });
+        cachedUsers = next;
+        return next;
       });
     };
     const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
     document.addEventListener('visibilitychange', onFocus);
-    const interval = window.setInterval(() => void refresh(), 30_000);
+    const interval = window.setInterval(() => void refresh(), 60_000);
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onFocus);
       window.clearInterval(interval);
     };
   }, []);
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
-    window.setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 240);
-  }, []);
-
-  const showToast = useCallback((message: string, type: ToastType) => {
-    toastIdRef.current += 1;
-    const id = toastIdRef.current;
-    setToasts(prev => [...prev, { id, message, type }]);
-    window.setTimeout(() => {
-      dismissToast(id);
-    }, 4000);
-  }, [dismissToast]);
 
   const handleRoleChange = useCallback((userId: string, newRole: UserRole, error?: string) => {
     if (error) {
@@ -474,7 +521,7 @@ export default function AdminUsers() {
         const newLabel = USER_ROLE_LABELS[newRole];
         showToast(`${target.name}'s role changed from ${oldLabel} to ${newLabel}`, 'success');
       }
-      return prev.map(u => {
+      const next = prev.map(u => {
         if (u.id !== userId) return u;
         // Role -> admin/super_admin should imply is_admin=true so the
         // user actually shows up under the Admins tab. Demoting away
@@ -485,6 +532,8 @@ export default function AdminUsers() {
         const elevated = newRole === 'admin' || newRole === 'super_admin';
         return { ...u, role: newRole, isAdmin: u.isAdmin || elevated };
       });
+      cachedUsers = next;
+      return next;
     });
     // Mirror the elevation to the DB so the next page load sees the
     // same state. Fire-and-forget; the optimistic UI is already
@@ -496,8 +545,19 @@ export default function AdminUsers() {
     }
   }, [showToast]);
 
-  const shoppers = allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id));
-  const dbCreators = allUsers.filter(u => u.role === 'creator');
+  // Pass 6: memoize the per-tab filters. allUsers is small today
+  // (tens of rows) but recomputing four arrays + their sort tables
+  // on every render — including every toast tick — was needless work
+  // and made each toggle feel less crisp. Keys: allUsers, waitlistIds,
+  // and deletedContentCreators (the only inputs that mutate the slices).
+  const shoppers = useMemo(
+    () => allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id)),
+    [allUsers, waitlistIds],
+  );
+  const dbCreators = useMemo(
+    () => allUsers.filter(u => u.role === 'creator'),
+    [allUsers],
+  );
 
   // Merge content creators from looks data with DB creators
   const contentCreators: UserRow[] = useMemo(() => {
@@ -523,9 +583,9 @@ export default function AdminUsers() {
         followings: 0,
         creator: '-',
       }));
-  }, [dbCreators]);
+  }, [dbCreators, deletedContentCreators]);
 
-  const creators = [...dbCreators, ...contentCreators];
+  const creators = useMemo(() => [...dbCreators, ...contentCreators], [dbCreators, contentCreators]);
   // Admins tab: a user counts as an admin when EITHER the explicit
   // is_admin flag is true OR their primary role is admin / super_admin.
   // Either dimension alone used to be enough to make a user "vanish":
@@ -533,10 +593,16 @@ export default function AdminUsers() {
   // stayed false, the user dropped from Shoppers (role mismatch) and
   // never showed up here (is_admin false). We keep the union so no
   // matter how someone is promoted they appear here.
-  const admins = allUsers.filter(u => u.isAdmin || u.role === 'admin' || u.role === 'super_admin');
+  const admins = useMemo(
+    () => allUsers.filter(u => u.isAdmin || u.role === 'admin' || u.role === 'super_admin'),
+    [allUsers],
+  );
   // Super-admins are the strict tier (gates destructive UI on consumer
   // surfaces). Driven purely by role.
-  const superAdmins = allUsers.filter(u => u.role === 'super_admin');
+  const superAdmins = useMemo(
+    () => allUsers.filter(u => u.role === 'super_admin'),
+    [allUsers],
+  );
 
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
   // their generated_videos / user_generations. Seed-data ("content-*")
@@ -613,11 +679,16 @@ export default function AdminUsers() {
         supabase.from('user_uploads').delete().eq('user_id', userId),
       ]).catch(err => console.warn('[users] cascade delete failed:', err));
     }
-    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    setAllUsers(prev => {
+      const next = prev.filter(u => u.id !== userId);
+      cachedUsers = next;
+      return next;
+    });
     setWaitlistIds(prev => {
       if (!prev.has(userId)) return prev;
       const next = new Set(prev);
       next.delete(userId);
+      cachedWaitlistIds = next;
       return next;
     });
     showToast(
@@ -647,18 +718,30 @@ export default function AdminUsers() {
     const key = `${userId}|isAdmin`;
     if (!tryClaim(key)) return;
     const target = allUsers.find(u => u.id === userId);
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: next } : u));
-    const { error } = await updateUserIsAdmin(userId, next);
-    release(key);
-    if (error) {
-      // Roll back on failure so the UI doesn't lie about the DB.
-      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: !next } : u));
-      showToast(error, 'warning');
-    } else if (target) {
+    setAllUsers(prev => {
+      const out = prev.map(u => u.id === userId ? { ...u, isAdmin: next } : u);
+      cachedUsers = out;
+      return out;
+    });
+    // Toast immediately so the change feels instantaneous. The
+    // realtime echo will dedupe (Pass 5) so the same message isn't
+    // shown twice. On failure we toast the error and rollback.
+    if (target) {
       showToast(
         next ? `${target.name} is now an admin` : `${target.name} is no longer an admin`,
         'success',
       );
+    }
+    const { error } = await updateUserIsAdmin(userId, next);
+    release(key);
+    if (error) {
+      // Roll back on failure so the UI doesn't lie about the DB.
+      setAllUsers(prev => {
+        const out = prev.map(u => u.id === userId ? { ...u, isAdmin: !next } : u);
+        cachedUsers = out;
+        return out;
+      });
+      showToast(`Couldn’t save admin flag: ${error}`, 'warning');
     }
   }, [allUsers, showToast, tryClaim, release]);
 
@@ -676,12 +759,24 @@ export default function AdminUsers() {
     // Pass 9: super_admin always implies is_admin too. Demoting from
     // super_admin to admin keeps is_admin true (an admin is by
     // definition an admin); promoting to super_admin enforces it.
-    setAllUsers(prev => prev.map(u => u.id === userId
-      ? { ...u, role: newRole, isAdmin: u.isAdmin || newRole === 'super_admin' || newRole === 'admin' }
-      : u));
+    setAllUsers(prev => {
+      const out = prev.map(u => u.id === userId
+        ? { ...u, role: newRole, isAdmin: u.isAdmin || newRole === 'super_admin' || newRole === 'admin' }
+        : u);
+      cachedUsers = out;
+      return out;
+    });
+    showToast(
+      next ? `${target.name} is now a super admin` : `${target.name} is no longer a super admin`,
+      'success',
+    );
     const { error } = await updateUserRole(userId, newRole);
     if (error) {
-      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: prevRole } : u));
+      setAllUsers(prev => {
+        const out = prev.map(u => u.id === userId ? { ...u, role: prevRole } : u);
+        cachedUsers = out;
+        return out;
+      });
       showToast(`Failed to change role: ${error}`, 'warning');
       release(key);
       return;
@@ -691,10 +786,6 @@ export default function AdminUsers() {
       void updateUserIsAdmin(userId, true);
     }
     release(key);
-    showToast(
-      next ? `${target.name} is now a super admin` : `${target.name} is no longer a super admin`,
-      'success',
-    );
   }, [allUsers, showToast, tryClaim, release]);
 
   const shopperTable = useSortableTable(shoppers);
@@ -709,6 +800,14 @@ export default function AdminUsers() {
     showSuperToggle: boolean = false,
   ) => {
     if (data.length === 0) {
+      // Pass 3: distinguish "still loading the first time" from
+      // "loaded, but this slice is empty". The flash of "No shoppers
+      // yet" while the network is still in flight read like a bug —
+      // worse on slow connections — and made promotions feel less
+      // stable since the list rebuilds after the optimistic write.
+      if (!loaded) {
+        return <p className="admin-detail-empty admin-users-loading">Loading {labelCol.toLowerCase()}s…</p>;
+      }
       return <p className="admin-detail-empty">No {labelCol.toLowerCase()}s yet</p>;
     }
     return (
