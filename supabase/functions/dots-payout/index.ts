@@ -125,6 +125,13 @@ async function handleCreateUser(
     return errorRes('first_name, last_name, country_code, phone_number and email are required');
   }
 
+  const clientId = Deno.env.get('DOTS_CLIENT_ID') ?? '';
+  const apiKey = Deno.env.get('DOTS_API_KEY') ?? '';
+  if (!clientId || !apiKey) {
+    console.error('[dots-payout] DOTS_CLIENT_ID or DOTS_API_KEY secret is not set');
+    return errorRes('Payment service credentials not configured. Contact support.');
+  }
+
   const res = await dotsRequest('/users', 'POST', {
     first_name: first_name.trim(),
     last_name: last_name.trim(),
@@ -135,15 +142,14 @@ async function handleCreateUser(
   });
 
   if (!res.ok) {
-    // Mask Dots credential errors — surface a friendly message instead
+    const errBody = await res.json().catch(() => ({}));
+    console.error('[dots-payout] POST /users failed', { status: res.status, body: errBody });
     if (res.status === 401 || res.status === 403) {
-      return errorRes('Payment service is unavailable. Please try again later.');
+      return errorRes('Payment service credentials are invalid. Please contact support. (Dots HTTP ' + res.status + ')');
     }
-    const err = await res.json().catch(() => ({}));
-    const msg = (err as { message?: string; error?: string }).message
-      ?? (err as { message?: string; error?: string }).error
+    const msg = (errBody as { message?: string; error?: string }).message
+      ?? (errBody as { message?: string; error?: string }).error
       ?? 'Failed to create payout account';
-    // Detect duplicate phone number error from Dots
     if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('exists')) {
       return errorRes('This phone number is already registered with Dots. Use "attach existing" instead.');
     }
