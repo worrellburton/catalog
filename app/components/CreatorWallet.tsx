@@ -167,17 +167,33 @@ export default function CreatorWallet({ onProfileChange }: Props) {
               <div style={{ fontSize: 32, fontWeight: 700 }}>
                 ${balance.toFixed(2)}
               </div>
-              {isConnected && balance > 0 && (
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>
+                Withdraw anytime
+              </div>
+              {isConnected ? (
                 <button
                   onClick={handleWithdraw}
-                  disabled={withdrawing}
+                  disabled={withdrawing || balance <= 0}
+                  title={balance <= 0 ? 'No balance to withdraw' : undefined}
+                  style={{
+                    marginTop: 14, padding: '8px 18px', background: '#fff',
+                    color: balance <= 0 ? '#999' : '#000', border: 'none', borderRadius: 8,
+                    cursor: balance <= 0 ? 'default' : 'pointer', fontWeight: 600, fontSize: 13,
+                    opacity: balance <= 0 ? 0.5 : 1,
+                  }}
+                >
+                  {withdrawing ? 'Processing…' : 'Withdraw'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowSignup(true)}
                   style={{
                     marginTop: 14, padding: '8px 18px', background: '#fff',
                     color: '#000', border: 'none', borderRadius: 8,
                     cursor: 'pointer', fontWeight: 600, fontSize: 13,
                   }}
                 >
-                  {withdrawing ? 'Processing…' : 'Withdraw'}
+                  Connect to Withdraw
                 </button>
               )}
             </div>
@@ -216,7 +232,7 @@ export default function CreatorWallet({ onProfileChange }: Props) {
               flexWrap: 'wrap',
             }}>
               <div style={{ fontSize: 13, fontWeight: 500 }}>
-                You have a pending withdrawal ready
+                Your payout link is ready — complete the withdrawal at any time
               </div>
               <button
                 onClick={() => window.open(withdrawLink!, '_blank', 'noopener,noreferrer')}

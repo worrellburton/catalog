@@ -110,7 +110,7 @@ export default function AdminEarnings() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0 }}>Earnings</h1>
-          <p className="admin-page-subtitle" style={{ margin: '4px 0 0' }}>Creator payout configuration via Dots</p>
+          <p className="admin-page-subtitle" style={{ margin: '4px 0 0' }}>Creator payout configuration via Dots &mdash; creators withdraw on demand anytime they have a balance</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
           {/* Payout Pool */}
@@ -129,9 +129,9 @@ export default function AdminEarnings() {
               <input type="number" min="0" step="0.01" value={cac} onChange={e => setCac(e.target.value)} />
             </div>
           </div>
-          {/* Frequency */}
+          {/* Auto-payout schedule — for future scheduled batch payouts, does not restrict creator on-demand withdrawals */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Pay Frequency</label>
+            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Auto-Payout Schedule</label>
             <select
               value={frequency}
               onChange={e => setFrequency(e.target.value as PayoutFrequency)}
@@ -142,6 +142,7 @@ export default function AdminEarnings() {
                 <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
               ))}
             </select>
+            <span style={{ fontSize: 10, color: '#999' }}>For batch payouts &mdash; creators also withdraw on demand</span>
           </div>
           {/* Save */}
           <button
@@ -172,7 +173,7 @@ export default function AdminEarnings() {
           {[
             { label: 'Payout Pool', value: `$${settings.payout_value.toFixed(2)}` },
             { label: 'Acquisition Cost', value: `$${settings.cac.toFixed(2)}` },
-            { label: 'Frequency', value: FREQUENCY_LABELS[settings.frequency] },
+            { label: 'Auto-Payout Schedule', value: FREQUENCY_LABELS[settings.frequency] },
             { label: 'Effective', value: new Date(settings.effective_at).toLocaleDateString() },
           ].map(({ label, value }) => (
             <div key={label} className="admin-table-wrap" style={{ padding: '12px 20px', minWidth: 140 }}>
