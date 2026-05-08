@@ -348,6 +348,22 @@ export default function AdminUsers() {
     return () => { cancelled = true; };
   }, []);
 
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+    window.setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 240);
+  }, []);
+
+  const showToast = useCallback((message: string, type: ToastType) => {
+    toastIdRef.current += 1;
+    const id = toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    window.setTimeout(() => {
+      dismissToast(id);
+    }, 4000);
+  }, [dismissToast]);
+
   // Pass 3: realtime — listen to the profiles table so any row that
   // another admin (or this admin in another tab) updates lands here
   // within ~50ms. Updates merge into allUsers; deletes drop the row;
@@ -445,22 +461,6 @@ export default function AdminUsers() {
       window.clearInterval(interval);
     };
   }, []);
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
-    window.setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 240);
-  }, []);
-
-  const showToast = useCallback((message: string, type: ToastType) => {
-    toastIdRef.current += 1;
-    const id = toastIdRef.current;
-    setToasts(prev => [...prev, { id, message, type }]);
-    window.setTimeout(() => {
-      dismissToast(id);
-    }, 4000);
-  }, [dismissToast]);
 
   const handleRoleChange = useCallback((userId: string, newRole: UserRole, error?: string) => {
     if (error) {
