@@ -348,6 +348,104 @@ export default function AdminUsers() {
     return () => { cancelled = true; };
   }, []);
 
+  // Pass 3: realtime — listen to the profiles table so any row that
+  // another admin (or this admin in another tab) updates lands here
+  // within ~50ms. Updates merge into allUsers; deletes drop the row;
+  // inserts append. Each remote change drops a toast so the admin
+  // sees who/what changed without having to reload.
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin-users-profiles')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const fresh = profileToRow(payload.new as Profile);
+            setAllUsers(prev => {
+              if (prev.some(u => u.id === fresh.id)) return prev;
+              return [...prev, { ...fresh, looksCount: 0 }];
+            });
+            return;
+          }
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id?: string }).id;
+            if (!id) return;
+            let removed: UserRow | undefined;
+            setAllUsers(prev => {
+              removed = prev.find(u => u.id === id);
+              return prev.filter(u => u.id !== id);
+            });
+            if (removed) showToast(`${removed.name} was removed`, 'warning');
+            return;
+          }
+          if (payload.eventType === 'UPDATE') {
+            const fresh = profileToRow(payload.new as Profile);
+            setAllUsers(prev => {
+              const target = prev.find(u => u.id === fresh.id);
+              if (!target) return prev;
+              // Only emit a remote-change toast when the fields we
+              // surface actually changed; otherwise irrelevant churn
+              // (last_sign_in_at ticking on session refresh, etc.)
+              // would spam the admin.
+              const fieldsChanged =
+                target.role !== fresh.role
+                || target.isAdmin !== fresh.isAdmin
+                || target.gender !== fresh.gender
+                || target.name !== fresh.name;
+              if (fieldsChanged) {
+                const what =
+                  target.role !== fresh.role
+                    ? `role -> ${USER_ROLE_LABELS[fresh.role]}`
+                    : target.isAdmin !== fresh.isAdmin
+                      ? (fresh.isAdmin ? 'made admin' : 'admin revoked')
+                      : 'updated';
+                showToast(`${fresh.name}: ${what}`, 'success');
+              }
+              return prev.map(u => u.id === fresh.id
+                ? { ...u, ...fresh, looksCount: u.looksCount }
+                : u);
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase!.removeChannel(channel);
+    };
+  }, [showToast]);
+
+  // Pass 4: refetch on tab focus + soft 30s interval. The realtime
+  // sub above is the hot path, but a periodic re-read catches missed
+  // events (websocket drops, network blips, etc.) and the focus-
+  // refetch covers tabs that were backgrounded across a change. Both
+  // are best-effort: failures are silent.
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const profiles = await getProfiles();
+      if (cancelled) return;
+      setAllUsers(prev => {
+        const byId = new Map(prev.map(u => [u.id, u]));
+        return profiles.map(p => {
+          const row = profileToRow(p);
+          const prevRow = byId.get(p.id);
+          return { ...row, looksCount: prevRow?.looksCount ?? 0 };
+        });
+      });
+    };
+    const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onFocus);
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onFocus);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const dismissToast = useCallback((id: number) => {
     setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
     window.setTimeout(() => {
@@ -376,8 +474,26 @@ export default function AdminUsers() {
         const newLabel = USER_ROLE_LABELS[newRole];
         showToast(`${target.name}'s role changed from ${oldLabel} to ${newLabel}`, 'success');
       }
-      return prev.map(u => u.id === userId ? { ...u, role: newRole } : u);
+      return prev.map(u => {
+        if (u.id !== userId) return u;
+        // Role -> admin/super_admin should imply is_admin=true so the
+        // user actually shows up under the Admins tab. Demoting away
+        // from admin/super_admin doesn't auto-flip is_admin off — an
+        // admin who happens to be primarily a "creator" is still an
+        // admin and the explicit toggle is the source of truth in
+        // that case.
+        const elevated = newRole === 'admin' || newRole === 'super_admin';
+        return { ...u, role: newRole, isAdmin: u.isAdmin || elevated };
+      });
     });
+    // Mirror the elevation to the DB so the next page load sees the
+    // same state. Fire-and-forget; the optimistic UI is already
+    // committed and a server failure surfaces as a toast.
+    if (newRole === 'admin' || newRole === 'super_admin') {
+      void updateUserIsAdmin(userId, true).then(({ error: err }) => {
+        if (err) showToast(`Couldn’t mark admin flag: ${err}`, 'warning');
+      });
+    }
   }, [showToast]);
 
   const shoppers = allUsers.filter(u => u.role === 'shopper' && !waitlistIds.has(u.id));
@@ -410,13 +526,16 @@ export default function AdminUsers() {
   }, [dbCreators]);
 
   const creators = [...dbCreators, ...contentCreators];
-  // Admins tab is now driven by the explicit is_admin flag on the
-  // profile, not the role text column. Keeps role for display while
-  // letting an admin be elevated without altering their primary role.
-  const admins = allUsers.filter(u => u.isAdmin);
-  // Super-admins are the subset whose primary role is 'super_admin'  - 
-  // the strict tier that gates destructive UI on consumer surfaces
-  // (e.g. delete-mode in the account menu).
+  // Admins tab: a user counts as an admin when EITHER the explicit
+  // is_admin flag is true OR their primary role is admin / super_admin.
+  // Either dimension alone used to be enough to make a user "vanish":
+  // if you flipped role -> 'admin' via the role dropdown but is_admin
+  // stayed false, the user dropped from Shoppers (role mismatch) and
+  // never showed up here (is_admin false). We keep the union so no
+  // matter how someone is promoted they appear here.
+  const admins = allUsers.filter(u => u.isAdmin || u.role === 'admin' || u.role === 'super_admin');
+  // Super-admins are the strict tier (gates destructive UI on consumer
+  // surfaces). Driven purely by role.
   const superAdmins = allUsers.filter(u => u.role === 'super_admin');
 
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
@@ -509,10 +628,28 @@ export default function AdminUsers() {
     );
   }, [allUsers, showToast]);
 
+  // Pass 5: in-flight guard. Map of (userId|field) -> in-flight Promise.
+  // A second click on the same toggle while the first is mid-flight
+  // is ignored; the DB write either lands or rolls back, then the
+  // user can flip again. Stops rapid-fire double-clicks from racing
+  // with the optimistic UI and the realtime subscription.
+  const inFlight = useRef<Set<string>>(new Set());
+  const tryClaim = useCallback((key: string): boolean => {
+    if (inFlight.current.has(key)) return false;
+    inFlight.current.add(key);
+    return true;
+  }, []);
+  const release = useCallback((key: string) => {
+    inFlight.current.delete(key);
+  }, []);
+
   const handleAdminToggle = useCallback(async (userId: string, next: boolean) => {
+    const key = `${userId}|isAdmin`;
+    if (!tryClaim(key)) return;
     const target = allUsers.find(u => u.id === userId);
     setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: next } : u));
     const { error } = await updateUserIsAdmin(userId, next);
+    release(key);
     if (error) {
       // Roll back on failure so the UI doesn't lie about the DB.
       setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isAdmin: !next } : u));
@@ -523,29 +660,42 @@ export default function AdminUsers() {
         'success',
       );
     }
-  }, [allUsers, showToast]);
+  }, [allUsers, showToast, tryClaim, release]);
 
   // Super-admin toggle - flips the primary role between 'super_admin'
   // and 'admin'. Off lands on 'admin' (not the original role) because
   // the toggle is only surfaced on the Admins / Super Admins tabs, so
   // 'admin' is the right neighbouring tier.
   const handleSuperAdminToggle = useCallback(async (userId: string, next: boolean) => {
+    const key = `${userId}|role`;
+    if (!tryClaim(key)) return;
     const target = allUsers.find(u => u.id === userId);
-    if (!target) return;
+    if (!target) { release(key); return; }
     const newRole: UserRole = next ? 'super_admin' : 'admin';
     const prevRole = target.role;
-    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    // Pass 9: super_admin always implies is_admin too. Demoting from
+    // super_admin to admin keeps is_admin true (an admin is by
+    // definition an admin); promoting to super_admin enforces it.
+    setAllUsers(prev => prev.map(u => u.id === userId
+      ? { ...u, role: newRole, isAdmin: u.isAdmin || newRole === 'super_admin' || newRole === 'admin' }
+      : u));
     const { error } = await updateUserRole(userId, newRole);
     if (error) {
       setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: prevRole } : u));
       showToast(`Failed to change role: ${error}`, 'warning');
+      release(key);
       return;
     }
+    // Mirror is_admin to the DB so the elevation persists.
+    if (newRole === 'super_admin' || newRole === 'admin') {
+      void updateUserIsAdmin(userId, true);
+    }
+    release(key);
     showToast(
       next ? `${target.name} is now a super admin` : `${target.name} is no longer a super admin`,
       'success',
     );
-  }, [allUsers, showToast]);
+  }, [allUsers, showToast, tryClaim, release]);
 
   const shopperTable = useSortableTable(shoppers);
   const creatorTable = useSortableTable(creators);
