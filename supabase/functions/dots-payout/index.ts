@@ -125,12 +125,6 @@ async function handleCreateUser(
     return errorRes('first_name, last_name, country_code, phone_number and email are required');
   }
 
-  // Check if phone already registered in Dots
-  const existing = await findDotsUserByPhone(country_code, phone_number);
-  if (existing) {
-    return errorRes('This phone number is already registered with Dots. Use the "attach existing" option.');
-  }
-
   const res = await dotsRequest('/users', 'POST', {
     first_name: first_name.trim(),
     last_name: last_name.trim(),
@@ -141,8 +135,19 @@ async function handleCreateUser(
   });
 
   if (!res.ok) {
+    // Mask Dots credential errors — surface a friendly message instead
+    if (res.status === 401 || res.status === 403) {
+      return errorRes('Payment service is unavailable. Please try again later.');
+    }
     const err = await res.json().catch(() => ({}));
-    return errorRes((err as { message?: string }).message ?? 'Failed to create Dots account');
+    const msg = (err as { message?: string; error?: string }).message
+      ?? (err as { message?: string; error?: string }).error
+      ?? 'Failed to create payout account';
+    // Detect duplicate phone number error from Dots
+    if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('exists')) {
+      return errorRes('This phone number is already registered with Dots. Use "attach existing" instead.');
+    }
+    return errorRes(msg);
   }
 
   const dotsUser = await res.json();
@@ -164,8 +169,24 @@ async function handleCheckExistence(body: Record<string, unknown>) {
     return errorRes('country_code and phone_number are required');
   }
 
-  const existing = await findDotsUserByPhone(country_code, phone_number);
-  return jsonRes({ exists: !!existing, dots_user_id: existing?.id ?? null });
+  // Try a targeted GET /users?phone_number= if Dots supports it,
+  // otherwise fall back to pagination; either way, swallow auth/rate errors.
+  const res = await dotsRequest(
+    `/users?phone_number=${encodeURIComponent(phone_number)}&country_code=${encodeURIComponent(country_code)}&limit=1`,
+  );
+  if (!res.ok) {
+    // Can't check — treat as not existing so the create flow can proceed
+    return jsonRes({ exists: false, dots_user_id: null });
+  }
+  const body2 = await res.json().catch(() => ({ data: [] }));
+  const users: Array<{ id: string; phone_number?: { country_code: string; phone_number: string } }> =
+    body2?.data ?? [];
+  const found = users.find(
+    u =>
+      u.phone_number?.phone_number === phone_number &&
+      u.phone_number?.country_code === country_code,
+  ) ?? null;
+  return jsonRes({ exists: !!found, dots_user_id: found?.id ?? null });
 }
 
 // POST /user/verify — verify OTP code

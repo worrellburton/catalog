@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import LookForm from './LookForm';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
-
-const CreatorWallet = lazy(() => import('./CreatorWallet'));
 
 interface MyLooksProps {
   onClose: () => void;
@@ -28,7 +26,6 @@ const STATUS_COLORS: Record<LookStatus, string> = {
 };
 
 export default function MyLooks({ onClose }: MyLooksProps) {
-  const [tab, setTab] = useState<'looks' | 'wallet'>('looks');
   const [looks, setLooks] = useState<ManagedLook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,48 +132,16 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
               </svg>
             </button>
-            <h1 className="my-looks-title">{tab === 'wallet' ? 'Wallet' : 'My Looks'}</h1>
+            <h1 className="my-looks-title">My Catalog</h1>
           </div>
-          {tab === 'looks' && (
-            <button className="my-looks-create-btn" onClick={handleCreateNew}>
+          <button className="my-looks-create-btn" onClick={handleCreateNew}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               New Look
             </button>
-          )}
         </div>
 
-        {/* Tab switcher */}
-        <div style={{ display: 'flex', gap: 4, padding: '0 16px 12px', borderBottom: '1px solid #f0f0f0' }}>
-          {(['looks', 'wallet'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontWeight: 600, fontSize: 13,
-                background: tab === t ? '#000' : 'transparent',
-                color: tab === t ? '#fff' : '#666',
-              }}
-            >
-              {t === 'looks' ? 'My Looks' : '💰 Wallet'}
-            </button>
-          ))}
-        </div>
-
-        {/* Wallet tab */}
-        {tab === 'wallet' && (
-          <div style={{ padding: '20px 16px', overflowY: 'auto', flex: 1 }}>
-            <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>Loading wallet…</div>}>
-              <CreatorWallet />
-            </Suspense>
-          </div>
-        )}
-
-        {/* Looks tab content */}
-        {tab === 'looks' && (
-          <>
         {/* Status filters */}
         <div className="my-looks-filters">
           {(['all', 'draft', 'submitted', 'live', 'archived'] as const).map(s => (
@@ -316,8 +281,6 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 </button>
               </div>
             )}
-          </>
-        )}
           </>
         )}
       </div>

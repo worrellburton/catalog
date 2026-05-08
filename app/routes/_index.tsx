@@ -26,6 +26,7 @@ const importProductPage = () => import('~/components/ProductPage');
 const importLookOverlay = () => import('~/components/LookOverlay');
 const importInAppBrowser = () => import('~/components/InAppBrowser');
 const importMyLooks = () => import('~/components/MyLooks');
+const importCreatorWallet = () => import('~/components/CreatorWallet');
 
 const LandingPage = lazy(importLandingPage);
 const CreatorPage = lazy(importCreatorPage);
@@ -35,6 +36,7 @@ const ProductPage = lazy(importProductPage);
 const LookOverlay = lazy(importLookOverlay);
 const InAppBrowser = lazy(importInAppBrowser);
 const MyLooks = lazy(importMyLooks);
+const CreatorWallet = lazy(importCreatorWallet);
 
 // Order chosen by likelihood the user will open the surface in the next
 // minute: looks/products dominate, browser is the most-visited tail action,
@@ -275,6 +277,7 @@ export default function Home() {
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
@@ -954,6 +957,7 @@ export default function Home() {
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
   const openMyLooks = useCallback(() => setShowMyLooks(true), []);
+  const openWallet = useCallback(() => setShowWallet(true), []);
   const closeBookmarks = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -961,6 +965,10 @@ export default function Home() {
   const closeMyLooks = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowMyLooks(false);
+  }, []);
+  const closeWallet = useCallback(() => {
+    history.replaceState({}, '', '/#app');
+    setShowWallet(false);
   }, []);
   const handleLogout = useCallback(async () => {
     await logout();
@@ -1232,6 +1240,7 @@ export default function Home() {
               <UserMenu
                 onOpenBookmarks={openBookmarks}
                 onOpenMyLooks={openMyLooks}
+                onOpenWallet={openWallet}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={handleLogout}
@@ -1334,6 +1343,28 @@ export default function Home() {
             <Suspense fallback={null}>
               <MyLooks onClose={closeMyLooks} />
             </Suspense>
+          )}
+
+          {showWallet && (
+            <div className="my-looks-overlay">
+              <div className="my-looks-container">
+                <div className="my-looks-header">
+                  <div className="my-looks-header-left">
+                    <button className="my-looks-back" onClick={closeWallet} aria-label="Back">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+                      </svg>
+                    </button>
+                    <h1 className="my-looks-title">Wallet</h1>
+                  </div>
+                </div>
+                <div style={{ padding: '20px 16px', overflowY: 'auto', flex: 1 }}>
+                  <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>Loading wallet…</div>}>
+                    <CreatorWallet />
+                  </Suspense>
+                </div>
+              </div>
+            </div>
           )}
 
           {selectedProduct && (

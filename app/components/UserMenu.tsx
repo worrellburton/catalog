@@ -6,6 +6,7 @@ import type { Look, Product } from '~/data/looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import PresentMenuSection from './PresentMenuSection';
 import { AvatarUpload } from './AvatarCropModal';
+import { getWallet } from '~/services/earnings';
 
 interface UserMenuUser {
   id?: string;
@@ -18,6 +19,7 @@ interface UserMenuUser {
 interface UserMenuProps {
   onOpenBookmarks: () => void;
   onOpenMyLooks?: () => void;
+  onOpenWallet?: () => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
@@ -55,6 +57,7 @@ function MiniTile({ src, label, onClick }: { src?: string; label: string; onClic
 function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
+  onOpenWallet,
   bookmarkCount,
   user,
   onLogout,
@@ -70,17 +73,10 @@ function UserMenu({
   const [open, setOpen] = useState(false);
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
-  // Local override for the avatar URL so a fresh upload renders in
-  // the menu without waiting for the next auth-session refresh.
-  // Phase 10: a key change on the rendered <img> drives a flip-in
-  // animation defined in user-menu.css.
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
   const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
-  // Brief grace period after closing during which the scrim stays
-  // mounted, even though the popout is gone. Catches the phantom click
-  // iOS Safari dispatches after touchend (typically 0-300ms later) on
-  // whatever element ended up beneath the user's finger.
   const [cooldown, setCooldown] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -112,6 +108,16 @@ function UserMenu({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
+
+  // Fetch wallet balance when menu opens (for creators / logged-in users)
+  useEffect(() => {
+    if (!open || !user?.id) return;
+    let cancelled = false;
+    getWallet(1, 1).then(w => {
+      if (!cancelled) setWalletBalance(w.current_balance);
+    }).catch(() => { /* not a creator or no wallet */ });
+    return () => { cancelled = true; };
+  }, [open, user?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -152,6 +158,22 @@ function UserMenu({
                     {user.displayName && <span className="user-menu-name">{user.displayName}</span>}
                     {user.email && <span className="user-menu-email">{user.email}</span>}
                     {user.role && <span className={`user-menu-role user-menu-role-${user.role}`}>{USER_ROLE_LABELS[user.role]}</span>}
+                    {walletBalance !== null && walletBalance > 0 && onOpenWallet && (
+                      <button
+                        onClick={runItem(onOpenWallet)}
+                        style={{
+                          marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px', background: '#dcfce7', color: '#15803d',
+                          border: '1px solid #bbf7d0', borderRadius: 20,
+                          fontSize: 12, fontWeight: 700, cursor: 'pointer', width: 'fit-content',
+                        }}
+                        title="Open Wallet"
+                      >
+                        <span>$</span>
+                        <span>{walletBalance.toFixed(2)}</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="user-menu-divider" />
@@ -235,6 +257,17 @@ function UserMenu({
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 <span>My Catalog</span>
+              </button>
+            )}
+            {onOpenWallet && (
+              <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Wallet</span>
+                {walletBalance !== null && walletBalance > 0 && (
+                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#15803d' }}>
+                    ${walletBalance.toFixed(2)}
+                  </span>
+                )}
               </button>
             )}
             <div className="user-menu-item-flyout-wrap">

@@ -95,7 +95,7 @@ export async function getPayoutSettings(): Promise<PayoutSettings> {
 export async function updatePayoutSettings(
   payout_value: number,
   cac: number,
-  frequency: PayoutFrequency,
+  frequency: PayoutFrequency = 'weekly',
 ): Promise<PayoutSettings> {
   return edgeJson<PayoutSettings>('/settings', 'PUT', { payout_value, cac, frequency });
 }
@@ -149,6 +149,14 @@ export async function deleteDotsUser(): Promise<{ success: boolean }> {
 
 export async function getWallet(page = 1, limit = 50): Promise<WalletSummary> {
   return edgeJson<WalletSummary>(`/wallet?page=${page}&limit=${limit}`);
+}
+
+/** Lightweight balance-only fetch — used by profile menu chip. */
+export async function getWalletBalance(): Promise<number> {
+  const session = await import('~/utils/supabase').then(m => m.supabase.auth.getSession());
+  if (!session.data.session) return 0;
+  const w = await getWallet(1, 1);
+  return w.current_balance;
 }
 
 export async function initiateWithdrawal(): Promise<{

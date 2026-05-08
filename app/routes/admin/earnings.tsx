@@ -2,19 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   type PayoutSettings,
   type PayoutCreator,
-  type PayoutFrequency,
   getPayoutSettings,
   updatePayoutSettings,
   getPayoutCreators,
   adminCreditCreator,
 } from '~/services/earnings';
-
-const FREQUENCY_LABELS: Record<PayoutFrequency, string> = {
-  daily: 'Daily',
-  weekly: 'Weekly',
-  biweekly: 'Bi-Weekly',
-  monthly: 'Monthly',
-};
 
 export default function AdminEarnings() {
   const [settings, setSettings] = useState<PayoutSettings | null>(null);
@@ -23,7 +15,6 @@ export default function AdminEarnings() {
 
   const [payoutValue, setPayoutValue] = useState('5');
   const [cac, setCac] = useState('2');
-  const [frequency, setFrequency] = useState<PayoutFrequency>('weekly');
 
   const [showCreatePayout, setShowCreatePayout] = useState(false);
   const [payoutSearch, setPayoutSearch] = useState('');
@@ -42,7 +33,6 @@ export default function AdminEarnings() {
       setSettings(s);
       setPayoutValue(s.payout_value.toString());
       setCac(s.cac.toString());
-      setFrequency(s.frequency);
     }).catch(() => {});
   }, []);
 
@@ -70,7 +60,6 @@ export default function AdminEarnings() {
       const updated = await updatePayoutSettings(
         parseFloat(payoutValue) || 5,
         parseFloat(cac) || 2,
-        frequency,
       );
       setSettings(updated);
       setSettingsSaved(true);
@@ -129,21 +118,7 @@ export default function AdminEarnings() {
               <input type="number" min="0" step="0.01" value={cac} onChange={e => setCac(e.target.value)} />
             </div>
           </div>
-          {/* Auto-payout schedule — for future scheduled batch payouts, does not restrict creator on-demand withdrawals */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: 0.3 }}>Auto-Payout Schedule</label>
-            <select
-              value={frequency}
-              onChange={e => setFrequency(e.target.value as PayoutFrequency)}
-              className="admin-date-input"
-              style={{ height: 34, paddingRight: 28, cursor: 'pointer' }}
-            >
-              {(Object.keys(FREQUENCY_LABELS) as PayoutFrequency[]).map(f => (
-                <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
-              ))}
-            </select>
-            <span style={{ fontSize: 10, color: '#999' }}>For batch payouts &mdash; creators also withdraw on demand</span>
-          </div>
+
           {/* Save */}
           <button
             className="admin-btn admin-btn-primary"
@@ -173,7 +148,6 @@ export default function AdminEarnings() {
           {[
             { label: 'Payout Pool', value: `$${settings.payout_value.toFixed(2)}` },
             { label: 'Acquisition Cost', value: `$${settings.cac.toFixed(2)}` },
-            { label: 'Auto-Payout Schedule', value: FREQUENCY_LABELS[settings.frequency] },
             { label: 'Effective', value: new Date(settings.effective_at).toLocaleDateString() },
           ].map(({ label, value }) => (
             <div key={label} className="admin-table-wrap" style={{ padding: '12px 20px', minWidth: 140 }}>
