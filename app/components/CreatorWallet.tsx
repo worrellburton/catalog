@@ -117,193 +117,124 @@ export default function CreatorWallet({ onProfileChange }: Props) {
   const isConnected = profile?.is_payout_active && profile?.dots_user_id;
 
   if (profileLoading) {
-    return <div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>Loading…</div>;
+    return (
+      <div className="wallet-loading">
+        <span className="wallet-spinner" />
+      </div>
+    );
   }
 
   return (
-    <div>
-      {/* Connect banner */}
+    <div className="wallet-root">
+      {/* Setup banner — only when not connected */}
       {!isConnected && (
-        <div style={{
-          background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12,
-          padding: '16px 20px', marginBottom: 20, display: 'flex',
-          alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          flexWrap: 'wrap',
-        }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Connect your payout account</div>
-            <div style={{ fontSize: 13, color: '#666' }}>
-              Link your Dots account to withdraw earnings to your bank, Venmo, or PayPal
-            </div>
+        <div className="wallet-setup-banner">
+          <div className="wallet-setup-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
+            </svg>
           </div>
-          <button
-            onClick={() => setShowSignup(true)}
-            style={{
-              padding: '9px 20px', background: '#000', color: '#fff',
-              border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14,
-            }}
-          >
-            Connect Dots
+          <div className="wallet-setup-text">
+            <div className="wallet-setup-title">Set up earnings</div>
+            <div className="wallet-setup-sub">Connect Dots to withdraw to bank, Venmo, or PayPal</div>
+          </div>
+          <button className="wallet-setup-btn" onClick={() => setShowSignup(true)}>
+            Get started
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
           </button>
         </div>
       )}
 
-      {/* Balance cards */}
       {loading ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>
-          Loading wallet…
+        <div className="wallet-loading">
+          <span className="wallet-spinner" />
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            {/* Balance */}
-            <div style={{
-              flex: '1 1 180px', padding: '20px 24px', background: '#000',
-              color: '#fff', borderRadius: 16,
-            }}>
-              <div style={{ fontSize: 12, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Available Balance
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 700 }}>
-                ${balance.toFixed(2)}
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>
-                Withdraw anytime
-              </div>
+          {/* Stat cards */}
+          <div className="wallet-cards">
+            <div className="wallet-card wallet-card--main">
+              <div className="wallet-card-label">Available Balance</div>
+              <div className="wallet-card-amount">${balance.toFixed(2)}</div>
+              <div className="wallet-card-sub">Withdraw anytime</div>
               {isConnected ? (
                 <button
+                  className={`wallet-withdraw-btn${balance <= 0 ? ' wallet-withdraw-btn--disabled' : ''}`}
                   onClick={handleWithdraw}
                   disabled={withdrawing || balance <= 0}
-                  title={balance <= 0 ? 'No balance to withdraw' : undefined}
-                  style={{
-                    marginTop: 14, padding: '8px 18px', background: '#fff',
-                    color: balance <= 0 ? '#999' : '#000', border: 'none', borderRadius: 8,
-                    cursor: balance <= 0 ? 'default' : 'pointer', fontWeight: 600, fontSize: 13,
-                    opacity: balance <= 0 ? 0.5 : 1,
-                  }}
                 >
                   {withdrawing ? 'Processing…' : 'Withdraw'}
                 </button>
               ) : (
-                <button
-                  onClick={() => setShowSignup(true)}
-                  style={{
-                    marginTop: 14, padding: '8px 18px', background: '#fff',
-                    color: '#000', border: 'none', borderRadius: 8,
-                    cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                  }}
-                >
+                <button className="wallet-withdraw-btn" onClick={() => setShowSignup(true)}>
                   Connect to Withdraw
                 </button>
               )}
             </div>
-            {/* Total earned */}
-            <div style={{
-              flex: '1 1 140px', padding: '20px 24px', background: '#f0fdf4',
-              borderRadius: 16, border: '1px solid #bbf7d0',
-            }}>
-              <div style={{ fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Total Earned
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 700, color: '#15803d' }}>
-                ${totalEarning.toFixed(2)}
-              </div>
+
+            <div className="wallet-card wallet-card--earned">
+              <div className="wallet-card-label">Total Earned</div>
+              <div className="wallet-card-amount wallet-card-amount--green">${totalEarning.toFixed(2)}</div>
             </div>
-            {/* Total withdrawn */}
-            <div style={{
-              flex: '1 1 140px', padding: '20px 24px', background: '#fafafa',
-              borderRadius: 16, border: '1px solid #e5e7eb',
-            }}>
-              <div style={{ fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Total Withdrawn
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 700 }}>
-                ${totalWithdraw.toFixed(2)}
-              </div>
+
+            <div className="wallet-card wallet-card--secondary">
+              <div className="wallet-card-label">Total Withdrawn</div>
+              <div className="wallet-card-amount">${totalWithdraw.toFixed(2)}</div>
             </div>
           </div>
 
-          {/* Open existing withdraw link */}
+          {/* Pending payout link */}
           {withdrawLink && (
-            <div style={{
-              background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12,
-              padding: '12px 16px', marginBottom: 16, display: 'flex',
-              alignItems: 'center', justifyContent: 'space-between', gap: 12,
-              flexWrap: 'wrap',
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>
-                Your payout link is ready — complete the withdrawal at any time
-              </div>
+            <div className="wallet-payout-banner">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span className="wallet-payout-banner-text">Payout pending — complete via your link</span>
               <button
+                className="wallet-payout-banner-btn"
                 onClick={() => window.open(withdrawLink!, '_blank', 'noopener,noreferrer')}
-                style={{
-                  padding: '7px 16px', background: '#92400e', color: '#fff',
-                  border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                }}
               >
-                Open Payout Link
+                Open link
               </button>
             </div>
           )}
 
           {withdrawError && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#dc2626' }}>
-              {withdrawError}
-            </div>
+            <div className="wallet-error">{withdrawError}</div>
           )}
 
           {/* Transaction history */}
-          <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', fontWeight: 600, fontSize: 14, borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
-              Transaction History
-            </div>
+          <div className="wallet-history">
+            <div className="wallet-history-header">Transaction History</div>
             {entries.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>
-                No transactions yet
-              </div>
+              <div className="wallet-history-empty">No transactions yet</div>
             ) : (
-              <div>
+              <div className="wallet-history-list">
                 {entries.map(entry => (
-                  <div
-                    key={entry.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '12px 16px', borderBottom: '1px solid #f5f5f5',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: '50%', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center', fontSize: 16,
-                        background: entry.type === 'credit' ? '#f0fdf4' :
-                                     entry.type === 'debit' ? '#fef2f2' : '#fefce8',
-                      }}>
-                        {entry.type === 'credit' ? '↓' : entry.type === 'debit' ? '↑' : '⏳'}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>
-                          {entry.comment || entryLabel(entry.entry_code)}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#888' }}>
-                          {new Date(entry.created_at).toLocaleDateString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                            hour: '2-digit', minute: '2-digit',
-                          })}
-                        </div>
+                  <div key={entry.id} className="wallet-entry">
+                    <div className={`wallet-entry-icon wallet-entry-icon--${entry.type}`}>
+                      {entry.type === 'credit' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 19 19 12"/></svg>
+                      ) : entry.type === 'debit' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      )}
+                    </div>
+                    <div className="wallet-entry-info">
+                      <div className="wallet-entry-label">{entry.comment || entryLabel(entry.entry_code)}</div>
+                      <div className="wallet-entry-date">
+                        {new Date(entry.created_at).toLocaleDateString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{
-                        fontSize: 15, fontWeight: 700,
-                        color: entry.type === 'credit' ? '#15803d' :
-                               entry.type === 'debit' ? '#dc2626' : '#92400e',
-                      }}>
+                    <div className="wallet-entry-amounts">
+                      <div className={`wallet-entry-amount wallet-entry-amount--${entry.type}`}>
                         {entry.type === 'credit' ? '+' : entry.type === 'debit' ? '-' : ''}
                         ${entry.amount.toFixed(2)}
                       </div>
-                      <div style={{ fontSize: 11, color: '#888' }}>
-                        Bal: ${entry.current_balance.toFixed(2)}
-                      </div>
+                      <div className="wallet-entry-bal">Bal: ${entry.current_balance.toFixed(2)}</div>
                     </div>
                   </div>
                 ))}
@@ -311,27 +242,23 @@ export default function CreatorWallet({ onProfileChange }: Props) {
             )}
           </div>
 
-          {/* Payout account status */}
+          {/* Connected account status */}
           {isConnected && (
-            <div style={{ marginTop: 20, padding: '12px 16px', background: '#fafafa', borderRadius: 12, border: '1px solid #e5e7eb' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%', display: 'inline-block' }} />
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>Dots account connected</span>
-                  {profile.is_payout_verified && (
-                    <span style={{ fontSize: 11, background: '#dcfce7', color: '#15803d', padding: '2px 7px', borderRadius: 6, fontWeight: 600 }}>
-                      VERIFIED
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 12 }}
-                >
-                  {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+            <div className="wallet-status">
+              <div className="wallet-status-left">
+                <span className="wallet-status-dot" />
+                <span className="wallet-status-label">Dots connected</span>
+                {profile.is_payout_verified && (
+                  <span className="wallet-status-badge">VERIFIED</span>
+                )}
               </div>
+              <button
+                className="wallet-status-disconnect"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+              >
+                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              </button>
             </div>
           )}
         </>
