@@ -590,17 +590,17 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           {[
             {
               num: '01',
-              role: 'Shoppers',
-              word: 'Discovery',
-              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
-              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
-            },
-            {
-              num: '02',
               role: 'Creators',
               word: 'Revenue',
               problem: 'Disorganized payouts, scatter links, no home base.',
               solution: 'Earn on daily engagement, instant payouts, compound income based on their catalog.',
+            },
+            {
+              num: '02',
+              role: 'Shoppers',
+              word: 'Discovery',
+              problem: 'Fragmented, ad-heavy, impersonal. The keyword search bar lost the plot in 1995.',
+              solution: 'Curated by tastemakers they actually follow. No ads, no noise, just the looks they want.',
             },
           ].map(({ num, role, word, problem, solution }, rowIdx, arr) => (
             <React.Fragment key={num}>
@@ -638,17 +638,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
                 </div>
               </div>
               {rowIdx < arr.length - 1 && (
-                <div className="deck-v1-compare-link" aria-hidden="true">
-                  <span className="deck-v1-compare-link-line" />
-                  <span className="deck-v1-compare-link-pill">
-                    <svg className="deck-v1-compare-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="17 1 21 5 17 9" />
-                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                      <polyline points="7 23 3 19 7 15" />
-                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                    </svg>
-                    <span>Two sides of the same loop</span>
-                  </span>
+                <div className="deck-v1-compare-link deck-v1-compare-link-bare" aria-hidden="true">
                   <span className="deck-v1-compare-link-line" />
                 </div>
               )}
@@ -788,40 +778,6 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           Opportunity so the conversation goes "here's the market" ->
           "here's how creators get paid for it". */}
       <div className="deck-slide deck-v1-payouts deck-v1-payouts-split">
-        {/* Money fly-up overlay. 36 emoji flakes scatter across the
-            slide with deterministic random positions/delays so the
-            burst feels chaotic without being repetitive. Container
-            covers the slide; pointer-events: none so it never blocks
-            the underlying list copy. */}
-        <div className="deck-v1-money-burst" aria-hidden="true">
-          {Array.from({ length: 36 }).map((_, i) => {
-            const emojis = ['💵', '💸', '💰', '🪙', '💴', '💶'];
-            // Pseudo-random spread using small primes so the swarm
-            // looks scattered rather than gridded.
-            const left = (i * 37 + 11) % 100;
-            const delay = ((i * 0.17) % 2.4).toFixed(2);
-            const dur = (4.5 + (i * 0.31) % 3).toFixed(2);
-            const rotEnd = ((i * 73) % 720) - 360;
-            const driftX = ((i * 53) % 60) - 30;
-            const size = 22 + (i * 7) % 18;
-            return (
-              <span
-                key={i}
-                className="deck-v1-money-flake"
-                style={{
-                  left: `${left}%`,
-                  fontSize: `${size}px`,
-                  ['--money-delay' as string]: `${delay}s`,
-                  ['--money-dur' as string]: `${dur}s`,
-                  ['--money-rot' as string]: `${rotEnd}deg`,
-                  ['--money-drift' as string]: `${driftX}vw`,
-                }}
-              >
-                {emojis[i % emojis.length]}
-              </span>
-            );
-          })}
-        </div>
         <div className="deck-v1-payouts-split-left">
           <span className="deck-label">Payouts</span>
           <h2>Post once.<br />Earn three ways.</h2>
@@ -1092,7 +1048,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
           this slide is supporting material. */}
       <div className="deck-slide deck-v1-demo-slide">
         <span className="deck-label">Demo</span>
-        <h2 className="deck-v1-demo-h2">Words won&apos;t do it justice.</h2>
+        <h2 className="deck-v1-demo-h2">See the demo.</h2>
         <p className="deck-v1-demo-sub">Open the app. See it work.</p>
         <button
           type="button"
@@ -1107,7 +1063,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             }, 700);
           }}
         >
-          <span className="deck-v1-demo-cta-label">Catalog</span>
+          <CatalogLogo className="deck-v1-demo-cta-logo" />
           <svg className="deck-v1-demo-cta-arrow" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="5" y1="12" x2="19" y2="12" />
             <polyline points="13 6 19 12 13 18" />
