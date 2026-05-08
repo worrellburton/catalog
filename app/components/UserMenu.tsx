@@ -7,6 +7,7 @@ import { useDeleteMode } from '~/hooks/useDeleteMode';
 import PresentMenuSection from './PresentMenuSection';
 import { AvatarUpload } from './AvatarCropModal';
 import { getWallet } from '~/services/earnings';
+import { supabase } from '~/utils/supabase';
 
 interface UserMenuUser {
   id?: string;
@@ -77,6 +78,7 @@ function UserMenu({
   const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
   const [cooldown, setCooldown] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [dotsConnected, setDotsConnected] = useState<boolean | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -109,13 +111,27 @@ function UserMenu({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  // Fetch wallet balance when menu opens (for creators / logged-in users)
+  // Fetch wallet balance + Dots connection status when menu opens
   useEffect(() => {
     if (!open || !user?.id) return;
     let cancelled = false;
-    getWallet(1, 1).then(w => {
-      if (!cancelled) setWalletBalance(w.current_balance);
-    }).catch(() => { /* not a creator or no wallet */ });
+    // Check if Dots is connected
+    supabase
+      .from('profiles')
+      .select('is_payout_active')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const connected = data?.is_payout_active ?? false;
+        setDotsConnected(connected);
+        if (connected) {
+          getWallet(1, 1).then(w => {
+            if (!cancelled) setWalletBalance(w.current_balance);
+          }).catch(() => {});
+        }
+      })
+      .catch(() => { if (!cancelled) setDotsConnected(false); });
     return () => { cancelled = true; };
   }, [open, user?.id]);
 
@@ -158,7 +174,7 @@ function UserMenu({
                     {user.displayName && <span className="user-menu-name">{user.displayName}</span>}
                     {user.email && <span className="user-menu-email">{user.email}</span>}
                     {user.role && <span className={`user-menu-role user-menu-role-${user.role}`}>{USER_ROLE_LABELS[user.role]}</span>}
-                    {walletBalance !== null && walletBalance > 0 && onOpenWallet && (
+                    {dotsConnected && walletBalance !== null && walletBalance > 0 && onOpenWallet && (
                       <button
                         onClick={runItem(onOpenWallet)}
                         style={{
@@ -259,12 +275,18 @@ function UserMenu({
                 <span>My Catalog</span>
               </button>
             )}
-            {onOpenWallet && (
+            {onOpenWallet && dotsConnected === false && (
+              <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>Setup Earnings</span>
+              </button>
+            )}
+            {onOpenWallet && dotsConnected === true && (
               <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 <span>Wallet</span>
-                {walletBalance !== null && walletBalance > 0 && (
-                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#15803d' }}>
+                {walletBalance !== null && (
+                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: walletBalance > 0 ? '#15803d' : 'var(--text-muted, #888)' }}>
                     ${walletBalance.toFixed(2)}
                   </span>
                 )}
