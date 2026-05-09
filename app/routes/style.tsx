@@ -9,6 +9,7 @@ import {
   createStyleGeneration,
   listStyleGenerationsWithImages,
   deleteStyleGeneration,
+  deleteStyleGenerationImage,
   type StyleGenerationImage,
   type StyleGenerationResult,
 } from '~/services/style-generations';
@@ -153,6 +154,23 @@ export default function StylePage() {
     }
   }
 
+  async function handleDeleteImage(generationId: string, imageId: string) {
+    if (!user) return;
+    // Optimistic per-image remove. Drops the image from the parent
+    // sheet's images array; rolls back via re-hydrate on RLS failure.
+    setHistory(prev => prev.map(entry =>
+      entry.generation.id === generationId
+        ? { ...entry, images: entry.images.filter(im => im.id !== imageId) }
+        : entry,
+    ));
+    const { error: err } = await deleteStyleGenerationImage(imageId);
+    if (err && user.id) {
+      const fresh = await listStyleGenerationsWithImages(user.id);
+      setHistory(fresh);
+      setError(err);
+    }
+  }
+
   if (authLoading) {
     return <div className="style-page"><div className="style-loading">Loading…</div></div>;
   }
@@ -274,6 +292,7 @@ export default function StylePage() {
               images={entry.images}
               onOpen={setLightboxImage}
               onDelete={() => handleDelete(entry.generation.id)}
+              onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
             />
           ))}
         </section>
@@ -297,19 +316,21 @@ function StyleSheetCard({
   images,
   onOpen,
   onDelete,
+  onDeleteImage,
 }: {
   title: string;
   subtitle: string;
   images: StyleGenerationImage[] | null;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete: (() => void) | null;
+  onDeleteImage?: (imageId: string) => void;
 }) {
-  // Always render 4 slots: fill from the images array, otherwise null
-  // (placeholder). Sort_order maps directly to slot index.
-  const slots: (StyleGenerationImage | null)[] = Array.from({ length: 4 }, (_, i) => {
-    if (!images) return null;
-    return images.find(im => im.sort_order === i) ?? null;
-  });
+  // While generating (images === null) we show 4 placeholders so the
+  // card has visible weight; otherwise we render exactly the rows the
+  // user still has — per-image delete just removes its slot.
+  const slots: (StyleGenerationImage | null)[] = images
+    ? [...images].sort((a, b) => a.sort_order - b.sort_order)
+    : Array.from({ length: 4 }, () => null);
 
   return (
     <article className="style-sheet">
@@ -343,6 +364,7 @@ function StyleSheetCard({
             image={img}
             index={i}
             onOpen={onOpen}
+            onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
           />
         ))}
       </div>
@@ -372,10 +394,12 @@ function StyleResultTile({
   image,
   index,
   onOpen,
+  onDelete,
 }: {
   image: StyleGenerationImage | null;
   index: number;
   onOpen: (img: StyleGenerationImage) => void;
+  onDelete?: (() => void) | null;
 }) {
   if (!image) {
     return (
@@ -384,23 +408,45 @@ function StyleResultTile({
       </div>
     );
   }
+  // Reusable per-tile X. stopPropagation so it doesn't fire the
+  // tile's lightbox-open click. Visible on hover (desktop) and always
+  // (mobile) via CSS.
+  const deleteBtn = onDelete ? (
+    <button
+      type="button"
+      className="style-tile-delete"
+      onClick={e => { e.stopPropagation(); onDelete(); }}
+      aria-label={`Delete image ${index + 1}`}
+      title="Delete"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+  ) : null;
+
   if (image.status === 'done' && image.image_url) {
     return (
-      <button
-        type="button"
-        className="style-tile is-done"
-        onClick={() => onOpen(image)}
-        aria-label={`Open style reference ${index + 1}`}
-      >
-        <img src={image.image_url} alt={`Style reference ${index + 1}`} />
+      <div className="style-tile is-done">
+        <button
+          type="button"
+          className="style-tile-open"
+          onClick={() => onOpen(image)}
+          aria-label={`Open style reference ${index + 1}`}
+        >
+          <img src={image.image_url} alt={`Style reference ${index + 1}`} />
+        </button>
         <span className="style-tile-badge">{image.provider}</span>
-      </button>
+        {deleteBtn}
+      </div>
     );
   }
   return (
     <div className="style-tile is-failed">
       <span className="style-tile-badge">{image.provider}</span>
       <div className="style-tile-error">{image.error ?? 'Failed'}</div>
+      {deleteBtn}
     </div>
   );
 }
