@@ -28,6 +28,7 @@ export interface StyleGenerationImage {
   status: StyleImageStatus;
   image_url: string | null;
   error: string | null;
+  liked: boolean;
   created_at: string;
 }
 
@@ -138,6 +139,22 @@ export async function deleteStyleGenerationImage(
   const { error } = await supabase
     .from('style_generation_images')
     .delete()
+    .eq('id', imageId);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Toggle the heart on a single image. Owner-gated via the
+ * `style_generation_images_owner_update` RLS policy.
+ */
+export async function setStyleImageLiked(
+  imageId: string,
+  liked: boolean,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('style_generation_images')
+    .update({ liked })
     .eq('id', imageId);
   return { error: error?.message ?? null };
 }
