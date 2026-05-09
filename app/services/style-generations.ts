@@ -127,6 +127,21 @@ export async function deleteStyleGeneration(
   return { error: error?.message ?? null };
 }
 
+/**
+ * Delete a single image row. RLS gates this to the parent generation's
+ * owner via the `style_generation_images_owner_delete` policy.
+ */
+export async function deleteStyleGenerationImage(
+  imageId: string,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('style_generation_images')
+    .delete()
+    .eq('id', imageId);
+  return { error: error?.message ?? null };
+}
+
 /** Fetch a single generation + its images. Useful for re-rendering history. */
 export async function getStyleGenerationDetail(
   generationId: string,
