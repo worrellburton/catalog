@@ -85,7 +85,6 @@ import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, s
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
-import { emitPresentEvent } from '~/services/present';
 import { supabase } from '~/utils/supabase';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
@@ -188,16 +187,7 @@ function getRandomCatalogName(query?: string): string {
 }
 
 export default function Home() {
-  // Viewer mode: when /present/<slug> embeds this page in an iframe
-  // it appends ?viewer=1. We treat that as "skip the auth wall and
-  // show the public catalog feed read-only" so the live demo on the
-  // /present/ route doesn't ask anonymous guests to sign in. Read it
-  // once at mount; it never changes during the page's lifetime.
-  const viewerMode = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('viewer') === '1';
-  }, []);
-  const [view, setView] = useState<AppView>(viewerMode ? 'app' : 'locked');
+  const [view, setView] = useState<AppView>('locked');
   // First-visit splash: if the user has never been to catalog on this device,
   // show a branded splash before surfacing the gate / landing. The flag is
   // written once and never revisited so repeat visitors skip it.
@@ -1038,39 +1028,6 @@ export default function Home() {
     }
   }, [selectedLook]);
 
-  // Mirror overlay state to /present/<slug>. Fires when a Look opens
-  // or closes; the full Look object travels in the payload so the
-  // viewer never has to fetch from Supabase. No-op when broadcasting
-  // is off — emitPresentEvent silently goes nowhere.
-  useEffect(() => {
-    emitPresentEvent('overlay', {
-      kind: selectedLook ? 'look' : null,
-      look: selectedLook ?? null,
-    });
-  }, [selectedLook]);
-
-  // Mirror search + filter chips. Throttled to React's render
-  // cadence — every keystroke fires, but Realtime backpressures and
-  // we already debounce the URL push above so the wire load stays
-  // tame.
-  useEffect(() => {
-    emitPresentEvent('search', { searchQuery, activeFilter });
-  }, [searchQuery, activeFilter]);
-
-  // Mirror the in-app browser iframe so viewers see the same product
-  // page the presenter is reading.
-  useEffect(() => {
-    if (!browserState) {
-      emitPresentEvent('browser', { open: false });
-    } else {
-      emitPresentEvent('browser', {
-        open: true,
-        url: browserState.url,
-        title: browserState.title,
-        product: browserState.product ?? null,
-      });
-    }
-  }, [browserState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1204,7 +1161,7 @@ export default function Home() {
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !authLoading && !user && !viewerMode && <PasswordGate />}
+      {view === 'locked' && !authLoading && !user && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
