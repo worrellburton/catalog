@@ -460,7 +460,6 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
         />
         <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
       </div>
-      <span className="style-lightbox-badge">{image.provider}</span>
     </div>
   );
 }
@@ -543,7 +542,8 @@ function StyleResultTile({
             height={720}
           />
         </button>
-        <span className="style-tile-badge">{image.provider}</span>
+        {/* Provider badge intentionally omitted on the user end — the
+            admin user/$name page still surfaces it for debugging. */}
         <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
@@ -563,7 +563,6 @@ function StyleResultTile({
   }
   return (
     <div className="style-tile is-failed">
-      <span className="style-tile-badge">{image.provider}</span>
       <div className="style-tile-error">{image.error ?? 'Failed'}</div>
       {deleteBtn}
     </div>
