@@ -2526,6 +2526,13 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-result-actions > .gen-btn-primary {
     grid-column: 1 / -1;
   }
+  /* The trailing secondary (e.g. "Edit & regenerate" when status=done)
+     would otherwise land alone in column 1 on row 3 with a fat empty
+     half-row next to it. Span it across both columns so the row reads
+     as a deliberate full-width action, not a layout accident. */
+  .gen-result-actions > .gen-btn-secondary:last-child {
+    grid-column: 1 / -1;
+  }
 
   /* Result-step layout: the video is the focal point. Drop the
      "Your look" heading (the video itself is self-evidently the
@@ -2586,6 +2593,43 @@ html[data-shell="catalog-app"] .gen-page {
     font-size: 10px;
   }
 }
+
+/* Phone-targeted polish for the result step. Caps the video so the
+   feedback row + action buttons stay visible above the fold instead
+   of landing below it; trims horizontal padding so content gets the
+   full viewport width. */
+@media (max-width: 480px) {
+  .gen-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .gen-step-result .gen-build-frame,
+  .gen-step-result .gen-result-video {
+    /* Reserve room (≈340px) for the back link, products dock,
+       feedback prompt and action buttons stacked underneath. */
+    max-height: calc(100dvh - 340px);
+    width: auto;
+    aspect-ratio: 9 / 16;
+    margin: 0 auto;
+  }
+  .gen-result-actions {
+    /* Same 2-col grid, but let it stretch full width on phones so
+       buttons aren't artificially narrow at 360px max. */
+    max-width: 100%;
+  }
+  .gen-result-products {
+    /* Pull the products dock all the way to the edges so the
+     horizontal scroller has natural overflow gutters. */
+    margin-left: -16px;
+    margin-right: -16px;
+    width: calc(100% + 32px);
+  }
+  .gen-result-products-list {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 .gen-feedback-btn {
   padding: 10px 14px;
   font-size: 13px;
