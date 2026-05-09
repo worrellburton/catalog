@@ -773,6 +773,21 @@
   mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
 }
 
+/* While the search overlay is open, lock the underlying feed so the
+   user can't scroll the page behind the dim. :has() is supported in
+   every shipping browser we target (Safari 15.4+, Chrome 105+).
+   Belt-and-suspenders: also lock the html element + the consumer
+   feed container so iOS Safari's rubber-band can't peek through. */
+:root:has(.bottom-bar.search-open),
+html:has(.bottom-bar.search-open),
+body:has(.bottom-bar.search-open) {
+  overflow: hidden !important;
+  /* touch-action: none stops two-finger scroll attempts on iOS that
+     overflow:hidden alone won't catch. */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 /* Full-viewport scrim. Pinned to the viewport edges (inset: 0) so the
    dim covers the entire screen — including the area under the input
    bar — instead of laying out inline at static position. The
