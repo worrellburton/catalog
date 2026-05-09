@@ -6,8 +6,9 @@
 // 3. Reads the foundational prompt from app_settings('style_prompt') and
 //    substitutes {{gender}} {{name}} {{height}} {{age}} {{pronoun}} {{occasion}}
 //    plus the contracted form {{pronoun}}'s → he's|she's|they're.
-// 4. Submits 4 fal.ai jobs in parallel — 2 to fal-ai/gpt-image-2/edit-image,
+// 4. Submits 4 fal.ai jobs in parallel — 2 to fal-ai/gpt-image-2/image-to-image,
 //    2 to fal-ai/nano-banana-2/edit — each with the user's reference photos.
+//    Both providers are asked for 16:9 outputs so the tile grid is consistent.
 // 5. As each completes, writes a row into style_generation_images. When all
 //    4 settle, marks the parent style_generations row done|failed.
 // 6. Returns the parent row + the 4 image rows (success-only) to the client.
@@ -35,7 +36,9 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE_SYNC = 'https://fal.run';
-const GPT_IMAGE_SLUG = 'fal-ai/gpt-image-2/edit-image';
+// gpt-image-2 exposes the edit endpoint at /image-to-image (verified
+// against fal.ai docs — earlier guesses at /edit-image returned 404).
+const GPT_IMAGE_SLUG = 'fal-ai/gpt-image-2/image-to-image';
 const NANO_BANANA_SLUG = 'fal-ai/nano-banana-2/edit';
 
 interface ProfileContext {
@@ -98,6 +101,15 @@ async function callFalImage(
     image_urls: imageUrls.slice(0, 4),
     num_images: 1,
   };
+  // Per-provider 16:9 hint. gpt-image-2 takes a fixed image_size pair
+  // (1536x1024 is the closest landscape preset to 16:9). nano-banana-2
+  // accepts a free-form aspect_ratio. CSS still object-fit:cover so a
+  // provider that ignores the hint still slots cleanly into the grid.
+  if (modelSlug.includes('gpt-image-2')) {
+    body.image_size = '1536x1024';
+  } else if (modelSlug.includes('nano-banana-2')) {
+    body.aspect_ratio = '16:9';
+  }
   let res: Response;
   try {
     res = await fetch(`${FAL_BASE_SYNC}/${modelSlug}`, {
