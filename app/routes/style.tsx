@@ -469,6 +469,17 @@ function StyleResultTile({
       </div>
     );
   }
+  // Pending rows on a hydrated history (e.g. user reloaded mid-run, or the
+  // edge function timed out before settling) keep the spinner — only
+  // explicit `failed` rows render the error chrome.
+  if (image.status === 'pending') {
+    return (
+      <div className="style-tile is-loading" aria-label={`Generating image ${index + 1}`}>
+        <span className="style-tile-badge">{image.provider}</span>
+        <div className="style-tile-spinner" />
+      </div>
+    );
+  }
   return (
     <div className="style-tile is-failed">
       <span className="style-tile-badge">{image.provider}</span>
