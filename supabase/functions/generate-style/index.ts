@@ -105,12 +105,13 @@ async function callFalImage(
     image_urls: imageUrls.slice(0, 4),
     num_images: 1,
   };
-  // Per-provider 16:9 hint. gpt-image-2 takes a fixed image_size pair
-  // (1536x1024 is the closest landscape preset to 16:9). nano-banana-2
+  // Per-provider 16:9 hint. gpt-image-2's image_size is an enum
+  // (square_hd | square | portrait_4_3 | portrait_16_9 | landscape_4_3
+  // | landscape_16_9 — verified from a fal_422 response). nano-banana-2
   // accepts a free-form aspect_ratio. CSS still object-fit:cover so a
   // provider that ignores the hint still slots cleanly into the grid.
   if (modelSlug.includes('gpt-image-2')) {
-    body.image_size = '1536x1024';
+    body.image_size = 'landscape_16_9';
   } else if (modelSlug.includes('nano-banana-2')) {
     body.aspect_ratio = '16:9';
   }
