@@ -877,6 +877,13 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
+              <span className="deck-v1-tech-stack-label">Image</span>
+              <ul>
+                <li><strong>OpenAI</strong>, gpt-image-2 style sheets</li>
+                <li><strong>Google</strong>, Nano Banana 2 (Gemini 3 Pro Image)</li>
+              </ul>
+            </div>
+            <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Embeddings &amp; Vector</span>
               <ul>
                 <li><strong>TwelveLabs</strong>, Marengo 3.0 video embeddings</li>
@@ -887,7 +894,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               <span className="deck-v1-tech-stack-label">Compute</span>
               <ul>
                 <li><strong>Modal</strong>, serverless agents</li>
-                <li><strong>Fal.ai</strong>, video generation queue</li>
+                <li><strong>Fal.ai</strong>, video &amp; image generation queue</li>
               </ul>
             </div>
           </div>
