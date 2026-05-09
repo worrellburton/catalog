@@ -7,6 +7,8 @@ import { getUserHeightAge } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
 import {
   createStyleGeneration,
+  listStyleGenerationsWithImages,
+  deleteStyleGeneration,
   type StyleGenerationImage,
   type StyleGenerationResult,
 } from '~/services/style-generations';
@@ -38,8 +40,11 @@ export default function StylePage() {
 
   const [occasion, setOccasion] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submittingOccasion, setSubmittingOccasion] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<StyleGenerationResult | null>(null);
+  // Newest first. Hydrated from DB on mount + prepended to on every
+  // successful generate so prior style sheets stay visible in a scroll.
+  const [history, setHistory] = useState<StyleGenerationResult[]>([]);
   const [lightboxImage, setLightboxImage] = useState<StyleGenerationImage | null>(null);
   const occasionRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +71,18 @@ export default function StylePage() {
       const known = new Set(list.map(u => u.id));
       const ids = slots.filter((id): id is string => typeof id === 'string' && known.has(id));
       setPickedIds(ids);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Hydrate prior style generations + their image rows so the page
+  // opens with the user's full history visible.
+  useEffect(() => {
+    if (!user?.id) { setHistory([]); return; }
+    let cancelled = false;
+    listStyleGenerationsWithImages(user.id).then(rows => {
+      if (cancelled) return;
+      setHistory(rows);
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -105,17 +122,35 @@ export default function StylePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !canSubmit) return;
+    const trimmed = occasion.trim();
     setSubmitting(true);
+    setSubmittingOccasion(trimmed);
     setError(null);
-    setResult(null);
     const { data, error: err } = await createStyleGeneration({
       userId: user.id,
-      occasion: occasion.trim(),
+      occasion: trimmed,
       referenceUrls,
     });
     setSubmitting(false);
+    setSubmittingOccasion('');
     if (err) { setError(err); return; }
-    setResult(data);
+    if (data) {
+      setHistory(prev => [data, ...prev.filter(p => p.generation.id !== data.generation.id)]);
+      setOccasion('');
+    }
+  }
+
+  async function handleDelete(generationId: string) {
+    if (!user) return;
+    // Optimistic remove — RLS confirms ownership server-side and ON DELETE
+    // CASCADE removes the 4 image rows. If the call fails we re-hydrate.
+    setHistory(prev => prev.filter(p => p.generation.id !== generationId));
+    const { error: err } = await deleteStyleGeneration(generationId);
+    if (err && user.id) {
+      const fresh = await listStyleGenerationsWithImages(user.id);
+      setHistory(fresh);
+      setError(err);
+    }
   }
 
   if (authLoading) {
@@ -214,27 +249,33 @@ export default function StylePage() {
         </form>
       )}
 
-      {/* Result grid. While submitting we show 4 placeholder tiles so the
-          intent is obvious. After the response lands we show whichever of
-          the 4 image slots came back successfully; failed tiles show the
-          provider error inline so the user can retry. */}
-      {(submitting || result) && (
-        <section className="style-results">
-          <h2 className="style-results-title">
-            {submitting ? 'Generating…' : 'Your style sheet'}
-          </h2>
-          <div className="style-grid">
-            {(submitting ? Array.from({ length: 4 }).map((_, i) => null) : result?.images ?? [])
-              .map((img, i) => (
-                <StyleResultTile
-                  key={(img as StyleGenerationImage)?.id ?? i}
-                  image={img as StyleGenerationImage | null}
-                  index={i}
-                  onOpen={setLightboxImage}
-                />
-              ))
-            }
-          </div>
+      {/* Vertical history of style sheets. While a generation is in flight
+          we pin a placeholder card on top with the typed occasion. Each
+          card is a 2x2 grid of tiles; tiles open in the lightbox; the
+          card has a delete button that cascades the 4 images. */}
+      {(submitting || history.length > 0) && (
+        <section className="style-history">
+          {submitting && (
+            <StyleSheetCard
+              title={submittingOccasion || 'Generating…'}
+              subtitle="Generating 4 looks…"
+              images={null}
+              onOpen={setLightboxImage}
+              onDelete={null}
+            />
+          )}
+          {history.map(entry => (
+            <StyleSheetCard
+              key={entry.generation.id}
+              title={entry.generation.occasion}
+              subtitle={new Date(entry.generation.created_at).toLocaleString(undefined, {
+                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+              })}
+              images={entry.images}
+              onOpen={setLightboxImage}
+              onDelete={() => handleDelete(entry.generation.id)}
+            />
+          ))}
         </section>
       )}
 
@@ -242,6 +283,70 @@ export default function StylePage() {
         <StyleLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * One style sheet (4-tile grid) with header + delete. `images=null`
+ * renders 4 loading placeholders for the in-flight generation pinned
+ * on top.
+ */
+function StyleSheetCard({
+  title,
+  subtitle,
+  images,
+  onOpen,
+  onDelete,
+}: {
+  title: string;
+  subtitle: string;
+  images: StyleGenerationImage[] | null;
+  onOpen: (img: StyleGenerationImage) => void;
+  onDelete: (() => void) | null;
+}) {
+  // Always render 4 slots: fill from the images array, otherwise null
+  // (placeholder). Sort_order maps directly to slot index.
+  const slots: (StyleGenerationImage | null)[] = Array.from({ length: 4 }, (_, i) => {
+    if (!images) return null;
+    return images.find(im => im.sort_order === i) ?? null;
+  });
+
+  return (
+    <article className="style-sheet">
+      <header className="style-sheet-header">
+        <div className="style-sheet-meta">
+          <h3 className="style-sheet-title">{title}</h3>
+          <span className="style-sheet-subtitle">{subtitle}</span>
+        </div>
+        {onDelete && (
+          <button
+            type="button"
+            className="style-sheet-delete"
+            onClick={onDelete}
+            aria-label="Delete this style sheet"
+            title="Delete"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          </button>
+        )}
+      </header>
+      <div className="style-grid">
+        {slots.map((img, i) => (
+          <StyleResultTile
+            key={img?.id ?? i}
+            image={img}
+            index={i}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </article>
   );
 }
 
