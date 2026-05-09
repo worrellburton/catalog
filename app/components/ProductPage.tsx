@@ -6,6 +6,7 @@ import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { trackProductClickout } from '~/services/session-tracker';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -907,6 +908,10 @@ export default function ProductPage({
                       className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
                       onClick={() => {
                         setShowRetailers(false);
+                        // Fire-and-forget clickout telemetry. Resolves the
+                        // products.url → id so /admin/products + the per-
+                        // user CTR both attribute the right product.
+                        void trackProductClickout(offer.url, product.brand, product.name);
                         onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
                       }}
                       role="listitem"
