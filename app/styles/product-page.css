@@ -789,6 +789,20 @@
   background: rgba(255, 255, 255, 0.12);
   flex: 0 0 auto;
 }
+/* Initial-letter fallback when the creator has no avatar (orphan
+   looks created via the user-generation flow). Same circle size +
+   neutral background as the img so the layout doesn't shift. */
+.pd-look-tile-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 192, 96, 0.85);
+  color: #0a0a0a;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+}
 
 /* Saved-by social proof row. Avatars overlap left-to-right with a thin
    ring; count sits to the right. Sized to feel like a quiet signal next to

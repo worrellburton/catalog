@@ -395,14 +395,18 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
     e.stopPropagation();
     // Only honor click-to-zoom if it isn't the tail end of a drag.
     if (dragRef.current) return;
+    // Capture the rect + click coords NOW, before the setZoomed updater
+    // runs — React's synthetic event pool nulls e.currentTarget after
+    // the handler returns, so reading rect inside the updater throws
+    // TypeError (the production "Application Error" on tile click).
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top - rect.height / 2;
     setZoomed(z => {
       if (z) { setPan({ x: 0, y: 0 }); return false; }
       // Center the click point so the area the user tapped grows
       // out from under their finger / cursor instead of jumping
       // to a corner.
-      const rect = e.currentTarget.getBoundingClientRect();
-      const cx = e.clientX - rect.left - rect.width / 2;
-      const cy = e.clientY - rect.top - rect.height / 2;
       setPan({ x: -cx, y: -cy });
       return true;
     });
