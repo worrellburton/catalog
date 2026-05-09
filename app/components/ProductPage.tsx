@@ -446,19 +446,25 @@ function LookTile({
       )}
 
       <div className="pd-look-tile-meta">
-        {(avatarUrl || displayName) && (
-          <span className="pd-look-tile-creator">
-            {avatarUrl && (
-              <img
-                className="pd-look-tile-avatar"
-                src={avatarUrl}
-                alt=""
-                loading="lazy"
-              />
-            )}
-            {displayName && <span>{displayName}</span>}
-          </span>
-        )}
+        {/* Always render the creator chip in the lower-left so every
+            look has a visible attribution. Static creators get their
+            real avatar + name; user-generated orphan looks fall back
+            to an initial circle so the chip never disappears. */}
+        <span className="pd-look-tile-creator">
+          {avatarUrl ? (
+            <img
+              className="pd-look-tile-avatar"
+              src={avatarUrl}
+              alt=""
+              loading="lazy"
+            />
+          ) : (
+            <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
+              {(displayName || look.creator || '?').charAt(0).toUpperCase()}
+            </span>
+          )}
+          <span>{displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}</span>
+        </span>
       </div>
     </button>
   );
