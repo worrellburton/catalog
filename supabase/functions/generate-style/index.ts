@@ -94,6 +94,12 @@ function resolvePrompt(template: string, profile: ProfileContext, occasion: stri
 
 interface FalImageResult { url: string | null; error: string | null }
 
+// Hard per-call timeout so one slow provider can't strand its row in
+// `pending` forever (Supabase edge functions are killed at 60s wall
+// clock — if gpt-image-2 hasn't returned by ~50s we abort and mark
+// failed, leaving headroom to write the row).
+const FAL_CALL_TIMEOUT_MS = 50_000;
+
 async function callFalImage(
   modelSlug: string,
   prompt: string,
@@ -105,16 +111,19 @@ async function callFalImage(
     image_urls: imageUrls.slice(0, 4),
     num_images: 1,
   };
-  // Per-provider 16:9 hint. gpt-image-2's image_size is an enum
-  // (square_hd | square | portrait_4_3 | portrait_16_9 | landscape_4_3
-  // | landscape_16_9 — verified from a fal_422 response). nano-banana-2
+  // Per-provider 16:9 hint + speed. gpt-image-2's image_size is an
+  // enum; quality=low cuts the wall-clock cost roughly in half so
+  // both calls reliably finish under the edge timeout. nano-banana-2
   // accepts a free-form aspect_ratio. CSS still object-fit:cover so a
   // provider that ignores the hint still slots cleanly into the grid.
   if (modelSlug.includes('gpt-image-2')) {
     body.image_size = 'landscape_16_9';
+    body.quality = 'low';
   } else if (modelSlug.includes('nano-banana-2')) {
     body.aspect_ratio = '16:9';
   }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FAL_CALL_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${FAL_BASE_SYNC}/${modelSlug}`, {
@@ -124,10 +133,16 @@ async function callFalImage(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: ctrl.signal,
     });
   } catch (err) {
+    clearTimeout(timer);
+    if ((err as { name?: string })?.name === 'AbortError') {
+      return { url: null, error: `timeout_${FAL_CALL_TIMEOUT_MS}ms` };
+    }
     return { url: null, error: `network_error:${String(err).slice(0, 200)}` };
   }
+  clearTimeout(timer);
   const text = await res.text().catch(() => '');
   if (!res.ok) {
     return { url: null, error: `fal_${res.status}:${text.slice(0, 300)}` };
