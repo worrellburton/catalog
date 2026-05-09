@@ -177,10 +177,10 @@ export default function StylePage() {
   if (!user) {
     return (
       <div className="style-page">
-        <header className="style-header">
+        <div className="style-header">
           <button className="style-back" onClick={() => navigate(-1)} aria-label="Back">←</button>
           <h1>Style</h1>
-        </header>
+        </div>
         <div className="style-empty">Sign in to use Style.</div>
       </div>
     );
@@ -190,10 +190,10 @@ export default function StylePage() {
 
   return (
     <div className="style-page">
-      <header className="style-header">
+      <div className="style-header">
         <button className="style-back" onClick={() => navigate(-1)} aria-label="Back">←</button>
         <h1>Style</h1>
-      </header>
+      </div>
 
       {/* Shared context strip — photos + height + age, mirroring Try it on. */}
       <section className="style-context">
@@ -334,7 +334,7 @@ function StyleSheetCard({
 
   return (
     <article className="style-sheet">
-      <header className="style-sheet-header">
+      <div className="style-sheet-header">
         <div className="style-sheet-meta">
           <h3 className="style-sheet-title">{title}</h3>
           <span className="style-sheet-subtitle">{subtitle}</span>
@@ -356,7 +356,7 @@ function StyleSheetCard({
             </svg>
           </button>
         )}
-      </header>
+      </div>
       <div className="style-grid">
         {slots.map((img, i) => (
           <StyleResultTile
