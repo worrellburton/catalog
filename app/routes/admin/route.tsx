@@ -55,6 +55,9 @@ interface SearchItem {
 const allSearchItems: SearchItem[] = [
   // Pages
   { label: 'Users', type: 'Page', to: '/admin/users' },
+  { label: 'Waitlist', type: 'Page', to: '/admin/users?tab=waitlist' },
+  { label: 'Admins', type: 'Page', to: '/admin/users?tab=admins' },
+  { label: 'Super Admins', type: 'Page', to: '/admin/users?tab=super-admins' },
   { label: 'Content', type: 'Page', to: '/admin/content' },
   { label: 'Catalogs', type: 'Page', to: '/admin/catalogs' },
   { label: 'Search', type: 'Page', to: '/admin/search' },

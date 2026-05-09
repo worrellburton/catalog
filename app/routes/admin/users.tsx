@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { useNavigate } from '@remix-run/react';
+import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { getProfiles, updateUserRole, updateUserIsAdmin, deleteProfile, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
@@ -85,6 +85,12 @@ function profileToRow(p: Profile): UserRow {
 }
 
 type Tab = 'waitlist' | 'users' | 'admins' | 'super-admins';
+
+const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins', 'super-admins'];
+
+function isTab(value: string | null): value is Tab {
+  return value !== null && (TAB_VALUES as readonly string[]).includes(value);
+}
 
 type ToastType = 'success' | 'info' | 'warning';
 
@@ -317,7 +323,22 @@ function writeDeletedContentCreators(set: Set<string>) {
 }
 
 export default function AdminUsers() {
-  const [activeTab, setActiveTab] = useState<Tab>('users');
+  // Each tab has its own URL — `?tab=waitlist|users|admins|super-admins`.
+  // Default is `users` when no param is present (or it's invalid). We
+  // bind through useSearchParams so deep-links land on the right tab,
+  // the back button walks tab history, and the "Move to admin" CTA's
+  // tab switch updates the URL too.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const activeTab: Tab = isTab(tabFromUrl) ? tabFromUrl : 'users';
+  const setActiveTab = useCallback((next: Tab) => {
+    setSearchParams(prev => {
+      const out = new URLSearchParams(prev);
+      if (next === 'users') out.delete('tab');
+      else                  out.set('tab', next);
+      return out;
+    }, { replace: false });
+  }, [setSearchParams]);
   // Pass 2: seed from module cache so re-entering the page paints
   // with data immediately. Realtime + initial fetch refresh in place.
   const [allUsers, setAllUsers] = useState<UserRow[]>(() => cachedUsers ?? []);
