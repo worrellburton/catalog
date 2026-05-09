@@ -13,6 +13,41 @@
   padding: 0 24px;
 }
 
+/* Floating hint that sits above the AI bar on first run.
+   Disappears on the first keystroke (or once the user has dismissed
+   it on this device — see TypeAnywhere.tsx). Wrap is column so the
+   hint stacks above the row without affecting the bar's width. */
+.ai-bar-wrap { flex-direction: column; align-items: center; gap: 10px; }
+.ai-bar-hint {
+  pointer-events: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  /* Soft fade-in + bob so it reads as a tooltip, not page chrome. */
+  animation: ai-bar-hint-in 0.5s ease-out both, ai-bar-hint-bob 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes ai-bar-hint-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ai-bar-hint-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+.light-mode .ai-bar-hint {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+}
+
 .ai-bar {
   pointer-events: auto;
   display: flex;
