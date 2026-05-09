@@ -440,7 +440,24 @@
   object-fit: contain;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  cursor: zoom-in;
+  /* Smooth scale + pan; will-change so transform stays on the GPU
+     while the user drags. */
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* No native pan-zoom — we intercept pointer events for our own
+     drag-to-pan once the image is zoomed. */
+  touch-action: none;
 }
+.style-lightbox-img.is-zoomed {
+  cursor: grab;
+  /* While dragging the .is-zoomed image, the React handler suppresses
+     transitions implicitly because it updates pan every move. The
+     base transition above only fires on toggle, which is what we want. */
+}
+.style-lightbox-img.is-zoomed:active { cursor: grabbing; }
 .style-lightbox-close {
   position: absolute;
   top: 20px;

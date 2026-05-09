@@ -2155,6 +2155,29 @@ html[data-shell="catalog-app"] .gen-page {
   border: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
+/* Centerpiece pulse for the product the user came in to try on
+   (Try-it-on button on a product page → /generate?product_url=…).
+   Fires once for ~2s on landing, then the JS sets state back to null
+   and the class drops. Scale-pop + glow ring so it reads as "this is
+   the one" rather than just another picked chip. */
+.gen-dock-pick.is-prefilled {
+  animation: gen-dock-prefill 2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  z-index: 1;
+}
+.gen-dock-pick.is-prefilled img {
+  border-color: #f0c060;
+  box-shadow:
+    0 0 0 3px rgba(240, 192, 96, 0.35),
+    0 8px 22px rgba(240, 192, 96, 0.25);
+}
+@keyframes gen-dock-prefill {
+  0%   { transform: scale(0.8); }
+  20%  { transform: scale(1.18); }
+  40%  { transform: scale(1.04); }
+  60%  { transform: scale(1.10); }
+  100% { transform: scale(1.00); }
+}
+
 .gen-dock-pick-x {
   position: absolute;
   top: -5px;
