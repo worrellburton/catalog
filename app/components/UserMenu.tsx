@@ -204,6 +204,15 @@ function UserMenu({
               <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
 
+            {/* Style — sibling of Try it on. Generates a 4-image style
+                reference sheet from the same context (photos, height, age)
+                using gpt-image-1 + nano-banana-2 via fal.ai. */}
+            <button className="user-menu-cta" onClick={runItem(() => navigate('/style'))}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/><circle cx="12" cy="12" r="9" opacity="0.25"/></svg>
+              <span>Style</span>
+              <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+
             {/* Recently viewed - products tapped in the trail, newest first. */}
             {recents.length > 0 && onOpenProduct && (
               <div className="user-menu-section">
