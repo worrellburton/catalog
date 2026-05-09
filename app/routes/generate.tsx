@@ -386,6 +386,7 @@ export default function GeneratePage() {
   // user may have just removed. Matches against products.url since the
   // consumer Product type has no id.
   const productUrlPrefilled = useRef(false);
+  const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
   useEffect(() => {
     if (productUrlPrefilled.current) return;
     if (typeof window === 'undefined') return;
@@ -407,12 +408,42 @@ export default function GeneratePage() {
         { id: row.id, name: row.name, brand: row.brand, price: row.price, image_url: row.image_url, role_tag: roleTagFromName(row.name) },
         ...prev,
       ]);
+      // Surface the prefilled product as the centerpiece — the dock
+      // chip gets scrolled into the viewport center and a brief
+      // highlight ring fires so it's unmistakable that this is the
+      // product the user came here to try on.
+      setPrefilledProductId(row.id);
       // Strip the param off so a hard reload doesn't re-prefill.
       url.searchParams.delete('product_url');
       window.history.replaceState({}, '', url.toString());
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Center + highlight effect for the prefilled product. Runs after the
+  // dock chip mounts; clears the highlight after the pulse animation
+  // (~2s) so it doesn't linger as the user keeps interacting.
+  useEffect(() => {
+    if (!prefilledProductId) return;
+    if (typeof window === 'undefined') return;
+    const tries = [0, 80, 240, 600]; // retry until the chip is mounted
+    const timers: number[] = [];
+    let scrolled = false;
+    tries.forEach(delay => {
+      timers.push(window.setTimeout(() => {
+        if (scrolled) return;
+        const el = document.querySelector<HTMLElement>(
+          `[data-prefilled-id="${prefilledProductId}"]`,
+        );
+        if (el) {
+          scrolled = true;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+      }, delay));
+    });
+    const clear = window.setTimeout(() => setPrefilledProductId(null), 2400);
+    return () => { timers.forEach(clearTimeout); clearTimeout(clear); };
+  }, [prefilledProductId]);
 
   // Phase 9/10 - height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
@@ -1847,7 +1878,11 @@ export default function GeneratePage() {
           {picked.length > 0 && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
               {picked.map(p => (
-                <div key={p.id} className="gen-dock-pick">
+                <div
+                  key={p.id}
+                  className={`gen-dock-pick${prefilledProductId === p.id ? ' is-prefilled' : ''}`}
+                  data-prefilled-id={prefilledProductId === p.id ? p.id : undefined}
+                >
                   {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
                   <button
                     type="button"

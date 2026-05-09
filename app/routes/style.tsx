@@ -378,17 +378,85 @@ function StyleSheetCard({
 }
 
 function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClose: () => void }) {
+  // Click-to-zoom (1x ↔ 2x) with pointer drag-pan when zoomed. We
+  // track translate(x, y) in state and apply via transform so a
+  // single CSS transition handles both axes cleanly. Pointer events
+  // unify mouse + touch so the same code path works on phones.
+  const [zoomed, setZoomed] = useState(false);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  // `panning` toggles the CSS transition off during drag-pan so
+  // moves are 1:1 with the cursor; the transition still fires on
+  // zoom-in / zoom-out toggles. Only flips at the start/end of a
+  // drag, not per pointer-move.
+  const [panning, setPanning] = useState(false);
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+
+  const onImgClick = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    e.stopPropagation();
+    // Only honor click-to-zoom if it isn't the tail end of a drag.
+    if (dragRef.current) return;
+    setZoomed(z => {
+      if (z) { setPan({ x: 0, y: 0 }); return false; }
+      // Center the click point so the area the user tapped grows
+      // out from under their finger / cursor instead of jumping
+      // to a corner.
+      const rect = e.currentTarget.getBoundingClientRect();
+      const cx = e.clientX - rect.left - rect.width / 2;
+      const cy = e.clientY - rect.top - rect.height / 2;
+      setPan({ x: -cx, y: -cy });
+      return true;
+    });
+  }, []);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLImageElement>) => {
+    if (!zoomed) return;
+    e.stopPropagation();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y };
+    setPanning(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, [zoomed, pan.x, pan.y]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLImageElement>) => {
+    if (!dragRef.current) return;
+    e.stopPropagation();
+    setPan({
+      x: dragRef.current.baseX + (e.clientX - dragRef.current.startX),
+      y: dragRef.current.baseY + (e.clientY - dragRef.current.startY),
+    });
+  }, []);
+
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLImageElement>) => {
+    const wasDragging = dragRef.current !== null;
+    dragRef.current = null;
+    setPanning(false);
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
+    // Suppress the synthesized click that fires after a drag-pan
+    // (otherwise releasing the pan toggles the zoom back to 1x).
+    if (wasDragging) e.stopPropagation();
+  }, []);
+
   // Click anywhere on the dim backdrop closes; clicks on the image
-  // itself stop propagation so the user can interact with it without
-  // triggering an accidental dismiss.
+  // itself are handled above. Stop propagation on the frame so a
+  // tap on the wordmark area doesn't dismiss.
   return (
     <div className="style-lightbox" onClick={onClose} role="dialog" aria-modal="true">
       <button className="style-lightbox-close" onClick={onClose} aria-label="Close">×</button>
       <div className="style-lightbox-frame" onClick={e => e.stopPropagation()}>
         <img
-          className="style-lightbox-img"
+          className={`style-lightbox-img${zoomed ? ' is-zoomed' : ''}`}
           src={image.image_url ?? ''}
           alt={`Style reference (${image.provider})`}
+          decoding="async"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomed ? 2 : 1})`,
+            transition: panning ? 'none' : undefined,
+          }}
+          onClick={onImgClick}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          draggable={false}
         />
         <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
       </div>
@@ -463,7 +531,17 @@ function StyleResultTile({
           onClick={() => onOpen(image)}
           aria-label={`Open style reference ${index + 1}`}
         >
-          <img src={image.image_url} alt={`Style reference ${index + 1}`} />
+          {/* loading=lazy + decoding=async + intrinsic size hint so the
+              browser allocates pixels without forcing layout, defers
+              off-screen tiles, and decodes off the main thread. */}
+          <img
+            src={image.image_url}
+            alt={`Style reference ${index + 1}`}
+            loading="lazy"
+            decoding="async"
+            width={1280}
+            height={720}
+          />
         </button>
         <span className="style-tile-badge">{image.provider}</span>
         <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>

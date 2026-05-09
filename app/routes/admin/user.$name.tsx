@@ -442,8 +442,15 @@ export default function AdminUserDetail() {
                       }}>
                         {img?.image_url ? (
                           <a href={img.image_url} target="_blank" rel="noopener noreferrer">
-                            <img src={img.image_url} alt={`${s.occasion} ${i + 1}`}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            <img
+                              src={img.image_url}
+                              alt={`${s.occasion} ${i + 1}`}
+                              loading="lazy"
+                              decoding="async"
+                              width={1280}
+                              height={720}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            />
                           </a>
                         ) : (
                           <div style={{
