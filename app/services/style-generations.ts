@@ -87,6 +87,46 @@ export async function listStyleGenerations(userId: string): Promise<StyleGenerat
   return (data ?? []) as StyleGeneration[];
 }
 
+/**
+ * Hydrate a user's prior style generations together with their image
+ * rows in two queries (one for the parents, one IN-list for the
+ * children) so the Style page can render the full history without N+1.
+ */
+export async function listStyleGenerationsWithImages(
+  userId: string,
+): Promise<StyleGenerationResult[]> {
+  if (!supabase) return [];
+  const parents = await listStyleGenerations(userId);
+  if (parents.length === 0) return [];
+  const { data: images } = await supabase
+    .from('style_generation_images')
+    .select('*')
+    .in('generation_id', parents.map(p => p.id))
+    .order('sort_order');
+  const byParent = new Map<string, StyleGenerationImage[]>();
+  ((images ?? []) as StyleGenerationImage[]).forEach(img => {
+    const list = byParent.get(img.generation_id) ?? [];
+    list.push(img);
+    byParent.set(img.generation_id, list);
+  });
+  return parents.map(p => ({ generation: p, images: byParent.get(p.id) ?? [] }));
+}
+
+/**
+ * Delete a generation. The FK on style_generation_images is ON DELETE
+ * CASCADE, so the 4 image rows go with it. RLS allows owners only.
+ */
+export async function deleteStyleGeneration(
+  generationId: string,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('style_generations')
+    .delete()
+    .eq('id', generationId);
+  return { error: error?.message ?? null };
+}
+
 /** Fetch a single generation + its images. Useful for re-rendering history. */
 export async function getStyleGenerationDetail(
   generationId: string,

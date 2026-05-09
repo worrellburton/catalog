@@ -6,7 +6,11 @@
 }
 .bottom-bar {
   position: fixed;
-  bottom: 24px;
+  /* Hugs the URL bar with just enough breathing room — 24px sat too
+     high and read as a floating island; 12px (+ the home-indicator
+     safe area on devices that report one) reads as "anchored above the
+     browser chrome". */
+  bottom: calc(12px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
@@ -752,12 +756,13 @@
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.18s ease, visibility 0.18s ease;
-  /* Reserve space at the bottom for the input bar so the scroll
-     track doesn't run pills into / under the bar. Uses the live
-     --ios-bottom-chrome var BottomBar writes; on desktop it's 0. */
+  /* Reserve only the input-bar's own height (≈ 48px) + the 12px
+     bottom offset, so the lowest visible suggestion sits right above
+     the search bar with no awkward gap. The previous +88px left a
+     ~40px floating gap between "concert outfit" and the input. */
   --suggestions-bar-clear: max(
-    calc(env(safe-area-inset-bottom) + 88px),
-    calc(var(--ios-bottom-chrome, 0px) + 88px)
+    calc(env(safe-area-inset-bottom) + 60px),
+    calc(var(--ios-bottom-chrome, 0px) + 60px)
   );
   padding-bottom: var(--suggestions-bar-clear);
   box-sizing: border-box;
@@ -768,13 +773,27 @@
   mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
 }
 
-/* Make the underlying scrim a touch darker + blurrier so the
-   solid dim itself does the work of dimming the feed; no need
-   for a tracking gradient on the suggestions container. */
+/* Full-viewport scrim. Pinned to the viewport edges (inset: 0) so the
+   dim covers the entire screen — including the area under the input
+   bar — instead of laying out inline at static position. The
+   suggestions column (z-index: 101) and input bar (z-index: 100)
+   stack above. */
 .search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  pointer-events: none;
+}
+.search-backdrop.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .search-suggestions.visible {

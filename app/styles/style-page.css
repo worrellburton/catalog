@@ -196,14 +196,70 @@
   font-size: 13px;
 }
 
-.style-results {
-  margin-top: 12px;
+/* History — vertical stack of past style sheets, newest on top.
+   Each is its own card with a header + 2x2 grid + delete button. */
+.style-history {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 8px;
 }
-.style-results-title {
-  font-size: 18px;
+.style-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+.style-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.style-sheet-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.style-sheet-title {
+  font-size: 16px;
   font-weight: 600;
-  margin: 0 0 14px;
   letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+  text-transform: capitalize;
+  /* Long occasions get truncated rather than wrapping the header into
+     two ragged lines next to the delete button. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.style-sheet-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.style-sheet-delete {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.style-sheet-delete:hover {
+  background: rgba(255, 80, 80, 0.12);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff8a8a;
 }
 .style-grid {
   display: grid;
