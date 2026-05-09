@@ -981,15 +981,38 @@ body:has(.bottom-bar.search-open) {
     border-radius: 22px;
   }
   .bottom-bar.search-open {
+    /* Tight 8px gap when the search overlay is up — the keyboard sits
+       directly below the bar, so the user reads it as one continuous
+       input strip (was 28px which left a visible un-dimmed band). */
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 28px),
-      calc(var(--ios-bottom-chrome, 0px) + 28px)
+      calc(env(safe-area-inset-bottom) + 8px),
+      calc(var(--ios-bottom-chrome, 0px) + 8px)
     );
   }
   .bottom-bar.filters-open {
     top: 0;
     bottom: 0;
   }
+
+  /* Native touch-scroll for suggestions on phones (rAF auto-scroll
+     is disabled here in BottomBar.tsx). Track resets to identity
+     transform so user scroll isn't fighting a per-frame translate. */
+  .search-suggestions {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search-suggestions-track {
+    transform: none !important;
+    /* Bottom padding pushes the last suggestion above the input bar
+       so users can tap any item without it hiding behind the pill. */
+    padding-bottom: calc(var(--suggestions-bar-clear, 88px) + 12px);
+  }
+  /* Slightly more opaque dim on mobile so the page doesn't bleed
+     through the gap between the bar and the keyboard. */
+  .search-backdrop {
+    background: rgba(0, 0, 0, 0.88);
+  }
+}
   /* Suggestions float above the bar - keep them well clear of the URL
      toolbar so the rolling list doesn't clip into Safari's chrome. */
   .search-suggestions {

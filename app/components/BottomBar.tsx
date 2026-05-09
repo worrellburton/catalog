@@ -87,6 +87,13 @@ function BottomBar({
       }
       return;
     }
+    // Skip the rAF auto-scroll on phones — the user wants to touch-
+    // scroll the suggestions directly. Native overflow-y on the
+    // .search-suggestions container handles it; the rAF would fight
+    // user pans by snapping back every frame.
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+      return;
+    }
     const track = trackRef.current;
     const SPEED = 0.4;
     let offset = scrollY.current;
