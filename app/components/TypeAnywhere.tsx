@@ -28,6 +28,23 @@ const PLACEHOLDER_HINTS = [
   'Try "off duty"',
 ];
 
+// localStorage key — once the user types (or explicitly dismisses)
+// we set this and never re-show the floating "Just start typing"
+// hint on this device. Persisted so a returning visitor isn't told
+// a thing they already learned.
+const TYPE_HINT_DISMISSED_KEY = 'catalog:type-anywhere-hint-dismissed:v1';
+
+function readHintDismissed(): boolean {
+  if (typeof window === 'undefined') return true;
+  try { return window.localStorage.getItem(TYPE_HINT_DISMISSED_KEY) === '1'; }
+  catch { return false; }
+}
+
+function persistHintDismissed(): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(TYPE_HINT_DISMISSED_KEY, '1'); } catch { /* quota */ }
+}
+
 export default function TypeAnywhere() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,6 +59,19 @@ export default function TypeAnywhere() {
   // they've started - no point distracting them).
   const [hintIndex, setHintIndex] = useState(() => Math.floor(Math.random() * PLACEHOLDER_HINTS.length));
   const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
+
+  // Floating "Just start typing" tooltip above the bar. Shown once
+  // per device until the user types anything; then it fades out and
+  // never returns (persisted in localStorage). Desktop only — the
+  // bar itself already hides on mobile.
+  const [hintDismissed, setHintDismissed] = useState(true);
+  useEffect(() => { setHintDismissed(readHintDismissed()); }, []);
+  useEffect(() => {
+    if (text.length > 0 && !hintDismissed) {
+      setHintDismissed(true);
+      persistHintDismissed();
+    }
+  }, [text, hintDismissed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -124,6 +154,9 @@ export default function TypeAnywhere() {
   return (
     <>
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
+        {!hintDismissed && (
+          <div className="ai-bar-hint" aria-hidden="true">Just start typing</div>
+        )}
         <div className="ai-bar">
           <button
             type="button"
