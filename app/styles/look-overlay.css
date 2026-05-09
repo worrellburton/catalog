@@ -428,14 +428,15 @@
   .look-media {
     width: 100%;
     height: auto;
-    aspect-ratio: 9 / 16;
+    /* Match the consumer LookCard's framing exactly: 3:4 portrait
+       with object-fit:cover (was 9:16 + contain, which letterboxed
+       on mobile and made the look feel cropped/wrong). The card on
+       the feed and the overlay video now display the same way. */
+    aspect-ratio: 3 / 4;
     border-radius: 0;
   }
-  /* contain (not cover) so any non-9:16 source letterboxes instead of
-     cropping; the wrapper aspect-ratio still keeps the layout square
-     on the dominant case. */
   .look-media-video {
-    object-fit: contain;
+    object-fit: cover;
     background: #000;
   }
   .look-info-col {
