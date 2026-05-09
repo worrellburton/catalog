@@ -6,6 +6,13 @@ import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import { trackImpression } from '~/services/session-tracker';
+
+// Per-session impression dedupe so a user scrolling past the same
+// look five times only counts as one impression (one round trip).
+// Lives on module scope so it's shared across every LookCard mount
+// in the same tab; reset on a hard reload.
+const impressionsLogged = new Set<string>();
 
 interface LookCardProps {
   look: Look;
@@ -86,6 +93,17 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     slotRef.current = node;
     setVideoSlot(node);
   }, [setVideoSlot]);
+
+  // Emit one impression per session per look the first time the card
+  // crosses the viewport. Deduped via a module-scope Set so a user
+  // scrolling past the same tile multiple times still counts as one.
+  useEffect(() => {
+    if (!inViewport) return;
+    const key = String(look.id ?? '');
+    if (!key || impressionsLogged.has(key)) return;
+    impressionsLogged.add(key);
+    trackImpression({ type: 'look', id: key, context: look.title?.slice(0, 200) });
+  }, [inViewport, look.id, look.title]);
 
   // Mark loaded once the host video has frames.
   useEffect(() => {
