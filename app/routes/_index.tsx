@@ -86,6 +86,7 @@ import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
+import { trackClick } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
 type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
@@ -644,6 +645,9 @@ export default function Home() {
     // back to the previous look on close" so opening a product from
     // here doesn't bounce them somewhere unexpected.
     setProductOpenedFromLook(null);
+    // Fire-and-forget click telemetry for /admin/analytics. No-op for
+    // unauthenticated visitors (session tracker isn't running).
+    trackClick({ type: 'look', id: String(look.id ?? ''), context: look.title?.slice(0, 200) });
     setSelectedLook(look);
   }, []);
 

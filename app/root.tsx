@@ -7,6 +7,7 @@ import {
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
 import TypeAnywhere from "~/components/TypeAnywhere";
+import SessionTrackerHost from "~/components/SessionTrackerHost";
 
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
@@ -134,6 +135,9 @@ export default function App() {
           query applied. Component is desktop-only and ignores
           keys when focus is in another input. */}
       <TypeAnywhere />
+      {/* Per-user session + event tracker for /admin/analytics. No-op
+          for unauthenticated visitors; starts/stops with the auth user. */}
+      <SessionTrackerHost />
       <Outlet />
     </>
   );

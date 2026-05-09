@@ -5,6 +5,12 @@ import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import type { UserUpload, UserGeneration } from '~/services/user-generations';
 import type { StyleGeneration, StyleGenerationImage } from '~/services/style-generations';
+import {
+  getUserAnalytics,
+  clickThroughRate,
+  formatDurationMs,
+  type UserAnalyticsRow,
+} from '~/services/analytics';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -128,6 +134,7 @@ export default function AdminUserDetail() {
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
   const [styleGens, setStyleGens] = useState<StyleGenWithImages[]>([]);
+  const [analytics, setAnalytics] = useState<UserAnalyticsRow | null>(null);
   const [resolved, setResolved] = useState(false);
   useEffect(() => {
     if (!supabase) { setResolved(true); return; }
@@ -219,6 +226,40 @@ export default function AdminUserDetail() {
     return () => { cancelled = true; };
   }, [decoded]);
 
+  // Pull the user's analytics row from the realtime RPC + subscribe
+  // to user_sessions / user_events writes so the Activity card on
+  // this page updates the moment a session heartbeats or an event
+  // lands. We re-run the (small) RPC instead of computing deltas
+  // because the rollup is cheap and the result is a single row.
+  useEffect(() => {
+    if (!profile?.id) { setAnalytics(null); return; }
+    const targetId = profile.id;
+    let cancelled = false;
+    let timer: number | null = null;
+    const refetch = () => {
+      getUserAnalytics().then(rows => {
+        if (cancelled) return;
+        setAnalytics(rows.find(r => r.user_id === targetId) ?? null);
+      });
+    };
+    const schedule = () => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(refetch, 400);
+    };
+    refetch();
+    if (!supabase) return () => { cancelled = true; };
+    const channel = supabase
+      .channel(`user-detail-analytics:${targetId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_sessions', filter: `user_id=eq.${targetId}` }, schedule)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_events',   filter: `user_id=eq.${targetId}` }, schedule)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
+
   // Header info - prefer real profile data over the URL slug. Fall
   // back to the slug + creator data for legacy creator links.
   const displayName = profile?.full_name || creator?.displayName || decoded;
@@ -265,6 +306,37 @@ export default function AdminUserDetail() {
             <div className="admin-detail-row"><span>Brands</span><span>{uniqueBrands.size}</span></div>
             <div className="admin-detail-row"><span>Reference photos</span><span>{uploads.length}</span></div>
             <div className="admin-detail-row"><span>Saved</span><span>0</span></div>
+          </div>
+        </div>
+        {/* Engagement card mirrors the per-row data in /admin/analytics
+            so the user detail page is a 1:1 view into the same telemetry.
+            Realtime: a session heartbeat or new event re-renders these
+            rows the moment they hit the DB. */}
+        <div className="admin-detail-card">
+          <h3>Engagement</h3>
+          <div className="admin-detail-rows">
+            <div className="admin-detail-row">
+              <span>Last sign-in</span>
+              <span>{analytics?.last_sign_in_at
+                ? new Date(analytics.last_sign_in_at).toLocaleString()
+                : (profile?.last_sign_in_at
+                    ? new Date(profile.last_sign_in_at).toLocaleString()
+                    : '—')}</span>
+            </div>
+            <div className="admin-detail-row"><span>Sign-ins</span><span>{analytics?.sign_in_count ?? 0}</span></div>
+            <div className="admin-detail-row"><span>Impressions</span><span>{(analytics?.total_impressions ?? 0).toLocaleString()}</span></div>
+            <div className="admin-detail-row"><span>Clicks</span><span>{(analytics?.total_clicks ?? 0).toLocaleString()}</span></div>
+            <div className="admin-detail-row"><span>Clickouts</span><span>{(analytics?.total_clickouts ?? 0).toLocaleString()}</span></div>
+            <div className="admin-detail-row">
+              <span>CTR</span>
+              <span>{(() => {
+                const ctr = analytics ? clickThroughRate(analytics) : null;
+                return ctr === null ? '—' : `${(ctr * 100).toFixed(1)}%`;
+              })()}</span>
+            </div>
+            <div className="admin-detail-row"><span>Avg session</span><span>{formatDurationMs(analytics?.avg_session_ms ?? 0)}</span></div>
+            <div className="admin-detail-row"><span>Total session</span><span>{formatDurationMs(analytics?.total_session_ms ?? 0)}</span></div>
+            <div className="admin-detail-row"><span>Idle</span><span>{formatDurationMs(analytics?.total_idle_ms ?? 0)}</span></div>
           </div>
         </div>
       </div>
