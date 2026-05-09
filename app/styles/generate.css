@@ -2644,10 +2644,13 @@ html[data-shell="catalog-app"] .gen-page {
   }
   .gen-step-result .gen-build-frame,
   .gen-step-result .gen-result-video {
-    /* Reserve room (≈340px) for the back link, products dock,
-       feedback prompt and action buttons stacked underneath. */
-    max-height: calc(100dvh - 340px);
-    width: auto;
+    /* Pick the smaller of full-viewport-width or the height-bounded
+       9:16 width so the frame stays inside the screen but never
+       collapses to 0 (which happened when the parent had height:auto
+       and the frame had only width:auto + aspect-ratio + max-height
+       — no axis was actually concrete). */
+    width: min(100%, calc((100dvh - 340px) * 9 / 16));
+    max-width: 100%;
     aspect-ratio: 9 / 16;
     margin: 0 auto;
   }
