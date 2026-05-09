@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { Product, Look, creators as staticCreators } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
@@ -477,8 +478,20 @@ export default function ProductPage({
   bookmarks,
   navKey = 0,
 }: ProductPageProps) {
+  const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+
+  // "Try it on" → /generate with the current product pre-picked.
+  // The /generate route looks up the supabase products row by url
+  // and prepends it to the picker's selection.
+  const handleTryOn = useCallback(() => {
+    const url = product.url;
+    const target = url
+      ? `/generate?step=products&product_url=${encodeURIComponent(url)}`
+      : '/generate?step=products';
+    navigate(target);
+  }, [navigate, product.url]);
 
   // Shared derived values used by both rails below.
   const ownBrand = (product.brand || '').trim().toLowerCase();
@@ -847,6 +860,17 @@ export default function ProductPage({
                   </svg>
                 </button>
               )}
+              <button
+                type="button"
+                className="pd-tryon-btn"
+                onClick={handleTryOn}
+                aria-label="Try this on"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <span>Try it on</span>
+              </button>
               <button
                 type="button"
                 className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}
