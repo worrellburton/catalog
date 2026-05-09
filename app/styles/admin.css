@@ -1067,6 +1067,17 @@ html.admin-on-dark-canvas .admin-topbar,
   border-radius: 8px;
 }
 
+.admin-row-promote {
+  /* Compact row-context override for the "Move to admin" button.
+     The base .admin-btn has 7/14 padding which makes the row taller
+     than the table's existing rhythm — pull it in so the row stays
+     the same height as one without a promote button. */
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .admin-row-delete {
   display: inline-flex;
   align-items: center;

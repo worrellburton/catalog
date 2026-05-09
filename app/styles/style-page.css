@@ -1,0 +1,281 @@
+/* Style page — sibling of /generate (Try it on). Same visual direction
+   (dark, generous space, single accent), simpler layout: no wizard, just
+   a context strip + occasion input + 2x2 result grid. */
+
+.style-page {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.06), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(120, 80, 220, 0.04), transparent 50%),
+    #050505;
+  color: #fff;
+  padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
+           calc(64px + env(safe-area-inset-bottom));
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
+
+.style-loading,
+.style-empty {
+  padding: 48px 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.style-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.style-header h1 {
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.style-back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.style-back:hover { background: rgba(255, 255, 255, 0.08); }
+
+.style-context {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 24px;
+}
+.style-context-photos {
+  display: flex;
+  gap: 8px;
+}
+.style-context-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.style-context-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.style-context-empty {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.style-context-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.style-context-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+  text-transform: lowercase;
+}
+.style-context-edit {
+  background: none;
+  border: none;
+  color: #f0c060;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.style-context-edit:hover { color: #ffd980; }
+
+.style-empty-cta {
+  padding: 32px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+.style-empty-cta p {
+  margin: 0 0 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.style-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.style-question {
+  font-size: clamp(20px, 2.5vw, 26px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.95);
+}
+.style-input {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.style-input:focus {
+  border-color: rgba(240, 192, 96, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+}
+.style-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.style-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.style-suggestion-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-suggestion-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(240, 192, 96, 0.3);
+}
+.style-suggestion-chip:disabled { opacity: 0.5; cursor: default; }
+
+.style-primary {
+  align-self: flex-start;
+  padding: 12px 24px;
+  border-radius: 999px;
+  border: none;
+  background: #f0c060;
+  color: #000;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+}
+.style-primary:hover:not(:disabled) { background: #ffd071; }
+.style-primary:active:not(:disabled) { transform: scale(0.97); }
+.style-primary:disabled { opacity: 0.4; cursor: default; }
+
+.style-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 80, 80, 0.3);
+  background: rgba(255, 80, 80, 0.08);
+  color: #ff8a8a;
+  font-size: 13px;
+}
+
+.style-results {
+  margin-top: 12px;
+}
+.style-results-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  letter-spacing: -0.01em;
+}
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.style-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.style-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.style-tile-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+.style-tile.is-loading {
+  background:
+    linear-gradient(110deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 70%) 0 0 / 200% 100%;
+  animation: style-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes style-shimmer {
+  to { background-position: -200% 0; }
+}
+.style-tile-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #f0c060;
+  animation: style-spin 0.8s linear infinite;
+}
+@keyframes style-spin {
+  to { transform: rotate(360deg); }
+}
+.style-tile.is-failed {
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-color: rgba(255, 80, 80, 0.25);
+  background: rgba(255, 80, 80, 0.05);
+}
+.style-tile-error {
+  font-size: 11px;
+  color: #ff8a8a;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .style-context { flex-direction: column; align-items: flex-start; }
+  .style-context-meta { margin-left: 0; }
+}
