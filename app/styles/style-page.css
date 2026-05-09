@@ -215,9 +215,8 @@
 }
 .style-sheet-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 2px;
 }
 .style-sheet-meta {
   display: flex;
@@ -232,8 +231,6 @@
   margin: 0;
   color: #fff;
   text-transform: capitalize;
-  /* Long occasions get truncated rather than wrapping the header into
-     two ragged lines next to the delete button. */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,25 +238,6 @@
 .style-sheet-subtitle {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
-}
-.style-sheet-delete {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.style-sheet-delete:hover {
-  background: rgba(255, 80, 80, 0.12);
-  border-color: rgba(255, 80, 80, 0.4);
-  color: #ff8a8a;
 }
 /* Tiles stack vertically as a single column at 16:9 — better for
    referencing full-body outfit sheets than the previous 2x2 squares. */
@@ -297,10 +275,13 @@
   border-color: rgba(240, 192, 96, 0.4);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
-.style-tile-delete {
+/* Per-tile action chrome — heart on the left, trash on the right.
+   Same pill shape so they read as a pair; tap-friendly on mobile,
+   hover-revealed on desktop pointer devices. */
+.style-tile-delete,
+.style-tile-like {
   position: absolute;
   top: 8px;
-  right: 8px;
   z-index: 2;
   width: 30px;
   height: 30px;
@@ -308,24 +289,47 @@
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
-  /* Tap-friendly on mobile but unobtrusive on desktop until hovered. */
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
   opacity: 1;
 }
+.style-tile-delete { right: 8px; }
+.style-tile-like   { left:  8px; }
 .style-tile-delete:hover {
   background: rgba(255, 80, 80, 0.7);
   border-color: rgba(255, 80, 80, 0.9);
   color: #fff;
 }
+.style-tile-like:hover {
+  border-color: rgba(255, 110, 130, 0.7);
+  color: #ff8aa1;
+}
+.style-tile-like.is-liked {
+  background: rgba(255, 70, 110, 0.85);
+  border-color: rgba(255, 70, 110, 0.95);
+  color: #fff;
+}
+.style-tile-like.is-liked:hover { background: rgba(255, 90, 130, 0.95); }
+.style-tile-like:active,
+.style-tile-delete:active { transform: scale(0.92); }
+
 @media (hover: hover) and (pointer: fine) {
-  .style-tile-delete { opacity: 0; }
+  .style-tile-delete,
+  .style-tile-like {
+    opacity: 0;
+  }
+  /* Liked images keep the heart visible at rest so the user can see
+     which tiles they've saved without hovering. */
+  .style-tile-like.is-liked { opacity: 1; }
   .style-tile:hover .style-tile-delete,
-  .style-tile-delete:focus-visible { opacity: 1; }
+  .style-tile:hover .style-tile-like,
+  .style-tile-delete:focus-visible,
+  .style-tile-like:focus-visible { opacity: 1; }
 }
 .style-tile img {
   width: 100%;

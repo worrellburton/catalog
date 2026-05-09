@@ -10,6 +10,7 @@ import {
   listStyleGenerationsWithImages,
   deleteStyleGeneration,
   deleteStyleGenerationImage,
+  setStyleImageLiked,
   type StyleGenerationImage,
   type StyleGenerationResult,
 } from '~/services/style-generations';
@@ -141,30 +142,50 @@ export default function StylePage() {
     }
   }
 
-  async function handleDelete(generationId: string) {
+  async function handleDeleteImage(generationId: string, imageId: string) {
     if (!user) return;
-    // Optimistic remove — RLS confirms ownership server-side and ON DELETE
-    // CASCADE removes the 4 image rows. If the call fails we re-hydrate.
-    setHistory(prev => prev.filter(p => p.generation.id !== generationId));
-    const { error: err } = await deleteStyleGeneration(generationId);
-    if (err && user.id) {
+    // Optimistic per-image remove. If this drops the last image in the
+    // sheet, also nuke the parent generation so we don't leave behind
+    // an empty header card.
+    let parentEmptied = false;
+    setHistory(prev => prev.flatMap(entry => {
+      if (entry.generation.id !== generationId) return [entry];
+      const remaining = entry.images.filter(im => im.id !== imageId);
+      if (remaining.length === 0) { parentEmptied = true; return []; }
+      return [{ ...entry, images: remaining }];
+    }));
+
+    const { error: imgErr } = await deleteStyleGenerationImage(imageId);
+    if (imgErr) {
+      // Rollback via re-hydrate on RLS / network failure.
       const fresh = await listStyleGenerationsWithImages(user.id);
       setHistory(fresh);
-      setError(err);
+      setError(imgErr);
+      return;
+    }
+
+    if (parentEmptied) {
+      const { error: parentErr } = await deleteStyleGeneration(generationId);
+      if (parentErr) {
+        const fresh = await listStyleGenerationsWithImages(user.id);
+        setHistory(fresh);
+        setError(parentErr);
+      }
     }
   }
 
-  async function handleDeleteImage(generationId: string, imageId: string) {
+  async function handleToggleLiked(generationId: string, imageId: string, nextLiked: boolean) {
     if (!user) return;
-    // Optimistic per-image remove. Drops the image from the parent
-    // sheet's images array; rolls back via re-hydrate on RLS failure.
     setHistory(prev => prev.map(entry =>
       entry.generation.id === generationId
-        ? { ...entry, images: entry.images.filter(im => im.id !== imageId) }
+        ? {
+            ...entry,
+            images: entry.images.map(im => im.id === imageId ? { ...im, liked: nextLiked } : im),
+          }
         : entry,
     ));
-    const { error: err } = await deleteStyleGenerationImage(imageId);
-    if (err && user.id) {
+    const { error: err } = await setStyleImageLiked(imageId, nextLiked);
+    if (err) {
       const fresh = await listStyleGenerationsWithImages(user.id);
       setHistory(fresh);
       setError(err);
@@ -279,7 +300,6 @@ export default function StylePage() {
               subtitle="Generating 4 looks…"
               images={null}
               onOpen={setLightboxImage}
-              onDelete={null}
             />
           )}
           {history.map(entry => (
@@ -291,8 +311,8 @@ export default function StylePage() {
               })}
               images={entry.images}
               onOpen={setLightboxImage}
-              onDelete={() => handleDelete(entry.generation.id)}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
+              onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
             />
           ))}
         </section>
@@ -315,19 +335,20 @@ function StyleSheetCard({
   subtitle,
   images,
   onOpen,
-  onDelete,
   onDeleteImage,
+  onToggleLiked,
 }: {
   title: string;
   subtitle: string;
   images: StyleGenerationImage[] | null;
   onOpen: (img: StyleGenerationImage) => void;
-  onDelete: (() => void) | null;
   onDeleteImage?: (imageId: string) => void;
+  onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
 }) {
   // While generating (images === null) we show 4 placeholders so the
   // card has visible weight; otherwise we render exactly the rows the
-  // user still has — per-image delete just removes its slot.
+  // user still has — per-image delete just removes its slot, and once
+  // every slot is gone the parent page nukes the empty card too.
   const slots: (StyleGenerationImage | null)[] = images
     ? [...images].sort((a, b) => a.sort_order - b.sort_order)
     : Array.from({ length: 4 }, () => null);
@@ -339,23 +360,6 @@ function StyleSheetCard({
           <h3 className="style-sheet-title">{title}</h3>
           <span className="style-sheet-subtitle">{subtitle}</span>
         </div>
-        {onDelete && (
-          <button
-            type="button"
-            className="style-sheet-delete"
-            onClick={onDelete}
-            aria-label="Delete this style sheet"
-            title="Delete"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6" />
-              <path d="M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          </button>
-        )}
       </div>
       <div className="style-grid">
         {slots.map((img, i) => (
@@ -365,6 +369,7 @@ function StyleSheetCard({
             index={i}
             onOpen={onOpen}
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
+            onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
           />
         ))}
       </div>
@@ -395,11 +400,13 @@ function StyleResultTile({
   index,
   onOpen,
   onDelete,
+  onToggleLiked,
 }: {
   image: StyleGenerationImage | null;
   index: number;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete?: (() => void) | null;
+  onToggleLiked?: ((nextLiked: boolean) => void) | null;
 }) {
   if (!image) {
     return (
@@ -408,9 +415,25 @@ function StyleResultTile({
       </div>
     );
   }
-  // Reusable per-tile X. stopPropagation so it doesn't fire the
-  // tile's lightbox-open click. Visible on hover (desktop) and always
-  // (mobile) via CSS.
+  // Heart (top-left) + trash (top-right). stopPropagation on each so
+  // the click doesn't bubble into the tile-open button beneath.
+  const heartBtn = onToggleLiked ? (
+    <button
+      type="button"
+      className={`style-tile-like ${image.liked ? 'is-liked' : ''}`}
+      onClick={e => { e.stopPropagation(); onToggleLiked(!image.liked); }}
+      aria-label={image.liked ? `Unlike image ${index + 1}` : `Like image ${index + 1}`}
+      aria-pressed={image.liked}
+      title={image.liked ? 'Unlike' : 'Like'}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24"
+        fill={image.liked ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </svg>
+    </button>
+  ) : null;
+
   const deleteBtn = onDelete ? (
     <button
       type="button"
@@ -419,9 +442,12 @@ function StyleResultTile({
       aria-label={`Delete image ${index + 1}`}
       title="Delete"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
       </svg>
     </button>
   ) : null;
@@ -438,6 +464,7 @@ function StyleResultTile({
           <img src={image.image_url} alt={`Style reference ${index + 1}`} />
         </button>
         <span className="style-tile-badge">{image.provider}</span>
+        {heartBtn}
         {deleteBtn}
       </div>
     );
