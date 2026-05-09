@@ -384,12 +384,14 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
   return (
     <div className="style-lightbox" onClick={onClose} role="dialog" aria-modal="true">
       <button className="style-lightbox-close" onClick={onClose} aria-label="Close">×</button>
-      <img
-        className="style-lightbox-img"
-        src={image.image_url ?? ''}
-        alt={`Style reference (${image.provider})`}
-        onClick={e => e.stopPropagation()}
-      />
+      <div className="style-lightbox-frame" onClick={e => e.stopPropagation()}>
+        <img
+          className="style-lightbox-img"
+          src={image.image_url ?? ''}
+          alt={`Style reference (${image.provider})`}
+        />
+        <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
+      </div>
       <span className="style-lightbox-badge">{image.provider}</span>
     </div>
   );
@@ -464,6 +466,7 @@ function StyleResultTile({
           <img src={image.image_url} alt={`Style reference ${index + 1}`} />
         </button>
         <span className="style-tile-badge">{image.provider}</span>
+        <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
       </div>

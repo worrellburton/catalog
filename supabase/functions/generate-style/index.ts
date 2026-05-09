@@ -6,9 +6,10 @@
 // 3. Reads the foundational prompt from app_settings('style_prompt') and
 //    substitutes {{gender}} {{name}} {{height}} {{age}} {{pronoun}} {{occasion}}
 //    plus the contracted form {{pronoun}}'s → he's|she's|they're.
-// 4. Submits 4 fal.ai jobs in parallel — 2 to openai/gpt-image-2/edit,
-//    2 to fal-ai/nano-banana-2/edit — each with the user's reference photos.
-//    Both providers are asked for 16:9 outputs so the tile grid is consistent.
+// 4. Submits 4 fal.ai jobs in parallel — all to openai/gpt-image-2/edit —
+//    each with the user's reference photos. (nano-banana-2 was removed
+//    by request; existing nano-banana-2 rows stay in the DB and render
+//    historically.) Asks for 16:9 outputs so the tile grid is consistent.
 // 5. As each completes, writes a row into style_generation_images. When all
 //    4 settle, marks the parent style_generations row done|failed.
 // 6. Returns the parent row + the 4 image rows (success-only) to the client.
@@ -43,7 +44,6 @@ const FAL_BASE_SYNC = 'https://fal.run';
 // https://fal.ai/models?keywords=gpt-image: the listed editor is
 // `openai/gpt-image-2/edit`.
 const GPT_IMAGE_SLUG = 'openai/gpt-image-2/edit';
-const NANO_BANANA_SLUG = 'fal-ai/nano-banana-2/edit';
 
 interface ProfileContext {
   gender: 'male' | 'female' | 'unknown';
@@ -80,7 +80,7 @@ function resolvePrompt(template: string, profile: ProfileContext, occasion: stri
   const name = profile.full_name?.trim() || 'this person';
   const height = profile.height_label?.trim() || 'average height';
   const age = profile.age_label?.trim() || 'their age';
-  return template
+  const filled = template
     .replace(/\{\{\s*gender\s*\}\}/g, genderWord(profile.gender))
     .replace(/\{\{\s*name\s*\}\}/g, name)
     .replace(/\{\{\s*height\s*\}\}/g, height)
@@ -88,6 +88,11 @@ function resolvePrompt(template: string, profile: ProfileContext, occasion: stri
     .replace(/\{\{\s*pronoun\s*\}\}'s/g, pronounContraction(profile.gender))
     .replace(/\{\{\s*pronoun\s*\}\}/g, pronounSubject(profile.gender))
     .replace(/\{\{\s*occasion\s*\}\}/g, occasion.trim() || 'any occasion');
+  // Hard directive every run: the multiple reference photos are for
+  // identity / build / face only — never reproduce them in the output.
+  // Appended in the edge function (not the admin-editable template) so
+  // it can't be accidentally edited away.
+  return `${filled} Use the reference photos only to inform the person's appearance (face, build, hair, skin tone). Do not include the reference photos themselves in the generated style sheet — show only the new outfit references.`;
 }
 
 // ── fal.ai sync image generation ──────────────────────────────────────────
@@ -111,16 +116,13 @@ async function callFalImage(
     image_urls: imageUrls.slice(0, 4),
     num_images: 1,
   };
-  // Per-provider 16:9 hint + speed. gpt-image-2's image_size is an
-  // enum; quality=low cuts the wall-clock cost roughly in half so
-  // both calls reliably finish under the edge timeout. nano-banana-2
-  // accepts a free-form aspect_ratio. CSS still object-fit:cover so a
-  // provider that ignores the hint still slots cleanly into the grid.
+  // gpt-image-2's image_size is an enum (square_hd | square |
+  // portrait_4_3 | portrait_16_9 | landscape_4_3 | landscape_16_9).
+  // quality=low cuts the wall-clock cost roughly in half so all four
+  // calls reliably finish under the 60s edge timeout.
   if (modelSlug.includes('gpt-image-2')) {
     body.image_size = 'landscape_16_9';
     body.quality = 'low';
-  } else if (modelSlug.includes('nano-banana-2')) {
-    body.aspect_ratio = '16:9';
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FAL_CALL_TIMEOUT_MS);
@@ -245,21 +247,20 @@ Deno.serve(async (req: Request) => {
   }).eq('id', generation.id);
 
   // Seed 4 image rows in 'pending' so the client can poll/render placeholders.
-  // Sort order: 0,1 = gpt-image-2; 2,3 = nano-banana-2.
+  // All 4 use gpt-image-2 (nano-banana-2 dropped per request).
   const seedRows = [
     { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 0, status: 'pending' },
     { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 1, status: 'pending' },
-    { generation_id: generation.id, provider: 'nano-banana-2', sort_order: 2, status: 'pending' },
-    { generation_id: generation.id, provider: 'nano-banana-2', sort_order: 3, status: 'pending' },
+    { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 2, status: 'pending' },
+    { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 3, status: 'pending' },
   ];
   await admin.from('style_generation_images').upsert(seedRows, { onConflict: 'generation_id,sort_order' });
 
   // Fan out 4 fal.ai calls in parallel. Each result is written immediately so
-  // a partial success still surfaces images even if one provider 500s.
+  // a partial success still surfaces images even if one call 500s.
   const tasks = seedRows.map(seed =>
     (async () => {
-      const slug = seed.provider === 'gpt-image-2' ? GPT_IMAGE_SLUG : NANO_BANANA_SLUG;
-      const result = await callFalImage(slug, resolvedPrompt, generation.reference_urls, falKey);
+      const result = await callFalImage(GPT_IMAGE_SLUG, resolvedPrompt, generation.reference_urls, falKey);
       const update = result.url
         ? { status: 'done', image_url: result.url, error: null }
         : { status: 'failed', image_url: null, error: result.error };
