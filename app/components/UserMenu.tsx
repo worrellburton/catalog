@@ -4,7 +4,6 @@ import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
 import type { Look, Product } from '~/data/looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
-import PresentMenuSection from './PresentMenuSection';
 import { AvatarUpload } from './AvatarCropModal';
 import { getWallet } from '~/services/earnings';
 import { supabase } from '~/utils/supabase';
@@ -323,14 +322,6 @@ function UserMenu({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
               <span>Admin</span>
             </button>
-            {/* Live demo broadcast — only super admins (presenters)
-                see this. Toggles Robert's session into a public
-                /present/<slug> mirror so guests on Google Meet can
-                watch lag-free with their own visible cursors. */}
-            <PresentMenuSection
-              defaultName={user?.displayName ?? user?.email ?? null}
-              visible={isSuperAdmin}
-            />
             {isSuperAdmin && onChangeCatalogGender && (
               <div className="user-menu-item user-menu-item--segmented" role="group" aria-label="Shopping for">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -4,6 +4,11 @@ import { looks, creators, type Look } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import type { UserUpload, UserGeneration } from '~/services/user-generations';
+import type { StyleGeneration, StyleGenerationImage } from '~/services/style-generations';
+
+interface StyleGenWithImages extends StyleGeneration {
+  images: StyleGenerationImage[];
+}
 
 function findCreatorHandle(displayName: string): string | null {
   for (const [handle, c] of Object.entries(creators)) {
@@ -122,6 +127,7 @@ export default function AdminUserDetail() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [generations, setGenerations] = useState<UserGeneration[]>([]);
+  const [styleGens, setStyleGens] = useState<StyleGenWithImages[]>([]);
   const [resolved, setResolved] = useState(false);
   useEffect(() => {
     if (!supabase) { setResolved(true); return; }
@@ -181,13 +187,33 @@ export default function AdminUserDetail() {
       setProfile(prof);
 
       if (!prof) { setResolved(true); return; }
-      const [{ data: u }, { data: g }] = await Promise.all([
+      const [{ data: u }, { data: g }, { data: s }] = await Promise.all([
         supabase!.from('user_uploads').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
         supabase!.from('user_generations').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
+        supabase!.from('style_generations').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
       setUploads((u || []) as UserUpload[]);
       setGenerations((g || []) as UserGeneration[]);
+      const styleParents = (s || []) as StyleGeneration[];
+      // Hydrate the 4 image rows for each parent in one IN-list query so
+      // the section renders the actual style sheets, not just metadata.
+      if (styleParents.length > 0) {
+        const { data: imgs } = await supabase!
+          .from('style_generation_images')
+          .select('*')
+          .in('generation_id', styleParents.map(p => p.id))
+          .order('sort_order');
+        const byParent = new Map<string, StyleGenerationImage[]>();
+        ((imgs || []) as StyleGenerationImage[]).forEach(img => {
+          const list = byParent.get(img.generation_id) ?? [];
+          list.push(img);
+          byParent.set(img.generation_id, list);
+        });
+        setStyleGens(styleParents.map(p => ({ ...p, images: byParent.get(p.id) ?? [] })));
+      } else {
+        setStyleGens([]);
+      }
       setResolved(true);
     })();
     return () => { cancelled = true; };
@@ -363,6 +389,83 @@ export default function AdminUserDetail() {
                     {g.error}
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 24 }}>
+        <h2 className="admin-section-title">Generated styles ({styleGens.length})</h2>
+        {!resolved ? (
+          <p className="admin-detail-empty">Loading…</p>
+        ) : styleGens.length === 0 ? (
+          <p className="admin-detail-empty">No style sheets generated yet</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {styleGens.map(s => (
+              <div key={s.id} style={{
+                borderRadius: 8, background: '#fff', border: '1px solid #eee',
+                padding: 12, fontSize: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ color: '#1a1a1a', fontWeight: 600, fontSize: 13 }}>
+                      {s.occasion || '—'}
+                    </div>
+                    <div style={{ color: '#666', marginTop: 2 }}>
+                      {s.status} · {new Date(s.created_at).toLocaleDateString()}
+                      {s.height_label && ` · ${s.height_label}`}
+                      {s.age_label && ` · ${s.age_label}`}
+                      {s.gender && s.gender !== 'unknown' && ` · ${s.gender}`}
+                    </div>
+                  </div>
+                  {s.error && (
+                    <span style={{ color: '#b91c1c', fontSize: 11 }}>{s.error}</span>
+                  )}
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 8,
+                  marginTop: 10,
+                }}>
+                  {Array.from({ length: 4 }, (_, i) => {
+                    const img = s.images.find(im => im.sort_order === i);
+                    return (
+                      <div key={i} style={{
+                        aspectRatio: '1 / 1',
+                        borderRadius: 6,
+                        overflow: 'hidden',
+                        background: '#f3f3f3',
+                        position: 'relative',
+                      }}>
+                        {img?.image_url ? (
+                          <a href={img.image_url} target="_blank" rel="noopener noreferrer">
+                            <img src={img.image_url} alt={`${s.occasion} ${i + 1}`}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          </a>
+                        ) : (
+                          <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, color: '#888', textAlign: 'center', padding: 6,
+                          }}>
+                            {img?.status === 'failed' ? (img.error?.slice(0, 60) || 'Failed') : '…'}
+                          </div>
+                        )}
+                        {img && (
+                          <span style={{
+                            position: 'absolute', bottom: 4, left: 4,
+                            padding: '2px 6px', borderRadius: 999,
+                            background: 'rgba(0,0,0,0.7)', color: '#fff',
+                            fontSize: 9, fontWeight: 600, letterSpacing: 0.02,
+                          }}>{img.provider}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>

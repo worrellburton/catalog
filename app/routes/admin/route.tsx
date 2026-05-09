@@ -1,9 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
-import LiveCursors from '~/components/LiveCursors';
 import { useAuth } from '~/hooks/useAuth';
-import { useLiveCursors } from '~/hooks/useLiveCursors';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
 import { AdminConfirmProvider } from '~/components/AdminConfirm';
@@ -458,12 +456,6 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
 
-  const liveCursors = useLiveCursors({
-    selfId: user?.id,
-    selfName: user?.displayName || user?.email?.split('@')[0] || 'Admin',
-    enabled: !!user,
-  });
-
   if (loading || !user) {
     return null;
   }
@@ -471,7 +463,6 @@ export default function AdminLayout() {
   return (
     <AdminConfirmProvider>
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
-      <LiveCursors cursors={liveCursors} />
       <div
         className="admin-sidebar-backdrop"
         onClick={() => setSidebarOpen(false)}
