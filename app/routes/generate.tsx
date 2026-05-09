@@ -380,6 +380,40 @@ export default function GeneratePage() {
   }, [productResults, categoryQueries]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
+  // Pre-pick a product when the user lands here from a Product page's
+  // "Try it on" button (?product_url=…). One-shot — once we hydrate we
+  // strip the param off the URL so a refresh doesn't re-add a row the
+  // user may have just removed. Matches against products.url since the
+  // consumer Product type has no id.
+  const productUrlPrefilled = useRef(false);
+  useEffect(() => {
+    if (productUrlPrefilled.current) return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const productUrl = url.searchParams.get('product_url');
+    if (!productUrl) { productUrlPrefilled.current = true; return; }
+    productUrlPrefilled.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, brand, price, image_url')
+        .eq('url', productUrl)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      const row = data as { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null };
+      setPicked(prev => prev.some(p => p.id === row.id) ? prev : [
+        { id: row.id, name: row.name, brand: row.brand, price: row.price, image_url: row.image_url, role_tag: roleTagFromName(row.name) },
+        ...prev,
+      ]);
+      // Strip the param off so a hard reload doesn't re-prefill.
+      url.searchParams.delete('product_url');
+      window.history.replaceState({}, '', url.toString());
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Phase 9/10 - height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
