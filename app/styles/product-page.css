@@ -844,6 +844,42 @@
   transform: rotate(180deg);
 }
 
+/* Try-it-on button — sits between Shop and Save. Outline pill so it
+   reads as a secondary CTA: less weight than Shop (filled), more
+   visual presence than Save (outline + icon). Tapping navigates to
+   /generate with this product pre-picked. */
+.pd-tryon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.pd-tryon-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(240, 192, 96, 0.45);
+  color: #f0c060;
+}
+.pd-tryon-btn:active { transform: scale(0.97); }
+.light-mode .pd-tryon-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
+}
+.light-mode .pd-tryon-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(180, 130, 30, 0.5);
+  color: #b08230;
+}
+
 /* Retailer drawer - collapsed by default, expands beneath the action row.
    Uses grid-template-rows 0fr → 1fr for a smooth height animation that
    doesn't require knowing the content height in advance. */
