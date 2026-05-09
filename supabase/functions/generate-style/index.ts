@@ -6,7 +6,7 @@
 // 3. Reads the foundational prompt from app_settings('style_prompt') and
 //    substitutes {{gender}} {{name}} {{height}} {{age}} {{pronoun}} {{occasion}}
 //    plus the contracted form {{pronoun}}'s → he's|she's|they're.
-// 4. Submits 4 fal.ai jobs in parallel — 2 to fal-ai/gpt-image-2/image-to-image,
+// 4. Submits 4 fal.ai jobs in parallel — 2 to openai/gpt-image-2/edit,
 //    2 to fal-ai/nano-banana-2/edit — each with the user's reference photos.
 //    Both providers are asked for 16:9 outputs so the tile grid is consistent.
 // 5. As each completes, writes a row into style_generation_images. When all
@@ -36,9 +36,13 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE_SYNC = 'https://fal.run';
-// gpt-image-2 exposes the edit endpoint at /image-to-image (verified
-// against fal.ai docs — earlier guesses at /edit-image returned 404).
-const GPT_IMAGE_SLUG = 'fal-ai/gpt-image-2/image-to-image';
+// gpt-image-2 lives under the `openai/` provider namespace on fal
+// (not `fal-ai/`), and the edit endpoint is `/edit`. We tried
+// `fal-ai/gpt-image-2/edit-image` and `fal-ai/gpt-image-2/image-to-image`
+// first — both returned `fal_404:Path … not found`. Verified against
+// https://fal.ai/models?keywords=gpt-image: the listed editor is
+// `openai/gpt-image-2/edit`.
+const GPT_IMAGE_SLUG = 'openai/gpt-image-2/edit';
 const NANO_BANANA_SLUG = 'fal-ai/nano-banana-2/edit';
 
 interface ProfileContext {
