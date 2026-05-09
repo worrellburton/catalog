@@ -6,7 +6,7 @@
 // 3. Reads the foundational prompt from app_settings('style_prompt') and
 //    substitutes {{gender}} {{name}} {{height}} {{age}} {{pronoun}} {{occasion}}
 //    plus the contracted form {{pronoun}}'s → he's|she's|they're.
-// 4. Submits 4 fal.ai jobs in parallel — 2 to fal-ai/gpt-image-1/edit-image,
+// 4. Submits 4 fal.ai jobs in parallel — 2 to fal-ai/gpt-image-2/edit-image,
 //    2 to fal-ai/nano-banana-2/edit — each with the user's reference photos.
 // 5. As each completes, writes a row into style_generation_images. When all
 //    4 settle, marks the parent style_generations row done|failed.
@@ -35,7 +35,7 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE_SYNC = 'https://fal.run';
-const GPT_IMAGE_SLUG = 'fal-ai/gpt-image-1/edit-image';
+const GPT_IMAGE_SLUG = 'fal-ai/gpt-image-2/edit-image';
 const NANO_BANANA_SLUG = 'fal-ai/nano-banana-2/edit';
 
 interface ProfileContext {
@@ -213,10 +213,10 @@ Deno.serve(async (req: Request) => {
   }).eq('id', generation.id);
 
   // Seed 4 image rows in 'pending' so the client can poll/render placeholders.
-  // Sort order: 0,1 = gpt-image-1; 2,3 = nano-banana-2.
+  // Sort order: 0,1 = gpt-image-2; 2,3 = nano-banana-2.
   const seedRows = [
-    { generation_id: generation.id, provider: 'gpt-image-1', sort_order: 0, status: 'pending' },
-    { generation_id: generation.id, provider: 'gpt-image-1', sort_order: 1, status: 'pending' },
+    { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 0, status: 'pending' },
+    { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 1, status: 'pending' },
     { generation_id: generation.id, provider: 'nano-banana-2', sort_order: 2, status: 'pending' },
     { generation_id: generation.id, provider: 'nano-banana-2', sort_order: 3, status: 'pending' },
   ];
@@ -226,7 +226,7 @@ Deno.serve(async (req: Request) => {
   // a partial success still surfaces images even if one provider 500s.
   const tasks = seedRows.map(seed =>
     (async () => {
-      const slug = seed.provider === 'gpt-image-1' ? GPT_IMAGE_SLUG : NANO_BANANA_SLUG;
+      const slug = seed.provider === 'gpt-image-2' ? GPT_IMAGE_SLUG : NANO_BANANA_SLUG;
       const result = await callFalImage(slug, resolvedPrompt, generation.reference_urls, falKey);
       const update = result.url
         ? { status: 'done', image_url: result.url, error: null }

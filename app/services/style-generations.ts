@@ -1,7 +1,7 @@
 import { supabase } from '~/utils/supabase';
 
 export type StyleGenerationStatus = 'pending' | 'generating' | 'done' | 'failed';
-export type StyleImageProvider = 'gpt-image-1' | 'nano-banana-2';
+export type StyleImageProvider = 'gpt-image-1' | 'gpt-image-2' | 'nano-banana-2';
 export type StyleImageStatus = 'pending' | 'done' | 'failed';
 
 export interface StyleGeneration {

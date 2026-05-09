@@ -40,7 +40,16 @@ export default function StylePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<StyleGenerationResult | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<StyleGenerationImage | null>(null);
   const occasionRef = useRef<HTMLInputElement>(null);
+
+  // Esc closes the lightbox.
+  useEffect(() => {
+    if (!lightboxImage) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightboxImage]);
 
   // Hydrate uploaded photos + saved slot picks (mirrors the Try it on
   // wizard so the same 1–3 reference photos surface here without forcing
@@ -216,16 +225,53 @@ export default function StylePage() {
           </h2>
           <div className="style-grid">
             {(submitting ? Array.from({ length: 4 }).map((_, i) => null) : result?.images ?? [])
-              .map((img, i) => <StyleResultTile key={(img as StyleGenerationImage)?.id ?? i} image={img as StyleGenerationImage | null} index={i} />)
+              .map((img, i) => (
+                <StyleResultTile
+                  key={(img as StyleGenerationImage)?.id ?? i}
+                  image={img as StyleGenerationImage | null}
+                  index={i}
+                  onOpen={setLightboxImage}
+                />
+              ))
             }
           </div>
         </section>
+      )}
+
+      {lightboxImage && lightboxImage.image_url && (
+        <StyleLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
       )}
     </div>
   );
 }
 
-function StyleResultTile({ image, index }: { image: StyleGenerationImage | null; index: number }) {
+function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClose: () => void }) {
+  // Click anywhere on the dim backdrop closes; clicks on the image
+  // itself stop propagation so the user can interact with it without
+  // triggering an accidental dismiss.
+  return (
+    <div className="style-lightbox" onClick={onClose} role="dialog" aria-modal="true">
+      <button className="style-lightbox-close" onClick={onClose} aria-label="Close">×</button>
+      <img
+        className="style-lightbox-img"
+        src={image.image_url ?? ''}
+        alt={`Style reference (${image.provider})`}
+        onClick={e => e.stopPropagation()}
+      />
+      <span className="style-lightbox-badge">{image.provider}</span>
+    </div>
+  );
+}
+
+function StyleResultTile({
+  image,
+  index,
+  onOpen,
+}: {
+  image: StyleGenerationImage | null;
+  index: number;
+  onOpen: (img: StyleGenerationImage) => void;
+}) {
   if (!image) {
     return (
       <div className="style-tile is-loading" aria-label={`Generating image ${index + 1}`}>
@@ -235,10 +281,15 @@ function StyleResultTile({ image, index }: { image: StyleGenerationImage | null;
   }
   if (image.status === 'done' && image.image_url) {
     return (
-      <div className="style-tile is-done">
+      <button
+        type="button"
+        className="style-tile is-done"
+        onClick={() => onOpen(image)}
+        aria-label={`Open style reference ${index + 1}`}
+      >
         <img src={image.image_url} alt={`Style reference ${index + 1}`} />
         <span className="style-tile-badge">{image.provider}</span>
-      </div>
+      </button>
     );
   }
   return (
