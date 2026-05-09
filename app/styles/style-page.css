@@ -339,8 +339,10 @@
 }
 .style-tile-badge {
   position: absolute;
+  /* Provider chip moves to the bottom-right so the wordmark owns the
+     bottom-left brand slot. */
   bottom: 8px;
-  left: 8px;
+  right: 8px;
   padding: 3px 8px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.6);
@@ -351,6 +353,26 @@
   letter-spacing: 0.02em;
   text-transform: lowercase;
 }
+/* Catalog wordmark watermark — every successful tile + the lightbox
+   frame carry the brand in the lower-left. Rendered as text so it
+   stays crisp at any zoom; soft drop-shadow keeps it legible against
+   bright backgrounds. */
+.style-tile-wordmark,
+.style-lightbox-wordmark {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  font-family: 'Sentient', 'Sentient Variable', Georgia, serif;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  color: #fff;
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+.style-tile-wordmark { font-size: 18px; }
+.style-lightbox-wordmark { font-size: 28px; bottom: 18px; left: 22px; }
 .style-tile.is-loading {
   background:
     linear-gradient(110deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 70%) 0 0 / 200% 100%;
@@ -402,13 +424,22 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+.style-lightbox-frame {
+  /* Inline-block frame so the wordmark anchors to the image's actual
+     bounds, not the viewport. */
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+}
 .style-lightbox-img {
+  display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  cursor: default;
 }
 .style-lightbox-close {
   position: absolute;
