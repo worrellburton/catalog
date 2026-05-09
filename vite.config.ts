@@ -35,6 +35,7 @@ export default defineConfig({
             route("administrators", "routes/admin/administrators.tsx");
             route("advertisements", "routes/admin/advertisements.tsx");
             route("agents", "routes/admin/agents.tsx");
+            route("analytics", "routes/admin/analytics.tsx");
             route("apis", "routes/admin/apis.tsx");
             route("appearance", "routes/admin/appearance.tsx");
             route("audiences", "routes/admin/audiences.tsx");
@@ -72,6 +73,7 @@ export default defineConfig({
             route("musics", "routes/admin/musics.tsx");
             route("places", "routes/admin/places.tsx");
             route("products", "routes/admin/products.tsx");
+            route("prompts", "routes/admin/prompts.tsx");
             route("reports", "routes/admin/reports.tsx");
             route("revenue", "routes/admin/revenue.tsx");
             route("ai-models", "routes/admin/ai-models.tsx");
