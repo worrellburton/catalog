@@ -374,8 +374,24 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Stop scroll-chaining: when the user reaches top or bottom of the
+     overlay's scroll, the browser was forwarding the leftover delta
+     to the underlying feed — causing the page behind the overlay to
+     scroll. `contain` keeps the scroll inside this element. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+/* Belt-and-suspenders for iOS Safari, which sometimes still bubbles
+   touch deltas to the body even with overscroll-behavior on the
+   scroll child. Lock the underlying page entirely while the overlay
+   is in its "in" state. */
+:root:has(.look-overlay.look-overlay--in),
+html:has(.look-overlay.look-overlay--in),
+body:has(.look-overlay.look-overlay--in) {
+  overflow: hidden !important;
+  overscroll-behavior: none;
 }
 
 .look-overlay-scroll::-webkit-scrollbar {
@@ -427,16 +443,23 @@
   }
   .look-media {
     width: 100%;
-    height: auto;
-    /* Match the consumer LookCard's framing exactly: 3:4 portrait
-       with object-fit:cover (was 9:16 + contain, which letterboxed
-       on mobile and made the look feel cropped/wrong). The card on
-       the feed and the overlay video now display the same way. */
-    aspect-ratio: 3 / 4;
+    /* Explicit dvh height — the prior aspect-ratio approach was being
+       outsized by the page's flex math and ended up at ~50% of the
+       viewport, cropping off head + feet. 75dvh always gives the
+       video the same chunk of screen so the full body is visible
+       and the info column still has enough room below. */
+    height: 75dvh;
+    max-height: 75dvh;
+    aspect-ratio: auto;
     border-radius: 0;
   }
   .look-media-video {
-    object-fit: cover;
+    /* contain so every pixel of the source video shows — black bars
+       at top/bottom if the source aspect doesn't match the frame.
+       Better to see the full look than to fill via cropping. */
+    object-fit: contain;
+    width: 100%;
+    height: 100%;
     background: #000;
   }
   .look-info-col {
