@@ -1180,6 +1180,41 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #999 !important;
 }
 
+/* Per-product thumbnail in the analytics Products table — small,
+   square, neutral chip; falls back to a placeholder square when no
+   image_url. Keeps the row height tight so the table stays scannable. */
+.admin-product-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+  background: rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+.admin-dark .admin-product-thumb { background: rgba(255, 255, 255, 0.06); }
+.admin-product-thumb--empty {
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.04) 25%, transparent 25%) -8px 0 / 16px 16px,
+    rgba(0, 0, 0, 0.04);
+}
+.admin-th-thumb { width: 44px; }
+.admin-cell-thumb { width: 44px; padding-right: 0; }
+
+/* Long product names get clipped with an ellipsis instead of wrapping
+   the row across three lines. Hover tooltip surfaces the full name. */
+.admin-cell-name--clip {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The analytics products table has many columns — let the wrap host
+   scroll horizontally on narrow viewports rather than letting the
+   row push into the page chrome. */
+.admin-analytics-products { table-layout: auto; }
+
 /* Toolbar above realtime tables — hosts the Live indicator. */
 .admin-table-toolbar {
   display: flex;

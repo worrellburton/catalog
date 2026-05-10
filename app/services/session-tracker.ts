@@ -138,13 +138,18 @@ export function startSessionTracker(userId: string): Tracker {
 
   function emit(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; context?: string }) {
     if (!supabase) return;
-    void supabase.from('user_events').insert({
+    // Surface RLS / network errors via console so a misconfigured
+    // policy doesn't silently swallow every analytics event. The
+    // request itself is still fire-and-forget.
+    supabase.from('user_events').insert({
       user_id: userId,
       session_id: sessionId,
       event_type: eventType,
       target_type: target?.type ?? null,
       target_id: target?.id ?? null,
       context: target?.context ?? null,
+    }).then(({ error }) => {
+      if (error) console.warn('[session-tracker] event insert failed:', eventType, error.message);
     });
   }
 
@@ -156,15 +161,46 @@ export function startSessionTracker(userId: string): Tracker {
   return activeTracker;
 }
 
-/** Convenience wrappers for the consumer site. */
+/** Convenience wrappers for the consumer site. Buffer events when
+ *  the tracker isn't ready yet (auth still resolving, session row
+ *  still being inserted) — flushed automatically once the tracker
+ *  comes online so we never drop the first few impressions of a
+ *  fresh session. */
+type QueuedEvent = { eventType: 'impression' | 'click' | 'clickout'; target?: { type?: string; id?: string; context?: string } };
+const eventQueue: QueuedEvent[] = [];
+const QUEUE_FLUSH_INTERVAL_MS = 250;
+let queueFlushTimer: number | null = null;
+
+function scheduleFlush() {
+  if (typeof window === 'undefined') return;
+  if (queueFlushTimer != null) return;
+  queueFlushTimer = window.setInterval(() => {
+    if (!activeTracker) return;
+    while (eventQueue.length > 0) {
+      const ev = eventQueue.shift();
+      if (ev) activeTracker.emit(ev.eventType, ev.target);
+    }
+    if (queueFlushTimer != null) {
+      window.clearInterval(queueFlushTimer);
+      queueFlushTimer = null;
+    }
+  }, QUEUE_FLUSH_INTERVAL_MS);
+}
+
+function fireOrQueue(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; context?: string }) {
+  if (activeTracker) { activeTracker.emit(eventType, target); return; }
+  eventQueue.push({ eventType, target });
+  scheduleFlush();
+}
+
 export function trackImpression(target?: { type?: string; id?: string; context?: string }) {
-  activeTracker?.emit('impression', target);
+  fireOrQueue('impression', target);
 }
 export function trackClick(target?: { type?: string; id?: string; context?: string }) {
-  activeTracker?.emit('click', target);
+  fireOrQueue('click', target);
 }
 export function trackClickout(target?: { type?: string; id?: string; context?: string }) {
-  activeTracker?.emit('clickout', target);
+  fireOrQueue('clickout', target);
 }
 
 /**
