@@ -169,19 +169,27 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
               onOpenCreator(look.creator);
             }}
           >
-            <img
-              className="card-creator-avatar"
-              src={creatorData?.avatar || look.creatorAvatar || ''}
-              alt={creatorData?.displayName || look.creatorDisplayName || ''}
-            />
+            {(() => {
+              const avatar = creatorData?.avatar || look.creatorAvatar || '';
+              const name = creatorData?.displayName
+                || look.creatorDisplayName
+                || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
+              return avatar ? (
+                <img className="card-creator-avatar" src={avatar} alt={name} />
+              ) : (
+                <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
+                  {(name || look.creator || '?').charAt(0).toUpperCase()}
+                </span>
+              );
+            })()}
             <span className="card-creator-name">
               {/* Prefer the static-seed display name, then the look-level
                   fallback emitted by user-published flows. If neither is
-                  set and the handle is a raw user:<uuid>, hide it - the
-                  uuid is noise in the UI. */}
+                  set and the handle is a raw user:<uuid>, label as
+                  "User" so we never leak the uuid into the UI. */}
               {creatorData?.displayName
                 || look.creatorDisplayName
-                || (look.creator?.startsWith('user:') ? '' : look.creator)}
+                || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
             </span>
           </div>
         )}
