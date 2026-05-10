@@ -443,20 +443,20 @@ body:has(.look-overlay.look-overlay--in) {
   }
   .look-media {
     width: 100%;
-    /* Explicit dvh height — the prior aspect-ratio approach was being
-       outsized by the page's flex math and ended up at ~50% of the
-       viewport, cropping off head + feet. 75dvh always gives the
-       video the same chunk of screen so the full body is visible
-       and the info column still has enough room below. */
-    height: 75dvh;
-    max-height: 75dvh;
+    /* Fill the entire viewport so the video reads as the look itself
+       (Reels/TikTok style). The drag handle + info column live just
+       below — the page scrolls them up into view. 75dvh felt cramped
+       because the look kept losing pixels to the bottom-sheet area. */
+    height: 100dvh;
+    max-height: 100dvh;
+    /* Subtract the iOS safe-area top inset so the status bar doesn't
+       eat into the video frame on notched devices. */
+    height: calc(100dvh - env(safe-area-inset-top));
+    max-height: calc(100dvh - env(safe-area-inset-top));
     aspect-ratio: auto;
     border-radius: 0;
   }
   .look-media-video {
-    /* contain so every pixel of the source video shows — black bars
-       at top/bottom if the source aspect doesn't match the frame.
-       Better to see the full look than to fill via cropping. */
     object-fit: contain;
     width: 100%;
     height: 100%;
