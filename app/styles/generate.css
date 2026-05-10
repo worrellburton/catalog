@@ -5,19 +5,22 @@
 .gen-page {
   width: 100%;
   margin: 0 auto;
-  /* Desktop contract: the entire wizard tries to fit within the dynamic
-     viewport so the dock + step + header all stay visible at once.
-     Mobile reality: photos grid + height/age + saved-looks list often
-     overflows on a phone, so we relax to overflow-y: auto on narrow
-     viewports (see media query below) and let the step scroll.
-     Bottom padding still clears the fixed dock + safe-area inset;
-     horizontal padding stays generous. */
+  /* The page itself scrolls on every viewport. We previously locked
+     the page to 100dvh + overflow:hidden and let the inner .gen-step
+     own scroll, but on viewports where the photos row alone fills
+     most of the height the step couldn't reliably reveal "Your looks"
+     below — taps on the wheel/trackpad were going to the wrong
+     scroll container. Letting the page scroll instead is the simpler
+     contract: the dock (gen-rail) is position:fixed so it still
+     pins to the bottom, and the bottom padding here keeps content
+     above it. */
   padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   background:
@@ -28,44 +31,16 @@
   letter-spacing: -0.005em;
 }
 
-/* Step container fills the remaining viewport space below the header
-   and above the docked rail. min-height: 0 lets flex children shrink
-   inside it; overflow-y: auto so content that's taller than the
-   available space scrolls inside the step rather than getting clipped
-   off the bottom. The page itself stays overflow: hidden so the dock
-   still pins to the bottom. */
+/* Step container holds the wizard content. It no longer owns scroll —
+   the parent .gen-page is the scroll container. We keep the flex
+   column for layout but let the step grow with its content so the
+   page-level scroll reveals everything. */
 .gen-page > .gen-step {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  /* Hide the scrollbar visually on desktop - the step still scrolls,
-     but no chrome competes with the dark background. */
-  scrollbar-width: none;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-}
-.gen-page > .gen-step::-webkit-scrollbar { display: none; }
-
-/* Phone breakpoint: the entire page scrolls vertically. The mobile
-   dock sits in the normal flow at the bottom of the page (gen-rail's
-   fixed positioning still pins it to the viewport, so it stays put
-   while content scrolls underneath). */
-@media (max-width: 760px) {
-  .gen-page {
-    height: auto;
-    min-height: 100vh;
-    min-height: 100dvh;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .gen-page > .gen-step {
-    overflow: visible;
-    flex: 0 0 auto;
-  }
 }
 
 /* Result step's phone-frame video is the tallest single element on the

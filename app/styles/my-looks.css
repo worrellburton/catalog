@@ -1392,22 +1392,72 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-size: 13px;
 }
 
-/* Looks grid - same 3-column 9:16 layout as CreatorPage. */
+/* Looks grid - same 3-column layout as CreatorPage. Tile aspect ratio
+   is set on .my-cat-tile-media so the wrapper itself can host the
+   absolute-positioned status pill / action row. */
 .my-cat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
-.my-cat-grid .look-card {
-  width: 100%;
-  aspect-ratio: 3 / 4;
-}
 
 /* Per-tile wrapper - position:relative so the status pill, action
    row, and delete-confirm overlay can absolute-position over the
-   LookCard. */
+   media area. Click anywhere on the card opens the editor. */
 .my-cat-tile {
   position: relative;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.my-cat-tile:hover { transform: translateY(-1px); }
+
+/* Media area - 3:4 portrait, mirrors .creator-grid .look-card. */
+.my-cat-tile-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.my-cat-tile-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.18);
+}
+.my-cat-tile-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 38%);
+}
+.my-cat-tile-title {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 /* Status pill stays visible regardless of mode so the curator can spot

@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import LookForm from './LookForm';
-import LookCard from './LookCard';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
-import type { Look, Product } from '~/data/looks';
 
 interface MyLooksProps {
   onClose: () => void;
@@ -28,54 +26,21 @@ const STATUS_COLORS: Record<LookStatus, string> = {
   archived:  '#777',
 };
 
-// Stable hash for the synthetic numeric id we hand to LookCard. LookCard
-// keys off look.id and uses it for the trail-video handoff, so we need
-// something deterministic per-managed-look UUID and disjoint from seed
-// look ids (which are positive). Negative numbers buy us that without
-// any DB lookup.
-function hashId(uuid: string): number {
-  let h = 0;
-  for (let i = 0; i < uuid.length; i++) h = ((h << 5) - h + uuid.charCodeAt(i)) | 0;
-  return -1 * (Math.abs(h) % 1_000_000) - 1;
-}
-
-// Pick the best preview asset for the LookCard's <video poster>. Photos
-// win over poster frames because the catalog flow currently writes
-// look_photos with thumbnails first, video posters only when a video is
-// present. Falls back to the static thumbnail_url field.
-function previewFor(look: ManagedLook): string | undefined {
+// Pick the best preview asset for the tile. Photos win over poster
+// frames because the catalog flow writes look_photos with thumbnails
+// first; video posters only land once a video upload completes.
+function previewFor(look: ManagedLook): { src: string; isVideo: boolean } | null {
   if (look.look_photos?.length > 0) {
-    return look.look_photos[0].thumbnail_url || look.look_photos[0].url || undefined;
+    const src = look.look_photos[0].thumbnail_url || look.look_photos[0].url;
+    if (src) return { src, isVideo: false };
   }
   if (look.look_videos?.length > 0) {
-    return look.look_videos[0].poster_url || undefined;
+    const poster = look.look_videos[0].poster_url;
+    if (poster) return { src: poster, isVideo: true };
+    const video = look.look_videos[0].url;
+    if (video) return { src: video, isVideo: true };
   }
-  return undefined;
-}
-
-// Map ManagedLook (the my-looks REST shape) to Look (the LookCard shape)
-// so the same tile component renders here as on CreatorPage.
-function toLookShape(m: ManagedLook, currentCreatorHandle: string): Look {
-  const products: Product[] = (m.look_products || []).map(lp => ({
-    brand: lp.products.brand || '',
-    name:  lp.products.name  || '',
-    price: lp.products.price || '',
-    url:   lp.products.url   || '',
-    image: lp.products.image_url || undefined,
-  }));
-  const video = m.look_videos?.[0]?.url || '';
-  return {
-    id: hashId(m.id),
-    uuid: m.id,
-    title: m.title,
-    video,
-    gender: (m.gender || 'unisex') as Look['gender'],
-    creator: currentCreatorHandle,
-    description: m.description || '',
-    color: m.color || '#222',
-    products,
-    thumbnail_url: previewFor(m),
-  };
+  return null;
 }
 
 export default function MyLooks({ onClose }: MyLooksProps) {
@@ -175,10 +140,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     return { all, live, draft, archived };
   }, [looks]);
 
-  // Map managed looks to the Look shape LookCard expects.
-  const tileLooks = useMemo(
-    () => looks.map(m => ({ managed: m, look: toLookShape(m, myCreatorHandle) })),
-    [looks, myCreatorHandle],
+  // Pre-compute previews so the render loop stays cheap.
+  const tiles = useMemo(
+    () => looks.map(m => ({ managed: m, preview: previewFor(m) })),
+    [looks],
   );
 
   // ── Form mode renders the editor full-screen (unchanged behavior) ──
@@ -210,13 +175,14 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       <button
         className="my-cat-create-fab"
         onClick={handleCreateNew}
-        aria-label="New look"
-        title="New look"
+        aria-label="Upload look"
+        title="Upload look"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
+        <span className="my-cat-create-fab-label">Upload look</span>
       </button>
 
       {/* Hero — same layout as CreatorPage.creator-hero. */}
@@ -275,7 +241,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <div className="my-cat-skeleton-grid">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="my-cat-skeleton-tile" />)}
         </div>
-      ) : tileLooks.length === 0 ? (
+      ) : tiles.length === 0 ? (
         <div className="my-cat-empty">
           <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -289,15 +255,58 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       ) : (
         <>
           <div className="my-cat-grid">
-            {tileLooks.map(({ managed, look }) => (
-              <div key={managed.id} className={`my-cat-tile${creatorMode ? ' my-cat-tile--editing' : ''}`}>
-                <LookCard
-                  look={look}
-                  className="look-card"
-                  onOpenLook={() => handleEdit(managed)}
-                  onOpenCreator={() => {}}
-                  hideCreator
-                />
+            {tiles.map(({ managed, preview }) => (
+              <div
+                key={managed.id}
+                className={`my-cat-tile${creatorMode ? ' my-cat-tile--editing' : ''}`}
+                onClick={() => handleEdit(managed)}
+                role="button"
+                tabIndex={0}
+              >
+                {/* Image-based preview. We deliberately avoid the
+                    consumer LookCard here because its TrailVideoHost
+                    handoff is wired to the public feed pool — managed
+                    looks aren't in that pool, so the video slot would
+                    render empty. A simple <img> covers every state
+                    (photo, poster frame, color placeholder). */}
+                <div className="my-cat-tile-media">
+                  {preview ? (
+                    preview.isVideo ? (
+                      <video
+                        className="my-cat-tile-img"
+                        src={preview.src}
+                        poster={preview.src}
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        className="my-cat-tile-img"
+                        src={preview.src}
+                        alt={managed.title}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )
+                  ) : (
+                    <div
+                      className="my-cat-tile-placeholder"
+                      style={{ backgroundColor: managed.color || '#222' }}
+                    >
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                    </div>
+                  )}
+                  {/* Soft bottom gradient so the title reads on bright photos. */}
+                  <div className="my-cat-tile-scrim" />
+                  {managed.title && (
+                    <span className="my-cat-tile-title">{managed.title}</span>
+                  )}
+                </div>
 
                 {/* Status pill — always visible so the curator can spot
                     drafts at a glance (matches the prior MyLooks UX). */}

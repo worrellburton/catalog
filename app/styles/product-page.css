@@ -773,6 +773,11 @@
   text-align: left;
   color: #fff;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  /* Sit above the video (z-index:1 inline) and the poster <img>
+     (z-index:0). Without this the chip paints under the playing
+     video and disappears entirely. */
+  z-index: 3;
+  pointer-events: none;
 }
 .pd-look-tile-creator {
   display: inline-flex;

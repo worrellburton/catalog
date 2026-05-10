@@ -105,6 +105,34 @@ header > * {
   gap: 12px;
 }
 
+/* Earnings pill - sits between the bookmark button and the avatar
+   menu. Mirrors the green pill on ProductPage but compact for the
+   header. Hides when the user is signed out or the balance hasn't
+   loaded. */
+.header-wallet-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.16);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.header-wallet-pill:hover {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.45);
+  transform: translateY(-1px);
+}
+.header-wallet-pill svg { display: block; }
+
 .logo {
   height: 36px;
   width: auto;

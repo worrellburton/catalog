@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect } from 'react';
 import { looks as seedLooks, creators as seedCreators, Look, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { supabase } from '~/utils/supabase';
+import { useAuth } from '~/hooks/useAuth';
+import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 
 interface CreatorPageProps {
@@ -39,6 +41,7 @@ export default function CreatorPage({
   onCreateCatalog,
 }: CreatorPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
+  const { user: currentUser } = useAuth();
   useEscapeKey(onClose);
 
   // ── Two render paths share this component ──────────────────────────────
@@ -258,7 +261,28 @@ export default function CreatorPage({
 
       {/* Hero - centered profile */}
       <div className="creator-hero">
-        {avatarUrl ? (
+        {/* When the current user is viewing their own profile, the
+            avatar becomes the AvatarUpload trigger (file picker →
+            crop modal → Supabase upload). Everyone else sees the
+            static <img>. The static-seed creator path has no userId,
+            so this branch only fires for real shopper profiles. */}
+        {userId && currentUser?.id === userId ? (
+          <div className="creator-hero-avatar-edit">
+            <AvatarUpload
+              userId={currentUser.id}
+              currentUrl={avatarUrl || undefined}
+              fallbackInitial={initial}
+              onUploaded={(url) => setProfile(p => p ? { ...p, avatar_url: url } : p)}
+              className="creator-hero-avatar"
+            />
+            <span className="creator-hero-avatar-edit-hint" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </span>
+          </div>
+        ) : avatarUrl ? (
           <img className="creator-hero-avatar" src={avatarUrl} alt={displayName} />
         ) : (
           <div className="creator-hero-avatar creator-hero-avatar--initial">{initial}</div>
