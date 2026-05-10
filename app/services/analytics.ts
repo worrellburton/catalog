@@ -39,13 +39,19 @@ export async function getUserAnalytics(): Promise<UserAnalyticsRow[]> {
 }
 
 /**
- * Computed click-through rate. Returns null when there are no
- * impressions to avoid the `0/0` artifact rendering as `0%` (which
- * would falsely imply tracking without traffic).
+ * Two CTR variants:
+ *   • Click CTR     — clicks / impressions  ("did the impression earn a click?")
+ *   • Clickout CTR  — clickouts / clicks    ("once on the page, did they click out?")
+ * Both return null when the denominator is 0 so the table can render
+ * "—" instead of a misleading 0%.
  */
 export function clickThroughRate(row: { total_impressions: number; total_clicks: number }): number | null {
   if (!row.total_impressions) return null;
   return row.total_clicks / row.total_impressions;
+}
+export function clickoutRate(row: { total_clicks: number; total_clickouts: number }): number | null {
+  if (!row.total_clicks) return null;
+  return row.total_clickouts / row.total_clicks;
 }
 
 /**
@@ -55,6 +61,7 @@ export interface ProductAnalyticsRow {
   product_id: string;
   product_name: string | null;
   brand: string | null;
+  image_url: string | null;
   total_impressions: number;
   total_clicks: number;
   total_clickouts: number;
