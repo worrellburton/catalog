@@ -7,6 +7,7 @@ import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { trackProductClickout } from '~/services/session-tracker';
+import { getWalletBalance } from '~/services/earnings';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -665,6 +666,19 @@ export default function ProductPage({
   useEscapeKey(handleClose);
 
   const isSaved = bookmarks.isProductBookmarked(product);
+
+  // Creator earnings bubble — sits to the left of the bookmark on
+  // the product page actions row. Fetches the signed-in creator's
+  // current wallet balance once on mount; null when no wallet
+  // (anonymous visitor / not yet a creator) hides the bubble.
+  const [earnings, setEarnings] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getWalletBalance()
+      .then(b => { if (!cancelled) setEarnings(typeof b === 'number' ? b : 0); })
+      .catch(() => { if (!cancelled) setEarnings(null); });
+    return () => { cancelled = true; };
+  }, []);
   const handleToggleSave = useCallback(() => {
     bookmarks.toggleProductBookmark(product);
   }, [bookmarks, product]);
@@ -878,6 +892,11 @@ export default function ProductPage({
                 </svg>
                 <span>Try it on</span>
               </button>
+              {earnings !== null && (
+                <span className="pd-earnings-bubble" title="Your earnings">
+                  ${earnings.toFixed(2)}
+                </span>
+              )}
               <button
                 type="button"
                 className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}
@@ -993,16 +1012,27 @@ export default function ProductPage({
           </section>
         )}
 
-        {lookCreatives && lookCreatives.length > 0 && (
-          <section className="pd-look-feed">
-            <h2 className="pd-feed-title">Featured in Looks</h2>
-            <div className="pd-look-grid">
-              {lookCreatives.slice(0, 24).map((l, i) => (
-                <LookTile key={l.id} look={l} index={i} onOpen={onOpenLook} />
-              ))}
-            </div>
-          </section>
-        )}
+        {lookCreatives && lookCreatives.length > 0 && (() => {
+          // Always render either 8 or 12 looks (no orphan rows). >=12
+          // shows 12; >=8 shows 8; <8 hides the section entirely so
+          // we never render a ragged 5- or 7-tile bottom row.
+          const visible = lookCreatives.length >= 12
+            ? lookCreatives.slice(0, 12)
+            : lookCreatives.length >= 8
+              ? lookCreatives.slice(0, 8)
+              : [];
+          if (visible.length === 0) return null;
+          return (
+            <section className="pd-look-feed">
+              <h2 className="pd-feed-title">Featured in Looks</h2>
+              <div className="pd-look-grid">
+                {visible.map((l, i) => (
+                  <LookTile key={l.id} look={l} index={i} onOpen={onOpenLook} />
+                ))}
+              </div>
+            </section>
+          );
+        })()}
       </div>
     </div>
   );

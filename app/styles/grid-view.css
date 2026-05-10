@@ -359,6 +359,20 @@
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+/* Initial-letter fallback when the creator has no avatar (orphan
+   look published via the user-generation flow). Same circle so the
+   layout doesn't shift; gold tint reads as "user-generated". */
+.card-creator-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 192, 96, 0.92);
+  color: #0a0a0a;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+}
 
 .card-creator-name {
   font-size: 11px;

@@ -858,6 +858,24 @@
   transform: rotate(180deg);
 }
 
+/* Creator earnings bubble — sits to the left of the Save bookmark
+   on the actions row. Reflects the signed-in creator's wallet
+   balance so they see what this product is earning at a glance. */
+.pd-earnings-bubble {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.10);
+  border: 1px solid rgba(34, 197, 94, 0.40);
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
 /* Try-it-on button — sits between Shop and Save. Outline pill so it
    reads as a secondary CTA: less weight than Shop (filled), more
    visual presence than Save (outline + icon). Tapping navigates to
