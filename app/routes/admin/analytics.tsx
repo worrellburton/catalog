@@ -4,6 +4,7 @@ import {
   getUserAnalytics,
   getProductAnalytics,
   clickThroughRate,
+  clickoutRate,
   formatDurationMs,
   type UserAnalyticsRow,
   type ProductAnalyticsRow,
@@ -110,7 +111,8 @@ export default function AdminAnalytics() {
 
 type SortKey =
   | 'name' | 'last_sign_in_at' | 'sign_in_count'
-  | 'impressions' | 'clicks' | 'clickouts' | 'ctr'
+  | 'impressions' | 'clicks' | 'clickouts'
+  | 'ctr_click' | 'ctr_clickout'
   | 'total_session' | 'avg_session' | 'idle_session';
 
 function UsersAnalyticsTable() {
@@ -158,9 +160,14 @@ function UsersAnalyticsTable() {
         case 'impressions':    return (a.total_impressions - b.total_impressions) * dir;
         case 'clicks':         return (a.total_clicks      - b.total_clicks)      * dir;
         case 'clickouts':      return (a.total_clickouts   - b.total_clickouts)   * dir;
-        case 'ctr': {
+        case 'ctr_click': {
           const ar = clickThroughRate(a) ?? -1;
           const br = clickThroughRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+        case 'ctr_clickout': {
+          const ar = clickoutRate(a) ?? -1;
+          const br = clickoutRate(b) ?? -1;
           return (ar - br) * dir;
         }
         case 'total_session':  return (a.total_session_ms - b.total_session_ms) * dir;
@@ -201,7 +208,8 @@ function UsersAnalyticsTable() {
             <SortableTh col="impressions" label="Impressions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <SortableTh col="clicks" label="Clicks" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <SortableTh col="clickouts" label="Clickouts" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
-            <SortableTh col="ctr" label="CTR" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <SortableTh col="ctr_click" label="CTR (click)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <SortableTh col="ctr_clickout" label="CTR (clickout)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <SortableTh col="avg_session" label="Avg session" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <SortableTh col="total_session" label="Total session" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <SortableTh col="idle_session" label="Idle" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
@@ -209,7 +217,8 @@ function UsersAnalyticsTable() {
         </thead>
         <tbody>
           {sortedRows.map(row => {
-            const ctr = clickThroughRate(row);
+            const ctrClick = clickThroughRate(row);
+            const ctrClickout = clickoutRate(row);
             return (
               <tr key={row.user_id}>
                 <td className="admin-cell-name">
@@ -219,17 +228,15 @@ function UsersAnalyticsTable() {
                         {(row.full_name || row.email || '?').charAt(0).toUpperCase()}
                       </span>
                   }
-                  <div className="admin-cell-name-stack">
-                    <span>{row.full_name || row.email || row.user_id.slice(0, 8)}</span>
-                    {row.email && row.full_name && <small className="admin-cell-name-sub">{row.email}</small>}
-                  </div>
+                  <span>{row.full_name || row.email || row.user_id.slice(0, 8)}</span>
                 </td>
                 <td>{row.last_sign_in_at ? new Date(row.last_sign_in_at).toLocaleString() : '—'}</td>
                 <td className="admin-cell-num">{row.sign_in_count.toLocaleString()}</td>
                 <td className="admin-cell-num">{row.total_impressions.toLocaleString()}</td>
                 <td className="admin-cell-num">{row.total_clicks.toLocaleString()}</td>
                 <td className="admin-cell-num">{row.total_clickouts.toLocaleString()}</td>
-                <td className="admin-cell-num">{ctr === null ? '—' : `${(ctr * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClick === null ? '—' : `${(ctrClick * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClickout === null ? '—' : `${(ctrClickout * 100).toFixed(1)}%`}</td>
                 <td className="admin-cell-num">{formatDurationMs(row.avg_session_ms)}</td>
                 <td className="admin-cell-num">{formatDurationMs(row.total_session_ms)}</td>
                 <td className="admin-cell-num">{formatDurationMs(row.total_idle_ms)}</td>
@@ -270,7 +277,7 @@ function SortableTh({
 
 // ── Products tab ────────────────────────────────────────────────────────────
 
-type ProductSortKey = 'product_name' | 'brand' | 'impressions' | 'clicks' | 'clickouts' | 'ctr';
+type ProductSortKey = 'product_name' | 'brand' | 'impressions' | 'clicks' | 'clickouts' | 'ctr_click' | 'ctr_clickout';
 
 function ProductsAnalyticsStub() {
   return <ProductsAnalyticsTable />;
@@ -307,9 +314,14 @@ function ProductsAnalyticsTable() {
         case 'impressions':  return (a.total_impressions - b.total_impressions) * dir;
         case 'clicks':       return (a.total_clicks      - b.total_clicks)      * dir;
         case 'clickouts':    return (a.total_clickouts   - b.total_clickouts)   * dir;
-        case 'ctr': {
+        case 'ctr_click': {
           const ar = clickThroughRate(a) ?? -1;
           const br = clickThroughRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+        case 'ctr_clickout': {
+          const ar = clickoutRate(a) ?? -1;
+          const br = clickoutRate(b) ?? -1;
           return (ar - br) * dir;
         }
       }
@@ -336,28 +348,39 @@ function ProductsAnalyticsTable() {
       <div className="admin-table-toolbar">
         <LiveChip live={live} />
       </div>
-      <table className="admin-table">
+      <table className="admin-table admin-analytics-products">
         <thead>
           <tr>
+            <th className="admin-th-thumb" aria-label="Thumbnail" />
             <ProductTh col="product_name" label="Product" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <ProductTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             <ProductTh col="impressions" label="Impressions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <ProductTh col="clicks" label="Clicks" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
             <ProductTh col="clickouts" label="Clickouts" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
-            <ProductTh col="ctr" label="CTR" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <ProductTh col="ctr_click" label="CTR (click)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <ProductTh col="ctr_clickout" label="CTR (clickout)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
           </tr>
         </thead>
         <tbody>
           {sortedRows.map(row => {
-            const ctr = clickThroughRate(row);
+            const ctrClick = clickThroughRate(row);
+            const ctrClickout = clickoutRate(row);
             return (
               <tr key={row.product_id}>
-                <td className="admin-cell-name">{row.product_name || '—'}</td>
-                <td>{row.brand || '—'}</td>
+                <td className="admin-cell-thumb">
+                  {row.image_url
+                    ? <img src={row.image_url} alt="" className="admin-product-thumb" loading="lazy" decoding="async" />
+                    : <span className="admin-product-thumb admin-product-thumb--empty" aria-hidden="true" />}
+                </td>
+                <td className="admin-cell-name admin-cell-name--clip" title={row.product_name ?? undefined}>
+                  {row.product_name || '—'}
+                </td>
+                <td className="admin-cell-muted">{row.brand || '—'}</td>
                 <td className="admin-cell-num">{row.total_impressions.toLocaleString()}</td>
                 <td className="admin-cell-num">{row.total_clicks.toLocaleString()}</td>
                 <td className="admin-cell-num">{row.total_clickouts.toLocaleString()}</td>
-                <td className="admin-cell-num">{ctr === null ? '—' : `${(ctr * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClick === null ? '—' : `${(ctrClick * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClickout === null ? '—' : `${(ctrClickout * 100).toFixed(1)}%`}</td>
               </tr>
             );
           })}
