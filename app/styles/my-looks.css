@@ -1190,3 +1190,435 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .wallet-status-disconnect:hover { color: #f87171; background: rgba(248,113,113,0.08); }
 .wallet-status-disconnect:disabled { opacity: 0.5; cursor: default; }
+
+/* ───────────────────────────────────────────────────────────────────
+   My Catalog — mirrors CreatorPage layout so the curator's own view
+   matches what shoppers see on the public CreatorPage. Selectors are
+   prefixed `my-cat-` (vs. the legacy `my-looks-` which still powers
+   the Wallet overlay above) so the two surfaces stay isolated.
+   ─────────────────────────────────────────────────────────────────── */
+
+.my-cat-page {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 150;
+  overflow-y: auto;
+  padding: var(--header-height) 28px 28px;
+}
+
+/* Form-mode root - swaps the page padding so the LookForm fills the
+   whole canvas the way the legacy my-looks-form-container did. */
+.my-cat-page--form {
+  padding: 0;
+  background: #0a0a0a;
+}
+.my-cat-form-container {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+
+/* Top-left back link. Style + size copied from .creator-back. */
+.my-cat-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-bottom: 20px;
+}
+.my-cat-back:hover { color: #111; }
+
+/* Top-right floating "+" button. Sits over the hero so it's reachable
+   on every viewport without competing with the back link. */
+.my-cat-create-fab {
+  position: absolute;
+  top: calc(var(--header-height, 0px) + 12px);
+  right: 28px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease, background 0.15s ease;
+  z-index: 5;
+}
+.my-cat-create-fab:hover {
+  background: #000;
+  transform: translateY(-1px);
+}
+.my-cat-create-fab:active { transform: translateY(0); }
+
+/* Hero - same flex column / centered layout as CreatorPage. */
+.my-cat-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 0 32px;
+}
+.my-cat-hero-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+}
+.my-cat-hero-avatar--initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1f2937, #374151);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.my-cat-hero-curated {
+  font-size: 15px;
+  font-style: italic;
+  color: rgba(0, 0, 0, 0.4);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.my-cat-hero-name {
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 600;
+  color: #111;
+  margin: 4px 0 20px;
+  letter-spacing: -0.02em;
+}
+
+/* Creator Mode toggle - sits where CreatorPage shows the Follow
+   button. Same dark pill, with an "is-on" green tint when active. */
+.my-cat-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: #111;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition: opacity 0.2s, background 0.2s;
+  font-family: inherit;
+}
+.my-cat-mode-toggle:hover { opacity: 0.85; }
+.my-cat-mode-toggle.is-on {
+  background: #16a34a;
+}
+.my-cat-mode-toggle svg { display: block; }
+
+.my-cat-hero-stats {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.4);
+  margin: 0;
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+/* Status filter row - matches .creator-nav layout (centered, tabs with
+   bottom-border underline). */
+.my-cat-nav {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin: 12px 0 24px;
+  flex-wrap: wrap;
+}
+.my-cat-nav-tab {
+  padding: 14px 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  font-family: inherit;
+}
+.my-cat-nav-tab:hover { color: rgba(0, 0, 0, 0.7); }
+.my-cat-nav-tab.active {
+  color: #111;
+  border-bottom-color: #111;
+}
+.my-cat-nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.my-cat-nav-tab.active .my-cat-nav-count {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+}
+
+/* Error banner - light tinted box above the grid. */
+.my-cat-error {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: rgba(217, 83, 79, 0.08);
+  border: 1px solid rgba(217, 83, 79, 0.25);
+  border-radius: 8px;
+  color: #b54a48;
+  font-size: 13px;
+}
+
+/* Looks grid - same 3-column 9:16 layout as CreatorPage. */
+.my-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.my-cat-grid .look-card {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+}
+
+/* Per-tile wrapper - position:relative so the status pill, action
+   row, and delete-confirm overlay can absolute-position over the
+   LookCard. */
+.my-cat-tile {
+  position: relative;
+}
+
+/* Status pill stays visible regardless of mode so the curator can spot
+   drafts at a glance. Sits top-left, above the LookCard chrome. */
+.my-cat-tile-status {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fff;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+/* Edit / Archive / Delete row - shown only when Creator Mode is on.
+   Top-right of the tile. Stops pointer events from reaching the
+   underlying LookCard. */
+.my-cat-tile-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  background: rgba(17, 17, 17, 0.92);
+  padding: 4px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+}
+.my-cat-tile-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.my-cat-tile-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.my-cat-tile-action--danger:hover {
+  background: rgba(217, 83, 79, 0.25);
+  color: #fbb;
+}
+
+/* Delete confirmation - covers the tile's center so the choice is
+   unambiguous. */
+.my-cat-delete-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: rgba(17, 17, 17, 0.86);
+  color: #fff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.my-cat-delete-confirm p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.my-cat-delete-actions {
+  display: flex;
+  gap: 8px;
+}
+.my-cat-btn-danger {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #d9534f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.my-cat-btn-danger:hover { background: #c9302c; }
+.my-cat-btn-cancel {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.my-cat-btn-cancel:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* Skeleton + empty states - same look-and-feel as CreatorPage. */
+.my-cat-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.my-cat-skeleton-tile {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+  animation: my-cat-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes my-cat-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.my-cat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.55);
+}
+.my-cat-empty svg { color: rgba(0, 0, 0, 0.25); }
+.my-cat-empty h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+}
+.my-cat-empty p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.my-cat-empty-btn {
+  margin-top: 8px;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: #111;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.my-cat-empty-btn:hover { opacity: 0.85; }
+
+/* Pagination row. */
+.my-cat-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 32px 0 16px;
+}
+.my-cat-page-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.7);
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.my-cat-page-btn:hover:not(:disabled) {
+  border-color: #111;
+  color: #111;
+}
+.my-cat-page-btn:disabled { opacity: 0.3; cursor: default; }
+.my-cat-page-info {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+/* Narrower viewports collapse to 2 columns. <520px goes single column. */
+@media (max-width: 720px) {
+  .my-cat-grid,
+  .my-cat-skeleton-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .my-cat-create-fab {
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+  .my-cat-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+@media (max-width: 420px) {
+  .my-cat-grid,
+  .my-cat-skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+}

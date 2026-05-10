@@ -487,12 +487,24 @@ body:has(.look-overlay.look-overlay--in) {
   }
 }
 
-/* ── Feed section below the hero ── */
+/* ── Feed sections below the hero (stack like ProductPage) ── */
 .look-feed-section {
   width: 100%;
-  padding: 48px 32px 64px;
+  padding: 40px 32px 0;
   background: #0a0a0a;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Last section keeps the trailing breathing room. Earlier sections
+   get a tighter bottom so consecutive sections aren't double-padded. */
+.look-feed-section + .look-feed-section {
+  border-top: none;
+}
+.look-feed-section:last-child {
+  padding-bottom: 64px;
+}
+.look-feed-section:not(:last-child) {
+  padding-bottom: 32px;
 }
 
 .look-feed-heading {
