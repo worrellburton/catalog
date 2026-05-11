@@ -8,6 +8,7 @@ import {
 import { Analytics } from "@vercel/analytics/remix";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
+import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
@@ -37,6 +38,7 @@ import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
+import "./styles/creator-toast.css";
 import "./styles/import.css";
 import "./styles/share-page.css";
 import "./styles/confirm-modal.css";
@@ -138,6 +140,11 @@ export default function App() {
       {/* Per-user session + event tracker for /admin/analytics. No-op
           for unauthenticated visitors; starts/stops with the auth user. */}
       <SessionTrackerHost />
+      {/* Once-per-session creator engagement toast. Shows "since
+          your last visit, your looks earned X impressions / Y
+          clicks" when there's something to report; otherwise stays
+          silent. Renders nothing for anonymous visitors. */}
+      <CreatorLoginToastHost />
       <Outlet />
     </>
   );

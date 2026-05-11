@@ -25,7 +25,7 @@ const ACTIVE_INPUT_WINDOW_MS   = 30 * 1000;       // input within 30 s = active
 
 type Tracker = {
   stop: () => void;
-  emit: (eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; context?: string }) => void;
+  emit: (eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; uuid?: string; context?: string }) => void;
   sessionId: () => string | null;
 };
 
@@ -136,7 +136,7 @@ export function startSessionTracker(userId: string): Tracker {
     activeTracker = null;
   }
 
-  function emit(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; context?: string }) {
+  function emit(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; uuid?: string; context?: string }) {
     if (!supabase) return;
     // Surface RLS / network errors via console so a misconfigured
     // policy doesn't silently swallow every analytics event. The
@@ -147,6 +147,11 @@ export function startSessionTracker(userId: string): Tracker {
       event_type: eventType,
       target_type: target?.type ?? null,
       target_id: target?.id ?? null,
+      // target_uuid is the canonical join key for server-side
+      // attribution (e.g. "events on user X's looks"). target_id
+      // stays as the client-side synthetic numeric id for backward
+      // compat with existing analytics queries.
+      target_uuid: target?.uuid ?? null,
       context: target?.context ?? null,
     }).then(({ error }) => {
       if (error) console.warn('[session-tracker] event insert failed:', eventType, error.message);
@@ -166,7 +171,7 @@ export function startSessionTracker(userId: string): Tracker {
  *  still being inserted) — flushed automatically once the tracker
  *  comes online so we never drop the first few impressions of a
  *  fresh session. */
-type QueuedEvent = { eventType: 'impression' | 'click' | 'clickout'; target?: { type?: string; id?: string; context?: string } };
+type QueuedEvent = { eventType: 'impression' | 'click' | 'clickout'; target?: { type?: string; id?: string; uuid?: string; context?: string } };
 const eventQueue: QueuedEvent[] = [];
 const QUEUE_FLUSH_INTERVAL_MS = 250;
 let queueFlushTimer: number | null = null;
@@ -187,19 +192,19 @@ function scheduleFlush() {
   }, QUEUE_FLUSH_INTERVAL_MS);
 }
 
-function fireOrQueue(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; context?: string }) {
+function fireOrQueue(eventType: 'impression' | 'click' | 'clickout', target?: { type?: string; id?: string; uuid?: string; context?: string }) {
   if (activeTracker) { activeTracker.emit(eventType, target); return; }
   eventQueue.push({ eventType, target });
   scheduleFlush();
 }
 
-export function trackImpression(target?: { type?: string; id?: string; context?: string }) {
+export function trackImpression(target?: { type?: string; id?: string; uuid?: string; context?: string }) {
   fireOrQueue('impression', target);
 }
-export function trackClick(target?: { type?: string; id?: string; context?: string }) {
+export function trackClick(target?: { type?: string; id?: string; uuid?: string; context?: string }) {
   fireOrQueue('click', target);
 }
-export function trackClickout(target?: { type?: string; id?: string; context?: string }) {
+export function trackClickout(target?: { type?: string; id?: string; uuid?: string; context?: string }) {
   fireOrQueue('clickout', target);
 }
 
@@ -230,14 +235,19 @@ export async function resolveProductIdByUrl(url: string): Promise<string | null>
  * table yet — user-level clickout count still increments.
  */
 export async function trackProductClickout(url: string | null | undefined, brand: string | null | undefined, name: string | null | undefined): Promise<void> {
-  if (!activeTracker) return;
   const context = [brand, name].filter(Boolean).join(' · ').slice(0, 200);
   if (!url) {
-    activeTracker.emit('clickout', { type: 'product_url', id: undefined, context });
+    fireOrQueue('clickout', { type: 'product_url', id: undefined, context });
     return;
   }
   const id = await resolveProductIdByUrl(url);
-  activeTracker.emit('clickout', id
-    ? { type: 'product', id, context }
+  // Route through fireOrQueue (not activeTracker.emit directly) so a
+  // clickout fired during the auth-resolving window still lands when
+  // the tracker comes online. The previous "if (!activeTracker)
+  // return" early-bail dropped every clickout fired in that window —
+  // including the most common one: the user taps Shop on their first
+  // page load before the auth bootstrap finishes.
+  fireOrQueue('clickout', id
+    ? { type: 'product', id, uuid: id, context }
     : { type: 'product_url', id: url.slice(0, 200), context });
 }

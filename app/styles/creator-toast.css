@@ -1,0 +1,169 @@
+/* Creator login engagement toast.
+   Fixed to the top-right of the viewport. Slides + fades in on
+   mount, scales slightly on hover. Click-through goes to the
+   earnings page; × dismisses silently. */
+
+.creator-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 12px) + 16px);
+  right: 16px;
+  z-index: 9999;
+  width: min(340px, calc(100vw - 32px));
+  padding: 16px 18px 14px;
+  border-radius: 16px;
+  background: linear-gradient(140deg, #0f1a13 0%, #0a0a0a 65%);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(34, 197, 94, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+
+  /* Enter: slide in from right + fade up. CSS does the lift; the
+     component flips the phase class on next frame. */
+  opacity: 0;
+  transform: translate3d(40px, -4px, 0) scale(0.96);
+  transition:
+    opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creator-toast--open {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.creator-toast--leave {
+  opacity: 0;
+  transform: translate3d(40px, -4px, 0) scale(0.96);
+}
+
+.creator-toast:hover {
+  transform: translate3d(-1px, -2px, 0) scale(1);
+  border-color: rgba(34, 197, 94, 0.42);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(34, 197, 94, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.creator-toast-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.creator-toast-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.creator-toast-headline {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #4ade80;
+  margin-bottom: 2px;
+}
+
+.creator-toast-subline {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.62);
+  margin-bottom: 12px;
+  line-height: 1.35;
+}
+
+/* Stats row - big numbers next to compact labels. */
+.creator-toast-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.creator-toast-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.creator-toast-stat-num {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  line-height: 1;
+
+  /* Each number does a subtle count-up bounce on enter. */
+  animation: creator-toast-num-pop 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.18s;
+}
+.creator-toast-stat:nth-child(3) .creator-toast-stat-num {
+  animation-delay: 0.28s;
+}
+.creator-toast-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+.creator-toast-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes creator-toast-num-pop {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.86); }
+  60%  { opacity: 1; transform: translateY(0)    scale(1.04); }
+  100% { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.creator-toast-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4ade80;
+  letter-spacing: -0.005em;
+}
+.creator-toast-cta svg {
+  transition: transform 0.18s ease;
+}
+.creator-toast:hover .creator-toast-cta svg {
+  transform: translateX(2px);
+}
+
+/* Mobile: pin to top-center, slightly slimmer. */
+@media (max-width: 480px) {
+  .creator-toast {
+    top: calc(env(safe-area-inset-top, 12px) + 10px);
+    right: 12px;
+    left: 12px;
+    width: auto;
+    padding: 14px 16px 12px;
+  }
+  .creator-toast-stat-num { font-size: 22px; }
+}
+
+/* Native shell (Flutter): nudge below the status bar that Flutter
+   draws on top of the webview. */
+html[data-shell="catalog-app"] .creator-toast {
+  top: calc(var(--shell-sb, env(safe-area-inset-top, 44px)) + 10px);
+}

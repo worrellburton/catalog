@@ -1046,6 +1046,70 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 
 /* Transaction history */
+/* ── Wallet Analytics section ──
+   Sits above Transaction History. Three cards (impressions / clicks
+   / clickouts) with the lifetime total on top and the 7-day slice
+   underneath. Matches the .wallet-card visual language so the two
+   sections feel like one surface. */
+.wallet-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.wallet-analytics-header {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(0, 0, 0, 0.45);
+}
+.wallet-analytics-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.wallet-analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.04) 0%, rgba(34, 197, 94, 0.02) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  transition: border-color 0.18s, background 0.18s;
+}
+.wallet-analytics-card:hover {
+  border-color: rgba(34, 197, 94, 0.25);
+}
+.wallet-analytics-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(0, 0, 0, 0.42);
+}
+.wallet-analytics-card-amount {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.wallet-analytics-card-sub {
+  font-size: 11.5px;
+  color: #16a34a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .wallet-analytics-cards { grid-template-columns: 1fr; }
+  .wallet-analytics-card-amount { font-size: 22px; }
+}
+
 .wallet-history {
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.08);

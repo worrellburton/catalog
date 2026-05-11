@@ -557,13 +557,28 @@ export default function Home() {
     };
     const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
     const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
+    // Creator engagement toast click → open the wallet and re-fire
+    // the same event after mount so CreatorWallet scrolls its
+    // Analytics section into view. The re-fire is deferred two
+    // frames: one for setShowWallet to commit, one for CreatorWallet
+    // to mount its scroll-target ref.
+    const onOpenWalletAnalytics = () => {
+      setShowWallet(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('catalog:scroll-wallet-analytics'));
+        });
+      });
+    };
 
     window.addEventListener('catalog:set-category', onSetCategory as EventListener);
     window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
     window.addEventListener('catalog:open-my-looks', onOpenMyLooks);
+    window.addEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
     return () => {
       window.removeEventListener('catalog:set-category', onSetCategory as EventListener);
       window.removeEventListener('catalog:open-bookmarks', onOpenBookmarks);
+      window.removeEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
       window.removeEventListener('catalog:open-my-looks', onOpenMyLooks);
     };
   }, []);
@@ -648,7 +663,7 @@ export default function Home() {
     setProductOpenedFromLook(null);
     // Fire-and-forget click telemetry for /admin/analytics. No-op for
     // unauthenticated visitors (session tracker isn't running).
-    trackClick({ type: 'look', id: String(look.id ?? ''), context: look.title?.slice(0, 200) });
+    trackClick({ type: 'look', id: String(look.id ?? ''), uuid: look.uuid, context: look.title?.slice(0, 200) });
     setSelectedLook(look);
   }, []);
 
