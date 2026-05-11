@@ -64,6 +64,9 @@ export function AvatarCropModal({
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const imgElRef = useRef<HTMLImageElement | null>(null);
+  // iOS Safari fires pointerdown → click on <button>. Guard against
+  // double-invocation of save/close when a pointerdown already ran.
+  const btnPointerRef = useRef<'save' | 'close' | null>(null);
 
   // Phase 8: open / leave animation drives via the className on the
   // wrapper. Set 'open' on the next frame so the CSS transition fires.
@@ -372,14 +375,16 @@ export function AvatarCropModal({
         <footer className="avatar-modal-foot">
           <button
             className="avatar-modal-cancel"
-            onClick={handleClose}
+            onPointerDown={() => { btnPointerRef.current = 'close'; handleClose(); }}
+            onClick={() => { if (btnPointerRef.current === 'close') { btnPointerRef.current = null; return; } handleClose(); }}
             disabled={isBusy}
           >
             Cancel
           </button>
           <button
             className={`avatar-modal-save${isBusy ? ' is-busy' : ''}`}
-            onClick={handleSave}
+            onPointerDown={() => { if (isBusy || !imgDims) return; btnPointerRef.current = 'save'; handleSave(); }}
+            onClick={() => { if (btnPointerRef.current === 'save') { btnPointerRef.current = null; return; } handleSave(); }}
             disabled={isBusy || !imgDims}
           >
             <span className="avatar-modal-save-label">
