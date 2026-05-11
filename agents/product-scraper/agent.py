@@ -180,6 +180,22 @@ TOOLS = [
                     "type": ["string", "null"],
                     "description": "Target gender: 'male', 'female', or 'unisex'. Use null if uncertain.",
                 },
+                "size_fit": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Size and fit details from the product page (e.g. 'Slim fit. Fits true to size. "
+                        "Model is 6\'2\" wearing size medium.'). Include all bullet points from the "
+                        "Size & Fit section, joined with '. '. Null if not found."
+                    ),
+                },
+                "materials_care": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Materials and care instructions from the product page (e.g. '75% wool, 25% lyocell. "
+                        "Dry clean only. Imported.'). Include all bullet points from the Materials & Care "
+                        "section, joined with '. '. Null if not found."
+                    ),
+                },
             },
             "required": ["title", "images"],
         },
@@ -1032,6 +1048,12 @@ Rules:
     have 3-8 images showing different angles, colors, or styled views. Include
     all of them -- do not limit to just 1-2 images.
 - Keep description concise (1-3 sentences).
+- **ALWAYS try to extract size_fit and materials_care**:
+  * Look for "Size & Fit" sections (often in accordion/dropdown panels — scroll down and
+    use get_page_html if needed to find them).
+  * Look for "Materials & Care", "Fabric & Care", "Composition", or similar sections.
+  * Join all bullet points with ". " into a single string per field.
+  * These sections are very commonly present on fashion product pages.
 - Use null for any field that cannot be determined.
 
 IMPORTANT -- non-product pages:
