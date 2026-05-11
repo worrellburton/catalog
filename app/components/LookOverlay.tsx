@@ -189,7 +189,31 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   className="look-media-video"
                   data-trail-id={trailId}
                 />
-                {/* Bottom-left: product count badge */}
+                {/* Bottom-left: creator avatar + name */}
+                <button
+                  className="overlay-video-creator"
+                  onClick={() => { handleClose(); onOpenCreator(look.creator); }}
+                  aria-label={`View ${creatorData?.displayName || look.creator}`}
+                >
+                  {(creatorData?.avatar || look.creatorAvatar) ? (
+                    <img
+                      className="overlay-video-creator__avatar"
+                      src={creatorData?.avatar || look.creatorAvatar}
+                      alt={creatorData?.displayName || look.creator}
+                    />
+                  ) : (
+                    <span className="overlay-video-creator__avatar overlay-video-creator__avatar--initial">
+                      {(creatorData?.displayName || look.creatorDisplayName || look.creator || '?').charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="overlay-video-creator__name">
+                    {creatorData?.displayName
+                      || look.creatorDisplayName
+                      || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
+                  </span>
+                </button>
+
+                {/* Bottom-right: product count badge */}
                 <div className="hotspot-indicator">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
