@@ -151,12 +151,31 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         <div className="look-hero-section">
           {/* ── LEFT: Media area (60%) ── */}
           <div className="look-media-col">
-            {/* Back button - top-left of the screen */}
+            {/* Back button - top-left of the screen (desktop) */}
             <button className="look-back-btn" onClick={handleClose} aria-label="Back">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
             </button>
+
+            {/* Mobile-only: back + bookmark overlaid on top of the video (same
+                pattern as ProductPage .pd-back / .pd-bookmark-btn) */}
+            <div className="look-video-overlay-btns">
+              <button className="look-video-back-btn" onClick={handleClose} aria-label="Back">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+              <button
+                className={`look-video-bookmark-btn${lookBookmarked ? ' active' : ''}`}
+                onClick={handleToggleLookBookmark}
+                aria-label="Bookmark look"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={lookBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+            </div>
 
             {/* Centered video with overlays */}
             <div className="look-media-centered">
@@ -195,7 +214,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <span className="look-drag-pill" />
             </div>
 
-            {/* Bookmark - top-right of panel */}
+            {/* Desktop-only top bar: bookmark button. On mobile these move
+                to look-video-overlay-btns on top of the video. */}
             <div className="look-info-topbar">
               <button className="look-back-btn-mobile" onClick={handleClose} aria-label="Back">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
