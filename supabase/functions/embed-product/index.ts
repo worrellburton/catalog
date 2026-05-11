@@ -37,11 +37,11 @@ const getSession = () => {
   return session;
 };
 
-const buildDoc = (p: { name: string | null; brand: string | null; type: string | null; description: string | null }): string => {
+const buildDoc = (p: { name: string | null; brand: string | null; type: string | null; description: string | null; size_fit?: string | null; materials_care?: string | null }): string => {
   // Order matters: name first (carries the most weight in the model's
   // attention), then brand, type, description. Keep it short — gte-small
   // truncates at 512 tokens.
-  const parts = [p.name, p.brand, p.type, p.description]
+  const parts = [p.name, p.brand, p.type, p.description, p.size_fit, p.materials_care]
     .map(s => (s ?? '').trim())
     .filter(Boolean);
   return parts.join('. ').slice(0, 4000);
@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: product, error: fetchErr } = await supabase
     .from('products')
-    .select('id, name, brand, type, description, is_active, embedding, embedded_at')
+    .select('id, name, brand, type, description, size_fit, materials_care, is_active, embedding, embedded_at')
     .eq('id', id)
     .maybeSingle();
 
