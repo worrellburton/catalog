@@ -586,6 +586,10 @@ function FileDropModal({
 }) {
   const [phase, setPhase] = useState<'enter' | 'open' | 'leave'>('enter');
   const [dragOver, setDragOver] = useState(false);
+  // Guard against iOS double-trigger: onPointerDown fires on touch start,
+  // then click fires again after the file picker closes. Track whether
+  // onPick was already called via pointerdown so onClick can skip it.
+  const pointerPickedRef = useRef(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setPhase('open'), 16);
@@ -693,7 +697,8 @@ function FileDropModal({
 
         <button
           className="avatar-pick-browse"
-          onClick={onPick}
+          onPointerDown={() => { pointerPickedRef.current = true; onPick(); }}
+          onClick={() => { if (pointerPickedRef.current) { pointerPickedRef.current = false; return; } onPick(); }}
           type="button"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
