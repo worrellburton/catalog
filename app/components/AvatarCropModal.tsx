@@ -255,7 +255,12 @@ export function AvatarCropModal({
         setPhase('leave');
         window.setTimeout(onClose, 240);
       }, 600);
-    } catch {
+    } catch (err) {
+      // Surface Save failures so the user sees an error instead of a
+      // silent revert to the open state. Most common path here is a
+      // storage RLS denial or a transient network hiccup on the
+      // updateUserAvatar profiles update.
+      console.error('[avatar-modal] save failed:', err);
       setInternalBusy(false);
       setPhase('open');
     }
@@ -353,7 +358,19 @@ export function AvatarCropModal({
           </svg>
         </div>
 
-        <div className="avatar-modal-zoom">
+        {/* Belt-and-suspenders stopPropagation on the zoom rail —
+            tapping the magnifier icons at either end was bubbling
+            taps that landed close to the modal edge through to the
+            backdrop, dismissing the dialog. Stop pointer events here
+            so even an off-pixel tap on the +/- icons stays inside
+            the modal. */}
+        <div
+          className="avatar-modal-zoom"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <span aria-hidden="true" className="avatar-modal-zoom-icon avatar-modal-zoom-icon-min">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="6" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
           </span>
@@ -495,6 +512,7 @@ export function AvatarUpload({
         const { updateUserAvatar } = await import('~/services/profiles');
         const { url, error: err } = await updateUserAvatar(userId, cropped);
         if (err || !url) {
+          console.error('[avatar-upload] save failed:', err);
           setError(err || 'Upload failed.');
           window.setTimeout(() => setError(null), 3500);
           throw new Error(err);

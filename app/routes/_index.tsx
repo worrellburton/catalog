@@ -9,6 +9,7 @@ import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import HeaderWalletPill from '~/components/HeaderWalletPill';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -556,13 +557,28 @@ export default function Home() {
     };
     const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
     const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
+    // Creator engagement toast click → open the wallet and re-fire
+    // the same event after mount so CreatorWallet scrolls its
+    // Analytics section into view. The re-fire is deferred two
+    // frames: one for setShowWallet to commit, one for CreatorWallet
+    // to mount its scroll-target ref.
+    const onOpenWalletAnalytics = () => {
+      setShowWallet(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('catalog:scroll-wallet-analytics'));
+        });
+      });
+    };
 
     window.addEventListener('catalog:set-category', onSetCategory as EventListener);
     window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
     window.addEventListener('catalog:open-my-looks', onOpenMyLooks);
+    window.addEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
     return () => {
       window.removeEventListener('catalog:set-category', onSetCategory as EventListener);
       window.removeEventListener('catalog:open-bookmarks', onOpenBookmarks);
+      window.removeEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
       window.removeEventListener('catalog:open-my-looks', onOpenMyLooks);
     };
   }, []);
@@ -647,7 +663,7 @@ export default function Home() {
     setProductOpenedFromLook(null);
     // Fire-and-forget click telemetry for /admin/analytics. No-op for
     // unauthenticated visitors (session tracker isn't running).
-    trackClick({ type: 'look', id: String(look.id ?? ''), context: look.title?.slice(0, 200) });
+    trackClick({ type: 'look', id: String(look.id ?? ''), uuid: look.uuid, context: look.title?.slice(0, 200) });
     setSelectedLook(look);
   }, []);
 
@@ -1194,6 +1210,7 @@ export default function Home() {
               </button>
             </div>
             <div className="header-right">
+              <HeaderWalletPill onOpenWallet={openWallet} />
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}

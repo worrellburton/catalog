@@ -65,14 +65,61 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // → hero never reloads or shows a black gap.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
 
-  // Each look gets exactly one card in the feed (no cycling/duplication).
-  // Two cards sharing a look.id would also share the layoutId for the
-  // trail morph - Framer Motion picks the latest-mounted as canonical and
-  // the other goes blank. Dedup by id and cap at 30.
-  const feedLooks = useMemo(() => {
+  // Mirror ProductPage's feed structure with three sections:
+  //   1. "Looks like this" — same brand overlap with current look
+  //   2. "Popular" — fallback when section 1 is empty
+  //   3. "More from <creator>" — other looks by the same creator
+  // Each section caps at 8 or 12 to avoid orphan rows (matching ProductPage).
+  const feedSections = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
-    return source.slice(0, 30).map((l, i) => ({ ...l, displayIndex: i }));
-  }, [look.id, allLooks]);
+    const ownBrands = new Set(
+      (look.products || [])
+        .map(p => (p.brand || '').toLowerCase().trim())
+        .filter(Boolean),
+    );
+
+    const cap = (arr: Look[]): Look[] => {
+      if (arr.length >= 12) return arr.slice(0, 12);
+      if (arr.length >= 8)  return arr.slice(0, 8);
+      return arr;
+    };
+
+    const looksLikeThis: Look[] = ownBrands.size
+      ? source.filter(l =>
+          (l.products || []).some(p =>
+            ownBrands.has((p.brand || '').toLowerCase().trim()),
+          ),
+        )
+      : [];
+
+    const popular: Look[] = looksLikeThis.length === 0
+      ? source.slice(0, 12)
+      : [];
+
+    const moreFromCreator: Look[] = look.creator
+      ? source.filter(l => l.creator === look.creator)
+      : [];
+
+    const seen = new Set<number>();
+    const dedupe = (arr: Look[]): Look[] => arr.filter(l => {
+      if (seen.has(l.id)) return false;
+      seen.add(l.id);
+      return true;
+    });
+
+    // Order matters: similar > popular fallback > creator catalog. Once a
+    // look appears in an earlier section, the later sections skip it so
+    // the user never sees the same tile twice.
+    const a = dedupe(looksLikeThis);
+    const b = dedupe(popular);
+    const c = dedupe(moreFromCreator);
+
+    return {
+      looksLikeThis:   cap(a),
+      popular:         cap(b),
+      moreFromCreator: cap(c),
+    };
+  }, [look.id, look.creator, look.products, allLooks]);
 
   // Trigger enter animation after first paint
   useEffect(() => {
@@ -336,14 +383,52 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         </div>
 
-        {/* ═══ FEED: Full-width grid below the hero ═══ */}
-        {feedLooks.length > 0 && (
+        {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
+        {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">More looks you'll love</h3>
+            <h3 className="look-feed-heading">Looks like this</h3>
             <div className="look-feed-grid">
-              {feedLooks.map(fl => (
+              {feedSections.looksLikeThis.map(fl => (
                 <LookCard
-                  key={`${fl.id}-${fl.displayIndex}`}
+                  key={`like-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {feedSections.popular.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">Popular</h3>
+            <div className="look-feed-grid">
+              {feedSections.popular.map(fl => (
+                <LookCard
+                  key={`popular-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {feedSections.moreFromCreator.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">
+              More from {creatorData?.displayName || look.creator}
+            </h3>
+            <div className="look-feed-grid">
+              {feedSections.moreFromCreator.map(fl => (
+                <LookCard
+                  key={`creator-${fl.id}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
