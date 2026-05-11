@@ -485,6 +485,55 @@ body:has(.look-overlay.look-overlay--in) {
   .look-overlay--in .look-info-col {
     transform: none !important;
   }
+
+  /* Hide desktop back button; show the one inside the info panel */
+  .look-back-btn {
+    display: none;
+  }
+  .look-back-btn-mobile {
+    display: flex;
+  }
+
+  /* Info panel top bar: space back btn and bookmark apart */
+  .look-info-topbar {
+    justify-content: space-between;
+    padding: 10px 16px 8px;
+  }
+
+  .look-creator-row {
+    padding: 2px 16px 10px;
+  }
+
+  .look-tabs {
+    padding: 0 16px;
+  }
+
+  .look-products-list {
+    padding: 4px 16px 24px;
+  }
+
+  .look-feed-section {
+    padding: 32px 16px 48px;
+  }
+
+  .look-feed-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Legacy product-item / product-thumb selectors (used in some looks) */
+  .product-item {
+    padding: 10px 0;
+  }
+
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .product-details h4 {
+    font-size: 13px;
+  }
 }
 
 /* ── Feed section below the hero ── */
