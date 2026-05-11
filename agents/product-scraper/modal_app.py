@@ -75,7 +75,15 @@ def enrich_description(product_data: dict) -> str | None:
     gender = product_data.get("gender", "unisex")
     price = product_data.get("price", "Unknown")
     description = product_data.get("description", "No description available.")
-    
+    size_fit = product_data.get("size_fit") or ""
+    materials_care = product_data.get("materials_care") or ""
+
+    extra_context = ""
+    if size_fit:
+        extra_context += f"\nSize & Fit: {size_fit}"
+    if materials_care:
+        extra_context += f"\nMaterials & Care: {materials_care}"
+
     prompt = f"""You are a fashion copywriter. Enhance this product description by adding 2-3 sentences with:
 - Specific occasions (e.g., "casual friday", "weekend brunch", "date night", "yoga class")
 - Activities it's perfect for (e.g., "gym workouts", "running errands", "lounging")
@@ -86,7 +94,7 @@ Product: {name}
 Brand: {brand}
 Type: {type_}
 Gender: {gender}
-Price: {price}
+Price: {price}{extra_context}
 
 Current description:
 {description}
@@ -212,6 +220,8 @@ def scrape_and_update(product_id: str, url: str):
             "availability": product.get("availability"),
             "type": product.get("type"),
             "gender": product.get("gender"),
+            "size_fit": product.get("size_fit"),
+            "materials_care": product.get("materials_care"),
         }
         # If the original URL was a Google Shopping link, overwrite it with the
         # resolved merchant URL so the row points to the actual product page.
@@ -231,6 +241,8 @@ def scrape_and_update(product_id: str, url: str):
             "price": product.get("price"),
             "gender": product.get("gender"),
             "description": product.get("description"),
+            "size_fit": product.get("size_fit"),
+            "materials_care": product.get("materials_care"),
         }
         
         # Note: quality_score is auto-computed by the trg_products_quality_score trigger
