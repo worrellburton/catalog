@@ -284,10 +284,9 @@ export function AvatarCropModal({
   return createPortal(
     <div
       className={`avatar-modal-backdrop avatar-modal--${phase}`}
-      // Use onPointerDown for the same iOS Safari reason as FileDropModal:
-      // click doesn't fire on plain divs without cursor:pointer on iOS,
-      // so stopPropagation on the inner panel never runs. pointerdown is
-      // reliable on all elements.
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Avoids the synthesized post-dialog click
+      // that iOS fires after the native file picker closes.
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (!isBusy && phase === 'open') handleClose();
@@ -630,12 +629,10 @@ function FileDropModal({
   return createPortal(
     <div
       className={`avatar-pick-backdrop avatar-pick--${phase}`}
-      // Use onPointerDown instead of onClick for the backdrop dismiss.
-      // On iOS Safari, click events don't fire on plain div elements
-      // that lack cursor:pointer — so onClick on the inner .avatar-pick
-      // panel never fires its stopPropagation, the event falls through,
-      // and the modal dismisses on every tap. pointerdown fires reliably
-      // on all elements regardless of cursor style.
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Also avoids the synthetic post-dialog click
+      // that iOS fires after the native file picker closes, which would
+      // otherwise land here and dismiss the modal unexpectedly.
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
@@ -659,6 +656,7 @@ function FileDropModal({
           onDragEnter={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
+          onPointerDown={onPick}
           onClick={onPick}
           role="button"
           tabIndex={0}
