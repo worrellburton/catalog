@@ -90,8 +90,11 @@ async function addWalletEntry(
   } else if (params.type === 'debit') {
     newBalance = parseFloat((newBalance - params.amount).toFixed(2));
     newTotalWithdraw = parseFloat((newTotalWithdraw + params.amount).toFixed(2));
+  } else if (params.type === 'on_hold') {
+    // Immediately reflect the deduction so the creator sees a $0 balance while the withdrawal is pending
+    newBalance = parseFloat((newBalance - params.amount).toFixed(2));
+    newTotalWithdraw = parseFloat((newTotalWithdraw + params.amount).toFixed(2));
   }
-  // on_hold does not change balance — funds are pending Dots payout
 
   const { data, error } = await sb.from('wallet_entries').insert({
     user_id: params.userId,
@@ -106,6 +109,35 @@ async function addWalletEntry(
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+// ─── Svix webhook verification ──────────────────────────────────────────────
+
+async function verifyDotsWebhook(req: Request, rawBody: string): Promise<boolean> {
+  const secret = Deno.env.get('DOTS_SVIX_WEBHOOK_SECRET') ?? '';
+  if (!secret) return false;
+
+  const svixId = req.headers.get('svix-id');
+  const svixTimestamp = req.headers.get('svix-timestamp');
+  const svixSignature = req.headers.get('svix-signature');
+  if (!svixId || !svixTimestamp || !svixSignature) return false;
+
+  // Reject timestamps older than 5 minutes to prevent replay attacks
+  const ts = parseInt(svixTimestamp, 10);
+  if (Number.isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+
+  const secretBytes = Uint8Array.from(
+    atob(secret.replace(/^whsec_/, '')),
+    (c) => c.charCodeAt(0),
+  );
+  const signedContent = `${svixId}.${svixTimestamp}.${rawBody}`;
+  const key = await crypto.subtle.importKey(
+    'raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedContent));
+  const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+  return svixSignature.split(' ').some((s) => (s.startsWith('v1,') ? s.slice(3) : s) === computed);
 }
 
 // ─── Route handlers ───────────────────────────────────────────────────────────
@@ -531,16 +563,14 @@ async function handleWebhook(
   supabaseUrl: string,
   serviceRoleKey: string,
 ) {
-  // Basic secret check via custom header (matches old server pattern)
-  const authHeader = req.headers.get('X-Authorization');
-  const expectedSecret = Deno.env.get('DOTS_WEBHOOK_APP_KEY') ?? '';
-  if (authHeader !== expectedSecret) {
-    return errorRes('Unauthorized webhook', 401);
-  }
+  const rawBody = await req.text();
+
+  const valid = await verifyDotsWebhook(req, rawBody);
+  if (!valid) return errorRes('Unauthorized webhook', 401);
 
   let event: Record<string, unknown>;
   try {
-    event = await req.json();
+    event = JSON.parse(rawBody);
   } catch {
     return errorRes('Invalid JSON payload');
   }
@@ -556,31 +586,27 @@ async function handleWebhook(
 
   const { data: profile } = await sb
     .from('profiles')
-    .select('id, payout_withdraw_link')
+    .select('id')
     .eq('dots_user_id', dotsUserId)
     .maybeSingle();
 
   if (profile) {
-    // Get pending on_hold amount
-    const { data: holdEntry } = await sb
-      .from('wallet_entries')
-      .select('amount')
+    // Balance was already deducted when the on_hold entry was created at withdrawal initiation.
+    // Here we just mark the payout_transfers row as completed and clear the withdraw link.
+    const { data: pendingTransfer } = await sb
+      .from('payout_transfers')
+      .select('id')
       .eq('user_id', profile.id as string)
-      .eq('type', 'on_hold')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const amount = holdEntry?.amount ?? 0;
-
-    if (amount > 0) {
-      await addWalletEntry({
-        userId: profile.id as string,
-        amount,
-        type: 'debit',
-        comment: 'Payout completed',
-        entryCode: ENTRY_CODES.WITHDRAW,
-      }, sb);
+    if (pendingTransfer) {
+      await sb
+        .from('payout_transfers')
+        .update({ status: 'completed' })
+        .eq('id', pendingTransfer.id);
     }
 
     await sb.from('profiles').update({ payout_withdraw_link: null }).eq('id', profile.id as string);
