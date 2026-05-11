@@ -284,12 +284,11 @@ export function AvatarCropModal({
   return createPortal(
     <div
       className={`avatar-modal-backdrop avatar-modal--${phase}`}
-      // Only close when the click landed *directly* on the backdrop.
-      // A child element (image drag, slider, button) bubbling its
-      // click up to here would otherwise dismiss the modal — which
-      // matters most when the file dialog returns control via a
-      // synthesized click on whatever was beneath the user's finger.
-      onClick={(e) => {
+      // Use onPointerDown for the same iOS Safari reason as FileDropModal:
+      // click doesn't fire on plain divs without cursor:pointer on iOS,
+      // so stopPropagation on the inner panel never runs. pointerdown is
+      // reliable on all elements.
+      onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (!isBusy && phase === 'open') handleClose();
       }}
@@ -298,7 +297,7 @@ export function AvatarCropModal({
       aria-label="Crop your avatar"
       style={flipStyle}
     >
-      <div className="avatar-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-modal" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-modal-head">
           <h2>Crop your avatar</h2>
           <button
@@ -631,18 +630,20 @@ function FileDropModal({
   return createPortal(
     <div
       className={`avatar-pick-backdrop avatar-pick--${phase}`}
-      // Only close on a direct backdrop click. Opening the file
-      // dialog via the Browse button or clicking the drop zone
-      // shouldn't dismiss the modal even if the synthesized
-      // post-dialog click lands on something inside the panel.
-      onClick={(e) => {
+      // Use onPointerDown instead of onClick for the backdrop dismiss.
+      // On iOS Safari, click events don't fire on plain div elements
+      // that lack cursor:pointer — so onClick on the inner .avatar-pick
+      // panel never fires its stopPropagation, the event falls through,
+      // and the modal dismisses on every tap. pointerdown fires reliably
+      // on all elements regardless of cursor style.
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a profile photo"
     >
-      <div className="avatar-pick" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-pick" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-pick-head">
           <h2>Change profile photo</h2>
           <button
