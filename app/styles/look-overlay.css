@@ -64,6 +64,53 @@
   color: #fff;
 }
 
+/* ── Mobile-only: back + bookmark overlaid on the video ──
+   Mirroring the exact pattern from ProductPage (.pd-back).
+   Hidden on desktop; shown via the @media block below. */
+.look-video-overlay-btns {
+  display: none; /* desktop: hidden */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 16px;
+  justify-content: space-between;
+  align-items: center;
+  /* Gradient scrim so buttons read over any video colour */
+  background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%);
+  pointer-events: none; /* let touches pass through to video */
+}
+
+.look-video-back-btn,
+.look-video-bookmark-btn {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.look-video-back-btn:hover,
+.look-video-bookmark-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.look-video-bookmark-btn.active {
+  color: #ffd75c;
+  border-color: rgba(255, 215, 92, 0.4);
+}
+
 /* Wrapper to center media within the 60% column */
 .look-media-centered {
   width: 100%;
@@ -484,6 +531,59 @@ body:has(.look-overlay.look-overlay--in) {
      normal document order on mobile so any transform fights scroll. */
   .look-overlay--in .look-info-col {
     transform: none !important;
+  }
+
+  /* Hide desktop back button; show the one inside the info panel */
+  .look-back-btn {
+    display: none;
+  }
+  .look-back-btn-mobile {
+    display: flex;
+  }
+
+  /* Show the video-overlay back + bookmark buttons on mobile */
+  .look-video-overlay-btns {
+    display: flex;
+  }
+
+  /* Hide the info-panel topbar on mobile — back + bookmark live on the video */
+  .look-info-topbar {
+    display: none;
+  }
+
+  .look-creator-row {
+    padding: 2px 16px 10px;
+  }
+
+  .look-tabs {
+    padding: 0 16px;
+  }
+
+  .look-products-list {
+    padding: 4px 16px 24px;
+  }
+
+  .look-feed-section {
+    padding: 32px 16px 48px;
+  }
+
+  .look-feed-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Legacy product-item / product-thumb selectors (used in some looks) */
+  .product-item {
+    padding: 10px 0;
+  }
+
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .product-details h4 {
+    font-size: 13px;
   }
 }
 

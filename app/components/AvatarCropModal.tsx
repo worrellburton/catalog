@@ -64,6 +64,9 @@ export function AvatarCropModal({
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const imgElRef = useRef<HTMLImageElement | null>(null);
+  // iOS Safari fires pointerdown → click on <button>. Guard against
+  // double-invocation of save/close when a pointerdown already ran.
+  const btnPointerRef = useRef<'save' | 'close' | null>(null);
 
   // Phase 8: open / leave animation drives via the className on the
   // wrapper. Set 'open' on the next frame so the CSS transition fires.
@@ -284,12 +287,10 @@ export function AvatarCropModal({
   return createPortal(
     <div
       className={`avatar-modal-backdrop avatar-modal--${phase}`}
-      // Only close when the click landed *directly* on the backdrop.
-      // A child element (image drag, slider, button) bubbling its
-      // click up to here would otherwise dismiss the modal — which
-      // matters most when the file dialog returns control via a
-      // synthesized click on whatever was beneath the user's finger.
-      onClick={(e) => {
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Avoids the synthesized post-dialog click
+      // that iOS fires after the native file picker closes.
+      onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (!isBusy && phase === 'open') handleClose();
       }}
@@ -298,7 +299,7 @@ export function AvatarCropModal({
       aria-label="Crop your avatar"
       style={flipStyle}
     >
-      <div className="avatar-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-modal" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-modal-head">
           <h2>Crop your avatar</h2>
           <button
@@ -374,14 +375,16 @@ export function AvatarCropModal({
         <footer className="avatar-modal-foot">
           <button
             className="avatar-modal-cancel"
-            onClick={handleClose}
+            onPointerDown={() => { btnPointerRef.current = 'close'; handleClose(); }}
+            onClick={() => { if (btnPointerRef.current === 'close') { btnPointerRef.current = null; return; } handleClose(); }}
             disabled={isBusy}
           >
             Cancel
           </button>
           <button
             className={`avatar-modal-save${isBusy ? ' is-busy' : ''}`}
-            onClick={handleSave}
+            onPointerDown={() => { if (isBusy || !imgDims) return; btnPointerRef.current = 'save'; handleSave(); }}
+            onClick={() => { if (btnPointerRef.current === 'save') { btnPointerRef.current = null; return; } handleSave(); }}
             disabled={isBusy || !imgDims}
           >
             <span className="avatar-modal-save-label">
@@ -588,6 +591,10 @@ function FileDropModal({
 }) {
   const [phase, setPhase] = useState<'enter' | 'open' | 'leave'>('enter');
   const [dragOver, setDragOver] = useState(false);
+  // Guard against iOS double-trigger: onPointerDown fires on touch start,
+  // then click fires again after the file picker closes. Track whether
+  // onPick was already called via pointerdown so onClick can skip it.
+  const pointerPickedRef = useRef(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setPhase('open'), 16);
@@ -631,18 +638,18 @@ function FileDropModal({
   return createPortal(
     <div
       className={`avatar-pick-backdrop avatar-pick--${phase}`}
-      // Only close on a direct backdrop click. Opening the file
-      // dialog via the Browse button or clicking the drop zone
-      // shouldn't dismiss the modal even if the synthesized
-      // post-dialog click lands on something inside the panel.
-      onClick={(e) => {
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Also avoids the synthetic post-dialog click
+      // that iOS fires after the native file picker closes, which would
+      // otherwise land here and dismiss the modal unexpectedly.
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a profile photo"
     >
-      <div className="avatar-pick" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-pick" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-pick-head">
           <h2>Change profile photo</h2>
           <button
@@ -658,6 +665,7 @@ function FileDropModal({
           onDragEnter={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
+          onPointerDown={onPick}
           onClick={onPick}
           role="button"
           tabIndex={0}
@@ -694,7 +702,8 @@ function FileDropModal({
 
         <button
           className="avatar-pick-browse"
-          onClick={onPick}
+          onPointerDown={() => { pointerPickedRef.current = true; onPick(); }}
+          onClick={() => { if (pointerPickedRef.current) { pointerPickedRef.current = false; return; } onPick(); }}
           type="button"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
