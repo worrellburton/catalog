@@ -1048,12 +1048,22 @@ Rules:
     have 3-8 images showing different angles, colors, or styled views. Include
     all of them -- do not limit to just 1-2 images.
 - Keep description concise (1-3 sentences).
-- **ALWAYS try to extract size_fit and materials_care**:
-  * Look for "Size & Fit" sections (often in accordion/dropdown panels — scroll down and
-    use get_page_html if needed to find them).
-  * Look for "Materials & Care", "Fabric & Care", "Composition", or similar sections.
-  * Join all bullet points with ". " into a single string per field.
-  * These sections are very commonly present on fashion product pages.
+- **Extract size_fit and materials_care by recognising what the data IS, not what it's called**:
+  * size_fit → any content that describes how the garment fits the body: fit type
+    (slim/relaxed/oversized), size model info ("Model is 6'2\" wearing M"), inseam,
+    cut name, silhouette label, "fits true to size" notes, size chart references.
+    Section labels vary widely: "Size & Fit", "Fit Guide", "Silhouette", "Fit Notes",
+    "How it fits", dimension tables, etc. — recognise the content, not the label.
+  * materials_care → any content that describes what the item is made of or how to
+    care for it: fabric composition ("75% cotton, 25% polyester"), fibre trade names
+    (Lenzing™ Lyocell, TENCEL™), wash/dry/iron instructions, "dry clean only",
+    country of origin. Section labels vary: "Materials & Care", "Fabric & Care",
+    "Composition", "Garment Details", "Details", a spec table with Care/Composition
+    rows, fabric icons, etc. — recognise the content, not the label.
+  * Check visit_page text content and get_page_html first; scroll once if needed.
+  * Join all relevant bullet points / table rows with ". " into a single string.
+  * Do NOT keep scrolling or use extra turns just to hunt for these sections —
+    they are bonus fields. If not found after one look, use null and call save_product.
 - Use null for any field that cannot be determined.
 
 IMPORTANT -- non-product pages:
@@ -1156,6 +1166,8 @@ def _run_agent_attempt(
     nudge_count = 0
     MAX_NUDGES = 3
     last_agent_reply: str | None = None
+    consecutive_scrolls = 0
+    MAX_CONSECUTIVE_SCROLLS = 3
 
     # Fast-fail on URLs that obviously aren't product pages (Google search
     # results, bare homepages, etc.). Saves a Claude call per row.
@@ -1203,7 +1215,9 @@ def _run_agent_attempt(
                         messages=messages,
                     )
                     if force_save and not saved_product:
-                        create_kwargs["tool_choice"] = {"type": "any"}
+                        # Force specifically save_product -- "any" still lets
+                        # the agent pick scroll_down and burn the remaining turns.
+                        create_kwargs["tool_choice"] = {"type": "tool", "name": "save_product"}
                     response = client.messages.create(**create_kwargs)
                     break
                 except anthropic.RateLimitError as e:
@@ -1263,6 +1277,13 @@ def _run_agent_attempt(
                 tool_name = block.name
                 tool_input = block.input
                 print(f"  🔧 {tool_name}({json.dumps(tool_input)[:100]})")
+
+                # Track consecutive scrolls; after the cap, inject a user
+                # message telling the agent to stop scrolling and save.
+                if tool_name == "scroll_down":
+                    consecutive_scrolls += 1
+                else:
+                    consecutive_scrolls = 0
 
                 if tool_name == "save_product":
                     # Sanity check: a real product page virtually always has at
@@ -1335,6 +1356,10 @@ def _run_agent_attempt(
                         "images": public_images,
                         "image_missing_reason": image_missing_reason,
                         "availability": tool_input.get("availability"),
+                        "type": tool_input.get("type"),
+                        "gender": tool_input.get("gender"),
+                        "size_fit": tool_input.get("size_fit"),
+                        "materials_care": tool_input.get("materials_care"),
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
 
@@ -1372,6 +1397,20 @@ def _run_agent_attempt(
                     )
 
             messages.append({"role": "user", "content": tool_results})
+
+            # If the agent has been scrolling too long without saving, inject
+            # a hard stop so it doesn't burn all remaining turns.
+            if consecutive_scrolls >= MAX_CONSECUTIVE_SCROLLS and not saved_product:
+                consecutive_scrolls = 0  # reset so we don't spam
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You have scrolled the page several times. "
+                        "Stop scrolling now and call save_product immediately with "
+                        "whatever data you have collected so far. "
+                        "Use null for any fields you could not find."
+                    ),
+                })
 
             if saved_product:
                 break
