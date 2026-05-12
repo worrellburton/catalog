@@ -73,6 +73,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
+import { useShellBridge } from '~/hooks/useShellBridge';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
@@ -439,31 +440,25 @@ export default function Home() {
     }
   }, [view]);
 
-  // Native shell bridge - when running inside the Flutter wrapper
-  // (catalog-flutter), it dispatches CustomEvents on `window` to drive
-  // the feed without needing direct React state access.
-  useEffect(() => {
-    const onSetCategory = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail) return;
+  // Native shell bridge: Flutter wrapper dispatches CustomEvents on
+  // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
+  useShellBridge({
+    onSetCategory: useCallback((detail: string) => {
       setSearchQuery('');
       setActiveFilter('all');
       setCatalogName(detail);
       setShuffleKey(k => k + 1);
       setView('app');
-    };
-    const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
-    const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
-
-    window.addEventListener('catalog:set-category', onSetCategory as EventListener);
-    window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
-    window.addEventListener('catalog:open-my-looks', onOpenMyLooks);
-    return () => {
-      window.removeEventListener('catalog:set-category', onSetCategory as EventListener);
-      window.removeEventListener('catalog:open-bookmarks', onOpenBookmarks);
-      window.removeEventListener('catalog:open-my-looks', onOpenMyLooks);
-    };
-  }, []);
+    }, []),
+    onOpenBookmarks: useCallback(() => {
+      history.pushState({}, '', '/bookmarks');
+      setShowBookmarks(true);
+    }, []),
+    onOpenMyLooks: useCallback(() => {
+      history.pushState({}, '', '/my-looks');
+      setShowMyLooks(true);
+    }, []),
+  });
 
   const handleWaitlistApproved = useCallback(() => {
     setView('app');
