@@ -1119,7 +1119,7 @@ export default function AdminUsers() {
 
       {activeTab === 'waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
-      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}
+      {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true, showAdminToggle: false })}
       {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', { showSuperToggle: true })}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
