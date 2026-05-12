@@ -274,6 +274,42 @@
   text-transform: uppercase;
 }
 
+/* ── Editable avatar (own profile) ─────────────────────────────────── */
+/* When the current user is on their own creator page, the avatar wraps
+   in the AvatarUpload trigger that opens the file picker + crop modal.
+   A small pencil hint sits over the lower-right of the circle so the
+   affordance is obvious. */
+.creator-hero-avatar-edit {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.creator-hero-avatar-edit .creator-hero-avatar {
+  margin-bottom: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.creator-hero-avatar-edit:hover .creator-hero-avatar {
+  opacity: 0.85;
+}
+.creator-hero-avatar-edit-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
 /* ── Count badges next to tab labels ───────────────────────────────── */
 .creator-nav-count {
   display: inline-flex;

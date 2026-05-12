@@ -102,7 +102,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     const key = String(look.id ?? '');
     if (!key || impressionsLogged.has(key)) return;
     impressionsLogged.add(key);
-    trackImpression({ type: 'look', id: key, context: look.title?.slice(0, 200) });
+    trackImpression({ type: 'look', id: key, uuid: look.uuid, context: look.title?.slice(0, 200) });
   }, [inViewport, look.id, look.title]);
 
   // Mark loaded once the host video has frames.

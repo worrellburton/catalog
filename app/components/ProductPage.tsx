@@ -7,7 +7,6 @@ import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { trackProductClickout } from '~/services/session-tracker';
-import { getWalletBalance } from '~/services/earnings';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -678,18 +677,6 @@ export default function ProductPage({
 
   const isSaved = bookmarks.isProductBookmarked(product);
 
-  // Creator earnings bubble — sits to the left of the bookmark on
-  // the product page actions row. Fetches the signed-in creator's
-  // current wallet balance once on mount; null when no wallet
-  // (anonymous visitor / not yet a creator) hides the bubble.
-  const [earnings, setEarnings] = useState<number | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    getWalletBalance()
-      .then(b => { if (!cancelled) setEarnings(typeof b === 'number' ? b : 0); })
-      .catch(() => { if (!cancelled) setEarnings(null); });
-    return () => { cancelled = true; };
-  }, []);
   const handleToggleSave = useCallback(() => {
     bookmarks.toggleProductBookmark(product);
   }, [bookmarks, product]);
@@ -903,11 +890,6 @@ export default function ProductPage({
                 </svg>
                 <span>Try it on</span>
               </button>
-              {earnings !== null && (
-                <span className="pd-earnings-bubble" title="Your earnings">
-                  ${earnings.toFixed(2)}
-                </span>
-              )}
               <button
                 type="button"
                 className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}

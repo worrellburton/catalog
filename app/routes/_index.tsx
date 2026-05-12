@@ -25,6 +25,7 @@ import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { trackClick } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
+import HeaderWalletPill from '~/components/HeaderWalletPill';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -174,6 +175,24 @@ export default function Home() {
     }, []),
   });
 
+  // Creator engagement toast click → open the wallet and scroll
+  // its Analytics section into view. Two rAF frames give setShowWallet
+  // time to commit and CreatorWallet time to mount its scroll-target.
+  useEffect(() => {
+    const onOpenWalletAnalytics = () => {
+      setShowWallet(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('catalog:scroll-wallet-analytics'));
+        });
+      });
+    };
+    window.addEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
+    return () => {
+      window.removeEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
+    };
+  }, []);
+
   const handleWaitlistApproved = useCallback(() => {
     setView('app');
   }, []);
@@ -254,7 +273,7 @@ export default function Home() {
     setProductOpenedFromLook(null);
     // Fire-and-forget click telemetry for /admin/analytics. No-op for
     // unauthenticated visitors (session tracker isn't running).
-    trackClick({ type: 'look', id: String(look.id ?? ''), context: look.title?.slice(0, 200) });
+    trackClick({ type: 'look', id: String(look.id ?? ''), uuid: look.uuid, context: look.title?.slice(0, 200) });
     setSelectedLook(look);
   }, []);
 
@@ -694,6 +713,7 @@ export default function Home() {
               </button>
             </div>
             <div className="header-right">
+              <HeaderWalletPill onOpenWallet={openWallet} />
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}

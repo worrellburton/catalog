@@ -182,29 +182,58 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // → hero never reloads or shows a black gap.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
 
-  // ─── "More like this" — gender-aware, product-type + brand similarity ──────
-
-  // "More like this" — looks sharing ≥2 pts with the current look.
-  // Score = shared product types (1 pt each) + shared brands (3 pts each).
-  // Gender-incompatible looks score 0 and are excluded.
-  const moreLikeThis = useMemo(() => {
+  // Mirror ProductPage's feed structure with three sections:
+  //   1. "Looks like this" — same brand overlap with current look
+  //   2. "Popular" — fallback when section 1 is empty
+  //   3. "More from <creator>" — other looks by the same creator
+  // Each section caps at 8 or 12 to avoid orphan rows (matching ProductPage).
+  const feedSections = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
-    return source
-      .map(l => ({ look: l, score: lookSimilarityScore(look, l) }))
-      .filter(x => x.score >= 2)
-      .sort((a, b) => b.score - a.score)
-      .map(x => x.look);
-  }, [look.id, look.products, look.gender, allLooks]);
-
-  // "Popular" — gender-matched other looks, only shown when moreLikeThis is empty.
-  const popularFallback = useMemo(() => {
-    if (moreLikeThis.length > 0) return [];
-    const sg = look.gender;
-    return (allLooks || allLooksData).filter(l =>
-      l.id !== look.id &&
-      (sg === 'unisex' || l.gender === 'unisex' || l.gender === sg),
+    const ownBrands = new Set(
+      (look.products || [])
+        .map(p => (p.brand || '').toLowerCase().trim())
+        .filter(Boolean),
     );
-  }, [moreLikeThis, look.id, look.gender, allLooks]);
+
+    const cap = (arr: Look[]): Look[] => {
+      if (arr.length >= 12) return arr.slice(0, 12);
+      if (arr.length >= 8)  return arr.slice(0, 8);
+      return arr;
+    };
+
+    const looksLikeThis: Look[] = ownBrands.size
+      ? source.filter(l =>
+          (l.products || []).some(p =>
+            ownBrands.has((p.brand || '').toLowerCase().trim()),
+          ),
+        )
+      : [];
+
+    const popular: Look[] = looksLikeThis.length === 0
+      ? source.slice(0, 12)
+      : [];
+
+    const moreFromCreator: Look[] = look.creator
+      ? source.filter(l => l.creator === look.creator)
+      : [];
+
+    const seen = new Set<number>();
+    const dedupe = (arr: Look[]): Look[] => arr.filter(l => {
+      if (seen.has(l.id)) return false;
+      seen.add(l.id);
+      return true;
+    });
+
+    const a = dedupe(looksLikeThis);
+    const b = dedupe(popular);
+    const c = dedupe(moreFromCreator);
+
+    return {
+      looksLikeThis:   cap(a),
+      popular:         cap(b),
+      moreFromCreator: cap(c),
+    };
+  }, [look.id, look.creator, look.products, allLooks]);
 
   // Trigger enter animation after first paint
   useEffect(() => {
@@ -492,43 +521,59 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         </div>
 
-        {/* ═══ FEED: Full-width grid below the hero ═══ */}
-        {moreLikeThis.length > 0 && (
+        {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
+        {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <div className="look-feed-content">
-              <h3 className="pd-feed-title">More like this</h3>
-              <div className="pd-similar-grid">
-                {fillLooks(moreLikeThis, 8).map((fl, i) => (
-                  <LookCard
-                    key={`mlt-${i}`}
-                    look={fl}
-                    className="look-card"
-                    onOpenLook={handleFeedLookClick}
-                    onOpenCreator={onOpenCreator}
-                    onCreateCatalog={onCreateCatalog}
-                  />
-                ))}
-              </div>
+            <h3 className="look-feed-heading">Looks like this</h3>
+            <div className="look-feed-grid">
+              {feedSections.looksLikeThis.map(fl => (
+                <LookCard
+                  key={`like-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
             </div>
           </div>
         )}
 
-        {moreLikeThis.length === 0 && popularFallback.length > 0 && (
+        {feedSections.popular.length > 0 && (
           <div className="look-feed-section">
-            <div className="look-feed-content">
-              <h3 className="pd-feed-title">Popular</h3>
-              <div className="pd-similar-grid">
-                {fillLooks(popularFallback, 8).map((fl, i) => (
-                  <LookCard
-                    key={`pop-${i}`}
-                    look={fl}
-                    className="look-card"
-                    onOpenLook={handleFeedLookClick}
-                    onOpenCreator={onOpenCreator}
-                    onCreateCatalog={onCreateCatalog}
-                  />
-                ))}
-              </div>
+            <h3 className="look-feed-heading">Popular</h3>
+            <div className="look-feed-grid">
+              {feedSections.popular.map(fl => (
+                <LookCard
+                  key={`popular-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {feedSections.moreFromCreator.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">
+              More from {creatorData?.displayName || look.creator}
+            </h3>
+            <div className="look-feed-grid">
+              {feedSections.moreFromCreator.map(fl => (
+                <LookCard
+                  key={`creator-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
             </div>
           </div>
         )}

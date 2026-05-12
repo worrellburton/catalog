@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   type WalletEntry,
   getWallet,
   initiateWithdrawal,
   deleteDotsUser,
 } from '~/services/earnings';
+import { type EngagementSummary, getEngagementSummary } from '~/services/creator-engagement';
 import { supabase } from '~/utils/supabase';
 import DotsSignupModal from './DotsSignupModal';
 
@@ -48,6 +49,35 @@ export default function CreatorWallet({ onProfileChange }: Props) {
   const [withdrawError, setWithdrawError] = useState('');
   const [showSignup, setShowSignup] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  // Engagement analytics — totals + 7-day slice rendered above the
+  // Transaction History so creators can see what their looks earned.
+  const [engagement, setEngagement] = useState<EngagementSummary | null>(null);
+  const analyticsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEngagementSummary().then(s => { if (!cancelled) setEngagement(s); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for the toast click → scroll the Analytics section into
+  // view. The home route handles opening the wallet first, then
+  // dispatches 'catalog:scroll-wallet-analytics' on the next frame so
+  // this component (which mounted in the meantime) can scroll. We
+  // also listen for 'catalog:open-wallet-analytics' for the case
+  // where the wallet was already open when the toast was clicked.
+  useEffect(() => {
+    const onScroll = () => {
+      analyticsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    window.addEventListener('catalog:scroll-wallet-analytics', onScroll);
+    window.addEventListener('catalog:open-wallet-analytics', onScroll);
+    return () => {
+      window.removeEventListener('catalog:scroll-wallet-analytics', onScroll);
+      window.removeEventListener('catalog:open-wallet-analytics', onScroll);
+    };
+  }, []);
 
   // Fetch payout-related profile columns
   const loadProfile = useCallback(async () => {
@@ -201,6 +231,42 @@ export default function CreatorWallet({ onProfileChange }: Props) {
           {withdrawError && (
             <div className="wallet-error">{withdrawError}</div>
           )}
+
+          {/* Engagement analytics — lifetime totals + 7-day slice.
+              The login toast scrolls here on click via the
+              catalog:open-wallet-analytics event. */}
+          <div ref={analyticsRef} className="wallet-analytics">
+            <div className="wallet-analytics-header">Analytics</div>
+            <div className="wallet-analytics-cards">
+              <div className="wallet-analytics-card">
+                <div className="wallet-analytics-card-label">Impressions</div>
+                <div className="wallet-analytics-card-amount">
+                  {(engagement?.total_impressions ?? 0).toLocaleString()}
+                </div>
+                <div className="wallet-analytics-card-sub">
+                  +{(engagement?.week_impressions ?? 0).toLocaleString()} this week
+                </div>
+              </div>
+              <div className="wallet-analytics-card">
+                <div className="wallet-analytics-card-label">Clicks</div>
+                <div className="wallet-analytics-card-amount">
+                  {(engagement?.total_clicks ?? 0).toLocaleString()}
+                </div>
+                <div className="wallet-analytics-card-sub">
+                  +{(engagement?.week_clicks ?? 0).toLocaleString()} this week
+                </div>
+              </div>
+              <div className="wallet-analytics-card">
+                <div className="wallet-analytics-card-label">Clickouts</div>
+                <div className="wallet-analytics-card-amount">
+                  {(engagement?.total_clickouts ?? 0).toLocaleString()}
+                </div>
+                <div className="wallet-analytics-card-sub">
+                  +{(engagement?.week_clickouts ?? 0).toLocaleString()} this week
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Transaction history */}
           <div className="wallet-history">
