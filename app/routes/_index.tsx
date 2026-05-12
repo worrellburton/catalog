@@ -700,8 +700,8 @@ export default function Home() {
               </button>
               <UserMenu
                 onOpenBookmarks={openBookmarks}
-                onOpenMyLooks={openMyLooks}
-                onOpenWallet={openWallet}
+                onOpenMyLooks={user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin' ? openMyLooks : undefined}
+                onOpenWallet={user?.role === 'creator' ? openWallet : undefined}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={handleLogout}
