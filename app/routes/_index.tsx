@@ -76,10 +76,10 @@ import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { useShellBridge } from '~/hooks/useShellBridge';
 import { useAppView } from '~/hooks/useAppView';
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
+import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
-import { getUserGender } from '~/services/genders';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { trackClick } from '~/services/session-tracker';
@@ -130,25 +130,16 @@ export default function Home() {
   // products share a brand+name or React batches the re-render in a way
   // that makes the field-comparison deps appear unchanged.
   const [productNavCount, setProductNavCount] = useState(0);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
-  // Once the user manually toggles the gender chip we stop auto-syncing
-  // it from the profile - otherwise their override would get clobbered
-  // on the next session-restore.
-  const filterUserOverride = useRef(false);
-  const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
-    filterUserOverride.current = true;
-    setActiveFilter(next);
-    // Also update the module-level shopperGender used by every
-    // product-creative query (home feed, brand strip, similar rail).
-    // Without this, flipping the Shopping-for toggle to Women only
-    // re-scoped the looks (small portion of the feed) - the much
-    // larger creative grid kept rendering whatever the profile's
-    // signup gender was set to. Mapping is straightforward:
-    //   'men'   → 'male'
-    //   'women' → 'female'
-    //   'all'   → 'unknown' (no filter)
-    setShopperGender(next === 'men' ? 'male' : next === 'women' ? 'female' : 'unknown');
-  }, []);
+  // Gender filter ('all' | 'men' | 'women') + profile-driven auto-sync.
+  // changeFilter locks the user-override flag so the auto-sync never
+  // clobbers an explicit toggle. lockOverride() lets handleOpenBrand
+  // mark override without flipping the filter value.
+  const {
+    activeFilter,
+    changeFilter: handleGenderFilterChange,
+    lockOverride: lockGenderOverride,
+    resetFilter: resetGenderFilter,
+  } = useShopperGender({ user, authLoading });
   // Search query + ?q= URL sync, including the bump-trigger that lets
   // Enter/suggestion-click bypass the in-feed typing debounce. See
   // useSearchUrlSync.
@@ -181,30 +172,6 @@ export default function Home() {
     }
   }, [catalogName]);
 
-  // Auto-scope the feed by the shopper's profile gender so a guy lands
-  // on men + unisex looks, a girl on women + unisex. Manual taps on the
-  // gender chip set filterUserOverride so we never clobber the user's
-  // explicit choice. Runs once per session-bound user id.
-  useEffect(() => {
-    if (!user || authLoading) return;
-    if (filterUserOverride.current) return;
-    let cancelled = false;
-    getUserGender(user.id).then(g => {
-      if (cancelled) return;
-      // Always tell product-creative the gender so brand-strip and
-      // live-ads queries scope correctly, even when the looks-level
-      // filter is overridden by the user. Skip 'unknown' - that's the
-      // null-state and we never want to hide the catalog from someone
-      // we can't tag.
-      if (g === 'male' || g === 'female') setShopperGender(g);
-      if (filterUserOverride.current) return;
-      if (g === 'male') setActiveFilter('men');
-      else if (g === 'female') setActiveFilter('women');
-      // 'unknown' leaves the catalog wide-open ('all').
-    });
-    return () => { cancelled = true; };
-  }, [user, authLoading]);
-
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -221,7 +188,7 @@ export default function Home() {
   useShellBridge({
     onSetCategory: useCallback((detail: string) => {
       setSearchQuery('');
-      setActiveFilter('all');
+      resetGenderFilter();
       setCatalogName(detail);
       setShuffleKey(k => k + 1);
       setView('app');
@@ -262,7 +229,7 @@ export default function Home() {
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
     setSearchQuery('');
-    setActiveFilter('all');
+    resetGenderFilter();
     setCreatorFilter(null);
     setBrandFilter(null);
     setSelectedProduct(null);
@@ -354,8 +321,8 @@ export default function Home() {
     setSearchQuery(brandName);
     setCatalogName(toCatalogName(brandName));
     bumpSearchTrigger();
-    filterUserOverride.current = true;
-  }, []);
+    lockGenderOverride();
+  }, [bumpSearchTrigger, lockGenderOverride]);
 
   const handleCloseBrand = useCallback(() => {
     setBrandFilter(null);
