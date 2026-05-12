@@ -471,6 +471,17 @@ function LookTile({
   );
 }
 
+/** Pads `arr` to exactly `count` items by cycling through duplicates,
+ *  or trims to `count` if the array is longer. Returns empty array
+ *  unchanged (no padding for empty sections). */
+function fillToExact<T>(arr: T[], count: number): T[] {
+  if (arr.length === 0) return [];
+  if (arr.length >= count) return arr.slice(0, count);
+  const out: T[] = [];
+  while (out.length < count) out.push(arr[out.length % arr.length]);
+  return out;
+}
+
 export default function ProductPage({
   product,
   onClose,
@@ -984,9 +995,9 @@ export default function ProductPage({
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
-              {moreLikeThis.map(c => (
+              {fillToExact(moreLikeThis, 8).map((c, i) => (
                 <CreativeCard
-                  key={c.id}
+                  key={`mlt-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
@@ -1000,9 +1011,9 @@ export default function ProductPage({
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">Popular</h2>
             <div className="pd-similar-grid">
-              {popularItems.map(c => (
+              {fillToExact(popularItems, 8).map((c, i) => (
                 <CreativeCard
-                  key={c.id}
+                  key={`pop-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
@@ -1012,27 +1023,16 @@ export default function ProductPage({
           </section>
         )}
 
-        {lookCreatives && lookCreatives.length > 0 && (() => {
-          // Always render either 8 or 12 looks (no orphan rows). >=12
-          // shows 12; >=8 shows 8; <8 hides the section entirely so
-          // we never render a ragged 5- or 7-tile bottom row.
-          const visible = lookCreatives.length >= 12
-            ? lookCreatives.slice(0, 12)
-            : lookCreatives.length >= 8
-              ? lookCreatives.slice(0, 8)
-              : [];
-          if (visible.length === 0) return null;
-          return (
-            <section className="pd-look-feed">
-              <h2 className="pd-feed-title">Featured in Looks</h2>
-              <div className="pd-look-grid">
-                {visible.map((l, i) => (
-                  <LookTile key={l.id} look={l} index={i} onOpen={onOpenLook} />
-                ))}
-              </div>
-            </section>
-          );
-        })()}
+        {lookCreatives && lookCreatives.length > 0 && (
+          <section className="pd-look-feed">
+            <h2 className="pd-feed-title">Featured in Looks</h2>
+            <div className="pd-look-grid">
+              {fillToExact(lookCreatives, 8).map((l, i) => (
+                <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
