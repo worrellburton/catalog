@@ -74,8 +74,8 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { useShellBridge } from '~/hooks/useShellBridge';
+import { useAppView } from '~/hooks/useAppView';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { getWaitlistStatus } from '~/services/waitlist';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
 import { getLooks } from '~/services/looks';
 import { getUserGender } from '~/services/genders';
@@ -84,84 +84,24 @@ import { supabase } from '~/utils/supabase';
 import { trackClick } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
-
 export default function Home() {
-  const [view, setView] = useState<AppView>('locked');
-  // First-visit splash: if the user has never been to catalog on this device,
-  // show a branded splash before surfacing the gate / landing. The flag is
-  // written once and never revisited so repeat visitors skip it.
-  //
-  // Splash timing is data-aware: we hold for at least 800ms (so the brand
-  // moment doesn't flash by) and at most 2500ms (so a slow network never
-  // hangs the user). In between, we dismiss as soon as the feed data lands
-  // - so by the time the splash drops, the cards render with real content
-  // already in cache.
-  const [firstVisit, setFirstVisit] = useState(() => {
-    try {
-      return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
-    } catch { return false; }
-  });
-  useEffect(() => {
-    if (!firstVisit) return;
-    try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
+  const bookmarks = useBookmarks();
+  const { recentProducts, pushRecent } = useRecentProducts();
+  const { user, loading: authLoading, logout } = useAuth();
 
-    const SPLASH_MIN_MS = 800;
-    const SPLASH_MAX_MS = 2500;
-    const startedAt = Date.now();
-    let dismissed = false;
-    const dismiss = () => {
-      if (dismissed) return;
-      dismissed = true;
-      setFirstVisit(false);
-    };
+  // Top-level view state machine (locked / splash / landing / app /
+  // waitlisted) + the two splash overlays (first-visit branded splash
+  // and the auth-resolving fade). See useAppView.
+  const {
+    view,
+    setView,
+    firstVisit,
+    showSplash,
+    setShowSplash,
+    authSplashMounted,
+    authSplashLeaving,
+  } = useAppView({ user, authLoading });
 
-    // Race the feed fetch + the min floor; whoever wins LAST triggers
-    // dismiss (so we don't dismiss before either is ready). Then a
-    // hard ceiling timer guarantees we never hang past max.
-    const ceiling = window.setTimeout(dismiss, SPLASH_MAX_MS);
-    let feedReady = false;
-    let floorReached = false;
-    const tryDismiss = () => {
-      if (feedReady && floorReached) dismiss();
-    };
-    const floor = window.setTimeout(() => { floorReached = true; tryDismiss(); }, SPLASH_MIN_MS);
-    prefetchHomeFeed()
-      .then(rows => {
-        // Pre-warm posters from the FRESH list while the splash is still
-        // up so they're in browser cache by the time the feed renders.
-        for (const ad of rows.slice(0, 6)) {
-          const url = ad.thumbnail_url
-            || ad.product?.image_url
-            || (ad.product?.images && ad.product.images[0])
-            || '';
-          if (!url) continue;
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = url;
-        }
-      })
-      .catch(() => { /* let the ceiling handle it */ })
-      .finally(() => {
-        const elapsed = Date.now() - startedAt;
-        // If the network beat the floor, mark ready and let the floor
-        // trigger dismiss; if it beat the ceiling but missed the floor,
-        // still wait for the floor for the brand moment.
-        feedReady = true;
-        if (elapsed >= SPLASH_MIN_MS) {
-          floorReached = true;
-          dismiss();
-        } else {
-          tryDismiss();
-        }
-      });
-
-    return () => {
-      window.clearTimeout(ceiling);
-      window.clearTimeout(floor);
-    };
-  }, [firstVisit]);
-  const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
@@ -246,38 +186,6 @@ export default function Home() {
   });
   const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
   const catalogDropdownRef = useRef<HTMLDivElement>(null);
-
-  const bookmarks = useBookmarks();
-  const { recentProducts, pushRecent } = useRecentProducts();
-  const { user, loading: authLoading, logout } = useAuth();
-
-  // Branded splash logic. Show the splash whenever we're in the
-  // 'locked' view AND either:
-  //   - auth is still resolving (initial bootstrap, OAuth code exchange,
-  //     or session restore from localStorage), OR
-  //   - auth has resolved with a user but the auto-route effect hasn't
-  //     yet flipped view to 'app' / 'waitlisted' (the waitlist-status
-  //     check is async and we don't want a blank screen during it).
-  // This keeps the password gate from ever flashing for users who are
-  // about to be signed in, and gives every cold start a unified splash.
-  const showAuthSplash = view === 'locked' && (authLoading || !!user);
-  const [splashLeaving, setSplashLeaving] = useState(false);
-  const [splashMounted, setSplashMounted] = useState(showAuthSplash);
-  useEffect(() => {
-    if (showAuthSplash) {
-      setSplashMounted(true);
-      setSplashLeaving(false);
-      return;
-    }
-    if (splashMounted) {
-      // Auth resolved - start the fade-out, then unmount after the
-      // CSS transition completes (240 ms; matching .auth-splash
-      // transition duration).
-      setSplashLeaving(true);
-      const t = window.setTimeout(() => setSplashMounted(false), 280);
-      return () => window.clearTimeout(t);
-    }
-  }, [showAuthSplash, splashMounted]);
 
   // Track recent catalogs
   useEffect(() => {
@@ -372,73 +280,6 @@ export default function Home() {
     if (catalogDropdownOpen) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [catalogDropdownOpen]);
-
-  // Auto-route on sign-in: approved users enter the app, everyone else goes to the waitlist.
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) return;
-    if (view !== 'locked') return;
-    // Clean OAuth artifacts from URL once sign-in is confirmed
-    if (
-      window.location.hash.includes('access_token') ||
-      window.location.search.includes('code=')
-    ) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-
-    let cancelled = false;
-    (async () => {
-      if (user.role === 'admin') {
-        if (!cancelled) setView('app');
-        return;
-      }
-      // Wrap the waitlist lookup so a transient network failure (or RLS
-      // regression) can't leave the user pinned on 'locked' forever - that
-      // path renders an auth splash with no escape. On throw, default to the
-      // waitlist view: it's the same destination an unapproved user lands
-      // on, has a Retry affordance, and beats a stuck splash.
-      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
-      try {
-        status = await getWaitlistStatus(user.id);
-      } catch (err) {
-        console.warn('[auto-route] waitlist lookup failed', err);
-      }
-      if (cancelled) return;
-      setView(status?.approved ? 'app' : 'waitlisted');
-    })();
-    return () => { cancelled = true; };
-  }, [user, authLoading, view]);
-
-  // Read hash on mount for deep linking
-  useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    if (hash === 'app') {
-      setView('app');
-    } else if (hash === 'landing') {
-      setView('landing');
-    }
-  }, []);
-
-  // Sync hash when view changes
-  useEffect(() => {
-    // Don't clobber Supabase OAuth return URL - let the client parse it
-    // first. Both implicit (#access_token=…) and PKCE (?code=…) flows
-    // depend on the URL staying intact until supabase-js's async
-    // exchange completes.
-    if (window.location.hash.includes('access_token')) return;
-    if (window.location.search.includes('code=')) return;
-
-    let hash = '';
-    if (view === 'app') hash = 'app';
-    else if (view === 'landing') hash = 'landing';
-    else if (view === 'locked') hash = '';
-
-    if (hash) {
-      window.history.replaceState(null, '', `#${hash}`);
-    } else {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, [view]);
 
   // Native shell bridge: Flutter wrapper dispatches CustomEvents on
   // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
@@ -946,8 +787,8 @@ export default function Home() {
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}
-      {splashMounted && (
-        <div className={`auth-splash${splashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+      {authSplashMounted && (
+        <div className={`auth-splash${authSplashLeaving ? ' leaving' : ''}`} aria-hidden="true">
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
