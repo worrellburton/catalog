@@ -9,6 +9,22 @@ import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import { Look, Product } from '~/data/looks';
+import { useBookmarks } from '~/hooks/useBookmarks';
+import { useRecentProducts } from '~/hooks/useRecentProducts';
+import { useAuth } from '~/hooks/useAuth';
+import { useOverlayRouter } from '~/hooks/useOverlayRouter';
+import { useShellBridge } from '~/hooks/useShellBridge';
+import { useAppView } from '~/hooks/useAppView';
+import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
+import { useShopperGender } from '~/hooks/useShopperGender';
+import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { getLooks } from '~/services/looks';
+import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { supabase } from '~/utils/supabase';
+import { trackClick } from '~/services/session-tracker';
+import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -68,22 +84,6 @@ function prefetchOverlayChunks() {
   if (ric) ric(tick, { timeout: 2000 });
   else window.setTimeout(tick, 800);
 }
-import { Look, Product } from '~/data/looks';
-import { useBookmarks } from '~/hooks/useBookmarks';
-import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
-import { useOverlayRouter } from '~/hooks/useOverlayRouter';
-import { useShellBridge } from '~/hooks/useShellBridge';
-import { useAppView } from '~/hooks/useAppView';
-import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
-import { useShopperGender } from '~/hooks/useShopperGender';
-import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
-import { getLooks } from '~/services/looks';
-import { primeTrailAssets } from '~/utils/trailPrefetch';
-import { supabase } from '~/utils/supabase';
-import { trackClick } from '~/services/session-tracker';
-import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
 export default function Home() {
   const bookmarks = useBookmarks();
@@ -153,35 +153,6 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState<string>('all');
-  const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('recentCatalogs') || '[]');
-    } catch { return []; }
-  });
-  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
-  const catalogDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Track recent catalogs
-  useEffect(() => {
-    if (catalogName) {
-      setRecentCatalogs(prev => {
-        const updated = [catalogName, ...prev.filter(n => n !== catalogName)].slice(0, 5);
-        localStorage.setItem('recentCatalogs', JSON.stringify(updated));
-        return updated;
-      });
-    }
-  }, [catalogName]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (catalogDropdownRef.current && !catalogDropdownRef.current.contains(e.target as Node)) {
-        setCatalogDropdownOpen(false);
-      }
-    };
-    if (catalogDropdownOpen) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [catalogDropdownOpen]);
 
   // Native shell bridge: Flutter wrapper dispatches CustomEvents on
   // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
