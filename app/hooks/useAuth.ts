@@ -51,7 +51,18 @@ function bootstrap() {
   });
 
   onAuthStateChange((u) => {
-    setState({ user: u, loading: false });
+    if (!u) {
+      setState({ user: null, loading: false });
+      return;
+    }
+    // auth.ts clears the cache before calling this callback, so
+    // getCurrentUser() here will re-fetch the role from the profiles
+    // table rather than returning a stale cache hit. This ensures role
+    // is always correct after sign-in, token refresh, or any other
+    // auth state event (not just the initial bootstrap call above).
+    getCurrentUser().then((fullUser) => {
+      setState({ user: fullUser, loading: false });
+    });
   });
 
   // Fallback: if we're in an OAuth return state and SIGNED_IN never fires

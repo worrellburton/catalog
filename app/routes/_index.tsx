@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { useLocation, useParams } from '@remix-run/react';
+import { useLocation } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -9,6 +9,22 @@ import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import { Look, Product } from '~/data/looks';
+import { useBookmarks } from '~/hooks/useBookmarks';
+import { useRecentProducts } from '~/hooks/useRecentProducts';
+import { useAuth } from '~/hooks/useAuth';
+import { useOverlayRouter } from '~/hooks/useOverlayRouter';
+import { useShellBridge } from '~/hooks/useShellBridge';
+import { useAppView } from '~/hooks/useAppView';
+import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
+import { useShopperGender } from '~/hooks/useShopperGender';
+import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
+import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { getLooks } from '~/services/looks';
+import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { supabase } from '~/utils/supabase';
+import { trackClick } from '~/services/session-tracker';
+import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
@@ -69,201 +85,25 @@ function prefetchOverlayChunks() {
   if (ric) ric(tick, { timeout: 2000 });
   else window.setTimeout(tick, 800);
 }
-import { Look, Product, looks as seedLooks } from '~/data/looks';
-import {
-  productSlug,
-  lookSlug,
-  brandSlug,
-  extractIdPrefix,
-  extractLookId,
-} from '~/utils/slug';
-import { useBookmarks } from '~/hooks/useBookmarks';
-import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
-import { catalogNames } from '~/data/catalogNames';
-import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
-import { getLooks } from '~/services/looks';
-import { getUserGender } from '~/services/genders';
-import { primeTrailAssets } from '~/utils/trailPrefetch';
-import { supabase } from '~/utils/supabase';
-import { trackClick } from '~/services/session-tracker';
-import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
-
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
-
-// Map individual search words to catalogNames keys so queries like
-// "first date fit", "gym fits", or "cozy fall vibes" land on themed names.
-const KEYWORD_ALIASES: Record<string, string> = {
-  date: 'datenight', dating: 'datenight', romantic: 'datenight', night: 'datenight',
-  hot: 'datenight', rizz: 'datenight', first: 'datenight',
-  gym: 'workout', workout: 'workout', fitness: 'workout', yoga: 'workout',
-  run: 'workout', running: 'workout', pilates: 'workout', sweat: 'workout',
-  brunch: 'brunch', mimosa: 'brunch', sunday: 'brunch',
-  wedding: 'wedding', bridal: 'wedding',
-  festival: 'festival', concert: 'festival', coachella: 'festival',
-  office: 'office', work: 'office', business: 'office', corporate: 'office',
-  street: 'streetwear', streetwear: 'streetwear', hype: 'streetwear',
-  sneaker: 'streetwear', sneakers: 'streetwear', drop: 'streetwear',
-  minimal: 'minimalist', minimalist: 'minimalist', clean: 'minimalist',
-  capsule: 'minimalist',
-  vintage: 'vintage', retro: 'vintage', thrift: 'vintage', y2k: 'vintage',
-  boho: 'boho', bohemian: 'boho', hippie: 'boho',
-  luxury: 'luxury', rich: 'luxury', designer: 'luxury', quiet: 'luxury',
-  old: 'luxury', money: 'luxury',
-  formal: 'formal', gala: 'formal', black: 'formal', tie: 'formal',
-  cheap: 'budget', budget: 'budget', broke: 'budget', affordable: 'budget',
-  bed: 'bedroom', bedroom: 'bedroom', cozy: 'bedroom', sleep: 'bedroom',
-  kitchen: 'kitchen', cooking: 'kitchen', chef: 'kitchen',
-  bath: 'bathroom', bathroom: 'bathroom', shower: 'bathroom', spa: 'bathroom',
-  home: 'homedecor', decor: 'homedecor', apartment: 'homedecor',
-  cat: 'cats', cats: 'cats', kitten: 'cats',
-  dog: 'dogs', dogs: 'dogs', puppy: 'dogs',
-  wellness: 'wellness', matcha: 'wellness', skincare: 'wellness',
-  self: 'wellness', glow: 'wellness',
-  outfit: 'fashion', fit: 'fashion', fits: 'fashion', drip: 'fashion',
-  dress: 'fashion', dresses: 'fashion', pants: 'fashion', shoes: 'fashion',
-  airport: 'fashion', travel: 'fashion', beach: 'fashion', summer: 'fashion',
-  winter: 'fashion', spring: 'fashion', fall: 'fashion',
-  nyc: 'nyc', brooklyn: 'nyc', manhattan: 'nyc',
-  la: 'la', hollywood: 'la', calabasas: 'la',
-  paris: 'paris', french: 'paris',
-  tokyo: 'tokyo', japan: 'tokyo', harajuku: 'tokyo',
-  athleisure: 'athleisure',
-  dopamine: 'maximalist', maximalist: 'maximalist',
-  cottagecore: 'cottagecore', mushroom: 'cottagecore',
-  scandi: 'scandi', hygge: 'scandi', neutral: 'scandi',
-  industrial: 'industrial', loft: 'industrial',
-  midcentury: 'midcentury',
-  electronics: 'electronics', tech: 'electronics', gadget: 'electronics',
-  girly: 'women', girl: 'women', girls: 'women',
-  mens: 'men', guys: 'men', guy: 'men',
-};
-
-// Title-case the user's literal search so it reads as a proper catalog
-// name beneath the logo. Short single tokens are kept uppercase so
-// "omg" → "OMG", but longer words use Title Case.
-function toCatalogName(query: string): string {
-  return query
-    .trim()
-    .split(/\s+/)
-    .map(w => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
-    .join(' ');
-}
-
-function getRandomCatalogName(query?: string): string {
-  if (query && query.trim()) {
-    const q = query.toLowerCase().trim();
-    const words = q.split(/\s+/).filter(w => w.length > 1);
-
-    // Collect candidate keys from alias + direct matches
-    const matched = new Set<string>();
-    for (const w of words) {
-      const alias = KEYWORD_ALIASES[w];
-      if (alias && catalogNames[alias]) matched.add(alias);
-    }
-    // Direct key lookup (covers combo keys like 'fashion+la')
-    for (const key of Object.keys(catalogNames)) {
-      const parts = key.split('+');
-      const allPartsMatched = parts.every(part =>
-        words.some(w => w === part || w.includes(part) || part.includes(w))
-      );
-      if (allPartsMatched) matched.add(key);
-    }
-
-    if (matched.size > 0) {
-      // Prefer combo keys (more specific) over single keys
-      const sorted = [...matched].sort((a, b) => b.split('+').length - a.split('+').length);
-      const names = catalogNames[sorted[0]];
-      if (names && names.length > 0) {
-        return names[Math.floor(Math.random() * names.length)];
-      }
-    }
-
-    // No match - fall back to generic fashion names instead of random unrelated theme
-    const fashion = catalogNames.fashion;
-    return fashion[Math.floor(Math.random() * fashion.length)];
-  }
-  const allNames = Object.values(catalogNames).flat();
-  return allNames[Math.floor(Math.random() * allNames.length)];
-}
 
 export default function Home() {
-  const [view, setView] = useState<AppView>('locked');
-  // First-visit splash: if the user has never been to catalog on this device,
-  // show a branded splash before surfacing the gate / landing. The flag is
-  // written once and never revisited so repeat visitors skip it.
-  //
-  // Splash timing is data-aware: we hold for at least 800ms (so the brand
-  // moment doesn't flash by) and at most 2500ms (so a slow network never
-  // hangs the user). In between, we dismiss as soon as the feed data lands
-  // - so by the time the splash drops, the cards render with real content
-  // already in cache.
-  const [firstVisit, setFirstVisit] = useState(() => {
-    try {
-      return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
-    } catch { return false; }
-  });
-  useEffect(() => {
-    if (!firstVisit) return;
-    try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
+  const bookmarks = useBookmarks();
+  const { recentProducts, pushRecent } = useRecentProducts();
+  const { user, loading: authLoading, logout } = useAuth();
 
-    const SPLASH_MIN_MS = 800;
-    const SPLASH_MAX_MS = 2500;
-    const startedAt = Date.now();
-    let dismissed = false;
-    const dismiss = () => {
-      if (dismissed) return;
-      dismissed = true;
-      setFirstVisit(false);
-    };
+  // Top-level view state machine (locked / splash / landing / app /
+  // waitlisted) + the two splash overlays (first-visit branded splash
+  // and the auth-resolving fade). See useAppView.
+  const {
+    view,
+    setView,
+    firstVisit,
+    showSplash,
+    setShowSplash,
+    authSplashMounted,
+    authSplashLeaving,
+  } = useAppView({ user, authLoading });
 
-    // Race the feed fetch + the min floor; whoever wins LAST triggers
-    // dismiss (so we don't dismiss before either is ready). Then a
-    // hard ceiling timer guarantees we never hang past max.
-    const ceiling = window.setTimeout(dismiss, SPLASH_MAX_MS);
-    let feedReady = false;
-    let floorReached = false;
-    const tryDismiss = () => {
-      if (feedReady && floorReached) dismiss();
-    };
-    const floor = window.setTimeout(() => { floorReached = true; tryDismiss(); }, SPLASH_MIN_MS);
-    prefetchHomeFeed()
-      .then(rows => {
-        // Pre-warm posters from the FRESH list while the splash is still
-        // up so they're in browser cache by the time the feed renders.
-        for (const ad of rows.slice(0, 6)) {
-          const url = ad.thumbnail_url
-            || ad.product?.image_url
-            || (ad.product?.images && ad.product.images[0])
-            || '';
-          if (!url) continue;
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = url;
-        }
-      })
-      .catch(() => { /* let the ceiling handle it */ })
-      .finally(() => {
-        const elapsed = Date.now() - startedAt;
-        // If the network beat the floor, mark ready and let the floor
-        // trigger dismiss; if it beat the ceiling but missed the floor,
-        // still wait for the floor for the brand moment.
-        feedReady = true;
-        if (elapsed >= SPLASH_MIN_MS) {
-          floorReached = true;
-          dismiss();
-        } else {
-          tryDismiss();
-        }
-      });
-
-    return () => {
-      window.clearTimeout(ceiling);
-      window.clearTimeout(floor);
-    };
-  }, [firstVisit]);
-  const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
@@ -291,48 +131,21 @@ export default function Home() {
   // products share a brand+name or React batches the re-render in a way
   // that makes the field-comparison deps appear unchanged.
   const [productNavCount, setProductNavCount] = useState(0);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
-  // Once the user manually toggles the gender chip we stop auto-syncing
-  // it from the profile - otherwise their override would get clobbered
-  // on the next session-restore.
-  const filterUserOverride = useRef(false);
-  const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
-    filterUserOverride.current = true;
-    setActiveFilter(next);
-    // Also update the module-level shopperGender used by every
-    // product-creative query (home feed, brand strip, similar rail).
-    // Without this, flipping the Shopping-for toggle to Women only
-    // re-scoped the looks (small portion of the feed) - the much
-    // larger creative grid kept rendering whatever the profile's
-    // signup gender was set to. Mapping is straightforward:
-    //   'men'   → 'male'
-    //   'women' → 'female'
-    //   'all'   → 'unknown' (no filter)
-    setShopperGender(next === 'men' ? 'male' : next === 'women' ? 'female' : 'unknown');
-  }, []);
-  // Initial searchQuery comes from the URL ?q= param so a deep-linked
-  // search (someone shares /catalog.shop/?q=shoes) lands in the right
-  // state on first paint. Subsequent commits push history entries - see
-  // the debounced syncSearchToUrl effect below - so the back button
-  // walks the user through their search history.
-  const initialUrlQuery = (() => {
-    if (typeof window === 'undefined') return '';
-    try { return new URLSearchParams(window.location.search).get('q') ?? ''; }
-    catch { return ''; }
-  })();
-  const [searchQuery, setSearchQuery] = useState(initialUrlQuery);
+  // Gender filter ('all' | 'men' | 'women') + profile-driven auto-sync.
+  // changeFilter locks the user-override flag so the auto-sync never
+  // clobbers an explicit toggle. lockOverride() lets handleOpenBrand
+  // mark override without flipping the filter value.
+  const {
+    activeFilter,
+    changeFilter: handleGenderFilterChange,
+    lockOverride: lockGenderOverride,
+    resetFilter: resetGenderFilter,
+  } = useShopperGender({ user, authLoading });
+  // Search query + ?q= URL sync, including the bump-trigger that lets
+  // Enter/suggestion-click bypass the in-feed typing debounce. See
+  // useSearchUrlSync.
+  const { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger } = useSearchUrlSync();
   const [searchLoading, setSearchLoading] = useState(false);
-  // searchTrigger is bumped on Enter / suggestion-click for an immediate
-  // commit (bypassing the debounce inside ContinuousFeed). The
-  // initial-mount value is non-zero when the URL already has ?q=, so
-  // the feed knows to fire the search on first render rather than wait
-  // for typing.
-  const [searchTrigger, setSearchTrigger] = useState(initialUrlQuery ? 1 : 0);
-  // Set when we're applying a popstate-driven URL change so the
-  // outgoing-URL-push effect doesn't echo it back as a new history
-  // entry. Without this every back-button press would push a forward
-  // entry on top of the one we just came from.
-  const isApplyingUrlChange = useRef(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
   }, []);
@@ -341,227 +154,31 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState<string>('all');
-  const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('recentCatalogs') || '[]');
-    } catch { return []; }
-  });
-  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
-  const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
-  const bookmarks = useBookmarks();
-  const { recentProducts, pushRecent } = useRecentProducts();
-  const { user, loading: authLoading, logout } = useAuth();
-
-  // Branded splash logic. Show the splash whenever we're in the
-  // 'locked' view AND either:
-  //   - auth is still resolving (initial bootstrap, OAuth code exchange,
-  //     or session restore from localStorage), OR
-  //   - auth has resolved with a user but the auto-route effect hasn't
-  //     yet flipped view to 'app' / 'waitlisted' (the waitlist-status
-  //     check is async and we don't want a blank screen during it).
-  // This keeps the password gate from ever flashing for users who are
-  // about to be signed in, and gives every cold start a unified splash.
-  const showAuthSplash = view === 'locked' && (authLoading || !!user);
-  const [splashLeaving, setSplashLeaving] = useState(false);
-  const [splashMounted, setSplashMounted] = useState(showAuthSplash);
-  useEffect(() => {
-    if (showAuthSplash) {
-      setSplashMounted(true);
-      setSplashLeaving(false);
-      return;
-    }
-    if (splashMounted) {
-      // Auth resolved - start the fade-out, then unmount after the
-      // CSS transition completes (240 ms; matching .auth-splash
-      // transition duration).
-      setSplashLeaving(true);
-      const t = window.setTimeout(() => setSplashMounted(false), 280);
-      return () => window.clearTimeout(t);
-    }
-  }, [showAuthSplash, splashMounted]);
-
-  // Track recent catalogs
-  useEffect(() => {
-    if (catalogName) {
-      setRecentCatalogs(prev => {
-        const updated = [catalogName, ...prev.filter(n => n !== catalogName)].slice(0, 5);
-        localStorage.setItem('recentCatalogs', JSON.stringify(updated));
-        return updated;
-      });
-    }
-  }, [catalogName]);
-
-  // ── URL ↔ search state sync ─────────────────────────────────────────────
-  // Two-way binding between the ?q= URL param and searchQuery so each
-  // committed search is its own history entry and the back button walks
-  // the user through their search history.
-  //
-  // Push direction: debounce searchQuery by 350 ms so we don't blow the
-  // history stack on every keystroke. Only push when the URL would
-  // actually change, so a re-typed identical query doesn't add a
-  // redundant entry. The `isApplyingUrlChange` ref guards against echo
-  // when the change came from popstate.
-  //
-  // Pop direction: listen for popstate and read ?q=. When it differs
-  // from the current state, set isApplyingUrlChange before updating
-  // state so the push-effect's diff check skips the rebound.
-  useEffect(() => {
-    if (isApplyingUrlChange.current) {
-      isApplyingUrlChange.current = false;
-      return;
-    }
-    const t = window.setTimeout(() => {
-      const url = new URL(window.location.href);
-      const current = url.searchParams.get('q') ?? '';
-      const next = searchQuery;
-      if (current === next) return;
-      if (next) url.searchParams.set('q', next);
-      else      url.searchParams.delete('q');
-      window.history.pushState({ q: next }, '', url.toString());
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const onPop = () => {
-      try {
-        const q = new URLSearchParams(window.location.search).get('q') ?? '';
-        if (q !== searchQuery) {
-          isApplyingUrlChange.current = true;
-          setSearchQuery(q);
-          // Bump trigger so the feed re-runs the search rather than
-          // waiting for the user to type.
-          setSearchTrigger(t => t + 1);
-        }
-      } catch { /* malformed URL - ignore */ }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, [searchQuery]);
-
-  // Auto-scope the feed by the shopper's profile gender so a guy lands
-  // on men + unisex looks, a girl on women + unisex. Manual taps on the
-  // gender chip set filterUserOverride so we never clobber the user's
-  // explicit choice. Runs once per session-bound user id.
-  useEffect(() => {
-    if (!user || authLoading) return;
-    if (filterUserOverride.current) return;
-    let cancelled = false;
-    getUserGender(user.id).then(g => {
-      if (cancelled) return;
-      // Always tell product-creative the gender so brand-strip and
-      // live-ads queries scope correctly, even when the looks-level
-      // filter is overridden by the user. Skip 'unknown' - that's the
-      // null-state and we never want to hide the catalog from someone
-      // we can't tag.
-      if (g === 'male' || g === 'female') setShopperGender(g);
-      if (filterUserOverride.current) return;
-      if (g === 'male') setActiveFilter('men');
-      else if (g === 'female') setActiveFilter('women');
-      // 'unknown' leaves the catalog wide-open ('all').
-    });
-    return () => { cancelled = true; };
-  }, [user, authLoading]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (catalogDropdownRef.current && !catalogDropdownRef.current.contains(e.target as Node)) {
-        setCatalogDropdownOpen(false);
-      }
-    };
-    if (catalogDropdownOpen) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [catalogDropdownOpen]);
-
-  // Auto-route on sign-in: approved users enter the app, everyone else goes to the waitlist.
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) return;
-    if (view !== 'locked') return;
-    // Clean OAuth artifacts from URL once sign-in is confirmed
-    if (
-      window.location.hash.includes('access_token') ||
-      window.location.search.includes('code=')
-    ) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-
-    let cancelled = false;
-    (async () => {
-      if (user.role === 'admin') {
-        if (!cancelled) setView('app');
-        return;
-      }
-      // Wrap the waitlist lookup so a transient network failure (or RLS
-      // regression) can't leave the user pinned on 'locked' forever - that
-      // path renders an auth splash with no escape. On throw, default to the
-      // waitlist view: it's the same destination an unapproved user lands
-      // on, has a Retry affordance, and beats a stuck splash.
-      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
-      try {
-        status = await getWaitlistStatus(user.id);
-      } catch (err) {
-        console.warn('[auto-route] waitlist lookup failed', err);
-      }
-      if (cancelled) return;
-      setView(status?.approved ? 'app' : 'waitlisted');
-    })();
-    return () => { cancelled = true; };
-  }, [user, authLoading, view]);
-
-  // Read hash on mount for deep linking
-  useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    if (hash === 'app') {
-      setView('app');
-    } else if (hash === 'landing') {
-      setView('landing');
-    }
-  }, []);
-
-  // Sync hash when view changes
-  useEffect(() => {
-    // Don't clobber Supabase OAuth return URL - let the client parse it
-    // first. Both implicit (#access_token=…) and PKCE (?code=…) flows
-    // depend on the URL staying intact until supabase-js's async
-    // exchange completes.
-    if (window.location.hash.includes('access_token')) return;
-    if (window.location.search.includes('code=')) return;
-
-    let hash = '';
-    if (view === 'app') hash = 'app';
-    else if (view === 'landing') hash = 'landing';
-    else if (view === 'locked') hash = '';
-
-    if (hash) {
-      window.history.replaceState(null, '', `#${hash}`);
-    } else {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, [view]);
-
-  // Native shell bridge - when running inside the Flutter wrapper
-  // (catalog-flutter), it dispatches CustomEvents on `window` to drive
-  // the feed without needing direct React state access.
-  useEffect(() => {
-    const onSetCategory = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail) return;
+  // Native shell bridge: Flutter wrapper dispatches CustomEvents on
+  // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
+  useShellBridge({
+    onSetCategory: useCallback((detail: string) => {
       setSearchQuery('');
-      setActiveFilter('all');
+      resetGenderFilter();
       setCatalogName(detail);
       setShuffleKey(k => k + 1);
       setView('app');
-    };
-    const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
-    const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
-    // Creator engagement toast click → open the wallet and re-fire
-    // the same event after mount so CreatorWallet scrolls its
-    // Analytics section into view. The re-fire is deferred two
-    // frames: one for setShowWallet to commit, one for CreatorWallet
-    // to mount its scroll-target ref.
+    }, []),
+    onOpenBookmarks: useCallback(() => {
+      history.pushState({}, '', '/bookmarks');
+      setShowBookmarks(true);
+    }, []),
+    onOpenMyLooks: useCallback(() => {
+      history.pushState({}, '', '/my-looks');
+      setShowMyLooks(true);
+    }, []),
+  });
+
+  // Creator engagement toast click → open the wallet and scroll
+  // its Analytics section into view. Two rAF frames give setShowWallet
+  // time to commit and CreatorWallet time to mount its scroll-target.
+  useEffect(() => {
     const onOpenWalletAnalytics = () => {
       setShowWallet(true);
       requestAnimationFrame(() => {
@@ -570,16 +187,9 @@ export default function Home() {
         });
       });
     };
-
-    window.addEventListener('catalog:set-category', onSetCategory as EventListener);
-    window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
-    window.addEventListener('catalog:open-my-looks', onOpenMyLooks);
     window.addEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
     return () => {
-      window.removeEventListener('catalog:set-category', onSetCategory as EventListener);
-      window.removeEventListener('catalog:open-bookmarks', onOpenBookmarks);
       window.removeEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
-      window.removeEventListener('catalog:open-my-looks', onOpenMyLooks);
     };
   }, []);
 
@@ -609,7 +219,7 @@ export default function Home() {
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
     setSearchQuery('');
-    setActiveFilter('all');
+    resetGenderFilter();
     setCreatorFilter(null);
     setBrandFilter(null);
     setSelectedProduct(null);
@@ -700,9 +310,9 @@ export default function Home() {
     setBrandFilter(null);
     setSearchQuery(brandName);
     setCatalogName(toCatalogName(brandName));
-    setSearchTrigger(t => t + 1);
-    filterUserOverride.current = true;
-  }, []);
+    bumpSearchTrigger();
+    lockGenderOverride();
+  }, [bumpSearchTrigger, lockGenderOverride]);
 
   const handleCloseBrand = useCallback(() => {
     setBrandFilter(null);
@@ -950,7 +560,7 @@ export default function Home() {
     // re-runs on the next location update.
     if (params.has('code') || params.has('error_description')) return;
     handleCreateCatalog(q);
-    setSearchTrigger(t => t + 1);
+    bumpSearchTrigger();
     setView('app');
     params.delete('q');
     const remaining = params.toString();
@@ -991,7 +601,7 @@ export default function Home() {
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
     setCatalogName(toCatalogName(q));
-    setSearchTrigger(t => t + 1);
+    bumpSearchTrigger();
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
@@ -1013,125 +623,18 @@ export default function Home() {
     }
   }, [productOpenedFromLook]);
 
-  // Sync handlers - push the canonical share URL whenever a modal
-  // opens via in-app interaction. We use replaceState (not navigate)
-  // so the SPA doesn't remount the whole feed; we just update the
-  // address bar so copy-link / back-button / refresh all do the
-  // right thing.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedProduct) return;
-    const slug = productSlug({
-      id: selectedProduct.id ?? null,
-      brand: selectedProduct.brand ?? null,
-      name: selectedProduct.name ?? null,
-    });
-    if (!slug) return;
-    const target = `/p/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [selectedProduct]);
+  // URL ↔ overlay state binding: push /p/<slug>, /l/<slug>, /b/<slug>
+  // when an overlay opens, and consume the slug on fresh load. See
+  // useOverlayRouter for the full sync contract.
+  useOverlayRouter({
+    selectedProduct,
+    selectedLook,
+    brandFilter,
+    onOpenProduct: handleOpenProduct,
+    onOpenLook: handleOpenLook,
+    onOpenBrand: handleOpenBrand,
+  });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedLook) return;
-    const slug = lookSlug({
-      id: selectedLook.id ?? null,
-      creator: selectedLook.creator ?? null,
-      title: selectedLook.title ?? null,
-    });
-    if (!slug) return;
-    const target = `/l/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [selectedLook]);
-
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!brandFilter) return;
-    const slug = brandSlug(brandFilter);
-    if (!slug) return;
-    const target = `/b/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [brandFilter]);
-
-  // Pop URL when brand / look modals close. Product close handles
-  // its own pop above (it has more state to clear).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (brandFilter) return;
-    if (window.location.pathname.startsWith('/b/')) {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [brandFilter]);
-
-  // Fresh-load handler: read the route param the Remix router gave
-  // us and open the matching modal once. Runs on mount only - after
-  // that, in-app navigation drives state, and the URL syncs back via
-  // the effects above.
-  const params = useParams();
-  const slugParam = params.slug;
-  const initialSlugConsumed = useRef(false);
-  useEffect(() => {
-    if (initialSlugConsumed.current) return;
-    if (!slugParam) return;
-    initialSlugConsumed.current = true;
-    const path = location.pathname;
-    if (path.startsWith('/p/')) {
-      const idPrefix = extractIdPrefix(slugParam);
-      if (!idPrefix || !supabase) return;
-      // Look up the product by the 8-char UUID prefix. Sequence is
-      // products → handleOpenProduct so the rest of the modal stack
-      // (similar / brand rails) loads exactly like a tap-to-open.
-      supabase
-        .from('products')
-        .select('id, name, brand, price, image_url, images, url, catalog_tags, type, is_elite')
-        .ilike('id', `${idPrefix}%`)
-        .limit(1)
-        .then(({ data }) => {
-          const row = data?.[0];
-          if (!row) return;
-          const product: Product = {
-            id: row.id,
-            name: row.name || '',
-            brand: row.brand || '',
-            price: row.price || '',
-            url: row.url || '',
-            image: row.image_url || undefined,
-          };
-          handleOpenProduct(product);
-        });
-    } else if (path.startsWith('/l/')) {
-      const id = extractLookId(slugParam);
-      if (id == null) return;
-      const look = seedLooks.find(l => l.id === id);
-      if (look) handleOpenLook(look);
-    } else if (path.startsWith('/b/')) {
-      // Brand slug is the kebab brand name. Reverse-lookup against
-      // the products table to find the canonical brand string
-      // (preserves original casing / spacing).
-      if (!supabase) return;
-      supabase
-        .from('products')
-        .select('brand')
-        .not('brand', 'is', null)
-        .limit(2000)
-        .then(({ data }) => {
-          if (!data) return;
-          const target = slugParam.toLowerCase();
-          const match = (data as { brand: string }[]).find(r => brandSlug(r.brand) === target);
-          if (match?.brand) handleOpenBrand(match.brand);
-        });
-    }
-    // handleOpen* are stable refs; deliberately empty deps so this
-    // only runs once. The initialSlugConsumed ref guards re-runs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slugParam]);
   const handleBookmarksOpenCreator = useCallback((handle: string) => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -1176,8 +679,8 @@ export default function Home() {
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}
-      {splashMounted && (
-        <div className={`auth-splash${splashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+      {authSplashMounted && (
+        <div className={`auth-splash${authSplashLeaving ? ' leaving' : ''}`} aria-hidden="true">
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
@@ -1217,8 +720,8 @@ export default function Home() {
               </button>
               <UserMenu
                 onOpenBookmarks={openBookmarks}
-                onOpenMyLooks={openMyLooks}
-                onOpenWallet={openWallet}
+                onOpenMyLooks={user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin' ? openMyLooks : undefined}
+                onOpenWallet={user?.role === 'creator' ? openWallet : undefined}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={handleLogout}

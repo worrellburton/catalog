@@ -563,8 +563,8 @@ body:has(.look-overlay.look-overlay--in) {
     padding: 4px 16px 24px;
   }
 
-  .look-feed-section {
-    padding: 32px 16px 48px;
+  .look-feed-content {
+    padding: 24px 12px 32px;
   }
 
   .look-feed-grid {
