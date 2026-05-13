@@ -74,9 +74,6 @@ function isTab(v: string | null): v is Tab {
 }
 
 export default function AdminAnalytics() {
-  // Sub-tab → URL pattern matches /admin/users (?tab=…). Default is
-  // Users since that's the only tab with real data today; Products is
-  // a stub placeholder until per-product analytics land.
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: Tab = isTab(searchParams.get('tab')) ? (searchParams.get('tab') as Tab) : 'users';
   const setTab = useCallback((next: Tab) => {
@@ -88,27 +85,52 @@ export default function AdminAnalytics() {
     }, { replace: false });
   }, [setSearchParams]);
 
+  const [tableMeta, setTableMeta] = useState<{ count: number | null; live: boolean }>({ count: null, live: false });
+  const handleMeta = useCallback((count: number, live: boolean) => {
+    setTableMeta({ count, live });
+  }, []);
+
+  // Reset when switching tabs so stale count doesn't flash
+  useEffect(() => {
+    setTableMeta({ count: null, live: false });
+  }, [tab]);
+
+  const countLabel = tableMeta.count === null ? null : (() => {
+    const n = tableMeta.count.toLocaleString();
+    if (tab === 'users')    return `${n} ${tableMeta.count === 1 ? 'user'    : 'users'}`;
+    if (tab === 'products') return `${n} ${tableMeta.count === 1 ? 'product' : 'products'}`;
+    return `${n} ${tableMeta.count === 1 ? 'brand' : 'brands'}`;
+  })();
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <h1>Analytics</h1>
         <p className="admin-page-subtitle">Per-user engagement and per-product performance</p>
       </div>
-      <div className="admin-tabs">
-        <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
-          Users
-        </button>
-        <button className={`admin-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
-          Products
-        </button>
-        <button className={`admin-tab ${tab === 'brands' ? 'active' : ''}`} onClick={() => setTab('brands')}>
-          Brands
-        </button>
+      <div className="admin-analytics-tabbar">
+        <div className="admin-tabs">
+          <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
+            Users
+          </button>
+          <button className={`admin-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
+            Products
+          </button>
+          <button className={`admin-tab ${tab === 'brands' ? 'active' : ''}`} onClick={() => setTab('brands')}>
+            Brands
+          </button>
+        </div>
+        <div className="admin-tabs-meta">
+          {countLabel !== null && (
+            <span className="admin-table-count">{countLabel}</span>
+          )}
+          <LiveChip live={tableMeta.live} />
+        </div>
       </div>
 
-      {tab === 'users' && <UsersAnalyticsTable />}
-      {tab === 'products' && <ProductsAnalyticsTable />}
-      {tab === 'brands' && <BrandsAnalyticsTable />}
+      {tab === 'users' && <UsersAnalyticsTable onMeta={handleMeta} />}
+      {tab === 'products' && <ProductsAnalyticsTable onMeta={handleMeta} />}
+      {tab === 'brands' && <BrandsAnalyticsTable onMeta={handleMeta} />}
     </div>
   );
 }
@@ -121,7 +143,7 @@ type SortKey =
   | 'ctr_click' | 'ctr_clickout'
   | 'total_session' | 'avg_session' | 'idle_session';
 
-function UsersAnalyticsTable() {
+function UsersAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolean) => void }) {
   const [rows, setRows] = useState<UserAnalyticsRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('last_sign_in_at');
@@ -197,14 +219,13 @@ function UsersAnalyticsTable() {
     });
   };
 
+  useEffect(() => { onMeta(sortedRows.length, live); }, [sortedRows.length, live, onMeta]);
+
   if (!loaded) return <div className="admin-empty">Loading…</div>;
   if (rows.length === 0) return <div className="admin-empty">No users yet.</div>;
 
   return (
     <div className="admin-table-wrap">
-      <div className="admin-table-toolbar">
-        <LiveChip live={live} />
-      </div>
       <table className="admin-table">
         <thead>
           <tr>
@@ -273,9 +294,16 @@ function SortableTh({
       role="button"
       aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      {label}
-      <span className="admin-th-arrow" aria-hidden="true">
-        {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        <svg
+          aria-hidden="true"
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          style={{ opacity: active ? 0.7 : 0.25, flexShrink: 0, transition: 'opacity 0.15s, transform 0.15s',
+            transform: active && sortDir === 'asc' ? 'rotate(180deg)' : 'none' }}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </span>
     </th>
   );
@@ -286,7 +314,7 @@ function SortableTh({
 type ProductSortKey = 'product_name' | 'brand' | 'impressions' | 'clicks' | 'clickouts' | 'ctr_click' | 'ctr_clickout';
 
 
-function ProductsAnalyticsTable() {
+function ProductsAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolean) => void }) {
   const [rows, setRows] = useState<ProductAnalyticsRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortKey, setSortKey] = useState<ProductSortKey>('clickouts');
@@ -343,15 +371,13 @@ function ProductsAnalyticsTable() {
     });
   };
 
+  useEffect(() => { onMeta(sortedRows.length, live); }, [sortedRows.length, live, onMeta]);
+
   if (!loaded) return <div className="admin-empty">Loading…</div>;
   if (rows.length === 0) return <div className="admin-empty">No product analytics yet.</div>;
 
   return (
     <div className="admin-table-wrap">
-      <div className="admin-table-toolbar">
-        <span className="admin-table-count">{sortedRows.length.toLocaleString()} {sortedRows.length === 1 ? 'product' : 'products'}</span>
-        <LiveChip live={live} />
-      </div>
       <table className="admin-table admin-analytics-products">
         <thead>
           <tr>
@@ -412,9 +438,16 @@ function ProductTh({
       role="button"
       aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      {label}
-      <span className="admin-th-arrow" aria-hidden="true">
-        {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        <svg
+          aria-hidden="true"
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          style={{ opacity: active ? 0.7 : 0.25, flexShrink: 0, transition: 'opacity 0.15s, transform 0.15s',
+            transform: active && sortDir === 'asc' ? 'rotate(180deg)' : 'none' }}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </span>
     </th>
   );
@@ -424,7 +457,7 @@ function ProductTh({
 
 type BrandSortKey = 'brand' | 'product_count' | 'impressions' | 'clicks' | 'clickouts' | 'ctr_click' | 'ctr_clickout';
 
-function BrandsAnalyticsTable() {
+function BrandsAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolean) => void }) {
   const [rows, setRows] = useState<BrandAnalyticsRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [sortKey, setSortKey] = useState<BrandSortKey>('clickouts');
@@ -481,15 +514,13 @@ function BrandsAnalyticsTable() {
     });
   };
 
+  useEffect(() => { onMeta(sortedRows.length, live); }, [sortedRows.length, live, onMeta]);
+
   if (!loaded) return <div className="admin-empty">Loading…</div>;
   if (rows.length === 0) return <div className="admin-empty">No brand data yet.</div>;
 
   return (
     <div className="admin-table-wrap">
-      <div className="admin-table-toolbar">
-        <span className="admin-table-count">{sortedRows.length.toLocaleString()} {sortedRows.length === 1 ? 'brand' : 'brands'}</span>
-        <LiveChip live={live} />
-      </div>
       <table className="admin-table admin-analytics-brands">
         <thead>
           <tr>
@@ -556,9 +587,16 @@ function BrandTh({
       role="button"
       aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      {label}
-      <span className="admin-th-arrow" aria-hidden="true">
-        {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        <svg
+          aria-hidden="true"
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          style={{ opacity: active ? 0.7 : 0.25, flexShrink: 0, transition: 'opacity 0.15s, transform 0.15s',
+            transform: active && sortDir === 'asc' ? 'rotate(180deg)' : 'none' }}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </span>
     </th>
   );
