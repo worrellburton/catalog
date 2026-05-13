@@ -186,7 +186,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   //   1. "Looks like this" — same brand overlap with current look
   //   2. "Popular" — fallback when section 1 is empty
   //   3. "More from <creator>" — other looks by the same creator
-  // Each section caps at 8 or 12 to avoid orphan rows (matching ProductPage).
+  // Each section is padded/trimmed to exactly 8 items (fillLooks duplicates
+  // when there are fewer, caps when there are more).
   const feedSections = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
     const ownBrands = new Set(
@@ -194,12 +195,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         .map(p => (p.brand || '').toLowerCase().trim())
         .filter(Boolean),
     );
-
-    const cap = (arr: Look[]): Look[] => {
-      if (arr.length >= 12) return arr.slice(0, 12);
-      if (arr.length >= 8)  return arr.slice(0, 8);
-      return arr;
-    };
 
     const looksLikeThis: Look[] = ownBrands.size
       ? source.filter(l =>
@@ -210,7 +205,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       : [];
 
     const popular: Look[] = looksLikeThis.length === 0
-      ? source.slice(0, 12)
+      ? source.slice(0, 8)
       : [];
 
     const moreFromCreator: Look[] = look.creator
@@ -229,9 +224,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const c = dedupe(moreFromCreator);
 
     return {
-      looksLikeThis:   cap(a),
-      popular:         cap(b),
-      moreFromCreator: cap(c),
+      looksLikeThis:   fillLooks(a, 8),
+      popular:         fillLooks(b, 8),
+      moreFromCreator: fillLooks(c, 8),
     };
   }, [look.id, look.creator, look.products, allLooks]);
 

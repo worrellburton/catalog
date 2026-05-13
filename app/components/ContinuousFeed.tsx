@@ -60,8 +60,16 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
       const newSeen = new Set(state.seenLookIds);
       newSeen.add(look.id);
 
-      const related = getSimilarLooks(look, allLooks, 8, newSeen);
-      related.forEach(l => newSeen.add(l.id));
+      const raw = getSimilarLooks(look, allLooks, 8, newSeen);
+      raw.forEach(l => newSeen.add(l.id));
+
+      // Pad to exactly 8 by cycling duplicates with unique negative IDs
+      // (same approach as fillLooks in LookOverlay).
+      const related: Look[] = [...raw];
+      while (related.length < 8 && raw.length > 0) {
+        const src = raw[related.length % raw.length];
+        related.push({ ...src, id: -(src.id * 1000 + related.length) });
+      }
 
       return {
         segments: [
@@ -821,6 +829,7 @@ export default function ContinuousFeed({
                 canDeleteCreative={canDeleteCreative}
                 onDeleteCreative={handleDeleteCreative}
                 title={segment.title}
+                batchSize={segment.isInitial ? undefined : 8}
                 isInitial={segment.isInitial}
                 layoutMode={layoutMode}
                 searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0 || brandMatchedCreatives.length > 0)}

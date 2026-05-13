@@ -761,8 +761,20 @@ export default function AdminContent() {
       const p = new URLSearchParams(prev);
       if (next === 'looks') p.delete('tab');
       else p.set('tab', next);
+      // Clear brand filter when switching tabs.
+      p.delete('brand');
       return p;
     }, { replace: false });
+  }, [setSearchParams]);
+
+  // Brand drill-down from Analytics → Brands "View products" button.
+  const brandFilter = searchParams.get('brand') || null;
+  const clearBrandFilter = useCallback(() => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.delete('brand');
+      return p;
+    }, { replace: true });
   }, [setSearchParams]);
 
   // Looks sub-filter: Published = curated catalog, Unpublished = looks that
@@ -1838,13 +1850,15 @@ export default function AdminContent() {
       if (productFilter === 'untagged' && p.gender != null) return false;
       const key = `${p.brand}-${p.name}`;
       if (deletedProductKeys.has(key)) return false;
+      // Brand drill-down from Analytics → Brands "View products".
+      if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
       if (adminQuery) {
         const hay = `${p.brand} ${p.name}`.toLowerCase();
         if (!hay.includes(adminQuery)) return false;
       }
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery]
+    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter]
   );
   const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
 
@@ -3027,6 +3041,22 @@ export default function AdminContent() {
       )}
       {activeTab === 'products' && !productsLoading && (
         <>
+          {brandFilter && (
+            <div className="admin-brand-filter-chip">
+              <span>Brand: <strong>{brandFilter}</strong></span>
+              <span className="admin-brand-filter-count">{filteredProductsList.length} product{filteredProductsList.length !== 1 ? 's' : ''}</span>
+              <button
+                className="admin-icon-btn"
+                title="Clear brand filter"
+                aria-label="Clear brand filter"
+                onClick={clearBrandFilter}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
           <div className="admin-tabs" style={{ marginBottom: 12 }}>
             <button
               className={`admin-tab ${productFilter === 'all' ? 'active' : ''}`}

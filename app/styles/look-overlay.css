@@ -568,7 +568,6 @@ body:has(.look-overlay.look-overlay--in) {
   }
 
   .look-feed-grid {
-    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
@@ -590,6 +589,8 @@ body:has(.look-overlay.look-overlay--in) {
 /* ── Feed sections below the hero (stack like ProductPage) ── */
 .look-feed-section {
   width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
   padding: 40px 32px 0;
   background: #0a0a0a;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -617,8 +618,14 @@ body:has(.look-overlay.look-overlay--in) {
 
 .look-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .look-feed-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+}
+@media (min-width: 1200px) {
+  .look-feed-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .look-feed-grid .look-card {

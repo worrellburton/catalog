@@ -78,6 +78,27 @@ export async function getProductAnalytics(): Promise<ProductAnalyticsRow[]> {
 }
 
 /**
+ * Per-brand analytics row from the `brand_analytics_summary` RPC.
+ */
+export interface BrandAnalyticsRow {
+  brand: string;
+  product_count: number;
+  total_impressions: number;
+  total_clicks: number;
+  total_clickouts: number;
+}
+
+export async function getBrandAnalytics(): Promise<BrandAnalyticsRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('brand_analytics_summary');
+  if (error) {
+    console.error('[getBrandAnalytics]', error.message);
+    return [];
+  }
+  return (data ?? []) as BrandAnalyticsRow[];
+}
+
+/**
  * Pretty-print millisecond durations as `Hh Mm` / `Mm Ss` / `Ns`.
  * Used in the analytics table so column widths stay tight.
  */

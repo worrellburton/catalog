@@ -23,7 +23,7 @@ import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, t
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
-import { trackClick } from '~/services/session-tracker';
+import { trackClick, trackCreativeImpressions, resolveProductIdByUrl } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 
@@ -400,6 +400,18 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
+
+    // Fire a single product impression. Resolve URL → DB id asynchronously
+    // so it doesn't block navigation; fire-and-forget.
+    const productId = (product as Product & { id?: string }).id || null;
+    const context = [product.brand, product.name].filter(Boolean).join(' · ').slice(0, 200);
+    if (productId) {
+      void trackCreativeImpressions(productId, null, context);
+    } else if (product.url) {
+      resolveProductIdByUrl(product.url).then(id => {
+        void trackCreativeImpressions(id || null, null, context);
+      });
+    }
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
@@ -426,7 +438,17 @@ export default function Home() {
     if (now - lastOpenAtRef.current < 240) return;
     lastOpenAtRef.current = now;
 
-    const mapped: Product = {
+    // Fire impressions for the primary product + every other product in the
+    // associated look (if any). Fire-and-forget — don't await so navigation
+    // is never blocked by the look_products query.
+    void trackCreativeImpressions(
+      creative.product.id || null,
+      creative.look_id || null,
+      [creative.product.brand, creative.product.name].filter(Boolean).join(' · ').slice(0, 200),
+    );
+
+    const mapped: Product & { id?: string } = {
+      id: creative.product.id || undefined,
       name: creative.product.name || 'Shop Now',
       brand: creative.product.brand || '',
       price: creative.product.price || '',
@@ -631,6 +653,7 @@ export default function Home() {
     selectedLook,
     brandFilter,
     onOpenProduct: handleOpenProduct,
+    onOpenCreative: handleOpenCreative,
     onOpenLook: handleOpenLook,
     onOpenBrand: handleOpenBrand,
   });

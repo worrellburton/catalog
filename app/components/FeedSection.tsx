@@ -111,7 +111,9 @@ function FeedSection({
     // The initial segment is creative-only, so it should render even when
     // looks haven't resolved yet. Sub-segments need looks to draw similars.
     if (!isInitial && looks.length === 0) return [];
-    const targetCells = isInitial ? 200 : 50;
+    // Sub-segments (More like this) show the exact looks array — no cycling
+    // beyond the input so the section stays at exactly 8 items.
+    const targetCells = isInitial ? 200 : looks.length;
 
     if (isInitial && creativesLoading) {
       // First paint while elite creatives are still loading - render *only*

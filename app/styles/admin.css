@@ -651,8 +651,9 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-page {
   padding: 24px 28px;
-  max-width: 1400px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .admin-page-header {
@@ -1063,8 +1064,8 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-table-wrap {
   overflow-x: auto;
   background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
 }
 
 .admin-row-promote {
@@ -1104,31 +1105,34 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .admin-table th {
-  text-align: center;
-  padding: 8px 12px;
-  font-size: 10px;
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #999;
-  border-bottom: 1px solid #e5e5e5;
+  letter-spacing: 0.05em;
+  color: #b0b0b0;
+  background: #fafafa;
+  border-bottom: 1px solid #ebebeb;
   white-space: nowrap;
-}
-.admin-table th:first-child {
-  text-align: left;
 }
 
 .admin-th-sortable {
   cursor: pointer;
   user-select: none;
+  transition: color 0.15s;
 }
 
 .admin-th-sortable:hover {
-  color: #555;
+  color: #666;
+}
+
+.admin-th-sortable.is-active {
+  color: #333;
 }
 
 .admin-th-sortable-inner {
@@ -1148,23 +1152,32 @@ html.admin-on-dark-canvas .admin-topbar,
   opacity: 1;
 }
 
-.admin-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #444;
-  vertical-align: middle;
-  text-align: center;
-}
-.admin-table td:first-child {
-  text-align: left;
+/* Numeric column header — right-aligned to match cell values */
+.admin-th-num {
+  text-align: right;
 }
 
-.admin-table tbody tr:nth-child(even) td {
-  background: #fafafa;
+.admin-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f2f2f2;
+  color: #444;
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .admin-table tr:hover td {
-  background: #f0f4ff;
+  background: #f7f7f7;
+}
+
+/* Numeric value cells — right-aligned, tabular number spacing */
+.admin-cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: #555;
 }
 
 .admin-cell-name {
@@ -1210,19 +1223,83 @@ html.admin-on-dark-canvas .admin-topbar,
   white-space: nowrap;
 }
 
+/* Plain text product name cell — bold + clipped, no flex (flex is only
+   needed in avatar+text combos like the users table). */
+.admin-cell-product-name {
+  font-weight: 600;
+  color: #111;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-dark .admin-cell-product-name { color: #f0f0f0; }
+
+/* Narrow actions column at the end of a table row */
+.admin-th-actions { width: 40px; }
+.admin-cell-actions {
+  width: 40px;
+  text-align: right;
+  padding-right: 6px;
+}
+
+/* Brand filter chip shown above the products table when ?brand= is set */
+.admin-brand-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  background: #f0f4ff;
+  border: 1px solid #c7d4f8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334;
+}
+.admin-dark .admin-brand-filter-chip {
+  background: rgba(99, 122, 231, 0.12);
+  border-color: rgba(99, 122, 231, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+.admin-brand-filter-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.admin-dark .admin-brand-filter-count { color: rgba(255, 255, 255, 0.4); }
+
 /* The analytics products table has many columns — let the wrap host
    scroll horizontally on narrow viewports rather than letting the
    row push into the page chrome. */
 .admin-analytics-products { table-layout: auto; }
 
-/* Toolbar above realtime tables — hosts the Live indicator. */
-.admin-table-toolbar {
+/* Full-width row containing tabs (left) + count/live chip (right) */
+.admin-analytics-tabbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 0 0 10px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
 }
+/* Override default margin-bottom on admin-tabs when nested inside tabbar */
+.admin-analytics-tabbar .admin-tabs {
+  margin-bottom: 0;
+}
+/* Right slot: count label + live chip */
+.admin-tabs-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* Row count label */
+.admin-table-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.38);
+  letter-spacing: 0.01em;
+}
+.admin-dark .admin-table-count { color: rgba(255, 255, 255, 0.35); }
 .admin-live-chip {
   display: inline-flex;
   align-items: center;
@@ -1871,27 +1948,31 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 
 .admin-dark .admin-table-wrap {
-  background: #111;
-  border-color: rgba(255, 255, 255, 0.06);
+  background: #161616;
+  border-color: rgba(255, 255, 255, 0.07);
 }
 
 .admin-dark .admin-table th {
-  color: rgba(255, 255, 255, 0.3);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.28);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
 }
 
 .admin-dark .admin-th-sortable:hover {
   color: rgba(255, 255, 255, 0.6);
 }
-.admin-dark .admin-table td {
-  color: rgba(255, 255, 255, 0.7);
-  border-bottom-color: rgba(255, 255, 255, 0.04);
+.admin-dark .admin-th-sortable.is-active {
+  color: rgba(255, 255, 255, 0.85);
 }
-.admin-dark .admin-table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.02);
+.admin-dark .admin-table td {
+  color: rgba(255, 255, 255, 0.68);
+  border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 .admin-dark .admin-table tr:hover td {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
+}
+.admin-dark .admin-cell-num {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .admin-dark .admin-cell-name {

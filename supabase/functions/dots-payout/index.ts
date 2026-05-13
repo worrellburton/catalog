@@ -533,7 +533,7 @@ async function handleUpdateSettings(
   return jsonRes(data);
 }
 
-// GET /creators (admin) — creators list with payout status
+// GET /creators (admin) — creators list with payout status + wallet data
 async function handleGetCreators(
   url: URL,
   sb: ReturnType<typeof createClient>,
@@ -542,19 +542,115 @@ async function handleGetCreators(
   const limit = Math.min(100, parseInt(url.searchParams.get('limit') ?? '50'));
   const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const offset = (page - 1) * limit;
+  const sort = url.searchParams.get('sort') ?? 'created_at';
+  const sortAllowed = ['created_at', 'full_name', 'email'];
 
   let query = sb
     .from('profiles')
     .select('id, full_name, email, dots_user_id, is_payout_verified, is_payout_active, created_at', { count: 'exact' })
-    .order('created_at', { ascending: false })
+    .order(sortAllowed.includes(sort) ? sort : 'created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (search) {
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
   }
 
-  const { data, count } = await query;
-  return jsonRes({ creators: data ?? [], total: count ?? 0 });
+  const { data: profiles, count } = await query;
+  if (!profiles || profiles.length === 0) {
+    return jsonRes({ creators: [], total: count ?? 0 });
+  }
+
+  // Batch-fetch latest wallet entry per user
+  const userIds = profiles.map((p: { id: string }) => p.id);
+  const { data: walletRows } = await sb
+    .from('wallet_entries')
+    .select('user_id, current_balance, total_earning, total_withdraw, created_at')
+    .in('user_id', userIds)
+    .order('created_at', { ascending: false });
+
+  // Build map: user_id → latest wallet snapshot
+  const walletMap: Record<string, { current_balance: number; total_earning: number; total_withdraw: number }> = {};
+  if (walletRows) {
+    for (const row of walletRows) {
+      if (!walletMap[row.user_id]) {
+        walletMap[row.user_id] = {
+          current_balance: row.current_balance,
+          total_earning: row.total_earning,
+          total_withdraw: row.total_withdraw,
+        };
+      }
+    }
+  }
+
+  const creators = profiles.map((p: {
+    id: string; full_name: string | null; email: string | null;
+    dots_user_id: string | null; is_payout_verified: boolean;
+    is_payout_active: boolean; created_at: string;
+  }) => ({
+    ...p,
+    current_balance: walletMap[p.id]?.current_balance ?? 0,
+    total_earning: walletMap[p.id]?.total_earning ?? 0,
+    total_withdraw: walletMap[p.id]?.total_withdraw ?? 0,
+  }));
+
+  // If sorting by earnings, sort in-app after merge
+  if (sort === 'total_earning') {
+    creators.sort((a: { total_earning: number }, b: { total_earning: number }) => b.total_earning - a.total_earning);
+  } else if (sort === 'current_balance') {
+    creators.sort((a: { current_balance: number }, b: { current_balance: number }) => b.current_balance - a.current_balance);
+  }
+
+  return jsonRes({ creators, total: count ?? 0 });
+}
+
+// GET /creator-wallet/:userId (admin) — full wallet history for a specific creator
+async function handleAdminGetCreatorWallet(
+  userId: string,
+  url: URL,
+  sb: ReturnType<typeof createClient>,
+) {
+  const limit = Math.min(200, parseInt(url.searchParams.get('limit') ?? '100'));
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
+  const offset = (page - 1) * limit;
+
+  const { data: entries, count } = await sb
+    .from('wallet_entries')
+    .select('*', { count: 'exact' })
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  return jsonRes({ entries: entries ?? [], total: count ?? 0 });
+}
+
+// GET /earnings-summary (admin) — platform-wide earnings totals
+async function handleGetEarningsSummary(sb: ReturnType<typeof createClient>) {
+  // Get the latest wallet entry per user for accurate running totals
+  const { data: walletRows } = await sb
+    .from('wallet_entries')
+    .select('user_id, current_balance, total_earning, total_withdraw, created_at')
+    .order('created_at', { ascending: false });
+
+  const latestPerUser: Record<string, { current_balance: number; total_earning: number; total_withdraw: number }> = {};
+  if (walletRows) {
+    for (const row of walletRows) {
+      if (!latestPerUser[row.user_id]) {
+        latestPerUser[row.user_id] = {
+          current_balance: row.current_balance,
+          total_earning: row.total_earning,
+          total_withdraw: row.total_withdraw,
+        };
+      }
+    }
+  }
+
+  const users = Object.values(latestPerUser);
+  const total_platform_earnings = parseFloat(users.reduce((s, u) => s + u.total_earning, 0).toFixed(2));
+  const total_outstanding_balance = parseFloat(users.reduce((s, u) => s + u.current_balance, 0).toFixed(2));
+  const total_withdrawn = parseFloat(users.reduce((s, u) => s + u.total_withdraw, 0).toFixed(2));
+  const creators_with_earnings = users.filter(u => u.total_earning > 0).length;
+
+  return jsonRes({ total_platform_earnings, total_outstanding_balance, total_withdrawn, creators_with_earnings });
 }
 
 // POST /webhook — Dots payout_link.paid_out event
@@ -699,6 +795,19 @@ Deno.serve(async (req: Request) => {
   if (path === '/creators' && method === 'GET') {
     if (!profile.is_admin) return errorRes('Admin only', 403);
     return handleGetCreators(url, sb);
+  }
+
+  // ── Admin: platform earnings summary ─────────────────────────────────────
+  if (path === '/earnings-summary' && method === 'GET') {
+    if (!profile.is_admin) return errorRes('Admin only', 403);
+    return handleGetEarningsSummary(sb);
+  }
+
+  // ── Admin: wallet history for a specific creator ──────────────────────────
+  const creatorWalletMatch = path.match(/^\/creator-wallet\/([\w-]+)$/);
+  if (creatorWalletMatch && method === 'GET') {
+    if (!profile.is_admin) return errorRes('Admin only', 403);
+    return handleAdminGetCreatorWallet(creatorWalletMatch[1], url, sb);
   }
 
   // ── Admin: credit creator wallet ──────────────────────────────────────────

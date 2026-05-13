@@ -251,3 +251,44 @@ export async function trackProductClickout(url: string | null | undefined, brand
     ? { type: 'product', id, uuid: id, context }
     : { type: 'product_url', id: url.slice(0, 200), context });
 }
+
+/**
+ * Fire impression events for all products associated with a creative open.
+ *
+ * - Always fires for the primary product (`primaryId`).
+ * - If the creative has a `look_id`, also fires for every other product
+ *   in that look (via the `look_products` junction table) so all visible
+ *   products get credited, not just the one the creative was made for.
+ *
+ * Fire-and-forget — awaiting is optional. Errors are swallowed so a
+ * failing analytics write can never break the UI open path.
+ */
+export async function trackCreativeImpressions(
+  primaryId: string | null | undefined,
+  lookId: string | null | undefined,
+  context: string,
+): Promise<void> {
+  const seen = new Set<string>();
+
+  // Primary product — fire immediately without waiting for any lookup.
+  if (primaryId) {
+    seen.add(primaryId);
+    fireOrQueue('impression', { type: 'product', id: primaryId, uuid: primaryId, context });
+  }
+
+  // Remaining products in the associated look.
+  if (lookId && supabase) {
+    try {
+      const { data } = await supabase
+        .from('look_products')
+        .select('product_id')
+        .eq('look_id', lookId);
+      for (const row of (data ?? []) as Array<{ product_id: string }>) {
+        const id = row.product_id;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        fireOrQueue('impression', { type: 'product', id, uuid: id, context });
+      }
+    } catch { /* swallow — analytics must not break product navigation */ }
+  }
+}
