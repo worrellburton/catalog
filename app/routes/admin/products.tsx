@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import {
   getProductAnalytics,
@@ -25,6 +26,8 @@ export default function AdminProducts() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [analytics, setAnalytics] = useState<ProductAnalyticsRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const brandFilter = searchParams.get('brand') || null;
 
   useEffect(() => {
     if (!supabase) return;
@@ -91,6 +94,14 @@ export default function AdminProducts() {
     ];
   }, [products, analytics]);
 
+  // Apply brand filter from URL (?brand=xxx) — set by the Analytics →
+  // Brands tab "View products" eye button for quick drill-down.
+  const displayedProducts = useMemo(() => {
+    if (!brandFilter) return products;
+    const lc = brandFilter.toLowerCase();
+    return products.filter(p => (p.brand || '').toLowerCase() === lc);
+  }, [products, brandFilter]);
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -109,6 +120,22 @@ export default function AdminProducts() {
         <div className="admin-empty">Loading…</div>
       ) : (
         <div className="admin-table-wrap">
+          {brandFilter && (
+            <div className="admin-brand-filter-chip">
+              <span>Filtered by brand: <strong>{brandFilter}</strong></span>
+              <span className="admin-brand-filter-count">{displayedProducts.length} product{displayedProducts.length !== 1 ? 's' : ''}</span>
+              <button
+                className="admin-icon-btn"
+                title="Clear filter"
+                aria-label="Clear brand filter"
+                onClick={() => setSearchParams(prev => { const out = new URLSearchParams(prev); out.delete('brand'); return out; }, { replace: true })}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
           <table className="admin-table">
             <thead>
               <tr>
@@ -122,12 +149,12 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody>
-              {products.map(p => {
+              {displayedProducts.map(p => {
                 const a = analyticsById.get(p.id);
                 const ctr = a ? clickThroughRate(a) : null;
                 return (
                   <tr key={p.id}>
-                    <td className="admin-cell-name">{p.name || '—'}</td>
+                    <td className="admin-cell-product-name">{p.name || '—'}</td>
                     <td className="admin-cell-muted">{p.brand || '—'}</td>
                     <td>{p.price || '—'}</td>
                     <td className="admin-cell-num">{(a?.total_impressions ?? 0).toLocaleString()}</td>

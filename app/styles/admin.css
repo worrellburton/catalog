@@ -1210,6 +1210,51 @@ html.admin-on-dark-canvas .admin-topbar,
   white-space: nowrap;
 }
 
+/* Plain text product name cell — bold + clipped, no flex (flex is only
+   needed in avatar+text combos like the users table). */
+.admin-cell-product-name {
+  font-weight: 600;
+  color: #111;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-dark .admin-cell-product-name { color: #f0f0f0; }
+
+/* Narrow actions column at the end of a table row */
+.admin-th-actions { width: 40px; }
+.admin-cell-actions {
+  width: 40px;
+  text-align: right;
+  padding-right: 6px;
+}
+
+/* Brand filter chip shown above the products table when ?brand= is set */
+.admin-brand-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  background: #f0f4ff;
+  border: 1px solid #c7d4f8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334;
+}
+.admin-dark .admin-brand-filter-chip {
+  background: rgba(99, 122, 231, 0.12);
+  border-color: rgba(99, 122, 231, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+.admin-brand-filter-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.admin-dark .admin-brand-filter-count { color: rgba(255, 255, 255, 0.4); }
+
 /* The analytics products table has many columns — let the wrap host
    scroll horizontally on narrow viewports rather than letting the
    row push into the page chrome. */
@@ -1219,10 +1264,18 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-table-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
   margin: 0 0 10px;
 }
+/* Row count label on the left side of the toolbar */
+.admin-table-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.01em;
+}
+.admin-dark .admin-table-count { color: rgba(255, 255, 255, 0.35); }
 .admin-live-chip {
   display: inline-flex;
   align-items: center;

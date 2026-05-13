@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from '@remix-run/react';
+import { useSearchParams, useNavigate } from '@remix-run/react';
 import {
   getUserAnalytics,
   getProductAnalytics,
+  getBrandAnalytics,
   clickThroughRate,
   clickoutRate,
   formatDurationMs,
   type UserAnalyticsRow,
   type ProductAnalyticsRow,
+  type BrandAnalyticsRow,
 } from '~/services/analytics';
 import { supabase } from '~/utils/supabase';
 
@@ -65,8 +67,8 @@ function LiveChip({ live }: { live: boolean }) {
   );
 }
 
-type Tab = 'users' | 'products';
-const TAB_VALUES: readonly Tab[] = ['users', 'products'];
+type Tab = 'users' | 'products' | 'brands';
+const TAB_VALUES: readonly Tab[] = ['users', 'products', 'brands'];
 function isTab(v: string | null): v is Tab {
   return v !== null && (TAB_VALUES as readonly string[]).includes(v);
 }
@@ -99,10 +101,14 @@ export default function AdminAnalytics() {
         <button className={`admin-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
           Products
         </button>
+        <button className={`admin-tab ${tab === 'brands' ? 'active' : ''}`} onClick={() => setTab('brands')}>
+          Brands
+        </button>
       </div>
 
       {tab === 'users' && <UsersAnalyticsTable />}
-      {tab === 'products' && <ProductsAnalyticsStub />}
+      {tab === 'products' && <ProductsAnalyticsTable />}
+      {tab === 'brands' && <BrandsAnalyticsTable />}
     </div>
   );
 }
@@ -279,9 +285,6 @@ function SortableTh({
 
 type ProductSortKey = 'product_name' | 'brand' | 'impressions' | 'clicks' | 'clickouts' | 'ctr_click' | 'ctr_clickout';
 
-function ProductsAnalyticsStub() {
-  return <ProductsAnalyticsTable />;
-}
 
 function ProductsAnalyticsTable() {
   const [rows, setRows] = useState<ProductAnalyticsRow[]>([]);
@@ -346,6 +349,7 @@ function ProductsAnalyticsTable() {
   return (
     <div className="admin-table-wrap">
       <div className="admin-table-toolbar">
+        <span className="admin-table-count">{sortedRows.length.toLocaleString()} {sortedRows.length === 1 ? 'product' : 'products'}</span>
         <LiveChip live={live} />
       </div>
       <table className="admin-table admin-analytics-products">
@@ -372,7 +376,7 @@ function ProductsAnalyticsTable() {
                     ? <img src={row.image_url} alt="" className="admin-product-thumb" loading="lazy" decoding="async" />
                     : <span className="admin-product-thumb admin-product-thumb--empty" aria-hidden="true" />}
                 </td>
-                <td className="admin-cell-name admin-cell-name--clip" title={row.product_name ?? undefined}>
+                <td className="admin-cell-product-name" title={row.product_name ?? undefined}>
                   {row.product_name || '—'}
                 </td>
                 <td className="admin-cell-muted">{row.brand || '—'}</td>
@@ -398,6 +402,150 @@ function ProductTh({
   sortKey: ProductSortKey;
   sortDir: 'asc' | 'desc';
   onSort: (k: ProductSortKey) => void;
+  numeric?: boolean;
+}) {
+  const active = sortKey === col;
+  return (
+    <th
+      className={`admin-th-sortable ${numeric ? 'admin-th-num' : ''} ${active ? 'is-active' : ''}`}
+      onClick={() => onSort(col)}
+      role="button"
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      {label}
+      <span className="admin-th-arrow" aria-hidden="true">
+        {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+      </span>
+    </th>
+  );
+}
+
+// ── Brands tab ──────────────────────────────────────────────────────────────
+
+type BrandSortKey = 'brand' | 'product_count' | 'impressions' | 'clicks' | 'clickouts' | 'ctr_click' | 'ctr_clickout';
+
+function BrandsAnalyticsTable() {
+  const [rows, setRows] = useState<BrandAnalyticsRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [sortKey, setSortKey] = useState<BrandSortKey>('clickouts');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const { live, pulse } = useLivePulse();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      getBrandAnalytics().then(data => {
+        if (cancelled) return;
+        setRows(data);
+        setLoaded(true);
+      });
+    };
+    refetch();
+    const unsub = subscribeAnalytics(['user_events'], refetch, pulse);
+    return () => { cancelled = true; unsub(); };
+  }, [pulse]);
+
+  const sortedRows = useMemo(() => {
+    const cmp = (a: BrandAnalyticsRow, b: BrandAnalyticsRow): number => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortKey) {
+        case 'brand':         return (a.brand || '').localeCompare(b.brand || '') * dir;
+        case 'product_count': return (a.product_count    - b.product_count)    * dir;
+        case 'impressions':   return (a.total_impressions - b.total_impressions) * dir;
+        case 'clicks':        return (a.total_clicks      - b.total_clicks)      * dir;
+        case 'clickouts':     return (a.total_clickouts   - b.total_clickouts)   * dir;
+        case 'ctr_click': {
+          const ar = clickThroughRate(a) ?? -1;
+          const br = clickThroughRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+        case 'ctr_clickout': {
+          const ar = clickoutRate(a) ?? -1;
+          const br = clickoutRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+      }
+    };
+    return [...rows].sort(cmp);
+  }, [rows, sortKey, sortDir]);
+
+  const onSort = (key: BrandSortKey) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
+      setSortDir(key === 'brand' ? 'asc' : 'desc');
+      return key;
+    });
+  };
+
+  if (!loaded) return <div className="admin-empty">Loading…</div>;
+  if (rows.length === 0) return <div className="admin-empty">No brand data yet.</div>;
+
+  return (
+    <div className="admin-table-wrap">
+      <div className="admin-table-toolbar">
+        <span className="admin-table-count">{sortedRows.length.toLocaleString()} {sortedRows.length === 1 ? 'brand' : 'brands'}</span>
+        <LiveChip live={live} />
+      </div>
+      <table className="admin-table admin-analytics-brands">
+        <thead>
+          <tr>
+            <BrandTh col="brand"         label="Brand"       sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <BrandTh col="product_count" label="Products"    sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <BrandTh col="impressions"   label="Impressions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <BrandTh col="clicks"        label="Clicks"      sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <BrandTh col="clickouts"     label="Clickouts"   sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <BrandTh col="ctr_click"     label="CTR (click)"    sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <BrandTh col="ctr_clickout"  label="CTR (clickout)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <th className="admin-th-actions" aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.map(row => {
+            const ctrClick    = clickThroughRate(row);
+            const ctrClickout = clickoutRate(row);
+            return (
+              <tr key={row.brand}>
+                <td className="admin-cell-name">{row.brand}</td>
+                <td className="admin-cell-num">{row.product_count.toLocaleString()}</td>
+                <td className="admin-cell-num">{row.total_impressions.toLocaleString()}</td>
+                <td className="admin-cell-num">{row.total_clicks.toLocaleString()}</td>
+                <td className="admin-cell-num">{row.total_clickouts.toLocaleString()}</td>
+                <td className="admin-cell-num">{ctrClick    === null ? '—' : `${(ctrClick    * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClickout === null ? '—' : `${(ctrClickout * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-actions">
+                  <button
+                    className="admin-icon-btn"
+                    title={`View products for ${row.brand}`}
+                    aria-label={`View products for ${row.brand}`}
+                    onClick={() => navigate(`/admin/content?tab=products&brand=${encodeURIComponent(row.brand)}`)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BrandTh({
+  col, label, sortKey, sortDir, onSort, numeric,
+}: {
+  col: BrandSortKey;
+  label: string;
+  sortKey: BrandSortKey;
+  sortDir: 'asc' | 'desc';
+  onSort: (k: BrandSortKey) => void;
   numeric?: boolean;
 }) {
   const active = sortKey === col;
