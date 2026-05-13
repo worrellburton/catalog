@@ -161,9 +161,17 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
 
   // Read hash on mount for deep linking
   useEffect(() => {
+    const path = window.location.pathname;
     const hash = window.location.hash.replace('#', '');
+    // On deep-link paths (/p/, /l/, /b/) the shell injects #app to bypass
+    // the password gate. Honor it by entering the app view, then strip the
+    // hash so the URL stays clean (/p/slug not /p/slug#app).
+    const isDeepLink = path.startsWith('/p/') || path.startsWith('/l/') || path.startsWith('/b/');
     if (hash === 'app') {
       setView('app');
+      if (isDeepLink) {
+        window.history.replaceState(null, '', path);
+      }
     } else if (hash === 'landing') {
       setView('landing');
     }
@@ -177,6 +185,19 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     // exchange completes.
     if (window.location.hash.includes('access_token')) return;
     if (window.location.search.includes('code=')) return;
+
+    // Deep-link routes (/p/, /l/, /b/) own their own URL — the overlay
+    // router keeps them in sync. Don't append #app on top of a product
+    // or look path or the address bar shows /p/slug#app after reload.
+    const path = window.location.pathname;
+    const isDeepLink = path.startsWith('/p/') || path.startsWith('/l/') || path.startsWith('/b/');
+    if (isDeepLink) {
+      // Strip any stale hash left over from a previous navigation.
+      if (window.location.hash) {
+        window.history.replaceState(null, '', path);
+      }
+      return;
+    }
 
     let hash = '';
     if (view === 'app') hash = 'app';

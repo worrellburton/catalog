@@ -426,7 +426,8 @@ export default function Home() {
     if (now - lastOpenAtRef.current < 240) return;
     lastOpenAtRef.current = now;
 
-    const mapped: Product = {
+    const mapped: Product & { id?: string } = {
+      id: creative.product.id || undefined,
       name: creative.product.name || 'Shop Now',
       brand: creative.product.brand || '',
       price: creative.product.price || '',
@@ -631,6 +632,7 @@ export default function Home() {
     selectedLook,
     brandFilter,
     onOpenProduct: handleOpenProduct,
+    onOpenCreative: handleOpenCreative,
     onOpenLook: handleOpenLook,
     onOpenBrand: handleOpenBrand,
   });
