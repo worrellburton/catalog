@@ -52,6 +52,16 @@ export interface PayoutCreator {
   is_payout_verified: boolean;
   is_payout_active: boolean;
   created_at: string;
+  current_balance: number;
+  total_earning: number;
+  total_withdraw: number;
+}
+
+export interface EarningsSummary {
+  total_platform_earnings: number;
+  total_outstanding_balance: number;
+  total_withdrawn: number;
+  creators_with_earnings: number;
 }
 
 // ─── Edge function URL ────────────────────────────────────────────────────────
@@ -180,8 +190,22 @@ export async function getPayoutCreators(
   search = '',
   page = 1,
   limit = 50,
+  sort = 'created_at',
 ): Promise<{ creators: PayoutCreator[]; total: number }> {
-  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString(), sort });
   if (search) params.set('search', search);
   return edgeJson<{ creators: PayoutCreator[]; total: number }>(`/creators?${params}`);
+}
+
+export async function getEarningsSummary(): Promise<EarningsSummary> {
+  return edgeJson<EarningsSummary>('/earnings-summary');
+}
+
+export async function adminGetCreatorWallet(
+  userId: string,
+  page = 1,
+  limit = 100,
+): Promise<{ entries: WalletEntry[]; total: number }> {
+  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  return edgeJson<{ entries: WalletEntry[]; total: number }>(`/creator-wallet/${userId}?${params}`);
 }
