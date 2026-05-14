@@ -13,6 +13,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { useSearch } from '~/hooks/useSearch';
+import { director } from '~/services/video-playback-director';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -129,6 +130,15 @@ export default function ContinuousFeed({
       setCommittedQuery(searchQuery);
     }
   }, [searchQuery]);
+
+  // ── Director scroll notifications ─────────────────────────────────────
+  // Keeps the playback director in sync with the page scroll position so
+  // it can re-rank and recover stalled cards after a fast flick.
+  useEffect(() => {
+    const onScroll = () => director.notifyScroll(window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // ── Filtering uses committedQuery so grid doesn't change while typing ──
   // must never appear in the consumer feed, detail pages, or similar-look rows.

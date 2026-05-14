@@ -766,11 +766,10 @@
   );
   padding-bottom: var(--suggestions-bar-clear);
   box-sizing: border-box;
-  /* Soft entrance fade on just the top edge so the first row of
-     pills doesn't pop visually. No bottom mask - the input bar
-     itself is opaque and naturally clips the column. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 80px, black 100%);
-  mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
+  /* Fade at the top edge (items exit upward) and bottom edge (items
+     emerge from the search bar, creating a rising-from-bar visual). */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 60px, black 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 60px, black 68%, transparent 100%);
 }
 
 /* While the search overlay is open, lock the underlying feed so the
@@ -994,30 +993,14 @@ body:has(.bottom-bar.search-open) {
     bottom: 0;
   }
 
-  /* Native touch-scroll for suggestions on phones (rAF auto-scroll
-     is disabled here in BottomBar.tsx). Track resets to identity
-     transform so user scroll isn't fighting a per-frame translate. */
-  .search-suggestions {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .search-suggestions-track {
-    transform: none !important;
-    /* Bottom padding pushes the last suggestion above the input bar
-       so users can tap any item without it hiding behind the pill. */
-    padding-bottom: calc(var(--suggestions-bar-clear, 88px) + 12px);
-  }
+  /* Auto-scroll (rAF) is now active on mobile too — no touch-scroll
+     override needed. The rAF drives translateY, so overflow stays hidden. */
   /* Slightly more opaque dim on mobile so the page doesn't bleed
      through the gap between the bar and the keyboard. */
   .search-backdrop {
     background: rgba(0, 0, 0, 0.88);
   }
 }
-  /* Suggestions float above the bar - keep them well clear of the URL
-     toolbar so the rolling list doesn't clip into Safari's chrome. */
-  .search-suggestions {
-    bottom: calc(180px + env(safe-area-inset-bottom));
-  }
 }
 
 

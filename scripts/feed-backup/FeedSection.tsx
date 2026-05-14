@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import LookCard from './LookCard';
-import CreativeCardV2 from './CreativeCardV2';
+import CreativeCard from './CreativeCard';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
@@ -262,9 +262,8 @@ function FeedSection({
           }
           if (item.type === 'creative') {
             return (
-              <CreativeCardV2
+              <CreativeCard
                 key={`creative-${item.creative.id}-${idx}`}
-                slotId={`creative-${item.creative.id}-${idx}`}
                 creative={item.creative}
                 className={getCardClass(idx)}
                 onOpenProduct={onOpenCreativeProduct}
