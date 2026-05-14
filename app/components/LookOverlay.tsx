@@ -6,6 +6,7 @@ import LookCard from './LookCard';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
+import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -157,6 +158,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
+  const [saveCount, setSaveCount] = useState<number | null>(null);
 
   // Resolve creator identity in priority order so orphan looks (created
   // via the user-generation flow with no creator_handle) render the
@@ -255,6 +257,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setActiveTab('products');
     setLookBookmarked(bookmarks.isLookBookmarked(look.id));
     setProductBookmarks(look.products.map(p => bookmarks.isProductBookmarked(p)));
+    // Fetch save count when look has a Supabase UUID
+    setSaveCount(null);
+    if (look.uuid) {
+      getLookSaveCount(look.uuid).then(setSaveCount);
+    }
   }, [look.id]);
 
   useEscapeKey(() => handleClose());
@@ -283,8 +290,19 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   }, [translateY, handleClose]);
 
   const handleToggleLookBookmark = () => {
+    const wasBookmarked = lookBookmarked;
     bookmarks.toggleLookBookmark(look.id);
     setLookBookmarked(b => !b);
+    // Sync to Supabase and update the displayed count
+    if (look.uuid) {
+      if (wasBookmarked) {
+        recordLookUnsave(look.uuid);
+        setSaveCount(c => (c !== null && c > 0 ? c - 1 : c));
+      } else {
+        recordLookSave(look.uuid);
+        setSaveCount(c => (c !== null ? c + 1 : 1));
+      }
+    }
   };
 
   const handleToggleProductBookmark = (index: number) => {
@@ -444,6 +462,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Look title */}
             {look.title && (
               <h2 className="look-detail-title">{look.title}</h2>
+            )}
+
+            {/* Save count */}
+            {look.uuid && saveCount !== null && saveCount > 0 && (
+              <div className="look-save-count">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>{saveCount.toLocaleString()} {saveCount === 1 ? 'save' : 'saves'}</span>
+              </div>
             )}
 
             {/* Tabs */}

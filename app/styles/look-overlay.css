@@ -230,8 +230,19 @@
   font-weight: 600;
   line-height: 1.3;
   color: #ffffff;
-  padding: 12px 24px 16px;
+  padding: 12px 24px 8px;
   margin: 0;
+}
+
+/* Save count shown below the title */
+.look-save-count {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 24px 14px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Tabs */
