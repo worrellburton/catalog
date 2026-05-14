@@ -114,9 +114,9 @@ header > * {
   align-items: center;
   padding: 5px 11px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.14);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.28);
+  background: #22c55e;
+  color: #ffffff;
+  border: 1px solid #22c55e;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -128,8 +128,8 @@ header > * {
   white-space: nowrap;
 }
 .header-wallet-pill:hover {
-  background: rgba(34, 197, 94, 0.22);
-  border-color: rgba(34, 197, 94, 0.45);
+  background: #16a34a;
+  border-color: #16a34a;
   transform: translateY(-1px);
 }
 
