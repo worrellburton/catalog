@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   type PayoutSettings,
   type PayoutCreator,
@@ -49,6 +49,12 @@ export default function AdminEarnings() {
 
   const [expandedCreator, setExpandedCreator] = useState<string | null>(null);
   const [walletCache, setWalletCache] = useState<Record<string, { entries: WalletEntry[]; loading: boolean }>>({});
+
+  const [creditModal, setCreditModal] = useState<{ creator: PayoutCreator } | null>(null);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditNote, setCreditNote] = useState('');
+  const [crediting, setCrediting] = useState(false);
+  const [creditMsg, setCreditMsg] = useState('');
 
   function toggleExpand(creatorId: string) {
     if (expandedCreator === creatorId) { setExpandedCreator(null); return; }
@@ -103,8 +109,34 @@ export default function AdminEarnings() {
     } finally { setSavingSettings(false); }
   }
 
+  function openCreditModal(creator: PayoutCreator) {
+    setCreditModal({ creator });
+    setCreditAmount('');
+    setCreditNote('');
+    setCreditMsg('');
+  }
+
+  async function doCredit() {
+    if (!creditModal || !creditAmount) return;
+    setCrediting(true); setCreditMsg('');
+    try {
+      await adminCreditCreator(creditModal.creator.id, parseFloat(creditAmount), creditNote || undefined);
+      // Refresh wallet if this creator is expanded
+      const cid = creditModal.creator.id;
+      if (expandedCreator === cid) {
+        adminGetCreatorWallet(cid).then(res => {
+          setWalletCache(prev => ({ ...prev, [cid]: { entries: res.entries, loading: false } }));
+        }).catch(() => {});
+      }
+      loadCreators(earningsSearch, earningsSort);
+      getEarningsSummary().then(setSummary).catch(() => {});
+      setCreditModal(null);
+    } catch (e: unknown) {
+      setCreditMsg((e as Error).message ?? 'Failed to add credit');
+    } finally { setCrediting(false); }
+  }
+
   async function doTransfer() {
-    if (!transferTarget || !transferAmount) return;
     setTransferring(true); setTransferMsg('');
     try {
       await adminCreditCreator(transferTarget.id, parseFloat(transferAmount), transferComment || undefined);
@@ -349,22 +381,22 @@ export default function AdminEarnings() {
               <th style={{ textAlign: 'right' }}>Withdrawn</th>
               <th>Payout</th>
               <th>Joined</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loadingCreators && (
-              <tr><td colSpan={6} className="admin-empty" style={{ padding: '32px 0' }}>Loading…</td></tr>
+              <tr><td colSpan={7} className="admin-empty" style={{ padding: '32px 0' }}>Loading…</td></tr>
             )}
             {!loadingCreators && creators.length === 0 && (
-              <tr><td colSpan={6} className="admin-empty" style={{ padding: '32px 0' }}>No creators found</td></tr>
+              <tr><td colSpan={7} className="admin-empty" style={{ padding: '32px 0' }}>No creators found</td></tr>
             )}
             {!loadingCreators && creators.map(c => {
               const isExpanded = expandedCreator === c.id;
               const walletState = walletCache[c.id];
               return (
-                <>
+                <Fragment key={c.id}>
                   <tr
-                    key={c.id}
                     className="admin-clickable-row"
                     onClick={() => toggleExpand(c.id)}
                     style={{ background: isExpanded ? '#fafbff' : undefined }}
@@ -412,11 +444,20 @@ export default function AdminEarnings() {
                       )}
                     </td>
                     <td className="admin-cell-muted">{new Date(c.created_at).toLocaleDateString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="admin-btn admin-btn-secondary"
+                        style={{ fontSize: 11, padding: '3px 10px', height: 'auto', whiteSpace: 'nowrap' }}
+                        onClick={e => { e.stopPropagation(); openCreditModal(c); }}
+                      >
+                        + Payout
+                      </button>
+                    </td>
                   </tr>
 
                   {isExpanded && (
-                    <tr key={`${c.id}-txn`}>
-                      <td colSpan={6} style={{ padding: 0, background: '#f9fafc', borderBottom: '2px solid #e5e5e5' }}>
+                    <tr key={`${c.id}-wallet`}>
+                      <td colSpan={7} style={{ padding: 0, background: '#f9fafc', borderBottom: '2px solid #e5e5e5' }}>
                         <div style={{ padding: '16px 20px 16px 56px' }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
                             Transaction History
@@ -477,12 +518,76 @@ export default function AdminEarnings() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* ── Add Credit modal ──────────────────────────────────────────────── */}
+      {creditModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { if (!crediting) setCreditModal(null); }}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: 14, padding: '28px 28px 24px', width: 400, maxWidth: '92vw', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Add Payout</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{displayName(creditModal.creator)}</div>
+              </div>
+              <button
+                onClick={() => setCreditModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 4 }}
+                disabled={crediting}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Amount</div>
+              <div className="admin-popover-input-wrap">
+                <span className="admin-popover-input-prefix">$</span>
+                <input
+                  type="number" min="0.01" step="0.01" placeholder="0.00"
+                  value={creditAmount}
+                  onChange={e => setCreditAmount(e.target.value)}
+                  autoFocus
+                  style={{ fontSize: 16, fontWeight: 600 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>Note <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></div>
+              <input
+                type="text" placeholder="e.g. Manual adjustment"
+                value={creditNote}
+                onChange={e => setCreditNote(e.target.value)}
+                className="admin-date-input" style={{ width: '100%' }}
+              />
+            </div>
+
+            {creditMsg && (
+              <div style={{ marginBottom: 14, fontSize: 12, color: '#c62828' }}>{creditMsg}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => setCreditModal(null)} disabled={crediting}>Cancel</button>
+              <button className="admin-btn admin-btn-primary" onClick={doCredit} disabled={crediting || !creditAmount}>
+                {crediting ? 'Adding…' : 'Add Payout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

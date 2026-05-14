@@ -87,15 +87,22 @@ function BottomBar({
       }
       return;
     }
-    // Skip the rAF auto-scroll on phones — the user wants to touch-
-    // scroll the suggestions directly. Native overflow-y on the
-    // .search-suggestions container handles it; the rAF would fight
-    // user pans by snapping back every frame.
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
-      return;
-    }
     const track = trackRef.current;
-    const SPEED = 0.4;
+    const container = track.parentElement as HTMLElement | null;
+    const SPEED = 0.5;
+
+    // On first open, position the track so items enter from the bottom
+    // (near the search bar) rather than appearing at the top of the screen.
+    if (scrollY.current === 0) {
+      const containerH = window.visualViewport?.height ?? container?.clientHeight ?? window.innerHeight;
+      const half = track.scrollHeight / 2;
+      if (half > 0 && containerH > 0) {
+        // translateY(-(half - containerH + 40)) aligns the end of the first
+        // batch with the bottom of the container. Items scroll upward from there.
+        scrollY.current = Math.max(0, half - containerH + 40);
+      }
+    }
+
     let offset = scrollY.current;
     function tick() {
       offset += SPEED;

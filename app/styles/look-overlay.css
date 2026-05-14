@@ -230,8 +230,19 @@
   font-weight: 600;
   line-height: 1.3;
   color: #ffffff;
-  padding: 12px 24px 16px;
+  padding: 12px 24px 8px;
   margin: 0;
+}
+
+/* Save count shown below the title */
+.look-save-count {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 24px 14px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Tabs */
@@ -414,6 +425,53 @@
   color: #fff;
 }
 
+.look-creator-more-section {
+  padding: 20px 12px 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.look-creator-more-section .look-feed-heading {
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+
+.look-creator-more-scroll {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-right: -12px;
+  padding-right: 12px;
+}
+
+.look-creator-more-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.look-creator-more-scroll .look-card {
+  flex-shrink: 0;
+  /* same width as one column in the 2-col feed grid */
+  width: calc((100% - 12px) / 2);
+  aspect-ratio: 4 / 5;
+  border-radius: 14px;
+  background: #1a1a1a;
+  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.look-creator-more-scroll .look-card:hover {
+  transform: translateY(-2px);
+}
+
+.look-creator-more-scroll .look-card .card-creator-row {
+  opacity: 0;
+}
+
+.look-creator-more-scroll .look-card:hover .card-creator-row {
+  opacity: 1;
+}
+
 /* ── Scrollable wrapper (makes the whole overlay a scrollable page) ── */
 .look-overlay-scroll {
   width: 100%;
@@ -568,7 +626,7 @@ body:has(.look-overlay.look-overlay--in) {
   }
 
   .look-feed-grid {
-    gap: 10px;
+    gap: 8px;
   }
 
   /* Legacy product-item / product-thumb selectors (used in some looks) */
@@ -591,9 +649,18 @@ body:has(.look-overlay.look-overlay--in) {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 40px 32px 0;
+  padding: 32px 24px 0;
   background: #0a0a0a;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+@media (max-width: 600px) {
+  .look-feed-section {
+    padding: 20px 12px 0;
+  }
+  .look-feed-heading {
+    font-size: 16px;
+    margin: 0 0 16px;
+  }
 }
 
 /* Last section keeps the trailing breathing room. Earlier sections
@@ -602,7 +669,7 @@ body:has(.look-overlay.look-overlay--in) {
   border-top: none;
 }
 .look-feed-section:last-child {
-  padding-bottom: 64px;
+  padding-bottom: 56px;
 }
 .look-feed-section:not(:last-child) {
   padding-bottom: 32px;
@@ -629,7 +696,44 @@ body:has(.look-overlay.look-overlay--in) {
 }
 
 .look-feed-grid .look-card {
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 4 / 5;
+  border-radius: 14px;
+  background: #1a1a1a;
+  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.look-feed-grid .look-card:hover { transform: translateY(-2px); }
+
+/* Inside the feed grid, simplify the creator chip to match pd-look-tile */
+.look-feed-grid .look-card .card-creator-row {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  bottom: 10px;
+  left: 10px;
+}
+.look-feed-grid .look-card:hover .card-creator-row {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  transform: none;
+}
+.look-feed-grid .look-card .card-creator-row .card-creator-avatar {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+  border: none;
+  box-shadow: none;
+}
+.look-feed-grid .look-card .card-creator-row .card-creator-name {
+  font-size: 12px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
 }
 
 /* Creator overlay bottom-left of video */

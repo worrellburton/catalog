@@ -102,6 +102,10 @@
   color: #1a1a1a;
 }
 
+.light-mode .look-save-count {
+  color: rgba(0, 0, 0, 0.4);
+}
+
 .light-mode .product-brand {
   color: rgba(0, 0, 0, 0.45);
 }
