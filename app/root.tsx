@@ -59,6 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           name="description"
           content="A creator-powered shopping platform where you discover products through curated looks."
         />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         {/* Open the TCP/TLS connection to Supabase before the JS bundle even
