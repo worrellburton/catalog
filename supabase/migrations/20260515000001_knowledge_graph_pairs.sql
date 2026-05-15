@@ -281,7 +281,7 @@ as $$
       ) @@ bm25_q.q
     limit k * 4
   ),
-  -- FULL OUTER JOIN: semantic OR text match
+  -- RRF fusion: dense rank + BM25 rank combined.
   rrf as (
     select
       coalesce(d.id, b.id) as id,
@@ -290,10 +290,28 @@ as $$
     from dense d
     full outer join bm25 b on b.id = d.id
   ),
+  -- Adaptive threshold — enforces AND-like semantics when BM25 matches exist.
+  --
+  -- Key fact: max pure-dense score = 1/(60+1) ≈ 0.01639 (rank-1, no BM25).
+  --
+  -- • BM25 has matches → threshold 0.020 > 0.01639:
+  --     Pure-dense-only items can NEVER pass. Only items matching BOTH
+  --     dense AND BM25 reach a combined score ≥ 0.020 → AND-like behaviour.
+  --     e.g. "black shoe" → only the shoe (score 0.027) passes; unrelated
+  --     Alo items (~0.016) are filtered out.
+  --
+  -- • BM25 empty → threshold 0.015:
+  --     Top ~6 pure-dense results pass as semantic fallback.
+  --     e.g. "black t shirts" → no product has all query words in text;
+  --     dense similarity surfaces the most relevant tops/tees.
   ranked as (
     select id, rrf_score as score
     from rrf
-    where rrf_score >= 0.015
+    where rrf_score >= case
+      when exists (select 1 from bm25 limit 1)
+      then 0.020   -- BM25 has matches: require dense+text combined (AND-like)
+      else 0.015   -- BM25 empty: allow top pure-dense results (semantic fallback)
+    end
     order by rrf_score desc
     limit k
   ),
