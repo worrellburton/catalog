@@ -253,18 +253,12 @@ as $$
     where b.embedding is not null
     limit k * 4
   ),
-  -- OR-semantics BM25: replace the plainto AND conjunction with OR so that
-  -- partial matches (e.g. "shirt" when query is "black t shirts") still
-  -- contribute a BM25 score even when the colour word isn't in product text.
+  -- Strict AND BM25 for when query terms appear in product text.
+  -- plainto_tsquery keeps AND semantics so only genuinely relevant
+  -- text matches contribute. Dense (semantic) handles queries where
+  -- text fields don't match (e.g. colour words, synonyms).
   bm25_q as (
-    select
-      to_tsquery(
-        'english',
-        replace(
-          plainto_tsquery('english', query_text)::text,
-          ' & ', ' | '
-        )
-      ) as q
+    select plainto_tsquery('english', query_text) as q
   ),
   bm25 as (
     select
