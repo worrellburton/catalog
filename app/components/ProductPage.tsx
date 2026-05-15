@@ -6,6 +6,7 @@ import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { type GraphPair } from '~/services/graph-pairs';
 import { trackProductClickout } from '~/services/session-tracker';
 import {
   pickVideoUrl,
@@ -52,6 +53,9 @@ interface ProductPageProps {
   /** Editorial fashion looks (Look[]) - drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
+  /** Products related via entity_edges (pairs_with / same_brand). Powers
+   *  the "Pairs well with" horizontal rail on ProductPage. */
+  graphPairs?: GraphPair[];
   bookmarks: BookmarksInterface;
   /** Increments on every navigation. ProductPage's scroll-to-top
    *  effect depends on this so it fires reliably even when the new
@@ -493,6 +497,7 @@ export default function ProductPage({
   brandCreatives,
   popularFallback,
   lookCreatives,
+  graphPairs,
   bookmarks,
   navKey = 0,
 }: ProductPageProps) {
@@ -1011,6 +1016,46 @@ export default function ProductPage({
             <div className="pd-look-grid">
               {fillToExact(lookCreatives, 8).map((l, i) => (
                 <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {graphPairs && graphPairs.length > 0 && (
+          <section className="pd-graph-pairs" aria-label="Pairs well with">
+            <h2 className="pd-feed-title">Pairs well with</h2>
+            <div className="pd-graph-pairs-rail">
+              {graphPairs.map(pair => (
+                <button
+                  key={pair.product_id}
+                  className="pd-graph-pair-tile"
+                  onClick={() => {
+                    if (pair.url && onOpenBrowser) {
+                      onOpenBrowser(pair.url, pair.name || pair.brand || 'Product', {
+                        name: pair.name || '',
+                        brand: pair.brand || '',
+                        price: pair.price || '',
+                        url: pair.url,
+                        image: pair.image_url || undefined,
+                      });
+                    }
+                  }}
+                  aria-label={[pair.brand, pair.name].filter(Boolean).join(' — ')}
+                >
+                  {pair.image_url && (
+                    <img
+                      src={pair.image_url}
+                      alt={pair.name || ''}
+                      className="pd-graph-pair-img"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="pd-graph-pair-meta">
+                    {pair.brand && <span className="pd-graph-pair-brand">{pair.brand}</span>}
+                    {pair.name && <span className="pd-graph-pair-name">{pair.name}</span>}
+                    {pair.price && <span className="pd-graph-pair-price">{pair.price}</span>}
+                  </div>
+                </button>
               ))}
             </div>
           </section>
