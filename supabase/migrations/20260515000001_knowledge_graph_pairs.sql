@@ -253,8 +253,18 @@ as $$
     where b.embedding is not null
     limit k * 4
   ),
+  -- OR-semantics BM25: replace the plainto AND conjunction with OR so that
+  -- partial matches (e.g. "shirt" when query is "black t shirts") still
+  -- contribute a BM25 score even when the colour word isn't in product text.
   bm25_q as (
-    select plainto_tsquery('english', query_text) as q
+    select
+      to_tsquery(
+        'english',
+        replace(
+          plainto_tsquery('english', query_text)::text,
+          ' & ', ' | '
+        )
+      ) as q
   ),
   bm25 as (
     select
@@ -289,7 +299,7 @@ as $$
   ranked as (
     select id, rrf_score as score
     from rrf
-    where rrf_score >= 0.032
+    where rrf_score >= 0.015
     order by rrf_score desc
     limit k
   ),
