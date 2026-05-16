@@ -8,6 +8,7 @@ import {
 import { type EngagementSummary, getEngagementSummary } from '~/services/creator-engagement';
 import { supabase } from '~/utils/supabase';
 import DotsSignupModal from './DotsSignupModal';
+import WalletBackground from './WalletBackground';
 
 interface PayoutProfile {
   id: string;
@@ -49,11 +50,10 @@ export default function CreatorWallet({ onProfileChange }: Props) {
   const [withdrawError, setWithdrawError] = useState('');
   const [showSignup, setShowSignup] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
-  // Engagement analytics — totals + 7-day slice rendered above the
-  // Transaction History so creators can see what their looks earned.
   const [engagement, setEngagement] = useState<EngagementSummary | null>(null);
-  const analyticsRef = useRef<HTMLDivElement | null>(null);
+  const insightsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,25 +61,24 @@ export default function CreatorWallet({ onProfileChange }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  // Listen for the toast click → scroll the Analytics section into
-  // view. The home route handles opening the wallet first, then
-  // dispatches 'catalog:scroll-wallet-analytics' on the next frame so
-  // this component (which mounted in the meantime) can scroll. We
-  // also listen for 'catalog:open-wallet-analytics' for the case
-  // where the wallet was already open when the toast was clicked.
+  // The login toast and the legacy 'open-wallet-analytics' event both
+  // expect the analytics block to scroll into view — opening Insights
+  // and scrolling to it preserves that behaviour.
   useEffect(() => {
-    const onScroll = () => {
-      analyticsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const openAndScroll = () => {
+      setInsightsOpen(true);
+      requestAnimationFrame(() => {
+        insightsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     };
-    window.addEventListener('catalog:scroll-wallet-analytics', onScroll);
-    window.addEventListener('catalog:open-wallet-analytics', onScroll);
+    window.addEventListener('catalog:scroll-wallet-analytics', openAndScroll);
+    window.addEventListener('catalog:open-wallet-analytics', openAndScroll);
     return () => {
-      window.removeEventListener('catalog:scroll-wallet-analytics', onScroll);
-      window.removeEventListener('catalog:open-wallet-analytics', onScroll);
+      window.removeEventListener('catalog:scroll-wallet-analytics', openAndScroll);
+      window.removeEventListener('catalog:open-wallet-analytics', openAndScroll);
     };
   }, []);
 
-  // Fetch payout-related profile columns
   const loadProfile = useCallback(async () => {
     if (!supabase) return;
     setProfileLoading(true);
@@ -146,189 +145,220 @@ export default function CreatorWallet({ onProfileChange }: Props) {
 
   const isConnected = profile?.is_payout_active && profile?.dots_user_id;
 
-  if (profileLoading) {
-    return (
-      <div className="wallet-loading">
-        <span className="wallet-spinner" />
-      </div>
-    );
-  }
-
   return (
     <div className="wallet-root">
-      {/* Setup banner — only when not connected */}
-      {!isConnected && (
-        <div className="wallet-setup-banner">
-          <div className="wallet-setup-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-              <line x1="1" y1="10" x2="23" y2="10" />
-            </svg>
-          </div>
-          <div className="wallet-setup-text">
-            <div className="wallet-setup-title">Set up earnings</div>
-            <div className="wallet-setup-sub">Connect Dots to withdraw to bank, Venmo, or PayPal</div>
-          </div>
-          <button className="wallet-setup-btn" onClick={() => setShowSignup(true)}>
-            Get started
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-          </button>
-        </div>
-      )}
+      <WalletBackground />
 
-      {loading ? (
-        <div className="wallet-loading">
-          <span className="wallet-spinner" />
-        </div>
-      ) : (
-        <>
-          {/* Stat cards */}
-          <div className="wallet-cards">
-            <div className="wallet-card wallet-card--main">
-              <div className="wallet-card-label">Available Balance</div>
-              <div className="wallet-card-amount">${balance.toFixed(2)}</div>
-              <div className="wallet-card-sub">Withdraw anytime</div>
-              {isConnected ? (
-                <button
-                  className={`wallet-withdraw-btn${balance <= 0 ? ' wallet-withdraw-btn--disabled' : ''}`}
-                  onClick={handleWithdraw}
-                  disabled={withdrawing || balance <= 0}
-                >
-                  {withdrawing ? 'Processing…' : 'Withdraw'}
-                </button>
-              ) : (
-                <button className="wallet-withdraw-btn" onClick={() => setShowSignup(true)}>
-                  Connect to Withdraw
-                </button>
-              )}
+      <div className="wallet-content">
+        {profileLoading && (
+          <div className="wallet-loading">
+            <span className="wallet-spinner" />
+          </div>
+        )}
+
+        {!profileLoading && !isConnected && (
+          <div className="wallet-setup-banner">
+            <div className="wallet-setup-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                <line x1="1" y1="10" x2="23" y2="10" />
+              </svg>
+            </div>
+            <div className="wallet-setup-text">
+              <div className="wallet-setup-title">Set up earnings</div>
+              <div className="wallet-setup-sub">Connect Dots to withdraw to bank, Venmo, or PayPal</div>
+            </div>
+            <button className="wallet-setup-btn" onClick={() => setShowSignup(true)}>
+              Get started
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+          </div>
+        )}
+
+        {!profileLoading && loading && (
+          <div className="wallet-loading">
+            <span className="wallet-spinner" />
+          </div>
+        )}
+        {!profileLoading && !loading && (
+          <>
+            {/* Hero — Total Earned in the middle, large */}
+            <div className="wallet-hero">
+              <div className="wallet-hero-label">Total Earned</div>
+              <div className="wallet-hero-amount">${totalEarning.toFixed(2)}</div>
+              <div className="wallet-hero-glow" aria-hidden />
             </div>
 
-            <div className="wallet-card wallet-card--earned">
-              <div className="wallet-card-label">Total Earned</div>
-              <div className="wallet-card-amount wallet-card-amount--green">${totalEarning.toFixed(2)}</div>
-            </div>
-
-            <div className="wallet-card wallet-card--secondary">
-              <div className="wallet-card-label">Total Withdrawn</div>
-              <div className="wallet-card-amount">${totalWithdraw.toFixed(2)}</div>
-            </div>
-          </div>
-
-          {/* Pending payout link */}
-          {withdrawLink && (
-            <div className="wallet-payout-banner">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <span className="wallet-payout-banner-text">Payout pending — complete via your link</span>
-              <button
-                className="wallet-payout-banner-btn"
-                onClick={() => window.open(withdrawLink!, '_blank', 'noopener,noreferrer')}
-              >
-                Open link
-              </button>
-            </div>
-          )}
-
-          {withdrawError && (
-            <div className="wallet-error">{withdrawError}</div>
-          )}
-
-          {/* Engagement analytics — lifetime totals + 7-day slice.
-              The login toast scrolls here on click via the
-              catalog:open-wallet-analytics event. */}
-          <div ref={analyticsRef} className="wallet-analytics">
-            <div className="wallet-analytics-header">Analytics</div>
-            <div className="wallet-analytics-cards">
-              <div className="wallet-analytics-card">
-                <div className="wallet-analytics-card-label">Impressions</div>
-                <div className="wallet-analytics-card-amount">
-                  {(engagement?.total_impressions ?? 0).toLocaleString()}
-                </div>
-                <div className="wallet-analytics-card-sub">
-                  +{(engagement?.week_impressions ?? 0).toLocaleString()} this week
-                </div>
-              </div>
-              <div className="wallet-analytics-card">
-                <div className="wallet-analytics-card-label">Clicks</div>
-                <div className="wallet-analytics-card-amount">
-                  {(engagement?.total_clicks ?? 0).toLocaleString()}
-                </div>
-                <div className="wallet-analytics-card-sub">
-                  +{(engagement?.week_clicks ?? 0).toLocaleString()} this week
-                </div>
-              </div>
-              <div className="wallet-analytics-card">
-                <div className="wallet-analytics-card-label">Clickouts</div>
-                <div className="wallet-analytics-card-amount">
-                  {(engagement?.total_clickouts ?? 0).toLocaleString()}
-                </div>
-                <div className="wallet-analytics-card-sub">
-                  +{(engagement?.week_clickouts ?? 0).toLocaleString()} this week
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Transaction history */}
-          <div className="wallet-history">
-            <div className="wallet-history-header">Transaction History</div>
-            {entries.length === 0 ? (
-              <div className="wallet-history-empty">No transactions yet</div>
-            ) : (
-              <div className="wallet-history-list">
-                {entries.map(entry => (
-                  <div key={entry.id} className="wallet-entry">
-                    <div className={`wallet-entry-icon wallet-entry-icon--${entry.type}`}>
-                      {entry.type === 'credit' ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 19 19 12"/></svg>
-                      ) : entry.type === 'debit' ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
-                      ) : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      )}
-                    </div>
-                    <div className="wallet-entry-info">
-                      <div className="wallet-entry-label">{entry.comment || entryLabel(entry.entry_code)}</div>
-                      <div className="wallet-entry-date">
-                        {new Date(entry.created_at).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
-                      </div>
-                    </div>
-                    <div className="wallet-entry-amounts">
-                      <div className={`wallet-entry-amount wallet-entry-amount--${entry.type}`}>
-                        {entry.type === 'credit' ? '+' : entry.type === 'debit' ? '-' : ''}
-                        ${entry.amount.toFixed(2)}
-                      </div>
-                      <div className="wallet-entry-bal">Bal: ${entry.current_balance.toFixed(2)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Connected account status */}
-          {isConnected && (
-            <div className="wallet-status">
-              <div className="wallet-status-left">
-                <span className="wallet-status-dot" />
-                <span className="wallet-status-label">Dots connected</span>
-                {profile.is_payout_verified && (
-                  <span className="wallet-status-badge">VERIFIED</span>
+            {/* Secondary cards: balance + withdrawn */}
+            <div className="wallet-cards">
+              <div className="wallet-card wallet-card--main">
+                <div className="wallet-card-label">Available Balance</div>
+                <div className="wallet-card-amount">${balance.toFixed(2)}</div>
+                <div className="wallet-card-sub">Withdraw anytime</div>
+                {isConnected ? (
+                  <button
+                    className={`wallet-withdraw-btn${balance <= 0 ? ' wallet-withdraw-btn--disabled' : ''}`}
+                    onClick={handleWithdraw}
+                    disabled={withdrawing || balance <= 0}
+                  >
+                    {withdrawing ? 'Processing…' : 'Withdraw'}
+                  </button>
+                ) : (
+                  <button className="wallet-withdraw-btn" onClick={() => setShowSignup(true)}>
+                    Connect to Withdraw
+                  </button>
                 )}
               </div>
-              <button
-                className="wallet-status-disconnect"
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-              >
-                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-              </button>
+
+              <div className="wallet-card wallet-card--secondary">
+                <div className="wallet-card-label">Total Withdrawn</div>
+                <div className="wallet-card-amount">${totalWithdraw.toFixed(2)}</div>
+                <div className="wallet-card-sub">Lifetime payouts</div>
+              </div>
             </div>
-          )}
-        </>
-      )}
+
+            {withdrawLink && (
+              <div className="wallet-payout-banner">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span className="wallet-payout-banner-text">Payout pending — complete via your link</span>
+                <button
+                  className="wallet-payout-banner-btn"
+                  onClick={() => window.open(withdrawLink!, '_blank', 'noopener,noreferrer')}
+                >
+                  Open link
+                </button>
+              </div>
+            )}
+
+            {withdrawError && (
+              <div className="wallet-error">{withdrawError}</div>
+            )}
+
+            {/* Insights — collapsible section wrapping analytics + history */}
+            <div ref={insightsRef} className={`wallet-insights${insightsOpen ? ' wallet-insights--open' : ''}`}>
+              <button
+                type="button"
+                className="wallet-insights-toggle"
+                onClick={() => setInsightsOpen(o => !o)}
+                aria-expanded={insightsOpen}
+              >
+                <span className="wallet-insights-toggle-label">
+                  {insightsOpen ? 'Hide insights' : 'Show insights'}
+                </span>
+                <svg
+                  className="wallet-insights-chevron"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              <div className="wallet-insights-panel">
+                <div className="wallet-insights-inner">
+                  <div className="wallet-analytics">
+                    <div className="wallet-analytics-header">Analytics</div>
+                    <div className="wallet-analytics-cards">
+                      <div className="wallet-analytics-card">
+                        <div className="wallet-analytics-card-label">Impressions</div>
+                        <div className="wallet-analytics-card-amount">
+                          {(engagement?.total_impressions ?? 0).toLocaleString()}
+                        </div>
+                        <div className="wallet-analytics-card-sub">
+                          +{(engagement?.week_impressions ?? 0).toLocaleString()} this week
+                        </div>
+                      </div>
+                      <div className="wallet-analytics-card">
+                        <div className="wallet-analytics-card-label">Clicks</div>
+                        <div className="wallet-analytics-card-amount">
+                          {(engagement?.total_clicks ?? 0).toLocaleString()}
+                        </div>
+                        <div className="wallet-analytics-card-sub">
+                          +{(engagement?.week_clicks ?? 0).toLocaleString()} this week
+                        </div>
+                      </div>
+                      <div className="wallet-analytics-card">
+                        <div className="wallet-analytics-card-label">Clickouts</div>
+                        <div className="wallet-analytics-card-amount">
+                          {(engagement?.total_clickouts ?? 0).toLocaleString()}
+                        </div>
+                        <div className="wallet-analytics-card-sub">
+                          +{(engagement?.week_clickouts ?? 0).toLocaleString()} this week
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="wallet-history">
+                    <div className="wallet-history-header">Transaction History</div>
+                    {entries.length === 0 ? (
+                      <div className="wallet-history-empty">No transactions yet</div>
+                    ) : (
+                      <div className="wallet-history-list">
+                        {entries.map(entry => (
+                          <div key={entry.id} className="wallet-entry">
+                            <div className={`wallet-entry-icon wallet-entry-icon--${entry.type}`}>
+                              {entry.type === 'credit' ? (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 19 19 12"/></svg>
+                              ) : entry.type === 'debit' ? (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>
+                              ) : (
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              )}
+                            </div>
+                            <div className="wallet-entry-info">
+                              <div className="wallet-entry-label">{entry.comment || entryLabel(entry.entry_code)}</div>
+                              <div className="wallet-entry-date">
+                                {new Date(entry.created_at).toLocaleDateString('en-US', {
+                                  month: 'short', day: 'numeric', year: 'numeric',
+                                  hour: '2-digit', minute: '2-digit',
+                                })}
+                              </div>
+                            </div>
+                            <div className="wallet-entry-amounts">
+                              <div className={`wallet-entry-amount wallet-entry-amount--${entry.type}`}>
+                                {entry.type === 'credit' ? '+' : entry.type === 'debit' ? '-' : ''}
+                                ${entry.amount.toFixed(2)}
+                              </div>
+                              <div className="wallet-entry-bal">Bal: ${entry.current_balance.toFixed(2)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {isConnected && (
+              <div className="wallet-status">
+                <div className="wallet-status-left">
+                  <span className="wallet-status-dot" />
+                  <span className="wallet-status-label">Dots connected</span>
+                  {profile.is_payout_verified && (
+                    <span className="wallet-status-badge">VERIFIED</span>
+                  )}
+                </div>
+                <button
+                  className="wallet-status-disconnect"
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                >
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {showSignup && (
         <DotsSignupModal
