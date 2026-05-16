@@ -33,6 +33,7 @@ interface ProfileBadgeBits {
 export default function StylePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [profileBits, setProfileBits] = useState<ProfileBadgeBits>({
@@ -310,6 +311,8 @@ export default function StylePage() {
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
               })}
               images={entry.images}
+              prompt={entry.generation.resolved_prompt ?? entry.generation.occasion}
+              showAdminInfo={isSuperAdmin}
               onOpen={setLightboxImage}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
@@ -334,6 +337,8 @@ function StyleSheetCard({
   title,
   subtitle,
   images,
+  prompt,
+  showAdminInfo,
   onOpen,
   onDeleteImage,
   onToggleLiked,
@@ -341,6 +346,8 @@ function StyleSheetCard({
   title: string;
   subtitle: string;
   images: StyleGenerationImage[] | null;
+  prompt?: string | null;
+  showAdminInfo?: boolean;
   onOpen: (img: StyleGenerationImage) => void;
   onDeleteImage?: (imageId: string) => void;
   onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
@@ -367,6 +374,8 @@ function StyleSheetCard({
             key={img?.id ?? i}
             image={img}
             index={i}
+            prompt={prompt ?? null}
+            showAdminInfo={!!showAdminInfo}
             onOpen={onOpen}
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
             onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
@@ -462,7 +471,6 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
           onPointerCancel={onPointerUp}
           draggable={false}
         />
-        <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
       </div>
     </div>
   );
@@ -471,16 +479,21 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
 function StyleResultTile({
   image,
   index,
+  prompt,
+  showAdminInfo,
   onOpen,
   onDelete,
   onToggleLiked,
 }: {
   image: StyleGenerationImage | null;
   index: number;
+  prompt?: string | null;
+  showAdminInfo?: boolean;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete?: (() => void) | null;
   onToggleLiked?: ((nextLiked: boolean) => void) | null;
 }) {
+  const [infoOpen, setInfoOpen] = useState(false);
   if (!image) {
     return (
       <div className="style-tile is-loading" aria-label={`Generating image ${index + 1}`}>
@@ -488,6 +501,34 @@ function StyleResultTile({
       </div>
     );
   }
+  const infoBtn = showAdminInfo ? (
+    <button
+      type="button"
+      className={`style-tile-info ${infoOpen ? 'is-open' : ''}`}
+      onClick={e => { e.stopPropagation(); setInfoOpen(o => !o); }}
+      aria-label="View prompt and model"
+      aria-expanded={infoOpen}
+      title="Prompt & model (super admin only)"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+    </button>
+  ) : null;
+  const infoPanel = showAdminInfo && infoOpen ? (
+    <div className="style-tile-info-panel" onClick={e => e.stopPropagation()} role="dialog" aria-label="Generation details">
+      <div className="style-tile-info-row">
+        <span className="style-tile-info-label">Model</span>
+        <code className="style-tile-info-value">{image.provider}</code>
+      </div>
+      <div className="style-tile-info-row">
+        <span className="style-tile-info-label">Prompt</span>
+        <p className="style-tile-info-prompt">{prompt?.trim() || '— no resolved prompt —'}</p>
+      </div>
+    </div>
+  ) : null;
   // Heart (top-left) + trash (top-right). stopPropagation on each so
   // the click doesn't bubble into the tile-open button beneath.
   const heartBtn = onToggleLiked ? (
@@ -548,9 +589,10 @@ function StyleResultTile({
         </button>
         {/* Provider badge intentionally omitted on the user end — the
             admin user/$name page still surfaces it for debugging. */}
-        <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
+        {infoBtn}
+        {infoPanel}
       </div>
     );
   }
