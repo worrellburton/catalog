@@ -850,7 +850,7 @@ export default function Home() {
           )}
 
           {showWallet && (
-            <div className="my-looks-overlay">
+            <div className="my-looks-overlay my-looks-overlay--wallet">
               <div className="my-looks-container">
                 <div className="my-looks-header">
                   <div className="my-looks-header-left">
@@ -862,11 +862,9 @@ export default function Home() {
                     <h1 className="my-looks-title">Wallet</h1>
                   </div>
                 </div>
-                <div style={{ padding: '20px 16px', overflowY: 'auto', flex: 1 }}>
-                  <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>Loading wallet…</div>}>
-                    <CreatorWallet />
-                  </Suspense>
-                </div>
+                <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#bbf7d0', fontSize: 14 }}>Loading wallet…</div>}>
+                  <CreatorWallet />
+                </Suspense>
               </div>
             </div>
           )}
