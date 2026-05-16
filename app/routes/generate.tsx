@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from '@remix-run/react';
+import { useNavigate, useLocation } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 
@@ -203,6 +203,11 @@ function readStepFromUrl(): Step {
 
 export default function GeneratePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Pages that route the user to /generate can pass `state: { backTo }`
+  // so the back button returns them to where they came from (e.g. /style)
+  // instead of bouncing them out to the catalog.
+  const backTo = (location.state as { backTo?: string } | null)?.backTo ?? '/#app';
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>(() => readStepFromUrl());
   // Branded confirm modal — drop-in replacement for window.confirm()
@@ -1143,7 +1148,7 @@ export default function GeneratePage() {
         <div className="gen-empty">
           <h2>Sign in to generate</h2>
           <p>We need your account to save uploads and track your generations.</p>
-          <button className="gen-btn-primary" onClick={() => navigate('/#app')}>Back to catalog</button>
+          <button className="gen-btn-primary" onClick={() => navigate(backTo)}>{backTo === '/style' ? 'Back to Style' : 'Back to catalog'}</button>
         </div>
       </div>
     );
@@ -1163,12 +1168,12 @@ export default function GeneratePage() {
               setStep('photos');
               return;
             }
-            navigate('/#app');
+            navigate(backTo);
           }}
-          aria-label={step === 'result' ? 'Back to your looks' : 'Back to catalog'}
+          aria-label={step === 'result' ? 'Back to your looks' : (backTo === '/style' ? 'Back to Style' : 'Back to catalog')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
+          {step === 'result' ? 'Back to your looks' : (backTo === '/style' ? 'Back to Style' : 'Back to catalog')}
         </button>
         {/* Photos step gets a "Try this on" headline - the actual primary
             verb the page does. Products is dense and gets the back-only

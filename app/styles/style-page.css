@@ -353,6 +353,10 @@
   letter-spacing: 0.02em;
   text-transform: lowercase;
 }
+.style-tile-badge--admin {
+  text-transform: none;
+  letter-spacing: 0;
+}
 /* Catalog wordmark watermark — every successful tile + the lightbox
    frame carry the brand in the lower-left. Rendered as text so it
    stays crisp at any zoom; soft drop-shadow keeps it legible against

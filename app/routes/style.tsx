@@ -24,6 +24,15 @@ const OCCASION_SUGGESTIONS = [
   'a night out',
 ];
 
+// Friendly labels for the image-model badge that's shown to super
+// admins on each generated tile. Falls back to the raw provider id
+// for any future model we haven't labeled yet.
+const PROVIDER_LABEL: Record<string, string> = {
+  'gpt-image-1': 'ChatGPT Image 1',
+  'gpt-image-2': 'ChatGPT Image 2',
+  'nano-banana-2': 'Nano Banana 2',
+};
+
 interface ProfileBadgeBits {
   heightLabel: string | null;
   ageLabel: string | null;
@@ -33,6 +42,7 @@ interface ProfileBadgeBits {
 export default function StylePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [profileBits, setProfileBits] = useState<ProfileBadgeBits>({
@@ -238,7 +248,7 @@ export default function StylePage() {
           <button
             type="button"
             className="style-context-edit"
-            onClick={() => navigate('/generate')}
+            onClick={() => navigate('/generate', { state: { backTo: '/style' } })}
           >
             Edit
           </button>
@@ -248,7 +258,7 @@ export default function StylePage() {
       {noPhotos && (
         <div className="style-empty-cta">
           <p>You need at least one reference photo to generate a style sheet.</p>
-          <button className="style-primary" onClick={() => navigate('/generate')}>Add photo</button>
+          <button className="style-primary" onClick={() => navigate('/generate', { state: { backTo: '/style' } })}>Add photo</button>
         </div>
       )}
 
@@ -300,6 +310,7 @@ export default function StylePage() {
               subtitle="Generating 4 looks…"
               images={null}
               onOpen={setLightboxImage}
+              isSuperAdmin={isSuperAdmin}
             />
           )}
           {history.map(entry => (
@@ -313,6 +324,7 @@ export default function StylePage() {
               onOpen={setLightboxImage}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
+              isSuperAdmin={isSuperAdmin}
             />
           ))}
         </section>
@@ -337,6 +349,7 @@ function StyleSheetCard({
   onOpen,
   onDeleteImage,
   onToggleLiked,
+  isSuperAdmin,
 }: {
   title: string;
   subtitle: string;
@@ -344,6 +357,7 @@ function StyleSheetCard({
   onOpen: (img: StyleGenerationImage) => void;
   onDeleteImage?: (imageId: string) => void;
   onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
+  isSuperAdmin?: boolean;
 }) {
   // While generating (images === null) we show 4 placeholders so the
   // card has visible weight; otherwise we render exactly the rows the
@@ -370,6 +384,7 @@ function StyleSheetCard({
             onOpen={onOpen}
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
             onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
+            isSuperAdmin={isSuperAdmin}
           />
         ))}
       </div>
@@ -474,12 +489,14 @@ function StyleResultTile({
   onOpen,
   onDelete,
   onToggleLiked,
+  isSuperAdmin,
 }: {
   image: StyleGenerationImage | null;
   index: number;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete?: (() => void) | null;
   onToggleLiked?: ((nextLiked: boolean) => void) | null;
+  isSuperAdmin?: boolean;
 }) {
   if (!image) {
     return (
@@ -546,8 +563,14 @@ function StyleResultTile({
             height={720}
           />
         </button>
-        {/* Provider badge intentionally omitted on the user end — the
-            admin user/$name page still surfaces it for debugging. */}
+        {/* Provider badge omitted for regular users. Super admins get
+            a friendly model label in the bottom-right so they can tell
+            at a glance which generator produced each tile. */}
+        {isSuperAdmin && (
+          <span className="style-tile-badge style-tile-badge--admin">
+            {PROVIDER_LABEL[image.provider] ?? image.provider}
+          </span>
+        )}
         <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
