@@ -34,6 +34,36 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   z-index: 1;
 }
 
+/* Sticky header so the back button stays reachable on the
+   insights page after the user scrolls. The negative margins pull
+   it flush with the overlay edges so the blurred background reads
+   as a full-width strip instead of a floating bar. */
+.my-looks-overlay--wallet .my-looks-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -24px -20px 16px;
+  padding: 18px 20px 14px;
+  background: linear-gradient(180deg, rgba(3, 25, 16, 0.92) 0%, rgba(3, 25, 16, 0.7) 70%, rgba(3, 25, 16, 0) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.my-looks-overlay--wallet .my-looks-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 8px 10px;
+  border-radius: 999px;
+  background: rgba(6, 42, 28, 0.55);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  color: #bbf7d0;
+}
+.my-looks-overlay--wallet .my-looks-back:hover {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.42);
+  color: #ecfdf5;
+}
+
 .my-looks-container {
   max-width: 900px;
   margin: 0 auto;
@@ -869,6 +899,26 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   gap: 14px;
 }
 
+/* Two stacked "pages" inside the wallet container. The summary
+   fills the first viewport so Total Earned reads as the
+   centerpiece; the insights page sits directly below and gets
+   scrolled into view by the bottom CTA. */
+.wallet-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-margin-top: 72px;
+}
+.wallet-page--summary {
+  min-height: calc(100svh - 120px);
+  justify-content: center;
+  padding-bottom: 24px;
+}
+.wallet-page--insights {
+  padding-top: 24px;
+  gap: 16px;
+}
+
 /* Loading */
 .wallet-loading {
   display: flex;
@@ -959,7 +1009,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 .wallet-setup-btn:hover { background: #d1fae5; transform: translateY(-1px); }
 
-/* Hero — Total Earned centerpiece */
+/* Hero — Total Earned centerpiece. White amount on a saturated
+   green background per design direction. */
 .wallet-hero {
   position: relative;
   display: flex;
@@ -967,38 +1018,41 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 44px 20px 40px;
-  border-radius: 22px;
+  padding: 56px 20px 52px;
+  border-radius: 24px;
   background:
-    radial-gradient(120% 100% at 50% 0%, rgba(34, 197, 94, 0.22) 0%, rgba(34, 197, 94, 0) 70%),
-    rgba(6, 42, 28, 0.45);
-  border: 1px solid rgba(74, 222, 128, 0.22);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+    radial-gradient(120% 100% at 50% 0%, rgba(134, 239, 172, 0.28) 0%, rgba(134, 239, 172, 0) 70%),
+    linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  border: 1px solid rgba(187, 247, 208, 0.38);
+  box-shadow:
+    0 24px 60px rgba(22, 163, 74, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
   overflow: hidden;
 }
 
 .wallet-hero-label {
+  position: relative;
+  z-index: 1;
   font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-weight: 700;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(187, 247, 208, 0.7);
-  margin-bottom: 14px;
+  color: rgba(255, 255, 255, 0.78);
+  margin-bottom: 16px;
 }
 
 .wallet-hero-amount {
   position: relative;
   z-index: 1;
   font-family: 'DM Sans', sans-serif;
-  font-size: 72px;
+  font-size: 84px;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.03em;
-  color: #4ade80;
+  letter-spacing: -0.035em;
+  color: #ffffff;
   text-shadow:
-    0 0 20px rgba(74, 222, 128, 0.45),
-    0 0 60px rgba(34, 197, 94, 0.25);
+    0 2px 24px rgba(0, 0, 0, 0.28),
+    0 0 64px rgba(255, 255, 255, 0.18);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1146,70 +1200,77 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-size: 13px;
 }
 
-/* Insights — collapsible wrapper */
-.wallet-insights {
-  display: flex;
-  flex-direction: column;
-  border-radius: 16px;
-  background: rgba(6, 42, 28, 0.4);
-  border: 1px solid rgba(74, 222, 128, 0.16);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  overflow: hidden;
-}
-
-.wallet-insights-toggle {
-  display: flex;
+/* "View insights" CTA — sits at the bottom of the summary page
+   and scrolls the insights section into view on click. */
+.wallet-view-insights {
+  display: inline-flex;
+  align-self: center;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 16px 20px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: #ecfdf5;
-  transition: background 0.15s;
-}
-.wallet-insights-toggle:hover { background: rgba(74, 222, 128, 0.06); }
-
-.wallet-insights-toggle-label {
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px 22px;
+  background: rgba(6, 42, 28, 0.48);
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 999px;
+  color: #bbf7d0;
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s, color 0.15s;
+}
+.wallet-view-insights:hover {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #ecfdf5;
+  transform: translateY(-1px);
+}
+.wallet-view-insights svg {
+  animation: wallet-view-insights-bob 2.4s ease-in-out infinite;
+}
+@keyframes wallet-view-insights-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(3px); }
+}
+
+/* Insights page header */
+.wallet-insights-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+.wallet-insights-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ecfdf5;
+  margin: 0;
+}
+.wallet-insights-up {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(187, 247, 208, 0.6);
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #bbf7d0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-
-.wallet-insights-chevron {
-  color: #86efac;
-  transition: transform 0.32s ease;
-}
-.wallet-insights--open .wallet-insights-chevron {
-  transform: rotate(180deg);
-}
-
-/* Expand/collapse via grid-template-rows trick — no fixed max-height
-   so content of any size animates smoothly. */
-.wallet-insights-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.36s ease;
-}
-.wallet-insights--open .wallet-insights-panel {
-  grid-template-rows: 1fr;
-}
-.wallet-insights-inner {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 0 16px;
-  opacity: 0;
-  transition: opacity 0.28s ease, padding 0.32s ease;
-}
-.wallet-insights--open .wallet-insights-inner {
-  opacity: 1;
-  padding: 4px 16px 18px;
+.wallet-insights-up:hover {
+  color: #ecfdf5;
+  background: rgba(74, 222, 128, 0.08);
+  border-color: rgba(74, 222, 128, 0.22);
 }
 
 /* Analytics */
@@ -1218,42 +1279,41 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   flex-direction: column;
   gap: 10px;
 }
-.wallet-analytics-header {
-  padding: 0 2px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(187, 247, 208, 0.6);
-}
 .wallet-analytics-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 .wallet-analytics-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(3, 25, 16, 0.45);
-  border: 1px solid rgba(74, 222, 128, 0.14);
+  gap: 10px;
+  padding: 16px 16px 0;
+  border-radius: 14px;
+  background: rgba(3, 25, 16, 0.5);
+  border: 1px solid rgba(74, 222, 128, 0.16);
+  overflow: hidden;
   transition: border-color 0.18s, background 0.18s;
 }
 .wallet-analytics-card:hover {
-  border-color: rgba(74, 222, 128, 0.32);
-  background: rgba(3, 25, 16, 0.6);
+  border-color: rgba(74, 222, 128, 0.34);
+  background: rgba(3, 25, 16, 0.66);
+}
+.wallet-analytics-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .wallet-analytics-card-label {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(187, 247, 208, 0.5);
+  color: rgba(187, 247, 208, 0.55);
 }
 .wallet-analytics-card-amount {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #fff;
@@ -1265,6 +1325,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: #86efac;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* Sparkline area chart — full-width strip flush to the card bottom. */
+.wallet-spark {
+  display: block;
+  width: calc(100% + 32px);
+  height: 44px;
+  margin: 4px -16px 0;
 }
 
 /* Transaction history */
@@ -1410,8 +1478,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-status-disconnect:disabled { opacity: 0.5; cursor: default; }
 
 @media (max-width: 640px) {
-  .wallet-hero { padding: 36px 16px 32px; }
-  .wallet-hero-amount { font-size: 56px; }
+  .wallet-hero { padding: 44px 16px 40px; }
+  .wallet-hero-amount { font-size: 64px; }
   .wallet-hero-glow { width: 260px; height: 260px; }
   .wallet-analytics-cards { grid-template-columns: 1fr; }
   .wallet-analytics-card-amount { font-size: 22px; }

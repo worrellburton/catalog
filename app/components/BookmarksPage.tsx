@@ -111,7 +111,13 @@ export default function BookmarksPage({ bookmarks, onClose, onOpenLook, onOpenBr
               <div className="bookmarks-product-list">
                 {bookmarks.bookmarkedProducts.map((p, i) => (
                   <div key={i} className="bookmarks-product-item">
-                    <div className="bp-thumb" style={{ background: 'rgba(128,128,128,0.2)' }} />
+                    {p.image ? (
+                      <img className="bp-thumb" src={p.image} alt={p.name} loading="lazy" />
+                    ) : (
+                      <div className="bp-thumb bp-thumb--placeholder" aria-hidden>
+                        {p.brand?.[0]?.toUpperCase() ?? '·'}
+                      </div>
+                    )}
                     <div
                       className="bp-info"
                       onClick={() => {

@@ -49,6 +49,7 @@
 }
 
 .ai-bar {
+  position: relative;
   pointer-events: auto;
   display: flex;
   align-items: center;
@@ -70,6 +71,47 @@
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
+/* Slow orbiting light-beam highlight on the rim. A masked conic
+   gradient becomes the visible "border", with a transparent dark
+   inner mask carving out the bar body so only a ~1px halo remains.
+   The conic 'from' angle is animated via @property so the box
+   stays put and only the highlight orbits. Pointer-events off so
+   it never blocks the input. */
+@property --ai-bar-beam {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.ai-bar::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--ai-bar-beam),
+    rgba(255, 255, 255, 0)    0%,
+    rgba(255, 255, 255, 0)    35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0)    65%,
+    rgba(255, 255, 255, 0)    100%
+  );
+  -webkit-mask:
+    linear-gradient(#000, #000) content-box,
+    linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: ai-bar-beam 7s linear infinite;
+  opacity: 0.7;
+}
+@keyframes ai-bar-beam {
+  to { --ai-bar-beam: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar::before { animation: none; opacity: 0.25; }
+}
+
 .ai-bar:focus-within {
   border-color: rgba(255, 255, 255, 0.18);
   box-shadow:
@@ -77,6 +119,7 @@
     0 0 0 3px rgba(255, 255, 255, 0.04),
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
+.ai-bar:focus-within::before { opacity: 1; }
 
 .ai-bar-icon-btn {
   flex: 0 0 auto;
