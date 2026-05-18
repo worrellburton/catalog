@@ -90,7 +90,12 @@ function canBackgroundPreload(): boolean {
  *  needs to start playing. Pulling the whole file in the background
  *  would double the bytes a scrolling user spends; we'd rather warm
  *  the cache for "the first frame is ready" and let the rest stream
- *  on demand once the user taps in. */
+ *  on demand once the user taps in.
+ *
+ *  `priority` maps directly to the Fetch API's RequestPriority. Use
+ *  'high' for the first above-the-fold tile (it gets an exclusive
+ *  bandwidth window before lower-priority prewarms start), 'auto'
+ *  for secondary above-fold tiles, and 'low' (default) for the rest. */
 export function prefetchVideoBytes(url: string | null | undefined, priority: RequestPriority = 'low'): void {
   if (!url) return;
   if (preloadedHighResUrls.has(url)) return;
@@ -106,11 +111,9 @@ export function prefetchVideoBytes(url: string | null | undefined, priority: Req
     method: 'GET',
     signal: ctrl.signal,
     headers: { Range: 'bytes=0-262143' },
-    // Priority is caller-supplied. Tile 0 / top-of-section cards use
-    // 'auto' (medium) so their moov atoms arrive before the <video>
-    // element mounts; background cards stay 'low' to avoid competing
-    // with the in-viewport video the user is actually watching.
-    priority: priority as RequestPriority,
+    // Lowest priority so we don't compete with the in-viewport video
+    // that the user is actually watching.
+    priority,
     // Ditto for the credentials policy - default 'same-origin' is fine
     // for Supabase public URLs.
   } as RequestInit & { priority: RequestPriority })

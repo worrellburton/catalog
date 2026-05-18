@@ -768,16 +768,29 @@ export default function ProductPage({
       } catch { /* ignore */ }
     }
     const mobile = isMobileViewport();
-    tiles.slice(0, 8).forEach((l, i) => {
-      const videoUrl = (mobile && l.mobile_video_url) || l.video;
-      if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
-        // Tile 0 is the first card the user sees after the hero. Give its
-        // prewarm auto (medium) priority so the moov atom + first GOP
-        // arrive before its IntersectionObserver fires. The remaining
-        // tiles stay low to avoid competing with tile 0's download.
-        prefetchVideoBytes(videoUrl, i === 0 ? 'auto' : 'low');
+
+    // Tile 0 is the first visible card. Fire its prewarm first with
+    // high priority so it gets an uncontested connection window to
+    // pull the moov atom into cache before its <video> mounts.
+    const tile0 = tiles[0];
+    const tile0Url = tile0 && ((mobile && tile0.mobile_video_url) || tile0.video);
+    if (tile0Url && /^https?:\/\//i.test(tile0Url)) {
+      prefetchVideoBytes(tile0Url, 'high');
+    }
+
+    // Tiles 1-7 follow with low priority after a 120ms delay. This
+    // gives tile 0's high-priority fetch ~100ms of exclusive bandwidth
+    // before the remaining prewarms start competing. 120ms is chosen
+    // to cover a typical LTE round-trip + first 256KB transfer.
+    const warmTimer = window.setTimeout(() => {
+      for (const l of tiles.slice(1, 8)) {
+        const videoUrl = (mobile && l.mobile_video_url) || l.video;
+        if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
+          prefetchVideoBytes(videoUrl, 'low');
+        }
       }
-    });
+    }, 120);
+    return () => window.clearTimeout(warmTimer);
   }, [lookCreatives]);
 
   return (
