@@ -3,10 +3,13 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
+import CreativeCard from './CreativeCard';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
+import { type ProductAd } from '~/services/product-creative';
+import { seededShuffle } from '~/utils/seededShuffle';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -125,6 +128,14 @@ function lookSimilarityScore(seed: Look, candidate: Look): number {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
+type LookYmalItem =
+  | { kind: 'look'; look: Look; key: string }
+  | { kind: 'product'; creative: ProductAd; key: string }
+
+const LOOK_YMAL_BATCH = 16;
+const LOOK_YMAL_POOL_SIZE = 200;
+
 type TabId = 'products' | 'creator';
 
 interface BookmarksInterface {
@@ -144,11 +155,16 @@ interface LookOverlayProps {
   onOpenLook?: (look: Look) => void;
   bookmarks: BookmarksInterface;
   allLooks?: Look[];
+  /** Product creatives for the "You might also like" section. */
+  popularFallback?: ProductAd[];
+  /** Opens a product creative (with video context) in ProductPage. */
+  onOpenCreative?: (creative: ProductAd) => void;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const moreScrollRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -235,21 +251,91 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
   // has something to show.
+  // Synthetic negative IDs prevent TrailVideoHost trailId conflicts with the
+  // always-rendered moreFromCreator feed section below the hero. Without this,
+  // mounting the About strip steals the shared <video> element from the feed
+  // cards (same look.id → same lookTrailId → same TrailVideoHost key), making
+  // the Popular/moreFromCreator sections go black when the About tab is active.
   const aboutCreatorStrip = useMemo(() => {
     const all = allLooks || allLooksData;
     const byCreator = look.creator
       ? all.filter(l => l.creator === look.creator && l.id !== look.id)
       : [];
-    if (byCreator.length > 0) return byCreator.slice(0, 8);
-    // Fall back: include the current look itself so the strip shows at least 1
-    const fallback = look.creator ? all.filter(l => l.creator === look.creator) : [];
-    return fallback.slice(0, 8);
+    const source = byCreator.length > 0
+      ? byCreator
+      : (look.creator ? all.filter(l => l.creator === look.creator) : []);
+    return source.slice(0, 8).map((l, i) => ({
+      ...l,
+      // Use a unique synthetic ID so TrailVideoHost creates a separate
+      // <video> element for the about strip vs the feed section cards.
+      id: -(Math.abs(l.id) * 1000 + i + 1),
+    }));
   }, [look.id, look.creator, allLooks]);
+
+  // ── You Might Also Like (YMAL) ──────────────────────────────────────────────
+  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [ymalVisible, setYmalVisible] = useState(LOOK_YMAL_BATCH);
+
+  const ymalPool = useMemo((): LookYmalItem[] => {
+    const seed = (Math.abs(look.id) * 7) ^ 0x5f3759df;
+    const sourceLooks = (allLooks || allLooksData).filter(l => l.id !== look.id);
+    const sourceProds = popularFallback || [];
+    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
+
+    const shuffledLooks = seededShuffle(sourceLooks, seed);
+    const shuffledProds = seededShuffle(sourceProds, seed ^ 0xdeadbeef);
+
+    const pool: LookYmalItem[] = [];
+    let li = 0, pi = 0;
+    for (let i = 0; i < LOOK_YMAL_POOL_SIZE; i++) {
+      // Pattern: product, product, look (repeating)
+      if (i % 3 === 2 && shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        // Unique synthetic negative ID avoids TrailVideoHost conflicts
+        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
+        li++;
+      } else if (shuffledProds.length > 0) {
+        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
+        pi++;
+      } else if (shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
+        li++;
+      } else {
+        break;
+      }
+    }
+    return pool;
+  }, [look.id, allLooks, popularFallback]);
+
+  useEffect(() => {
+    setYmalVisible(LOOK_YMAL_BATCH);
+  }, [look.id]);
+
+  useEffect(() => {
+    const sentinel = ymalSentinelRef.current;
+    const scroller = scrollRef.current;
+    if (!sentinel || !scroller || ymalPool.length === 0) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setYmalVisible(prev => Math.min(prev + LOOK_YMAL_BATCH, ymalPool.length));
+      }
+    }, { root: scroller, rootMargin: '400px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [ymalPool.length]);
 
   // Trigger enter animation after first paint
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  const scrollMoreLeft = () => {
+    moreScrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
+  };
+  const scrollMoreRight = () => {
+    moreScrollRef.current?.scrollBy({ left: 240, behavior: 'smooth' });
+  };
 
   // Reset scroll to top when look changes
   useEffect(() => {
@@ -558,17 +644,25 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {aboutCreatorStrip.length > 0 && (
                     <div className="look-creator-more-section">
                       <h3 className="look-feed-heading">More looks</h3>
-                      <div className="look-creator-more-scroll">
-                        {aboutCreatorStrip.map(fl => (
-                          <LookCard
-                            key={`about-creator-${fl.id}`}
-                            look={fl}
-                            className="look-card"
-                            onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
-                            onOpenCreator={onOpenCreator}
-                            onCreateCatalog={onCreateCatalog}
-                          />
-                        ))}
+                      <div className="look-creator-more-scroll-wrap">
+                        <button className="look-scroll-arrow look-scroll-arrow--left" onClick={scrollMoreLeft} aria-label="Scroll left">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <div className="look-creator-more-scroll" ref={moreScrollRef}>
+                          {aboutCreatorStrip.map(fl => (
+                            <LookCard
+                              key={`about-creator-${fl.id}`}
+                              look={fl}
+                              className="look-card"
+                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
+                              onOpenCreator={onOpenCreator}
+                              onCreateCatalog={onCreateCatalog}
+                            />
+                          ))}
+                        </div>
+                        <button className="look-scroll-arrow look-scroll-arrow--right" onClick={scrollMoreRight} aria-label="Scroll right">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -632,6 +726,34 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 />
               ))}
             </div>
+          </div>
+        )}
+
+        {ymalPool.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">You might also like</h3>
+            <div className="look-feed-grid">
+              {ymalPool.slice(0, ymalVisible).map(item =>
+                item.kind === 'look' ? (
+                  <LookCard
+                    key={item.key}
+                    look={item.look}
+                    className="look-card"
+                    onOpenLook={handleFeedLookClick}
+                    onOpenCreator={onOpenCreator}
+                    onCreateCatalog={onCreateCatalog}
+                  />
+                ) : (
+                  <CreativeCard
+                    key={item.key}
+                    creative={item.creative}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                )
+              )}
+            </div>
+            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
           </div>
         )}
       </div>

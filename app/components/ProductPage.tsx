@@ -1,11 +1,14 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { Product, Look, creators as staticCreators } from '~/data/looks';
+import { Product, Look, creators as staticCreators, looks as allLooksData } from '~/data/looks';
+import { seededShuffle } from '~/utils/seededShuffle';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
+import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { type GraphPair } from '~/services/graph-pairs';
 import { trackProductClickout } from '~/services/session-tracker';
 import {
   pickVideoUrl,
@@ -52,6 +55,12 @@ interface ProductPageProps {
   /** Editorial fashion looks (Look[]) - drives the "You might also like"
    *  grid below the trail rail. Tap opens the look in LookOverlay. */
   lookCreatives?: Look[];
+  /** Products related via entity_edges (pairs_with / same_brand). Powers
+   *  the "Pairs well with" horizontal rail on ProductPage. */
+  graphPairs?: GraphPair[];
+  /** Full look pool for the "You might also like" infinite section. Falls
+   *  back to the static allLooksData when omitted. */
+  allLooks?: Look[];
   bookmarks: BookmarksInterface;
   /** Increments on every navigation. ProductPage's scroll-to-top
    *  effect depends on this so it fires reliably even when the new
@@ -245,7 +254,10 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
 }
 
 /** Look-creative tile for the "Featured in Looks" grid. Looks have video
- *  via the looks_creative join in services/looks.ts, mapped to look.video. */
+ *  via the looks_creative join in services/looks.ts, mapped to look.video.
+ *  Uses the TrailVideoHost shared pool — no per-tile <video> elements,
+ *  no stagger timers, no intervals. Videos attach when scrolled into the
+ *  pool's prep band (useInViewport default: 200% of viewport). */
 function LookTile({
   look,
   index,
@@ -256,150 +268,70 @@ function LookTile({
   onOpen: (l: Look) => void;
 }) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [inViewport, setInViewport] = useState(false);
-  const [renderReady, setRenderReady] = useState(index < 4);
+  const slotRef = useRef<HTMLDivElement | null>(null);
+  const inViewport = useInViewport(wrapRef);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  // Phase 6: route through the shared pickVideoUrl helper so save-data
-  // and slow-connection users get the small variant even on a wider
-  // viewport. The helper expects video_url / mobile_video_url, which
-  // matches ProductAd's shape; Look stores the full-res URL on `video`.
+
   const rawVideo = pickVideoUrl({
     video_url: look.video,
     mobile_video_url: look.mobile_video_url ?? null,
   });
   const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
-  // Full-res URL used for Phase 4 background prefetch. Skip the
-  // prefetch when it equals the playable URL (desktop) - that file is
-  // already streaming.
   const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const tilePoster = look.thumbnail_url || look.cover || '';
 
-  useEffect(() => {
-    const node = wrapRef.current;
-    if (!node) return;
-    const obs = new IntersectionObserver(
-      es => es.forEach(e => setInViewport(e.isIntersecting)),
-      // Bumped from 400px to 800px so look-tile videos start streaming
-      // ~half a viewport before the user actually scrolls them into
-      // view; closes the perceived gap to product images, which paint
-      // instantly because they're way smaller.
-      { rootMargin: '800px' },
-    );
-    obs.observe(node);
-    return () => obs.disconnect();
-  }, []);
+  // Attach the shared TrailVideoHost <video> element when this tile
+  // enters the prep band. The pool element is already warm from the
+  // feed, so no re-download happens on first attach.
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
+    tilePoster || undefined,
+  );
 
-  // Phase 5: stagger the request waterfall. The browser caps to ~6
-  // concurrent media downloads per origin; an 8-tile rail saturates
-  // that and the last 2 sit in queue. Tiles 0-3 render <video>
-  // immediately, 4-7 wait a tick, 8+ wait for idle. By the time the
-  // first batch has its moov atom + first GOP, the next batch's
-  // sockets are free.
-  useEffect(() => {
-    if (renderReady) return;
-    if (typeof window === 'undefined') return;
-    const delay = index < 8 ? 200 : 400 + (index - 8) * 100;
-    const ric = (window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    }).requestIdleCallback;
-    if (ric) {
-      const handle = ric(() => setRenderReady(true), { timeout: delay + 500 });
-      return () => {
-        const cic = (window as Window & {
-          cancelIdleCallback?: (h: number) => void;
-        }).cancelIdleCallback;
-        if (cic) cic(handle);
-      };
-    }
-    const t = window.setTimeout(() => setRenderReady(true), delay);
-    return () => window.clearTimeout(t);
-  }, [index, renderReady]);
+  const setSlot = useCallback((el: HTMLDivElement | null) => {
+    slotRef.current = el;
+    setVideoSlot(el);
+  }, [setVideoSlot]);
 
-  // Phase 4: once a tile has been visible ~600ms on mobile, warm the
-  // first 256 KB of the full-res clip. Same Phase-8 contract as
-  // CreativeCard - by the time the user taps in, the LookOverlay
-  // hero gets a cache hit and paints near-instantly.
+  // Once visible, warm the full-res clip for instant LookOverlay open.
   useEffect(() => {
     if (!inViewport) return;
     if (!isMobileViewport()) return;
-    if (!fullResVideoUrl) return;
-    if (fullResVideoUrl === videoUrl) return; // already streaming this URL
-    const t = window.setTimeout(() => {
-      prefetchVideoBytes(fullResVideoUrl);
-    }, 600);
+    if (!fullResVideoUrl || fullResVideoUrl === videoUrl) return;
+    const t = window.setTimeout(() => prefetchVideoBytes(fullResVideoUrl), 600);
     return () => window.clearTimeout(t);
   }, [inViewport, fullResVideoUrl, videoUrl]);
 
-  // Belt-and-suspenders: force play() once frames decode + on every
-  // visibility return. Mobile Safari pauses videos on tab background
-  // and the muted-autoplay flag can fail to evaluate when the element
-  // is JS-created with src set after attributes; rendering the <video>
-  // declaratively (every attribute on the element from creation) plus
-  // these retries makes muted autoplay actually fire on mobile.
+  // Mark first frame for perf traces.
   useEffect(() => {
     if (!inViewport) return;
-    const v = videoRef.current;
+    const v = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!v) return;
-    const kick = () => { if (v.paused) void v.play().catch(() => {}); };
-    // Phase 1: capture the moment the first frame decodes so the
-    // before/after of the rest of the perf work is measurable. Only
-    // marks once per tile (the one-shot guard is a closure boolean).
     let marked = false;
-    const markFirstFrame = () => {
+    const mark = () => {
       if (marked) return;
       marked = true;
       markFeedMilestone(`look-first-frame:${look.id}`);
     };
-    if (v.readyState >= 2) { kick(); markFirstFrame(); }
-    const onLoaded = () => { kick(); markFirstFrame(); };
-    v.addEventListener('loadeddata', onLoaded);
-    v.addEventListener('canplay', onLoaded);
-    const onVis = () => { if (!document.hidden) kick(); };
-    document.addEventListener('visibilitychange', onVis);
-    const interval = window.setInterval(kick, 1000);
-    const stopAt = window.setTimeout(() => window.clearInterval(interval), 8000);
+    if (v.readyState >= 2) { mark(); return; }
+    v.addEventListener('loadeddata', mark, { once: true });
+    v.addEventListener('canplay', mark, { once: true });
     return () => {
-      v.removeEventListener('loadeddata', onLoaded);
-      v.removeEventListener('canplay', onLoaded);
-      document.removeEventListener('visibilitychange', onVis);
-      window.clearInterval(interval);
-      window.clearTimeout(stopAt);
+      v.removeEventListener('loadeddata', mark);
+      v.removeEventListener('canplay', mark);
     };
-  }, [inViewport, videoUrl, look.id]);
+  }, [inViewport, trailId, look.id]);
 
-  // Resolve creator identity in priority order:
-  //   1. Static creators map (real handles like @lilywittman/@garrett)
-  //   2. Profile fallback baked into the look row (orphan looks created
-  //      via the user-generation flow - see services/looks.ts)
-  //   3. Raw handle string, but only if it's not the synthetic `user:UUID`
-  //      key - that one's a placeholder, not something to show users.
   const creatorEntry = staticCreators[look.creator];
   const displayName = creatorEntry?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator)
     || '';
   const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
-
-  // Look poster: the server-extracted thumbnail when present, the
-  // legacy cover image otherwise. Set as <video poster=> so the tile
-  // never paints a black frame, and rendered as a separate <img>
-  // behind the video so the tile is never blank even outside the
-  // viewport prep band.
-  const tilePoster = look.thumbnail_url || look.cover || '';
-
-  // Phase 2: the first 8 tiles (one row on desktop, four rows on
-  // mobile) get eager + high-priority poster fetch so the rail paints
-  // an image the instant it scrolls into view. Later tiles stay lazy
-  // so we don't burn bytes on posters the user may never reach.
   const eagerPoster = index < 8;
 
-  // Phase 10: intent-based prefetch. Hover or first-touch = the user
-  // is about to tap, so kick the full-res byte fetch immediately.
-  // Idempotent via the prefetchedHighResUrls set in video-loading.ts,
-  // so this is free if Phase 4 already ran or if the bytes are
-  // cached. Closes the cold-cache gap for staggered tiles whose
-  // <video> hasn't rendered yet when the tap lands.
   const handleIntent = useCallback(() => {
     if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
   }, [fullResVideoUrl]);
@@ -413,7 +345,7 @@ function LookTile({
       onTouchStart={handleIntent}
       ref={wrapRef}
     >
-      {tilePoster && (
+      {tilePoster ? (
         <img
           src={tilePoster}
           alt=""
@@ -424,26 +356,15 @@ function LookTile({
           decoding="async"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
         />
+      ) : (
+        <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
       )}
-      {videoUrl && inViewport && renderReady && (
-        <video
-          ref={videoRef}
-          className="pd-look-tile-video"
-          data-trail-id={trailId}
-          src={videoUrl}
-          poster={tilePoster || undefined}
-          muted
-          autoPlay
-          loop
-          playsInline
-          preload="auto"
-          crossOrigin="anonymous"
-          style={{ position: 'relative', zIndex: 1 }}
-        />
-      )}
-      {(!videoUrl || !inViewport || !renderReady) && (
-        <div className="pd-look-tile-video" data-trail-id={trailId} />
-      )}
+      <div
+        ref={setSlot}
+        className="pd-look-tile-video"
+        data-trail-id={trailId}
+        style={{ position: 'relative', zIndex: 1 }}
+      />
 
       <div className="pd-look-tile-meta">
         {/* Always render the creator chip in the lower-left so every
@@ -481,6 +402,14 @@ function fillToExact<T>(arr: T[], count: number): T[] {
   return out;
 }
 
+// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
+type YmalItem =
+  | { kind: 'look'; look: Look; key: string }
+  | { kind: 'product'; creative: ProductAd; key: string }
+
+const YMAL_BATCH = 16;
+const YMAL_POOL_SIZE = 200;
+
 export default function ProductPage({
   product,
   onClose,
@@ -493,6 +422,8 @@ export default function ProductPage({
   brandCreatives,
   popularFallback,
   lookCreatives,
+  graphPairs,
+  allLooks,
   bookmarks,
   navKey = 0,
 }: ProductPageProps) {
@@ -574,6 +505,68 @@ export default function ProductPage({
     if (moreLikeThis.length > 0) return [];
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
+
+  // ── You Might Also Like pool ──────────────────────────────────────────────
+  // Builds a 200-item cycling pool that mixes shuffled looks and product
+  // creatives (2 products : 1 look). Seeded by product so the order is
+  // stable across re-renders and resets properly on navigation.
+  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [ymalVisible, setYmalVisible] = useState(YMAL_BATCH);
+
+  const ymalPool = useMemo((): YmalItem[] => {
+    const seed = hashString(`${product.brand}|${product.name}|ymal`);
+    const sourceLooks = allLooks || allLooksData;
+    const sourceProds = popularFallback || [];
+    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
+
+    const shuffledLooks = seededShuffle(sourceLooks, seed);
+    const shuffledProds = seededShuffle(sourceProds, seed ^ 0x5f3759df);
+
+    const pool: YmalItem[] = [];
+    let li = 0, pi = 0;
+    for (let i = 0; i < YMAL_POOL_SIZE; i++) {
+      // Pattern: product, product, look (repeating)
+      if (i % 3 === 2 && shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else if (shuffledProds.length > 0) {
+        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
+        pi++;
+      } else if (shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else {
+        break;
+      }
+    }
+    return pool;
+  }, [product.brand, product.name, allLooks, popularFallback]);
+
+  // Reset visible count when the product changes.
+  useEffect(() => {
+    setYmalVisible(YMAL_BATCH);
+  }, [product.brand, product.name]);
+
+  // Infinite scroll: load next batch when the sentinel enters the scroll container.
+  // Must use root: scrollerRef.current — .product-page is a custom overflow-y:auto
+  // container, not window scroll. Without root, rootMargin extends the viewport but
+  // gets clipped by the container before it can fire early. Mirrors GridView's pattern
+  // exactly: root = scroll container + rootMargin = lookahead distance.
+  useEffect(() => {
+    const sentinel = ymalSentinelRef.current;
+    const scroller = scrollerRef.current;
+    if (!sentinel || !scroller || ymalPool.length === 0) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setYmalVisible(prev => Math.min(prev + YMAL_BATCH, ymalPool.length));
+      }
+    }, { root: scroller, rootMargin: '400px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [ymalPool.length]);
+
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -740,12 +733,11 @@ export default function ProductPage({
   // into view - same first-paint cadence as the product images
   // around it.
   //
-  // Phase 3: also fire a Range-bounded byte prefetch on the first 4
-  // look videos. ~256 KB × 4 ≈ 1 MB total, paid silently while the
-  // user reads the hero, so by the time they scroll the rail into
-  // view the moov atom + first GOP are already in the HTTP cache and
-  // <video> decodes its first frame on the very next event loop tick
-  // instead of waiting for a cold round-trip to Supabase storage.
+  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
+  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
+  // so prefetching their bytes would create competing downloads for the same
+  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
+  // giving us a head start before their <video> elements mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!lookCreatives || lookCreatives.length === 0) return;
@@ -760,7 +752,7 @@ export default function ProductPage({
       } catch { /* ignore */ }
     }
     const mobile = isMobileViewport();
-    for (const l of tiles.slice(0, 4)) {
+    for (const l of tiles.slice(4, 12)) {
       const videoUrl = (mobile && l.mobile_video_url) || l.video;
       if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
         prefetchVideoBytes(videoUrl);
@@ -1013,6 +1005,67 @@ export default function ProductPage({
                 <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
               ))}
             </div>
+          </section>
+        )}
+
+        {graphPairs && graphPairs.length > 0 && (
+          <section className="pd-graph-pairs" aria-label="Pairs well with">
+            <h2 className="pd-feed-title">Pairs well with</h2>
+            <div className="pd-graph-pairs-rail">
+              {graphPairs.map(pair => (
+                <button
+                  key={pair.product_id}
+                  className="pd-graph-pair-tile"
+                  onClick={() => {
+                    if (pair.url && onOpenBrowser) {
+                      onOpenBrowser(pair.url, pair.name || pair.brand || 'Product', {
+                        name: pair.name || '',
+                        brand: pair.brand || '',
+                        price: pair.price || '',
+                        url: pair.url,
+                        image: pair.image_url || undefined,
+                      });
+                    }
+                  }}
+                  aria-label={[pair.brand, pair.name].filter(Boolean).join(' — ')}
+                >
+                  {pair.image_url && (
+                    <img
+                      src={pair.image_url}
+                      alt={pair.name || ''}
+                      className="pd-graph-pair-img"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="pd-graph-pair-meta">
+                    {pair.brand && <span className="pd-graph-pair-brand">{pair.brand}</span>}
+                    {pair.name && <span className="pd-graph-pair-name">{pair.name}</span>}
+                    {pair.price && <span className="pd-graph-pair-price">{pair.price}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {ymalPool.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">You might also like</h2>
+            <div className="pd-similar-grid">
+              {ymalPool.slice(0, ymalVisible).map((item, i) =>
+                item.kind === 'look' ? (
+                  <LookTile key={item.key} look={item.look} index={i} onOpen={onOpenLook} />
+                ) : (
+                  <CreativeCard
+                    key={item.key}
+                    creative={item.creative}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                )
+              )}
+            </div>
+            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
           </section>
         )}
       </div>

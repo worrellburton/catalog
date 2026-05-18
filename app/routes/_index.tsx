@@ -20,6 +20,7 @@ import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
@@ -115,6 +116,7 @@ export default function Home() {
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
   const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
+  const [graphPairs, setGraphPairs] = useState<GraphPair[] | null>(null);
   // Popular-product fallback for the "More like this" feed. Populated
   // once on mount; used when find_similar_creatives returns nothing for
   // a given seed (e.g. cold-start product with no embedding yet).
@@ -400,6 +402,7 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
+    setGraphPairs(null);
 
     // Fire a single product impression. Resolve URL → DB id asynchronously
     // so it doesn't block navigation; fire-and-forget.
@@ -424,6 +427,9 @@ export default function Home() {
           setBrandCreatives(rows);
         })
         .catch(() => { /* leave rail empty rather than throw */ });
+    }
+    if (productId) {
+      getGraphPairs([productId]).then(setGraphPairs).catch(() => {});
     }
   }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
@@ -480,6 +486,9 @@ export default function Home() {
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
+    const graphP = creative.product.id
+      ? getGraphPairs([creative.product.id])
+      : Promise.resolve([] as GraphPair[]);
 
     // Overwrite when data arrives. No intermediate null state - old rail
     // content stays put through the morph and gets replaced atomically.
@@ -494,6 +503,7 @@ export default function Home() {
     }).catch(() => { /* keep brand rail empty rather than throw */ });
 
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
+    graphP.then(rows => { if (rows.length) setGraphPairs(rows); }).catch(() => {});
   }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   // Editorial looks for the "You might also like" grid on ProductPage. One
@@ -632,6 +642,7 @@ export default function Home() {
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
+    setGraphPairs(null);
     // If the product was opened from a look, restore that look so the
     // back button feels like back-navigation. Otherwise fall through to
     // the feed and pop /p/<slug> from the URL.
@@ -803,6 +814,8 @@ export default function Home() {
                 onCreateCatalog={handleCreateCatalog}
                 onOpenLook={handleOpenLook}
                 bookmarks={bookmarks}
+                popularFallback={popularFallback}
+                onOpenCreative={handleOpenCreative}
               />
             </Suspense>
           )}
@@ -887,6 +900,7 @@ export default function Home() {
                 }
                 similarCreatives={similarCreatives ?? undefined}
                 brandCreatives={brandCreatives ?? undefined}
+                graphPairs={graphPairs ?? undefined}
                 popularFallback={popularFallback}
                 lookCreatives={lookFeedTiles}
                 bookmarks={bookmarks}
