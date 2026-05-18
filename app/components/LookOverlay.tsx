@@ -7,6 +7,7 @@ import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
+import { prefetchVideoBytes, isMobileViewport } from '~/services/video-loading';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -159,6 +160,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
   const [saveCount, setSaveCount] = useState<number | null>(null);
+  // Stagger the secondary feed section (moreFromCreator) so the primary
+  // section's 8 cards get full bandwidth before 8 more compete. Reset
+  // to 0 on each look change; the 500ms delay is invisible during the
+  // 320ms overlay entrance animation.
+  const [sectionsUnlocked, setSectionsUnlocked] = useState(0);
 
   // Resolve creator identity in priority order so orphan looks (created
   // via the user-generation flow with no creator_handle) render the
@@ -260,6 +266,44 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  // Stagger secondary section: reset lock on look change, unlock at 500ms.
+  // The 500ms gap is invisible while the overlay entrance animation plays
+  // (320ms), and lets the primary section's 8 video downloads stabilise
+  // before moreFromCreator's 8 additional elements mount.
+  useEffect(() => {
+    setSectionsUnlocked(0);
+    const t = window.setTimeout(() => setSectionsUnlocked(1), 500);
+    return () => clearTimeout(t);
+  }, [look.id]);
+
+  // Prewarm feed-section videos on each look open. Primary section (looksLikeThis
+  // or popular) gets warmed immediately — same pattern as ProductPage Phase 3.
+  // The moreFromCreator prewarm fires 100ms before that section mounts (at 400ms)
+  // so its first few cards see cache hits. prefetchVideoBytes is idempotent, so
+  // re-running on allLooks change is a cheap no-op for already-fetched URLs.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mobile = isMobileViewport();
+    const primary = feedSections.looksLikeThis.length > 0
+      ? feedSections.looksLikeThis
+      : feedSections.popular;
+    primary.slice(0, 4).forEach(l => {
+      const url = (mobile && l.mobile_video_url) || l.video;
+      if (url && /^https?:\/\//i.test(url)) prefetchVideoBytes(url);
+    });
+    const creator = feedSections.moreFromCreator;
+    const t = window.setTimeout(() => {
+      creator.slice(0, 4).forEach(l => {
+        const url = (mobile && l.mobile_video_url) || l.video;
+        if (url && /^https?:\/\//i.test(url)) prefetchVideoBytes(url);
+      });
+    }, 400);
+    return () => clearTimeout(t);
+    // feedSections is stable (useMemo) and changes only when look.id /
+    // look.products / allLooks change — all valid reasons to re-prewarm.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedSections]);
 
   // Reset scroll to top when look changes
   useEffect(() => {
@@ -625,7 +669,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         )}
 
-        {feedSections.moreFromCreator.length > 0 && (
+        {feedSections.moreFromCreator.length > 0 && sectionsUnlocked >= 1 && (
           <div className="look-feed-section">
             <h3 className="look-feed-heading">
               More from {creatorData?.displayName || look.creator}

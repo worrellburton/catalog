@@ -768,12 +768,16 @@ export default function ProductPage({
       } catch { /* ignore */ }
     }
     const mobile = isMobileViewport();
-    for (const l of tiles.slice(0, 8)) {
+    tiles.slice(0, 8).forEach((l, i) => {
       const videoUrl = (mobile && l.mobile_video_url) || l.video;
       if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
-        prefetchVideoBytes(videoUrl);
+        // Tile 0 is the first card the user sees after the hero. Give its
+        // prewarm auto (medium) priority so the moov atom + first GOP
+        // arrive before its IntersectionObserver fires. The remaining
+        // tiles stay low to avoid competing with tile 0's download.
+        prefetchVideoBytes(videoUrl, i === 0 ? 'auto' : 'low');
       }
-    }
+    });
   }, [lookCreatives]);
 
   return (
