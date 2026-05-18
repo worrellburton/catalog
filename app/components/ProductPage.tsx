@@ -263,6 +263,11 @@ function LookTile({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inViewport, setInViewport] = useState(false);
   const [renderReady, setRenderReady] = useState(index < 4);
+  // True once the <video> has decoded its first frame. The video is
+  // rendered opacity:0 until then so the poster <img> underneath stays
+  // visible - otherwise the video element paints black on top of the
+  // poster for the seconds-long window between mount and first frame.
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Phase 6: route through the shared pickVideoUrl helper so save-data
@@ -355,8 +360,8 @@ function LookTile({
       marked = true;
       markFeedMilestone(`look-first-frame:${look.id}`);
     };
-    if (v.readyState >= 2) { kick(); markFirstFrame(); }
-    const onLoaded = () => { kick(); markFirstFrame(); };
+    if (v.readyState >= 2) { kick(); markFirstFrame(); setVideoLoaded(true); }
+    const onLoaded = () => { kick(); markFirstFrame(); setVideoLoaded(true); };
     v.addEventListener('loadeddata', onLoaded);
     v.addEventListener('canplay', onLoaded);
     const onVis = () => { if (!document.hidden) kick(); };
@@ -418,16 +423,24 @@ function LookTile({
       ref={wrapRef}
     >
       {tilePoster ? (
-        <img
-          src={tilePoster}
-          alt=""
-          aria-hidden="true"
-          className="pd-look-tile-video"
-          loading={eagerPoster ? 'eager' : 'lazy'}
-          fetchPriority={eagerPoster ? 'high' : 'auto'}
-          decoding="async"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-        />
+        <>
+          {/* Shimmer underneath the poster so the tile never paints
+              flat black during the brief window before the <img> network
+              fetch resolves. The poster covers it the moment it decodes. */}
+          {!videoLoaded && (
+            <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
+          )}
+          <img
+            src={tilePoster}
+            alt=""
+            aria-hidden="true"
+            className="pd-look-tile-video"
+            loading={eagerPoster ? 'eager' : 'lazy'}
+            fetchPriority={eagerPoster ? 'high' : 'auto'}
+            decoding="async"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        </>
       ) : (
         <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
       )}
@@ -444,7 +457,12 @@ function LookTile({
           playsInline
           preload="auto"
           crossOrigin="anonymous"
-          style={{ position: 'relative', zIndex: 1 }}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            opacity: videoLoaded ? 1 : 0,
+            transition: 'opacity 0.25s ease',
+          }}
         />
       )}
       {(!videoUrl || !inViewport || !renderReady) && (
