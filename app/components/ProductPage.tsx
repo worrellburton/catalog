@@ -261,11 +261,7 @@ function LookTile({
 }) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  // Tile 0 is always at the top of the grid and always visible — skip
-  // the IO wait and mount its <video> in the same render cycle so the
-  // browser queues its network request ~16ms before tiles 1-3 get their
-  // IO callbacks. Tiles 1-3 still use the IO to avoid mounting off-screen.
-  const [inViewport, setInViewport] = useState(index === 0);
+  const [inViewport, setInViewport] = useState(false);
   const [renderReady, setRenderReady] = useState(index < 4);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -751,46 +747,31 @@ export default function ProductPage({
   // into view - same first-paint cadence as the product images
   // around it.
   //
-  // Phase 3: Range-bounded byte prefetch for look tiles.
-  // The prewarm useEffect fires synchronously in the same effect batch
-  // as each LookTile's IntersectionObserver setup. The IO callback fires
-  // asynchronously (next frame), so the prefetch fetch has a head-start
-  // window to pull 256 KB into the HTTP cache before the <video> element
-  // mounts. prefetchVideoBytes now caps at 256 KB regardless of the server
-  // response code, so this is safe for all tiles including 0-3.
+  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
+  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
+  // so prefetching their bytes would create competing downloads for the same
+  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
+  // giving us a head start before their <video> elements mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!lookCreatives || lookCreatives.length === 0) return;
     const tiles = lookCreatives.slice(0, 12);
-    // Poster warming — use crossOrigin:'anonymous' on the Image so it
-    // gets the same CORS-keyed cache entry as <video crossOrigin="anonymous"
-    // poster={url}>.  Without this the <video poster> always has a cache
-    // miss (img = no-CORS key, video poster = CORS key) and shows a black
-    // flash before the poster paints over the video background.
     for (const l of tiles) {
       const url = l.thumbnail_url;
       if (!url) continue;
       try {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
         img.decoding = 'async';
         img.src = url;
       } catch { /* ignore */ }
     }
-
-    // Do NOT call prefetchVideoBytes for tiles 0-3 here.  Those tiles
-    // mount their <video> elements within one animation frame of this
-    // effect (tile 0 immediately; tiles 1-3 after the IO callback fires
-    // ~16 ms later).  The Supabase storage TTFB is ~100 ms, so any
-    // prewarm fetch queued here has received zero cached bytes by the
-    // time the video element starts — it only creates a competing request
-    // that steals bandwidth from the video's own highest-priority stream.
-    //
-    // Tiles 4-7 have a 200 ms renderReady stagger, so they won't mount
-    // their videos until after the prewarm below could theoretically
-    // start helping.  But in practice the TTFB (100 ms) + 256 KB read
-    // time still exceed the 200 ms window, so we skip those too and let
-    // every tile download at full priority with no contention.
+    const mobile = isMobileViewport();
+    for (const l of tiles.slice(4, 12)) {
+      const videoUrl = (mobile && l.mobile_video_url) || l.video;
+      if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
+        prefetchVideoBytes(videoUrl);
+      }
+    }
   }, [lookCreatives]);
 
   return (
