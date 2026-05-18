@@ -149,6 +149,7 @@ interface LookOverlayProps {
 export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const moreScrollRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -260,6 +261,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  const scrollMoreLeft = () => {
+    moreScrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
+  };
+  const scrollMoreRight = () => {
+    moreScrollRef.current?.scrollBy({ left: 240, behavior: 'smooth' });
+  };
 
   // Reset scroll to top when look changes
   useEffect(() => {
@@ -568,17 +576,25 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {aboutCreatorStrip.length > 0 && (
                     <div className="look-creator-more-section">
                       <h3 className="look-feed-heading">More looks</h3>
-                      <div className="look-creator-more-scroll">
-                        {aboutCreatorStrip.map(fl => (
-                          <LookCard
-                            key={`about-creator-${fl.id}`}
-                            look={fl}
-                            className="look-card"
-                            onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
-                            onOpenCreator={onOpenCreator}
-                            onCreateCatalog={onCreateCatalog}
-                          />
-                        ))}
+                      <div className="look-creator-more-scroll-wrap">
+                        <button className="look-scroll-arrow look-scroll-arrow--left" onClick={scrollMoreLeft} aria-label="Scroll left">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <div className="look-creator-more-scroll" ref={moreScrollRef}>
+                          {aboutCreatorStrip.map(fl => (
+                            <LookCard
+                              key={`about-creator-${fl.id}`}
+                              look={fl}
+                              className="look-card"
+                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
+                              onOpenCreator={onOpenCreator}
+                              onCreateCatalog={onCreateCatalog}
+                            />
+                          ))}
+                        </div>
+                        <button className="look-scroll-arrow look-scroll-arrow--right" onClick={scrollMoreRight} aria-label="Scroll right">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
                       </div>
                     </div>
                   )}
