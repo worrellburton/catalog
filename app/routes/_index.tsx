@@ -814,6 +814,8 @@ export default function Home() {
                 onCreateCatalog={handleCreateCatalog}
                 onOpenLook={handleOpenLook}
                 bookmarks={bookmarks}
+                popularFallback={popularFallback}
+                onOpenCreative={handleOpenCreative}
               />
             </Suspense>
           )}

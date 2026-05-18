@@ -3,11 +3,13 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
+import CreativeCard from './CreativeCard';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
-import { prefetchVideoBytes } from '~/services/video-loading';
+import { type ProductAd } from '~/services/product-creative';
+import { seededShuffle } from '~/utils/seededShuffle';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -126,6 +128,14 @@ function lookSimilarityScore(seed: Look, candidate: Look): number {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
+type LookYmalItem =
+  | { kind: 'look'; look: Look; key: string }
+  | { kind: 'product'; creative: ProductAd; key: string }
+
+const LOOK_YMAL_BATCH = 16;
+const LOOK_YMAL_POOL_SIZE = 200;
+
 type TabId = 'products' | 'creator';
 
 interface BookmarksInterface {
@@ -145,15 +155,16 @@ interface LookOverlayProps {
   onOpenLook?: (look: Look) => void;
   bookmarks: BookmarksInterface;
   allLooks?: Look[];
+  /** Product creatives for the "You might also like" section. */
+  popularFallback?: ProductAd[];
+  /** Opens a product creative (with video context) in ProductPage. */
+  onOpenCreative?: (creative: ProductAd) => void;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
-  const sentinelLikeThis = useRef<HTMLDivElement>(null);
-  const sentinelPopular = useRef<HTMLDivElement>(null);
-  const sentinelMoreCreator = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -164,13 +175,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
   const [saveCount, setSaveCount] = useState<number | null>(null);
-
-  // Per-section visible counts that grow as the user scrolls into a
-  // sentinel at the bottom of each feed strip. Mirrors the feed page's
-  // infinite-scroll pattern so the detail page never feels "done".
-  const [visibleLikeThis, setVisibleLikeThis] = useState(8);
-  const [visiblePopular, setVisiblePopular] = useState(8);
-  const [visibleMoreCreator, setVisibleMoreCreator] = useState(8);
 
   // Resolve creator identity in priority order so orphan looks (created
   // via the user-generation flow with no creator_handle) render the
@@ -219,7 +223,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       : [];
 
     const popular: Look[] = looksLikeThis.length === 0
-      ? source
+      ? source.slice(0, 8)
       : [];
 
     const moreFromCreator: Look[] = look.creator
@@ -238,11 +242,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const c = dedupe(moreFromCreator);
 
     return {
-      looksLikeThis:   fillLooks(a, visibleLikeThis),
-      popular:         fillLooks(b, visiblePopular),
-      moreFromCreator: fillLooks(c, visibleMoreCreator),
+      looksLikeThis:   fillLooks(a, 8),
+      popular:         fillLooks(b, 8),
+      moreFromCreator: fillLooks(c, 8),
     };
-  }, [look.id, look.creator, look.products, allLooks, visibleLikeThis, visiblePopular, visibleMoreCreator]);
+  }, [look.id, look.creator, look.products, allLooks]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
@@ -268,58 +272,63 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     }));
   }, [look.id, look.creator, allLooks]);
 
+  // ── You Might Also Like (YMAL) ──────────────────────────────────────────────
+  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [ymalVisible, setYmalVisible] = useState(LOOK_YMAL_BATCH);
+
+  const ymalPool = useMemo((): LookYmalItem[] => {
+    const seed = (Math.abs(look.id) * 7) ^ 0x5f3759df;
+    const sourceLooks = (allLooks || allLooksData).filter(l => l.id !== look.id);
+    const sourceProds = popularFallback || [];
+    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
+
+    const shuffledLooks = seededShuffle(sourceLooks, seed);
+    const shuffledProds = seededShuffle(sourceProds, seed ^ 0xdeadbeef);
+
+    const pool: LookYmalItem[] = [];
+    let li = 0, pi = 0;
+    for (let i = 0; i < LOOK_YMAL_POOL_SIZE; i++) {
+      // Pattern: product, product, look (repeating)
+      if (i % 3 === 2 && shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        // Unique synthetic negative ID avoids TrailVideoHost conflicts
+        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
+        li++;
+      } else if (shuffledProds.length > 0) {
+        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
+        pi++;
+      } else if (shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
+        li++;
+      } else {
+        break;
+      }
+    }
+    return pool;
+  }, [look.id, allLooks, popularFallback]);
+
+  useEffect(() => {
+    setYmalVisible(LOOK_YMAL_BATCH);
+  }, [look.id]);
+
+  useEffect(() => {
+    const sentinel = ymalSentinelRef.current;
+    const scroller = scrollRef.current;
+    if (!sentinel || !scroller || ymalPool.length === 0) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setYmalVisible(prev => Math.min(prev + LOOK_YMAL_BATCH, ymalPool.length));
+      }
+    }, { root: scroller, rootMargin: '400px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [ymalPool.length]);
+
   // Trigger enter animation after first paint
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
-
-  // Warm the network for every feed-section video the moment the
-  // overlay opens. Each call issues a small Range request (~256KB) and
-  // is internally deduped, so by the time the user scrolls down to
-  // "Popular" / "Looks like this" / "More from <creator>" the bytes
-  // are already in the HTTP cache and TrailVideoHost can paint a
-  // first frame instantly. Same trick we use for the feed page.
-  useEffect(() => {
-    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-    const all = [
-      ...feedSections.looksLikeThis,
-      ...feedSections.popular,
-      ...feedSections.moreFromCreator,
-      ...aboutCreatorStrip,
-    ];
-    for (const l of all) {
-      const url = normalizeLookVideoUrl(l.video, basePath);
-      if (url) prefetchVideoBytes(url);
-    }
-  }, [feedSections, aboutCreatorStrip]);
-
-  // Infinite-scroll observers. Watch a sentinel beneath each feed
-  // strip; when it enters within 400px of the viewport, bump the
-  // section's visible count by 8. Mirrors GridView's sentinel pattern.
-  useEffect(() => {
-    const root = scrollRef.current;
-    if (!root) return;
-    type Entry = { el: HTMLDivElement | null; bump: () => void };
-    const entries: Entry[] = [
-      { el: sentinelLikeThis.current,   bump: () => setVisibleLikeThis(v => v + 8) },
-      { el: sentinelPopular.current,    bump: () => setVisiblePopular(v => v + 8) },
-      { el: sentinelMoreCreator.current, bump: () => setVisibleMoreCreator(v => v + 8) },
-    ];
-    const observer = new IntersectionObserver(
-      (intersections) => {
-        for (const ev of intersections) {
-          if (!ev.isIntersecting) continue;
-          const match = entries.find(e => e.el === ev.target);
-          match?.bump();
-        }
-      },
-      { root, rootMargin: '400px 0px' },
-    );
-    for (const e of entries) {
-      if (e.el) observer.observe(e.el);
-    }
-    return () => observer.disconnect();
-  }, [feedSections]);
 
   const scrollMoreLeft = () => {
     moreScrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
@@ -334,9 +343,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setActiveTab('products');
     setLookBookmarked(bookmarks.isLookBookmarked(look.id));
     setProductBookmarks(look.products.map(p => bookmarks.isProductBookmarked(p)));
-    setVisibleLikeThis(8);
-    setVisiblePopular(8);
-    setVisibleMoreCreator(8);
     // Fetch save count when look has a Supabase UUID
     setSaveCount(null);
     if (look.uuid) {
@@ -671,19 +677,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <div className="look-feed-section">
             <h3 className="look-feed-heading">Looks like this</h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.map((fl, i) => (
+              {feedSections.looksLikeThis.map(fl => (
                 <LookCard
                   key={`like-${fl.id}`}
                   look={fl}
                   className="look-card"
-                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
-            <div ref={sentinelLikeThis} style={{ height: 1 }} aria-hidden />
           </div>
         )}
 
@@ -691,19 +695,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <div className="look-feed-section">
             <h3 className="look-feed-heading">Popular</h3>
             <div className="look-feed-grid">
-              {feedSections.popular.map((fl, i) => (
+              {feedSections.popular.map(fl => (
                 <LookCard
                   key={`popular-${fl.id}`}
                   look={fl}
                   className="look-card"
-                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
-            <div ref={sentinelPopular} style={{ height: 1 }} aria-hidden />
           </div>
         )}
 
@@ -713,19 +715,45 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               More from {creatorData?.displayName || look.creator}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.moreFromCreator.map((fl, i) => (
+              {feedSections.moreFromCreator.map(fl => (
                 <LookCard
                   key={`creator-${fl.id}`}
                   look={fl}
                   className="look-card"
-                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
-            <div ref={sentinelMoreCreator} style={{ height: 1 }} aria-hidden />
+          </div>
+        )}
+
+        {ymalPool.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">You might also like</h3>
+            <div className="look-feed-grid">
+              {ymalPool.slice(0, ymalVisible).map(item =>
+                item.kind === 'look' ? (
+                  <LookCard
+                    key={item.key}
+                    look={item.look}
+                    className="look-card"
+                    onOpenLook={handleFeedLookClick}
+                    onOpenCreator={onOpenCreator}
+                    onCreateCatalog={onCreateCatalog}
+                  />
+                ) : (
+                  <CreativeCard
+                    key={item.key}
+                    creative={item.creative}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                )
+              )}
+            </div>
+            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { Product, Look, creators as staticCreators } from '~/data/looks';
+import { Product, Look, creators as staticCreators, looks as allLooksData } from '~/data/looks';
+import { seededShuffle } from '~/utils/seededShuffle';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
@@ -57,6 +58,9 @@ interface ProductPageProps {
   /** Products related via entity_edges (pairs_with / same_brand). Powers
    *  the "Pairs well with" horizontal rail on ProductPage. */
   graphPairs?: GraphPair[];
+  /** Full look pool for the "You might also like" infinite section. Falls
+   *  back to the static allLooksData when omitted. */
+  allLooks?: Look[];
   bookmarks: BookmarksInterface;
   /** Increments on every navigation. ProductPage's scroll-to-top
    *  effect depends on this so it fires reliably even when the new
@@ -251,14 +255,9 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
 
 /** Look-creative tile for the "Featured in Looks" grid. Looks have video
  *  via the looks_creative join in services/looks.ts, mapped to look.video.
- *
- *  Uses TrailVideoHost (the same shared <video> pool the feed and the
- *  LookOverlay hero use) so the tile reuses any already-warm <video>
- *  element for this look.id — no remount, no first-frame black, no
- *  staggered request-waterfall delay. The first row (`index < 4`) attaches
- *  unconditionally (`eager`) so the section paints instantly; later tiles
- *  attach when scrolled within ~2 viewports of the prep band via the
- *  pool's built-in IntersectionObserver. */
+ *  Uses the TrailVideoHost shared pool — no per-tile <video> elements,
+ *  no stagger timers, no intervals. Videos attach when scrolled into the
+ *  pool's prep band (useInViewport default: 200% of viewport). */
 function LookTile({
   look,
   index,
@@ -273,60 +272,41 @@ function LookTile({
   const inViewport = useInViewport(wrapRef);
   const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  // Route through pickVideoUrl so save-data / slow-connection users
-  // get the small variant even on a wider viewport. Helper expects
-  // video_url / mobile_video_url, matching ProductAd's shape.
+
   const rawVideo = pickVideoUrl({
     video_url: look.video,
     mobile_video_url: look.mobile_video_url ?? null,
   });
   const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
-  // Full-res URL used for background prefetch. Skip when it equals
-  // the playable URL (desktop) — that file is already streaming.
   const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
-
-  // First row of tiles attach immediately so the rail paints in lockstep
-  // with the rest of the detail page. Below-the-fold tiles wait until
-  // they're within the IntersectionObserver's prep band.
-  const eager = index < 4;
-  const shouldAttach = eager || inViewport;
-
-  // Poster: server-extracted thumbnail when present, legacy cover
-  // otherwise. Passed to TrailVideoHost so the shared <video> shows
-  // the still even before its first frame decodes.
   const tilePoster = look.thumbnail_url || look.cover || '';
 
+  // Attach the shared TrailVideoHost <video> element when this tile
+  // enters the prep band. The pool element is already warm from the
+  // feed, so no re-download happens on first attach.
   const setVideoSlot = useTrailVideo(
-    shouldAttach ? trailId : undefined,
-    shouldAttach ? videoUrl : undefined,
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
     tilePoster || undefined,
   );
 
-  // Compose slot ref + observer ref onto the same nodes.
   const setSlot = useCallback((el: HTMLDivElement | null) => {
     slotRef.current = el;
     setVideoSlot(el);
   }, [setVideoSlot]);
 
-  // Once a tile has been visible ~600ms on mobile, warm the first
-  // 256KB of the full-res clip. Idempotent via preloadedHighResUrls,
-  // so safe to call from multiple places. By the time the user taps
-  // in, LookOverlay's hero gets a cache hit.
+  // Once visible, warm the full-res clip for instant LookOverlay open.
   useEffect(() => {
     if (!inViewport) return;
     if (!isMobileViewport()) return;
-    if (!fullResVideoUrl) return;
-    if (fullResVideoUrl === videoUrl) return;
-    const t = window.setTimeout(() => {
-      prefetchVideoBytes(fullResVideoUrl);
-    }, 600);
+    if (!fullResVideoUrl || fullResVideoUrl === videoUrl) return;
+    const t = window.setTimeout(() => prefetchVideoBytes(fullResVideoUrl), 600);
     return () => window.clearTimeout(t);
   }, [inViewport, fullResVideoUrl, videoUrl]);
 
-  // Mark first-frame for the existing perf-trace milestones so the
-  // before/after comparison numbers stay valid.
+  // Mark first frame for perf traces.
   useEffect(() => {
-    if (!shouldAttach) return;
+    if (!inViewport) return;
     const v = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!v) return;
     let marked = false;
@@ -342,28 +322,16 @@ function LookTile({
       v.removeEventListener('loadeddata', mark);
       v.removeEventListener('canplay', mark);
     };
-  }, [shouldAttach, trailId, look.id]);
+  }, [inViewport, trailId, look.id]);
 
-  // Resolve creator identity in priority order:
-  //   1. Static creators map (real handles like @lilywittman/@garrett)
-  //   2. Profile fallback baked into the look row (orphan looks created
-  //      via the user-generation flow - see services/looks.ts)
-  //   3. Raw handle string, but only if it's not the synthetic `user:UUID`
-  //      key - that one's a placeholder, not something to show users.
   const creatorEntry = staticCreators[look.creator];
   const displayName = creatorEntry?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator)
     || '';
   const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
-
-  // First 8 tiles get eager + high-priority poster fetch so the rail
-  // paints an image the instant it scrolls into view.
   const eagerPoster = index < 8;
 
-  // Hover or first-touch = the user is about to tap, so kick the
-  // full-res byte fetch immediately. Idempotent via the
-  // prefetchedHighResUrls set in video-loading.ts.
   const handleIntent = useCallback(() => {
     if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
   }, [fullResVideoUrl]);
@@ -434,6 +402,14 @@ function fillToExact<T>(arr: T[], count: number): T[] {
   return out;
 }
 
+// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
+type YmalItem =
+  | { kind: 'look'; look: Look; key: string }
+  | { kind: 'product'; creative: ProductAd; key: string }
+
+const YMAL_BATCH = 16;
+const YMAL_POOL_SIZE = 200;
+
 export default function ProductPage({
   product,
   onClose,
@@ -447,22 +423,13 @@ export default function ProductPage({
   popularFallback,
   lookCreatives,
   graphPairs,
+  allLooks,
   bookmarks,
   navKey = 0,
 }: ProductPageProps) {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
-
-  // Infinite-scroll counts for each feed section beneath the hero.
-  // Each starts at 8 (current behaviour) and bumps by 8 when the
-  // section's sentinel enters view, mirroring the feed page.
-  const [visibleMoreLikeThis, setVisibleMoreLikeThis] = useState(8);
-  const [visiblePopular, setVisiblePopular] = useState(8);
-  const [visibleLooks, setVisibleLooks] = useState(8);
-  const sentinelMoreLikeThis = useRef<HTMLDivElement | null>(null);
-  const sentinelPopular = useRef<HTMLDivElement | null>(null);
-  const sentinelLooks = useRef<HTMLDivElement | null>(null);
 
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
@@ -504,7 +471,7 @@ export default function ProductPage({
     return g === seedGender;
   }, [seedGender]);
 
-  const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 64): ProductAd[] => {
+  const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
     if (!rows || rows.length === 0) return [];
     const seenProductIds = new Set<string>();
     const out: ProductAd[] = [];
@@ -538,6 +505,68 @@ export default function ProductPage({
     if (moreLikeThis.length > 0) return [];
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
+
+  // ── You Might Also Like pool ──────────────────────────────────────────────
+  // Builds a 200-item cycling pool that mixes shuffled looks and product
+  // creatives (2 products : 1 look). Seeded by product so the order is
+  // stable across re-renders and resets properly on navigation.
+  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [ymalVisible, setYmalVisible] = useState(YMAL_BATCH);
+
+  const ymalPool = useMemo((): YmalItem[] => {
+    const seed = hashString(`${product.brand}|${product.name}|ymal`);
+    const sourceLooks = allLooks || allLooksData;
+    const sourceProds = popularFallback || [];
+    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
+
+    const shuffledLooks = seededShuffle(sourceLooks, seed);
+    const shuffledProds = seededShuffle(sourceProds, seed ^ 0x5f3759df);
+
+    const pool: YmalItem[] = [];
+    let li = 0, pi = 0;
+    for (let i = 0; i < YMAL_POOL_SIZE; i++) {
+      // Pattern: product, product, look (repeating)
+      if (i % 3 === 2 && shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else if (shuffledProds.length > 0) {
+        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
+        pi++;
+      } else if (shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else {
+        break;
+      }
+    }
+    return pool;
+  }, [product.brand, product.name, allLooks, popularFallback]);
+
+  // Reset visible count when the product changes.
+  useEffect(() => {
+    setYmalVisible(YMAL_BATCH);
+  }, [product.brand, product.name]);
+
+  // Infinite scroll: load next batch when the sentinel enters the scroll container.
+  // Must use root: scrollerRef.current — .product-page is a custom overflow-y:auto
+  // container, not window scroll. Without root, rootMargin extends the viewport but
+  // gets clipped by the container before it can fire early. Mirrors GridView's pattern
+  // exactly: root = scroll container + rootMargin = lookahead distance.
+  useEffect(() => {
+    const sentinel = ymalSentinelRef.current;
+    const scroller = scrollerRef.current;
+    if (!sentinel || !scroller || ymalPool.length === 0) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setYmalVisible(prev => Math.min(prev + YMAL_BATCH, ymalPool.length));
+      }
+    }, { root: scroller, rootMargin: '400px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [ymalPool.length]);
+
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -569,51 +598,7 @@ export default function ProductPage({
   // products happen to share fields.
   useLayoutEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    setVisibleMoreLikeThis(8);
-    setVisiblePopular(8);
-    setVisibleLooks(8);
   }, [navKey]);
-
-  // Infinite-scroll observers for each below-the-fold rail.
-  useEffect(() => {
-    const root = scrollerRef.current;
-    if (!root) return;
-    type Entry = { el: HTMLDivElement | null; bump: () => void };
-    const entries: Entry[] = [
-      { el: sentinelMoreLikeThis.current, bump: () => setVisibleMoreLikeThis(v => v + 8) },
-      { el: sentinelPopular.current,      bump: () => setVisiblePopular(v => v + 8) },
-      { el: sentinelLooks.current,        bump: () => setVisibleLooks(v => v + 8) },
-    ];
-    const observer = new IntersectionObserver(
-      (intersections) => {
-        for (const ev of intersections) {
-          if (!ev.isIntersecting) continue;
-          const match = entries.find(e => e.el === ev.target);
-          match?.bump();
-        }
-      },
-      { root, rootMargin: '400px 0px' },
-    );
-    for (const e of entries) {
-      if (e.el) observer.observe(e.el);
-    }
-    return () => observer.disconnect();
-  }, [navKey, moreLikeThis.length, popularItems.length, lookCreatives?.length]);
-
-  // Prefetch video bytes for every look in the "Featured in Looks" rail
-  // the moment the page opens. Each call issues a small Range request
-  // (~256KB), dedupes globally, and primes the HTTP cache so when the
-  // tile attaches its TrailVideoHost <video> the first frame paints
-  // immediately. Fixes the 30-second black-tile bug for tile 0 and
-  // makes the whole rail feel instant.
-  useEffect(() => {
-    if (!lookCreatives || lookCreatives.length === 0) return;
-    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-    for (const l of lookCreatives) {
-      const url = normalizeLookVideoUrl(l.video, basePath);
-      if (url) prefetchVideoBytes(url);
-    }
-  }, [lookCreatives]);
 
   const handleClose = useCallback(() => {
     setIsAnimatingOut(true);
@@ -984,7 +969,7 @@ export default function ProductPage({
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
-              {fillToExact(moreLikeThis, visibleMoreLikeThis).map((c, i) => (
+              {fillToExact(moreLikeThis, 8).map((c, i) => (
                 <CreativeCard
                   key={`mlt-${i}`}
                   creative={c}
@@ -993,7 +978,6 @@ export default function ProductPage({
                 />
               ))}
             </div>
-            <div ref={sentinelMoreLikeThis} style={{ height: 1 }} aria-hidden />
           </section>
         )}
 
@@ -1001,7 +985,7 @@ export default function ProductPage({
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">Popular</h2>
             <div className="pd-similar-grid">
-              {fillToExact(popularItems, visiblePopular).map((c, i) => (
+              {fillToExact(popularItems, 8).map((c, i) => (
                 <CreativeCard
                   key={`pop-${i}`}
                   creative={c}
@@ -1010,7 +994,6 @@ export default function ProductPage({
                 />
               ))}
             </div>
-            <div ref={sentinelPopular} style={{ height: 1 }} aria-hidden />
           </section>
         )}
 
@@ -1018,11 +1001,10 @@ export default function ProductPage({
           <section className="pd-look-feed">
             <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
-              {fillToExact(lookCreatives, visibleLooks).map((l, i) => (
+              {fillToExact(lookCreatives, 8).map((l, i) => (
                 <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
               ))}
             </div>
-            <div ref={sentinelLooks} style={{ height: 1 }} aria-hidden />
           </section>
         )}
 
@@ -1063,6 +1045,27 @@ export default function ProductPage({
                 </button>
               ))}
             </div>
+          </section>
+        )}
+
+        {ymalPool.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">You might also like</h2>
+            <div className="pd-similar-grid">
+              {ymalPool.slice(0, ymalVisible).map((item, i) =>
+                item.kind === 'look' ? (
+                  <LookTile key={item.key} look={item.look} index={i} onOpen={onOpenLook} />
+                ) : (
+                  <CreativeCard
+                    key={item.key}
+                    creative={item.creative}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                )
+              )}
+            </div>
+            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
           </section>
         )}
       </div>

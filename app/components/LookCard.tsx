@@ -24,16 +24,9 @@ interface LookCardProps {
    *  Catalog page where the creator identity is already in the page
    *  header - per-tile attribution is redundant noise there. */
   hideCreator?: boolean;
-  /** Skip the IntersectionObserver gate and attach the shared <video>
-   *  element immediately on mount. Used by detail-page feed sections
-   *  (LookOverlay "Popular" / "Looks like this" / ProductPage
-   *  "Featured in Looks") for the first row of tiles so they paint
-   *  the same first frame as the feed — no waiting for the observer
-   *  callback. */
-  eager?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, eager = false }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -90,12 +83,9 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Defer slot population to viewport. The TrailVideoHost pool keeps the
   // element alive so the LookOverlay hero (same trailId) reuses the same
   // running <video> on tap - no remount, no first-frame black.
-  // `eager` overrides the viewport gate so first-row detail-page tiles
-  // attach immediately, matching feed-card first-paint cadence.
-  const shouldAttach = eager || inViewport;
   const setVideoSlot = useTrailVideo(
-    shouldAttach ? trailId : undefined,
-    shouldAttach ? videoUrl : undefined,
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
     posterUrl || undefined,
   );
 
@@ -117,7 +107,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
 
   // Mark loaded once the host video has frames.
   useEffect(() => {
-    if (!shouldAttach) return;
+    if (!inViewport) return;
     const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
     if (video.readyState >= 2) { setLoaded(true); return; }
@@ -128,7 +118,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       clearTimeout(timeout);
       ['playing', 'canplay', 'loadeddata'].forEach(evt => video.removeEventListener(evt, handler));
     };
-  }, [shouldAttach, trailId]);
+  }, [inViewport, trailId]);
 
   return (
     <div
