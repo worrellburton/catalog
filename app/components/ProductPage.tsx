@@ -747,11 +747,13 @@ export default function ProductPage({
   // into view - same first-paint cadence as the product images
   // around it.
   //
-  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
-  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
-  // so prefetching their bytes would create competing downloads for the same
-  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
-  // giving us a head start before their <video> elements mount.
+  // Phase 3: Range-bounded byte prefetch for look tiles.
+  // The prewarm useEffect fires synchronously in the same effect batch
+  // as each LookTile's IntersectionObserver setup. The IO callback fires
+  // asynchronously (next frame), so the prefetch fetch has a head-start
+  // window to pull 256 KB into the HTTP cache before the <video> element
+  // mounts. prefetchVideoBytes now caps at 256 KB regardless of the server
+  // response code, so this is safe for all tiles including 0-3.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!lookCreatives || lookCreatives.length === 0) return;
@@ -766,7 +768,7 @@ export default function ProductPage({
       } catch { /* ignore */ }
     }
     const mobile = isMobileViewport();
-    for (const l of tiles.slice(4, 12)) {
+    for (const l of tiles.slice(0, 8)) {
       const videoUrl = (mobile && l.mobile_video_url) || l.video;
       if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
         prefetchVideoBytes(videoUrl);
