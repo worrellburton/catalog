@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { Product, Look, creators as staticCreators } from '~/data/looks';
+import { Product, Look, creators as staticCreators, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
@@ -12,8 +12,6 @@ import {
   pickVideoUrl,
   pickPosterUrl,
   prefetchVideoBytes,
-  isMobileViewport,
-  markFeedMilestone,
 } from '~/services/video-loading';
 
 interface ProductPageCreative {
@@ -248,8 +246,9 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
   );
 }
 
-/** Look-creative tile for the "Featured in Looks" grid. Looks have video
- *  via the looks_creative join in services/looks.ts, mapped to look.video. */
+/** Look-creative tile for the "Featured in Looks" grid.
+ *  Uses TrailVideoHost so tapping hands the already-buffered <video>
+ *  element to LookOverlay's hero — instant playback, no black gap. */
 function LookTile({
   look,
   index,
@@ -260,158 +259,52 @@ function LookTile({
   onOpen: (l: Look) => void;
 }) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const slotRef = useRef<HTMLDivElement | null>(null);
   const [inViewport, setInViewport] = useState(false);
-  const [renderReady, setRenderReady] = useState(index < 4);
-  // True once the <video> has decoded its first frame. The video is
-  // rendered opacity:0 until then so the poster <img> underneath stays
-  // visible - otherwise the video element paints black on top of the
-  // poster for the seconds-long window between mount and first frame.
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const trailId = lookTrailId(look.id);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  // Phase 6: route through the shared pickVideoUrl helper so save-data
-  // and slow-connection users get the small variant even on a wider
-  // viewport. The helper expects video_url / mobile_video_url, which
-  // matches ProductAd's shape; Look stores the full-res URL on `video`.
-  const rawVideo = pickVideoUrl({
-    video_url: look.video,
-    mobile_video_url: look.mobile_video_url ?? null,
-  });
-  const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
-  // Full-res URL used for Phase 4 background prefetch. Skip the
-  // prefetch when it equals the playable URL (desktop) - that file is
-  // already streaming.
-  const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const trailId = lookTrailId(look.id);
+  const videoUrl = normalizeLookVideoUrl(
+    pickVideoUrl({ video_url: look.video, mobile_video_url: look.mobile_video_url ?? null }),
+    basePath,
+  );
+  const tilePoster = look.thumbnail_url || look.cover || '';
+
+  // Register with TrailVideoHost. The shared <video> starts buffering once
+  // the tile enters the 800 px pre-load band — so when the user taps,
+  // LookOverlay's hero can reuse the same element instantly.
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
+    tilePoster || undefined,
+  );
+
+  const setSlot = useCallback((node: HTMLDivElement | null) => {
+    slotRef.current = node;
+    setVideoSlot(node);
+  }, [setVideoSlot]);
 
   useEffect(() => {
     const node = wrapRef.current;
     if (!node) return;
     const obs = new IntersectionObserver(
       es => es.forEach(e => setInViewport(e.isIntersecting)),
-      // Bumped from 400px to 800px so look-tile videos start streaming
-      // ~half a viewport before the user actually scrolls them into
-      // view; closes the perceived gap to product images, which paint
-      // instantly because they're way smaller.
       { rootMargin: '800px' },
     );
     obs.observe(node);
     return () => obs.disconnect();
   }, []);
 
-  // Phase 5: stagger the request waterfall. The browser caps to ~6
-  // concurrent media downloads per origin; an 8-tile rail saturates
-  // that and the last 2 sit in queue. Tiles 0-3 render <video>
-  // immediately, 4-7 wait a tick, 8+ wait for idle. By the time the
-  // first batch has its moov atom + first GOP, the next batch's
-  // sockets are free.
-  useEffect(() => {
-    if (renderReady) return;
-    if (typeof window === 'undefined') return;
-    const delay = index < 8 ? 200 : 400 + (index - 8) * 100;
-    const ric = (window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    }).requestIdleCallback;
-    if (ric) {
-      const handle = ric(() => setRenderReady(true), { timeout: delay + 500 });
-      return () => {
-        const cic = (window as Window & {
-          cancelIdleCallback?: (h: number) => void;
-        }).cancelIdleCallback;
-        if (cic) cic(handle);
-      };
-    }
-    const t = window.setTimeout(() => setRenderReady(true), delay);
-    return () => window.clearTimeout(t);
-  }, [index, renderReady]);
+  // Intent-based prefetch: hover or first-touch signals an imminent tap.
+  const handleIntent = useCallback(() => {
+    if (videoUrl) prefetchVideoBytes(videoUrl);
+  }, [videoUrl]);
 
-  // Phase 4: once a tile has been visible ~600ms on mobile, warm the
-  // first 256 KB of the full-res clip. Same Phase-8 contract as
-  // CreativeCard - by the time the user taps in, the LookOverlay
-  // hero gets a cache hit and paints near-instantly.
-  useEffect(() => {
-    if (!inViewport) return;
-    if (!isMobileViewport()) return;
-    if (!fullResVideoUrl) return;
-    if (fullResVideoUrl === videoUrl) return; // already streaming this URL
-    const t = window.setTimeout(() => {
-      prefetchVideoBytes(fullResVideoUrl);
-    }, 600);
-    return () => window.clearTimeout(t);
-  }, [inViewport, fullResVideoUrl, videoUrl]);
-
-  // Belt-and-suspenders: force play() once frames decode + on every
-  // visibility return. Mobile Safari pauses videos on tab background
-  // and the muted-autoplay flag can fail to evaluate when the element
-  // is JS-created with src set after attributes; rendering the <video>
-  // declaratively (every attribute on the element from creation) plus
-  // these retries makes muted autoplay actually fire on mobile.
-  useEffect(() => {
-    if (!inViewport) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const kick = () => { if (v.paused) void v.play().catch(() => {}); };
-    // Phase 1: capture the moment the first frame decodes so the
-    // before/after of the rest of the perf work is measurable. Only
-    // marks once per tile (the one-shot guard is a closure boolean).
-    let marked = false;
-    const markFirstFrame = () => {
-      if (marked) return;
-      marked = true;
-      markFeedMilestone(`look-first-frame:${look.id}`);
-    };
-    if (v.readyState >= 2) { kick(); markFirstFrame(); setVideoLoaded(true); }
-    const onLoaded = () => { kick(); markFirstFrame(); setVideoLoaded(true); };
-    v.addEventListener('loadeddata', onLoaded);
-    v.addEventListener('canplay', onLoaded);
-    const onVis = () => { if (!document.hidden) kick(); };
-    document.addEventListener('visibilitychange', onVis);
-    const interval = window.setInterval(kick, 1000);
-    const stopAt = window.setTimeout(() => window.clearInterval(interval), 8000);
-    return () => {
-      v.removeEventListener('loadeddata', onLoaded);
-      v.removeEventListener('canplay', onLoaded);
-      document.removeEventListener('visibilitychange', onVis);
-      window.clearInterval(interval);
-      window.clearTimeout(stopAt);
-    };
-  }, [inViewport, videoUrl, look.id]);
-
-  // Resolve creator identity in priority order:
-  //   1. Static creators map (real handles like @lilywittman/@garrett)
-  //   2. Profile fallback baked into the look row (orphan looks created
-  //      via the user-generation flow - see services/looks.ts)
-  //   3. Raw handle string, but only if it's not the synthetic `user:UUID`
-  //      key - that one's a placeholder, not something to show users.
   const creatorEntry = staticCreators[look.creator];
   const displayName = creatorEntry?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator)
     || '';
   const avatarUrl = creatorEntry?.avatar || look.creatorAvatar || '';
-
-  // Look poster: the server-extracted thumbnail when present, the
-  // legacy cover image otherwise. Set as <video poster=> so the tile
-  // never paints a black frame, and rendered as a separate <img>
-  // behind the video so the tile is never blank even outside the
-  // viewport prep band.
-  const tilePoster = look.thumbnail_url || look.cover || '';
-
-  // Phase 2: the first 8 tiles (one row on desktop, four rows on
-  // mobile) get eager + high-priority poster fetch so the rail paints
-  // an image the instant it scrolls into view. Later tiles stay lazy
-  // so we don't burn bytes on posters the user may never reach.
-  const eagerPoster = index < 8;
-
-  // Phase 10: intent-based prefetch. Hover or first-touch = the user
-  // is about to tap, so kick the full-res byte fetch immediately.
-  // Idempotent via the prefetchedHighResUrls set in video-loading.ts,
-  // so this is free if Phase 4 already ran or if the bytes are
-  // cached. Closes the cold-cache gap for staggered tiles whose
-  // <video> hasn't rendered yet when the tap lands.
-  const handleIntent = useCallback(() => {
-    if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
-  }, [fullResVideoUrl]);
 
   return (
     <button
@@ -423,57 +316,25 @@ function LookTile({
       ref={wrapRef}
     >
       {tilePoster ? (
-        <>
-          {/* Shimmer underneath the poster so the tile never paints
-              flat black during the brief window before the <img> network
-              fetch resolves. The poster covers it the moment it decodes. */}
-          {!videoLoaded && (
-            <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
-          )}
-          <img
-            src={tilePoster}
-            alt=""
-            aria-hidden="true"
-            className="pd-look-tile-video"
-            loading={eagerPoster ? 'eager' : 'lazy'}
-            fetchPriority={eagerPoster ? 'high' : 'auto'}
-            decoding="async"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-          />
-        </>
+        <img
+          src={tilePoster}
+          alt=""
+          aria-hidden="true"
+          loading={index < 8 ? 'eager' : 'lazy'}
+          fetchPriority={index < 8 ? 'high' : 'auto'}
+          decoding="async"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        />
       ) : (
         <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
       )}
-      {videoUrl && inViewport && renderReady && (
-        <video
-          ref={videoRef}
-          className="pd-look-tile-video"
-          data-trail-id={trailId}
-          src={videoUrl}
-          poster={tilePoster || undefined}
-          muted
-          autoPlay
-          loop
-          playsInline
-          preload="auto"
-          crossOrigin="anonymous"
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            opacity: videoLoaded ? 1 : 0,
-            transition: 'opacity 0.25s ease',
-          }}
-        />
-      )}
-      {(!videoUrl || !inViewport || !renderReady) && (
-        <div className="pd-look-tile-video" data-trail-id={trailId} />
-      )}
-
+      <div
+        ref={setSlot}
+        className="pd-look-tile-video"
+        data-trail-id={trailId}
+        style={{ position: 'absolute', inset: 0, zIndex: 1 }}
+      />
       <div className="pd-look-tile-meta">
-        {/* Always render the creator chip in the lower-left so every
-            look has a visible attribution. Static creators get their
-            real avatar + name; user-generated orphan looks fall back
-            to an initial circle so the chip never disappears. */}
         <span className="pd-look-tile-creator">
           {avatarUrl ? (
             <img
@@ -599,6 +460,13 @@ export default function ProductPage({
     if (moreLikeThis.length > 0) return [];
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
+
+  const moreLooks = useMemo(() => {
+    if (extraLookPages === 0) return [] as Look[];
+    const shown = new Set<number>((lookCreatives || []).map(l => l.id));
+    return allLooksData.filter(l => !shown.has(l.id)).slice(0, extraLookPages * 8);
+  }, [extraLookPages, lookCreatives]);
+
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
@@ -606,7 +474,9 @@ export default function ProductPage({
   const isDesktop = typeof window !== 'undefined'
     && window.matchMedia('(min-width: 960px)').matches;
   const [showRetailers, setShowRetailers] = useState(isDesktop);
+  const [extraLookPages, setExtraLookPages] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
@@ -630,6 +500,7 @@ export default function ProductPage({
   // products happen to share fields.
   useLayoutEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    setExtraLookPages(0);
   }, [navKey]);
 
   const handleClose = useCallback(() => {
@@ -757,24 +628,12 @@ export default function ProductPage({
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
   }, [creative?.id, creative?.videoUrl]);
 
-  // Prewarm "Featured in Looks" poster images. Each look that's
-  // about to render a tile gets its poster jpeg pulled into the
-  // browser image cache while the user is still reading the hero.
-  // Posters are tiny (~30 KB) so the cost is negligible and the
-  // payoff is the rail painting instantly the moment it scrolls
-  // into view - same first-paint cadence as the product images
-  // around it.
-  //
-  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
-  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
-  // so prefetching their bytes would create competing downloads for the same
-  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
-  // giving us a head start before their <video> elements mount.
+  // Prewarm poster images for the "Featured in Looks" rail so tiles
+  // paint an image the moment they scroll into view.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!lookCreatives || lookCreatives.length === 0) return;
-    const tiles = lookCreatives.slice(0, 12);
-    for (const l of tiles) {
+    for (const l of lookCreatives.slice(0, 12)) {
       const url = l.thumbnail_url;
       if (!url) continue;
       try {
@@ -783,14 +642,25 @@ export default function ProductPage({
         img.src = url;
       } catch { /* ignore */ }
     }
-    const mobile = isMobileViewport();
-    for (const l of tiles.slice(4, 12)) {
-      const videoUrl = (mobile && l.mobile_video_url) || l.video;
-      if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
-        prefetchVideoBytes(videoUrl);
-      }
-    }
   }, [lookCreatives]);
+
+  // Infinite scroll: load more looks when the sentinel enters the viewport.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || extraLookPages >= 5) return;
+    let fired = false;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !fired) {
+          fired = true;
+          setExtraLookPages(p => p + 1);
+        }
+      },
+      { rootMargin: '300px' },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [extraLookPages]);
 
   return (
     <div
@@ -1033,12 +903,25 @@ export default function ProductPage({
           <section className="pd-look-feed">
             <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
-              {fillToExact(lookCreatives, 8).map((l, i) => (
-                <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
+              {lookCreatives.map((l, i) => (
+                <LookTile key={`fl-${l.id}`} look={l} index={i} onOpen={onOpenLook} />
               ))}
             </div>
           </section>
         )}
+
+        {moreLooks.length > 0 && (
+          <section className="pd-look-feed">
+            <h2 className="pd-feed-title">More looks</h2>
+            <div className="pd-look-grid">
+              {moreLooks.map((l, i) => (
+                <LookTile key={`more-${l.id}`} look={l} index={i} onOpen={onOpenLook} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />
 
         {graphPairs && graphPairs.length > 0 && (
           <section className="pd-graph-pairs" aria-label="Pairs well with">

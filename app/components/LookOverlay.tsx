@@ -160,6 +160,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
   const [saveCount, setSaveCount] = useState<number | null>(null);
+  const [extraPages, setExtraPages] = useState(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Resolve creator identity in priority order so orphan looks (created
   // via the user-generation flow with no creator_handle) render the
@@ -253,14 +255,45 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ...l,
       // Use a unique synthetic ID so TrailVideoHost creates a separate
       // <video> element for the about strip vs the feed section cards.
-      id: -(Math.abs(l.id) * 1000 + i + 1),
+      id: -(Math.abs(l.id) * 1_000_000 + i + 1),
     }));
   }, [look.id, look.creator, allLooks]);
+
+  const extraLooks = useMemo(() => {
+    if (extraPages === 0) return [] as Look[];
+    const shown = new Set([
+      look.id,
+      ...feedSections.looksLikeThis.map(l => Math.abs(l.id)),
+      ...feedSections.popular.map(l => Math.abs(l.id)),
+      ...feedSections.moreFromCreator.map(l => Math.abs(l.id)),
+    ]);
+    return (allLooks || allLooksData)
+      .filter(l => !shown.has(l.id))
+      .slice(0, extraPages * 8);
+  }, [look.id, feedSections, extraPages, allLooks]);
 
   // Trigger enter animation after first paint
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
+
+  // Infinite scroll: load more looks when the sentinel enters the viewport.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || extraPages >= 5) return;
+    let fired = false;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !fired) {
+          fired = true;
+          setExtraPages(p => p + 1);
+        }
+      },
+      { rootMargin: '300px' },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [extraPages]);
 
   const scrollMoreLeft = () => {
     moreScrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
@@ -275,6 +308,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setActiveTab('products');
     setLookBookmarked(bookmarks.isLookBookmarked(look.id));
     setProductBookmarks(look.products.map(p => bookmarks.isProductBookmarked(p)));
+    setExtraPages(0);
     // Fetch save count when look has a Supabase UUID
     setSaveCount(null);
     if (look.uuid) {
@@ -660,6 +694,26 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             </div>
           </div>
         )}
+
+        {extraLooks.length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">More looks</h3>
+            <div className="look-feed-grid">
+              {extraLooks.map(fl => (
+                <LookCard
+                  key={`extra-${fl.id}`}
+                  look={fl}
+                  className="look-card"
+                  onOpenLook={handleFeedLookClick}
+                  onOpenCreator={onOpenCreator}
+                  onCreateCatalog={onCreateCatalog}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />
       </div>
     </div>
   );
