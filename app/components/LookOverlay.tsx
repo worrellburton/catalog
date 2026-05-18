@@ -7,6 +7,7 @@ import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
+import { prefetchVideoBytes } from '~/services/video-loading';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -150,6 +151,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
+  const sentinelLikeThis = useRef<HTMLDivElement>(null);
+  const sentinelPopular = useRef<HTMLDivElement>(null);
+  const sentinelMoreCreator = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -160,8 +164,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
   const [saveCount, setSaveCount] = useState<number | null>(null);
-  const [extraPages, setExtraPages] = useState(0);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Per-section visible counts that grow as the user scrolls into a
+  // sentinel at the bottom of each feed strip. Mirrors the feed page's
+  // infinite-scroll pattern so the detail page never feels "done".
+  const [visibleLikeThis, setVisibleLikeThis] = useState(8);
+  const [visiblePopular, setVisiblePopular] = useState(8);
+  const [visibleMoreCreator, setVisibleMoreCreator] = useState(8);
 
   // Resolve creator identity in priority order so orphan looks (created
   // via the user-generation flow with no creator_handle) render the
@@ -210,7 +219,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       : [];
 
     const popular: Look[] = looksLikeThis.length === 0
-      ? source.slice(0, 8)
+      ? source
       : [];
 
     const moreFromCreator: Look[] = look.creator
@@ -229,11 +238,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const c = dedupe(moreFromCreator);
 
     return {
-      looksLikeThis:   fillLooks(a, 8),
-      popular:         fillLooks(b, 8),
-      moreFromCreator: fillLooks(c, 8),
+      looksLikeThis:   fillLooks(a, visibleLikeThis),
+      popular:         fillLooks(b, visiblePopular),
+      moreFromCreator: fillLooks(c, visibleMoreCreator),
     };
-  }, [look.id, look.creator, look.products, allLooks]);
+  }, [look.id, look.creator, look.products, allLooks, visibleLikeThis, visiblePopular, visibleMoreCreator]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
@@ -255,45 +264,62 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ...l,
       // Use a unique synthetic ID so TrailVideoHost creates a separate
       // <video> element for the about strip vs the feed section cards.
-      id: -(Math.abs(l.id) * 1_000_000 + i + 1),
+      id: -(Math.abs(l.id) * 1000 + i + 1),
     }));
   }, [look.id, look.creator, allLooks]);
-
-  const extraLooks = useMemo(() => {
-    if (extraPages === 0) return [] as Look[];
-    const shown = new Set([
-      look.id,
-      ...feedSections.looksLikeThis.map(l => Math.abs(l.id)),
-      ...feedSections.popular.map(l => Math.abs(l.id)),
-      ...feedSections.moreFromCreator.map(l => Math.abs(l.id)),
-    ]);
-    return (allLooks || allLooksData)
-      .filter(l => !shown.has(l.id))
-      .slice(0, extraPages * 8);
-  }, [look.id, feedSections, extraPages, allLooks]);
 
   // Trigger enter animation after first paint
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // Infinite scroll: load more looks when the sentinel enters the viewport.
+  // Warm the network for every feed-section video the moment the
+  // overlay opens. Each call issues a small Range request (~256KB) and
+  // is internally deduped, so by the time the user scrolls down to
+  // "Popular" / "Looks like this" / "More from <creator>" the bytes
+  // are already in the HTTP cache and TrailVideoHost can paint a
+  // first frame instantly. Same trick we use for the feed page.
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || extraPages >= 5) return;
-    let fired = false;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !fired) {
-          fired = true;
-          setExtraPages(p => p + 1);
+    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const all = [
+      ...feedSections.looksLikeThis,
+      ...feedSections.popular,
+      ...feedSections.moreFromCreator,
+      ...aboutCreatorStrip,
+    ];
+    for (const l of all) {
+      const url = normalizeLookVideoUrl(l.video, basePath);
+      if (url) prefetchVideoBytes(url);
+    }
+  }, [feedSections, aboutCreatorStrip]);
+
+  // Infinite-scroll observers. Watch a sentinel beneath each feed
+  // strip; when it enters within 400px of the viewport, bump the
+  // section's visible count by 8. Mirrors GridView's sentinel pattern.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    type Entry = { el: HTMLDivElement | null; bump: () => void };
+    const entries: Entry[] = [
+      { el: sentinelLikeThis.current,   bump: () => setVisibleLikeThis(v => v + 8) },
+      { el: sentinelPopular.current,    bump: () => setVisiblePopular(v => v + 8) },
+      { el: sentinelMoreCreator.current, bump: () => setVisibleMoreCreator(v => v + 8) },
+    ];
+    const observer = new IntersectionObserver(
+      (intersections) => {
+        for (const ev of intersections) {
+          if (!ev.isIntersecting) continue;
+          const match = entries.find(e => e.el === ev.target);
+          match?.bump();
         }
       },
-      { rootMargin: '300px' },
+      { root, rootMargin: '400px 0px' },
     );
-    obs.observe(sentinel);
-    return () => obs.disconnect();
-  }, [extraPages]);
+    for (const e of entries) {
+      if (e.el) observer.observe(e.el);
+    }
+    return () => observer.disconnect();
+  }, [feedSections]);
 
   const scrollMoreLeft = () => {
     moreScrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
@@ -308,7 +334,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setActiveTab('products');
     setLookBookmarked(bookmarks.isLookBookmarked(look.id));
     setProductBookmarks(look.products.map(p => bookmarks.isProductBookmarked(p)));
-    setExtraPages(0);
+    setVisibleLikeThis(8);
+    setVisiblePopular(8);
+    setVisibleMoreCreator(8);
     // Fetch save count when look has a Supabase UUID
     setSaveCount(null);
     if (look.uuid) {
@@ -643,17 +671,19 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <div className="look-feed-section">
             <h3 className="look-feed-heading">Looks like this</h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.map(fl => (
+              {feedSections.looksLikeThis.map((fl, i) => (
                 <LookCard
                   key={`like-${fl.id}`}
                   look={fl}
                   className="look-card"
+                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
+            <div ref={sentinelLikeThis} style={{ height: 1 }} aria-hidden />
           </div>
         )}
 
@@ -661,17 +691,19 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <div className="look-feed-section">
             <h3 className="look-feed-heading">Popular</h3>
             <div className="look-feed-grid">
-              {feedSections.popular.map(fl => (
+              {feedSections.popular.map((fl, i) => (
                 <LookCard
                   key={`popular-${fl.id}`}
                   look={fl}
                   className="look-card"
+                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
+            <div ref={sentinelPopular} style={{ height: 1 }} aria-hidden />
           </div>
         )}
 
@@ -681,39 +713,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               More from {creatorData?.displayName || look.creator}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.moreFromCreator.map(fl => (
+              {feedSections.moreFromCreator.map((fl, i) => (
                 <LookCard
                   key={`creator-${fl.id}`}
                   look={fl}
                   className="look-card"
+                  eager={i < 4}
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
             </div>
+            <div ref={sentinelMoreCreator} style={{ height: 1 }} aria-hidden />
           </div>
         )}
-
-        {extraLooks.length > 0 && (
-          <div className="look-feed-section">
-            <h3 className="look-feed-heading">More looks</h3>
-            <div className="look-feed-grid">
-              {extraLooks.map(fl => (
-                <LookCard
-                  key={`extra-${fl.id}`}
-                  look={fl}
-                  className="look-card"
-                  onOpenLook={handleFeedLookClick}
-                  onOpenCreator={onOpenCreator}
-                  onCreateCatalog={onCreateCatalog}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />
       </div>
     </div>
   );

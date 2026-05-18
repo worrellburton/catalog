@@ -24,9 +24,16 @@ interface LookCardProps {
    *  Catalog page where the creator identity is already in the page
    *  header - per-tile attribution is redundant noise there. */
   hideCreator?: boolean;
+  /** Skip the IntersectionObserver gate and attach the shared <video>
+   *  element immediately on mount. Used by detail-page feed sections
+   *  (LookOverlay "Popular" / "Looks like this" / ProductPage
+   *  "Featured in Looks") for the first row of tiles so they paint
+   *  the same first frame as the feed — no waiting for the observer
+   *  callback. */
+  eager?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, eager = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -83,9 +90,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Defer slot population to viewport. The TrailVideoHost pool keeps the
   // element alive so the LookOverlay hero (same trailId) reuses the same
   // running <video> on tap - no remount, no first-frame black.
+  // `eager` overrides the viewport gate so first-row detail-page tiles
+  // attach immediately, matching feed-card first-paint cadence.
+  const shouldAttach = eager || inViewport;
   const setVideoSlot = useTrailVideo(
-    inViewport ? trailId : undefined,
-    inViewport ? videoUrl : undefined,
+    shouldAttach ? trailId : undefined,
+    shouldAttach ? videoUrl : undefined,
     posterUrl || undefined,
   );
 
@@ -107,7 +117,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
 
   // Mark loaded once the host video has frames.
   useEffect(() => {
-    if (!inViewport) return;
+    if (!shouldAttach) return;
     const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
     if (video.readyState >= 2) { setLoaded(true); return; }
@@ -118,7 +128,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       clearTimeout(timeout);
       ['playing', 'canplay', 'loadeddata'].forEach(evt => video.removeEventListener(evt, handler));
     };
-  }, [inViewport, trailId]);
+  }, [shouldAttach, trailId]);
 
   return (
     <div
@@ -150,30 +160,6 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* Poster backdrop - paints instantly the moment the card mounts,
-            so the section never shows a black/shimmer gap while the shared
-            TrailVideoHost <video> is still attaching or buffering. Stays
-            beneath the video slot so when the video starts it covers the
-            poster seamlessly (video also has opacity 0 → 1 via .loaded). */}
-        {posterUrl && (
-          <img
-            src={posterUrl}
-            alt=""
-            aria-hidden="true"
-            className="card-poster"
-            loading="lazy"
-            decoding="async"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              zIndex: 0,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
         {/* TrailVideoHost slot - shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
             own video frames stay alive while the overlay opacity-fades in. */}
@@ -181,7 +167,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           ref={setSlot}
           className="card-video-slot"
           data-trail-id={trailId}
-          style={{ position: 'absolute', inset: 0, zIndex: 1 } as React.CSSProperties}
+          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
         />
         <div className="card-gradient" />
 

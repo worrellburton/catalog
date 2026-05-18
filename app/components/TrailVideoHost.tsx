@@ -33,13 +33,13 @@ import {
   type ReactNode,
 } from 'react';
 
-// Pool cap. We size for "2 viewports of cards stay alive at once" - at
-// ~6 cards per mobile viewport that's 12 cards. 32 gives enough headroom
-// for search results (up to 48 items per page) so videos beyond row 3
-// don't lose their buffered frames. Videos that exit the 2-viewport band
-// get returned to the off-screen pool (paused) and only get evicted
-// entirely once the cap is exceeded.
-const POOL_MAX = 32;
+// Pool cap. Sized to keep the feed (50+ visible cards) plus every detail
+// page rail (3 sections x 8 cards = 24) alive concurrently, so when a
+// user navigates feed → look detail → product detail and back, none of
+// the upstream <video> elements have been evicted. 96 gives ~5x the old
+// headroom; memory cost is ~10MB worst case (paused, off-screen videos)
+// which is well under the iOS WKWebView budget.
+const POOL_MAX = 96;
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
