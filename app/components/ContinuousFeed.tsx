@@ -391,7 +391,20 @@ export default function ContinuousFeed({
     }
 
     // 1. In-memory match against already-loaded liveCreatives.
-    const inMemory = liveCreatives.filter(c => creativeMatchesCatalogQuery(c, q));
+    // Apply materialKws filter (e.g. "denim" → only products whose name
+    // contains 'denim'/'jean'/'jeans') so the in-memory set is consistent
+    // with what getCreativesByCatalogTag returns - otherwise a broad
+    // type-match (all Pants/Shorts/Jackets) wins the `rows.length >
+    // inMemory.length` guard below and the narrowed DB result is discarded.
+    const materialKwsForTag = resolveMaterialKeywords(q);
+    const inMemory = liveCreatives.filter(c => {
+      if (!creativeMatchesCatalogQuery(c, q)) return false;
+      if (materialKwsForTag) {
+        const name = ((c.product as { name?: string | null } | null)?.name ?? '').toLowerCase();
+        return materialKwsForTag.some(k => name.includes(k));
+      }
+      return true;
+    });
     if (inMemory.length > 0) {
       tagQueryRef.current = q;
       setTagMatchedCreatives(inMemory);
