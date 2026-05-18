@@ -461,22 +461,18 @@ export default function ProductPage({
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
 
-  const moreLooks = useMemo(() => {
-    if (extraLookPages === 0) return [] as Look[];
-    const shown = new Set<number>((lookCreatives || []).map(l => l.id));
-    return allLooksData.filter(l => !shown.has(l.id)).slice(0, extraLookPages * 8);
-  }, [extraLookPages, lookCreatives]);
-
-  // Shop dropdown - collapsed by default on mobile so the action row
-  // reads clean; auto-expanded on desktop because the split layout
-  // gives the right column plenty of vertical space and the retailer
-  // comparison is the highest-value content there.
   const isDesktop = typeof window !== 'undefined'
     && window.matchMedia('(min-width: 960px)').matches;
   const [showRetailers, setShowRetailers] = useState(isDesktop);
   const [extraLookPages, setExtraLookPages] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const moreLooks = useMemo(() => {
+    if (extraLookPages === 0) return [] as Look[];
+    const shown = new Set<number>((lookCreatives || []).map(l => l.id));
+    return allLooksData.filter(l => !shown.has(l.id)).slice(0, extraLookPages * 8);
+  }, [extraLookPages, lookCreatives]);
 
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
