@@ -112,7 +112,26 @@ export function prefetchVideoBytes(url: string | null | undefined): void {
     // Ditto for the credentials policy - default 'same-origin' is fine
     // for Supabase public URLs.
   } as RequestInit & { priority: RequestPriority })
-    .then(r => r.arrayBuffer())  // drain the stream so the browser commits to cache
+    .then(async r => {
+      // Read at most 256 KB regardless of whether the server respected
+      // the Range header. If Range was ignored and the server returned
+      // the full file (200 OK), r.arrayBuffer() would buffer the entire
+      // video into memory and saturate bandwidth for in-flight <video>
+      // elements. A bounded stream read limits the memory/bandwidth cost
+      // to the intended 256 KB while still warming the HTTP cache.
+      const reader = r.body?.getReader();
+      if (!reader) return;
+      let received = 0;
+      try {
+        while (received < 262144) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value?.byteLength ?? 0;
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+      }
+    })
     .catch(() => { /* aborted or offline - nothing to do */ })
     .finally(() => { preloadAbortControllers.delete(url); });
 }

@@ -417,7 +417,7 @@ function LookTile({
       onTouchStart={handleIntent}
       ref={wrapRef}
     >
-      {tilePoster && (
+      {tilePoster ? (
         <img
           src={tilePoster}
           alt=""
@@ -428,6 +428,8 @@ function LookTile({
           decoding="async"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
         />
+      ) : (
+        <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
       )}
       {videoUrl && inViewport && renderReady && (
         <video
@@ -745,12 +747,11 @@ export default function ProductPage({
   // into view - same first-paint cadence as the product images
   // around it.
   //
-  // Phase 3: also fire a Range-bounded byte prefetch on the first 4
-  // look videos. ~256 KB × 4 ≈ 1 MB total, paid silently while the
-  // user reads the hero, so by the time they scroll the rail into
-  // view the moov atom + first GOP are already in the HTTP cache and
-  // <video> decodes its first frame on the very next event loop tick
-  // instead of waiting for a cold round-trip to Supabase storage.
+  // Phase 3: Range-bounded byte prefetch for staggered look tiles.
+  // Tiles 0-3 have renderReady=true and mount <video> elements immediately,
+  // so prefetching their bytes would create competing downloads for the same
+  // URL. Only prefetch tiles 4-11 which have a render delay (200-400 ms)
+  // giving us a head start before their <video> elements mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!lookCreatives || lookCreatives.length === 0) return;
@@ -765,7 +766,7 @@ export default function ProductPage({
       } catch { /* ignore */ }
     }
     const mobile = isMobileViewport();
-    for (const l of tiles.slice(0, 4)) {
+    for (const l of tiles.slice(4, 12)) {
       const videoUrl = (mobile && l.mobile_video_url) || l.video;
       if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
         prefetchVideoBytes(videoUrl);

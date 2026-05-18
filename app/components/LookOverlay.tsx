@@ -235,15 +235,25 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
   // has something to show.
+  // Synthetic negative IDs prevent TrailVideoHost trailId conflicts with the
+  // always-rendered moreFromCreator feed section below the hero. Without this,
+  // mounting the About strip steals the shared <video> element from the feed
+  // cards (same look.id → same lookTrailId → same TrailVideoHost key), making
+  // the Popular/moreFromCreator sections go black when the About tab is active.
   const aboutCreatorStrip = useMemo(() => {
     const all = allLooks || allLooksData;
     const byCreator = look.creator
       ? all.filter(l => l.creator === look.creator && l.id !== look.id)
       : [];
-    if (byCreator.length > 0) return byCreator.slice(0, 8);
-    // Fall back: include the current look itself so the strip shows at least 1
-    const fallback = look.creator ? all.filter(l => l.creator === look.creator) : [];
-    return fallback.slice(0, 8);
+    const source = byCreator.length > 0
+      ? byCreator
+      : (look.creator ? all.filter(l => l.creator === look.creator) : []);
+    return source.slice(0, 8).map((l, i) => ({
+      ...l,
+      // Use a unique synthetic ID so TrailVideoHost creates a separate
+      // <video> element for the about strip vs the feed section cards.
+      id: -(Math.abs(l.id) * 1000 + i + 1),
+    }));
   }, [look.id, look.creator, allLooks]);
 
   // Trigger enter animation after first paint
