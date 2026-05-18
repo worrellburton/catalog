@@ -185,13 +185,22 @@ export default function ContinuousFeed({
       : allLooks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
-      // For searches >= 3 chars (semantic-eligible), suppress looks entirely.
-      // The look text filter (title/description/product name .includes()) is
-      // too broad - a look with "tennis shoes" in its title or a skirt product
-      // named "tennis skirt" would appear for a "shoes" search. The semantic
-      // lane (renderedCreatives) already surfaces the right products; mixing
-      // looks in via text match adds noise.
-      if (q.length >= 3) return [];
+      // For searches >= 3 chars (semantic-eligible), suppress looks UNLESS
+      // the query is a material keyword (denim, leather, wool, …).  For
+      // material queries we want look cards too: a look that CONTAINS a
+      // denim product should surface as a look card, while the individual
+      // denim product creative shows up in the product lane separately.
+      // For type-only or abstract semantic queries the product creative lane
+      // already returns the right results, so looks stay suppressed there.
+      if (q.length >= 3) {
+        const materialKws = resolveMaterialKeywords(q);
+        if (!materialKws) return [];
+        return base.filter(l =>
+          l.products.some(p =>
+            materialKws.some(kw => p.name.toLowerCase().includes(kw))
+          )
+        );
+      }
       return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
