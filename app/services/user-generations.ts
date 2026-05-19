@@ -842,6 +842,12 @@ export function buildGenerationPrompt(opts: {
   heightLabel: string;
   ageLabel?: string;
   style: string;
+  // Free-text occasion ("West Village Date Night", "work", etc.) —
+  // when present, mentioned in the prompt body so the model knows
+  // what the look is FOR. Set by the Style → Shop this look → Try it
+  // on flow which forwards the originating Style sheet's occasion via
+  // ?occasion= URL param.
+  occasion?: string;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
   durationSeconds?: number;
 }): string {
@@ -862,6 +868,11 @@ export function buildGenerationPrompt(opts: {
   // shoes / accessories that were never selected.
   const framing = computeFraming(opts.productLines);
   const seconds = opts.durationSeconds ?? 5;
+  // Occasion is appended at the END of each prompt variant below so
+  // it modifies the scene context without disrupting the existing
+  // style-preset prompt structures (commercial, street, etc.) Empty
+  // when not forwarded from the Style flow.
+  const occasionClause = opts.occasion ? ` Scene: ${opts.occasion}.` : '';
 
   if (opts.style === 'commercial') {
     const tones = detectBrandTones(opts.productLines);
@@ -899,7 +910,7 @@ export function buildGenerationPrompt(opts: {
       cameraLine,
       beatLine,
       framing,
-      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.`,
+      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.${occasionClause}`,
     ].join(' ');
   }
 
@@ -909,6 +920,6 @@ export function buildGenerationPrompt(opts: {
     `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
     framing,
-    `Natural motion, ${seconds}-second portrait clip${styleTag}.`,
+    `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}`,
   ].join(' ');
 }

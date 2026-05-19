@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import '~/styles/style-page.css';
 import { useAuth } from '~/hooks/useAuth';
@@ -7,6 +7,11 @@ import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
 import { supabase } from '~/utils/supabase';
 import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+
+// Lens sheet is the only consumer of the SerpAPI Google Lens client +
+// product ingest path, so lazy-load it so the rest of the Style page
+// stays light when the user never taps "Shop this look."
+const StyleLensSheet = lazy(() => import('~/components/StyleLensSheet'));
 import {
   createStyleGeneration,
   listStyleGenerationsWithImages,
@@ -51,16 +56,22 @@ export default function StylePage() {
   // Newest first. Hydrated from DB on mount + prepended to on every
   // successful generate so prior style sheets stay visible in a scroll.
   const [history, setHistory] = useState<StyleGenerationResult[]>([]);
-  const [lightboxImage, setLightboxImage] = useState<StyleGenerationImage | null>(null);
+  // Lightbox carries the occasion alongside the image so the "Shop
+  // this look" CTA can hand both off to the Lens sheet without the
+  // page needing to look up the parent generation again.
+  const [lightboxOpen, setLightboxOpen] = useState<
+    { image: StyleGenerationImage; occasion: string } | null
+  >(null);
+  const [lensTarget, setLensTarget] = useState<{ imageUrl: string; occasion: string } | null>(null);
   const occasionRef = useRef<HTMLInputElement>(null);
 
   // Esc closes the lightbox.
   useEffect(() => {
-    if (!lightboxImage) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null); };
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(null); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [lightboxImage]);
+  }, [lightboxOpen]);
 
   // Hydrate uploaded photos + saved slot picks (mirrors the Try it on
   // wizard so the same 1–3 reference photos surface here without forcing
@@ -304,7 +315,7 @@ export default function StylePage() {
               title={submittingOccasion || 'Generating…'}
               subtitle="Generating 4 looks…"
               images={null}
-              onOpen={setLightboxImage}
+              onOpen={(img) => setLightboxOpen({ image: img, occasion: submittingOccasion })}
             />
           )}
           {history.map(entry => (
@@ -315,7 +326,7 @@ export default function StylePage() {
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
               })}
               images={entry.images}
-              onOpen={setLightboxImage}
+              onOpen={(img) => setLightboxOpen({ image: img, occasion: entry.generation.occasion })}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
             />
@@ -323,8 +334,30 @@ export default function StylePage() {
         </section>
       )}
 
-      {lightboxImage && lightboxImage.image_url && (
-        <StyleLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
+      {lightboxOpen && lightboxOpen.image.image_url && (
+        <StyleLightbox
+          image={lightboxOpen.image}
+          onClose={() => setLightboxOpen(null)}
+          onShop={() => {
+            // Hand off both image + occasion to the lens sheet, then
+            // close the lightbox so the two overlays don't stack.
+            setLensTarget({
+              imageUrl: lightboxOpen.image.image_url ?? '',
+              occasion: lightboxOpen.occasion,
+            });
+            setLightboxOpen(null);
+          }}
+        />
+      )}
+
+      {lensTarget && (
+        <Suspense fallback={null}>
+          <StyleLensSheet
+            imageUrl={lensTarget.imageUrl}
+            occasion={lensTarget.occasion}
+            onClose={() => setLensTarget(null)}
+          />
+        </Suspense>
       )}
 
       {editingStats && user && (
@@ -394,7 +427,15 @@ function StyleSheetCard({
   );
 }
 
-function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClose: () => void }) {
+function StyleLightbox({
+  image,
+  onClose,
+  onShop,
+}: {
+  image: StyleGenerationImage;
+  onClose: () => void;
+  onShop: () => void;
+}) {
   // Click-to-zoom (1x ↔ 2x) with pointer drag-pan when zoomed. We
   // track translate(x, y) in state and apply via transform so a
   // single CSS transition handles both axes cleanly. Pointer events
@@ -480,6 +521,21 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
           draggable={false}
         />
         <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
+        {/* Shop CTA — stopPropagation on click so it doesn't bubble up
+            into the zoom handler beneath. Opens the Lens sheet which
+            takes over the viewport with shoppable matches + try-on. */}
+        <button
+          type="button"
+          className="style-lightbox-shop"
+          onClick={(e) => { e.stopPropagation(); onShop(); }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          Shop this look
+        </button>
       </div>
     </div>
   );

@@ -385,13 +385,25 @@ export default function GeneratePage() {
   // strip the param off the URL so a refresh doesn't re-add a row the
   // user may have just removed. Matches against products.url since the
   // consumer Product type has no id.
+  //
+  // Style → Shop this look → Try it on also lands here with an
+  // additional `?occasion=…` param. We capture it into state and feed
+  // it into the prompt builder at submit time so the resulting look
+  // reads "for {occasion}" alongside the picked products.
   const productUrlPrefilled = useRef(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
+  const [occasionHint, setOccasionHint] = useState<string>('');
   useEffect(() => {
     if (productUrlPrefilled.current) return;
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     const productUrl = url.searchParams.get('product_url');
+    const occasionParam = url.searchParams.get('occasion');
+    if (occasionParam) {
+      setOccasionHint(occasionParam);
+      url.searchParams.delete('occasion');
+      window.history.replaceState({}, '', url.toString());
+    }
     if (!productUrl) { productUrlPrefilled.current = true; return; }
     productUrlPrefilled.current = true;
 
@@ -1099,6 +1111,7 @@ export default function GeneratePage() {
       heightLabel,
       ageLabel,
       style,
+      occasion: occasionHint || undefined,
       durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
