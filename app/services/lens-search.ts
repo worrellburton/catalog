@@ -199,6 +199,32 @@ export async function cropAndUploadLensRegion(args: {
   }
 }
 
+/**
+ * Count how many Lens results from each Style sheet image have been
+ * ingested into the user's catalog. Used by the Style page to render
+ * a "{n} saved" badge on tiles that have try-on history, so the user
+ * can spot which looks they've already shopped without re-scanning.
+ *
+ * Returns a Map keyed by source_image_url so the page can do an O(1)
+ * lookup per tile.
+ */
+export async function getLensIngestCounts(imageUrls: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!supabase || imageUrls.length === 0) return out;
+  const { data, error } = await supabase
+    .from('lens_searches')
+    .select('source_image_url, lens_results!inner(ingested_product_id)')
+    .in('source_image_url', imageUrls)
+    .not('lens_results.ingested_product_id', 'is', null);
+  if (error || !data) return out;
+  for (const row of data as Array<{ source_image_url: string; lens_results: Array<{ ingested_product_id: string | null }> }>) {
+    const cur = out.get(row.source_image_url) ?? 0;
+    const add = (row.lens_results ?? []).filter(r => r.ingested_product_id).length;
+    out.set(row.source_image_url, cur + add);
+  }
+  return out;
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

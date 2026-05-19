@@ -5,6 +5,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { listUserUploads, getUserSlots, type UserUpload } from '~/services/user-generations';
 import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
+import { getLensIngestCounts } from '~/services/lens-search';
 import { supabase } from '~/utils/supabase';
 import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 
@@ -56,6 +57,11 @@ export default function StylePage() {
   // Newest first. Hydrated from DB on mount + prepended to on every
   // successful generate so prior style sheets stay visible in a scroll.
   const [history, setHistory] = useState<StyleGenerationResult[]>([]);
+  // image_url → number of Lens results ingested into the catalog from
+  // that tile. Surfaced as a small "{n} saved" badge on each tile so
+  // the user can spot Style sheets they've already shopped without
+  // reopening every one.
+  const [ingestCounts, setIngestCounts] = useState<Map<string, number>>(new Map());
   // Lightbox carries the occasion alongside the image so the "Shop
   // this look" CTA can hand both off to the Lens sheet without the
   // page needing to look up the parent generation again.
@@ -95,11 +101,17 @@ export default function StylePage() {
   // Hydrate prior style generations + their image rows so the page
   // opens with the user's full history visible.
   useEffect(() => {
-    if (!user?.id) { setHistory([]); return; }
+    if (!user?.id) { setHistory([]); setIngestCounts(new Map()); return; }
     let cancelled = false;
     listStyleGenerationsWithImages(user.id).then(rows => {
       if (cancelled) return;
       setHistory(rows);
+      // Once we have the image URLs, pull the ingest counts in a
+      // single batch so each tile can render its "{n} saved" badge.
+      const urls = rows.flatMap(r => r.images.map(i => i.image_url).filter((u): u is string => !!u));
+      if (urls.length > 0) {
+        getLensIngestCounts(urls).then(counts => { if (!cancelled) setIngestCounts(counts); });
+      }
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -329,6 +341,7 @@ export default function StylePage() {
               onOpen={(img) => setLightboxOpen({ image: img, occasion: entry.generation.occasion })}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
+              ingestCounts={ingestCounts}
             />
           ))}
         </section>
@@ -387,6 +400,7 @@ function StyleSheetCard({
   onOpen,
   onDeleteImage,
   onToggleLiked,
+  ingestCounts,
 }: {
   title: string;
   subtitle: string;
@@ -394,6 +408,7 @@ function StyleSheetCard({
   onOpen: (img: StyleGenerationImage) => void;
   onDeleteImage?: (imageId: string) => void;
   onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
+  ingestCounts?: Map<string, number>;
 }) {
   // While generating (images === null) we show 4 placeholders so the
   // card has visible weight; otherwise we render exactly the rows the
@@ -420,6 +435,7 @@ function StyleSheetCard({
             onOpen={onOpen}
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
             onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
+            ingestCount={img?.image_url ? ingestCounts?.get(img.image_url) ?? 0 : 0}
           />
         ))}
       </div>
@@ -547,12 +563,14 @@ function StyleResultTile({
   onOpen,
   onDelete,
   onToggleLiked,
+  ingestCount,
 }: {
   image: StyleGenerationImage | null;
   index: number;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete?: (() => void) | null;
   onToggleLiked?: ((nextLiked: boolean) => void) | null;
+  ingestCount?: number;
 }) {
   if (!image) {
     return (
@@ -621,9 +639,19 @@ function StyleResultTile({
         </button>
         {/* Provider badge intentionally omitted on the user end — the
             admin user/$name page still surfaces it for debugging. */}
+
         <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
+        {ingestCount && ingestCount > 0 ? (
+          <span className="style-tile-ingest" aria-label={`${ingestCount} items saved from this look`}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            {ingestCount} saved
+          </span>
+        ) : null}
       </div>
     );
   }

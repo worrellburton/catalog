@@ -372,6 +372,28 @@
   z-index: 2;
 }
 .style-tile-wordmark { font-size: 18px; }
+
+/* "{n} saved" chip on the bottom-right of a Style tile when the user
+   has previously ingested products from this look's lens scan. */
+.style-tile-ingest {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(40, 80, 50, 0.8);
+  color: #b6f3c2;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.style-tile-ingest svg { flex: 0 0 11px; }
 .style-lightbox-wordmark { font-size: 28px; bottom: 18px; left: 22px; }
 .style-tile.is-loading {
   background:
@@ -975,6 +997,90 @@
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
+}
+
+/* ── Skeleton cards (loading state) ───────────────────────────────── */
+.lens-card--skeleton {
+  pointer-events: none;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.02);
+}
+.lens-card--skeleton .lens-card-image {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: lens-shimmer 1.4s ease-in-out infinite;
+}
+.lens-card-skeleton-line {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: lens-shimmer 1.4s ease-in-out infinite;
+}
+.lens-card-skeleton-line--short { width: 40%; height: 8px; }
+@keyframes lens-shimmer {
+  0%, 100% { background-position: 100% 0; }
+  50%      { background-position: 0 0; }
+}
+
+/* ── Source favicon next to the merchant name ─────────────────────── */
+.lens-card-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lens-card-source-favicon {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: 0 0 12px;
+  object-fit: contain;
+}
+
+/* ── External-merchant link button (top-right of each card) ───────── */
+.lens-card-external {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  pointer-events: none;
+}
+.lens-card:hover .lens-card-external,
+.lens-card:focus-within .lens-card-external {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.lens-card-external:hover { background: rgba(0, 0, 0, 0.75); color: #fff; }
+/* Mobile / touch — no hover, so always show. */
+@media (hover: none) {
+  .lens-card-external {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 }
 
 .lens-card.is-ingested { border-color: rgba(120, 220, 140, 0.4); }

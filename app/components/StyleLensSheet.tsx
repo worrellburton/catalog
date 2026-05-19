@@ -220,10 +220,28 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
         </div>
 
         {loading && (
-          <div className="lens-sheet-loading">
-            <div className="style-tile-spinner" />
-            <span>Scanning with Google Lens…</span>
-          </div>
+          <>
+            <div className="lens-sheet-loading">
+              <div className="style-tile-spinner" />
+              <span>Scanning with Google Lens…</span>
+            </div>
+            {/* Skeleton grid fills the page below the spinner so the
+                layout doesn't jump when the real results land —
+                roughly the same number of cards we expect SerpAPI to
+                return. */}
+            <ul className="lens-sheet-grid" aria-hidden="true">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <li key={i} className="lens-card lens-card--skeleton">
+                  <div className="lens-card-image" />
+                  <div className="lens-card-body">
+                    <span className="lens-card-skeleton-line lens-card-skeleton-line--short" />
+                    <span className="lens-card-skeleton-line" />
+                    <span className="lens-card-skeleton-line lens-card-skeleton-line--short" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         {!loading && error && (
@@ -275,10 +293,44 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
                       <span className="lens-card-title">{m.title}</span>
                       <div className="lens-card-meta">
                         {m.price && <span className="lens-card-price">{m.price}</span>}
-                        {m.source && <span className="lens-card-source">{m.source}</span>}
+                        {m.source && (
+                          <span className="lens-card-source">
+                            {m.source_icon && (
+                              <img
+                                className="lens-card-source-favicon"
+                                src={m.source_icon}
+                                alt=""
+                                loading="lazy"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            )}
+                            <span>{m.source}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
+                  {/* Open the merchant URL in a new tab without picking
+                      — gives the user an out for "I just want to see it
+                      first" without conflating with the try-on flow.
+                      stopPropagation so the card's pick button doesn't
+                      also fire. */}
+                  <a
+                    href={m.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="lens-card-external"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Open ${m.source || 'merchant'} in new tab`}
+                    title="Open merchant page"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                  </a>
                 </li>
               );
             })}
