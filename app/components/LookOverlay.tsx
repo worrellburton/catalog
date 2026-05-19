@@ -97,6 +97,23 @@ function lookSimilarityScore(seed: Look, candidate: Look): number {
   return score;
 }
 
+/**
+ * Pads `arr` to exactly `count` items by cycling duplicates (with synthetic
+ * negative IDs so TrailVideoHost creates a separate <video> per slot), or
+ * trims to `count` if longer. Returns empty array unchanged so empty sections
+ * stay hidden.
+ */
+function fillLooks(arr: Look[], count: number): Look[] {
+  if (arr.length === 0) return [];
+  if (arr.length >= count) return arr.slice(0, count);
+  const out: Look[] = [...arr];
+  while (out.length < count) {
+    const src = arr[out.length % arr.length];
+    out.push({ ...src, id: -(src.id * 1000 + out.length) });
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -209,11 +226,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       : [];
 
     const popular: Look[] = looksLikeThis.length === 0
-      ? source.slice(0, 8)
+      ? source
       : [];
 
+    // Two looks count as "from the same creator" only when both the
+    // creator key AND the display name match. A single uploader can
+    // publish looks under multiple synthetic personas (e.g. all share
+    // the same user:<uuid> key but have different titles/displayNames
+    // like "Robert Burton" vs "Taylor Phillips"). Matching on the key
+    // alone groups unrelated personas together.
+    const sameCreator = (l: Look) =>
+      l.creator === look.creator &&
+      (l.creatorDisplayName || '') === (look.creatorDisplayName || '');
+
     const moreFromCreator: Look[] = look.creator
-      ? source.filter(l => l.creator === look.creator)
+      ? source.filter(sameCreator)
       : [];
 
     const seen = new Set<number>();
@@ -228,9 +255,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const c = dedupe(moreFromCreator);
 
     return {
-      looksLikeThis:   a.slice(0, 8),
-      popular:         b.slice(0, 8),
-      moreFromCreator: c.slice(0, 8),
+      looksLikeThis:   fillLooks(a, 8),
+      popular:         fillLooks(b, 8),
+      moreFromCreator: fillLooks(c, 8),
     };
   }, [look.id, look.creator, look.products, allLooks]);
 
@@ -244,19 +271,22 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // the Popular/moreFromCreator sections go black when the About tab is active.
   const aboutCreatorStrip = useMemo(() => {
     const all = allLooks || allLooksData;
+    // Match creator by key AND display name. See feedSections.sameCreator
+    // for why — different personas can share the same user:<uuid> key.
+    const sameCreator = (l: Look) =>
+      l.creator === look.creator &&
+      (l.creatorDisplayName || '') === (look.creatorDisplayName || '');
     const byCreator = look.creator
-      ? all.filter(l => l.creator === look.creator && l.id !== look.id)
+      ? all.filter(l => sameCreator(l) && l.id !== look.id)
       : [];
-    const source = byCreator.length > 0
-      ? byCreator
-      : (look.creator ? all.filter(l => l.creator === look.creator) : []);
+    const source = byCreator;
     return source.slice(0, 8).map((l, i) => ({
       ...l,
       // Use a unique synthetic ID so TrailVideoHost creates a separate
       // <video> element for the about strip vs the feed section cards.
       id: -(Math.abs(l.id) * 1000 + i + 1),
     }));
-  }, [look.id, look.creator, allLooks]);
+  }, [look.id, look.creator, look.creatorDisplayName, allLooks]);
 
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
@@ -628,7 +658,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                               onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
                               onOpenCreator={onOpenCreator}
                               onCreateCatalog={onCreateCatalog}
-                              previewOnly
                             />
                           ))}
                         </div>
@@ -657,7 +686,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
-                  previewOnly
                 />
               ))}
             </div>
@@ -676,7 +704,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
-                  previewOnly
                 />
               ))}
             </div>
@@ -697,7 +724,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
-                  previewOnly
                 />
               ))}
             </div>

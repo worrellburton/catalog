@@ -824,6 +824,7 @@ export default function Home() {
                 onCreateCatalog={handleCreateCatalog}
                 onOpenLook={handleOpenLook}
                 bookmarks={bookmarks}
+                allLooks={liveLooks}
                 popularFallback={popularFallback}
                 onOpenCreative={handleOpenCreative}
               />
