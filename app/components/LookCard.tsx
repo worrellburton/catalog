@@ -24,13 +24,21 @@ interface LookCardProps {
    *  Catalog page where the creator identity is already in the page
    *  header - per-tile attribution is redundant noise there. */
   hideCreator?: boolean;
+  /** IntersectionObserver rootMargin for deferred video attach. Default:
+   *  '200% 0%' (2 viewport-heights of look-ahead). Pass '100% 0%' for
+   *  overlay feed sections where bandwidth is shared with the hero video. */
+  rootMargin?: string;
+  /** Skip video entirely and render a static poster thumbnail. Use for
+   *  overlay feed sections (similar looks, YMAL) where multiple simultaneous
+   *  video decoders cause CPU/fan spikes. Card is still tappable. */
+  previewOnly?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '200% 0%', previewOnly = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const inViewport = useInViewport(cardRef);
+  const [loaded, setLoaded] = useState(() => previewOnly);
+  const inViewport = useInViewport(cardRef, rootMargin);
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -84,8 +92,8 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // element alive so the LookOverlay hero (same trailId) reuses the same
   // running <video> on tap - no remount, no first-frame black.
   const setVideoSlot = useTrailVideo(
-    inViewport ? trailId : undefined,
-    inViewport ? videoUrl : undefined,
+    (inViewport && !previewOnly) ? trailId : undefined,
+    (inViewport && !previewOnly) ? videoUrl : undefined,
     posterUrl || undefined,
   );
 
@@ -152,13 +160,28 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
         {!loaded && <div className="card-shimmer" />}
         {/* TrailVideoHost slot - shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
-            own video frames stay alive while the overlay opacity-fades in. */}
-        <div
-          ref={setSlot}
-          className="card-video-slot"
-          data-trail-id={trailId}
-          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
-        />
+            own video frames stay alive while the overlay opacity-fades in.
+            previewOnly: static poster image, no video decode. */}
+        {previewOnly ? (
+          <div
+            className="card-video-slot"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: posterUrl ? `url(${posterUrl})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundColor: look.color || '#111',
+            } as React.CSSProperties}
+          />
+        ) : (
+          <div
+            ref={setSlot}
+            className="card-video-slot"
+            data-trail-id={trailId}
+            style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
+          />
+        )}
         <div className="card-gradient" />
 
         {!hideCreator && (

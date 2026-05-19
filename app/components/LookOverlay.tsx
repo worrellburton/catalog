@@ -3,8 +3,8 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
-import CreativeCard from './CreativeCard';
-import { useTrailVideo } from './TrailVideoHost';
+import CreativeCardV2 from './CreativeCardV2';
+import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
@@ -12,36 +12,6 @@ import { type ProductAd } from '~/services/product-creative';
 import { seededShuffle } from '~/utils/seededShuffle';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
-
-/** Pads `arr` to exactly `count` items by cycling duplicates, or trims if
- *  longer. Returns empty array unchanged so empty sections stay hidden. */
-function fillToExact<T>(arr: T[], count: number): T[] {
-  if (arr.length === 0) return [];
-  if (arr.length >= count) return arr.slice(0, count);
-  const out: T[] = [];
-  while (out.length < count) out.push(arr[out.length % arr.length]);
-  return out;
-}
-
-/**
- * Same as fillToExact but gives each padded Look copy a unique synthetic
- * negative ID so TrailVideoHost creates separate <video> elements per slot.
- * Without this, multiple cards that share the same look.id all compete for
- * the same trailId — only the last-mounted one gets the real <video> node
- * and the rest show a black empty div.
- */
-function fillLooks(arr: Look[], count: number): Look[] {
-  if (arr.length === 0) return [];
-  if (arr.length >= count) return arr.slice(0, count);
-  const out: Look[] = [...arr];
-  while (out.length < count) {
-    const src = arr[out.length % arr.length];
-    // Synthetic unique negative ID keeps the video URL / products intact
-    // while giving TrailVideoHost a distinct trailId per card position.
-    out.push({ ...src, id: -(src.id * 1000 + out.length) });
-  }
-  return out;
-}
 
 /** Canonical product-type groups. A product name that contains any keyword
  *  in a group is classified as that group's canonical type.
@@ -200,12 +170,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // → hero never reloads or shows a black gap.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
 
+  // Pause background feed cards while the overlay is open so they don't
+  // compete for bandwidth with the hero video. Resume on unmount.
+  const trailMgr = useTrailVideoManager();
+  useEffect(() => {
+    trailMgr?.suspendFeed(trailId);
+    return () => { trailMgr?.resumeFeed(); };
+  }, [trailMgr, trailId]);
+
   // Mirror ProductPage's feed structure with three sections:
   //   1. "Looks like this" — same brand overlap with current look
   //   2. "Popular" — fallback when section 1 is empty
   //   3. "More from <creator>" — other looks by the same creator
-  // Each section is padded/trimmed to exactly 8 items (fillLooks duplicates
-  // when there are fewer, caps when there are more).
+  // Each section is capped at 8 real items. No padding — duplicate TrailVideoHost
+  // entries for the same URL saturate bandwidth without adding visible content.
   const feedSections = useMemo(() => {
     const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
     const ownBrands = new Set(
@@ -242,9 +220,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const c = dedupe(moreFromCreator);
 
     return {
-      looksLikeThis:   fillLooks(a, 8),
-      popular:         fillLooks(b, 8),
-      moreFromCreator: fillLooks(c, 8),
+      looksLikeThis:   a.slice(0, 8),
+      popular:         b.slice(0, 8),
+      moreFromCreator: c.slice(0, 8),
     };
   }, [look.id, look.creator, look.products, allLooks]);
 
@@ -657,6 +635,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                               onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
                               onOpenCreator={onOpenCreator}
                               onCreateCatalog={onCreateCatalog}
+                              previewOnly
                             />
                           ))}
                         </div>
@@ -685,6 +664,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
+                  previewOnly
                 />
               ))}
             </div>
@@ -703,6 +683,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
+                  previewOnly
                 />
               ))}
             </div>
@@ -723,6 +704,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
                   onCreateCatalog={onCreateCatalog}
+                  previewOnly
                 />
               ))}
             </div>
@@ -742,9 +724,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     onOpenLook={handleFeedLookClick}
                     onOpenCreator={onOpenCreator}
                     onCreateCatalog={onCreateCatalog}
+                    previewOnly
                   />
                 ) : (
-                  <CreativeCard
+                  <CreativeCardV2
                     key={item.key}
                     creative={item.creative}
                     className="look-card"

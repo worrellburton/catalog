@@ -33,18 +33,21 @@ import {
   type ReactNode,
 } from 'react';
 
-// Pool cap. We size for "2 viewports of cards stay alive at once" - at
-// ~6 cards per mobile viewport that's 12 cards. 32 gives enough headroom
-// for search results (up to 48 items per page) so videos beyond row 3
-// don't lose their buffered frames. Videos that exit the 2-viewport band
-// get returned to the off-screen pool (paused) and only get evicted
-// entirely once the cap is exceeded.
-const POOL_MAX = 32;
+// Pool cap. Sized to cover 2 viewports of grid cards (~12) plus the full
+// overlay slot budget (~24 across looksLikeThis / popular / moreFromCreator
+// / aboutCreatorStrip / YMAL). 64 leaves room for both without LRU
+// evictions clearing src on still-visible cards.
+const POOL_MAX = 64;
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
    *  Returns a cleanup that returns the element to the off-screen pool. */
   attach: (id: string, src: string, container: HTMLElement, poster?: string) => () => void;
+  /** Pause every in-slot video except `heroTrailId`. Call when a detail
+   *  overlay opens so background feed cards stop competing for bandwidth. */
+  suspendFeed: (heroTrailId: string) => void;
+  /** Resume all paused in-slot videos. Call when the overlay closes. */
+  resumeFeed: () => void;
 }
 
 const TrailVideoContext = createContext<TrailVideoManager | null>(null);
@@ -117,8 +120,8 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       // 'auto' so the video buffers fully while the card sits in the
       // 2-viewport prep band - by the time the user actually scrolls to
       // it, frames are already decoded and playback starts instantly.
-      // Bandwidth-heavy on mobile, but bounded by POOL_MAX (32) so worst
-      // case is ~32 buffered videos at any moment.
+      // Bandwidth-heavy on mobile, but bounded by POOL_MAX so only a
+      // finite number of videos buffer at any moment.
       el.preload = 'auto';
       el.crossOrigin = 'anonymous';
       // Poster paints instantly while the MP4 streams - the single
@@ -175,7 +178,25 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     };
   }, [evictIfNeeded]);
 
-  const manager = useMemo<TrailVideoManager>(() => ({ attach }), [attach]);
+  const suspendFeed = useCallback((heroTrailId: string) => {
+    const offscreen = poolRef.current;
+    for (const [id, { el }] of elementsRef.current) {
+      if (id === heroTrailId) continue;
+      if (!el.parentElement || el.parentElement === offscreen) continue;
+      try { el.pause(); } catch {}
+    }
+  }, []);
+
+  const resumeFeed = useCallback(() => {
+    const offscreen = poolRef.current;
+    for (const { el } of elementsRef.current.values()) {
+      if (!el.parentElement || el.parentElement === offscreen) continue;
+      if (!el.paused) continue;
+      void el.play().catch(() => {});
+    }
+  }, []);
+
+  const manager = useMemo<TrailVideoManager>(() => ({ attach, suspendFeed, resumeFeed }), [attach, suspendFeed, resumeFeed]);
 
   // Visibility + gesture playback recovery. Three sources of frozen-frame
   // bugs we have to handle:
@@ -270,6 +291,12 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       />
     </TrailVideoContext.Provider>
   );
+}
+
+/** Access the raw manager to call suspendFeed / resumeFeed from outside
+ *  the TrailVideoHost component (e.g. LookOverlay mounts/unmounts). */
+export function useTrailVideoManager() {
+  return useContext(TrailVideoContext);
 }
 
 /** Returns a ref callback; assign to the slot div. The optional poster
