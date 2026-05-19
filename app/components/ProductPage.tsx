@@ -7,6 +7,7 @@ import CreativeCard from '~/components/CreativeCard';
 import { useAuth } from '~/hooks/useAuth';
 import { getUserGender, type UserGender } from '~/services/genders';
 import { filterByShopperGender } from '~/utils/genderFilter';
+import { inferRoleFromName } from '~/utils/garmentOrder';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -1002,39 +1003,57 @@ export default function ProductPage({
         </section>
         </div>
 
-        {/* "More like this" — pure vector-similarity output. NO popular
-            fallback, NO padding. The upstream similarity RPC
-            (search_similar_creatives) ranks by cosine distance over
-            the product-creative embedding column, so every row here
-            is semantically related to the current product. If the
-            RPC returns 4 matches, we show 4 — never houseplants or
-            unrelated popular content. Caps at 8 max, dedupes by
-            product_id. */}
-        {moreLikeThis.length > 0 && (
-          <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">More like this</h2>
-            <div className="pd-similar-grid">
-              {(() => {
-                const seen = new Set<string>();
-                const rows: typeof moreLikeThis = [];
-                for (const c of moreLikeThis) {
-                  if (rows.length >= 8) break;
-                  if (seen.has(c.product_id)) continue;
-                  seen.add(c.product_id);
-                  rows.push(c);
-                }
-                return rows.map((c, i) => (
+        {/* "More like this" — vector-similarity FIRST, then a
+            type-scoped popular fallback to ensure the rail always
+            renders something relevant when the similarity RPC came
+            back short (e.g. the seed product has no creative
+            embedding yet). Fallback filters popularItems to the same
+            inferred garment category as the current product so we
+            never surface houseplants under a 'more like this'
+            heading. Caps at 8 total, dedupes by product_id. */}
+        {(() => {
+          const seen = new Set<string>();
+          const rows: typeof moreLikeThis = [];
+          // 1) Vector-similarity hits first.
+          for (const c of moreLikeThis) {
+            if (rows.length >= 8) break;
+            if (seen.has(c.product_id)) continue;
+            seen.add(c.product_id);
+            rows.push(c);
+          }
+          // 2) Type-scoped popular filler if the similarity rail is
+          //    short. inferRoleFromName classifies "Velvet Cap" →
+          //    "hat", "Italian Heavy Poplin" → "pants", etc.
+          if (rows.length < 8 && popularItems.length > 0) {
+            const seedRole = inferRoleFromName(product.name);
+            for (const c of popularItems) {
+              if (rows.length >= 8) break;
+              if (seen.has(c.product_id)) continue;
+              if (seedRole) {
+                const cRole = inferRoleFromName(c.product?.name);
+                if (cRole && cRole !== seedRole) continue;
+              }
+              seen.add(c.product_id);
+              rows.push(c);
+            }
+          }
+          if (rows.length === 0) return null;
+          return (
+            <section className="pd-similar-feed">
+              <h2 className="pd-feed-title">More like this</h2>
+              <div className="pd-similar-grid">
+                {rows.map((c, i) => (
                   <CreativeCard
                     key={`mlt-${c.id ?? i}`}
                     creative={c}
                     className="look-card"
                     onOpenProduct={onOpenCreative}
                   />
-                ));
-              })()}
-            </div>
-          </section>
-        )}
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
