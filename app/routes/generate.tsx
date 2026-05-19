@@ -31,6 +31,8 @@ import {
 import { getUserGender, type UserGender } from '~/services/genders';
 import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
 import { ConfirmModal, useConfirm } from '~/components/ConfirmModal';
+import StatsEditorModal from '~/components/StatsEditorModal';
+import '~/styles/style-page.css'; /* shares the stats-editor modal CSS */
 import {
   createLookShare,
   getLookShare,
@@ -385,13 +387,25 @@ export default function GeneratePage() {
   // strip the param off the URL so a refresh doesn't re-add a row the
   // user may have just removed. Matches against products.url since the
   // consumer Product type has no id.
+  //
+  // Style → Shop this look → Try it on also lands here with an
+  // additional `?occasion=…` param. We capture it into state and feed
+  // it into the prompt builder at submit time so the resulting look
+  // reads "for {occasion}" alongside the picked products.
   const productUrlPrefilled = useRef(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
+  const [occasionHint, setOccasionHint] = useState<string>('');
   useEffect(() => {
     if (productUrlPrefilled.current) return;
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     const productUrl = url.searchParams.get('product_url');
+    const occasionParam = url.searchParams.get('occasion');
+    if (occasionParam) {
+      setOccasionHint(occasionParam);
+      url.searchParams.delete('occasion');
+      window.history.replaceState({}, '', url.toString());
+    }
     if (!productUrl) { productUrlPrefilled.current = true; return; }
     productUrlPrefilled.current = true;
 
@@ -449,6 +463,10 @@ export default function GeneratePage() {
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
+  // Stats editor visibility (shared StatsEditorModal). The chips
+  // render next to the "You" title so the user can adjust height /
+  // age / gender without leaving the wizard.
+  const [editingStats, setEditingStats] = useState(false);
   const [style, setStyle] = useState<string>('street');
   // Output clip length. Seedance 2 /fast is 5s only; Pro can do 5
   // or 10. Default 5 for Fast; the model picker bumps it to 10 when
@@ -1099,6 +1117,7 @@ export default function GeneratePage() {
       heightLabel,
       ageLabel,
       style,
+      occasion: occasionHint || undefined,
       durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
@@ -1209,7 +1228,28 @@ export default function GeneratePage() {
                 look button. Capped at ~1/3 of the viewport height so the
                 "Your looks" grid below can dominate the screen. */}
             <div className="gen-photos-form">
-              <h2 className="gen-photos-title">You</h2>
+              <div className="gen-photos-title-row">
+                <h2 className="gen-photos-title">You</h2>
+                {/* Stats chips + Edit button mirror the /style page so the
+                    user can spot and adjust the height / age / gender values
+                    that get fed into every prompt. Reuses the shared
+                    StatsEditorModal so both surfaces persist to the same
+                    profiles row. */}
+                <div className="style-context-meta gen-photos-stats">
+                  {heightLabel && <span className="style-context-chip">{heightLabel}</span>}
+                  {ageLabel && <span className="style-context-chip">{ageLabel}</span>}
+                  {userGender !== 'unknown' && (
+                    <span className="style-context-chip">{userGender}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="style-context-edit"
+                    onClick={() => setEditingStats(true)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
 
               <input
                 ref={fileInputRef}
@@ -1914,6 +1954,21 @@ export default function GeneratePage() {
           </div>
         </aside>
         </>
+      )}
+
+      {editingStats && user && (
+        <StatsEditorModal
+          userId={user.id}
+          initial={{ heightCm, heightLabel, ageLabel, gender: userGender }}
+          onClose={() => setEditingStats(false)}
+          onSaved={(next) => {
+            if (next.heightCm != null) setHeightCm(next.heightCm);
+            if (next.heightLabel) setHeightLabel(next.heightLabel);
+            if (next.ageLabel) setAgeLabel(next.ageLabel);
+            setUserGender(next.gender);
+            setEditingStats(false);
+          }}
+        />
       )}
     </div>
   );

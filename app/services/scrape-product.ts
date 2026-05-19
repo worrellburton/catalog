@@ -7,15 +7,22 @@ const MODAL_SCRAPER_URL = import.meta.env.VITE_MODAL_SCRAPER_URL || '';
 
 async function _triggerScrape(productId: string, url: string): Promise<void> {
   if (!MODAL_SCRAPER_URL) return;
-  try {
-    await fetch(MODAL_SCRAPER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, url }),
-    });
-  } catch {
-    // Non-fatal - the daily cron will pick it up
-  }
+  // Fire-and-forget with a 6s ceiling. Modal cold-starts can stall this
+  // request for minutes; awaiting them froze the "Add via Brand
+  // Website" modal on the "Adding…" state until the network timed out.
+  // The DB row is already inserted before we get here, so the daily
+  // cron + the INSERT trigger both still pick this up if Modal never
+  // responds. Errors / timeouts are intentionally swallowed.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  fetch(MODAL_SCRAPER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product_id: productId, url }),
+    signal: ctrl.signal,
+  })
+    .catch(() => { /* non-fatal — daily cron will pick it up */ })
+    .finally(() => clearTimeout(timer));
 }
 
 /**

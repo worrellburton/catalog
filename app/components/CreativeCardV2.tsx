@@ -51,16 +51,18 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   priority = false,
   slotId,
 }: CreativeCardV2Props) {
-  const [loaded, setLoaded] = useState(false);
+  const posterUrl = pickPosterUrl(creative);
+  const playableUrl = pickVideoUrl(creative);
+  // Poster-first: if we have a still image, skip the shimmer entirely.
+  // The shimmer is only useful as a loading skeleton when there is nothing
+  // to show yet — with a poster we already have pixels to display.
+  const [loaded, setLoaded] = useState(() => !!posterUrl);
   const impressionTracked = useRef(false);
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
-
-  const posterUrl = pickPosterUrl(creative);
-  const playableUrl = pickVideoUrl(creative);
 
   // Use slotId when provided (e.g. duplicate positions in infinite feed),
   // otherwise fall back to the creative's own id.
@@ -74,12 +76,14 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     posterUrl,
   );
 
-  // Mark loaded once the director reports the video is actually playing.
-  // Stays true after first play so the shimmer never comes back.
+  // Remove shimmer as soon as the director has assigned a video element
+  // (status 'loading' = play() in-flight, video appended to DOM).
+  // We don't wait for 'playing' — the video poster is visible the instant
+  // the element mounts, so the shimmer is redundant from that point on.
   useEffect(() => {
-    if (status === 'playing') {
+    if (status === 'loading' || status === 'playing') {
       setLoaded(true);
-      markFeedMilestone(`first-frame:${directorId}`);
+      if (status === 'playing') markFeedMilestone(`first-frame:${directorId}`);
     }
   }, [status, directorId]);
 

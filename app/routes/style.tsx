@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import '~/styles/style-page.css';
 import { useAuth } from '~/hooks/useAuth';
 import { listUserUploads, getUserSlots, type UserUpload } from '~/services/user-generations';
 import { getUserHeightAge } from '~/services/profiles';
+import { type UserGender } from '~/services/genders';
+import { getLensIngestCounts } from '~/services/lens-search';
 import { supabase } from '~/utils/supabase';
+import StatsEditorModal from '~/components/StatsEditorModal';
+
+// Lens sheet is the only consumer of the SerpAPI Google Lens client +
+// product ingest path, so lazy-load it so the rest of the Style page
+// stays light when the user never taps "Shop this look."
+const StyleLensSheet = lazy(() => import('~/components/StyleLensSheet'));
 import {
   createStyleGeneration,
   listStyleGenerationsWithImages,
@@ -25,20 +33,26 @@ const OCCASION_SUGGESTIONS = [
 ];
 
 interface ProfileBadgeBits {
+  heightCm: number | null;
   heightLabel: string | null;
   ageLabel: string | null;
-  gender: 'male' | 'female' | 'unknown';
+  gender: UserGender;
 }
 
 export default function StylePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  // Super admins see the image-gen provider badge (gpt-image-1 vs
+  // nano-banana-2) on each tile so engineering can compare model
+  // output quality at a glance without diving into /admin/user.$name.
+  const isSuperAdmin = user?.role === 'super_admin';
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [profileBits, setProfileBits] = useState<ProfileBadgeBits>({
-    heightLabel: null, ageLabel: null, gender: 'unknown',
+    heightCm: null, heightLabel: null, ageLabel: null, gender: 'unknown',
   });
   const [profileHydrated, setProfileHydrated] = useState(false);
+  const [editingStats, setEditingStats] = useState(false);
 
   const [occasion, setOccasion] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -47,16 +61,27 @@ export default function StylePage() {
   // Newest first. Hydrated from DB on mount + prepended to on every
   // successful generate so prior style sheets stay visible in a scroll.
   const [history, setHistory] = useState<StyleGenerationResult[]>([]);
-  const [lightboxImage, setLightboxImage] = useState<StyleGenerationImage | null>(null);
+  // image_url → number of Lens results ingested into the catalog from
+  // that tile. Surfaced as a small "{n} saved" badge on each tile so
+  // the user can spot Style sheets they've already shopped without
+  // reopening every one.
+  const [ingestCounts, setIngestCounts] = useState<Map<string, number>>(new Map());
+  // Lightbox carries the occasion alongside the image so the "Shop
+  // this look" CTA can hand both off to the Lens sheet without the
+  // page needing to look up the parent generation again.
+  const [lightboxOpen, setLightboxOpen] = useState<
+    { image: StyleGenerationImage; occasion: string } | null
+  >(null);
+  const [lensTarget, setLensTarget] = useState<{ imageUrl: string; occasion: string } | null>(null);
   const occasionRef = useRef<HTMLInputElement>(null);
 
   // Esc closes the lightbox.
   useEffect(() => {
-    if (!lightboxImage) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null); };
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxOpen(null); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [lightboxImage]);
+  }, [lightboxOpen]);
 
   // Hydrate uploaded photos + saved slot picks (mirrors the Try it on
   // wizard so the same 1–3 reference photos surface here without forcing
@@ -80,11 +105,17 @@ export default function StylePage() {
   // Hydrate prior style generations + their image rows so the page
   // opens with the user's full history visible.
   useEffect(() => {
-    if (!user?.id) { setHistory([]); return; }
+    if (!user?.id) { setHistory([]); setIngestCounts(new Map()); return; }
     let cancelled = false;
     listStyleGenerationsWithImages(user.id).then(rows => {
       if (cancelled) return;
       setHistory(rows);
+      // Once we have the image URLs, pull the ingest counts in a
+      // single batch so each tile can render its "{n} saved" badge.
+      const urls = rows.flatMap(r => r.images.map(i => i.image_url).filter((u): u is string => !!u));
+      if (urls.length > 0) {
+        getLensIngestCounts(urls).then(counts => { if (!cancelled) setIngestCounts(counts); });
+      }
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -100,6 +131,7 @@ export default function StylePage() {
       if (cancelled) return;
       const g = (profileRow.data?.gender as string | undefined);
       setProfileBits({
+        heightCm: heightAge.heightCm,
         heightLabel: heightAge.heightLabel,
         ageLabel: heightAge.ageLabel,
         gender: (g === 'male' || g === 'female') ? g : 'unknown',
@@ -238,7 +270,7 @@ export default function StylePage() {
           <button
             type="button"
             className="style-context-edit"
-            onClick={() => navigate('/generate')}
+            onClick={() => setEditingStats(true)}
           >
             Edit
           </button>
@@ -299,7 +331,8 @@ export default function StylePage() {
               title={submittingOccasion || 'Generating…'}
               subtitle="Generating 4 looks…"
               images={null}
-              onOpen={setLightboxImage}
+              onOpen={(img) => setLightboxOpen({ image: img, occasion: submittingOccasion })}
+              showProviderBadge={isSuperAdmin}
             />
           )}
           {history.map(entry => (
@@ -310,16 +343,52 @@ export default function StylePage() {
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
               })}
               images={entry.images}
-              onOpen={setLightboxImage}
+              onOpen={(img) => setLightboxOpen({ image: img, occasion: entry.generation.occasion })}
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
+              ingestCounts={ingestCounts}
+              showProviderBadge={isSuperAdmin}
             />
           ))}
         </section>
       )}
 
-      {lightboxImage && lightboxImage.image_url && (
-        <StyleLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
+      {lightboxOpen && lightboxOpen.image.image_url && (
+        <StyleLightbox
+          image={lightboxOpen.image}
+          onClose={() => setLightboxOpen(null)}
+          onShop={() => {
+            // Hand off both image + occasion to the lens sheet, then
+            // close the lightbox so the two overlays don't stack.
+            setLensTarget({
+              imageUrl: lightboxOpen.image.image_url ?? '',
+              occasion: lightboxOpen.occasion,
+            });
+            setLightboxOpen(null);
+          }}
+        />
+      )}
+
+      {lensTarget && (
+        <Suspense fallback={null}>
+          <StyleLensSheet
+            imageUrl={lensTarget.imageUrl}
+            occasion={lensTarget.occasion}
+            onClose={() => setLensTarget(null)}
+          />
+        </Suspense>
+      )}
+
+      {editingStats && user && (
+        <StatsEditorModal
+          userId={user.id}
+          initial={profileBits}
+          onClose={() => setEditingStats(false)}
+          onSaved={(next) => {
+            setProfileBits(next);
+            setEditingStats(false);
+          }}
+        />
       )}
     </div>
   );
@@ -337,6 +406,8 @@ function StyleSheetCard({
   onOpen,
   onDeleteImage,
   onToggleLiked,
+  ingestCounts,
+  showProviderBadge,
 }: {
   title: string;
   subtitle: string;
@@ -344,6 +415,8 @@ function StyleSheetCard({
   onOpen: (img: StyleGenerationImage) => void;
   onDeleteImage?: (imageId: string) => void;
   onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
+  ingestCounts?: Map<string, number>;
+  showProviderBadge?: boolean;
 }) {
   // While generating (images === null) we show 4 placeholders so the
   // card has visible weight; otherwise we render exactly the rows the
@@ -370,6 +443,8 @@ function StyleSheetCard({
             onOpen={onOpen}
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
             onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
+            ingestCount={img?.image_url ? ingestCounts?.get(img.image_url) ?? 0 : 0}
+            showProviderBadge={showProviderBadge}
           />
         ))}
       </div>
@@ -377,7 +452,15 @@ function StyleSheetCard({
   );
 }
 
-function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClose: () => void }) {
+function StyleLightbox({
+  image,
+  onClose,
+  onShop,
+}: {
+  image: StyleGenerationImage;
+  onClose: () => void;
+  onShop: () => void;
+}) {
   // Click-to-zoom (1x ↔ 2x) with pointer drag-pan when zoomed. We
   // track translate(x, y) in state and apply via transform so a
   // single CSS transition handles both axes cleanly. Pointer events
@@ -463,6 +546,21 @@ function StyleLightbox({ image, onClose }: { image: StyleGenerationImage; onClos
           draggable={false}
         />
         <span className="style-lightbox-wordmark" aria-hidden="true">Catalog</span>
+        {/* Shop CTA — stopPropagation on click so it doesn't bubble up
+            into the zoom handler beneath. Opens the Lens sheet which
+            takes over the viewport with shoppable matches + try-on. */}
+        <button
+          type="button"
+          className="style-lightbox-shop"
+          onClick={(e) => { e.stopPropagation(); onShop(); }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          Shop this look
+        </button>
       </div>
     </div>
   );
@@ -474,12 +572,20 @@ function StyleResultTile({
   onOpen,
   onDelete,
   onToggleLiked,
+  ingestCount,
+  showProviderBadge,
 }: {
   image: StyleGenerationImage | null;
   index: number;
   onOpen: (img: StyleGenerationImage) => void;
   onDelete?: (() => void) | null;
   onToggleLiked?: ((nextLiked: boolean) => void) | null;
+  ingestCount?: number;
+  // Super-admin only — shows which image-gen provider (gpt-image-1 or
+  // nano-banana-2) produced each tile, so engineering can spot quality
+  // regressions per model at a glance without diving into the
+  // /admin/user.$name diagnostic page.
+  showProviderBadge?: boolean;
 }) {
   if (!image) {
     return (
@@ -546,11 +652,25 @@ function StyleResultTile({
             height={720}
           />
         </button>
-        {/* Provider badge intentionally omitted on the user end — the
-            admin user/$name page still surfaces it for debugging. */}
-        <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
+        {/* Super-admin diagnostic: which image-gen provider produced
+            this tile. Hidden from shoppers; visible to super admins so
+            engineering can spot quality regressions per model at a
+            glance. */}
+        {showProviderBadge && (
+          <span className="style-tile-provider" aria-hidden="true">{image.provider}</span>
+        )}
+
         {heartBtn}
         {deleteBtn}
+        {ingestCount && ingestCount > 0 ? (
+          <span className="style-tile-ingest" aria-label={`${ingestCount} items saved from this look`}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            {ingestCount} saved
+          </span>
+        ) : null}
       </div>
     );
   }

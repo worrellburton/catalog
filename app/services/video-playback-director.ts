@@ -86,15 +86,23 @@ class VideoPlaybackDirector {
         this.scheduleRank();
       }
     });
+
+    // Heartbeat: every 1.5 s, re-rank so any card whose play() failed
+    // (degraded or paused after retries) gets another attempt once data
+    // has buffered. Critical for search results where videos are cold-cache
+    // and play() can be called before bytes arrive.
+    setInterval(() => { this.scheduleRank(); }, 1500);
   }
 
   private createVideoEl(): HTMLVideoElement {
     const el = document.createElement('video');
     el.muted = true;
     el.defaultMuted = true;
+    el.autoplay = true;
     el.loop = true;
     el.playsInline = true;
     el.setAttribute('muted', '');
+    el.setAttribute('autoplay', '');
     el.setAttribute('playsinline', '');
     el.preload = 'none';
     this.parkingDiv!.appendChild(el);
@@ -223,8 +231,13 @@ class VideoPlaybackDirector {
     // Promote ALL registered cards — every card plays all the time.
     for (const [id, entry] of this.cards) {
       if (entry.videoEl) {
-        // Already assigned — just ensure it's playing.
-        if (entry.videoEl.paused && entry.status !== 'loading') {
+        // Already assigned — ensure it's playing. Status 'loading' means
+        // play() is already in-flight; 'playing' means it's actively playing.
+        // For 'paused' (play failed / autoplay policy), retry via heartbeat.
+        if (entry.videoEl.paused && entry.status === 'paused') {
+          entry.retryCount = 0; // reset so playEl retries again
+          this.playEl(id, entry);
+        } else if (entry.videoEl.paused && entry.status !== 'loading') {
           this.playEl(id, entry);
         }
         continue;
@@ -240,6 +253,13 @@ class VideoPlaybackDirector {
       // (Re-)configure the element.
       if (slot.el.src !== entry.videoUrl) {
         slot.el.src = entry.videoUrl;
+        slot.el.preload = 'auto';
+        // Explicitly call load() so the browser starts buffering immediately.
+        // Without this, setting src alone may not kick the network request
+        // until play() is called, causing play() to pend until data arrives.
+        try { slot.el.load(); } catch { /* ignore */ }
+      } else {
+        // Same src (pool reuse) — make sure preload is still set to auto.
         slot.el.preload = 'auto';
       }
       const poster = entry.posterUrl;
@@ -270,6 +290,18 @@ class VideoPlaybackDirector {
     const el = entry.videoEl;
     if (!el) return;
 
+    // Backup: when the video finally has data, retry play() if still paused.
+    // This covers the case where play() is called before the first bytes arrive
+    // (e.g. cold cache on a search result) and the Promise rejects before data
+    // loads. The listener is once: true so it fires at most once per assignment.
+    const onLoadedData = () => {
+      const current = this.cards.get(cardId);
+      if (current?.videoEl === el && el.paused) {
+        void el.play().catch(() => {});
+      }
+    };
+    el.addEventListener('loadeddata', onLoadedData, { once: true });
+
     el.play().then(() => {
       // Guard: card may have been demoted while play() was in-flight.
       if (this.cards.get(cardId)?.videoEl !== el) return;
@@ -292,8 +324,9 @@ class VideoPlaybackDirector {
           if (current?.videoEl === el) this.playEl(cardId, current);
         }, 400 * entry.retryCount);
       } else {
-        entry.status = 'degraded';
-        this.emit(cardId, 'degraded');
+        // MAX_RETRIES exhausted — keep entry as 'paused' (not 'degraded')
+        // so the heartbeat can recover it once data finally arrives.
+        this.emit(cardId, 'paused');
       }
     });
   }

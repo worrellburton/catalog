@@ -322,24 +322,38 @@
   z-index: 2;
   cursor: pointer;
   text-decoration: none;
-  padding: 4px 10px 4px 4px;
-  border-radius: 20px;
-  border: 1px solid transparent;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Card hover: subtle lift on the chip so it reads as part of the card's
+   primary content rather than a floating chip. */
 .look-card:hover .card-creator-row {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Chip itself hover: full pill — bright background, clear border,
+   gentle scale so it lifts off the card. This is the affordance that
+   tells the user "click me to open the catalog." */
 .look-card .card-creator-row:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.35);
-  transform: scale(1.03);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(255, 255, 255, 1);
+  color: #0b0b0b;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transform: scale(1.04);
+}
+.look-card .card-creator-row:hover .card-creator-name {
+  color: #0b0b0b;
 }
 
 .look-card .card-creator-row:active {

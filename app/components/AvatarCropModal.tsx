@@ -517,6 +517,14 @@ export function AvatarUpload({
           window.setTimeout(() => setError(null), 3500);
           throw new Error(err);
         }
+        // Bust the looks/creators cache so the next consumer fetch
+        // re-pulls the freshly-uploaded avatar into the creator chip
+        // on every look card. Without this, the in-memory looksPromise
+        // keeps serving stale rows from before the upload.
+        try {
+          const { invalidateLooksCache } = await import('~/services/looks');
+          invalidateLooksCache();
+        } catch { /* non-fatal */ }
         // Cache-bust so the rendered <img> picks up the new file
         // even when the path collides (it shouldn't, since we
         // timestamp it, but belt-and-suspenders).
