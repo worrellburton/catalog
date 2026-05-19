@@ -29,6 +29,8 @@ interface ProductPageCreative {
 }
 
 interface BookmarksInterface {
+  isLookBookmarked: (id: number) => boolean;
+  toggleLookBookmark: (id: number) => void;
   isProductBookmarked: (p: Product) => boolean;
   toggleProductBookmark: (p: Product) => void;
 }
@@ -460,6 +462,10 @@ export default function ProductPage({
     return (seed?.gender || '').toLowerCase();
   }, [similarCreatives, popularFallback, ownBrand, ownProductId, product.name]);
 
+  // Active gender filter from the global shopper-gender singleton.
+  const activeFilter = useActiveGenderFilter();
+  const shopperGender = activeFilter === 'men' ? 'male' : activeFilter === 'women' ? 'female' : 'unknown';
+
   const genderMatches = useCallback((otherGender: string | null | undefined): boolean => {
     const g = (otherGender || '').toLowerCase();
     // Unisex always passes — universally wearable.
@@ -525,9 +531,6 @@ export default function ProductPage({
 
   // Active gender filter from the global shopper-gender singleton.
   // Drives the nested ContinuousFeed's gender scoping so the YMAL feed
-  // matches whatever the user picked in the BottomBar on the home page.
-  const activeFilter = useActiveGenderFilter();
-
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
   // gives the right column plenty of vertical space and the retailer
