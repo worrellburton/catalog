@@ -4,6 +4,9 @@ import { Product, Look, creators as staticCreators, looks as allLooksData } from
 import { seededShuffle } from '~/utils/seededShuffle';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
+import { useAuth } from '~/hooks/useAuth';
+import { getUserGender, type UserGender } from '~/services/genders';
+import { filterByShopperGender } from '~/utils/genderFilter';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -431,6 +434,18 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
+  // Shopper's gender drives the YMAL gender-filter below. We resolve
+  // it once when the user changes; 'unknown' opts the filter out so
+  // signed-out users see the full pool (matches the rest of the app).
+  const { user } = useAuth();
+  const [shopperGender, setShopperGender] = useState<UserGender>('unknown');
+  useEffect(() => {
+    if (!user?.id) { setShopperGender('unknown'); return; }
+    let cancelled = false;
+    getUserGender(user.id).then(g => { if (!cancelled) setShopperGender(g); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
   // and prepends it to the picker's selection.
@@ -515,8 +530,11 @@ export default function ProductPage({
 
   const ymalPool = useMemo((): YmalItem[] => {
     const seed = hashString(`${product.brand}|${product.name}|ymal`);
-    const sourceLooks = allLooks || allLooksData;
-    const sourceProds = popularFallback || [];
+    // Gender-gate the source pools before shuffling so we never even
+    // surface non-matching items. Signed-out / unknown shoppers see
+    // everything (filterByShopperGender returns the input).
+    const sourceLooks = filterByShopperGender(allLooks || allLooksData, shopperGender);
+    const sourceProds = filterByShopperGender(popularFallback || [], shopperGender);
     if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
 
     const shuffledLooks = seededShuffle(sourceLooks, seed);
@@ -542,7 +560,7 @@ export default function ProductPage({
       }
     }
     return pool;
-  }, [product.brand, product.name, allLooks, popularFallback]);
+  }, [product.brand, product.name, allLooks, popularFallback, shopperGender]);
 
   // Reset visible count when the product changes.
   useEffect(() => {
@@ -967,11 +985,16 @@ export default function ProductPage({
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
-              {/* CreativeCard handles the layoutId morph + shared video element
-                  so a tap here continues the trail with the same fluid handoff. */}
-              {fillToExact(moreLikeThis, 8).map((c, i) => (
+              {/* "More like this" caps at 8 but never pads — if the
+                  similarity RPC only returns 4 ranked matches we
+                  show just those 4 (sorted highest similarity first
+                  by the upstream RPC) rather than diluting the rail
+                  with filler. CreativeCard handles the layoutId
+                  morph + shared video element so a tap here
+                  continues the trail with the same fluid handoff. */}
+              {moreLikeThis.slice(0, 8).map((c, i) => (
                 <CreativeCard
-                  key={`mlt-${i}`}
+                  key={`mlt-${c.id ?? i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}

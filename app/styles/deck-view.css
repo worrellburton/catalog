@@ -6816,8 +6816,12 @@
 .deck-view-v1 .deck-v1-demo-cta {
   display: inline-flex;
   align-items: center;
-  gap: 22px;
-  padding: 26px 56px;
+  /* Asymmetric padding + tighter gap to compensate for the
+     optical-weight imbalance between the bold "Catalog" wordmark
+     (left) and the thin arrow glyph (right). Geometric centre and
+     optical centre now line up. */
+  gap: 18px;
+  padding: 26px 50px 26px 60px;
   font-size: clamp(22px, 2.4vw, 36px);
   font-weight: 700;
   letter-spacing: -0.005em;

@@ -3,6 +3,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
+import { sortByGarmentRole } from '~/utils/garmentOrder';
 import CreativeCardV2 from './CreativeCardV2';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -185,7 +186,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Each section is capped at 8 real items. No padding — duplicate TrailVideoHost
   // entries for the same URL saturate bandwidth without adding visible content.
   const feedSections = useMemo(() => {
-    const source = (allLooks || allLooksData).filter(l => l.id !== look.id);
+    // Filter out the legacy static-seed creators (@lilywittman /
+    // @garrett) — they have placeholder gradient thumbnails with no
+    // real videos, so they read as "looks that don't exist" in the
+    // Popular / More-from sections. Live looks only.
+    const SEED_CREATORS = new Set(['@lilywittman', '@garrett']);
+    const source = (allLooks || allLooksData)
+      .filter(l => l.id !== look.id)
+      .filter(l => !SEED_CREATORS.has(l.creator));
     const ownBrands = new Set(
       (look.products || [])
         .map(p => (p.brand || '').toLowerCase().trim())
@@ -509,15 +517,34 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </button>
             </div>
 
-            {/* Creator row */}
+            {/* Creator row — prefer the static-seed creator entry if
+                this look is from a hardcoded handle (@lilywittman etc.),
+                otherwise fall back to the per-look fields that
+                services/looks.ts populates from the publisher's profile
+                (creatorAvatar + creatorDisplayName). Without these
+                fallbacks user-published looks render as a blank avatar
+                + literal "Creator" placeholder. */}
             <div
               className="look-creator-row"
               onClick={() => { handleClose(); onOpenCreator(look.creator); }}
             >
-              <img className="detail-creator-avatar" src={creatorData?.avatar || ''} alt={creatorData?.displayName || ''} />
+              {(() => {
+                const avatar = creatorData?.avatar || look.creatorAvatar || '';
+                const name =
+                  creatorData?.displayName ||
+                  look.creatorDisplayName ||
+                  (showHandle ? look.creator : 'Creator');
+                return avatar ? (
+                  <img className="detail-creator-avatar" src={avatar} alt={name} />
+                ) : (
+                  <span className="detail-creator-avatar detail-creator-avatar--initial" aria-hidden="true">
+                    {(name || '?').charAt(0).toUpperCase()}
+                  </span>
+                );
+              })()}
               <div className="look-creator-text">
                 <span className="detail-creator-name">
-                  {creatorData?.displayName || (showHandle ? look.creator : 'Creator')}
+                  {creatorData?.displayName || look.creatorDisplayName || (showHandle ? look.creator : 'Creator')}
                 </span>
                 {showHandle && <span className="look-creator-handle">{look.creator.startsWith('@') ? look.creator : `@${look.creator}`}</span>}
               </div>
@@ -559,7 +586,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             <div className="look-tab-content">
               {activeTab === 'products' && (
                 <div className="look-products-list">
-                  {look.products.map((p, pi) => (
+                  {sortByGarmentRole(look.products).map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
                         {p.image
@@ -593,10 +620,23 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 <>
                   <div className="look-creator-about">
                     <div className="look-creator-about-header">
-                      <img className="look-creator-about-avatar" src={creatorData?.avatar || ''} alt={creatorData?.displayName || ''} />
+                      {(() => {
+                        const avatar = creatorData?.avatar || look.creatorAvatar || '';
+                        const name =
+                          creatorData?.displayName ||
+                          look.creatorDisplayName ||
+                          (showHandle ? look.creator : 'Creator');
+                        return avatar ? (
+                          <img className="look-creator-about-avatar" src={avatar} alt={name} />
+                        ) : (
+                          <span className="look-creator-about-avatar look-creator-about-avatar--initial" aria-hidden="true">
+                            {(name || '?').charAt(0).toUpperCase()}
+                          </span>
+                        );
+                      })()}
                       <div>
                         <div className="look-creator-about-name">
-                          {creatorData?.displayName || (showHandle ? look.creator : 'Creator')}
+                          {creatorData?.displayName || look.creatorDisplayName || (showHandle ? look.creator : 'Creator')}
                         </div>
                         {showHandle && (
                           <div className="look-creator-about-handle">
@@ -632,7 +672,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                               key={`about-creator-${fl.id}`}
                               look={fl}
                               className="look-card"
-                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : undefined}
+                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
                               onOpenCreator={onOpenCreator}
                               onCreateCatalog={onCreateCatalog}
                               previewOnly
