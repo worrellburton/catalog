@@ -192,14 +192,32 @@ export default function CreatorWallet({ onProfileChange }: Props) {
               <div className="wallet-hero-glow" aria-hidden />
               <div className="wallet-hero-label">Total Earned</div>
               <div className="wallet-hero-amount">${totalEarning.toFixed(2)}</div>
+              {/* Withdraw CTA sits directly under the hero amount so the
+                  primary action is in arm's reach. Goes to Connect when
+                  Dots isn't wired up yet so the flow is one-tap from
+                  cold. */}
+              {isConnected ? (
+                <button
+                  type="button"
+                  className={`wallet-hero-withdraw${balance <= 0 ? ' wallet-hero-withdraw--disabled' : ''}`}
+                  onClick={handleWithdraw}
+                  disabled={withdrawing || balance <= 0}
+                >
+                  {withdrawing ? 'Processing…' : `Withdraw $${balance.toFixed(2)}`}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="wallet-hero-withdraw"
+                  onClick={() => setShowSignup(true)}
+                >
+                  Connect to Withdraw
+                </button>
+              )}
               <button
                 type="button"
                 className="wallet-insights-toggle"
                 onClick={() => {
-                  // Open + scroll: schedule the scroll on the next
-                  // frame so the collapsing panel has time to begin
-                  // expanding before scrollIntoView resolves the
-                  // final geometry.
                   setInsightsOpen(true);
                   requestAnimationFrame(() => {
                     insightsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

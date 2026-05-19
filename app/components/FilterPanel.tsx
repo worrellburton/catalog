@@ -298,20 +298,6 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
           </div>
         </div>
 
-        {/* Featured Creators */}
-        <div className="filter-section filter-section-creators">
-          <div className="filter-section-label">Featured Creators</div>
-          <div className="filter-options">
-            <button className={`filter-option filter-creator-option glow ${isActive('creator', '@lilywittman') ? 'active' : ''}`} onClick={() => toggleFilter('creator', '@lilywittman')}>
-              <img className="filter-creator-avatar" src="https://i.pravatar.cc/100?img=47" alt="" />
-              <span>@lilywittman</span>
-            </button>
-            <button className={`filter-option filter-creator-option glow ${isActive('creator', '@garrett') ? 'active' : ''}`} onClick={() => toggleFilter('creator', '@garrett')}>
-              <img className="filter-creator-avatar" src="https://i.pravatar.cc/100?img=12" alt="" />
-              <span>@garrett</span>
-            </button>
-          </div>
-        </div>
 
         <button className="filter-apply-btn" onClick={onApply}>{btnText}</button>
       </div>
