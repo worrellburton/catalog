@@ -24,9 +24,12 @@ interface LookCardProps {
    *  Catalog page where the creator identity is already in the page
    *  header - per-tile attribution is redundant noise there. */
   hideCreator?: boolean;
-  /** IntersectionObserver rootMargin for deferred video attach. Default:
-   *  '200% 0%' (2 viewport-heights of look-ahead). Pass '100% 0%' for
-   *  overlay feed sections where bandwidth is shared with the hero video. */
+  /** IntersectionObserver rootMargin for the *active* band — cards inside
+   *  this band attach a live <video> element. Default: '50% 0%' (half a
+   *  viewport above + below). Cards outside this band but still within the
+   *  wider render band fall back to a static poster image, which releases
+   *  the video back to the TrailVideoHost pool. Pass a tighter value for
+   *  overlay feed sections that share bandwidth with a hero video. */
   rootMargin?: string;
   /** Skip video entirely and render a static poster thumbnail. Use for
    *  overlay feed sections (similar looks, YMAL) where multiple simultaneous
@@ -34,11 +37,27 @@ interface LookCardProps {
   previewOnly?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '200% 0%', previewOnly = false }: LookCardProps) {
+// Render band — cards within this margin keep their poster painted but
+// drop the video element. Wider than the active band so videos re-attach
+// before the user can scroll one back into view.
+const RENDER_MARGIN = '200% 0%';
+
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '50% 0%', previewOnly = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
-  const [loaded, setLoaded] = useState(() => previewOnly);
-  const inViewport = useInViewport(cardRef, rootMargin);
+  // Poster-first: if the look has a poster image, treat the card as
+  // "loaded" immediately so we never flash a shimmer over a perfectly
+  // good still image while the MP4 streams in.
+  const posterReady = !!(look.thumbnail_url || look.cover);
+  const [loaded, setLoaded] = useState(() => previewOnly || posterReady);
+  // Active band — close enough to need a live video element.
+  const inActiveBand = useInViewport(cardRef, rootMargin);
+  // Render band — still on screen-ish, but far enough that we drop the
+  // video to free decoder/bandwidth. The card stays in the DOM with its
+  // poster so scrolling back is instant (no remount, no layout shift).
+  const inRenderBand = useInViewport(cardRef, RENDER_MARGIN);
+  // Anything in DOM at all gets the poster painted.
+  const inViewport = inActiveBand || inRenderBand;
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -88,12 +107,15 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // the MP4 streams. Empty string disables the attribute.
   const posterUrl = look.thumbnail_url || look.cover || '';
 
-  // Defer slot population to viewport. The TrailVideoHost pool keeps the
-  // element alive so the LookOverlay hero (same trailId) reuses the same
-  // running <video> on tap - no remount, no first-frame black.
+  // Defer slot population to the *active* viewport band. Outside that
+  // band the video is detached and returned to the TrailVideoHost pool —
+  // bounded CPU/decoder use no matter how long the infinite feed gets.
+  // The LookOverlay hero (same trailId) still reuses the same running
+  // <video> on tap — no remount, no first-frame black.
+  const videoActive = inActiveBand && !previewOnly;
   const setVideoSlot = useTrailVideo(
-    (inViewport && !previewOnly) ? trailId : undefined,
-    (inViewport && !previewOnly) ? videoUrl : undefined,
+    videoActive ? trailId : undefined,
+    videoActive ? videoUrl : undefined,
     posterUrl || undefined,
   );
 
@@ -113,9 +135,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     trackImpression({ type: 'look', id: key, uuid: look.uuid, context: look.title?.slice(0, 200) });
   }, [inViewport, look.id, look.title]);
 
-  // Mark loaded once the host video has frames.
+  // Mark loaded once the host video has frames. If we already have a
+  // poster, `loaded` was true from the start — this just keeps things in
+  // sync for the rare no-poster path.
   useEffect(() => {
-    if (!inViewport) return;
+    if (!videoActive) return;
     const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
     if (video.readyState >= 2) { setLoaded(true); return; }
@@ -126,7 +150,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       clearTimeout(timeout);
       ['playing', 'canplay', 'loadeddata'].forEach(evt => video.removeEventListener(evt, handler));
     };
-  }, [inViewport, trailId]);
+  }, [videoActive, trailId]);
 
   return (
     <div
@@ -158,11 +182,14 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* TrailVideoHost slot - shared <video> hands off to LookOverlay's
+        {/* TrailVideoHost slot — shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
             own video frames stay alive while the overlay opacity-fades in.
-            previewOnly: static poster image, no video decode. */}
-        {previewOnly ? (
+            We paint the poster as a CSS background on the slot itself so
+            the user sees a real still image instantly — the <video> then
+            decodes on top of it. previewOnly and out-of-active-band cards
+            skip the video entirely and render poster only. */}
+        {previewOnly || !videoActive ? (
           <div
             className="card-video-slot"
             style={{
@@ -179,7 +206,14 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             ref={setSlot}
             className="card-video-slot"
             data-trail-id={trailId}
-            style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: posterUrl ? `url(${posterUrl})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundColor: look.color || '#111',
+            } as React.CSSProperties}
           />
         )}
         <div className="card-gradient" />
