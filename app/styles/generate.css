@@ -2220,6 +2220,19 @@ html[data-shell="catalog-app"] .gen-page {
   line-height: 1.2;
 }
 
+/* "You" header row: title on the left, stats chips + Edit on the right.
+   Stays aligned with the rest of the photos form so the chips read as
+   part of the You group rather than free-floating chrome. */
+.gen-photos-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.gen-photos-stats { margin-left: 0; }
+
 .gen-step-photos .gen-slots {
   /* Compact slot strip: 3 squares in a row, smaller than the original
      grid. Aspect ratio stays 3:4 so the slot still reads as portrait. */

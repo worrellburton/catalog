@@ -22,11 +22,14 @@
 }
 
 .creator-hero-avatar {
-  width: 100px;
-  height: 100px;
+  /* Hero size — gives the creator presence on their own page. The
+     edit-hint pencil overlay rides at the bottom-right (see
+     .creator-hero-avatar-edit) so the avatar still leaves room for it. */
+  width: 168px;
+  height: 168px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(0, 0, 0, 0.08);
+  border: 4px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 20px;
 }
 

@@ -3,11 +3,11 @@ import { useNavigate } from '@remix-run/react';
 import '~/styles/style-page.css';
 import { useAuth } from '~/hooks/useAuth';
 import { listUserUploads, getUserSlots, type UserUpload } from '~/services/user-generations';
-import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
-import { updateUserGender, type UserGender } from '~/services/genders';
+import { getUserHeightAge } from '~/services/profiles';
+import { type UserGender } from '~/services/genders';
 import { getLensIngestCounts } from '~/services/lens-search';
 import { supabase } from '~/utils/supabase';
-import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+import StatsEditorModal from '~/components/StatsEditorModal';
 
 // Lens sheet is the only consumer of the SerpAPI Google Lens client +
 // product ingest path, so lazy-load it so the rest of the Style page
@@ -42,6 +42,10 @@ interface ProfileBadgeBits {
 export default function StylePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  // Super admins see the image-gen provider badge (gpt-image-1 vs
+  // nano-banana-2) on each tile so engineering can compare model
+  // output quality at a glance without diving into /admin/user.$name.
+  const isSuperAdmin = user?.role === 'super_admin';
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [profileBits, setProfileBits] = useState<ProfileBadgeBits>({
@@ -328,6 +332,7 @@ export default function StylePage() {
               subtitle="Generating 4 looks…"
               images={null}
               onOpen={(img) => setLightboxOpen({ image: img, occasion: submittingOccasion })}
+              showProviderBadge={isSuperAdmin}
             />
           )}
           {history.map(entry => (
@@ -342,6 +347,7 @@ export default function StylePage() {
               onDeleteImage={imageId => handleDeleteImage(entry.generation.id, imageId)}
               onToggleLiked={(imageId, nextLiked) => handleToggleLiked(entry.generation.id, imageId, nextLiked)}
               ingestCounts={ingestCounts}
+              showProviderBadge={isSuperAdmin}
             />
           ))}
         </section>
@@ -401,6 +407,7 @@ function StyleSheetCard({
   onDeleteImage,
   onToggleLiked,
   ingestCounts,
+  showProviderBadge,
 }: {
   title: string;
   subtitle: string;
@@ -409,6 +416,7 @@ function StyleSheetCard({
   onDeleteImage?: (imageId: string) => void;
   onToggleLiked?: (imageId: string, nextLiked: boolean) => void;
   ingestCounts?: Map<string, number>;
+  showProviderBadge?: boolean;
 }) {
   // While generating (images === null) we show 4 placeholders so the
   // card has visible weight; otherwise we render exactly the rows the
@@ -436,6 +444,7 @@ function StyleSheetCard({
             onDelete={img && onDeleteImage ? () => onDeleteImage(img.id) : null}
             onToggleLiked={img && onToggleLiked ? (next) => onToggleLiked(img.id, next) : null}
             ingestCount={img?.image_url ? ingestCounts?.get(img.image_url) ?? 0 : 0}
+            showProviderBadge={showProviderBadge}
           />
         ))}
       </div>
@@ -643,8 +652,13 @@ function StyleResultTile({
             height={720}
           />
         </button>
-        {/* Provider badge intentionally omitted on the user end — the
-            admin user/$name page still surfaces it for debugging. */}
+        {/* Super-admin diagnostic: which image-gen provider produced
+            this tile. Hidden from shoppers; visible to super admins so
+            engineering can spot quality regressions per model at a
+            glance. */}
+        {showProviderBadge && (
+          <span className="style-tile-provider" aria-hidden="true">{image.provider}</span>
+        )}
 
         {heartBtn}
         {deleteBtn}
@@ -675,160 +689,6 @@ function StyleResultTile({
     <div className="style-tile is-failed">
       <div className="style-tile-error">{image.error ?? 'Failed'}</div>
       {deleteBtn}
-    </div>
-  );
-}
-
-/**
- * Inline editor for the user's "stats" — height, age, gender. Persists
- * to `profiles` via `updateUserHeightAge` + `updateUserGender`. Replaces
- * the old flow that bounced to /generate just to edit a chip.
- */
-function StatsEditorModal({
-  userId,
-  initial,
-  onClose,
-  onSaved,
-}: {
-  userId: string;
-  initial: ProfileBadgeBits;
-  onClose: () => void;
-  onSaved: (next: ProfileBadgeBits) => void;
-}) {
-  // Resolve the height dropdown's selection from the saved cm value
-  // when present, otherwise fall back to a label match so users who
-  // only have the label persisted still land on the right row.
-  const initialHeight = useMemo(() => {
-    if (initial.heightCm) {
-      const byCm = HEIGHT_OPTIONS.find(h => h.cm === initial.heightCm);
-      if (byCm) return byCm;
-    }
-    if (initial.heightLabel) {
-      const byLabel = HEIGHT_OPTIONS.find(h => h.label === initial.heightLabel);
-      if (byLabel) return byLabel;
-    }
-    return HEIGHT_OPTIONS.find(h => h.label === "5'10\"") ?? HEIGHT_OPTIONS[0];
-  }, [initial.heightCm, initial.heightLabel]);
-
-  const [heightCm, setHeightCm] = useState<number>(initialHeight.cm);
-  const [heightLabel, setHeightLabel] = useState<string>(initialHeight.label);
-  const [ageLabel, setAgeLabel] = useState<string>(initial.ageLabel ?? 'mid 20s');
-  const [gender, setGender] = useState<UserGender>(initial.gender);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Esc closes the modal so it follows the same dismiss pattern as the
-  // lightbox. Click on the backdrop also closes.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    // Persist both writes in parallel — gender lives on a sibling
-    // service so we run them concurrently and surface whichever
-    // error fires first.
-    const [heightResult, genderResult] = await Promise.all([
-      updateUserHeightAge(userId, { heightCm, heightLabel, ageLabel }),
-      updateUserGender(userId, gender),
-    ]);
-    setSaving(false);
-    if (heightResult.error) { setError(heightResult.error); return; }
-    if (genderResult.error) { setError(genderResult.error); return; }
-    onSaved({ heightCm, heightLabel, ageLabel, gender });
-  }
-
-  return (
-    <div className="style-stats-modal" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="style-stats-card" onClick={e => e.stopPropagation()}>
-        <div className="style-stats-header">
-          <h2>Your stats</h2>
-          <button
-            type="button"
-            className="style-stats-close"
-            onClick={onClose}
-            aria-label="Close"
-          >×</button>
-        </div>
-        <p className="style-stats-hint">
-          These get used in every generated look so the model matches your build.
-        </p>
-
-        <label className="style-stats-field">
-          <span className="style-stats-label">Height</span>
-          <select
-            value={heightCm}
-            onChange={e => {
-              const cm = Number(e.target.value);
-              const opt = HEIGHT_OPTIONS.find(h => h.cm === cm);
-              if (!opt) return;
-              setHeightCm(opt.cm);
-              setHeightLabel(opt.label);
-            }}
-            disabled={saving}
-          >
-            {HEIGHT_OPTIONS.map(h => (
-              <option key={h.cm} value={h.cm}>{h.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="style-stats-field">
-          <span className="style-stats-label">Age</span>
-          <select
-            value={ageLabel}
-            onChange={e => setAgeLabel(e.target.value)}
-            disabled={saving}
-          >
-            {AGE_OPTIONS.map(a => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-        </label>
-
-        <fieldset className="style-stats-field">
-          <span className="style-stats-label">Gender</span>
-          <div className="style-stats-gender">
-            {(['male', 'female', 'unknown'] as const).map(g => (
-              <label key={g} className={`style-stats-gender-opt${gender === g ? ' is-selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="style-stats-gender"
-                  value={g}
-                  checked={gender === g}
-                  onChange={() => setGender(g)}
-                  disabled={saving}
-                />
-                <span>{g === 'unknown' ? 'Prefer not to say' : g}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        {error && <div className="style-error">{error}</div>}
-
-        <div className="style-stats-actions">
-          <button
-            type="button"
-            className="style-stats-cancel"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="style-primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
