@@ -1002,41 +1002,41 @@ export default function ProductPage({
         </section>
         </div>
 
-        {moreLikeThis.length > 0 && (
+        {/* "More like this" — ALWAYS positioned directly after the
+            product info section. Prefers the type-scoped similarity
+            RPC's ranked matches; if the similarity RPC came back
+            empty (or short), we fall through to popularItems to fill
+            the rail without ever showing a separate "Popular"
+            heading. Caps at 8; if only 4 matches exist, shows just
+            those 4 rather than diluting with filler. */}
+        {(moreLikeThis.length > 0 || popularItems.length > 0) && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
-              {/* "More like this" caps at 8 but never pads — if the
-                  similarity RPC only returns 4 ranked matches we
-                  show just those 4 (sorted highest similarity first
-                  by the upstream RPC) rather than diluting the rail
-                  with filler. CreativeCard handles the layoutId
-                  morph + shared video element so a tap here
-                  continues the trail with the same fluid handoff. */}
-              {moreLikeThis.slice(0, 8).map((c, i) => (
-                <CreativeCard
-                  key={`mlt-${c.id ?? i}`}
-                  creative={c}
-                  className="look-card"
-                  onOpenProduct={onOpenCreative}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {popularItems.length > 0 && (
-          <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">Popular</h2>
-            <div className="pd-similar-grid">
-              {fillToExact(popularItems, 8).map((c, i) => (
-                <CreativeCard
-                  key={`pop-${i}`}
-                  creative={c}
-                  className="look-card"
-                  onOpenProduct={onOpenCreative}
-                />
-              ))}
+              {(() => {
+                const seen = new Set<string>();
+                const merged: typeof moreLikeThis = [];
+                for (const c of moreLikeThis) {
+                  if (merged.length >= 8) break;
+                  if (seen.has(c.product_id)) continue;
+                  seen.add(c.product_id);
+                  merged.push(c);
+                }
+                for (const c of popularItems) {
+                  if (merged.length >= 8) break;
+                  if (seen.has(c.product_id)) continue;
+                  seen.add(c.product_id);
+                  merged.push(c);
+                }
+                return merged.map((c, i) => (
+                  <CreativeCard
+                    key={`mlt-${c.id ?? i}`}
+                    creative={c}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                ));
+              })()}
             </div>
           </section>
         )}
