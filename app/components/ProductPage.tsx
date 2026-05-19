@@ -1002,33 +1002,28 @@ export default function ProductPage({
         </section>
         </div>
 
-        {/* "More like this" — ALWAYS positioned directly after the
-            product info section. Prefers the type-scoped similarity
-            RPC's ranked matches; if the similarity RPC came back
-            empty (or short), we fall through to popularItems to fill
-            the rail without ever showing a separate "Popular"
-            heading. Caps at 8; if only 4 matches exist, shows just
-            those 4 rather than diluting with filler. */}
-        {(moreLikeThis.length > 0 || popularItems.length > 0) && (
+        {/* "More like this" — pure vector-similarity output. NO popular
+            fallback, NO padding. The upstream similarity RPC
+            (search_similar_creatives) ranks by cosine distance over
+            the product-creative embedding column, so every row here
+            is semantically related to the current product. If the
+            RPC returns 4 matches, we show 4 — never houseplants or
+            unrelated popular content. Caps at 8 max, dedupes by
+            product_id. */}
+        {moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
               {(() => {
                 const seen = new Set<string>();
-                const merged: typeof moreLikeThis = [];
+                const rows: typeof moreLikeThis = [];
                 for (const c of moreLikeThis) {
-                  if (merged.length >= 8) break;
+                  if (rows.length >= 8) break;
                   if (seen.has(c.product_id)) continue;
                   seen.add(c.product_id);
-                  merged.push(c);
+                  rows.push(c);
                 }
-                for (const c of popularItems) {
-                  if (merged.length >= 8) break;
-                  if (seen.has(c.product_id)) continue;
-                  seen.add(c.product_id);
-                  merged.push(c);
-                }
-                return merged.map((c, i) => (
+                return rows.map((c, i) => (
                   <CreativeCard
                     key={`mlt-${c.id ?? i}`}
                     creative={c}

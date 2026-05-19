@@ -20,7 +20,11 @@ export function isGenderAllowed(
   const u = (shopperGender || 'unknown').toLowerCase();
   if (u !== 'male' && u !== 'female') return true; // no filter when unknown
   const i = (itemGender || '').toLowerCase();
-  if (!i || i === 'unisex' || i === 'both') return true;
+  if (i === 'unisex' || i === 'both') return true;
+  // Untagged items are dropped for gendered shoppers so the opposite
+  // catalog never leaks in. Callers that want to allow untagged can
+  // pre-tag their items before handing them off.
+  if (!i) return false;
   if (u === 'male')   return i === 'male'   || i === 'men';
   if (u === 'female') return i === 'female' || i === 'women';
   return true;
@@ -28,9 +32,9 @@ export function isGenderAllowed(
 
 /**
  * Convenience filter for arrays of items that carry a `gender`
- * field. Items with no gender or `unisex`/`both` pass for every
- * shopper. Reads `gender` at runtime so callers can use this with
- * any row shape without first widening the type.
+ * field. Reads gender from BOTH `it.gender` (Looks, raw products)
+ * AND `it.product?.gender` (ProductAd creatives) so callers don't
+ * have to widen their types or pre-flatten.
  */
 export function filterByShopperGender<T>(
   items: readonly T[],
@@ -39,7 +43,11 @@ export function filterByShopperGender<T>(
   const u = (shopperGender || 'unknown').toLowerCase();
   if (u !== 'male' && u !== 'female') return items.slice();
   return items.filter(it => {
-    const g = (it as { gender?: string | null } | null | undefined)?.gender;
+    const obj = it as {
+      gender?: string | null;
+      product?: { gender?: string | null } | null;
+    } | null | undefined;
+    const g = obj?.gender ?? obj?.product?.gender ?? null;
     return isGenderAllowed(g, shopperGender);
   });
 }

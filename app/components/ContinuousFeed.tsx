@@ -5,7 +5,7 @@ import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
+import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
@@ -215,7 +215,23 @@ export default function ContinuousFeed({
   // Kicks in for queries ≥ 3 chars; reorders filteredLooks so semantically
   // ranked looks float to the top. Falls back to the local text filter when
   // the edge function is unavailable or the query is too short.
-  const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
+  // When the explicit men/women chip is active, that wins. Otherwise
+  // fall back to the shopper's profile gender so a signed-in male
+  // shopper's search results never leak women's items (and vice-versa).
+  // Signed-out / 'unknown' still skips the filter so the public feed
+  // shows everything. Subscribed to the global setter so a profile
+  // change re-runs the search with the new gender.
+  const [profileGender, setProfileGender] = useState(() => getShopperGender());
+  useEffect(() => {
+    const off = subscribeToShopperGender(() => setProfileGender(getShopperGender()));
+    return off;
+  }, []);
+  const genderOpt: 'men' | 'women' | undefined =
+    activeFilter === 'all'
+      ? (profileGender === 'male'   ? 'men'
+        : profileGender === 'female' ? 'women'
+        : undefined)
+      : activeFilter;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
   // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
   // We still run semantic in the background so Haiku-driven expansion can
