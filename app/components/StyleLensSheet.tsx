@@ -192,11 +192,41 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
         </header>
 
         <div className="lens-sheet-source">
-          <img src={target.url} alt="Source look" />
-          {/* Crop CTA sits on top of the source preview so it's discoverable
-              the moment the user enters the lens sheet. Tapping it opens the
-              crop tool against the ORIGINAL image (not the cropped target),
-              so users can always re-scope from the full picture. */}
+          {/* Style sheets are typically a NxM grid of outfits inside a
+              single PNG. Scanning the whole thing dilutes Lens. So we
+              treat the source image as tap-to-pick: clicking anywhere
+              on the preview auto-crops a tall portrait region centred
+              on the tap point (default: 18% wide × 55% tall) and runs
+              a fresh lens-search against that crop. The user can still
+              tap "Crop a specific item" for a fine-grained box, but
+              the tap-to-pick covers the 90% case. */}
+          <button
+            type="button"
+            className="lens-sheet-source-tap"
+            onClick={(e) => {
+              if (!user?.id || cropping) return;
+              const img = e.currentTarget.querySelector('img');
+              if (!img) return;
+              const rect = img.getBoundingClientRect();
+              const px = e.clientX - rect.left;
+              const py = e.clientY - rect.top;
+              const w = 0.18;
+              const h = 0.55;
+              const x = Math.min(1 - w, Math.max(0, (px / rect.width) - w / 2));
+              const y = Math.min(1 - h, Math.max(0, (py / rect.height) - h / 2));
+              handleCropConfirm({ x, y, w, h });
+            }}
+            aria-label="Tap a specific look to scan it"
+            title={user?.id ? 'Tap an outfit to scan just that one' : 'Sign in to crop'}
+            disabled={!user?.id || cropping}
+          >
+            <img src={target.url} alt="Source look" draggable={false} />
+            {!target.cropped && (
+              <span className="lens-sheet-source-hint" aria-hidden="true">
+                Tap any outfit to scan just that one
+              </span>
+            )}
+          </button>
           <div className="lens-sheet-source-overlay">
             {target.cropped && (
               <button
