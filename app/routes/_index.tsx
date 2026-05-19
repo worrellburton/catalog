@@ -20,6 +20,7 @@ import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { inferRoleFromName } from '~/utils/garmentOrder';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -482,7 +483,16 @@ export default function Home() {
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
-    const similarP = prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null);
+    // Scope similarity to the same garment category whenever we can.
+    // When product.type is null (admin hasn't tagged it yet), fall
+    // back to inferring the type from the name so the rail doesn't
+    // come back full of beanies, houseplants, and empty rooms when
+    // the seed is a shirt. The RPC drops the type constraint only
+    // when both signals are missing.
+    const inferredType = creative.product?.type
+      || inferRoleFromName(creative.product?.name)
+      || null;
+    const similarP = prefetchSimilarCreatives(creative.id, 18, inferredType);
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
