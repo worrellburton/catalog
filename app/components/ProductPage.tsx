@@ -480,11 +480,32 @@ export default function ProductPage({
   }, [similarCreatives, popularFallback, ownBrand, ownProductId, product.name]);
 
   const genderMatches = useCallback((otherGender: string | null | undefined): boolean => {
-    if (!seedGender || seedGender === 'unisex') return true;
     const g = (otherGender || '').toLowerCase();
-    if (!g || g === 'unisex') return true;
+    // Unisex always passes — universally wearable.
+    if (g === 'unisex') return true;
+
+    // Shopper-gender gate (primary): a male shopper sees only
+    // male+unisex products across every rail, regardless of which
+    // product they're currently viewing. A female shopper sees
+    // female+unisex. Signed-out / unknown shoppers don't apply this
+    // gate. Untagged products are dropped for gendered shoppers so
+    // we don't leak women's items into a man's feed.
+    const u = (shopperGender || 'unknown').toLowerCase();
+    if (u === 'male' || u === 'female') {
+      const wantMale = u === 'male';
+      if (!g) return false;
+      if (wantMale)  return g === 'male'   || g === 'men';
+      return            g === 'female' || g === 'women';
+    }
+
+    // Seed-gender gate (fallback for signed-out users): when we
+    // don't know the shopper, fall back to matching the seed
+    // product's gender so a man's product page doesn't show
+    // women's rails.
+    if (!seedGender || seedGender === 'unisex') return true;
+    if (!g) return true;
     return g === seedGender;
-  }, [seedGender]);
+  }, [seedGender, shopperGender]);
 
   const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
     if (!rows || rows.length === 0) return [];
