@@ -1,11 +1,9 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { Product, Look, creators as staticCreators } from '~/data/looks';
+import { Product, Look, creators as staticCreators, looks as allLooksData } from '~/data/looks';
+import { seededShuffle } from '~/utils/seededShuffle';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
-import { inferRoleFromName } from '~/utils/garmentOrder';
-import ContinuousFeed from '~/components/ContinuousFeed';
-import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -29,6 +27,8 @@ interface ProductPageCreative {
 }
 
 interface BookmarksInterface {
+  isLookBookmarked: (id: number) => boolean;
+  toggleLookBookmark: (id: number) => void;
   isProductBookmarked: (p: Product) => boolean;
   toggleProductBookmark: (p: Product) => void;
 }
@@ -404,6 +404,14 @@ function fillToExact<T>(arr: T[], count: number): T[] {
   return out;
 }
 
+// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
+type YmalItem =
+  | { kind: 'look'; look: Look; key: string }
+  | { kind: 'product'; creative: ProductAd; key: string }
+
+const YMAL_BATCH = 16;
+const YMAL_POOL_SIZE = 200;
+
 export default function ProductPage({
   product,
   onClose,
@@ -461,32 +469,11 @@ export default function ProductPage({
   }, [similarCreatives, popularFallback, ownBrand, ownProductId, product.name]);
 
   const genderMatches = useCallback((otherGender: string | null | undefined): boolean => {
-    const g = (otherGender || '').toLowerCase();
-    // Unisex always passes — universally wearable.
-    if (g === 'unisex') return true;
-
-    // Shopper-gender gate (primary): a male shopper sees only
-    // male+unisex products across every rail, regardless of which
-    // product they're currently viewing. A female shopper sees
-    // female+unisex. Signed-out / unknown shoppers don't apply this
-    // gate. Untagged products are dropped for gendered shoppers so
-    // we don't leak women's items into a man's feed.
-    const u = (shopperGender || 'unknown').toLowerCase();
-    if (u === 'male' || u === 'female') {
-      const wantMale = u === 'male';
-      if (!g) return false;
-      if (wantMale)  return g === 'male'   || g === 'men';
-      return            g === 'female' || g === 'women';
-    }
-
-    // Seed-gender gate (fallback for signed-out users): when we
-    // don't know the shopper, fall back to matching the seed
-    // product's gender so a man's product page doesn't show
-    // women's rails.
     if (!seedGender || seedGender === 'unisex') return true;
-    if (!g) return true;
+    const g = (otherGender || '').toLowerCase();
+    if (!g || g === 'unisex') return true;
     return g === seedGender;
-  }, [seedGender, shopperGender]);
+  }, [seedGender]);
 
   const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
     if (!rows || rows.length === 0) return [];
@@ -523,10 +510,48 @@ export default function ProductPage({
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
 
-  // Active gender filter from the global shopper-gender singleton.
-  // Drives the nested ContinuousFeed's gender scoping so the YMAL feed
-  // matches whatever the user picked in the BottomBar on the home page.
-  const activeFilter = useActiveGenderFilter();
+  // ── You Might Also Like pool ──────────────────────────────────────────────
+  // Builds a 200-item cycling pool that mixes shuffled looks and product
+  // creatives (2 products : 1 look). Seeded by product so the order is
+  // stable across re-renders and resets properly on navigation.
+  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [ymalVisible, setYmalVisible] = useState(YMAL_BATCH);
+
+  const ymalPool = useMemo((): YmalItem[] => {
+    const seed = hashString(`${product.brand}|${product.name}|ymal`);
+    const sourceLooks = allLooks || allLooksData;
+    const sourceProds = popularFallback || [];
+    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
+
+    const shuffledLooks = seededShuffle(sourceLooks, seed);
+    const shuffledProds = seededShuffle(sourceProds, seed ^ 0x5f3759df);
+
+    const pool: YmalItem[] = [];
+    let li = 0, pi = 0;
+    for (let i = 0; i < YMAL_POOL_SIZE; i++) {
+      // Pattern: product, product, look (repeating)
+      if (i % 3 === 2 && shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else if (shuffledProds.length > 0) {
+        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
+        pi++;
+      } else if (shuffledLooks.length > 0) {
+        const l = shuffledLooks[li % shuffledLooks.length];
+        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
+        li++;
+      } else {
+        break;
+      }
+    }
+    return pool;
+  }, [product.brand, product.name, allLooks, popularFallback]);
+
+  // Reset visible count when the product changes.
+  useEffect(() => {
+    setYmalVisible(YMAL_BATCH);
+  }, [product.brand, product.name]);
 
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
@@ -536,13 +561,24 @@ export default function ProductPage({
     && window.matchMedia('(min-width: 960px)').matches;
   const [showRetailers, setShowRetailers] = useState(isDesktop);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  // Tracked separately so nested feeds re-bind their IntersectionObserver
-  // root once the scroller mounts (refs alone don't trigger re-renders).
-  const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
-  const setScrollerRef = useCallback((el: HTMLDivElement | null) => {
-    scrollerRef.current = el;
-    setScrollerEl(el);
-  }, []);
+
+  // Infinite scroll: load next batch when the sentinel enters the scroll container.
+  // Must use root: scrollerRef.current — .product-page is a custom overflow-y:auto
+  // container, not window scroll. Without root, rootMargin extends the viewport but
+  // gets clipped by the container before it can fire early. Mirrors GridView's pattern
+  // exactly: root = scroll container + rootMargin = lookahead distance.
+  useEffect(() => {
+    const sentinel = ymalSentinelRef.current;
+    const scroller = scrollerRef.current;
+    if (!sentinel || !scroller || ymalPool.length === 0) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setYmalVisible(prev => Math.min(prev + YMAL_BATCH, ymalPool.length));
+      }
+    }, { root: scroller, rootMargin: '400px' });
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [ymalPool.length]);
 
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
@@ -735,7 +771,7 @@ export default function ProductPage({
       role="dialog"
       aria-modal="true"
     >
-      <div className="product-page" ref={setScrollerRef}>
+      <div className="product-page" ref={scrollerRef}>
         <button
           className="pd-back"
           onClick={handleClose}
@@ -931,57 +967,39 @@ export default function ProductPage({
         </section>
         </div>
 
-        {/* "More like this" — vector-similarity FIRST, then a
-            type-scoped popular fallback to ensure the rail always
-            renders something relevant when the similarity RPC came
-            back short (e.g. the seed product has no creative
-            embedding yet). Fallback filters popularItems to the same
-            inferred garment category as the current product so we
-            never surface houseplants under a 'more like this'
-            heading. Caps at 8 total, dedupes by product_id. */}
-        {(() => {
-          const seen = new Set<string>();
-          const rows: typeof moreLikeThis = [];
-          // 1) Vector-similarity hits first.
-          for (const c of moreLikeThis) {
-            if (rows.length >= 8) break;
-            if (seen.has(c.product_id)) continue;
-            seen.add(c.product_id);
-            rows.push(c);
-          }
-          // 2) Type-scoped popular filler if the similarity rail is
-          //    short. inferRoleFromName classifies "Velvet Cap" →
-          //    "hat", "Italian Heavy Poplin" → "pants", etc.
-          if (rows.length < 8 && popularItems.length > 0) {
-            const seedRole = inferRoleFromName(product.name);
-            for (const c of popularItems) {
-              if (rows.length >= 8) break;
-              if (seen.has(c.product_id)) continue;
-              if (seedRole) {
-                const cRole = inferRoleFromName(c.product?.name);
-                if (cRole && cRole !== seedRole) continue;
-              }
-              seen.add(c.product_id);
-              rows.push(c);
-            }
-          }
-          if (rows.length === 0) return null;
-          return (
-            <section className="pd-similar-feed">
-              <h2 className="pd-feed-title">More like this</h2>
-              <div className="pd-similar-grid">
-                {rows.map((c, i) => (
-                  <CreativeCard
-                    key={`mlt-${c.id ?? i}`}
-                    creative={c}
-                    className="look-card"
-                    onOpenProduct={onOpenCreative}
-                  />
-                ))}
-              </div>
-            </section>
-          );
-        })()}
+        {moreLikeThis.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">More like this</h2>
+            <div className="pd-similar-grid">
+              {/* CreativeCard handles the layoutId morph + shared video element
+                  so a tap here continues the trail with the same fluid handoff. */}
+              {fillToExact(moreLikeThis, 8).map((c, i) => (
+                <CreativeCard
+                  key={`mlt-${i}`}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {popularItems.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">Popular</h2>
+            <div className="pd-similar-grid">
+              {fillToExact(popularItems, 8).map((c, i) => (
+                <CreativeCard
+                  key={`pop-${i}`}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
@@ -1034,24 +1052,26 @@ export default function ProductPage({
           </section>
         )}
 
-        <section className="pd-similar-feed">
-          <h2 className="pd-feed-title">You might also like</h2>
-          <ContinuousFeed
-            nested
-            scrollRoot={scrollerEl}
-            activeFilter={activeFilter}
-            searchQuery=""
-            shuffleKey={0}
-            layoutMode={0}
-            onOpenLook={onOpenLook}
-            onOpenCreator={onOpenCreator || (() => {})}
-            onOpenBrowser={onOpenBrowser}
-            onOpenProduct={onOpenProduct}
-            onOpenCreative={onOpenCreative}
-            onOpenBrand={onOpenBrand}
-            bookmarks={bookmarks}
-          />
-        </section>
+        {ymalPool.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">You might also like</h2>
+            <div className="pd-similar-grid">
+              {ymalPool.slice(0, ymalVisible).map((item, i) =>
+                item.kind === 'look' ? (
+                  <LookTile key={item.key} look={item.look} index={i} onOpen={onOpenLook} />
+                ) : (
+                  <CreativeCard
+                    key={item.key}
+                    creative={item.creative}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                )
+              )}
+            </div>
+            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
+          </section>
+        )}
       </div>
     </div>
   );

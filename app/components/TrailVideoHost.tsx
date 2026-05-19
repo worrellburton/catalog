@@ -63,6 +63,13 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   const poolRef = useRef<HTMLDivElement>(null);
   const elementsRef = useRef<Map<string, PoolEntry>>(new Map());
   const tickRef = useRef(0);
+  // Per-id stack of active containers. When an overlay (hero slot) steals a
+  // video from a grid card, the grid card's container stays in the stack
+  // below the hero slot's container. When the overlay unmounts and its cleanup
+  // runs, we pop the hero slot and hand the video back to the grid card
+  // instead of parking it in the off-screen pool — preventing the card from
+  // going blank with no way to recover without a full remount.
+  const slotStacksRef = useRef<Map<string, HTMLElement[]>>(new Map());
 
   const evictIfNeeded = useCallback(() => {
     const pool = elementsRef.current;
@@ -146,6 +153,14 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     const e = entry; // narrow for closure
     e.lastUsed = ++tickRef.current;
 
+    // Track this container in the per-id slot stack. When an overlay steals
+    // the video from a grid card, the card's container remains beneath the
+    // overlay's container in the stack. On cleanup we fall back to it.
+    const stacks = slotStacksRef.current;
+    const stack = stacks.get(id) ?? [];
+    stack.push(container);
+    stacks.set(id, stack);
+
     // Move into the slot. appendChild on an already-parented node detaches
     // first - the previous slot loses it automatically without remount.
     container.appendChild(e.el);
@@ -165,13 +180,32 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      // Park back in the off-screen pool so currentTime survives if the
-      // consumer remounts within the trail (e.g. the same card reappears in
-      // the next "more like this" rail).
-      const offscreen = poolRef.current;
-      if (offscreen && e.el.parentElement === container) {
-        offscreen.appendChild(e.el);
-        try { e.el.pause(); } catch {}
+      // Pop this container from the slot stack.
+      const st = stacks.get(id);
+      if (st) {
+        const idx = st.lastIndexOf(container);
+        if (idx !== -1) st.splice(idx, 1);
+        if (st.length === 0) stacks.delete(id);
+      }
+
+      // If there is a previous container still in the stack (e.g. the grid
+      // card behind a closing overlay) and it is still mounted, hand the
+      // video back to it instead of parking in the off-screen pool. This
+      // prevents cards from going blank after an overlay that borrowed their
+      // video element closes — the video returns to its original slot and
+      // resumes without needing a full remount of the card.
+      const prevContainer = st && st.length > 0 ? st[st.length - 1] : null;
+      if (prevContainer && prevContainer.isConnected && e.el.parentElement === container) {
+        prevContainer.appendChild(e.el);
+        void e.el.play().catch(() => {});
+      } else {
+        // No previous slot or it is gone — park in the off-screen pool so
+        // currentTime survives if the consumer remounts within the trail.
+        const offscreen = poolRef.current;
+        if (offscreen && e.el.parentElement === container) {
+          offscreen.appendChild(e.el);
+          try { e.el.pause(); } catch {}
+        }
       }
       e.lastUsed = ++tickRef.current;
       evictIfNeeded();
