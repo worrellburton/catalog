@@ -105,28 +105,49 @@ interface SerpLensMatch {
   reviews?: number;
 }
 
+async function callLens(params: URLSearchParams): Promise<{ exact: SerpLensMatch[]; visual: SerpLensMatch[] }> {
+  const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+  if (!res.ok) throw new Error(`SerpAPI ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  return {
+    exact: Array.isArray(json.exact_matches) ? json.exact_matches : [],
+    visual: Array.isArray(json.visual_matches) ? json.visual_matches : [],
+  };
+}
+
 async function searchSerpLens(
   imageUrl: string,
   apiKey: string,
   opts: { q?: string; country: string },
 ): Promise<NormalizedMatch[]> {
-  const params = new URLSearchParams({
+  // type=products narrows SerpAPI's Lens response to shoppable items
+  // only — Google Shopping-style entries with prices and merchant
+  // links, NOT generic Google web results. That's the user-visible
+  // promise: every tile in the grid should be something you can
+  // actually buy and try on. If the products engine comes back empty
+  // (rare, but possible on stylized images), we fall back to type=all
+  // and run the same shoppability post-filter so the experience never
+  // dead-ends to zero matches.
+  const baseParams = new URLSearchParams({
     engine: 'google_lens',
     url: imageUrl,
     api_key: apiKey,
     country: opts.country,
     hl: 'en',
-    type: 'all',
   });
-  if (opts.q) params.set('q', opts.q);
+  if (opts.q) baseParams.set('q', opts.q);
 
-  const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-  if (!res.ok) throw new Error(`SerpAPI ${res.status}: ${await res.text()}`);
-  const json = await res.json();
+  const productParams = new URLSearchParams(baseParams);
+  productParams.set('type', 'products');
+  let { exact, visual } = await callLens(productParams);
+  let merged: SerpLensMatch[] = [...exact, ...visual];
 
-  const exact: SerpLensMatch[] = Array.isArray(json.exact_matches) ? json.exact_matches : [];
-  const visual: SerpLensMatch[] = Array.isArray(json.visual_matches) ? json.visual_matches : [];
-  const merged: SerpLensMatch[] = [...exact, ...visual];
+  if (merged.length === 0) {
+    const allParams = new URLSearchParams(baseParams);
+    allParams.set('type', 'all');
+    ({ exact, visual } = await callLens(allParams));
+    merged = [...exact, ...visual];
+  }
 
   return merged.slice(0, 30).map((m, i): NormalizedMatch => {
     const title = String(m.title ?? '').trim();

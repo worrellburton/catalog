@@ -564,6 +564,7 @@ function StyleResultTile({
   onDelete,
   onToggleLiked,
   ingestCount,
+  showProviderBadge,
 }: {
   image: StyleGenerationImage | null;
   index: number;
@@ -571,6 +572,11 @@ function StyleResultTile({
   onDelete?: (() => void) | null;
   onToggleLiked?: ((nextLiked: boolean) => void) | null;
   ingestCount?: number;
+  // Super-admin only — shows which image-gen provider (gpt-image-1 or
+  // nano-banana-2) produced each tile, so engineering can spot quality
+  // regressions per model at a glance without diving into the
+  // /admin/user.$name diagnostic page.
+  showProviderBadge?: boolean;
 }) {
   if (!image) {
     return (
@@ -640,7 +646,6 @@ function StyleResultTile({
         {/* Provider badge intentionally omitted on the user end — the
             admin user/$name page still surfaces it for debugging. */}
 
-        <span className="style-tile-wordmark" aria-hidden="true">Catalog</span>
         {heartBtn}
         {deleteBtn}
         {ingestCount && ingestCount > 0 ? (
