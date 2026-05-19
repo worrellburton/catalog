@@ -34,6 +34,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   z-index: 1;
 }
 
+/* The wallet's animated canvas inside CreatorWallet uses
+   position:fixed inset:0 + isolation:isolate, so its stacking context
+   paints over the static .my-looks-header above it (the canvas takes
+   the full viewport including the area the back button sits in). Pin
+   the header above the canvas so the Back arrow + "Wallet" title
+   stay visible. */
+.my-looks-overlay--wallet .my-looks-header {
+  position: relative;
+  z-index: 2;
+}
+
 .my-looks-container {
   max-width: 900px;
   margin: 0 auto;
