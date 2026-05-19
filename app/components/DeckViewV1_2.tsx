@@ -332,7 +332,11 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [bgRevealed, setBgRevealed] = useState(false);
-  const [techActiveSeed] = useState<number | null>(0);
+  // techActiveSeed indexes into techVideos below. 1 = guy.mp4 (the
+  // grey polo creative) so the vector-similarity demo opens on the
+  // menswear seed; its 5 hue-rotated neighbors below the seed read as
+  // "like-kinded product creatives" pulled by the index.
+  const [techActiveSeed] = useState<number | null>(1);
   // Exit transition for the Demo slide CTA. Set to true on click; the
   // overlay fades in + the slide scales down for ~700ms, then we
   // navigate to catalog.shop.
@@ -864,8 +868,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
             <div className="deck-v1-tech-stack-group">
               <span className="deck-v1-tech-stack-label">Reasoning</span>
               <ul>
-                <li><strong>Anthropic</strong>, Claude Sonnet 4.5/4.6, Haiku 4.5/3.5</li>
-                <li><strong>Google</strong>, Gemini Flash</li>
+                <li><strong>Anthropic</strong>, Claude Opus 4.7</li>
               </ul>
             </div>
             <div className="deck-v1-tech-stack-group">
