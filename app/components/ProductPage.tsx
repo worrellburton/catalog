@@ -480,11 +480,32 @@ export default function ProductPage({
   }, [similarCreatives, popularFallback, ownBrand, ownProductId, product.name]);
 
   const genderMatches = useCallback((otherGender: string | null | undefined): boolean => {
-    if (!seedGender || seedGender === 'unisex') return true;
     const g = (otherGender || '').toLowerCase();
-    if (!g || g === 'unisex') return true;
+    // Unisex always passes — universally wearable.
+    if (g === 'unisex') return true;
+
+    // Shopper-gender gate (primary): a male shopper sees only
+    // male+unisex products across every rail, regardless of which
+    // product they're currently viewing. A female shopper sees
+    // female+unisex. Signed-out / unknown shoppers don't apply this
+    // gate. Untagged products are dropped for gendered shoppers so
+    // we don't leak women's items into a man's feed.
+    const u = (shopperGender || 'unknown').toLowerCase();
+    if (u === 'male' || u === 'female') {
+      const wantMale = u === 'male';
+      if (!g) return false;
+      if (wantMale)  return g === 'male'   || g === 'men';
+      return            g === 'female' || g === 'women';
+    }
+
+    // Seed-gender gate (fallback for signed-out users): when we
+    // don't know the shopper, fall back to matching the seed
+    // product's gender so a man's product page doesn't show
+    // women's rails.
+    if (!seedGender || seedGender === 'unisex') return true;
+    if (!g) return true;
     return g === seedGender;
-  }, [seedGender]);
+  }, [seedGender, shopperGender]);
 
   const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
     if (!rows || rows.length === 0) return [];
@@ -981,41 +1002,41 @@ export default function ProductPage({
         </section>
         </div>
 
-        {moreLikeThis.length > 0 && (
+        {/* "More like this" — ALWAYS positioned directly after the
+            product info section. Prefers the type-scoped similarity
+            RPC's ranked matches; if the similarity RPC came back
+            empty (or short), we fall through to popularItems to fill
+            the rail without ever showing a separate "Popular"
+            heading. Caps at 8; if only 4 matches exist, shows just
+            those 4 rather than diluting with filler. */}
+        {(moreLikeThis.length > 0 || popularItems.length > 0) && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
-              {/* "More like this" caps at 8 but never pads — if the
-                  similarity RPC only returns 4 ranked matches we
-                  show just those 4 (sorted highest similarity first
-                  by the upstream RPC) rather than diluting the rail
-                  with filler. CreativeCard handles the layoutId
-                  morph + shared video element so a tap here
-                  continues the trail with the same fluid handoff. */}
-              {moreLikeThis.slice(0, 8).map((c, i) => (
-                <CreativeCard
-                  key={`mlt-${c.id ?? i}`}
-                  creative={c}
-                  className="look-card"
-                  onOpenProduct={onOpenCreative}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {popularItems.length > 0 && (
-          <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">Popular</h2>
-            <div className="pd-similar-grid">
-              {fillToExact(popularItems, 8).map((c, i) => (
-                <CreativeCard
-                  key={`pop-${i}`}
-                  creative={c}
-                  className="look-card"
-                  onOpenProduct={onOpenCreative}
-                />
-              ))}
+              {(() => {
+                const seen = new Set<string>();
+                const merged: typeof moreLikeThis = [];
+                for (const c of moreLikeThis) {
+                  if (merged.length >= 8) break;
+                  if (seen.has(c.product_id)) continue;
+                  seen.add(c.product_id);
+                  merged.push(c);
+                }
+                for (const c of popularItems) {
+                  if (merged.length >= 8) break;
+                  if (seen.has(c.product_id)) continue;
+                  seen.add(c.product_id);
+                  merged.push(c);
+                }
+                return merged.map((c, i) => (
+                  <CreativeCard
+                    key={`mlt-${c.id ?? i}`}
+                    creative={c}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                ));
+              })()}
             </div>
           </section>
         )}

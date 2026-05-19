@@ -71,15 +71,48 @@ export function useSearch(
       setCreatives(prev => {
         const next = append ? [...prev] : [];
         const seenIds       = new Set(next.map(c => c.id));
-        const seenProducts  = append ? new Set(seenProductsRef.current) : new Set<string>();
+        // Track current entry per product_id so we can UPGRADE a
+        // placeholder to a real video creative when a later result
+        // for the same product carries video_url. Without this, the
+        // edge function's first result wins — so search for "jeans"
+        // would render a still product image even when a video
+        // creative for the exact same SKU was further down the
+        // hybrid-rank list.
+        const indexByProduct = new Map<string, number>();
+        for (let i = 0; i < next.length; i++) {
+          indexByProduct.set(next[i].product_id, i);
+        }
         for (const c of resp.results) {
           if (seenIds.has(c.id)) continue;
-          if (seenProducts.has(c.product_id)) continue;
+          const existing = indexByProduct.get(c.product_id);
+          if (existing !== undefined) {
+            const cur = next[existing];
+            // Replace a placeholder with a real video creative for
+            // the same product. Skip otherwise so we don't double-
+            // surface the SKU.
+            if (!cur.video_url && c.video_url) {
+              seenIds.delete(cur.id);
+              seenIds.add(c.id);
+              next[existing] = c;
+            }
+            continue;
+          }
           seenIds.add(c.id);
-          seenProducts.add(c.product_id);
+          indexByProduct.set(c.product_id, next.length);
           next.push(c);
         }
-        seenProductsRef.current = seenProducts;
+        seenProductsRef.current = new Set(indexByProduct.keys());
+        // Final pass: float every video-bearing creative to the top
+        // of the list, preserving relative order. Product-only
+        // placeholders (no video_url) sink to the bottom. This
+        // matches the user's expectation that "search shows video
+        // creatives" — a placeholder still surfaces when no creative
+        // exists for the SKU, but only after the videos.
+        next.sort((a, b) => {
+          const av = a.video_url ? 0 : 1;
+          const bv = b.video_url ? 0 : 1;
+          return av - bv;
+        });
         return next;
       });
 
