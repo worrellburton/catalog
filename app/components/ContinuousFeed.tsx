@@ -481,10 +481,12 @@ export default function ContinuousFeed({
       const n = (name || '').toLowerCase();
       return materialKws.some(kw => n.includes(kw));
     };
-    // SEARCH_V3: keep placeholder (image-only) rows so cold categories
-    // surface real products instead of an empty grid. CreativeCard handles
-    // the missing video_url by rendering the product image.
+    // Only surface rows that have an actual video creative. Placeholder rows
+    // (is_placeholder=true / video_url=null) are product-image stand-ins for
+    // products that have no creative yet — showing them in search gives the
+    // impression that the feed is "pooling photos" instead of creatives.
     return semantic.creatives
+      .filter(c => !c.is_placeholder && c.video_url)
       .filter(c => matchesMaterial(c.product_name))
       .map(c => ({
       id:               c.id,

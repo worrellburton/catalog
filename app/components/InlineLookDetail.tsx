@@ -1,5 +1,8 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { Look, creators, Product } from '~/data/looks';
+import { useInViewport } from '~/hooks/useInViewport';
+import { useTrailVideo } from './TrailVideoHost';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -19,7 +22,6 @@ interface InlineLookDetailProps {
 }
 
 export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, onOpenProduct, onOpenBrand, onCreateCatalog, bookmarks }: InlineLookDetailProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
   const [productBookmarks, setProductBookmarks] = useState(
@@ -29,23 +31,15 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   const creatorData = creators[look.creator];
 
-  // IntersectionObserver: play video when visible, pause when not
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          video.play().catch(() => {});
-        } else {
-          video.pause();
-        }
-      },
-      { threshold: 0.3 }
-    );
-    observer.observe(video);
-    return () => observer.disconnect();
-  }, []);
+  const trailId = lookTrailId(look.id);
+  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const poster = look.thumbnail_url || look.cover || '';
+  const inViewport = useInViewport(containerRef);
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
+    poster || undefined,
+  );
 
   const handleToggleLookBookmark = useCallback(() => {
     bookmarks.toggleLookBookmark(look.id);
@@ -69,13 +63,7 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
     <div className="inline-look-detail" ref={containerRef}>
       {/* Video section - full width popout card */}
       <div className="inline-look-video-wrap">
-        <video
-          ref={videoRef}
-          src={`${basePath}/${look.video}`}
-          loop
-          muted
-          playsInline
-        />
+        <div ref={setVideoSlot} style={{ width: '100%', height: '100%', display: 'block' }} />
         <div className="inline-look-video-overlay">
           <div className="hotspot-indicator">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
