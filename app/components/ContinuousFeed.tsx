@@ -97,7 +97,10 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
     case 'RESET':
       return {
         segments: [
-          { type: 'feed', id: `initial-${Date.now()}`, looks: action.looks, isInitial: true },
+          // Stable id — changing this would remount FeedSection and tear
+          // down every CreativeCardV2's director-managed <video>. Looks
+          // update via props instead.
+          { type: 'feed', id: 'initial', looks: action.looks, isInitial: true },
         ],
         seenLookIds: new Set<number>(),
       };
@@ -798,7 +801,13 @@ export default function ContinuousFeed({
 
   const [staleCreatives, setStaleCreatives] = useState<ProductAd[]>([]);
   const [staleLooks, setStaleLooks] = useState<Look[]>([]);
+  // Bumped when a search resolves with results. We do NOT use this as a
+  // React `key` (that would unmount the feed subtree, tearing down every
+  // CreativeCardV2 and pausing/parking its director-managed <video>).
+  // Instead we re-trigger the CSS fade-in animation by toggling the class
+  // on the same DOM node — keeps the video pool live and playing.
   const [feedContentKey, setFeedContentKey] = useState(0);
+  const feedContentRef = useRef<HTMLDivElement>(null);
   const prevSearchingRef = useRef(false);
 
   // Cache last successful content for stale display.
@@ -834,6 +843,20 @@ export default function ContinuousFeed({
   useEffect(() => () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
+
+  // Re-trigger the fade-in animation on the existing DOM node whenever a
+  // search resolves. Toggling the class (instead of remounting via `key`)
+  // keeps every CreativeCardV2 mounted, so the VideoPlaybackDirector pool
+  // is never torn down and videos don't get paused/parked mid-playback.
+  useEffect(() => {
+    if (feedContentKey === 0) return;
+    const el = feedContentRef.current;
+    if (!el) return;
+    el.classList.remove('feed-content-fadein');
+    // Force reflow so the browser restarts the CSS animation.
+    void el.offsetWidth;
+    el.classList.add('feed-content-fadein');
+  }, [feedContentKey]);
 
   // When a search has resolved (not in-flight), never fall back to stale
   // content - show only the exact search results (may be empty → empty grid
@@ -878,7 +901,7 @@ export default function ContinuousFeed({
       {showEmptyState && (
         <EmptyCatalogState catalogName={emptyCatalogName} />
       )}
-      <div key={feedContentKey} className={feedContentKey > 0 ? 'feed-content-fadein' : undefined} hidden={showEmptyState}>
+      <div ref={feedContentRef} hidden={showEmptyState}>
         {state.segments.map((segment, idx) => {
           if (segment.type === 'feed') {
             return (
