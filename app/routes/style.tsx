@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import '~/styles/style-page.css';
 import { useAuth } from '~/hooks/useAuth';
