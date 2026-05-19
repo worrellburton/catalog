@@ -39,6 +39,19 @@ interface ContinuousFeedProps {
   onSearchLoadingChange?: (loading: boolean) => void;
   /** Incremented on each Enter/submit to bypass debounce and fire immediately. */
   searchTrigger?: number;
+  /**
+   * When true the feed is rendered nested inside another scroll surface
+   * (e.g. ProductPage or LookOverlay's "You might also like" slot). Omits
+   * the `id="grid-viewport"` hook so global `#grid-viewport` CSS rules
+   * (feed-mode/landing-mode/etc.) don't double-target the nested instance.
+   */
+  nested?: boolean;
+  /**
+   * Optional scroll container for nested usage. When the feed lives inside
+   * an overflow:auto overlay, pass that element so the load-more sentinel
+   * triggers based on the overlay's edges instead of the window viewport.
+   */
+  scrollRoot?: HTMLElement | null;
 }
 
 type Segment =
@@ -108,6 +121,8 @@ export default function ContinuousFeed({
   bookmarks,
   onSearchLoadingChange,
   searchTrigger = 0,
+  nested = false,
+  scrollRoot = null,
 }: ContinuousFeedProps) {
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -849,7 +864,7 @@ export default function ContinuousFeed({
   const emptyCatalogName = trimmedQuery.replace(/\b\w/g, c => c.toUpperCase());
 
   return (
-    <div className="continuous-feed" id="grid-viewport">
+    <div className="continuous-feed" id={nested ? undefined : 'grid-viewport'}>
       {/* Top overlay loader - appears above existing content during search. */}
       {isSearching && (
         <div className="feed-search-loader" aria-hidden="true">
@@ -884,6 +899,7 @@ export default function ContinuousFeed({
                 layoutMode={layoutMode}
                 searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0 || brandMatchedCreatives.length > 0)}
                 onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
+                scrollRoot={scrollRoot}
               />
             );
           }

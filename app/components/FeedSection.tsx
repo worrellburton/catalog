@@ -27,6 +27,15 @@ interface FeedSectionProps {
   searchMode?: boolean;
   /** Called when the user scrolls to the end of the current pool in search mode. */
   onLoadMore?: () => void;
+  /**
+   * Optional scroll container to use as the IntersectionObserver root for
+   * the load-more sentinel. When omitted, the default viewport is used
+   * (the home/feed case where the document itself scrolls). When the
+   * feed is nested inside an overflow:auto overlay (ProductPage,
+   * LookOverlay), pass the overlay's scroll element so the sentinel
+   * triggers based on that container's edges instead of the viewport's.
+   */
+  scrollRoot?: HTMLElement | null;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -63,6 +72,7 @@ function FeedSection({
   layoutMode = 0,
   searchMode = false,
   onLoadMore,
+  scrollRoot = null,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -223,11 +233,11 @@ function FeedSection({
           }
         }
       },
-      { rootMargin: '400px' }
+      { root: scrollRoot ?? null, rootMargin: '400px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [batch, pool.length, visibleCount, searchMode, onLoadMore]);
+  }, [batch, pool.length, visibleCount, searchMode, onLoadMore, scrollRoot]);
 
   useEffect(() => {
     setVisibleCount(batch);
