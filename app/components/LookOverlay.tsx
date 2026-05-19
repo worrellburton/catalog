@@ -4,13 +4,13 @@ import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
-import CreativeCardV2 from './CreativeCardV2';
+import ContinuousFeed from './ContinuousFeed';
+import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 import { type ProductAd } from '~/services/product-creative';
-import { seededShuffle } from '~/utils/seededShuffle';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -99,13 +99,6 @@ function lookSimilarityScore(seed: Look, candidate: Look): number {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
-type LookYmalItem =
-  | { kind: 'look'; look: Look; key: string }
-  | { kind: 'product'; creative: ProductAd; key: string }
-
-const LOOK_YMAL_BATCH = 16;
-const LOOK_YMAL_POOL_SIZE = 200;
 
 type TabId = 'products' | 'creator';
 
@@ -136,6 +129,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
+  // Tracked separately so the nested feed re-binds its IntersectionObserver
+  // root once the scroller mounts (refs alone don't trigger re-renders).
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setScrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el;
+    setScrollEl(el);
+  }, []);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   const [touchStartY, setTouchStartY] = useState(0);
@@ -258,58 +258,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     }));
   }, [look.id, look.creator, allLooks]);
 
-  // ── You Might Also Like (YMAL) ──────────────────────────────────────────────
-  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [ymalVisible, setYmalVisible] = useState(LOOK_YMAL_BATCH);
-
-  const ymalPool = useMemo((): LookYmalItem[] => {
-    const seed = (Math.abs(look.id) * 7) ^ 0x5f3759df;
-    const sourceLooks = (allLooks || allLooksData).filter(l => l.id !== look.id);
-    const sourceProds = popularFallback || [];
-    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
-
-    const shuffledLooks = seededShuffle(sourceLooks, seed);
-    const shuffledProds = seededShuffle(sourceProds, seed ^ 0xdeadbeef);
-
-    const pool: LookYmalItem[] = [];
-    let li = 0, pi = 0;
-    for (let i = 0; i < LOOK_YMAL_POOL_SIZE; i++) {
-      // Pattern: product, product, look (repeating)
-      if (i % 3 === 2 && shuffledLooks.length > 0) {
-        const l = shuffledLooks[li % shuffledLooks.length];
-        // Unique synthetic negative ID avoids TrailVideoHost conflicts
-        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
-        li++;
-      } else if (shuffledProds.length > 0) {
-        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
-        pi++;
-      } else if (shuffledLooks.length > 0) {
-        const l = shuffledLooks[li % shuffledLooks.length];
-        pool.push({ kind: 'look', look: { ...l, id: -(Math.abs(l.id) * 10000 + li + 90000) }, key: `ymal-l${li}` });
-        li++;
-      } else {
-        break;
-      }
-    }
-    return pool;
-  }, [look.id, allLooks, popularFallback]);
-
-  useEffect(() => {
-    setYmalVisible(LOOK_YMAL_BATCH);
-  }, [look.id]);
-
-  useEffect(() => {
-    const sentinel = ymalSentinelRef.current;
-    const scroller = scrollRef.current;
-    if (!sentinel || !scroller || ymalPool.length === 0) return;
-    const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        setYmalVisible(prev => Math.min(prev + LOOK_YMAL_BATCH, ymalPool.length));
-      }
-    }, { root: scroller, rootMargin: '400px' });
-    obs.observe(sentinel);
-    return () => obs.disconnect();
-  }, [ymalPool.length]);
+  // ── You Might Also Like ─────────────────────────────────────────────────────
+  // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
+  // infinite scroll). Subscribes to the global shopper-gender singleton so
+  // the nested feed matches whatever the user picked on the home page.
+  const ymalGenderFilter = useActiveGenderFilter();
 
   // Trigger enter animation after first paint
   useEffect(() => {
@@ -406,7 +359,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ref={overlayRef}
       className={`look-overlay${mounted && !isAnimatingOut ? ' look-overlay--in' : ''}${isAnimatingOut ? ' look-overlay--out' : ''}`}
     >
-      <div className="look-overlay-scroll" ref={scrollRef}>
+      <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
           {/* ── LEFT: Media area (60%) ── */}
@@ -751,34 +704,24 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         )}
 
-        {ymalPool.length > 0 && (
-          <div className="look-feed-section">
-            <h3 className="look-feed-heading">You might also like</h3>
-            <div className="look-feed-grid">
-              {ymalPool.slice(0, ymalVisible).map(item =>
-                item.kind === 'look' ? (
-                  <LookCard
-                    key={item.key}
-                    look={item.look}
-                    className="look-card"
-                    onOpenLook={handleFeedLookClick}
-                    onOpenCreator={onOpenCreator}
-                    onCreateCatalog={onCreateCatalog}
-                    previewOnly
-                  />
-                ) : (
-                  <CreativeCardV2
-                    key={item.key}
-                    creative={item.creative}
-                    className="look-card"
-                    onOpenProduct={onOpenCreative}
-                  />
-                )
-              )}
-            </div>
-            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
-          </div>
-        )}
+        <div className="look-feed-section">
+          <h3 className="look-feed-heading">You might also like</h3>
+          <ContinuousFeed
+            nested
+            scrollRoot={scrollEl}
+            activeFilter={ymalGenderFilter}
+            searchQuery=""
+            shuffleKey={0}
+            layoutMode={0}
+            onOpenLook={handleFeedLookClick}
+            onOpenCreator={onOpenCreator}
+            onOpenBrowser={(url, title) => onOpenBrowser(url, title)}
+            onOpenProduct={onOpenProduct}
+            onOpenCreative={onOpenCreative}
+            onCreateCatalog={onCreateCatalog}
+            bookmarks={bookmarks}
+          />
+        </div>
       </div>
     </div>
   );
