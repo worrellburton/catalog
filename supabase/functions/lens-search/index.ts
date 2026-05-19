@@ -1,20 +1,30 @@
-// Google Lens visual-match proxy via SerpAPI.
-//
-// Takes an image URL (the public URL of a Style sheet image — or a
-// cropped region uploaded to user-uploads) and returns normalized
-// shopping matches. The caller can optionally pass a `q` text hint
-// ("denim jacket", "white sneakers") which SerpAPI uses to narrow the
-// visual match results.
+// Google Lens visual-match proxy via SerpAPI, with a two-table
+// persistence cache so reopening the same Style image (or a
+// previously-cropped region) skips the SerpAPI round trip.
 //
 // Required Supabase secrets:
 //   SERPAPI_KEY                 — SerpAPI Google Lens engine (paid plan)
+//   SUPABASE_URL                — for cache reads/writes
+//   SUPABASE_SERVICE_ROLE_KEY   — for cache reads/writes
 //
 // Request body:
-//   { image_url: string; q?: string; country?: string }
+//   {
+//     image_url: string;
+//     q?: string;
+//     country?: string;
+//     bbox?: { x: number; y: number; w: number; h: number }; // 0..1
+//   }
 //
 // Response:
-//   { success: true, count, matches: NormalizedMatch[] }
+//   {
+//     success: true,
+//     count,
+//     matches: NormalizedMatch[],
+//     cached: boolean,           // true if served from lens_searches
+//     search_id: string          // primary key of the lens_searches row
+//   }
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logAiUsage } from '../_shared/ai-usage.ts';
 
 const CORS_HEADERS = {
@@ -31,7 +41,10 @@ function jsonRes(data: unknown, status = 200) {
   });
 }
 
+interface BBox { x: number; y: number; w: number; h: number }
+
 interface NormalizedMatch {
+  id?: string | null;          // populated on cache hits + post-insert
   position: number;
   title: string;
   source: string;
@@ -43,11 +56,9 @@ interface NormalizedMatch {
   brand: string;
   rating: number | null;
   reviews: number | null;
+  ingested_product_id?: string | null;
 }
 
-// Reuse the brand-guessing heuristic from product-search: SerpAPI's Lens
-// response often has a clean source domain but no explicit brand field,
-// so we fall back to matching the title against the curated brand list.
 const KNOWN_BRANDS = [
   'Nike', 'Adidas', 'Jordan', 'Puma', 'Reebok', 'New Balance', 'Converse',
   'Vans', 'On Running', 'Hoka', 'Asics', "Levi's", 'Uniqlo', 'Everlane',
@@ -80,12 +91,7 @@ function guessBrand(title: string, source: string): string {
   return '';
 }
 
-interface SerpLensPrice {
-  value?: string;
-  extracted_value?: number;
-  currency?: string;
-}
-
+interface SerpLensPrice { value?: string; extracted_value?: number; currency?: string }
 interface SerpLensMatch {
   position?: number;
   title?: string;
@@ -110,11 +116,6 @@ async function searchSerpLens(
     api_key: apiKey,
     country: opts.country,
     hl: 'en',
-    // type=all gives us the widest pool of visual + exact matches.
-    // We previously used type=products which collapsed to 0 results on
-    // most outfit photos — the post-filter in our normaliser already
-    // throws away rows missing a merchant link, so we don't need the
-    // API-side restriction to keep the grid shoppable.
     type: 'all',
   });
   if (opts.q) params.set('q', opts.q);
@@ -123,9 +124,6 @@ async function searchSerpLens(
   if (!res.ok) throw new Error(`SerpAPI ${res.status}: ${await res.text()}`);
   const json = await res.json();
 
-  // SerpAPI returns visual_matches[] for Lens. Some products surface
-  // under exact_matches[] when Lens recognizes the exact item — merge
-  // both lists, exact_matches first since they're highest signal.
   const exact: SerpLensMatch[] = Array.isArray(json.exact_matches) ? json.exact_matches : [];
   const visual: SerpLensMatch[] = Array.isArray(json.visual_matches) ? json.visual_matches : [];
   const merged: SerpLensMatch[] = [...exact, ...visual];
@@ -154,6 +152,43 @@ async function searchSerpLens(
   }).filter(m => m.title && (m.thumbnail || m.image) && m.link);
 }
 
+// Canonical bbox JSON for fingerprinting — sorted keys, 4-decimal
+// precision so tiny float drift between client resizes doesn't blow
+// the cache.
+function canonicalBboxJson(bbox: BBox | null | undefined): string {
+  if (!bbox) return 'null';
+  const round = (n: number) => Math.round(n * 10000) / 10000;
+  return JSON.stringify({
+    x: round(bbox.x),
+    y: round(bbox.y),
+    w: round(bbox.w),
+    h: round(bbox.h),
+  });
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const bytes = new Uint8Array(hash);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Read the JWT-attached user id so we can attribute searches in the
+// cache for analytics. Service-role calls (no user JWT) get null.
+function readUserIdFromJwt(req: Request): string | null {
+  const auth = req.headers.get('Authorization') ?? '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const json = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof json.sub === 'string' ? json.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -162,12 +197,22 @@ Deno.serve(async (req: Request) => {
     let imageUrl = '';
     let q = '';
     let country = 'us';
+    let bbox: BBox | null = null;
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({} as Record<string, unknown>));
       imageUrl = String(body.image_url ?? '').trim();
       q = String(body.q ?? '').trim();
       const c = String(body.country ?? '').trim();
       if (c) country = c;
+      if (body.bbox && typeof body.bbox === 'object') {
+        const b = body.bbox as Record<string, unknown>;
+        const x = Number(b.x), y = Number(b.y), w = Number(b.w), h = Number(b.h);
+        if (
+          [x, y, w, h].every(n => Number.isFinite(n) && n >= 0 && n <= 1) && w > 0 && h > 0
+        ) {
+          bbox = { x, y, w, h };
+        }
+      }
     } else {
       const url = new URL(req.url);
       imageUrl = url.searchParams.get('image_url') ?? '';
@@ -181,18 +226,115 @@ Deno.serve(async (req: Request) => {
     const serpKey = Deno.env.get('SERPAPI_KEY') ?? '';
     if (!serpKey) return jsonRes({ success: false, error: 'SERPAPI_KEY not configured' }, 500);
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const cacheEnabled = !!supabaseUrl && !!serviceKey;
+    const admin = cacheEnabled ? createClient(supabaseUrl, serviceKey) : null;
+
+    const fingerprint = await sha256Hex(`${imageUrl}|${q}|${canonicalBboxJson(bbox)}|${country}`);
+    const userId = readUserIdFromJwt(req);
+
+    // ── Cache hit path ────────────────────────────────────────────────────
+    if (admin) {
+      const { data: existing } = await admin
+        .from('lens_searches')
+        .select('id, result_count')
+        .eq('fingerprint', fingerprint)
+        .maybeSingle();
+
+      if (existing?.id) {
+        const { data: rows } = await admin
+          .from('lens_results')
+          .select('id, position, title, source, source_icon, link, thumbnail, image, price, brand, rating, reviews, ingested_product_id')
+          .eq('search_id', existing.id)
+          .order('position', { ascending: true });
+
+        if (rows && rows.length > 0) {
+          return jsonRes({
+            success: true,
+            count: rows.length,
+            cached: true,
+            search_id: existing.id,
+            matches: rows as NormalizedMatch[],
+          });
+        }
+      }
+    }
+
+    // ── Miss path: hit SerpAPI ───────────────────────────────────────────
     const matches = await searchSerpLens(imageUrl, serpKey, { q: q || undefined, country });
 
-    // Each Lens search is 1 SerpAPI credit. Log so the admin AI usage
-    // dashboard rolls this into the existing serpapi line item.
     logAiUsage({
       platform: 'serpapi',
       operation: 'lens-search',
       units: 1,
-      metadata: { image_url: imageUrl, q, country, result_count: matches.length },
+      metadata: { image_url: imageUrl, q, country, result_count: matches.length, cached: false },
     });
 
-    return jsonRes({ success: true, count: matches.length, matches });
+    // Persist in the cache so subsequent calls (this user or any other)
+    // skip the SerpAPI round trip. Errors here are non-fatal — caller
+    // still gets the live results.
+    let searchId: string | null = null;
+    if (admin) {
+      const { data: searchRow, error: searchErr } = await admin
+        .from('lens_searches')
+        .insert({
+          user_id: userId,
+          source_image_url: imageUrl,
+          q,
+          bbox,
+          fingerprint,
+          result_count: matches.length,
+          country,
+        })
+        .select('id')
+        .single();
+
+      if (!searchErr && searchRow?.id) {
+        searchId = searchRow.id as string;
+        if (matches.length > 0) {
+          const rows = matches.map((m) => ({
+            search_id: searchId,
+            position: m.position,
+            title: m.title,
+            source: m.source || null,
+            source_icon: m.source_icon || null,
+            link: m.link,
+            thumbnail: m.thumbnail || null,
+            image: m.image || null,
+            price: m.price || null,
+            brand: m.brand || null,
+            rating: m.rating,
+            reviews: m.reviews,
+          }));
+          const { data: inserted } = await admin
+            .from('lens_results')
+            .insert(rows)
+            .select('id, link');
+
+          // Pipe the freshly-minted result ids back into the response
+          // so the client can use them as the stable key for selection
+          // + later patching of ingested_product_id by lens-ingest.
+          if (inserted) {
+            const idByLink = new Map<string, string>(
+              (inserted as { id: string; link: string }[]).map(r => [r.link, r.id]),
+            );
+            for (const m of matches) {
+              const id = idByLink.get(m.link);
+              if (id) m.id = id;
+            }
+          }
+        }
+      }
+    }
+
+    return jsonRes({
+      success: true,
+      count: matches.length,
+      cached: false,
+      search_id: searchId,
+      matches,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logAiUsage({

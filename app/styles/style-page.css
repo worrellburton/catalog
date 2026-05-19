@@ -848,6 +848,151 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── Crop tool (Phase 3) ────────────────────────────────────────────
+   Full-screen overlay opened from the Lens sheet so the user can box
+   one specific garment before re-running lens-search. */
+.lens-crop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: #0b0b0b;
+  display: flex;
+  flex-direction: column;
+}
+.lens-crop-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: clamp(14px, 3vw, 22px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.lens-crop-stage {
+  flex: 1 1 auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+  touch-action: none; /* prevents iOS scroll while dragging */
+  user-select: none;
+}
+.lens-crop-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.lens-crop-rect {
+  position: absolute;
+  border: 2px solid #f0c060;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  cursor: move;
+  /* Pin the rect to the image's CSS box. We compute the bbox in
+     percent-of-image-size and apply it via inline style so this
+     stays correct when the image aspect ratio resizes the rect. */
+}
+.lens-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #f0c060;
+  border: 2px solid #0b0b0b;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.lens-crop-handle-n,  .lens-crop-handle-s  { left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.lens-crop-handle-e,  .lens-crop-handle-w  { top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.lens-crop-handle-nw  { top: -8px; left: -8px; cursor: nwse-resize; }
+.lens-crop-handle-ne  { top: -8px; right: -8px; cursor: nesw-resize; }
+.lens-crop-handle-se  { bottom: -8px; right: -8px; cursor: nwse-resize; }
+.lens-crop-handle-sw  { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.lens-crop-handle-n   { top: -8px; }
+.lens-crop-handle-s   { bottom: -8px; }
+.lens-crop-handle-w   { left: -8px; }
+.lens-crop-handle-e   { right: -8px; }
+.lens-crop-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: clamp(14px, 3vw, 22px);
+  padding-bottom: calc(clamp(14px, 3vw, 22px) + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0b0b0b;
+}
+.lens-crop-reset {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+.lens-crop-reset:hover { color: #fff; }
+
+/* ── Lens sheet — crop chips + cached badge + ingested badge ──────── */
+.lens-sheet-source {
+  position: relative;
+}
+.lens-sheet-source-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lens-sheet-source-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lens-sheet-source-chip:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.75);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.lens-sheet-source-chip:disabled { opacity: 0.5; cursor: default; }
+.lens-sheet-source-chip.is-primary {
+  background: #f0c060;
+  color: #000;
+  border-color: transparent;
+  font-weight: 600;
+}
+.lens-sheet-source-chip.is-primary:hover:not(:disabled) { background: #ffd071; }
+
+.lens-sheet-cached {
+  margin-left: 6px;
+  color: rgba(240, 192, 96, 0.85);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.lens-card.is-ingested { border-color: rgba(120, 220, 140, 0.4); }
+.lens-card-ingested {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(40, 80, 50, 0.85);
+  color: #b6f3c2;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
 /* Lightbox CTA — sits on top of the existing zoom/pan transform of
    the lightbox image. Tap targets are large enough for thumbs even
    when the image is fully zoomed. */

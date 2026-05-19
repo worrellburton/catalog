@@ -163,6 +163,27 @@ Deno.serve(async (req: Request) => {
         : { id: null, name: i.name, url: i.url, deduped: false, error: 'not inserted' };
     });
 
+    // Phase 9 — back-patch lens_results.ingested_product_id so reopening
+    // the Style sheet's Lens overlay can render an "already tried on"
+    // badge on tiles the user already shopped. Best-effort: a missing
+    // join (e.g. the result row was created before the cache table
+    // existed) silently no-ops. Match by `link` since the lens-search
+    // edge function uses that as the merchant-URL key.
+    const linkToProductId = new Map<string, string>(
+      result.filter(r => r.id).map(r => [r.url, r.id as string]),
+    );
+    if (linkToProductId.size > 0) {
+      await Promise.allSettled(
+        Array.from(linkToProductId.entries()).map(([link, productId]) =>
+          admin
+            .from('lens_results')
+            .update({ ingested_product_id: productId })
+            .eq('link', link)
+            .is('ingested_product_id', null),
+        ),
+      );
+    }
+
     return jsonRes({ success: true, ingested: result, inserted_count: inserted.length });
   } catch (err) {
     return jsonRes({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);

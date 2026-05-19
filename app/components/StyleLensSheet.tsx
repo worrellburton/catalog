@@ -8,15 +8,34 @@
  * pre-selected and the Style sheet's occasion forwarded as a prompt
  * hint.
  *
+ * Two scan modes:
+ *   1. Full-image scan (default on first open).
+ *   2. Region crop — opens StyleLensCropTool, lets the user box a
+ *      single garment, uploads the crop to user-uploads, then runs
+ *      lens-search against the cropped URL with the bbox recorded
+ *      in the cache fingerprint.
+ *
  * The wizard at /generate already hydrates the user's saved reference
  * uploads on mount, so the resulting try-on look uses the same face
  * photos visible on the Style page — no extra wiring needed for the
  * face pipeline (Phase 8 of the build plan).
  */
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { lensSearch, lensIngest, type LensMatch } from '~/services/lens-search';
+import {
+  lensSearch,
+  lensIngest,
+  cropAndUploadLensRegion,
+  type LensMatch,
+  type LensBBox,
+} from '~/services/lens-search';
+import { useAuth } from '~/hooks/useAuth';
+
+// Crop tool is the only consumer of the canvas-crop helper + pointer
+// drag machinery, so lazy-load it so the rest of the lens sheet stays
+// light when the user never taps "Crop a specific item."
+const StyleLensCropTool = lazy(() => import('./StyleLensCropTool'));
 
 interface Props {
   imageUrl: string;
@@ -24,15 +43,32 @@ interface Props {
   onClose: () => void;
 }
 
+// Track the active scan target so the user can flip between
+// full-image and cropped scans without losing the prior result.
+interface ScanTarget {
+  url: string;        // image URL passed to lens-search
+  bbox: LensBBox | null;
+  // Whether this scan was started from a crop (only relevant for the
+  // header label so users see "Cropped match" vs "Full image").
+  cropped: boolean;
+}
+
 export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [target, setTarget] = useState<ScanTarget>({
+    url: imageUrl, bbox: null, cropped: false,
+  });
   const [matches, setMatches] = useState<LensMatch[] | null>(null);
+  const [cachedHit, setCachedHit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Picks are stored by `link` (the merchant URL) — that's the natural
   // ingest dedupe key and it's stable across rerenders.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [tryingOn, setTryingOn] = useState(false);
+  const [croppingOpen, setCroppingOpen] = useState(false);
+  const [cropping, setCropping] = useState(false);
 
   // Esc closes the sheet. Mirrors the StyleLightbox pattern so the
   // user has a consistent dismiss behaviour across both overlays.
@@ -42,15 +78,18 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Fire Lens search on mount. The occasion is passed as the `q` hint
-  // so SerpAPI's Lens engine narrows from "anything similar to this
-  // image" to "shoppable items that fit this occasion" — a meaningful
-  // quality improvement on noisy outfit collages.
+  // Fire Lens search whenever the scan target changes. The occasion is
+  // passed as the `q` hint so SerpAPI's Lens engine narrows from
+  // "anything similar to this image" to "shoppable items that fit
+  // this occasion" — a meaningful quality improvement on noisy
+  // outfit collages. Picks reset on retarget so the user doesn't end
+  // up trying on items from a stale scan.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    lensSearch({ imageUrl, q: occasion }).then(result => {
+    setPicked(new Set());
+    lensSearch({ imageUrl: target.url, q: occasion, bbox: target.bbox ?? undefined }).then(result => {
       if (cancelled) return;
       if (result.error) {
         setError(result.error);
@@ -58,10 +97,11 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
       } else {
         setMatches(result.matches);
       }
+      setCachedHit(!!result.cached);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [imageUrl, occasion]);
+  }, [target.url, target.bbox, occasion]);
 
   function togglePick(link: string) {
     setPicked(prev => {
@@ -70,6 +110,24 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
       else next.add(link);
       return next;
     });
+  }
+
+  async function handleCropConfirm(bbox: LensBBox) {
+    if (!user?.id || cropping) return;
+    setCropping(true);
+    setError(null);
+    const result = await cropAndUploadLensRegion({
+      userId: user.id,
+      sourceImageUrl: imageUrl,
+      bbox,
+    });
+    setCropping(false);
+    if (result.error || !result.croppedUrl) {
+      setError(result.error || 'Could not save the crop.');
+      return;
+    }
+    setCroppingOpen(false);
+    setTarget({ url: result.croppedUrl, bbox, cropped: true });
   }
 
   async function handleTryOn() {
@@ -83,7 +141,7 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
       brand: m.brand || null,
       price: m.price || null,
     }));
-    const result = await lensIngest({ items, sourceImageUrl: imageUrl });
+    const result = await lensIngest({ items, sourceImageUrl: target.url });
     if (result.error) {
       setError(result.error);
       setTryingOn(false);
@@ -106,6 +164,14 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
     navigate(`/generate?${params.toString()}`);
   }
 
+  // Header subtitle changes depending on whether the user has narrowed
+  // the scan to a cropped region. "Cached" badge signals when a result
+  // came from the lens_searches cache so the user knows why it returned
+  // instantly instead of taking ~5s.
+  const subtitle =
+    target.cropped ? 'Cropped region' :
+    occasion       ? occasion        : 'Shop this look';
+
   return (
     <div className="lens-sheet" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="lens-sheet-inner" onClick={e => e.stopPropagation()}>
@@ -117,13 +183,40 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
             aria-label="Close"
           >×</button>
           <div className="lens-sheet-title-block">
-            <span className="lens-sheet-eyebrow">Shop this look</span>
-            {occasion && <span className="lens-sheet-occasion">{occasion}</span>}
+            <span className="lens-sheet-eyebrow">
+              Shop this look
+              {cachedHit && <span className="lens-sheet-cached">· cached</span>}
+            </span>
+            <span className="lens-sheet-occasion">{subtitle}</span>
           </div>
         </header>
 
         <div className="lens-sheet-source">
-          <img src={imageUrl} alt="Source look" />
+          <img src={target.url} alt="Source look" />
+          {/* Crop CTA sits on top of the source preview so it's discoverable
+              the moment the user enters the lens sheet. Tapping it opens the
+              crop tool against the ORIGINAL image (not the cropped target),
+              so users can always re-scope from the full picture. */}
+          <div className="lens-sheet-source-overlay">
+            {target.cropped && (
+              <button
+                type="button"
+                className="lens-sheet-source-chip"
+                onClick={() => setTarget({ url: imageUrl, bbox: null, cropped: false })}
+                title="Scan the full image again"
+              >
+                ← Full image
+              </button>
+            )}
+            <button
+              type="button"
+              className="lens-sheet-source-chip is-primary"
+              onClick={() => setCroppingOpen(true)}
+              disabled={!user?.id || cropping}
+            >
+              {cropping ? 'Saving crop…' : target.cropped ? 'Crop again' : 'Crop a specific item'}
+            </button>
+          </div>
         </div>
 
         {loading && (
@@ -140,7 +233,7 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
         {!loading && matches && matches.length === 0 && !error && (
           <div className="lens-sheet-empty">
             Google Lens didn't find shoppable matches for this image.
-            Try a different look from your Style sheet.
+            Try cropping a specific garment.
           </div>
         )}
 
@@ -149,10 +242,11 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
             {matches.map(m => {
               const isPicked = picked.has(m.link);
               const thumb = m.thumbnail || m.image;
+              const alreadyIngested = !!m.ingested_product_id;
               return (
                 <li
                   key={m.link}
-                  className={`lens-card${isPicked ? ' is-picked' : ''}`}
+                  className={`lens-card${isPicked ? ' is-picked' : ''}${alreadyIngested ? ' is-ingested' : ''}`}
                 >
                   <button
                     type="button"
@@ -168,6 +262,11 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
                             stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
+                        </span>
+                      )}
+                      {alreadyIngested && !isPicked && (
+                        <span className="lens-card-ingested" aria-label="Already in your catalog">
+                          In catalog
                         </span>
                       )}
                     </div>
@@ -206,6 +305,16 @@ export default function StyleLensSheet({ imageUrl, occasion, onClose }: Props) {
           {tryingOn ? 'Saving…' : 'Try this on'}
         </button>
       </div>
+
+      {croppingOpen && (
+        <Suspense fallback={null}>
+          <StyleLensCropTool
+            imageUrl={imageUrl}
+            onCancel={() => setCroppingOpen(false)}
+            onConfirm={handleCropConfirm}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
