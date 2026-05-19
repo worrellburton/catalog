@@ -110,10 +110,12 @@ async function searchSerpLens(
     api_key: apiKey,
     country: opts.country,
     hl: 'en',
-    // Limit to "products" so we don't get back random Pinterest pins
-    // and stock-photo aggregators — Lens lets us ask for shoppable
-    // results only.
-    type: 'products',
+    // type=all gives us the widest pool of visual + exact matches.
+    // We previously used type=products which collapsed to 0 results on
+    // most outfit photos — the post-filter in our normaliser already
+    // throws away rows missing a merchant link, so we don't need the
+    // API-side restriction to keep the grid shoppable.
+    type: 'all',
   });
   if (opts.q) params.set('q', opts.q);
 
