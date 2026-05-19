@@ -1003,57 +1003,44 @@ export default function ProductPage({
         </section>
         </div>
 
-        {/* "More like this" — vector-similarity FIRST, then a
-            type-scoped popular fallback to ensure the rail always
-            renders something relevant when the similarity RPC came
-            back short (e.g. the seed product has no creative
-            embedding yet). Fallback filters popularItems to the same
-            inferred garment category as the current product so we
-            never surface houseplants under a 'more like this'
-            heading. Caps at 8 total, dedupes by product_id. */}
-        {(() => {
-          const seen = new Set<string>();
-          const rows: typeof moreLikeThis = [];
-          // 1) Vector-similarity hits first.
-          for (const c of moreLikeThis) {
-            if (rows.length >= 8) break;
-            if (seen.has(c.product_id)) continue;
-            seen.add(c.product_id);
-            rows.push(c);
-          }
-          // 2) Type-scoped popular filler if the similarity rail is
-          //    short. inferRoleFromName classifies "Velvet Cap" →
-          //    "hat", "Italian Heavy Poplin" → "pants", etc.
-          if (rows.length < 8 && popularItems.length > 0) {
-            const seedRole = inferRoleFromName(product.name);
-            for (const c of popularItems) {
-              if (rows.length >= 8) break;
-              if (seen.has(c.product_id)) continue;
-              if (seedRole) {
-                const cRole = inferRoleFromName(c.product?.name);
-                if (cRole && cRole !== seedRole) continue;
-              }
-              seen.add(c.product_id);
-              rows.push(c);
-            }
-          }
-          if (rows.length === 0) return null;
-          return (
-            <section className="pd-similar-feed">
-              <h2 className="pd-feed-title">More like this</h2>
-              <div className="pd-similar-grid">
-                {rows.map((c, i) => (
-                  <CreativeCard
-                    key={`mlt-${c.id ?? i}`}
-                    creative={c}
-                    className="look-card"
-                    onOpenProduct={onOpenCreative}
-                  />
-                ))}
-              </div>
-            </section>
-          );
-        })()}
+        {/* Restored pre-change structure: separate "More like this"
+            (vector-similarity RPC only) and "Popular" (fallback when
+            similarity is empty) sections. The recent attempts to
+            merge them produced irrelevant creatives — reverting to
+            the layout we know works. */}
+        {moreLikeThis.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">More like this</h2>
+            <div className="pd-similar-grid">
+              {/* CreativeCard handles the layoutId morph + shared video element
+                  so a tap here continues the trail with the same fluid handoff. */}
+              {fillToExact(moreLikeThis, 8).map((c, i) => (
+                <CreativeCard
+                  key={`mlt-${i}`}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {popularItems.length > 0 && (
+          <section className="pd-similar-feed">
+            <h2 className="pd-feed-title">Popular</h2>
+            <div className="pd-similar-grid">
+              {fillToExact(popularItems, 8).map((c, i) => (
+                <CreativeCard
+                  key={`pop-${i}`}
+                  creative={c}
+                  className="look-card"
+                  onOpenProduct={onOpenCreative}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
