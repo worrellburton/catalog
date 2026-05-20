@@ -412,3 +412,93 @@ def scrape_pending():
         scrape_and_update.spawn(row["id"], row["url"])
 
     print(f"Spawned {len(pending)} scrape job(s).")
+
+
+# ─── On-demand backfill: re-scrape rows missing size_fit / materials_care ──
+
+@app.function(
+    image=scraper_image,
+    secrets=secrets,
+    timeout=120,
+)
+def backfill_size_fit(
+    limit: int = 25,
+    dry_run: bool = True,
+    only_brand: str | None = None,
+):
+    """
+    Re-scrape products whose size_fit and materials_care are both NULL.
+
+    These are typically rows that were imported before migration 092 added
+    those columns, or via paths that didn't run this agent. Only targets
+    rows with scrape_status='done' — the 'pending' / 'failed' rows are
+    already handled by the regular cron / retry path, so this backfill
+    deliberately stays out of their way.
+
+    Reuses scrape_and_update so the full pipeline (Playwright scrape,
+    description enrichment, re-embedding) runs end-to-end. The downside
+    is that name / description / images get refreshed too, which is
+    fine for a stale catalog but worth knowing if a row was manually
+    edited.
+
+    Concurrency is bounded by scrape_and_update.max_containers (currently
+    3), so spawning a large batch just queues — it won't overrun
+    Anthropic or the merchant sites.
+
+    Usage:
+        # Dry-run, see the first 25 candidates without spending compute:
+        modal run modal_app.py::backfill_size_fit
+
+        # Actually scrape 50 rows:
+        modal run modal_app.py::backfill_size_fit --limit 50 --no-dry-run
+
+        # Scope to one brand (useful for piloting):
+        modal run modal_app.py::backfill_size_fit \\
+            --only-brand "James Perse" --no-dry-run
+    """
+    import os
+    from supabase import create_client
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+
+    q = (
+        supabase.table("products")
+        .select("id, brand, name, url")
+        .is_("size_fit", "null")
+        .is_("materials_care", "null")
+        .not_.is_("url", "null")
+        .eq("scrape_status", "done")
+    )
+    if only_brand:
+        q = q.eq("brand", only_brand)
+
+    rows = q.order("created_at", desc=True).limit(limit).execute()
+    candidates = rows.data or []
+
+    if not candidates:
+        print("No backfill candidates found.")
+        return {"found": 0, "queued": 0, "dry_run": dry_run}
+
+    print(
+        f"Found {len(candidates)} backfill candidate(s) "
+        f"(limit={limit}, dry_run={dry_run}"
+        + (f", only_brand={only_brand!r}" if only_brand else "")
+        + "):"
+    )
+    for r in candidates:
+        brand = (r.get("brand") or "?")
+        name  = (r.get("name")  or "?")[:60]
+        print(f"  • [{r['id']}] {brand} — {name}")
+
+    if dry_run:
+        print("\nDry run — no scrapes spawned. Re-run with --no-dry-run.")
+        return {"found": len(candidates), "queued": 0, "dry_run": True}
+
+    for r in candidates:
+        scrape_and_update.spawn(r["id"], r["url"])
+
+    print(f"\nSpawned {len(candidates)} scrape job(s).")
+    return {"found": len(candidates), "queued": len(candidates), "dry_run": False}
