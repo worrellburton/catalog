@@ -4,6 +4,11 @@ export interface Product {
   price: string;
   url: string;
   image?: string;
+  // Optional copy hydrated by ProductPage on open. The main loaders
+  // intentionally don't carry these to keep the look/grid payloads
+  // small — ProductPage fetches them once per product open.
+  size_fit?: string | null;
+  materials_care?: string | null;
 }
 
 export interface Creator {
