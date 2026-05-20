@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { Product, Look, creators as staticCreators, looks as allLooksData } from '~/data/looks';
-import { seededShuffle } from '~/utils/seededShuffle';
+import { Product, Look, creators as staticCreators } from '~/data/looks';
+import ContinuousFeed from '~/components/ContinuousFeed';
+import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import { useTrailVideo } from '~/components/TrailVideoHost';
@@ -404,13 +405,6 @@ function fillToExact<T>(arr: T[], count: number): T[] {
   return out;
 }
 
-// ── You Might Also Like (YMAL) ────────────────────────────────────────────────
-type YmalItem =
-  | { kind: 'look'; look: Look; key: string }
-  | { kind: 'product'; creative: ProductAd; key: string }
-
-const YMAL_BATCH = 16;
-const YMAL_POOL_SIZE = 200;
 
 export default function ProductPage({
   product,
@@ -510,48 +504,9 @@ export default function ProductPage({
     return pickFrom(popularFallback);
   }, [moreLikeThis, popularFallback, pickFrom]);
 
-  // ── You Might Also Like pool ──────────────────────────────────────────────
-  // Builds a 200-item cycling pool that mixes shuffled looks and product
-  // creatives (2 products : 1 look). Seeded by product so the order is
-  // stable across re-renders and resets properly on navigation.
-  const ymalSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [ymalVisible, setYmalVisible] = useState(YMAL_BATCH);
-
-  const ymalPool = useMemo((): YmalItem[] => {
-    const seed = hashString(`${product.brand}|${product.name}|ymal`);
-    const sourceLooks = allLooks || allLooksData;
-    const sourceProds = popularFallback || [];
-    if (sourceLooks.length === 0 && sourceProds.length === 0) return [];
-
-    const shuffledLooks = seededShuffle(sourceLooks, seed);
-    const shuffledProds = seededShuffle(sourceProds, seed ^ 0x5f3759df);
-
-    const pool: YmalItem[] = [];
-    let li = 0, pi = 0;
-    for (let i = 0; i < YMAL_POOL_SIZE; i++) {
-      // Pattern: product, product, look (repeating)
-      if (i % 3 === 2 && shuffledLooks.length > 0) {
-        const l = shuffledLooks[li % shuffledLooks.length];
-        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
-        li++;
-      } else if (shuffledProds.length > 0) {
-        pool.push({ kind: 'product', creative: shuffledProds[pi % shuffledProds.length], key: `ymal-p${pi}` });
-        pi++;
-      } else if (shuffledLooks.length > 0) {
-        const l = shuffledLooks[li % shuffledLooks.length];
-        pool.push({ kind: 'look', look: l, key: `ymal-l${li}` });
-        li++;
-      } else {
-        break;
-      }
-    }
-    return pool;
-  }, [product.brand, product.name, allLooks, popularFallback]);
-
-  // Reset visible count when the product changes.
-  useEffect(() => {
-    setYmalVisible(YMAL_BATCH);
-  }, [product.brand, product.name]);
+  // Active gender filter mirrors the global shopper-gender singleton so
+  // the nested ContinuousFeed's gender scoping matches the home feed.
+  const activeFilter = useActiveGenderFilter();
 
   // Shop dropdown - collapsed by default on mobile so the action row
   // reads clean; auto-expanded on desktop because the split layout
@@ -561,24 +516,14 @@ export default function ProductPage({
     && window.matchMedia('(min-width: 960px)').matches;
   const [showRetailers, setShowRetailers] = useState(isDesktop);
   const scrollerRef = useRef<HTMLDivElement>(null);
-
-  // Infinite scroll: load next batch when the sentinel enters the scroll container.
-  // Must use root: scrollerRef.current — .product-page is a custom overflow-y:auto
-  // container, not window scroll. Without root, rootMargin extends the viewport but
-  // gets clipped by the container before it can fire early. Mirrors GridView's pattern
-  // exactly: root = scroll container + rootMargin = lookahead distance.
-  useEffect(() => {
-    const sentinel = ymalSentinelRef.current;
-    const scroller = scrollerRef.current;
-    if (!sentinel || !scroller || ymalPool.length === 0) return;
-    const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        setYmalVisible(prev => Math.min(prev + YMAL_BATCH, ymalPool.length));
-      }
-    }, { root: scroller, rootMargin: '400px' });
-    obs.observe(sentinel);
-    return () => obs.disconnect();
-  }, [ymalPool.length]);
+  // Tracked separately so the nested ContinuousFeed re-binds its
+  // IntersectionObserver root once the scroller mounts (refs alone
+  // don't trigger re-renders).
+  const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
+  const setScrollerRef = useCallback((el: HTMLDivElement | null) => {
+    scrollerRef.current = el;
+    setScrollerEl(el);
+  }, []);
 
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
@@ -771,7 +716,7 @@ export default function ProductPage({
       role="dialog"
       aria-modal="true"
     >
-      <div className="product-page" ref={scrollerRef}>
+      <div className="product-page" ref={setScrollerRef}>
         <button
           className="pd-back"
           onClick={handleClose}
@@ -1052,26 +997,25 @@ export default function ProductPage({
           </section>
         )}
 
-        {ymalPool.length > 0 && (
-          <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">You might also like</h2>
-            <div className="pd-similar-grid">
-              {ymalPool.slice(0, ymalVisible).map((item, i) =>
-                item.kind === 'look' ? (
-                  <LookTile key={item.key} look={item.look} index={i} onOpen={onOpenLook} />
-                ) : (
-                  <CreativeCard
-                    key={item.key}
-                    creative={item.creative}
-                    className="look-card"
-                    onOpenProduct={onOpenCreative}
-                  />
-                )
-              )}
-            </div>
-            <div ref={ymalSentinelRef} style={{ height: 1 }} aria-hidden="true" />
-          </section>
-        )}
+        <section className="pd-similar-feed">
+          <h2 className="pd-feed-title">You might also like</h2>
+          <ContinuousFeed
+            nested
+            scrollRoot={scrollerEl}
+            activeFilter={activeFilter}
+            searchQuery=""
+            shuffleKey={0}
+            layoutMode={0}
+            onOpenLook={onOpenLook}
+            onOpenCreator={onOpenCreator || (() => {})}
+            onOpenBrowser={onOpenBrowser}
+            onOpenProduct={onOpenProduct}
+            onOpenCreative={onOpenCreative}
+            onOpenBrand={onOpenBrand}
+            bookmarks={bookmarks}
+            slotPrefix={`product:${product.brand}:${product.name}`}
+          />
+        </section>
       </div>
     </div>
   );
