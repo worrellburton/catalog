@@ -52,6 +52,12 @@ interface ContinuousFeedProps {
    * triggers based on the overlay's edges instead of the window viewport.
    */
   scrollRoot?: HTMLElement | null;
+  /**
+   * Forwarded to every FeedSection rendered by this feed. Namespaces
+   * CreativeCardV2 slotIds so overlay feeds never collide with the main
+   * feed's director registrations. See FeedSection.slotPrefix.
+   */
+  slotPrefix?: string;
 }
 
 type Segment =
@@ -126,6 +132,7 @@ export default function ContinuousFeed({
   searchTrigger = 0,
   nested = false,
   scrollRoot = null,
+  slotPrefix,
 }: ContinuousFeedProps) {
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -923,6 +930,7 @@ export default function ContinuousFeed({
                 searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0 || brandMatchedCreatives.length > 0)}
                 onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
                 scrollRoot={scrollRoot}
+                slotPrefix={slotPrefix}
               />
             );
           }

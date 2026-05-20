@@ -734,6 +734,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           <h3 className="look-feed-heading">You might also like</h3>
           <ContinuousFeed
             nested
+            slotPrefix={`look:${look.id}`}
             scrollRoot={scrollEl}
             activeFilter={ymalGenderFilter}
             searchQuery=""

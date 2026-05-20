@@ -36,6 +36,16 @@ interface FeedSectionProps {
    * triggers based on that container's edges instead of the viewport's.
    */
   scrollRoot?: HTMLElement | null;
+  /**
+   * Prefix applied to every CreativeCardV2 `slotId` in this section.
+   * Use a unique value (e.g. `"look:${look.id}"`) for feeds inside overlays
+   * so their director registrations never collide with the main feed's
+   * entries. Without a prefix the same creative at the same display-index
+   * produces identical slotIds across feeds, causing the overlay's
+   * `unregister()` call on close to delete the main feed's entry and freeze
+   * that card permanently.
+   */
+  slotPrefix?: string;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -73,6 +83,7 @@ function FeedSection({
   searchMode = false,
   onLoadMore,
   scrollRoot = null,
+  slotPrefix,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -274,7 +285,7 @@ function FeedSection({
             return (
               <CreativeCardV2
                 key={`creative-${item.creative.id}-${idx}`}
-                slotId={`creative-${item.creative.id}-${idx}`}
+                slotId={`${slotPrefix ? `${slotPrefix}:` : ''}creative-${item.creative.id}-${idx}`}
                 creative={item.creative}
                 className={getCardClass(idx)}
                 onOpenProduct={onOpenCreativeProduct}
