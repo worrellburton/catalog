@@ -196,12 +196,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => { trailMgr?.resumeFeed(); };
   }, [trailMgr, trailId]);
 
-  // Mirror ProductPage's feed structure with three sections:
-  //   1. "Looks like this" — same brand overlap with current look
-  //   2. "Popular" — fallback when section 1 is empty
+  // Resolves to the shopper's active gender preference ('all'|'men'|'women').  
+  // Declared before feedSections so it can be used as a tiebreaker when the
+  // seed look is tagged 'unisex' (e.g. because a product says "Unisex T-Shirt").
+  const ymalGenderFilter = useActiveGenderFilter();
+
+  // Feed sections below the hero:
+  //   1. "More like this" — shared product types + compatible gender
+  //   2. "Popular" — fallback (8 looks) when section 1 is empty
   //   3. "More from <creator>" — other looks by the same creator
-  // Each section is capped at 8 real items. No padding — duplicate TrailVideoHost
-  // entries for the same URL saturate bandwidth without adding visible content.
+  // Each section is capped at 8; padding with cycled duplicates fills short lists.
   const feedSections = useMemo(() => {
     // Filter out the legacy static-seed creators (@lilywittman /
     // @garrett) — they have placeholder gradient thumbnails with no
@@ -211,18 +215,32 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const source = (allLooks || allLooksData)
       .filter(l => l.id !== look.id)
       .filter(l => !SEED_CREATORS.has(l.creator));
-    const ownBrands = new Set(
-      (look.products || [])
-        .map(p => (p.brand || '').toLowerCase().trim())
-        .filter(Boolean),
+    // Match by exact shared product name (at least 1 product in common) +
+    // compatible gender. "Same hat" means the exact same product, not just
+    // any hat — type-category matching was too broad and pulled in unrelated looks.
+    const seedProductNames = new Set(
+      (look.products || []).map(p => p.name.toLowerCase().trim()).filter(Boolean)
     );
+    const seedGender = look.gender;
 
-    const looksLikeThis: Look[] = ownBrands.size
-      ? source.filter(l =>
-          (l.products || []).some(p =>
-            ownBrands.has((p.brand || '').toLowerCase().trim()),
-          ),
-        )
+    // When the seed look is 'unisex', use the shopper's active gender preference
+    // as the effective filter gender. This prevents women's looks from appearing
+    // in "More like this" when the seed is visually a men's look but tagged
+    // 'unisex' (e.g. because a product name includes "Unisex ...").
+    // If no preference is set ('all'), fall back to 'unisex' so all genders show.
+    const effectiveSeedGender: 'men' | 'women' | 'unisex' =
+      seedGender === 'unisex' && ymalGenderFilter !== 'all'
+        ? ymalGenderFilter
+        : seedGender;
+
+    const looksLikeThis: Look[] = seedProductNames.size > 0
+      ? source.filter(l => {
+          const cg = l.gender;
+          if (effectiveSeedGender !== 'unisex' && cg !== 'unisex' && effectiveSeedGender !== cg) return false;
+          return (l.products || []).some(p =>
+            seedProductNames.has(p.name.toLowerCase().trim())
+          );
+        })
       : [];
 
     const popular: Look[] = looksLikeThis.length === 0
@@ -259,7 +277,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       popular:         fillLooks(b, 8),
       moreFromCreator: fillLooks(c, 8),
     };
-  }, [look.id, look.creator, look.products, allLooks]);
+  }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
@@ -290,9 +308,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
-  // infinite scroll). Subscribes to the global shopper-gender singleton so
-  // the nested feed matches whatever the user picked on the home page.
-  const ymalGenderFilter = useActiveGenderFilter();
+  // infinite scroll). ymalGenderFilter is already declared above (before feedSections).
 
   // Trigger enter animation after first paint
   useEffect(() => {
@@ -676,7 +692,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
         {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">Looks like this</h3>
+            <h3 className="look-feed-heading">More like this</h3>
             <div className="look-feed-grid">
               {feedSections.looksLikeThis.map(fl => (
                 <LookCard

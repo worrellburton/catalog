@@ -570,6 +570,23 @@ export default function Home() {
     return out;
   }, [liveLooks]);
 
+  // "Featured in Looks" — only show looks that actually contain the selected
+  // product. Matched by product name (case-insensitive). If no look contains
+  // the product, the section is hidden (empty array → conditional render in
+  // ProductPage skips the block entirely).
+  const lookCreativesForProduct = useMemo<Look[]>(() => {
+    if (!selectedProduct) return [];
+    const needle = selectedProduct.name.toLowerCase().trim();
+    const brand = (selectedProduct.brand || '').toLowerCase().trim();
+    return lookFeedTiles.filter(l =>
+      (l.products || []).some(p => {
+        if (p.name.toLowerCase().trim() !== needle) return false;
+        if (brand && p.brand && p.brand.toLowerCase().trim() !== brand) return false;
+        return true;
+      })
+    );
+  }, [selectedProduct, lookFeedTiles]);
+
   const handleCreateCatalog = useCallback((query: string) => {
     setSelectedProduct(null);
     setSelectedLook(null);
@@ -913,7 +930,7 @@ export default function Home() {
                 brandCreatives={brandCreatives ?? undefined}
                 graphPairs={graphPairs ?? undefined}
                 popularFallback={popularFallback}
-                lookCreatives={lookFeedTiles}
+                lookCreatives={lookCreativesForProduct}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
               />
