@@ -14,3 +14,4 @@ IMPORTANT:
 - Prefer patching over rewriting
 - Avoid touching unrelated files
 - Ask before large architectural changes
+- Do not push to github unless instructed
