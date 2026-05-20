@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { useLocation } from '@remix-run/react';
+import { useLocation, useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -214,6 +214,13 @@ export default function Home() {
     setLayoutMode(0);
   }, []);
 
+  // Remix navigate is used to reset the URL on logo click so Remix's
+  // router-level location stays in sync. A raw window.history.pushState
+  // here would desync useLocation() — subsequent searches via the
+  // TypeAnywhere overlay (which uses navigate('/?q=…')) would then
+  // appear as no-op location changes and silently drop the query.
+  const navigate = useNavigate();
+
   const handleLogoClick = useCallback(() => {
     // Reset every layer that could be sitting on top of the feed:
     // search query + filters, all modal overlays (product, look,
@@ -237,18 +244,19 @@ export default function Home() {
       // Push the URL bar back to "/" so clicking the logo from a
       // deep-linked surface (/l/<look-slug>, /p/<product-slug>,
       // /b/<brand-slug>, or /?q=<search>) cleanly resets to the
-      // catalog root. Bypasses a full page reload - we already
-      // reset every layer of state above, so a silent pushState
-      // is enough to keep the URL bar honest.
+      // catalog root. Use Remix's navigate (not raw pushState) so
+      // useLocation() stays in sync — otherwise re-submitting the
+      // same search via the TypeAnywhere overlay would land on the
+      // same router-level location and the ?q= effect wouldn't fire.
       const target = '/';
       if (window.location.pathname !== target || window.location.search) {
-        window.history.pushState({}, '', target);
+        navigate(target);
       }
       // Scroll to top of the feed so the user lands at the start
       // of the grid, not wherever they were last reading.
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, []);
+  }, [navigate]);
 
   const handleLandingToApp = useCallback(() => {
     setShowSplash(true);
