@@ -115,6 +115,9 @@
 .creator-toast-stat:nth-child(3) .creator-toast-stat-num {
   animation-delay: 0.28s;
 }
+.creator-toast-stat:nth-child(5) .creator-toast-stat-num {
+  animation-delay: 0.38s;
+}
 .creator-toast-stat-label {
   font-size: 11px;
   font-weight: 500;
