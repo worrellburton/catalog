@@ -9,12 +9,13 @@ export interface Profile {
   provider: string | null;
   role: UserRole;
   is_admin: boolean;
+  is_ai: boolean;
   gender: 'male' | 'female' | 'unknown';
   created_at: string;
   last_sign_in_at: string | null;
 }
 
-const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, gender, created_at, last_sign_in_at';
+const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, is_ai, gender, created_at, last_sign_in_at';
 
 export async function getProfiles(): Promise<Profile[]> {
   if (!supabase) return [];

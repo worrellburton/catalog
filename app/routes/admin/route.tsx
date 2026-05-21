@@ -23,7 +23,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/admin', label: 'Home', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
   { to: '/admin/users', label: 'Users', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
-  { to: '/admin/ai-users', label: 'AI Users', icon: 'M12 2a3 3 0 0 0-3 3v2a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM5 22v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1M9 13l-1 2M15 13l1 2' },
   { to: '/admin/data', label: 'Data', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
   { to: '/admin/catalogs', label: 'Catalogs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { to: '/admin/search', label: 'Search', icon: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35' },
@@ -59,7 +58,7 @@ interface SearchItem {
 const allSearchItems: SearchItem[] = [
   // Pages
   { label: 'Users', type: 'Page', to: '/admin/users' },
-  { label: 'AI Users', type: 'Page', to: '/admin/ai-users' },
+  { label: 'AI Users', type: 'Page', to: '/admin/users?tab=ai' },
   { label: 'Waitlist', type: 'Page', to: '/admin/users?tab=waitlist' },
   { label: 'Admins', type: 'Page', to: '/admin/users?tab=admins' },
   { label: 'Super Admins', type: 'Page', to: '/admin/users?tab=admins' },
