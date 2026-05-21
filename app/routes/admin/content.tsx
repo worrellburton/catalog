@@ -38,6 +38,12 @@ interface CrawledProduct {
   gender?: 'male' | 'female' | 'unisex' | null;
   created_at?: string | null;
   source?: string | null;
+  /** Freeform measurements / fit copy scraped from the product page.
+   *  Surfaced on the row via the measurements icon column. ~1% of
+   *  rows have it filled in today; the rest fall back to "Not
+   *  available" in the hover panel. */
+  size_fit?: string | null;
+  materials_care?: string | null;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -512,7 +518,7 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1281,7 +1287,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1647,7 +1653,7 @@ export default function AdminContent() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -1708,7 +1714,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -1743,6 +1749,8 @@ export default function AdminContent() {
         entry.gender = cp.gender ?? null;
         entry.created_at = cp.created_at ?? null;
         entry.source = cp.source ?? null;
+        entry.size_fit = cp.size_fit ?? null;
+        entry.materials_care = cp.materials_care ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -1773,6 +1781,8 @@ export default function AdminContent() {
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
           source: cp.source ?? null,
+          size_fit: cp.size_fit ?? null,
+          materials_care: cp.materials_care ?? null,
         });
       }
     });
@@ -2361,7 +2371,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2392,7 +2402,7 @@ export default function AdminContent() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -3359,6 +3369,15 @@ export default function AdminContent() {
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
+                <th title="Measurements">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Measurements">
+                    <rect x="2" y="9" width="20" height="6" rx="1"/>
+                    <line x1="6"  y1="9"  x2="6"  y2="12"/>
+                    <line x1="10" y1="9"  x2="10" y2="13"/>
+                    <line x1="14" y1="9"  x2="14" y2="12"/>
+                    <line x1="18" y1="9"  x2="18" y2="13"/>
+                  </svg>
+                </th>
                 <th></th>
               </tr>
             </thead>
@@ -3721,6 +3740,41 @@ export default function AdminContent() {
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
+                  </td>
+                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const hasFit  = !!(p.size_fit && p.size_fit.trim());
+                      const hasCare = !!(p.materials_care && p.materials_care.trim());
+                      const hasAny  = hasFit || hasCare;
+                      return (
+                        <div
+                          className={`admin-measurements${hasAny ? ' has-data' : ''}`}
+                          aria-label={hasAny ? 'View measurements' : 'No measurements available'}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="2" y="9" width="20" height="6" rx="1"/>
+                            <line x1="6"  y1="9"  x2="6"  y2="12"/>
+                            <line x1="10" y1="9"  x2="10" y2="13"/>
+                            <line x1="14" y1="9"  x2="14" y2="12"/>
+                            <line x1="18" y1="9"  x2="18" y2="13"/>
+                          </svg>
+                          <div className="admin-measurements-tooltip" role="tooltip">
+                            <div className="admin-measurements-row">
+                              <div className="admin-measurements-label">Size &amp; fit</div>
+                              <div className={`admin-measurements-value${hasFit ? '' : ' is-empty'}`}>
+                                {hasFit ? p.size_fit : 'Not available'}
+                              </div>
+                            </div>
+                            <div className="admin-measurements-row">
+                              <div className="admin-measurements-label">Materials &amp; care</div>
+                              <div className={`admin-measurements-value${hasCare ? '' : ' is-empty'}`}>
+                                {hasCare ? p.materials_care : 'Not available'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td>
                     <button
