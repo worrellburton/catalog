@@ -87,6 +87,12 @@ function FeedSection({
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
+  // Initial segment grows the pool in cycles for true infinite scroll.
+  // Each cycle adds CYCLE_SIZE more items by rebuilding/re-shuffling the
+  // deck; concurrent video decode is bounded by the playback director
+  // (viewport-distance promotion + pool cap) so DOM card count is safe to
+  // grow. Sub-segments render a fixed `looks.length` and don't cycle.
+  const [poolCycles, setPoolCycles] = useState(1);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
 
@@ -134,7 +140,10 @@ function FeedSection({
     if (!isInitial && looks.length === 0) return [];
     // Sub-segments (More like this) show the exact looks array — no cycling
     // beyond the input so the section stays at exactly 8 items.
-    const targetCells = isInitial ? 200 : looks.length;
+    // Initial segment grows in cycles of CYCLE_SIZE; sentinel bumps poolCycles
+    // when the user nears the end so the feed scrolls indefinitely.
+    const CYCLE_SIZE = 80;
+    const targetCells = isInitial ? CYCLE_SIZE * poolCycles : looks.length;
 
     if (isInitial && creativesLoading) {
       // First paint while elite creatives are still loading - render *only*
@@ -226,7 +235,7 @@ function FeedSection({
     }
 
     return items;
-  }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode]);
+  }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode, poolCycles]);
 
   const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
 
@@ -235,23 +244,31 @@ function FeedSection({
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          if (visibleCount >= pool.length && searchMode && onLoadMore) {
-            // We've shown all current results - ask the parent for more.
-            onLoadMore();
-          } else {
-            setVisibleCount(prev => Math.min(prev + batch, pool.length));
-          }
+        if (!entry.isIntersecting) return;
+        if (visibleCount < pool.length) {
+          setVisibleCount(prev => Math.min(prev + batch, pool.length));
+          return;
+        }
+        // We've shown every item the current pool can produce.
+        if (searchMode) {
+          // Search mode: ask the parent for the next page of results.
+          onLoadMore?.();
+        } else if (isInitial) {
+          // Home feed: extend the pool with another shuffled deck cycle so
+          // infinite scroll truly never stalls. The director caps concurrent
+          // video decode regardless of how many cards are mounted.
+          setPoolCycles(c => c + 1);
         }
       },
-      { root: scrollRoot ?? null, rootMargin: '400px' }
+      { root: scrollRoot ?? null, rootMargin: '800px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [batch, pool.length, visibleCount, searchMode, onLoadMore, scrollRoot]);
+  }, [batch, pool.length, visibleCount, searchMode, onLoadMore, scrollRoot, isInitial]);
 
   useEffect(() => {
     setVisibleCount(batch);
+    setPoolCycles(1);
   }, [looks, batch]);
 
   // Hide only when both inputs are empty. Initial sections show creatives
