@@ -84,9 +84,9 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'waitlist' | 'users' | 'admins' | 'super-admins';
+type Tab = 'waitlist' | 'users' | 'admins';
 
-const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins', 'super-admins'];
+const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (TAB_VALUES as readonly string[]).includes(value);
@@ -323,7 +323,7 @@ function writeDeletedContentCreators(set: Set<string>) {
 }
 
 export default function AdminUsers() {
-  // Each tab has its own URL — `?tab=waitlist|users|admins|super-admins`.
+  // Each tab has its own URL — `?tab=waitlist|users|admins`.
   // Default is `users` when no param is present (or it's invalid). We
   // bind through useSearchParams so deep-links land on the right tab,
   // the back button walks tab history, and the "Move to admin" CTA's
@@ -721,13 +721,6 @@ export default function AdminUsers() {
     () => allUsers.filter(u => u.isAdmin || u.role === 'admin' || u.role === 'super_admin'),
     [allUsers],
   );
-  // Super-admins are the strict tier (gates destructive UI on consumer
-  // surfaces). Driven purely by role.
-  const superAdmins = useMemo(
-    () => allUsers.filter(u => u.role === 'super_admin'),
-    [allUsers],
-  );
-
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
   // their generated_videos / user_generations. Seed-data ("content-*")
   // creators → mark the handle deleted in localStorage so the
@@ -871,8 +864,8 @@ export default function AdminUsers() {
 
   // Super-admin toggle - flips the primary role between 'super_admin'
   // and 'admin'. Off lands on 'admin' (not the original role) because
-  // the toggle is only surfaced on the Admins / Super Admins tabs, so
-  // 'admin' is the right neighbouring tier.
+  // the toggle is only surfaced on the Admins tab, so 'admin' is the
+  // right neighbouring tier.
   const handleSuperAdminToggle = useCallback(async (userId: string, next: boolean) => {
     const key = `${userId}|role`;
     if (!tryClaim(key)) return;
@@ -914,7 +907,6 @@ export default function AdminUsers() {
 
   const userTable = useSortableTable(users);
   const adminTable = useSortableTable(admins);
-  const superAdminTable = useSortableTable(superAdmins);
 
   const renderTable = (
     data: UserRow[],
@@ -1089,13 +1081,12 @@ export default function AdminUsers() {
           {auditingGender ? 'Auditing…' : 'Gender audit'}
         </button>
       </div>
-      {/* Order: Waitlist > Users > Admins > Super Admins. The
-          previous Shoppers/Creators split was a false dichotomy —
-          a "shopper" who publishes a look becomes a "creator" with
-          no other state change, so showing them in two tables made
-          the same person appear/disappear on role flips. One Users
-          tab owns everyone who isn't elevated. The Incoming tab was
-          a placeholder for a feature that never shipped — dropped. */}
+      {/* Order: Waitlist > Users > Admins. Super-admins used to live
+          in their own sub-tab — collapsed back into Admins now that
+          the row already exposes a SUPER toggle next to ADMIN, so a
+          separate tab was redundant. The previous Shoppers/Creators
+          split was a false dichotomy — a "shopper" who publishes a
+          look becomes a "creator" with no other state change. */}
       <div className="admin-tabs">
         <div className="admin-tab-group">
           <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
@@ -1111,16 +1102,12 @@ export default function AdminUsers() {
           <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
             Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
           </button>
-          <button className={`admin-tab admin-tab-sub ${activeTab === 'super-admins' ? 'active' : ''}`} onClick={() => setActiveTab('super-admins')}>
-            Super Admins{superAdmins.length > 0 && <span className="admin-tab-count">{superAdmins.length}</span>}
-          </button>
         </div>
       </div>
 
       {activeTab === 'waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}
-      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', { showSuperToggle: true })}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
