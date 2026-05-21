@@ -43,7 +43,13 @@ export default defineConfig({
             route("campaigns", "routes/admin/campaigns.tsx");
             route("categories", "routes/admin/categories.tsx");
             route("clickouts", "routes/admin/clickouts.tsx");
-            route("content", "routes/admin/content.tsx");
+            // /admin/content renamed to /admin/data — file moved with
+            // git mv, but the legacy URL still resolves so bookmarks
+            // / muscle memory / old cmd-K hits don't 404.
+            route("content", "routes/admin/data.tsx");
+            route("data", "routes/admin/data.tsx");
+            route("ai-users", "routes/admin/ai-users.tsx");
+            route("dials", "routes/admin/dials.tsx");
             route("creators", "routes/admin/creators.tsx");
             route("creators/:name", "routes/admin/creators.$name.tsx");
             route("earnings", "routes/admin/earnings.tsx");
