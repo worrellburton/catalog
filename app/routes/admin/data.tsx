@@ -1,5 +1,6 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
+import { extractFabric } from '~/utils/extractFabric';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
@@ -756,7 +757,7 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
   );
 }
 
-export default function AdminContent() {
+export default function AdminData() {
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
   // is deep-linkable and the browser back button works like users expect.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -821,7 +822,7 @@ export default function AdminContent() {
         if (fetchedLooks.length > 0) setLooks(fetchedLooks);
         if (Object.keys(fetchedCreators).length > 0) setCreators(fetchedCreators);
       } catch (err) {
-        console.warn('[AdminContent] live looks fetch failed, keeping static seed:', err);
+        console.warn('[AdminData] live looks fetch failed, keeping static seed:', err);
       }
     })();
     return () => { cancelled = true; };
@@ -842,7 +843,7 @@ export default function AdminContent() {
         .select('id, user_id, status, style, height_label, age_label, height_cm, model, veo_model, prompt, fal_request_id, completed_at, storage_path, video_url, error, created_at, user_generation_products(count)')
         .order('created_at', { ascending: false });
       if (error) {
-        console.warn('[AdminContent] unpublished looks fetch failed:', error);
+        console.warn('[AdminData] unpublished looks fetch failed:', error);
         if (!cancelled) setUnpublishedLoading(false);
         return;
       }
@@ -1179,6 +1180,7 @@ export default function AdminContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [auditingTypes, setAuditingTypes] = useState(false);
   const [auditingGenders, setAuditingGenders] = useState(false);
+  const [ingestingSpecs, setIngestingSpecs] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
 
   // AI copywriter
@@ -2309,8 +2311,8 @@ export default function AdminContent() {
       )}
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1>Content</h1>
-          <p className="admin-page-subtitle">Manage all platform content</p>
+          <h1>Data</h1>
+          <p className="admin-page-subtitle">Manage all platform data</p>
         </div>
         {activeTab === 'looks' && (
           <button className="admin-btn admin-btn-primary" onClick={openCreateLookModal}>
@@ -2419,6 +2421,57 @@ export default function AdminContent() {
                 <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
               {auditingGenders ? 'Auditing…' : 'Gender audit'}
+            </button>
+            {/* Ingest measurements & fabrics — marks every visible product
+                (the currently-filtered list) as scrape_status=pending so
+                the Modal scraper agent re-extracts size_fit / materials_care
+                on its next cron pass. "Everything on here" is interpreted
+                as the filtered set the admin is looking at, not the
+                whole catalog. */}
+            <button
+              className="admin-btn admin-btn-secondary"
+              disabled={ingestingSpecs}
+              title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
+              onClick={async () => {
+                if (ingestingSpecs) return;
+                const ids = filteredProductsList
+                  .map(p => p.id)
+                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                if (ids.length === 0) {
+                  showToast('No syncable products in view — only crawled rows can be re-queued.');
+                  return;
+                }
+                setIngestingSpecs(true);
+                try {
+                  if (!supabase) throw new Error('Supabase not configured');
+                  const { error } = await supabase
+                    .from('products')
+                    .update({ scrape_status: 'pending' })
+                    .in('id', ids);
+                  if (error) throw error;
+                  setCrawledProducts(prev =>
+                    prev.map(r => ids.includes(r.id) ? { ...r, scrape_status: 'pending' } : r)
+                  );
+                  showToast(
+                    `Queued ${ids.length} product${ids.length === 1 ? '' : 's'} for spec re-scrape. Modal picks them up on its next pass.`,
+                  );
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : 'Unknown error';
+                  showToast(`Ingest failed: ${msg}`);
+                } finally {
+                  setIngestingSpecs(false);
+                }
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="9" width="20" height="6" rx="1"/>
+                <line x1="6" y1="9" x2="6" y2="12"/>
+                <line x1="10" y1="9" x2="10" y2="13"/>
+                <line x1="14" y1="9" x2="14" y2="12"/>
+                <line x1="18" y1="9" x2="18" y2="13"/>
+              </svg>
+              {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
             </button>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
@@ -3329,6 +3382,7 @@ export default function AdminContent() {
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ minWidth: 140 }}>Fabric</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
                 <th style={{ textAlign: 'center' }} title="When on, this product appears in search results and catalog-wide listings. When off, the product is hidden from the platform but stays in this admin table.">Platform</th>
@@ -3573,6 +3627,13 @@ export default function AdminContent() {
                     ) : (
                       <span style={{ color: '#cbd5e1' }}> - </span>
                     )}
+                  </td>
+                  {/* Fabric — derived from materials_care for inline display.
+                      The full hover panel is still on the measurements icon
+                      column further right; this column gives a glanceable
+                      composition string. */}
+                  <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.materials_care ?? undefined}>
+                    {extractFabric(p.materials_care) ?? <span style={{ color: '#cbd5e1' }}>—</span>}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     {p.url ? (

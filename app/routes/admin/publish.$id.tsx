@@ -6,7 +6,7 @@ import { invalidateLooksCache } from '~/services/looks';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
- * /admin/content?tab=looks (Unpublished tab) and the Published tab.
+ * /admin/data?tab=looks (Unpublished tab) and the Published tab.
  * Full screen instead of a modal so the admin has space to review
  * the look + product details before pushing live. */
 
@@ -48,7 +48,7 @@ export default function AdminPublishScreen() {
   useEffect(() => {
     if (!id) return;
     if (!UUID_RE.test(id)) {
-      setError('That id doesn’t look like an unpublished generation. Pull the Publish button from /admin/content first.');
+      setError('That id doesn’t look like an unpublished generation. Pull the Publish button from /admin/data first.');
       setLoading(false);
       return;
     }
@@ -159,7 +159,7 @@ export default function AdminPublishScreen() {
           .eq('id', look.id);
         if (statusErr) console.warn('[publish] status update failed:', statusErr.message);
       }
-      // Drop the cached promise so the next /admin/content render
+      // Drop the cached promise so the next /admin/data render
       // refetches and shows the new row in the Published tab.
       invalidateLooksCache();
       setPublished({ id: look.id });
@@ -181,7 +181,7 @@ export default function AdminPublishScreen() {
           <h1>Publish</h1>
         </div>
         <div className="admin-empty" style={{ color: '#991b1b' }}>{error}</div>
-        <Link to="/admin/content?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
+        <Link to="/admin/data?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
           ← Back to unpublished
         </Link>
       </div>
@@ -201,7 +201,7 @@ export default function AdminPublishScreen() {
           </div>
           <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>Look {published.id} created.</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="admin-btn admin-btn-secondary" onClick={() => navigate('/admin/content?tab=looks&looks=unpublished')}>
+            <button className="admin-btn admin-btn-secondary" onClick={() => navigate('/admin/data?tab=looks&looks=unpublished')}>
               Back to unpublished
             </button>
             <button
@@ -210,7 +210,7 @@ export default function AdminPublishScreen() {
                 // Hard reload so admin/content remounts and the
                 // (just-invalidated) looks cache refetches with the
                 // new row included.
-                window.location.assign('/admin/content?tab=looks');
+                window.location.assign('/admin/data?tab=looks');
               }}
             >
               See it in Looks
@@ -232,7 +232,7 @@ export default function AdminPublishScreen() {
             Review and promote this user-generated look into the curated catalog.
           </p>
         </div>
-        <Link to="/admin/content?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
+        <Link to="/admin/data?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
           ← Cancel
         </Link>
       </div>
@@ -333,7 +333,7 @@ export default function AdminPublishScreen() {
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-            <Link to="/admin/content?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
+            <Link to="/admin/data?tab=looks&looks=unpublished" className="admin-btn admin-btn-secondary">
               Cancel
             </Link>
             <button

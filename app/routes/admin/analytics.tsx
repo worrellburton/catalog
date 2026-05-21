@@ -561,7 +561,7 @@ function BrandsAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolea
                     className="admin-icon-btn"
                     title={`View products for ${row.brand}`}
                     aria-label={`View products for ${row.brand}`}
-                    onClick={() => navigate(`/admin/content?tab=products&brand=${encodeURIComponent(row.brand)}`)}
+                    onClick={() => navigate(`/admin/data?tab=products&brand=${encodeURIComponent(row.brand)}`)}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
