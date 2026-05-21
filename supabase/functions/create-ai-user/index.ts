@@ -65,48 +65,58 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
   if (req.method !== 'POST') {
-    return errorRes('Method not allowed', 405);
+    return errorRes('Method not allowed');
   }
 
   const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   if (!supabaseUrl || !serviceRoleKey) {
-    return errorRes('Edge function misconfigured: missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY', 500);
+    return errorRes('Edge function misconfigured: missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY');
   }
 
   // ── Caller auth + admin gate ─────────────────────────────────────
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return errorRes('Missing or invalid Authorization header', 401);
+    return errorRes('Missing or invalid Authorization header');
   }
   const token = authHeader.replace('Bearer ', '');
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   const { data: { user: caller }, error: userErr } = await admin.auth.getUser(token);
-  if (userErr || !caller) return errorRes('Unauthorized', 401);
+  if (userErr || !caller) return errorRes('Unauthorized');
 
   const { data: callerProfile, error: profErr } = await admin
     .from('profiles')
     .select('is_admin, role')
     .eq('id', caller.id)
     .maybeSingle();
-  if (profErr) return errorRes('Failed to load caller profile', 500);
+  if (profErr) return errorRes('Failed to load caller profile');
   const isAdmin = callerProfile?.is_admin === true
     || callerProfile?.role === 'admin'
     || callerProfile?.role === 'super_admin';
-  if (!isAdmin) return errorRes('Forbidden — admin role required', 403);
+  if (!isAdmin) return errorRes('Forbidden — admin role required');
 
   // ── Parse body ──────────────────────────────────────────────────
   let body: CreateBody;
   try { body = await req.json(); }
-  catch { return errorRes('Body must be JSON', 400); }
+  catch { return errorRes('Body must be JSON'); }
 
   const fullName = (body.full_name || '').trim();
-  if (!fullName) return errorRes('full_name is required', 400);
-  if (fullName.length > 200) return errorRes('full_name too long (max 200)', 400);
+  if (!fullName) return errorRes('full_name is required');
+  if (fullName.length > 200) return errorRes('full_name too long (max 200)');
 
-  const allowedGenders = new Set(['men', 'women', 'unisex', 'male', 'female']);
-  const gender = body.gender && allowedGenders.has(body.gender) ? body.gender : null;
+  // profiles.gender has a CHECK constraint enforcing {'male','female','unknown'}.
+  // The form ships 'men'/'women'/'unisex' (product-catalog vocabulary), so we
+  // normalize here. 'unisex' has no person-gender equivalent → drop it so the
+  // trigger's name-inferred value stays.
+  const GENDER_MAP: Record<string, string | null> = {
+    men: 'male',
+    male: 'male',
+    women: 'female',
+    female: 'female',
+    unisex: null,
+  };
+  const gender = body.gender ? GENDER_MAP[body.gender] ?? null : null;
   const heightCm = typeof body.height_cm === 'number'
     && Number.isFinite(body.height_cm)
     && body.height_cm > 0 && body.height_cm < 300
@@ -130,7 +140,7 @@ Deno.serve(async (req: Request) => {
     app_metadata: { provider: 'ai_persona' },
   });
   if (createErr || !createdAuth.user) {
-    return errorRes(`Failed to create auth user: ${createErr?.message || 'unknown error'}`, 500);
+    return errorRes(`Failed to create auth user: ${createErr?.message || 'unknown error'}`);
   }
 
   const newUserId = createdAuth.user.id;
@@ -155,7 +165,7 @@ Deno.serve(async (req: Request) => {
     // the auth user so the AI Users list doesn't surface a half-
     // initialized row.
     await admin.auth.admin.deleteUser(newUserId).catch(() => { /* best-effort */ });
-    return errorRes(`Failed to patch profile: ${updateErr.message}`, 500);
+    return errorRes(`Failed to patch profile: ${updateErr.message}`);
   }
 
   return jsonRes({ success: true, user_id: newUserId });
