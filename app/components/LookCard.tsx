@@ -7,6 +7,8 @@ import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackImpression } from '~/services/session-tracker';
+import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
 import {
   prefetchVideoBytes,
   captureVideoFrame,
@@ -124,7 +126,16 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // bounded CPU/decoder use no matter how long the infinite feed gets.
   // The LookOverlay hero (same trailId) still reuses the same running
   // <video> on tap — no remount, no first-frame black.
-  const videoActive = inActiveBand && !previewOnly;
+  //
+  // Video ↔ Still ratio dial (/admin/dials → video_still_ratio): when
+  // the global ratio is below 100, a deterministic per-card subset
+  // gets forced into the still-image path instead of the video path.
+  // We still respect inActiveBand / previewOnly so off-screen and
+  // preview cards stay cheap regardless. Phase 8 will handle cards
+  // that have no poster image to fall back on.
+  const globalVideoRatio = useVideoStillRatio();
+  const allowVideoForThisCard = shouldBeVideo(look.id, globalVideoRatio);
+  const videoActive = inActiveBand && !previewOnly && allowVideoForThisCard;
   const setVideoSlot = useTrailVideo(
     videoActive ? trailId : undefined,
     videoActive ? videoUrl : undefined,
