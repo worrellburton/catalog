@@ -324,9 +324,12 @@ class VideoPlaybackDirector {
 
     for (const { id, entry, distance } of wantsPlay) {
       if (entry.videoEl) {
-        // Already assigned — keep it playing. Skip play() during fast flicks
-        // (the heartbeat / scroll-rest will pick it back up when quiet).
-        if (entry.videoEl.paused && entry.status !== 'loading' && !this.isScrollFast) {
+        // Already assigned — keep it playing. If it's paused for any reason
+        // (assignment happened mid-flick, autoplay rejected, source swap),
+        // kick it again. The status guard only skips when a play() promise
+        // is genuinely in-flight (status='loading' is set right before the
+        // playEl() call below).
+        if (entry.videoEl.paused && entry.status !== 'loading') {
           if (entry.status === 'paused') entry.retryCount = 0;
           this.playEl(id, entry);
         }
@@ -394,13 +397,13 @@ class VideoPlaybackDirector {
       entry.videoEl = slot.el;
       entry.status = 'loading';
 
-      // Move the element into the card's slot div.
+      // Move the element into the card's slot div, then start playback.
+      // We always call play() here — the browser will queue against the
+      // in-flight network buffering, and the pool cap already bounds how
+      // many decodes run concurrently. Skipping play() here was leaving
+      // cards stuck in 'loading' on subsequent rank passes.
       entry.slotEl.appendChild(slot.el);
-      // During a fast flick we still attach + load() so the bytes are warm,
-      // but defer the play() call until scroll quiets.
-      if (!this.isScrollFast) {
-        this.playEl(id, entry);
-      }
+      this.playEl(id, entry);
     }
   }
 
