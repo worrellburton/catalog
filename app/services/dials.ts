@@ -51,3 +51,34 @@ export async function setVideoStillRatio(value: number): Promise<void> {
     .upsert({ key: VIDEO_STILL_RATIO_KEY, value: String(clamped) }, { onConflict: 'key' });
   if (error) throw error;
 }
+
+/**
+ * Listen for ratio changes pushed by other clients (admin moving the
+ * slider on /admin/dials, another tab updating the value, etc.).
+ * Returns the unsubscribe fn. The callback fires with the freshly
+ * parsed value any time the app_settings row for this key is
+ * INSERTed or UPDATEd. Filtering happens server-side so unrelated
+ * settings changes don't wake the consumer feed.
+ */
+export function subscribeVideoStillRatio(
+  onChange: (value: number) => void,
+): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${VIDEO_STILL_RATIO_KEY}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'app_settings',
+        filter: `key=eq.${VIDEO_STILL_RATIO_KEY}`,
+      },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseRatio(next ?? null));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
