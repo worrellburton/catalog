@@ -42,8 +42,14 @@ function jsonRes(data: unknown, status = 200) {
   });
 }
 
-function errorRes(message: string, status = 400) {
-  return jsonRes({ success: false, error: message }, status);
+// All non-CORS failures return 200 with success:false + a useful error
+// string. supabase-js's functions.invoke wraps non-2xx responses and
+// hides the response body, so any non-200 status loses the diagnostic
+// in the admin UI. Status 200 with success:false keeps the message
+// reachable.
+function errorRes(message: string) {
+  console.error('[create-ai-user]', message);
+  return jsonRes({ success: false, error: message }, 200);
 }
 
 interface CreateBody {
