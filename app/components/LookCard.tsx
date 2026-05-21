@@ -120,6 +120,13 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
   const posterUrl = look.thumbnail_url || look.cover || '';
+  // When the Dial pushes this card into still mode, prefer the first
+  // product's retail image over the look's own thumbnail — the
+  // product photo is the merchandising shot and reads better as a
+  // static tile. Falls back through the poster chain if no product
+  // images are attached.
+  const firstProductImage = look.products?.find(p => !!p.image)?.image || '';
+  const stillImageUrl = firstProductImage || posterUrl;
 
   // Defer slot population to the *active* viewport band. Outside that
   // band the video is detached and returned to the TrailVideoHost pool —
@@ -259,7 +266,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: posterUrl ? `url(${posterUrl})` : undefined,
+              // Prefer the retail product image when the Dial forced
+              // this into the still path; thumbnail / cover are the
+              // fallback chain for cards in still mode for other
+              // reasons (previewOnly, out-of-band, missing video).
+              backgroundImage: (stillImageUrl || posterUrl) ? `url(${stillImageUrl || posterUrl})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundColor: look.color || '#111',

@@ -3,6 +3,7 @@ import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type Product
 import {
   pickVideoUrl,
   pickPosterUrl,
+  pickStillImageUrl,
   prefetchVideoBytes,
   captureVideoFrame,
   markFeedMilestone,
@@ -10,6 +11,8 @@ import {
 } from '~/services/video-loading';
 import { useAuth } from '~/hooks/useAuth';
 import { useInViewport } from '~/hooks/useInViewport';
+import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
 
 interface CreativeCardProps {
   creative: ProductAd;
@@ -54,6 +57,19 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // paints it during MP4 load, and as a separate <img> behind the video
   // so even a broken video URL still shows a real picture.
   const posterUrl = pickPosterUrl(creative);
+
+  // Global Video → Still dial (/admin/dials → video_still_ratio):
+  // decides whether this specific card is allowed to play video.
+  // When false we render a still-only path with the retail product
+  // image rather than the video's auto-extracted thumbnail — the
+  // product photo is the merchandising shot and reads better. The
+  // dial is a preference, not a guarantee: if we have no product
+  // image to show, we still fall back to playing the video so the
+  // card isn't blank.
+  const globalVideoRatio = useVideoStillRatio();
+  const dialPrefersVideo = shouldBeVideo(creative.id, globalVideoRatio);
+  const stillImageUrl = pickStillImageUrl(creative);
+  const renderAsStill = !dialPrefersVideo && !!stillImageUrl;
   // Mobile viewports get the small variant when it exists; everywhere
   // else gets full-res. Phase 8 below silently warms the full-res
   // version into cache once the card has dwelled in viewport, so a
@@ -244,10 +260,15 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             (when set); product image is the universal fallback. Sits
             behind the video slot so the card is never an empty black
             box even before frames decode. */}
-        {posterUrl && (
+        {/* Behind-the-video poster image. In still mode (Dial pushed
+            this card off video) we swap to the retail product image
+            since that's what reads as a merchandising shot. In video
+            mode we keep the video's own thumbnail (server-extracted
+            frame) so the static frame matches the playing content. */}
+        {(renderAsStill ? stillImageUrl : posterUrl) && (
           <img
             className="card-poster"
-            src={posterUrl}
+            src={renderAsStill ? stillImageUrl : posterUrl}
             alt=""
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
@@ -262,8 +283,10 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             present on the element from creation, which is what every
             browser's autoplay heuristic actually inspects. JS-property
             equivalents (.muted, .autoplay) sometimes don't satisfy the
-            heuristic if set after src or after a play() call. */}
-        {playableUrl && (
+            heuristic if set after src or after a play() call.
+            Skipped entirely when the Dial dropped this card into the
+            still-image path. */}
+        {playableUrl && !renderAsStill && (
           <video
             ref={videoRef}
             className="card-video-slot"

@@ -61,6 +61,22 @@ export function pickPosterUrl(creative: {
     || '';
 }
 
+/** Picks the best STILL image — used when the global Video → Still
+ *  dial pushes a card into the image-only path. Inverts the poster
+ *  order so the retail-site product photo wins over the video's own
+ *  thumbnail (which is just a frame from the AI-generated MP4 and
+ *  reads as less merchandising-grade). Falls back to the thumbnail
+ *  only if no product image exists. */
+export function pickStillImageUrl(creative: {
+  thumbnail_url?: string | null;
+  product?: { image_url?: string | null; images?: string[] | null } | null;
+}): string {
+  return creative.product?.image_url
+    || (creative.product?.images && creative.product.images[0])
+    || creative.thumbnail_url
+    || '';
+}
+
 // ── Phase 8: background-preload full-res for in-viewport cards ────────
 // Once a card has been visible for ~500ms on mobile, kick off a
 // low-priority fetch of the desktop-quality video bytes. The browser
