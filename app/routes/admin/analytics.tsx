@@ -69,39 +69,22 @@ function LiveChip({ live }: { live: boolean }) {
   );
 }
 
-type Tab = 'users' | 'products' | 'brands';
-const TAB_VALUES: readonly Tab[] = ['users', 'products', 'brands'];
+type Tab = 'users' | 'creators' | 'products' | 'brands';
+const TAB_VALUES: readonly Tab[] = ['users', 'creators', 'products', 'brands'];
 function isTab(v: string | null): v is Tab {
   return v !== null && (TAB_VALUES as readonly string[]).includes(v);
-}
-
-type UsersView = 'shopper' | 'creator';
-const USERS_VIEW_VALUES: readonly UsersView[] = ['shopper', 'creator'];
-function isUsersView(v: string | null): v is UsersView {
-  return v !== null && (USERS_VIEW_VALUES as readonly string[]).includes(v);
 }
 
 export default function AdminAnalytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: Tab = isTab(searchParams.get('tab')) ? (searchParams.get('tab') as Tab) : 'users';
-  const usersView: UsersView = isUsersView(searchParams.get('view'))
-    ? (searchParams.get('view') as UsersView)
-    : 'shopper';
   const setTab = useCallback((next: Tab) => {
     setSearchParams(prev => {
       const out = new URLSearchParams(prev);
       if (next === 'users') out.delete('tab');
       else                  out.set('tab', next);
-      // The `view` sub-toggle only applies to the Users tab.
-      if (next !== 'users') out.delete('view');
-      return out;
-    }, { replace: false });
-  }, [setSearchParams]);
-  const setUsersView = useCallback((next: UsersView) => {
-    setSearchParams(prev => {
-      const out = new URLSearchParams(prev);
-      if (next === 'shopper') out.delete('view');
-      else                    out.set('view', next);
+      // The legacy `view` sub-toggle is gone — Creator is a sibling tab now.
+      out.delete('view');
       return out;
     }, { replace: false });
   }, [setSearchParams]);
@@ -111,14 +94,15 @@ export default function AdminAnalytics() {
     setTableMeta({ count, live });
   }, []);
 
-  // Reset when switching tabs / sub-views so stale count doesn't flash
+  // Reset when switching tabs so stale count doesn't flash
   useEffect(() => {
     setTableMeta({ count: null, live: false });
-  }, [tab, usersView]);
+  }, [tab]);
 
   const countLabel = tableMeta.count === null ? null : (() => {
     const n = tableMeta.count.toLocaleString();
     if (tab === 'users')    return `${n} ${tableMeta.count === 1 ? 'user'    : 'users'}`;
+    if (tab === 'creators') return `${n} ${tableMeta.count === 1 ? 'user'    : 'users'}`;
     if (tab === 'products') return `${n} ${tableMeta.count === 1 ? 'product' : 'products'}`;
     return `${n} ${tableMeta.count === 1 ? 'brand' : 'brands'}`;
   })();
@@ -134,6 +118,9 @@ export default function AdminAnalytics() {
           <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
             Users
           </button>
+          <button className={`admin-tab ${tab === 'creators' ? 'active' : ''}`} onClick={() => setTab('creators')}>
+            Creators
+          </button>
           <button className={`admin-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
             Products
           </button>
@@ -141,22 +128,6 @@ export default function AdminAnalytics() {
             Brands
           </button>
         </div>
-        {tab === 'users' && (
-          <div className="admin-tabs">
-            <button
-              className={`admin-tab admin-tab-sub ${usersView === 'shopper' ? 'active' : ''}`}
-              onClick={() => setUsersView('shopper')}
-            >
-              Shopper
-            </button>
-            <button
-              className={`admin-tab admin-tab-sub ${usersView === 'creator' ? 'active' : ''}`}
-              onClick={() => setUsersView('creator')}
-            >
-              Creator
-            </button>
-          </div>
-        )}
         <div className="admin-tabs-meta">
           {countLabel !== null && (
             <span className="admin-table-count">{countLabel}</span>
@@ -165,8 +136,8 @@ export default function AdminAnalytics() {
         </div>
       </div>
 
-      {tab === 'users' && usersView === 'shopper' && <UsersAnalyticsTable onMeta={handleMeta} />}
-      {tab === 'users' && usersView === 'creator' && <CreatorContentAnalyticsTable onMeta={handleMeta} />}
+      {tab === 'users' && <UsersAnalyticsTable onMeta={handleMeta} />}
+      {tab === 'creators' && <CreatorContentAnalyticsTable onMeta={handleMeta} />}
       {tab === 'products' && <ProductsAnalyticsTable onMeta={handleMeta} />}
       {tab === 'brands' && <BrandsAnalyticsTable onMeta={handleMeta} />}
     </div>
@@ -640,7 +611,7 @@ function BrandTh({
   );
 }
 
-// ── Users tab → Creator sub-view ────────────────────────────────────────────
+// ── Creators tab ────────────────────────────────────────────────────────────
 
 type CreatorSortKey =
   | 'name' | 'last_sign_in_at' | 'looks_posted'
