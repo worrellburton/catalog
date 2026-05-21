@@ -130,11 +130,19 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Video ↔ Still ratio dial (/admin/dials → video_still_ratio): when
   // the global ratio is below 100, a deterministic per-card subset
   // gets forced into the still-image path instead of the video path.
-  // We still respect inActiveBand / previewOnly so off-screen and
-  // preview cards stay cheap regardless. Phase 8 will handle cards
-  // that have no poster image to fall back on.
+  //
+  // Fallbacks (Phase 8): the dial is a preference, not a guarantee.
+  //   • A card flagged "still" with no poster falls back to video so
+  //     the slot isn't a flat colour block.
+  //   • A card flagged "video" with no video URL stays as a still
+  //     (its poster / cover image) — same behaviour as today.
+  // inActiveBand / previewOnly gates still apply, so off-screen and
+  // preview cards stay cheap regardless of the dial.
   const globalVideoRatio = useVideoStillRatio();
-  const allowVideoForThisCard = shouldBeVideo(look.id, globalVideoRatio);
+  const dialPrefersVideo = shouldBeVideo(look.id, globalVideoRatio);
+  const hasVideo  = !!videoUrl;
+  const hasPoster = !!posterUrl;
+  const allowVideoForThisCard = hasVideo && (dialPrefersVideo || !hasPoster);
   const videoActive = inActiveBand && !previewOnly && allowVideoForThisCard;
   const setVideoSlot = useTrailVideo(
     videoActive ? trailId : undefined,
