@@ -11,6 +11,11 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 import { type ProductAd } from '~/services/product-creative';
+import {
+  prefetchVideoBytes,
+  isMobileViewport,
+  isSlowConnection,
+} from '~/services/video-loading';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -180,13 +185,46 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const trailId = lookTrailId(look.id);
-  const heroVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const fullVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Match LookCard's URL choice exactly: same string ⇒ TrailVideoHost
+  // PoolEntry hits without re-swapping src on handoff. If the URL diverges
+  // the trail-host detects "same id, new src" and re-buffers from scratch
+  // (audible/visible reload).
+  const wantMobile = isMobileViewport() || isSlowConnection();
+  const heroVideoUrl = wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl;
+
+  // Tap-handoff poster: LookCard captured the playing frame via
+  // captureVideoFrame() and stashed a JPEG data URL on
+  // window.__feedTapPosters[trailId] right before navigation. Read it
+  // synchronously on mount so the hero paints that exact frame BEFORE
+  // the trail-host has a chance to swap in the live <video> element.
+  // Cleared after read so the next tap doesn't reuse a stale snapshot.
+  const tapHandoffPoster = (() => {
+    if (typeof window === 'undefined') return '';
+    const w = window as Window & { __feedTapPosters?: Record<string, string> };
+    const url = w.__feedTapPosters?.[trailId];
+    if (url && w.__feedTapPosters) delete w.__feedTapPosters[trailId];
+    return url || '';
+  })();
+  const heroPoster = tapHandoffPoster || look.thumbnail_url || look.cover || '';
 
   // Take ownership of the same shared <video> element the originating
   // LookCard was playing. appendChild moves the DOM node - currentTime,
   // decoded frames, and audio context all survive, so the morph from card
-  // → hero never reloads or shows a black gap.
-  const setHeroSlot = useTrailVideo(trailId, heroVideoUrl);
+  // → hero never reloads or shows a black gap. Pass the poster so a cold
+  // path (pool element evicted between card unmount and hero attach) still
+  // paints a real image.
+  const setHeroSlot = useTrailVideo(trailId, heroVideoUrl, heroPoster || undefined);
+
+  // Phase 8 — kick off a high-res prefetch on overlay mount in case the
+  // card-side preload didn't run (e.g. user opened the overlay from a
+  // route that never mounted the LookCard, or the card had been out of
+  // the render band). Idempotent by URL so calling twice is free when
+  // the cache is already warm.
+  useEffect(() => {
+    if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
+    if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
+  }, [heroVideoUrl, fullVideoUrl]);
 
   // Pause background feed cards while the overlay is open so they don't
   // compete for bandwidth with the hero video. Resume on unmount.
@@ -439,6 +477,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Centered video with overlays */}
             <div className="look-media-centered">
               <div className="look-media">
+                {/* Phase 9 instant poster: paints synchronously on mount
+                    using either the canvas-frame stashed by the tapped
+                    LookCard or the static thumbnail. The trail-host
+                    attaches its <video> on top in the same paint cycle,
+                    so the user sees a real frame immediately - never the
+                    black flash that used to bridge the card → hero gap. */}
+                {heroPoster && (
+                  <img
+                    src={heroPoster}
+                    alt=""
+                    aria-hidden="true"
+                    className="look-media-handoff-poster"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+                  />
+                )}
                 {/* Shared video slot - TrailVideoHost moves the running
                     <video> from the originating LookCard into this
                     element on tap, so playback continues unbroken across
@@ -447,6 +500,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   ref={setHeroSlot}
                   className="look-media-video"
                   data-trail-id={trailId}
+                  style={{ position: 'relative', zIndex: 1 }}
                 />
                 {/* Bottom-left: creator avatar + name */}
                 <button
@@ -715,26 +769,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               {feedSections.popular.map(fl => (
                 <LookCard
                   key={`popular-${fl.id}`}
-                  look={fl}
-                  className="look-card"
-                  onOpenLook={handleFeedLookClick}
-                  onOpenCreator={onOpenCreator}
-                  onCreateCatalog={onCreateCatalog}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {feedSections.moreFromCreator.length > 0 && (
-          <div className="look-feed-section">
-            <h3 className="look-feed-heading">
-              More from {creatorData?.displayName || look.creator}
-            </h3>
-            <div className="look-feed-grid">
-              {feedSections.moreFromCreator.map(fl => (
-                <LookCard
-                  key={`creator-${fl.id}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}

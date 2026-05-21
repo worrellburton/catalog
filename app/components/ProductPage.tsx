@@ -284,14 +284,16 @@ function LookTile({
   const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
   const tilePoster = look.thumbnail_url || look.cover || '';
 
-  // Attach the shared TrailVideoHost <video> element when this tile
-  // enters the prep band. The pool element is already warm from the
-  // feed, so no re-download happens on first attach.
-  const setVideoSlot = useTrailVideo(
-    inViewport ? trailId : undefined,
-    inViewport ? videoUrl : undefined,
-    tilePoster || undefined,
-  );
+  // Attach the shared TrailVideoHost <video> element immediately on mount —
+  // do NOT gate on inViewport. The TrailVideoHost pool is empty on a fresh
+  // product-page load (no feed warmup), so gating on IO means the video
+  // element isn't even created until the observer fires, adding 1–3 s of
+  // download time after the tile is visible. Attaching eagerly starts
+  // buffering (preload='auto') the moment the product page renders, so by
+  // the time the user sees the tile the video is already ready to play.
+  // Bandwidth cost: bounded by padLooks(_, 8) capped at 8 tiles; duplicate
+  // slots share the same URL so the browser deduplicates at HTTP cache level.
+  const setVideoSlot = useTrailVideo(trailId, videoUrl, tilePoster || undefined);
 
   const setSlot = useCallback((el: HTMLDivElement | null) => {
     slotRef.current = el;
@@ -394,9 +396,8 @@ function LookTile({
   );
 }
 
-/** Pads `arr` to exactly `count` items by cycling through duplicates,
- *  or trims to `count` if the array is longer. Returns empty array
- *  unchanged (no padding for empty sections). */
+/** Pads `arr` to exactly `count` items by cycling duplicates, or trims.
+ *  Safe for CreativeCard (own <video> per instance, no shared pool). */
 function fillToExact<T>(arr: T[], count: number): T[] {
   if (arr.length === 0) return [];
   if (arr.length >= count) return arr.slice(0, count);
@@ -405,6 +406,20 @@ function fillToExact<T>(arr: T[], count: number): T[] {
   return out;
 }
 
+/** Pads a Look array to `count` by cycling — duplicate slots get a
+ *  slot-unique synthetic id so LookTile's lookTrailId() stays unique
+ *  and TrailVideoHost gives each slot its own <video> element.
+ *  Same video URL, served from browser cache: zero extra network cost. */
+function padLooks(arr: Look[], count: number): Look[] {
+  if (arr.length === 0) return [];
+  if (arr.length >= count) return arr.slice(0, count);
+  const out: Look[] = [...arr];
+  while (out.length < count) {
+    const src = arr[out.length % arr.length];
+    out.push({ ...src, id: `${src.id}-slot-${out.length}` });
+  }
+  return out;
+}
 
 export default function ProductPage({
   product,
@@ -920,7 +935,7 @@ export default function ProductPage({
                   so a tap here continues the trail with the same fluid handoff. */}
               {fillToExact(moreLikeThis, 8).map((c, i) => (
                 <CreativeCard
-                  key={`mlt-${i}`}
+                  key={`mlt-${c.id}-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
@@ -936,7 +951,7 @@ export default function ProductPage({
             <div className="pd-similar-grid">
               {fillToExact(popularItems, 8).map((c, i) => (
                 <CreativeCard
-                  key={`pop-${i}`}
+                  key={`pop-${c.id}-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
@@ -950,8 +965,12 @@ export default function ProductPage({
           <section className="pd-look-feed">
             <h2 className="pd-feed-title">Featured in Looks</h2>
             <div className="pd-look-grid">
-              {fillToExact(lookCreatives, 8).map((l, i) => (
-                <LookTile key={`fl-${i}`} look={l} index={i} onOpen={onOpenLook} />
+              {/* padLooks gives duplicate slots a synthetic id so each
+                  LookTile gets a unique trailId → unique pool <video>.
+                  Same video URL, served from browser cache: zero extra
+                  network cost. */}
+              {padLooks(lookCreatives, 8).map((l, i) => (
+                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} />
               ))}
             </div>
           </section>
