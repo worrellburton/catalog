@@ -91,6 +91,10 @@ interface ProfileRow {
   role: string | null;
   created_at: string | null;
   last_sign_in_at: string | null;
+  gender: string | null;
+  height_cm: number | null;
+  height_label: string | null;
+  age_label: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -148,7 +152,7 @@ export default function AdminUserDetail() {
       if (UUID_RE.test(decoded)) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
           .eq('id', decoded)
           .maybeSingle();
         prof = (data ?? null) as ProfileRow | null;
@@ -160,7 +164,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
           .ilike('full_name', decoded);
         const candidates = (data ?? []) as ProfileRow[];
         if (candidates.length === 1) {
@@ -183,7 +187,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
           .ilike('email', `${decoded}@%`)
           .limit(1)
           .maybeSingle();
@@ -271,16 +275,23 @@ export default function AdminUserDetail() {
 
   return (
     <div className="admin-page">
-      <div className="admin-page-header">
+      <div className="admin-page-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
         <button className="admin-back-link" onClick={() => navigate('/admin/users')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Users
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {avatarUrl && <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 40, height: 40 }} />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {avatarUrl
+            ? <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 48, height: 48 }} />
+            : <span className="admin-user-avatar-img admin-user-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 18 }}>
+                {(displayName || '?').charAt(0).toUpperCase()}
+              </span>
+          }
           <div>
-            <h1>{displayName}</h1>
-            <p className="admin-page-subtitle">{isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}</p>
+            <h1 style={{ margin: 0 }}>{displayName}</h1>
+            <p className="admin-page-subtitle" style={{ margin: 0 }}>
+              {isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}
+            </p>
           </div>
         </div>
       </div>
@@ -295,6 +306,24 @@ export default function AdminUserDetail() {
             {creatorHandle && <div className="admin-detail-row"><span>Handle</span><span>{creatorHandle}</span></div>}
             <div className="admin-detail-row"><span>Status</span><span className="admin-status-active">Active</span></div>
             <div className="admin-detail-row"><span>Type</span><span style={{ textTransform: 'capitalize' }}>{profile?.role || (isCreator ? 'Creator' : 'Shopper')}</span></div>
+            {profile?.gender && (
+              <div className="admin-detail-row"><span>Gender</span><span style={{ textTransform: 'capitalize' }}>{profile.gender}</span></div>
+            )}
+            {(profile?.height_label || profile?.height_cm) && (
+              <div className="admin-detail-row">
+                <span>Height</span>
+                <span>
+                  {profile.height_label || `${profile.height_cm} cm`}
+                  {profile.height_label && profile.height_cm ? ` (${profile.height_cm} cm)` : ''}
+                </span>
+              </div>
+            )}
+            {profile?.age_label && (
+              <div className="admin-detail-row"><span>Age</span><span>{profile.age_label}</span></div>
+            )}
+            {profile?.created_at && (
+              <div className="admin-detail-row"><span>Joined</span><span>{new Date(profile.created_at).toLocaleDateString()}</span></div>
+            )}
             {profile?.id && <div className="admin-detail-row"><span>User ID</span><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{profile.id.slice(0, 8)}…</span></div>}
           </div>
         </div>
