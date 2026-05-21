@@ -3360,6 +3360,21 @@ html.admin-on-dark-canvas .admin-topbar,
   width: min(320px, calc(100% - 16px));
   z-index: auto;
   margin: 0;
+  /* The real bar lives over translucent video so 0.06 white reads
+     fine; on the preview's flat #050505 it disappears. Bump the
+     surface + border so the pill is actually visible inside the
+     tile, AND so the 2 px beam ring lands on something readable. */
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Thicken the beam ring inside the preview (3 px vs the 2 px the
+   real bar uses) so the animation is unmistakable at 64 px tile
+   height. Selector matches the existing beam ::before rule but
+   scoped to the admin mock. */
+.admin-ui-beam-mock.bottom-bar[class*="is-beam-"]:not(.is-beam-none)::before {
+  padding: 3px;
+  inset: -3px;
 }
 
 @media (max-width: 720px) {
