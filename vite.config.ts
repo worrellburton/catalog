@@ -45,8 +45,10 @@ export default defineConfig({
             route("clickouts", "routes/admin/clickouts.tsx");
             // /admin/content renamed to /admin/data — file moved with
             // git mv, but the legacy URL still resolves so bookmarks
-            // / muscle memory / old cmd-K hits don't 404.
-            route("content", "routes/admin/data.tsx");
+            // / muscle memory / old cmd-K hits don't 404. Remix
+            // requires a unique route id when two paths share a file,
+            // hence the explicit id on the alias.
+            route("content", "routes/admin/data.tsx", { id: "admin/content-legacy" });
             route("data", "routes/admin/data.tsx");
             route("ai-users", "routes/admin/ai-users.tsx");
             route("dials", "routes/admin/dials.tsx");
