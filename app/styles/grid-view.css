@@ -211,6 +211,21 @@
   position: relative;
 }
 
+/* Dials Phase 9 — when the video/still ratio dial changes, the
+   poster-only branch and the video-bearing branch swap places.
+   The slot div is fully re-mounted so a CSS transition on it
+   has nothing to interpolate from. A short fade-in keyframe
+   covers the swap so the change reads as a soft dissolve rather
+   than a hard cut. The animation only runs on mount, which means
+   the steady-state video doesn't constantly re-fade. */
+@keyframes card-slot-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.look-card .card-video-slot {
+  animation: card-slot-fade-in 0.32s ease both;
+}
+
 /* Shimmer placeholder - shown until video loads. Visible regardless
    of whether a poster image is present so the user never stares at a
    flat black box: a poster (if any) sits on top, but a brief shimmer
