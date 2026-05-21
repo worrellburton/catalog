@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from '@remix-run/react';
 import { looks, creators, type Look } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
-import type { UserUpload, UserGeneration } from '~/services/user-generations';
+import { uploadUserPhoto, type UserUpload, type UserGeneration } from '~/services/user-generations';
 import type { StyleGeneration, StyleGenerationImage } from '~/services/style-generations';
 import {
   getUserAnalytics,
@@ -417,7 +417,11 @@ export default function AdminUserDetail() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <h2 className="admin-section-title">Reference photos ({uploads.length})</h2>
+        <PhotoUploader
+          userId={profile?.id ?? null}
+          uploadCount={uploads.length}
+          onUploaded={u => setUploads(prev => [u, ...prev])}
+        />
         {!resolved ? (
           <p className="admin-detail-empty">Loading…</p>
         ) : uploads.length === 0 ? (
@@ -578,6 +582,77 @@ export default function AdminUserDetail() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+interface PhotoUploaderProps {
+  userId: string | null;
+  uploadCount: number;
+  onUploaded: (u: UserUpload) => void;
+}
+
+/**
+ * Admin-side reference-photo uploader. Sits inline with the
+ * "Reference photos (N)" section header so admins can fill in
+ * reference shots for any user — most useful for AI personas
+ * that don't upload themselves, but available on every detail
+ * page since the existing scraper / generator pipeline can
+ * consume reference photos from real users too.
+ */
+function PhotoUploader({ userId, uploadCount, onUploaded }: PhotoUploaderProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pickFiles = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!userId) return;
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // allow re-selecting the same file later
+    if (files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    for (const file of files) {
+      const { data, error: uploadErr } = await uploadUserPhoto(file, userId);
+      if (uploadErr || !data) {
+        setError(uploadErr || "Upload failed");
+        break;
+      }
+      onUploaded(data);
+    }
+    setUploading(false);
+  }, [userId, onUploaded]);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+      <h2 className="admin-section-title" style={{ margin: 0 }}>
+        Reference photos ({uploadCount})
+      </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {error && <span style={{ fontSize: 12, color: "#dc2626" }}>{error}</span>}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={onChange}
+          style={{ display: "none" }}
+        />
+        <button
+          type="button"
+          className="admin-btn admin-btn-secondary"
+          disabled={!userId || uploading}
+          onClick={pickFiles}
+          title={userId ? "Upload reference photos for this user" : "User has no DB profile to attach photos to"}
+        >
+          {uploading ? "Uploading…" : "+ Upload photos"}
+        </button>
       </div>
     </div>
   );
