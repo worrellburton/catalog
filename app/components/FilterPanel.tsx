@@ -29,7 +29,7 @@ export function hasActiveFilters(filters: ActiveFilters): boolean {
   return Object.values(filters).some(arr => arr.length > 0);
 }
 
-export function getCatalogName(filters: ActiveFilters): string {
+export function getCatalogName(filters: ActiveFilters, previous?: string): string {
   const allActive: string[] = [];
   Object.values(filters).forEach(arr => allActive.push(...arr));
   if (allActive.length === 0) return 'Build Your Catalog';
@@ -39,6 +39,14 @@ export function getCatalogName(filters: ActiveFilters): string {
     const options: string[] = [];
     allActive.forEach(v => { if (catalogNames[v]) options.push(...catalogNames[v]); });
     pool = options.length > 0 ? options : ['The Custom Catalog'];
+  }
+  // De-dupe the previous pick so a toggle ALWAYS visibly changes the
+  // title — without this, Math.random can land on the same row and
+  // the modal looks frozen even though state did update. Only
+  // skip when there's an alternative to fall back to.
+  if (previous && pool.length > 1) {
+    const filtered = pool.filter(n => n !== previous);
+    if (filtered.length > 0) pool = filtered;
   }
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -102,7 +110,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
       if (value === 'bottoms') setBottomsExpanded(true);
     }
     onFiltersChange(updated);
-    setDisplayName(getCatalogName(updated));
+    setDisplayName(prev => getCatalogName(updated, prev));
   }, [activeFilters, onFiltersChange, openSubPanel]);
 
   const isActive = (category: keyof ActiveFilters, value: string) => activeFilters[category].includes(value);

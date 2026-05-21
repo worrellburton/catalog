@@ -19,6 +19,8 @@ export const catalogNames: Record<string, string[]> = {
   'dogs+luxury': ['Diamond Collar Club', 'Trust Fund Puppy', 'Barkingham Palace'],
   'men+dogs': ['Good Boys & Their Boys', 'Mans Best Dressed Friend', 'The Bark Bro Edit'],
   'women+cats': ['Crazy Cat Lady Couture', 'Whiskers & Wardrobe', 'Cat Mom Catalog'],
+  'men+women': ['Couples Therapy Edit', 'His & Hers Closet', 'The Unisex Files', 'Dual Drip', 'For The Both Of You'],
+  'cats+dogs': ['The Whole Petting Zoo', 'Cats vs Dogs Edit', 'Multi-Pet Mayhem', 'Furry Family Files'],
   'men+luxury': ['Big Baller Brand', 'The Yacht Club Edit', 'Old Money Energy'],
   'women+luxury': ['Rich Mom Aesthetic', 'Trust Fund Babe', 'The Heiress Edit'],
   'men+budget': ['Broke Boy Drip', 'The Ramen Budget Edit', 'Frugal King Files'],
