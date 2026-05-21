@@ -8,7 +8,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl, triggerScrape } from '~/services/scrape-product';
+import { addProductUrl, triggerScrape, triggerScrapeFlush } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -2452,8 +2452,13 @@ export default function AdminData() {
                   setCrawledProducts(prev =>
                     prev.map(r => ids.includes(r.id) ? { ...r, scrape_status: 'pending' } : r)
                   );
+                  // Fire-and-forget kick to Modal so the first batch
+                  // starts now instead of waiting for the daily cron.
+                  // Modal's per-call batch cap (10) still applies; the
+                  // remaining queue clears on subsequent cron runs.
+                  void triggerScrapeFlush();
                   showToast(
-                    `Queued ${ids.length} product${ids.length === 1 ? '' : 's'} for spec re-scrape. Modal picks them up on its next pass.`,
+                    `Queued ${ids.length} product${ids.length === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
                   );
                 } catch (err) {
                   const msg = err instanceof Error ? err.message : 'Unknown error';
