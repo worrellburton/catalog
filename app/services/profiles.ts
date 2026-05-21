@@ -196,6 +196,41 @@ export async function getUserHeightAge(
 }
 
 /**
+ * Look up the impersonation target for the /generate?as_user=<id>
+ * flow. Returns the persona's id + display fields when the row exists
+ * and `is_ai=true`; null when the id is unknown or the profile is a
+ * real user. The RLS policies added in 20260521020000 mirror the gate
+ * on `is_ai=true`, so attempting to impersonate a real user would
+ * fail the writes anyway — this lookup just keeps the wizard from
+ * pretending it's working before any rows are touched.
+ */
+export interface ImpersonationTarget {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  gender: 'male' | 'female' | 'unknown';
+}
+
+export async function getImpersonationTarget(
+  userId: string,
+): Promise<ImpersonationTarget | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, gender, is_ai')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data || data.is_ai !== true) return null;
+  const g = data.gender as string | null;
+  return {
+    id: data.id as string,
+    full_name: (data.full_name as string) ?? null,
+    avatar_url: (data.avatar_url as string) ?? null,
+    gender: g === 'male' || g === 'female' ? (g as 'male' | 'female') : 'unknown',
+  };
+}
+
+/**
  * Toggle the explicit admin flag on a profile. Source-of-truth for
  * the admin gate going forward; the Admins tab in /admin/users
  * filters on this column.

@@ -95,6 +95,7 @@ interface ProfileRow {
   height_cm: number | null;
   height_label: string | null;
   age_label: string | null;
+  is_ai: boolean | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,7 +153,7 @@ export default function AdminUserDetail() {
       if (UUID_RE.test(decoded)) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
           .eq('id', decoded)
           .maybeSingle();
         prof = (data ?? null) as ProfileRow | null;
@@ -164,7 +165,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
           .ilike('full_name', decoded);
         const candidates = (data ?? []) as ProfileRow[];
         if (candidates.length === 1) {
@@ -187,7 +188,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
           .ilike('email', `${decoded}@%`)
           .limit(1)
           .maybeSingle();
@@ -439,7 +440,21 @@ export default function AdminUserDetail() {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <h2 className="admin-section-title">Generated looks ({generations.length})</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h2 className="admin-section-title" style={{ margin: 0 }}>
+            Generated looks ({generations.length})
+          </h2>
+          {profile?.is_ai && profile?.id && (
+            <button
+              type="button"
+              className="admin-btn admin-btn-primary"
+              onClick={() => navigate(`/generate?as_user=${profile.id}`)}
+              title="Open the Generate wizard with this AI persona as the active user — every upload, slot pick, and resulting look attaches to the persona."
+            >
+              Generate look as this persona
+            </button>
+          )}
+        </div>
         {!resolved ? (
           <p className="admin-detail-empty">Loading…</p>
         ) : generations.length === 0 ? (
