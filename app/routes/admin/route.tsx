@@ -1,9 +1,10 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
 import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
@@ -288,13 +289,87 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
   );
 }
 
+// MRU helpers — pure functions so they're easy to unit-test if we
+// ever want to. `pickNavMatch` attributes the current location to
+// the longest-prefix nav item so /admin/users/abc credits Users,
+// not Home. `applyMruOrder` is the "visited-first, original order
+// for the rest" sort used by the sidebar.
+function pickNavMatch(pathname: string, items: NavItem[]): string | null {
+  const exact = items.find(i => i.to === pathname);
+  if (exact) return exact.to;
+  const candidates = items
+    .filter(i => pathname === i.to || pathname.startsWith(i.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length);
+  return candidates[0]?.to ?? null;
+}
+
+function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
+  const byTo = new Map(items.map(i => [i.to, i]));
+  const seen = new Set<string>();
+  const out: NavItem[] = [];
+  for (const to of mru) {
+    const item = byTo.get(to);
+    if (item && !seen.has(to)) {
+      out.push(item);
+      seen.add(to);
+    }
+  }
+  for (const item of items) {
+    if (!seen.has(item.to)) {
+      out.push(item);
+      seen.add(item.to);
+    }
+  }
+  return out;
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // MRU sidebar order — persisted per admin on profiles.admin_nav_order.
+  // We hydrate once on mount (or when the signed-in user changes), then
+  // bubble the matching nav item to the top on every route change and
+  // write back to Supabase. The write is fire-and-forget: a failure
+  // just means the next session won't carry the latest tap, no UI
+  // disruption. mruHydrated gates the very first save so we don't
+  // overwrite the row before the read finishes.
+  const [mruOrder, setMruOrder] = useState<string[]>([]);
+  const [mruHydrated, setMruHydrated] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getAdminNavOrder().then(order => {
+      if (cancelled) return;
+      setMruOrder(order);
+      setMruHydrated(true);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  useEffect(() => {
+    if (!mruHydrated) return;
+    const matched = pickNavMatch(location.pathname, navItems);
+    if (!matched) return;
+    setMruOrder(prev => {
+      // Already at the head? No-op — avoids a redundant write on
+      // initial mount when the user lands on whatever was already
+      // their most-recent page.
+      if (prev[0] === matched) return prev;
+      const next = [matched, ...prev.filter(t => t !== matched)];
+      void saveAdminNavOrder(next);
+      return next;
+    });
+  }, [location.pathname, mruHydrated]);
+
+  const orderedNavItems = useMemo(
+    () => applyMruOrder(navItems, mruOrder),
+    [mruOrder],
+  );
 
   // Sync the topbar query to the URL ?q= so any admin page can read it
   // via useAdminSearch() and live-filter its visible data. Debounced so
@@ -481,9 +556,16 @@ export default function AdminLayout() {
           <span className="admin-badge">Admin</span>
         </div>
         <nav className="admin-nav">
-          {navItems.map((item, i) => {
-            const prev = navItems[i - 1];
-            const showSectionHeader = item.section && item.section !== prev?.section;
+          {orderedNavItems.map((item, i) => {
+            // Section headers only fire when consecutive items belong
+            // to different sections; with MRU reordering the original
+            // grouping breaks, so we suppress headers entirely once a
+            // user has any history. Static order remains intact for
+            // brand-new admins who haven't visited anything yet.
+            const prev = orderedNavItems[i - 1];
+            const showSectionHeader = mruOrder.length === 0
+              && item.section
+              && item.section !== prev?.section;
             return (
               <Fragment key={item.to}>
                 {showSectionHeader && (
