@@ -7,6 +7,12 @@ import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackImpression } from '~/services/session-tracker';
+import {
+  prefetchVideoBytes,
+  captureVideoFrame,
+  isMobileViewport,
+  isSlowConnection,
+} from '~/services/video-loading';
 
 // Per-session impression dedupe so a user scrolling past the same
 // look five times only counts as one impression (one round trip).
@@ -101,7 +107,13 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const trailId = lookTrailId(look.id);
-  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const fullVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Mobile / slow connections get the smaller H.264 480p variant when
+  // it exists (mirrors pickVideoUrl() in CreativeCard). Same URL is used
+  // by LookOverlay so TrailVideoHost's PoolEntry doesn't re-swap src on
+  // handoff (which would force a re-buffer + first-frame black).
+  const wantMobile = isMobileViewport() || isSlowConnection();
+  const videoUrl = wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl;
   // Look thumbnail (server-extracted) → look cover image → empty.
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
@@ -152,6 +164,26 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     };
   }, [videoActive, trailId]);
 
+  // Phase 8 — Background-warm the HTTP cache while the card sits in the
+  // wider render band (2 viewports). By the time the user actually scrolls
+  // it into the active band (or taps it for the overlay), the moov atom
+  // + first GOP are already cached and the <video> element gets first
+  // frame instantly. Mirrors CreativeCard's prefetch and is the single
+  // biggest perceived-latency win for cold-tap navigations.
+  //
+  // Prefetch BOTH the chosen variant and the full-res so the LookOverlay
+  // hero (which uses the same chosenUrl) is covered, and any consumer
+  // that picks full-res independently still hits the cache.
+  useEffect(() => {
+    if (!inRenderBand) return;
+    if (previewOnly) return;
+    const t = window.setTimeout(() => {
+      prefetchVideoBytes(videoUrl);
+      if (videoUrl !== fullVideoUrl) prefetchVideoBytes(fullVideoUrl);
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl]);
+
   return (
     <div
       ref={cardRef}
@@ -165,6 +197,19 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           return;
         }
         if (!(e.target as HTMLElement).closest('.card-creator-row')) {
+          // Phase 9 — snapshot the currently-playing frame so LookOverlay
+          // can paint it as an instant poster behind its hero <video> slot.
+          // Eliminates the black flash between card → overlay even when
+          // the trail-host hasn't yet swapped the live element across.
+          try {
+            const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
+            const frame = captureVideoFrame(video);
+            if (frame) {
+              const w = window as Window & { __feedTapPosters?: Record<string, string> };
+              w.__feedTapPosters = w.__feedTapPosters || {};
+              w.__feedTapPosters[trailId] = frame;
+            }
+          } catch { /* ignore — overlay falls back to thumbnail_url */ }
           onOpenLook(look);
         }
       }}
