@@ -803,9 +803,50 @@
   padding: 0;
   cursor: pointer;
   display: block;
+  width: 100%;
   transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .pd-look-tile:hover { transform: translateY(-2px); }
+
+/* Wrapper that stacks the creator chip above the media tile. The
+   chip used to be a transparent overlay on the bottom-left, but it
+   washed out against the underlying video on most looks (you couldn't
+   tell who made the look unless you opened it). Pulling it out into a
+   header row above the card guarantees the attribution always reads. */
+.pd-look-tile-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pd-look-tile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  min-height: 28px;
+}
+.pd-look-tile-header:hover .pd-look-tile-header-name { text-decoration: underline; }
+.pd-look-tile-header-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.12);
+  flex: 0 0 auto;
+}
+.pd-look-tile-header-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 
 /* Shimmer loading state shown when a look tile has no poster image.
    Uses the same sweep animation as .look-card .card-shimmer so the

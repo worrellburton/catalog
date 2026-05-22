@@ -344,57 +344,62 @@ function LookTile({
   }, [fullResVideoUrl]);
 
   return (
-    <button
-      type="button"
-      className="pd-look-tile"
-      onClick={() => onOpen(look)}
-      onMouseEnter={handleIntent}
-      onTouchStart={handleIntent}
-      ref={wrapRef}
-    >
-      {tilePoster ? (
-        <img
-          src={tilePoster}
-          alt=""
-          aria-hidden="true"
-          className="pd-look-tile-video"
-          loading={eagerPoster ? 'eager' : 'lazy'}
-          fetchPriority={eagerPoster ? 'high' : 'auto'}
-          decoding="async"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-        />
-      ) : (
-        <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
-      )}
-      <div
-        ref={setSlot}
-        className="pd-look-tile-video"
-        data-trail-id={trailId}
-        style={{ position: 'relative', zIndex: 1 }}
-      />
-
-      <div className="pd-look-tile-meta">
-        {/* Always render the creator chip in the lower-left so every
-            look has a visible attribution. Static creators get their
-            real avatar + name; user-generated orphan looks fall back
-            to an initial circle so the chip never disappears. */}
-        <span className="pd-look-tile-creator">
-          {avatarUrl ? (
-            <img
-              className="pd-look-tile-avatar"
-              src={avatarUrl}
-              alt=""
-              loading="lazy"
-            />
-          ) : (
-            <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
-              {(displayName || look.creator || '?').charAt(0).toUpperCase()}
-            </span>
-          )}
-          <span>{displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}</span>
+    <div className="pd-look-tile-wrap">
+      {/* Creator attribution sits ABOVE the media card so the avatar +
+          handle aren't camouflaged against dark video content (which
+          was happening when the chip was overlaid on the lower-left).
+          Tapping the row still opens the look — same intent as the
+          button below. */}
+      <button
+        type="button"
+        className="pd-look-tile-header"
+        onClick={() => onOpen(look)}
+        onMouseEnter={handleIntent}
+        onTouchStart={handleIntent}
+        aria-label={displayName ? `Open ${displayName}'s look` : 'Open look'}
+      >
+        {avatarUrl ? (
+          <img className="pd-look-tile-header-avatar" src={avatarUrl} alt="" loading="lazy" />
+        ) : (
+          <span className="pd-look-tile-header-avatar pd-look-tile-avatar--initial" aria-hidden="true">
+            {(displayName || look.creator || '?').charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className="pd-look-tile-header-name">
+          {displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}
         </span>
-      </div>
-    </button>
+      </button>
+
+      <button
+        type="button"
+        className="pd-look-tile"
+        onClick={() => onOpen(look)}
+        onMouseEnter={handleIntent}
+        onTouchStart={handleIntent}
+        ref={wrapRef}
+      >
+        {tilePoster ? (
+          <img
+            src={tilePoster}
+            alt=""
+            aria-hidden="true"
+            className="pd-look-tile-video"
+            loading={eagerPoster ? 'eager' : 'lazy'}
+            fetchPriority={eagerPoster ? 'high' : 'auto'}
+            decoding="async"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        ) : (
+          <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
+        )}
+        <div
+          ref={setSlot}
+          className="pd-look-tile-video"
+          data-trail-id={trailId}
+          style={{ position: 'relative', zIndex: 1 }}
+        />
+      </button>
+    </div>
   );
 }
 
