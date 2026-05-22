@@ -56,11 +56,29 @@ export function productSlug(p: ProductLike): string {
 export interface LookLike {
   id?: string | number | null;
   creator?: string | null;
+  creatorDisplayName?: string | null;
   title?: string | null;
 }
 
+/**
+ * Pick the cleanest creator label for the URL. Orphan looks (looks
+ * promoted from a user-generation without a real handle) carry the
+ * synthetic placeholder `user:<uuid>` in the `creator` field — passing
+ * that to `kebab()` produces a 36-char UUID embedded in the slug,
+ * which is what the user just flagged ("/l/user-27729261-…"). When
+ * we see the placeholder we prefer the human display name; falling
+ * back to nothing rather than the UUID.
+ */
+function pickCreatorLabel(l: LookLike): string {
+  const c = (l.creator ?? '').trim();
+  if (c && !c.startsWith('user:')) return c;
+  const dn = (l.creatorDisplayName ?? '').trim();
+  return dn;
+}
+
 export function lookSlug(l: LookLike): string {
-  const human = kebab([l.creator, l.title].filter(Boolean).join(' '));
+  const creatorLabel = pickCreatorLabel(l);
+  const human = kebab([creatorLabel, l.title].filter(Boolean).join(' '));
   // Look IDs in the seed data are simple numbers; pass them through
   // verbatim so the URL ends with /quiet-luxury-1 etc. UUID looks
   // (if/when looks move to the DB) get the same 8-char prefix

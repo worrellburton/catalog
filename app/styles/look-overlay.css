@@ -585,39 +585,39 @@ body:has(.look-overlay.look-overlay--in) {
   .look-hero-section {
     flex-direction: column;
     height: auto;
+    /* Belt-and-suspenders: any min-height the desktop rule introduces
+       must not constrain the column. Each child owns its own height. */
+    min-height: 0;
   }
   .look-media-col {
     flex: 0 0 auto;
     width: 100%;
-    /* Let the video drive its own height (9:16) so the whole frame
-       is visible — was previously 60dvh-clamped which cropped the
-       lower 30-40% of every look. */
-    height: auto;
-  }
-  /* Drop the 40px padding so the video uses every pixel of the
-     viewport width; pair with width:100% on .look-media so the video
-     spans edge-to-edge and grows downward at 9:16. */
-  .look-media-centered {
-    padding: 0;
-    height: auto;
-  }
-  .look-media {
-    width: 100%;
-    /* Fill the entire viewport so the video reads as the look itself
-       (Reels/TikTok style). The drag handle + info column live just
-       below — the page scrolls them up into view. 75dvh felt cramped
-       because the look kept losing pixels to the bottom-sheet area. */
+    /* The media column IS the first full viewport — owns 100dvh so the
+       look reads as the entire screen on landing. Info column flows
+       below it via normal document order; the page-level scroll on
+       .look-overlay-scroll reveals it. */
     height: 100dvh;
-    max-height: 100dvh;
     /* Subtract the iOS safe-area top inset so the status bar doesn't
        eat into the video frame on notched devices. */
     height: calc(100dvh - env(safe-area-inset-top));
-    max-height: calc(100dvh - env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+  /* Drop the 40px padding so the video uses every pixel of the
+     viewport width; pair with width:100% on .look-media so the video
+     spans edge-to-edge. */
+  .look-media-centered {
+    padding: 0;
+    height: 100%;
+  }
+  .look-media {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
     aspect-ratio: auto;
     border-radius: 0;
   }
   .look-media-video {
-    object-fit: contain;
+    object-fit: cover;
     width: 100%;
     height: 100%;
     background: #000;
@@ -626,7 +626,7 @@ body:has(.look-overlay.look-overlay--in) {
     flex: 1 1 auto;
     width: 100%;
     border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 0;
     /* Critical: remove the desktop `overflow: hidden` that was
        clipping the products list and the "More looks you'll love"
        feed below it. The parent .look-overlay-scroll owns scroll. */
@@ -634,10 +634,12 @@ body:has(.look-overlay.look-overlay--in) {
     /* Match the page bg so seam under the drag handle reads clean. */
     background: #0a0a0a;
   }
-  /* Reveal the drag handle the markup already includes — it's display:
-     none by default and exists only for the bottom-sheet feel on mobile. */
+  /* Drag handle is unused now that the layout is a normal scrolling
+     page rather than a bottom-sheet. Keeping it caused the info
+     column to look like it was supposed to be dragged up, which
+     obscured the affordance ("scroll for products"). */
   .look-drag-strip {
-    display: flex;
+    display: none;
   }
   /* The morphing layout-id transform sometimes leaves a translate
      on .look-info-col on phones. Reset it; the info column flows in

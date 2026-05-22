@@ -267,10 +267,15 @@ function LookTile({
   look,
   index,
   onOpen,
+  onOpenCreator,
 }: {
   look: Look;
   index: number;
   onOpen: (l: Look) => void;
+  /** Click on the creator chip jumps to that creator's catalog
+   *  page instead of opening the look. Routed via the same
+   *  handleOpenCreator wired through to ContinuousFeed elsewhere. */
+  onOpenCreator?: (creatorName: string) => void;
 }) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
@@ -343,63 +348,80 @@ function LookTile({
     if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
   }, [fullResVideoUrl]);
 
+  // Creator click jumps to that creator's catalog page instead of
+  // opening the look. We stopPropagation so the tile-level onClick
+  // (which opens the look overlay) doesn't also fire.
+  const handleCreatorClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onOpenCreator || !look.creator) return;
+    onOpenCreator(look.creator);
+  }, [onOpenCreator, look.creator]);
+
   return (
-    <div className="pd-look-tile-wrap">
-      {/* Creator attribution sits ABOVE the media card so the avatar +
-          handle aren't camouflaged against dark video content (which
-          was happening when the chip was overlaid on the lower-left).
-          Tapping the row still opens the look — same intent as the
-          button below. */}
-      <button
-        type="button"
-        className="pd-look-tile-header"
-        onClick={() => onOpen(look)}
-        onMouseEnter={handleIntent}
-        onTouchStart={handleIntent}
-        aria-label={displayName ? `Open ${displayName}'s look` : 'Open look'}
+    <button
+      type="button"
+      className="pd-look-tile"
+      onClick={() => onOpen(look)}
+      onMouseEnter={handleIntent}
+      onTouchStart={handleIntent}
+      ref={wrapRef}
+    >
+      {tilePoster ? (
+        <img
+          src={tilePoster}
+          alt=""
+          aria-hidden="true"
+          className="pd-look-tile-video"
+          loading={eagerPoster ? 'eager' : 'lazy'}
+          fetchPriority={eagerPoster ? 'high' : 'auto'}
+          decoding="async"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+        />
+      ) : (
+        <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
+      )}
+      <div
+        ref={setSlot}
+        className="pd-look-tile-video"
+        data-trail-id={trailId}
+        style={{ position: 'relative', zIndex: 1 }}
+      />
+
+      {/* Creator chip pinned to the lower-left of the tile. Rendered
+          as a nested clickable role="button" — the outer <button>
+          opens the look; stopPropagation on this chip routes to the
+          creator catalog instead. Avatar pulls profiles.avatar_url
+          via the looks fetcher (see services/looks.ts), so once the
+          admin uploads a profile pic via AvatarUpload it lights up
+          here automatically. */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="pd-look-tile-meta"
+        onClick={handleCreatorClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCreatorClick(e as unknown as React.MouseEvent); }
+        }}
+        title={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+        aria-label={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
       >
         {avatarUrl ? (
-          <img className="pd-look-tile-header-avatar" src={avatarUrl} alt="" loading="lazy" />
+          <img
+            className="pd-look-tile-avatar"
+            src={avatarUrl}
+            alt=""
+            loading="lazy"
+          />
         ) : (
-          <span className="pd-look-tile-header-avatar pd-look-tile-avatar--initial" aria-hidden="true">
+          <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
             {(displayName || look.creator || '?').charAt(0).toUpperCase()}
           </span>
         )}
-        <span className="pd-look-tile-header-name">
+        <span className="pd-look-tile-creator-name">
           {displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}
         </span>
-      </button>
-
-      <button
-        type="button"
-        className="pd-look-tile"
-        onClick={() => onOpen(look)}
-        onMouseEnter={handleIntent}
-        onTouchStart={handleIntent}
-        ref={wrapRef}
-      >
-        {tilePoster ? (
-          <img
-            src={tilePoster}
-            alt=""
-            aria-hidden="true"
-            className="pd-look-tile-video"
-            loading={eagerPoster ? 'eager' : 'lazy'}
-            fetchPriority={eagerPoster ? 'high' : 'auto'}
-            decoding="async"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
-          />
-        ) : (
-          <div className="card-shimmer" style={{ position: 'absolute', inset: 0, zIndex: 0, borderRadius: 0 }} />
-        )}
-        <div
-          ref={setSlot}
-          className="pd-look-tile-video"
-          data-trail-id={trailId}
-          style={{ position: 'relative', zIndex: 1 }}
-        />
-      </button>
-    </div>
+      </span>
+    </button>
   );
 }
 
@@ -1050,7 +1072,7 @@ export default function ProductPage({
                   Same video URL, served from browser cache: zero extra
                   network cost. */}
               {padLooks(lookCreatives, 8).map((l, i) => (
-                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} />
+                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} onOpenCreator={onOpenCreator} />
               ))}
             </div>
           </section>

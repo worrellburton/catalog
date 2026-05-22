@@ -19,6 +19,9 @@ export interface UserGeneration {
   height_cm: number | null;
   height_label: string | null;
   age_label: string | null;
+  /** Frozen weight phrase ("165 lb (75 kg)") captured at submit time;
+   *  null for legacy rows that pre-date the column. */
+  weight_label: string | null;
   style: string;
   prompt: string | null;
   veo_model: string | null;
@@ -669,6 +672,12 @@ export interface CreateGenerationInput {
   heightCm: number;
   heightLabel: string;
   ageLabel: string;
+  /** Frozen weight phrase the prompt should hear. Null/undefined when
+   *  the user hasn't set a weight on their profile yet — the prompt
+   *  builder omits the clause in that case rather than fabricating a
+   *  number. Optional during the gradual rollout so existing call
+   *  sites compile without forcing every caller to thread a value. */
+  weightLabel?: string | null;
   style: string;
   prompt: string;
   durationSeconds: number;
@@ -700,6 +709,7 @@ export async function createGeneration(
       height_cm: input.heightCm,
       height_label: input.heightLabel,
       age_label: input.ageLabel,
+      weight_label: input.weightLabel ?? null,
       style: input.style,
       prompt: input.prompt,
       duration_seconds: input.durationSeconds,
