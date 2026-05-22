@@ -10,9 +10,14 @@ import { supabase } from '~/utils/supabase';
 export interface ProductDetails {
   size_fit: string | null;
   materials_care: string | null;
+  /** Structured per-product measurements keyed by code → centimeters
+   *  (e.g. `{ neck_width_cm: 16, chest_width_cm: 52 }`). Rendered as
+   *  the SVG measurement diagram next to the size_fit copy. Null when
+   *  the scraper hasn't backfilled the row yet. */
+  measurements: Record<string, number> | null;
 }
 
-const SELECT = 'size_fit, materials_care';
+const SELECT = 'size_fit, materials_care, measurements';
 
 /**
  * Fetch the spec-sheet fields for a single product. Tries the cheapest

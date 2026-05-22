@@ -9,6 +9,10 @@ export interface Product {
   // small — ProductPage fetches them once per product open.
   size_fit?: string | null;
   materials_care?: string | null;
+  /** Structured garment measurements keyed by code → centimeters.
+   *  Surfaced as the SVG measurement diagram on /p/<slug>. Null until
+   *  the scraper backfills it; the diagram self-hides when empty. */
+  measurements?: Record<string, number> | null;
 }
 
 export interface Creator {

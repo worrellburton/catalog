@@ -145,6 +145,12 @@ export default function AdminUserDetail() {
   const [analytics, setAnalytics] = useState<UserAnalyticsRow | null>(null);
   const [resolved, setResolved] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  // Tab state for the Generated looks section. 'all' shows every row
+  // (default behaviour); 'queue' filters to pending/generating; 'done'
+  // filters to successful renders; 'failed' filters to the error path.
+  // Mounted as local state so a refresh resets to All — the value isn't
+  // worth syncing to the URL or persisting.
+  const [genTab, setGenTab] = useState<'all' | 'queue' | 'done' | 'failed'>('all');
   useEffect(() => {
     if (!supabase) { setResolved(true); return; }
     let cancelled = false;
@@ -548,7 +554,7 @@ export default function AdminUserDetail() {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <h2 className="admin-section-title" style={{ margin: 0 }}>
             Generated looks ({generations.length})
           </h2>
@@ -563,36 +569,131 @@ export default function AdminUserDetail() {
             </button>
           )}
         </div>
-        {!resolved ? (
-          <p className="admin-detail-empty">Loading…</p>
-        ) : generations.length === 0 ? (
-          <p className="admin-detail-empty">No looks generated yet</p>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-            {generations.map(g => (
-              <div key={g.id} style={{
-                borderRadius: 8, overflow: 'hidden', background: '#fff',
-                border: '1px solid #eee', padding: 10, fontSize: 12,
-              }}>
-                {g.video_url ? (
-                  <video src={g.video_url} muted loop playsInline autoPlay
-                    style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
-                ) : (
-                  <div style={{
-                    width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
-                    color: '#aaa', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    padding: '12px 10px', textAlign: 'center', fontSize: 11, gap: 8,
+        {/* Tabs split the rows by status so the Queue (live, polling
+            every 3s) reads at a glance vs the static history below.
+            Counts update in place as rows promote. */}
+        {generations.length > 0 && (() => {
+          const queueCount = generations.filter(g => g.status === 'pending' || g.status === 'generating').length;
+          const doneCount = generations.filter(g => g.status === 'done').length;
+          const failedCount = generations.filter(g => g.status === 'failed').length;
+          const tabs: { key: typeof genTab; label: string; count: number }[] = [
+            { key: 'all',    label: 'All',         count: generations.length },
+            { key: 'queue',  label: 'In queue',    count: queueCount },
+            { key: 'done',   label: 'Completed',   count: doneCount },
+            { key: 'failed', label: 'Failed',      count: failedCount },
+          ];
+          return (
+            <div style={{
+              display: 'flex', gap: 4, marginTop: 12, marginBottom: 12,
+              flexWrap: 'wrap',
+            }}>
+              {tabs.map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setGenTab(t.key)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 999,
+                    border: '1px solid ' + (genTab === t.key ? '#0a0a0a' : '#e5e5e5'),
+                    background: genTab === t.key ? '#0a0a0a' : '#fff',
+                    color: genTab === t.key ? '#fff' : '#1a1a1a',
+                    cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {t.label}
+                  <span style={{
+                    background: genTab === t.key ? 'rgba(255,255,255,0.18)' : '#f1f1f1',
+                    color: genTab === t.key ? '#fff' : '#888',
+                    borderRadius: 999, padding: '0 6px',
+                    fontSize: 10, fontWeight: 700,
                   }}>
-                    <div style={{ fontWeight: 600, color: g.status === 'failed' ? '#fca5a5' : '#aaa' }}>
-                      {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                    {t.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+        {(() => {
+          if (!resolved) return <p className="admin-detail-empty">Loading…</p>;
+          if (generations.length === 0) return <p className="admin-detail-empty">No looks generated yet</p>;
+          const filtered = generations.filter(g => {
+            if (genTab === 'all') return true;
+            if (genTab === 'queue') return g.status === 'pending' || g.status === 'generating';
+            return g.status === genTab;
+          });
+          if (filtered.length === 0) {
+            return <p className="admin-detail-empty">No looks in this tab</p>;
+          }
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+              {filtered.map(g => {
+                const triggeredByAdmin = !!g.triggered_by_admin_id
+                  && g.triggered_by_admin_id !== profile?.id;
+                const adminName = g.triggered_by_admin_id
+                  ? (adminLabels[g.triggered_by_admin_id] || g.triggered_by_admin_id.slice(0, 8))
+                  : null;
+                return (
+                  <div key={g.id} style={{
+                    borderRadius: 8, overflow: 'hidden', background: '#fff',
+                    border: '1px solid #eee', padding: 10, fontSize: 12,
+                  }}>
+                    {g.video_url ? (
+                      <video src={g.video_url} muted loop playsInline autoPlay
+                        style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
+                    ) : (
+                      <div style={{
+                        width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
+                        color: '#aaa', display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        padding: '12px 10px', textAlign: 'center', fontSize: 11, gap: 8,
+                      }}>
+                        <div style={{ fontWeight: 600, color: g.status === 'failed' ? '#fca5a5' : '#aaa' }}>
+                          {g.status === 'failed' ? 'Failed' : 'Processing…'}
+                        </div>
+                        {g.status === 'failed' && g.error && (
+                          <div
+                            title={g.error}
+                            style={{
+                              color: '#fca5a5', fontSize: 10, lineHeight: 1.35,
+                              display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden', wordBreak: 'break-word',
+                            }}
+                          >
+                            {g.error}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || ' - '}</div>
+                    <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
+                    {/* Tiny chip flags WHO kicked this off. Admin-triggered
+                        rows came in through /generate?as_user=; otherwise
+                        the persona/user self-triggered (the row's user_id
+                        matches the page's user). */}
+                    <div style={{ marginTop: 6 }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 6px', borderRadius: 999,
+                        background: triggeredByAdmin ? '#ede9fe' : '#f1f5f9',
+                        color:      triggeredByAdmin ? '#5b21b6' : '#475569',
+                        fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}>
+                        {triggeredByAdmin
+                          ? `Admin · ${adminName}`
+                          : 'User'}
+                      </span>
                     </div>
                     {g.status === 'failed' && g.error && (
                       <div
                         title={g.error}
                         style={{
-                          color: '#fca5a5', fontSize: 10, lineHeight: 1.35,
-                          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+                          marginTop: 6, color: '#b91c1c', fontSize: 11, lineHeight: 1.35,
+                          background: '#fef2f2', border: '1px solid #fecaca',
+                          borderRadius: 4, padding: '6px 8px',
+                          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                           overflow: 'hidden', wordBreak: 'break-word',
                         }}
                       >
@@ -600,27 +701,11 @@ export default function AdminUserDetail() {
                       </div>
                     )}
                   </div>
-                )}
-                <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || ' - '}</div>
-                <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
-                {g.status === 'failed' && g.error && (
-                  <div
-                    title={g.error}
-                    style={{
-                      marginTop: 6, color: '#b91c1c', fontSize: 11, lineHeight: 1.35,
-                      background: '#fef2f2', border: '1px solid #fecaca',
-                      borderRadius: 4, padding: '6px 8px',
-                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden', wordBreak: 'break-word',
-                    }}
-                  >
-                    {g.error}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       <div style={{ marginTop: 24 }}>

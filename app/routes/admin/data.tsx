@@ -1872,7 +1872,15 @@ export default function AdminData() {
     }),
     [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter]
   );
-  const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
+  // sharedTableId opts this table into the cross-admin sort state in
+  // app_settings — when one admin clicks a column header, every other
+  // admin viewing the page picks up the same sort via realtime. Local
+  // useState is the source of truth; the hook reconciles in both
+  // directions.
+  const productTable = useSortableTable(filteredProductsList, {
+    defaultSort: { key: 'created_at', direction: 'desc' },
+    sharedTableId: 'admin_products',
+  });
 
   // ── Windowed pagination ──────────────────────────────────────────────
   // The table is the most expensive surface in the admin: ~17 cells per

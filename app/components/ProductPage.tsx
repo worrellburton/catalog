@@ -10,6 +10,7 @@ import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
+import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
 import { trackProductClickout } from '~/services/session-tracker';
 import {
@@ -560,14 +561,23 @@ export default function ProductPage({
   const productUrl = product.url;
   const seededFit  = product.size_fit;
   const seededCare = product.materials_care;
+  const seededMeas = product.measurements;
   const [details, setDetails] = useState<ProductDetails | null>(
-    seededFit !== undefined || seededCare !== undefined
-      ? { size_fit: seededFit ?? null, materials_care: seededCare ?? null }
+    seededFit !== undefined || seededCare !== undefined || seededMeas !== undefined
+      ? {
+          size_fit: seededFit ?? null,
+          materials_care: seededCare ?? null,
+          measurements: seededMeas ?? null,
+        }
       : null,
   );
   useEffect(() => {
-    if (seededFit !== undefined || seededCare !== undefined) {
-      setDetails({ size_fit: seededFit ?? null, materials_care: seededCare ?? null });
+    if (seededFit !== undefined || seededCare !== undefined || seededMeas !== undefined) {
+      setDetails({
+        size_fit: seededFit ?? null,
+        materials_care: seededCare ?? null,
+        measurements: seededMeas ?? null,
+      });
       return;
     }
     let cancelled = false;
@@ -581,10 +591,10 @@ export default function ProductPage({
       if (cancelled) return;
       // Even if no row matched, render the section with nulls so the
       // shopper sees "Not available" instead of an indefinite skeleton.
-      setDetails(d ?? { size_fit: null, materials_care: null });
+      setDetails(d ?? { size_fit: null, materials_care: null, measurements: null });
     });
     return () => { cancelled = true; };
-  }, [productId, productUrl, product.brand, product.name, seededFit, seededCare]);
+  }, [productId, productUrl, product.brand, product.name, seededFit, seededCare, seededMeas]);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -950,6 +960,11 @@ export default function ProductPage({
             {details && (
               <section className="pd-specs" aria-label="Size and fit details">
                 <h2 className="pd-specs-title">Size &amp; fit</h2>
+                {/* Structured measurement diagram — self-hides when the
+                    scraper hasn't backfilled the measurements column
+                    for this product yet. Sits above the copy so a
+                    shopper sees the visual spec sheet first. */}
+                <ProductMeasurementsDiagram measurements={details.measurements} />
                 <dl className="pd-specs-list">
                   <div className="pd-specs-row">
                     <dt className="pd-specs-label">Fit</dt>
