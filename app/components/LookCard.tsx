@@ -7,6 +7,8 @@ import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackImpression } from '~/services/session-tracker';
+import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
 import {
   prefetchVideoBytes,
   captureVideoFrame,
@@ -118,13 +120,37 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
   const posterUrl = look.thumbnail_url || look.cover || '';
+  // When the Dial pushes this card into still mode, prefer the first
+  // product's retail image over the look's own thumbnail — the
+  // product photo is the merchandising shot and reads better as a
+  // static tile. Falls back through the poster chain if no product
+  // images are attached.
+  const firstProductImage = look.products?.find(p => !!p.image)?.image || '';
+  const stillImageUrl = firstProductImage || posterUrl;
 
   // Defer slot population to the *active* viewport band. Outside that
   // band the video is detached and returned to the TrailVideoHost pool —
   // bounded CPU/decoder use no matter how long the infinite feed gets.
   // The LookOverlay hero (same trailId) still reuses the same running
   // <video> on tap — no remount, no first-frame black.
-  const videoActive = inActiveBand && !previewOnly;
+  //
+  // Video ↔ Still ratio dial (/admin/dials → video_still_ratio): when
+  // the global ratio is below 100, a deterministic per-card subset
+  // gets forced into the still-image path instead of the video path.
+  //
+  // Fallbacks (Phase 8): the dial is a preference, not a guarantee.
+  //   • A card flagged "still" with no poster falls back to video so
+  //     the slot isn't a flat colour block.
+  //   • A card flagged "video" with no video URL stays as a still
+  //     (its poster / cover image) — same behaviour as today.
+  // inActiveBand / previewOnly gates still apply, so off-screen and
+  // preview cards stay cheap regardless of the dial.
+  const globalVideoRatio = useVideoStillRatio();
+  const dialPrefersVideo = shouldBeVideo(look.id, globalVideoRatio);
+  const hasVideo  = !!videoUrl;
+  const hasPoster = !!posterUrl;
+  const allowVideoForThisCard = hasVideo && (dialPrefersVideo || !hasPoster);
+  const videoActive = inActiveBand && !previewOnly && allowVideoForThisCard;
   const setVideoSlot = useTrailVideo(
     videoActive ? trailId : undefined,
     videoActive ? videoUrl : undefined,
@@ -240,7 +266,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: posterUrl ? `url(${posterUrl})` : undefined,
+              // Prefer the retail product image when the Dial forced
+              // this into the still path; thumbnail / cover are the
+              // fallback chain for cards in still mode for other
+              // reasons (previewOnly, out-of-band, missing video).
+              backgroundImage: (stillImageUrl || posterUrl) ? `url(${stillImageUrl || posterUrl})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               backgroundColor: look.color || '#111',

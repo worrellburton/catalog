@@ -23,12 +23,15 @@ import {
 import {
   pickVideoUrl,
   pickPosterUrl,
+  pickStillImageUrl,
   captureVideoFrame,
   markFeedMilestone,
 } from '~/services/video-loading';
 import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
+import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
 
 interface CreativeCardV2Props {
   creative: ProductAd;
@@ -53,6 +56,25 @@ const CreativeCardV2 = memo(function CreativeCardV2({
 }: CreativeCardV2Props) {
   const posterUrl = pickPosterUrl(creative);
   const playableUrl = pickVideoUrl(creative);
+
+  // Dial: /admin/dials → video_still_ratio controls whether this card
+  // renders as a still image or plays video. When the dial pushes the
+  // card into still mode we show the retail product photo (higher
+  // merchandising quality than the auto-extracted thumbnail) and skip
+  // the director entirely. On mouse-enter the card upgrades to video.
+  const globalVideoRatio = useVideoStillRatio();
+  const dialPrefersVideo = shouldBeVideo(creative.id, globalVideoRatio);
+  const stillImageUrl = pickStillImageUrl(creative);
+  const renderAsStill = !dialPrefersVideo && !!stillImageUrl;
+
+  // Hover-to-play: when in still mode, a mouseenter activates video for
+  // this card. Stays active for the session — no revert on mouseleave.
+  const [hoverPlaying, setHoverPlaying] = useState(false);
+
+  // Director only receives the video URL when we want it to play.
+  // Passing null keeps the card unregistered (still-only path).
+  const activeVideoUrl = (!renderAsStill || hoverPlaying) ? playableUrl : null;
+
   // Poster-first: if we have a still image, skip the shimmer entirely.
   // The shimmer is only useful as a loading skeleton when there is nothing
   // to show yet — with a poster we already have pixels to display.
@@ -70,9 +92,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
 
   // Wire to the director. containerRef goes on the card div — the
   // director will appendChild a pooled <video> here when promoted to top-K.
+  // activeVideoUrl is null in still mode, so the director skips this card.
   const { containerRef, status } = useDirectorSlot(
     directorId,
-    playableUrl,
+    activeVideoUrl,
     posterUrl,
   );
 
@@ -170,7 +193,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         }
         handleClick();
       }}
-      onMouseEnter={handlePrefetch}
+      onMouseEnter={() => {
+        handlePrefetch();
+        if (renderAsStill && !hoverPlaying) setHoverPlaying(true);
+      }}
       onTouchStart={(e) => { handlePrefetch(); beginLongPress(e); }}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
@@ -187,11 +213,13 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         {!loaded && <div className="card-shimmer" />}
 
         {/* Static poster — visible behind the video while the director
-            hasn't yet assigned a pool element (status='idle'/'paused'). */}
-        {posterUrl && (
+            hasn't yet assigned a pool element (status='idle'/'paused').
+            In still mode, shows the retail product image (stillImageUrl)
+            instead of the video thumbnail for better merchandising quality. */}
+        {(renderAsStill ? stillImageUrl : posterUrl) && (
           <img
             className="card-poster"
-            src={posterUrl}
+            src={renderAsStill && !hoverPlaying ? stillImageUrl : posterUrl ?? undefined}
             alt=""
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"

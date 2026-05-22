@@ -9,12 +9,13 @@ export interface Profile {
   provider: string | null;
   role: UserRole;
   is_admin: boolean;
+  is_ai: boolean;
   gender: 'male' | 'female' | 'unknown';
   created_at: string;
   last_sign_in_at: string | null;
 }
 
-const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, gender, created_at, last_sign_in_at';
+const PROFILE_SELECT = 'id, email, full_name, avatar_url, provider, role, is_admin, is_ai, gender, created_at, last_sign_in_at';
 
 export async function getProfiles(): Promise<Profile[]> {
   if (!supabase) return [];
@@ -44,6 +45,7 @@ export async function getProfiles(): Promise<Profile[]> {
     provider: (p.provider as string) || null,
     role: (p.role as UserRole) || 'shopper',
     is_admin: (p.is_admin as boolean) ?? (p.role === 'admin' || p.role === 'super_admin'),
+    is_ai: (p.is_ai as boolean) === true,
     gender: ((p.gender as string) === 'male' || (p.gender as string) === 'female')
       ? (p.gender as 'male' | 'female')
       : 'unknown',
@@ -69,6 +71,7 @@ export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
       ...p,
       role: p.role || 'shopper',
       is_admin: (p as { is_admin?: boolean }).is_admin ?? (p.role === 'admin' || p.role === 'super_admin'),
+      is_ai: (p as { is_ai?: boolean }).is_ai === true,
       gender: (g === 'male' || g === 'female') ? g : 'unknown',
     };
   });
@@ -191,6 +194,62 @@ export async function getUserHeightAge(
     heightCm:    (data?.height_cm    as number | null) ?? null,
     heightLabel: (data?.height_label as string | null) ?? null,
     ageLabel:    (data?.age_label    as string | null) ?? null,
+  };
+}
+
+/**
+ * Update a profile's display name. Used by the AI persona editor on
+ * /admin/user/<id> — the create form picks the initial name; admins
+ * can rename a persona after the fact without round-tripping through
+ * the create flow.
+ */
+export async function updateUserFullName(
+  userId: string,
+  fullName: string,
+): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const trimmed = fullName.trim();
+  if (!trimmed) return { error: 'Name cannot be empty' };
+  const { error } = await supabase
+    .from('profiles')
+    .update({ full_name: trimmed })
+    .eq('id', userId);
+  if (error) return { error: error.message };
+  return {};
+}
+
+/**
+ * Look up the impersonation target for the /generate?as_user=<id>
+ * flow. Returns the persona's id + display fields when the row exists
+ * and `is_ai=true`; null when the id is unknown or the profile is a
+ * real user. The RLS policies added in 20260521020000 mirror the gate
+ * on `is_ai=true`, so attempting to impersonate a real user would
+ * fail the writes anyway — this lookup just keeps the wizard from
+ * pretending it's working before any rows are touched.
+ */
+export interface ImpersonationTarget {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  gender: 'male' | 'female' | 'unknown';
+}
+
+export async function getImpersonationTarget(
+  userId: string,
+): Promise<ImpersonationTarget | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, gender, is_ai')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data || data.is_ai !== true) return null;
+  const g = data.gender as string | null;
+  return {
+    id: data.id as string,
+    full_name: (data.full_name as string) ?? null,
+    avatar_url: (data.avatar_url as string) ?? null,
+    gender: g === 'male' || g === 'female' ? (g as 'male' | 'female') : 'unknown',
   };
 }
 

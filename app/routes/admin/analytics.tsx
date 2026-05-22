@@ -4,12 +4,14 @@ import {
   getUserAnalytics,
   getProductAnalytics,
   getBrandAnalytics,
+  getCreatorContentAnalytics,
   clickThroughRate,
   clickoutRate,
   formatDurationMs,
   type UserAnalyticsRow,
   type ProductAnalyticsRow,
   type BrandAnalyticsRow,
+  type CreatorContentAnalyticsRow,
 } from '~/services/analytics';
 import { supabase } from '~/utils/supabase';
 
@@ -67,8 +69,8 @@ function LiveChip({ live }: { live: boolean }) {
   );
 }
 
-type Tab = 'users' | 'products' | 'brands';
-const TAB_VALUES: readonly Tab[] = ['users', 'products', 'brands'];
+type Tab = 'users' | 'creators' | 'products' | 'brands';
+const TAB_VALUES: readonly Tab[] = ['users', 'creators', 'products', 'brands'];
 function isTab(v: string | null): v is Tab {
   return v !== null && (TAB_VALUES as readonly string[]).includes(v);
 }
@@ -81,6 +83,8 @@ export default function AdminAnalytics() {
       const out = new URLSearchParams(prev);
       if (next === 'users') out.delete('tab');
       else                  out.set('tab', next);
+      // The legacy `view` sub-toggle is gone — Creator is a sibling tab now.
+      out.delete('view');
       return out;
     }, { replace: false });
   }, [setSearchParams]);
@@ -98,6 +102,7 @@ export default function AdminAnalytics() {
   const countLabel = tableMeta.count === null ? null : (() => {
     const n = tableMeta.count.toLocaleString();
     if (tab === 'users')    return `${n} ${tableMeta.count === 1 ? 'user'    : 'users'}`;
+    if (tab === 'creators') return `${n} ${tableMeta.count === 1 ? 'user'    : 'users'}`;
     if (tab === 'products') return `${n} ${tableMeta.count === 1 ? 'product' : 'products'}`;
     return `${n} ${tableMeta.count === 1 ? 'brand' : 'brands'}`;
   })();
@@ -112,6 +117,9 @@ export default function AdminAnalytics() {
         <div className="admin-tabs">
           <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
             Users
+          </button>
+          <button className={`admin-tab ${tab === 'creators' ? 'active' : ''}`} onClick={() => setTab('creators')}>
+            Creators
           </button>
           <button className={`admin-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
             Products
@@ -129,6 +137,7 @@ export default function AdminAnalytics() {
       </div>
 
       {tab === 'users' && <UsersAnalyticsTable onMeta={handleMeta} />}
+      {tab === 'creators' && <CreatorContentAnalyticsTable onMeta={handleMeta} />}
       {tab === 'products' && <ProductsAnalyticsTable onMeta={handleMeta} />}
       {tab === 'brands' && <BrandsAnalyticsTable onMeta={handleMeta} />}
     </div>
@@ -552,7 +561,7 @@ function BrandsAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolea
                     className="admin-icon-btn"
                     title={`View products for ${row.brand}`}
                     aria-label={`View products for ${row.brand}`}
-                    onClick={() => navigate(`/admin/content?tab=products&brand=${encodeURIComponent(row.brand)}`)}
+                    onClick={() => navigate(`/admin/data?tab=products&brand=${encodeURIComponent(row.brand)}`)}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -577,6 +586,171 @@ function BrandTh({
   sortKey: BrandSortKey;
   sortDir: 'asc' | 'desc';
   onSort: (k: BrandSortKey) => void;
+  numeric?: boolean;
+}) {
+  const active = sortKey === col;
+  return (
+    <th
+      className={`admin-th-sortable ${numeric ? 'admin-th-num' : ''} ${active ? 'is-active' : ''}`}
+      onClick={() => onSort(col)}
+      role="button"
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        <svg
+          aria-hidden="true"
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          style={{ opacity: active ? 0.7 : 0.25, flexShrink: 0, transition: 'opacity 0.15s, transform 0.15s',
+            transform: active && sortDir === 'asc' ? 'rotate(180deg)' : 'none' }}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    </th>
+  );
+}
+
+// ── Creators tab ────────────────────────────────────────────────────────────
+
+type CreatorSortKey =
+  | 'name' | 'last_sign_in_at' | 'looks_posted'
+  | 'impressions' | 'clicks' | 'clickouts'
+  | 'ctr_click' | 'ctr_clickout';
+
+function CreatorContentAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolean) => void }) {
+  const [rows, setRows] = useState<CreatorContentAnalyticsRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [sortKey, setSortKey] = useState<CreatorSortKey>('looks_posted');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const { live, pulse } = useLivePulse();
+
+  useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      getCreatorContentAnalytics().then(data => {
+        if (cancelled) return;
+        setRows(data);
+        setLoaded(true);
+      });
+    };
+    refetch();
+    // user_events drives the engagement counters; user_generations
+    // drives the looks_posted count when a creator publishes.
+    const unsub = subscribeAnalytics(
+      ['user_events', 'user_generations'],
+      refetch,
+      pulse,
+    );
+    return () => { cancelled = true; unsub(); };
+  }, [pulse]);
+
+  const sortedRows = useMemo(() => {
+    const cmp = (a: CreatorContentAnalyticsRow, b: CreatorContentAnalyticsRow): number => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortKey) {
+        case 'name': {
+          const an = (a.full_name || a.email || '').toLowerCase();
+          const bn = (b.full_name || b.email || '').toLowerCase();
+          return an.localeCompare(bn) * dir;
+        }
+        case 'last_sign_in_at': {
+          const at = a.last_sign_in_at ? Date.parse(a.last_sign_in_at) : 0;
+          const bt = b.last_sign_in_at ? Date.parse(b.last_sign_in_at) : 0;
+          return (at - bt) * dir;
+        }
+        case 'looks_posted':   return (a.looks_posted      - b.looks_posted)      * dir;
+        case 'impressions':    return (a.total_impressions - b.total_impressions) * dir;
+        case 'clicks':         return (a.total_clicks      - b.total_clicks)      * dir;
+        case 'clickouts':      return (a.total_clickouts   - b.total_clickouts)   * dir;
+        case 'ctr_click': {
+          const ar = clickThroughRate(a) ?? -1;
+          const br = clickThroughRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+        case 'ctr_clickout': {
+          const ar = clickoutRate(a) ?? -1;
+          const br = clickoutRate(b) ?? -1;
+          return (ar - br) * dir;
+        }
+      }
+    };
+    return [...rows].sort(cmp);
+  }, [rows, sortKey, sortDir]);
+
+  const onSort = (key: CreatorSortKey) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
+      setSortDir(key === 'name' ? 'asc' : 'desc');
+      return key;
+    });
+  };
+
+  useEffect(() => { onMeta(sortedRows.length, live); }, [sortedRows.length, live, onMeta]);
+
+  if (!loaded) return <div className="admin-empty">Loading…</div>;
+  if (rows.length === 0) return <div className="admin-empty">No users yet.</div>;
+
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table">
+        <thead>
+          <tr>
+            <CreatorTh col="name" label="User" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <CreatorTh col="last_sign_in_at" label="Last sign-in" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            <CreatorTh col="looks_posted" label="Looks posted" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <CreatorTh col="impressions" label="Impressions" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <CreatorTh col="clicks" label="Clicks" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <CreatorTh col="clickouts" label="Clickouts" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <CreatorTh col="ctr_click" label="CTR (click)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+            <CreatorTh col="ctr_clickout" label="CTR (clickout)" sortKey={sortKey} sortDir={sortDir} onSort={onSort} numeric />
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.map(row => {
+            // Users with 0 published looks render '—' in every metric
+            // column so the table doesn't suggest "0 clicks" was earned.
+            const hasLooks = row.looks_posted > 0;
+            const ctrClick = hasLooks ? clickThroughRate(row) : null;
+            const ctrClickout = hasLooks ? clickoutRate(row) : null;
+            return (
+              <tr key={row.user_id}>
+                <td className="admin-cell-name">
+                  {row.avatar_url
+                    ? <img src={row.avatar_url} alt="" className="admin-user-avatar-img" />
+                    : <span className="admin-user-avatar-img admin-user-avatar-placeholder">
+                        {(row.full_name || row.email || '?').charAt(0).toUpperCase()}
+                      </span>
+                  }
+                  <span>{row.full_name || row.email || row.user_id.slice(0, 8)}</span>
+                </td>
+                <td>{row.last_sign_in_at ? new Date(row.last_sign_in_at).toLocaleString() : '—'}</td>
+                <td className="admin-cell-num">{row.looks_posted.toLocaleString()}</td>
+                <td className="admin-cell-num">{hasLooks ? row.total_impressions.toLocaleString() : '—'}</td>
+                <td className="admin-cell-num">{hasLooks ? row.total_clicks.toLocaleString()      : '—'}</td>
+                <td className="admin-cell-num">{hasLooks ? row.total_clickouts.toLocaleString()   : '—'}</td>
+                <td className="admin-cell-num">{ctrClick    === null ? '—' : `${(ctrClick    * 100).toFixed(1)}%`}</td>
+                <td className="admin-cell-num">{ctrClickout === null ? '—' : `${(ctrClickout * 100).toFixed(1)}%`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CreatorTh({
+  col, label, sortKey, sortDir, onSort, numeric,
+}: {
+  col: CreatorSortKey;
+  label: string;
+  sortKey: CreatorSortKey;
+  sortDir: 'asc' | 'desc';
+  onSort: (k: CreatorSortKey) => void;
   numeric?: boolean;
 }) {
   const active = sortKey === col;

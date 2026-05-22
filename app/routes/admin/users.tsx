@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
+import CreateAiUserModal from '~/components/CreateAiUserModal';
 import { getProfiles, updateUserRole, updateUserIsAdmin, deleteProfile, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
 import { auditAllUserGenders, type UserGender } from '~/services/genders';
@@ -46,6 +47,7 @@ interface UserRow {
   sso: string;
   role: UserRole;
   isAdmin: boolean;
+  isAi: boolean;
   gender: UserGender;
   createdAt: string;
   lastSignIn: string;
@@ -73,6 +75,7 @@ function profileToRow(p: Profile): UserRow {
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
     isAdmin: p.is_admin === true,
+    isAi: p.is_ai === true,
     gender: ((p as { gender?: string }).gender as UserGender) || 'unknown',
     createdAt: formatDate(p.created_at),
     lastSignIn: formatRelative(p.last_sign_in_at),
@@ -84,9 +87,9 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'waitlist' | 'users' | 'admins' | 'super-admins';
+type Tab = 'waitlist' | 'users' | 'admins' | 'ai';
 
-const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins', 'super-admins'];
+const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins', 'ai'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (TAB_VALUES as readonly string[]).includes(value);
@@ -323,7 +326,7 @@ function writeDeletedContentCreators(set: Set<string>) {
 }
 
 export default function AdminUsers() {
-  // Each tab has its own URL — `?tab=waitlist|users|admins|super-admins`.
+  // Each tab has its own URL — `?tab=waitlist|users|admins`.
   // Default is `users` when no param is present (or it's invalid). We
   // bind through useSearchParams so deep-links land on the right tab,
   // the back button walks tab history, and the "Move to admin" CTA's
@@ -698,6 +701,7 @@ export default function AdminUsers() {
         sso: '-',
         role: 'creator' as UserRole,
         isAdmin: false,
+        isAi: false,
         gender: 'unknown' as UserGender,
         createdAt: '-',
         lastSignIn: '-',
@@ -709,7 +713,13 @@ export default function AdminUsers() {
       }));
   }, [dbUsers, deletedContentCreators]);
 
-  const users = useMemo(() => [...dbUsers, ...contentCreators], [dbUsers, contentCreators]);
+  // Users tab is real shoppers + seed-data creators. AI personas live
+  // in their own tab so they don't dilute the engagement numbers in
+  // the regular Users list.
+  const users = useMemo(
+    () => [...dbUsers.filter(u => !u.isAi), ...contentCreators],
+    [dbUsers, contentCreators],
+  );
   // Admins tab: a user counts as an admin when EITHER the explicit
   // is_admin flag is true OR their primary role is admin / super_admin.
   // Either dimension alone used to be enough to make a user "vanish":
@@ -718,16 +728,13 @@ export default function AdminUsers() {
   // never showed up here (is_admin false). We keep the union so no
   // matter how someone is promoted they appear here.
   const admins = useMemo(
-    () => allUsers.filter(u => u.isAdmin || u.role === 'admin' || u.role === 'super_admin'),
+    () => allUsers.filter(u => !u.isAi && (u.isAdmin || u.role === 'admin' || u.role === 'super_admin')),
     [allUsers],
   );
-  // Super-admins are the strict tier (gates destructive UI on consumer
-  // surfaces). Driven purely by role.
-  const superAdmins = useMemo(
-    () => allUsers.filter(u => u.role === 'super_admin'),
+  const aiUsers = useMemo(
+    () => allUsers.filter(u => u.isAi),
     [allUsers],
   );
-
   // Per-row delete. Real DB profiles → deleteProfile + cascade to
   // their generated_videos / user_generations. Seed-data ("content-*")
   // creators → mark the handle deleted in localStorage so the
@@ -871,8 +878,8 @@ export default function AdminUsers() {
 
   // Super-admin toggle - flips the primary role between 'super_admin'
   // and 'admin'. Off lands on 'admin' (not the original role) because
-  // the toggle is only surfaced on the Admins / Super Admins tabs, so
-  // 'admin' is the right neighbouring tier.
+  // the toggle is only surfaced on the Admins tab, so 'admin' is the
+  // right neighbouring tier.
   const handleSuperAdminToggle = useCallback(async (userId: string, next: boolean) => {
     const key = `${userId}|role`;
     if (!tryClaim(key)) return;
@@ -914,7 +921,7 @@ export default function AdminUsers() {
 
   const userTable = useSortableTable(users);
   const adminTable = useSortableTable(admins);
-  const superAdminTable = useSortableTable(superAdmins);
+  const aiUserTable = useSortableTable(aiUsers);
 
   const renderTable = (
     data: UserRow[],
@@ -1089,39 +1096,119 @@ export default function AdminUsers() {
           {auditingGender ? 'Auditing…' : 'Gender audit'}
         </button>
       </div>
-      {/* Order: Waitlist > Users > Admins > Super Admins. The
-          previous Shoppers/Creators split was a false dichotomy —
-          a "shopper" who publishes a look becomes a "creator" with
-          no other state change, so showing them in two tables made
-          the same person appear/disappear on role flips. One Users
-          tab owns everyone who isn't elevated. The Incoming tab was
-          a placeholder for a feature that never shipped — dropped. */}
-      <div className="admin-tabs">
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
-            Waitlist{waitlistIds.size > 0 && <span className="admin-tab-count">{waitlistIds.size}</span>}
-          </button>
+      {/* Order: Waitlist > Users > Admins. Super-admins used to live
+          in their own sub-tab — collapsed back into Admins now that
+          the row already exposes a SUPER toggle next to ADMIN, so a
+          separate tab was redundant. The previous Shoppers/Creators
+          split was a false dichotomy — a "shopper" who publishes a
+          look becomes a "creator" with no other state change. */}
+      {/* Group label distinguishes real people (Waitlist / Users /
+          Admins) from synthetic AI personas living on their own tab.
+          Pure visual — the active tab still drives the table below. */}
+      <div className="admin-tabs" style={{ alignItems: 'flex-end', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: '#888',
+          }}>
+            Human
+          </span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
+                Waitlist{waitlistIds.size > 0 && <span className="admin-tab-count">{waitlistIds.size}</span>}
+              </button>
+            </div>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+                Users{users.length > 0 && <span className="admin-tab-count">{users.length}</span>}
+              </button>
+            </div>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
+                Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-            Users{users.length > 0 && <span className="admin-tab-count">{users.length}</span>}
-          </button>
-        </div>
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
-            Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
-          </button>
-          <button className={`admin-tab admin-tab-sub ${activeTab === 'super-admins' ? 'active' : ''}`} onClick={() => setActiveTab('super-admins')}>
-            Super Admins{superAdmins.length > 0 && <span className="admin-tab-count">{superAdmins.length}</span>}
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: '#888',
+          }}>
+            Synthetic
+          </span>
+          <div className="admin-tab-group">
+            <button className={`admin-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>
+              AI{aiUsers.length > 0 && <span className="admin-tab-count">{aiUsers.length}</span>}
+            </button>
+          </div>
         </div>
       </div>
 
       {activeTab === 'waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}
-      {activeTab === 'super-admins' && renderTable(superAdmins, superAdminTable, 'Super Admin', { showSuperToggle: true })}
+      {activeTab === 'ai' && (
+        <AiUsersTab
+          rows={aiUsers}
+          table={aiUserTable}
+          renderTable={renderTable}
+          onCreated={async (userId) => {
+            // Re-pull profiles so the new AI row appears in the table
+            // immediately, then route to its detail page so the admin
+            // can upload reference photos.
+            const profiles = await getProfiles();
+            const rows = profiles.map(profileToRow);
+            setAllUsers(rows);
+            cachedUsers = rows;
+            navigate(`/admin/user/${userId}`);
+          }}
+        />
+      )}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
+  );
+}
+
+interface AiUsersTabProps {
+  rows: UserRow[];
+  table: ReturnType<typeof useSortableTable<UserRow>>;
+  renderTable: (
+    data: UserRow[],
+    table: ReturnType<typeof useSortableTable<UserRow>>,
+    label: string,
+    options?: { showSuperToggle?: boolean; showAdminToggle?: boolean; showPromoteButton?: boolean },
+  ) => JSX.Element;
+  onCreated: (userId: string) => void;
+}
+
+// Inline tab wrapper that renders the AI persona list + a "+ New AI
+// user" action button. Hooks into the existing renderTable so the
+// columns, sorting, and row affordances match the rest of /admin/users.
+function AiUsersTab({ rows, table, renderTable, onCreated }: AiUsersTabProps) {
+  const [createOpen, setCreateOpen] = useState(false);
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button
+          type="button"
+          className="admin-btn admin-btn-primary"
+          onClick={() => setCreateOpen(true)}
+        >
+          + New AI user
+        </button>
+      </div>
+      {renderTable(rows, table, 'AI user', { showAdminToggle: false })}
+      {createOpen && (
+        <CreateAiUserModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(userId) => {
+            setCreateOpen(false);
+            onCreated(userId);
+          }}
+        />
+      )}
+    </>
   );
 }

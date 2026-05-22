@@ -33,6 +33,28 @@ export async function triggerScrape(productId: string, url: string): Promise<voi
   return _triggerScrape(productId, url);
 }
 
+/**
+ * Ask the Modal scraper to flush every pending / failed row right now
+ * (it dispatches up to 10 per call, bounded by scrape_and_update's
+ * max_containers). Fire-and-forget so the admin UI never blocks on a
+ * Modal cold start; the queued rows still get picked up by the daily
+ * cron if this call fails. Used by the "Ingest measurements & fabrics"
+ * button on /admin/data?tab=products.
+ */
+export async function triggerScrapeFlush(): Promise<void> {
+  if (!MODAL_SCRAPER_URL) return;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  fetch(MODAL_SCRAPER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flush_pending: true }),
+    signal: ctrl.signal,
+  })
+    .catch(() => { /* non-fatal — daily cron will pick it up */ })
+    .finally(() => clearTimeout(timer));
+}
+
 // ============================================
 // Types
 // ============================================

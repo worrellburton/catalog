@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { updateUserHeightAge } from '~/services/profiles';
+import { updateUserHeightAge, updateUserFullName } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
 import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 
@@ -15,6 +15,10 @@ export interface StatsBits {
   heightLabel: string | null;
   ageLabel: string | null;
   gender: UserGender;
+  /** Only carried when the modal was opened with `editName=true`. The
+   *  consumer-facing /style + /generate surfaces don't surface the
+   *  name field; the admin AI persona editor does. */
+  fullName?: string | null;
 }
 
 interface Props {
@@ -22,9 +26,17 @@ interface Props {
   initial: StatsBits;
   onClose: () => void;
   onSaved: (next: StatsBits) => void;
+  /** When true, the modal renders a Name field above Height + commits
+   *  the new value via updateUserFullName. Used by /admin/user/<id>
+   *  to rename AI personas inline. */
+  editName?: boolean;
+  /** Optional title override — defaults to "Your stats" so /style and
+   *  /generate keep their current copy. The admin editor reads "Edit
+   *  profile" instead. */
+  title?: string;
 }
 
-export default function StatsEditorModal({ userId, initial, onClose, onSaved }: Props) {
+export default function StatsEditorModal({ userId, initial, onClose, onSaved, editName, title }: Props) {
   // Resolve the height dropdown's selection from the saved cm value
   // when present, otherwise fall back to a label match so users who
   // only have the label persisted still land on the right row.
@@ -44,6 +56,7 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved }: 
   const [heightLabel, setHeightLabel] = useState<string>(initialHeight.label);
   const [ageLabel, setAgeLabel] = useState<string>(initial.ageLabel ?? 'mid 20s');
   const [gender, setGender] = useState<UserGender>(initial.gender);
+  const [fullName, setFullName] = useState<string>(initial.fullName ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,21 +69,31 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved }: 
   async function handleSave() {
     setSaving(true);
     setError(null);
-    const [heightResult, genderResult] = await Promise.all([
+    const promises: Promise<{ error?: string | null }>[] = [
       updateUserHeightAge(userId, { heightCm, heightLabel, ageLabel }),
       updateUserGender(userId, gender),
-    ]);
+    ];
+    if (editName) {
+      promises.push(updateUserFullName(userId, fullName));
+    }
+    const results = await Promise.all(promises);
     setSaving(false);
-    if (heightResult.error) { setError(heightResult.error); return; }
-    if (genderResult.error) { setError(genderResult.error); return; }
-    onSaved({ heightCm, heightLabel, ageLabel, gender });
+    const firstError = results.find(r => r.error)?.error;
+    if (firstError) { setError(firstError); return; }
+    onSaved({
+      heightCm,
+      heightLabel,
+      ageLabel,
+      gender,
+      ...(editName ? { fullName: fullName.trim() } : {}),
+    });
   }
 
   return (
     <div className="style-stats-modal" onClick={onClose} role="dialog" aria-modal="true">
       <div className="style-stats-card" onClick={e => e.stopPropagation()}>
         <div className="style-stats-header">
-          <h2>Your stats</h2>
+          <h2>{title ?? 'Your stats'}</h2>
           <button
             type="button"
             className="style-stats-close"
@@ -81,6 +104,19 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved }: 
         <p className="style-stats-hint">
           These get used in every generated look so the model matches your build.
         </p>
+
+        {editName && (
+          <label className="style-stats-field">
+            <span className="style-stats-label">Name</span>
+            <input
+              type="text"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              disabled={saving}
+              placeholder="e.g. Ava — Fall Editorial"
+            />
+          </label>
+        )}
 
         <label className="style-stats-field">
           <span className="style-stats-label">Height</span>

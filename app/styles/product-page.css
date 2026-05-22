@@ -243,6 +243,60 @@
   }
 }
 
+/* Size & fit + Materials & care spec sheet that sits between the
+   retailer drawer and the brand rail. Two-row dl so the labels align
+   vertically; empty rows fade out so the section reads cleanly even
+   when the scraper hasn't backfilled the row yet. */
+.pd-specs {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-specs-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+
+.pd-specs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.pd-specs-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.pd-specs-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.pd-specs-value {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+}
+
+.pd-specs-value.is-empty {
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+}
+
 /* Rail variant of "More from this brand" - desktop-only, 2-up grid
    that fills the negative space below the Shop drawer. Hidden on
    mobile because the full-width strip below the hero is already there. */

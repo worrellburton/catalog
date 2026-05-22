@@ -1,9 +1,10 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
 import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
@@ -22,7 +23,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/admin', label: 'Home', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
   { to: '/admin/users', label: 'Users', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
-  { to: '/admin/content', label: 'Content', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
+  { to: '/admin/data', label: 'Data', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
   { to: '/admin/catalogs', label: 'Catalogs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { to: '/admin/search', label: 'Search', icon: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35' },
   { to: '/admin/advertisements', label: 'Partnerships', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { to: '/admin/apis', label: 'APIs', icon: 'M4 6h16M4 12h16M4 18h16' },
   { to: '/admin/branding', label: 'Branding', icon: 'M4 7h16M4 12h10M4 17h16' },
   { to: '/admin/ui', label: 'UI', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
+  { to: '/admin/dials', label: 'Dials', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
   { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
   { to: '/admin/projections', label: 'Projections', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
@@ -56,10 +58,13 @@ interface SearchItem {
 const allSearchItems: SearchItem[] = [
   // Pages
   { label: 'Users', type: 'Page', to: '/admin/users' },
+  { label: 'AI Users', type: 'Page', to: '/admin/users?tab=ai' },
   { label: 'Waitlist', type: 'Page', to: '/admin/users?tab=waitlist' },
   { label: 'Admins', type: 'Page', to: '/admin/users?tab=admins' },
-  { label: 'Super Admins', type: 'Page', to: '/admin/users?tab=super-admins' },
-  { label: 'Content', type: 'Page', to: '/admin/content' },
+  { label: 'Super Admins', type: 'Page', to: '/admin/users?tab=admins' },
+  { label: 'Data', type: 'Page', to: '/admin/data' },
+  // Old name kept in the search index so muscle memory still resolves.
+  { label: 'Content', type: 'Page', to: '/admin/data' },
   { label: 'Catalogs', type: 'Page', to: '/admin/catalogs' },
   { label: 'Search', type: 'Page', to: '/admin/search' },
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
@@ -85,6 +90,8 @@ const allSearchItems: SearchItem[] = [
   { label: '30 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=30' },
   { label: '60 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=60' },
   { label: 'UI', type: 'Page', to: '/admin/ui' },
+  { label: 'Dials', type: 'Page', to: '/admin/dials' },
+  { label: 'Video to still ratio', type: 'Page', to: '/admin/dials' },
   { label: 'Brand', type: 'Page', to: '/admin/ui/brand' },
   { label: 'Search bar', type: 'Page', to: '/admin/ui/search-bar' },
   { label: 'Beam', type: 'Page', to: '/admin/ui/search-bar' },
@@ -288,13 +295,87 @@ function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => vo
   );
 }
 
+// MRU helpers — pure functions so they're easy to unit-test if we
+// ever want to. `pickNavMatch` attributes the current location to
+// the longest-prefix nav item so /admin/users/abc credits Users,
+// not Home. `applyMruOrder` is the "visited-first, original order
+// for the rest" sort used by the sidebar.
+function pickNavMatch(pathname: string, items: NavItem[]): string | null {
+  const exact = items.find(i => i.to === pathname);
+  if (exact) return exact.to;
+  const candidates = items
+    .filter(i => pathname === i.to || pathname.startsWith(i.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length);
+  return candidates[0]?.to ?? null;
+}
+
+function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
+  const byTo = new Map(items.map(i => [i.to, i]));
+  const seen = new Set<string>();
+  const out: NavItem[] = [];
+  for (const to of mru) {
+    const item = byTo.get(to);
+    if (item && !seen.has(to)) {
+      out.push(item);
+      seen.add(to);
+    }
+  }
+  for (const item of items) {
+    if (!seen.has(item.to)) {
+      out.push(item);
+      seen.add(item.to);
+    }
+  }
+  return out;
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // MRU sidebar order — persisted per admin on profiles.admin_nav_order.
+  // We hydrate once on mount (or when the signed-in user changes), then
+  // bubble the matching nav item to the top on every route change and
+  // write back to Supabase. The write is fire-and-forget: a failure
+  // just means the next session won't carry the latest tap, no UI
+  // disruption. mruHydrated gates the very first save so we don't
+  // overwrite the row before the read finishes.
+  const [mruOrder, setMruOrder] = useState<string[]>([]);
+  const [mruHydrated, setMruHydrated] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getAdminNavOrder().then(order => {
+      if (cancelled) return;
+      setMruOrder(order);
+      setMruHydrated(true);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  useEffect(() => {
+    if (!mruHydrated) return;
+    const matched = pickNavMatch(location.pathname, navItems);
+    if (!matched) return;
+    setMruOrder(prev => {
+      // Already at the head? No-op — avoids a redundant write on
+      // initial mount when the user lands on whatever was already
+      // their most-recent page.
+      if (prev[0] === matched) return prev;
+      const next = [matched, ...prev.filter(t => t !== matched)];
+      void saveAdminNavOrder(next);
+      return next;
+    });
+  }, [location.pathname, mruHydrated]);
+
+  const orderedNavItems = useMemo(
+    () => applyMruOrder(navItems, mruOrder),
+    [mruOrder],
+  );
 
   // Sync the topbar query to the URL ?q= so any admin page can read it
   // via useAdminSearch() and live-filter its visible data. Debounced so
@@ -481,9 +562,16 @@ export default function AdminLayout() {
           <span className="admin-badge">Admin</span>
         </div>
         <nav className="admin-nav">
-          {navItems.map((item, i) => {
-            const prev = navItems[i - 1];
-            const showSectionHeader = item.section && item.section !== prev?.section;
+          {orderedNavItems.map((item, i) => {
+            // Section headers only fire when consecutive items belong
+            // to different sections; with MRU reordering the original
+            // grouping breaks, so we suppress headers entirely once a
+            // user has any history. Static order remains intact for
+            // brand-new admins who haven't visited anything yet.
+            const prev = orderedNavItems[i - 1];
+            const showSectionHeader = mruOrder.length === 0
+              && item.section
+              && item.section !== prev?.section;
             return (
               <Fragment key={item.to}>
                 {showSectionHeader && (

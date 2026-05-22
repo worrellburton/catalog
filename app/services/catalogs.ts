@@ -11,6 +11,10 @@ export interface Catalog {
   sortOrder: number;
   isFeatured: boolean;
   status: 'draft' | 'live' | 'archived';
+  isHome: boolean;
+  filterGender: boolean;
+  filterAge: boolean;
+  boostTopConverting: boolean;
 }
 
 interface CatalogRow {
@@ -24,7 +28,13 @@ interface CatalogRow {
   sort_order: number;
   is_featured: boolean;
   status: 'draft' | 'live' | 'archived';
+  is_home: boolean;
+  filter_gender: boolean;
+  filter_age: boolean;
+  boost_top_converting: boolean;
 }
+
+const CATALOG_SELECT = 'id, slug, name, description, theme_prompt, gender, cover_url, sort_order, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting';
 
 function fromRow(row: CatalogRow): Catalog {
   return {
@@ -38,6 +48,10 @@ function fromRow(row: CatalogRow): Catalog {
     sortOrder: row.sort_order,
     isFeatured: row.is_featured,
     status: row.status,
+    isHome: row.is_home ?? false,
+    filterGender: row.filter_gender ?? false,
+    filterAge: row.filter_age ?? false,
+    boostTopConverting: row.boost_top_converting ?? false,
   };
 }
 
@@ -45,7 +59,7 @@ export async function getLiveCatalogs(): Promise<Catalog[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('catalogs')
-    .select('id, slug, name, description, theme_prompt, gender, cover_url, sort_order, is_featured, status')
+    .select(CATALOG_SELECT)
     .eq('status', 'live')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
@@ -60,7 +74,7 @@ export async function getCatalogBySlug(slug: string): Promise<Catalog | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('catalogs')
-    .select('id, slug, name, description, theme_prompt, gender, cover_url, sort_order, is_featured, status')
+    .select(CATALOG_SELECT)
     .eq('slug', slug)
     .maybeSingle();
   if (error || !data) return null;
@@ -93,7 +107,7 @@ export async function upsertCatalog(input: {
   const { data, error } = await supabase
     .from('catalogs')
     .upsert(payload, { onConflict: 'slug' })
-    .select('id, slug, name, description, theme_prompt, gender, cover_url, sort_order, is_featured, status')
+    .select(CATALOG_SELECT)
     .single();
   if (error || !data) {
     console.error('upsertCatalog failed:', error?.message);
@@ -267,4 +281,62 @@ export async function removeCatalogProduct(catalogId: string, productId: string)
     return false;
   }
   return true;
+}
+
+// ============================================
+// Catalog toggles + signals
+// ============================================
+
+export async function getHomeCatalog(): Promise<Catalog | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('catalogs')
+    .select(CATALOG_SELECT)
+    .eq('is_home', true)
+    .maybeSingle();
+  if (error || !data) return null;
+  return fromRow(data as CatalogRow);
+}
+
+export async function updateCatalogToggles(
+  slug: string,
+  toggles: Partial<Pick<Catalog, 'filterGender' | 'filterAge' | 'boostTopConverting'>>
+): Promise<boolean> {
+  if (!supabase) return false;
+  if (Object.keys(toggles).length === 0) return true;
+  // Uses a SECURITY DEFINER RPC (migration 094) so the anon admin client
+  // can update the three boolean columns without a broad UPDATE RLS policy.
+  const { error } = await supabase.rpc('admin_update_catalog_toggles', {
+    p_slug:                 slug,
+    p_filter_gender:        toggles.filterGender        ?? null,
+    p_filter_age:           toggles.filterAge           ?? null,
+    p_boost_top_converting: toggles.boostTopConverting  ?? null,
+  });
+  if (error) {
+    console.error('updateCatalogToggles failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export interface CatalogSearchCounts {
+  catalogName: string;
+  count24h: number;
+  count7d: number;
+  countTotal: number;
+}
+
+export async function getCatalogSearchCounts(catalogNames: string[]): Promise<CatalogSearchCounts[]> {
+  if (!supabase || catalogNames.length === 0) return [];
+  const { data, error } = await supabase.rpc('catalog_search_counts', { catalog_names: catalogNames });
+  if (error || !data) {
+    console.warn('getCatalogSearchCounts failed:', error?.message);
+    return [];
+  }
+  return (data as { catalog_name: string; count_24h: number; count_7d: number; count_total: number }[]).map(r => ({
+    catalogName: r.catalog_name,
+    count24h: r.count_24h ?? 0,
+    count7d: r.count_7d ?? 0,
+    countTotal: r.count_total ?? 0,
+  }));
 }

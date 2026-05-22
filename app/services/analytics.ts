@@ -99,6 +99,36 @@ export async function getBrandAnalytics(): Promise<BrandAnalyticsRow[]> {
 }
 
 /**
+ * Per-user creator-content rollup from the `user_creator_analytics_summary`
+ * RPC. Counts the user's published looks plus the impressions / clicks /
+ * clickouts those looks earned from OTHER shoppers — so a creator
+ * scrolling their own feed doesn't inflate their numbers.
+ */
+export interface CreatorContentAnalyticsRow {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  role: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  looks_posted: number;
+  total_impressions: number;
+  total_clicks: number;
+  total_clickouts: number;
+}
+
+export async function getCreatorContentAnalytics(): Promise<CreatorContentAnalyticsRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('user_creator_analytics_summary');
+  if (error) {
+    console.error('[getCreatorContentAnalytics]', error.message);
+    return [];
+  }
+  return (data ?? []) as CreatorContentAnalyticsRow[];
+}
+
+/**
  * Pretty-print millisecond durations as `Hh Mm` / `Mm Ss` / `Ns`.
  * Used in the analytics table so column widths stay tight.
  */

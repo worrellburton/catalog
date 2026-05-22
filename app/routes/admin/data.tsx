@@ -1,5 +1,6 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
+import { extractFabric } from '~/utils/extractFabric';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
@@ -7,7 +8,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
-import { addProductUrl, triggerScrape } from '~/services/scrape-product';
+import { addProductUrl, triggerScrape, triggerScrapeFlush } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
@@ -38,6 +39,12 @@ interface CrawledProduct {
   gender?: 'male' | 'female' | 'unisex' | null;
   created_at?: string | null;
   source?: string | null;
+  /** Freeform measurements / fit copy scraped from the product page.
+   *  Surfaced on the row via the measurements icon column. ~1% of
+   *  rows have it filled in today; the rest fall back to "Not
+   *  available" in the hover panel. */
+  size_fit?: string | null;
+  materials_care?: string | null;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -235,7 +242,18 @@ interface UnpublishedLook {
   creator_name: string | null;
   creator_avatar: string | null;
   creator_email: string | null;
+  /** True when the look's owning profile is_ai=true. Drives the
+   *  AI vs Human split filter on the /admin/data Looks tab. */
+  creator_is_ai: boolean;
 }
+
+/** AI vs Human sub-filter for the Looks tab. 'all' shows every row,
+ *  'human' filters to looks owned by real profiles, 'ai' filters to
+ *  looks owned by AI personas (regardless of who triggered them —
+ *  admin impersonations still count as AI looks because the row
+ *  attaches to the persona). Persisted in the URL alongside the
+ *  existing ?looks=published|unpublished|failed pill. */
+type LookSource = 'all' | 'human' | 'ai';
 
 // Defers attaching the <video> until the row scrolls into the
 // viewport. Without this, the Unpublished tab stamps ~14 cross-
@@ -512,7 +530,7 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source');
+      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -750,7 +768,7 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
   );
 }
 
-export default function AdminContent() {
+export default function AdminData() {
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
   // is deep-linkable and the browser back button works like users expect.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -789,6 +807,20 @@ export default function AdminContent() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
+
+  // AI vs Human source filter — second axis on the Looks tab. Persisted
+  // in the URL so reloads stay on the same view and links shared with
+  // other admins land them on the same filter.
+  const urlSource = (searchParams.get('source') as LookSource | null) || 'all';
+  const lookSource: LookSource = (['all', 'human', 'ai'].includes(urlSource) ? urlSource : 'all') as LookSource;
+  const setLookSource = useCallback((next: LookSource) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (next === 'all') p.delete('source');
+      else p.set('source', next);
+      return p;
+    }, { replace: false });
+  }, [setSearchParams]);
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
@@ -815,7 +847,7 @@ export default function AdminContent() {
         if (fetchedLooks.length > 0) setLooks(fetchedLooks);
         if (Object.keys(fetchedCreators).length > 0) setCreators(fetchedCreators);
       } catch (err) {
-        console.warn('[AdminContent] live looks fetch failed, keeping static seed:', err);
+        console.warn('[AdminData] live looks fetch failed, keeping static seed:', err);
       }
     })();
     return () => { cancelled = true; };
@@ -836,19 +868,24 @@ export default function AdminContent() {
         .select('id, user_id, status, style, height_label, age_label, height_cm, model, veo_model, prompt, fal_request_id, completed_at, storage_path, video_url, error, created_at, user_generation_products(count)')
         .order('created_at', { ascending: false });
       if (error) {
-        console.warn('[AdminContent] unpublished looks fetch failed:', error);
+        console.warn('[AdminData] unpublished looks fetch failed:', error);
         if (!cancelled) setUnpublishedLoading(false);
         return;
       }
       const userIds = Array.from(new Set((gens || []).map((g: { user_id: string }) => g.user_id)));
-      const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
+      const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
       if (userIds.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, email')
+          .select('id, full_name, avatar_url, email, is_ai')
           .in('id', userIds);
-        (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null }) => {
-          profilesById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email });
+        (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
+          profilesById.set(p.id, {
+            full_name: p.full_name,
+            avatar_url: p.avatar_url,
+            email: p.email,
+            is_ai: p.is_ai === true,
+          });
         });
       }
       if (cancelled) return;
@@ -885,6 +922,7 @@ export default function AdminContent() {
           creator_name: prof?.full_name ?? null,
           creator_avatar: prof?.avatar_url ?? null,
           creator_email: prof?.email ?? null,
+          creator_is_ai: prof?.is_ai === true,
         };
       });
       setUnpublished(rows);
@@ -895,14 +933,30 @@ export default function AdminContent() {
 
   // Split user_generations into pending/done (Unpublished tab) and failed
   // (Failed tab) so admins can triage without scrolling past dead rows.
+  // The source filter (All / Human / AI) layers on top of the
+  // published/unpublished/failed pill so admins can answer "show me
+  // every AI-persona look still pending" or "every human-generated
+  // failure" without combining queries by hand.
+  const sourceMatch = useCallback((g: UnpublishedLook) => {
+    if (lookSource === 'all') return true;
+    return lookSource === 'ai' ? g.creator_is_ai : !g.creator_is_ai;
+  }, [lookSource]);
   const unpublishedActive = useMemo(
-    () => unpublished.filter(g => g.status !== 'failed'),
-    [unpublished],
+    () => unpublished.filter(g => g.status !== 'failed' && sourceMatch(g)),
+    [unpublished, sourceMatch],
   );
   const failedLooks = useMemo(
-    () => unpublished.filter(g => g.status === 'failed'),
-    [unpublished],
+    () => unpublished.filter(g => g.status === 'failed' && sourceMatch(g)),
+    [unpublished, sourceMatch],
   );
+  // Source-filter counts, unscoped by the published/unpublished pill —
+  // shown next to the All / Human / AI buttons so the admin sees the
+  // distribution at a glance.
+  const sourceCounts = useMemo(() => ({
+    all:   unpublished.length,
+    human: unpublished.filter(g => !g.creator_is_ai).length,
+    ai:    unpublished.filter(g =>  g.creator_is_ai).length,
+  }), [unpublished]);
 
   // Bottom-center publish toast. Stays up ~3.2s and fades. The
   // unpublished-row Publish button drives this - single-shot so we
@@ -1173,6 +1227,7 @@ export default function AdminContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [auditingTypes, setAuditingTypes] = useState(false);
   const [auditingGenders, setAuditingGenders] = useState(false);
+  const [ingestingSpecs, setIngestingSpecs] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
 
   // AI copywriter
@@ -1281,7 +1336,7 @@ export default function AdminContent() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1647,7 +1702,7 @@ export default function AdminContent() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -1708,7 +1763,7 @@ export default function AdminContent() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -1743,6 +1798,8 @@ export default function AdminContent() {
         entry.gender = cp.gender ?? null;
         entry.created_at = cp.created_at ?? null;
         entry.source = cp.source ?? null;
+        entry.size_fit = cp.size_fit ?? null;
+        entry.materials_care = cp.materials_care ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -1773,6 +1830,8 @@ export default function AdminContent() {
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
           source: cp.source ?? null,
+          size_fit: cp.size_fit ?? null,
+          materials_care: cp.materials_care ?? null,
         });
       }
     });
@@ -1860,7 +1919,15 @@ export default function AdminContent() {
     }),
     [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter]
   );
-  const productTable = useSortableTable(filteredProductsList, { key: 'created_at', direction: 'desc' });
+  // sharedTableId opts this table into the cross-admin sort state in
+  // app_settings — when one admin clicks a column header, every other
+  // admin viewing the page picks up the same sort via realtime. Local
+  // useState is the source of truth; the hook reconciles in both
+  // directions.
+  const productTable = useSortableTable(filteredProductsList, {
+    defaultSort: { key: 'created_at', direction: 'desc' },
+    sharedTableId: 'admin_products',
+  });
 
   // ── Windowed pagination ──────────────────────────────────────────────
   // The table is the most expensive surface in the admin: ~17 cells per
@@ -2299,8 +2366,8 @@ export default function AdminContent() {
       )}
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1>Content</h1>
-          <p className="admin-page-subtitle">Manage all platform content</p>
+          <h1>Data</h1>
+          <p className="admin-page-subtitle">Manage all platform data</p>
         </div>
         {activeTab === 'looks' && (
           <button className="admin-btn admin-btn-primary" onClick={openCreateLookModal}>
@@ -2361,7 +2428,7 @@ export default function AdminContent() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2392,7 +2459,7 @@ export default function AdminContent() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source')
+                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2409,6 +2476,91 @@ export default function AdminContent() {
                 <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
               {auditingGenders ? 'Auditing…' : 'Gender audit'}
+            </button>
+            {/* Ingest measurements & fabrics — marks every visible product
+                (the currently-filtered list) as scrape_status=pending so
+                the Modal scraper agent re-extracts size_fit / materials_care
+                on its next cron pass. "Everything on here" is interpreted
+                as the filtered set the admin is looking at, not the
+                whole catalog. */}
+            <button
+              className="admin-btn admin-btn-secondary"
+              disabled={ingestingSpecs}
+              title="Queue every visible product for spec re-scrape (size_fit + materials_care)"
+              onClick={async () => {
+                if (ingestingSpecs) return;
+                const ids = filteredProductsList
+                  .map(p => p.id)
+                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                if (ids.length === 0) {
+                  showToast('No syncable products in view — only crawled rows can be re-queued.');
+                  return;
+                }
+                setIngestingSpecs(true);
+                try {
+                  if (!supabase) throw new Error('Supabase not configured');
+                  // Update + select so we know exactly how many rows
+                  // RLS let through. A zero-row response means an admin
+                  // gate failed silently (the previous version threw a
+                  // bare PostgrestError that lost its message when the
+                  // catch tried err instanceof Error).
+                  const { data: updated, error } = await supabase
+                    .from('products')
+                    .update({ scrape_status: 'pending' })
+                    .in('id', ids)
+                    .select('id');
+                  if (error) {
+                    // PostgrestError is a plain object — pull the
+                    // human-readable bits out so the toast is actionable
+                    // ("permission denied for table products" etc.)
+                    // instead of "Unknown error".
+                    const parts = [error.message, error.details, error.hint, error.code]
+                      .filter((p): p is string => typeof p === 'string' && p.length > 0);
+                    throw new Error(parts.join(' · ') || 'Postgrest error');
+                  }
+                  const updatedIds = new Set((updated ?? []).map(r => r.id as string));
+                  if (updatedIds.size === 0) {
+                    throw new Error(
+                      'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+                    );
+                  }
+                  setCrawledProducts(prev =>
+                    prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
+                  );
+                  // Fire-and-forget kick to Modal so the first batch
+                  // starts now instead of waiting for the daily cron.
+                  // Modal's per-call batch cap (10) still applies; the
+                  // remaining queue clears on subsequent cron runs.
+                  void triggerScrapeFlush();
+                  showToast(
+                    `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
+                  );
+                } catch (err) {
+                  // Cover both Error instances and bare strings / PostgrestError
+                  // objects that escaped the try block, so the toast is never
+                  // "Unknown error" — that swallowed too many real diagnostics.
+                  const msg = err instanceof Error
+                    ? err.message
+                    : (typeof err === 'string'
+                        ? err
+                        : (err && typeof err === 'object' && 'message' in err
+                            ? String((err as { message?: unknown }).message ?? 'Unknown error')
+                            : 'Unknown error'));
+                  showToast(`Ingest failed: ${msg}`);
+                } finally {
+                  setIngestingSpecs(false);
+                }
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="9" width="20" height="6" rx="1"/>
+                <line x1="6" y1="9" x2="6" y2="12"/>
+                <line x1="10" y1="9" x2="10" y2="13"/>
+                <line x1="14" y1="9" x2="14" y2="12"/>
+                <line x1="18" y1="9" x2="18" y2="13"/>
+              </svg>
+              {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
             </button>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
@@ -2483,6 +2635,40 @@ export default function AdminContent() {
       </div>
 
       {activeTab === 'looks' && (
+        <>
+        {/* Source split sits ABOVE the status pills — it's the
+            primary axis the admin reasons in ("show me AI looks vs
+            human looks"), with status as the sub-filter inside that.
+            Hidden on Published since the curated `looks` table
+            doesn't track is_ai today. */}
+        {looksFilter !== 'published' && (
+          <div className="admin-tabs" style={{ marginBottom: 8 }}>
+            <button
+              className={`admin-tab ${lookSource === 'all' ? 'active' : ''}`}
+              onClick={() => setLookSource('all')}
+              title="Show every look in the current pill, regardless of creator type"
+            >
+              All
+              <span className="admin-tab-badge">{sourceCounts.all}</span>
+            </button>
+            <button
+              className={`admin-tab ${lookSource === 'human' ? 'active' : ''}`}
+              onClick={() => setLookSource('human')}
+              title="Looks created by real shoppers / creators (profile.is_ai = false)"
+            >
+              Human
+              <span className="admin-tab-badge">{sourceCounts.human}</span>
+            </button>
+            <button
+              className={`admin-tab ${lookSource === 'ai' ? 'active' : ''}`}
+              onClick={() => setLookSource('ai')}
+              title="Looks owned by AI personas (profile.is_ai = true) — admin impersonations land here"
+            >
+              AI
+              <span className="admin-tab-badge">{sourceCounts.ai}</span>
+            </button>
+          </div>
+        )}
         <div className="admin-tabs" style={{ marginBottom: 12 }}>
           <button
             className={`admin-tab ${looksFilter === 'published' ? 'active' : ''}`}
@@ -2509,6 +2695,7 @@ export default function AdminContent() {
             <span className="admin-tab-badge">{failedLooks.length}</span>
           </button>
         </div>
+        </>
       )}
 
       {activeTab === 'looks' && (
@@ -3319,6 +3506,7 @@ export default function AdminContent() {
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ minWidth: 140 }}>Fabric</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
                 <th style={{ textAlign: 'center' }} title="When on, this product appears in search results and catalog-wide listings. When off, the product is hidden from the platform but stays in this admin table.">Platform</th>
@@ -3359,6 +3547,15 @@ export default function AdminContent() {
                 <SortableTh label="Method" sortKey="source" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th>Tags</th>
                 <th>Links</th>
+                <th title="Measurements">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Measurements">
+                    <rect x="2" y="9" width="20" height="6" rx="1"/>
+                    <line x1="6"  y1="9"  x2="6"  y2="12"/>
+                    <line x1="10" y1="9"  x2="10" y2="13"/>
+                    <line x1="14" y1="9"  x2="14" y2="12"/>
+                    <line x1="18" y1="9"  x2="18" y2="13"/>
+                  </svg>
+                </th>
                 <th></th>
               </tr>
             </thead>
@@ -3555,6 +3752,13 @@ export default function AdminContent() {
                       <span style={{ color: '#cbd5e1' }}> - </span>
                     )}
                   </td>
+                  {/* Fabric — derived from materials_care for inline display.
+                      The full hover panel is still on the measurements icon
+                      column further right; this column gives a glanceable
+                      composition string. */}
+                  <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.materials_care ?? undefined}>
+                    {extractFabric(p.materials_care) ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     {p.url ? (
                       <a
@@ -3721,6 +3925,41 @@ export default function AdminContent() {
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
+                  </td>
+                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const hasFit  = !!(p.size_fit && p.size_fit.trim());
+                      const hasCare = !!(p.materials_care && p.materials_care.trim());
+                      const hasAny  = hasFit || hasCare;
+                      return (
+                        <div
+                          className={`admin-measurements${hasAny ? ' has-data' : ''}`}
+                          aria-label={hasAny ? 'View measurements' : 'No measurements available'}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="2" y="9" width="20" height="6" rx="1"/>
+                            <line x1="6"  y1="9"  x2="6"  y2="12"/>
+                            <line x1="10" y1="9"  x2="10" y2="13"/>
+                            <line x1="14" y1="9"  x2="14" y2="12"/>
+                            <line x1="18" y1="9"  x2="18" y2="13"/>
+                          </svg>
+                          <div className="admin-measurements-tooltip" role="tooltip">
+                            <div className="admin-measurements-row">
+                              <div className="admin-measurements-label">Size &amp; fit</div>
+                              <div className={`admin-measurements-value${hasFit ? '' : ' is-empty'}`}>
+                                {hasFit ? p.size_fit : 'Not available'}
+                              </div>
+                            </div>
+                            <div className="admin-measurements-row">
+                              <div className="admin-measurements-label">Materials &amp; care</div>
+                              <div className={`admin-measurements-value${hasCare ? '' : ' is-empty'}`}>
+                                {hasCare ? p.materials_care : 'Not available'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td>
                     <button

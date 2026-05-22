@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 interface CreatorLoginToastProps {
   impressions: number;
   clicks: number;
+  clickouts: number;
   /** Optional ISO timestamp the counts are relative to. When null,
    *  we say "since you joined" instead of "since last login". */
   since: string | null;
@@ -24,6 +25,7 @@ interface CreatorLoginToastProps {
 export default function CreatorLoginToast({
   impressions,
   clicks,
+  clickouts,
   since,
   onClick,
   onDismiss,
@@ -97,6 +99,11 @@ export default function CreatorLoginToast({
         <div className="creator-toast-stat">
           <span className="creator-toast-stat-num">{clicks.toLocaleString()}</span>
           <span className="creator-toast-stat-label">{clicks === 1 ? 'click' : 'clicks'}</span>
+        </div>
+        <div className="creator-toast-stat-divider" aria-hidden="true" />
+        <div className="creator-toast-stat">
+          <span className="creator-toast-stat-num">{clickouts.toLocaleString()}</span>
+          <span className="creator-toast-stat-label">{clickouts === 1 ? 'clickout' : 'clickouts'}</span>
         </div>
       </div>
 

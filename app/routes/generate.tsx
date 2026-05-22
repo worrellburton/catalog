@@ -29,7 +29,12 @@ import {
   type GenerationProductDetail,
 } from '~/services/user-generations';
 import { getUserGender, type UserGender } from '~/services/genders';
-import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
+import {
+  getUserHeightAge,
+  updateUserHeightAge,
+  getImpersonationTarget,
+  type ImpersonationTarget,
+} from '~/services/profiles';
 import { ConfirmModal, useConfirm } from '~/components/ConfirmModal';
 import StatsEditorModal from '~/components/StatsEditorModal';
 import '~/styles/style-page.css'; /* shares the stats-editor modal CSS */
@@ -116,6 +121,8 @@ const typicalSecondsFor = (durationSeconds?: number | null) =>
   ?? TYPICAL_GENERATION_SECONDS_DEFAULT;
 
 type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Age presets keep the picker compact - Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
@@ -207,6 +214,53 @@ export default function GeneratePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>(() => readStepFromUrl());
+
+  // Admin impersonation: when /generate?as_user=<id> is set AND the
+  // current session is an admin AND the target is an AI persona
+  // (is_ai=true), every wizard write attaches to the persona, not the
+  // admin. The RLS policies in 20260521020000 mirror this gate so a
+  // forged query string can't bypass it server-side either.
+  //
+  // `impersonate` is the resolved target row when impersonation is
+  // active, or null. `effectiveUserId` is what every downstream call
+  // keys off — defaults to the signed-in user.
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const asUserParam = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const v = new URLSearchParams(window.location.search).get('as_user');
+    return v && UUID_RE.test(v) ? v : null;
+  }, []);
+  const [impersonate, setImpersonate] = useState<ImpersonationTarget | null>(null);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+  const impersonationRequested = !!asUserParam;
+  useEffect(() => {
+    if (!asUserParam) { setImpersonate(null); return; }
+    if (!user?.id) return;
+    if (!isAdmin) {
+      setImpersonate(null);
+      setImpersonateError('Only admins can run /generate as another user.');
+      return;
+    }
+    let cancelled = false;
+    getImpersonationTarget(asUserParam).then(t => {
+      if (cancelled) return;
+      if (!t) {
+        setImpersonate(null);
+        setImpersonateError('That user is not an AI persona — refusing to impersonate.');
+        return;
+      }
+      setImpersonate(t);
+      setImpersonateError(null);
+    });
+    return () => { cancelled = true; };
+  }, [asUserParam, isAdmin, user?.id]);
+
+  const effectiveUserId = impersonate?.id ?? user?.id ?? null;
+  // True only once the impersonation handshake has resolved (or wasn't
+  // requested at all). Used to gate every wizard side-effect so we
+  // don't accidentally load the admin's own uploads/slots in the
+  // window between mount and the profiles lookup landing.
+  const effectiveUserReady = !impersonationRequested || impersonate?.id != null || !!impersonateError;
   // Branded confirm modal — drop-in replacement for window.confirm()
   // across the three destructive sites in this page (feedback delete,
   // saved-look delete, upload delete). Render `confirmHostModal` once
@@ -296,7 +350,7 @@ export default function GeneratePage() {
   );
   const filledKey = filledPublicUrls.join('|');
   useEffect(() => {
-    if (!user?.id) return;
+    if (!effectiveUserId || !effectiveUserReady) return;
     if (filledPublicUrls.length === 0) {
       setSlotChecks(['idle', 'idle', 'idle']);
       setPhotoCheckReason(null);
@@ -312,7 +366,7 @@ export default function GeneratePage() {
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const result = await checkFacePhoto(filledPublicUrls, user.id);
+      const result = await checkFacePhoto(filledPublicUrls, effectiveUserId);
       if (cancelled) return;
       setSlotChecks(prev => {
         const next = [...prev];
@@ -327,7 +381,7 @@ export default function GeneratePage() {
     // We deliberately key off filledKey + slot count so we don't re-run
     // when the user just reorders existingUploads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filledKey, user?.id]);
+  }, [filledKey, effectiveUserId, effectiveUserReady]);
 
   // Past generations - rendered in phase 7 as the "Your looks" grid. We poll
   // pending/generating rows here so the grid promotes itself to done/failed
@@ -483,9 +537,9 @@ export default function GeneratePage() {
   // can't tag.
   const [userGender, setUserGender] = useState<UserGender>('unknown');
   useEffect(() => {
-    if (!user?.id) { setUserGender('unknown'); return; }
-    getUserGender(user.id).then(setUserGender);
-  }, [user?.id]);
+    if (!effectiveUserId || !effectiveUserReady) { setUserGender('unknown'); return; }
+    getUserGender(effectiveUserId).then(setUserGender);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Prefill height + age from the user's profile so they don't have
   // to re-enter on every wizard open. Set a flag once the prefill has
@@ -493,9 +547,10 @@ export default function GeneratePage() {
   // initial defaults back over the saved values during hydration.
   const heightAgeHydrated = useRef(false);
   useEffect(() => {
-    if (!user?.id) { heightAgeHydrated.current = true; return; }
+    heightAgeHydrated.current = false;
+    if (!effectiveUserId || !effectiveUserReady) { heightAgeHydrated.current = true; return; }
     let cancelled = false;
-    getUserHeightAge(user.id).then(saved => {
+    getUserHeightAge(effectiveUserId).then(saved => {
       if (cancelled) return;
       if (saved.heightCm)    setHeightCm(saved.heightCm);
       if (saved.heightLabel) setHeightLabel(saved.heightLabel);
@@ -503,19 +558,19 @@ export default function GeneratePage() {
       heightAgeHydrated.current = true;
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Persist height + age on change. Debounced so dragging the height
   // slider doesn't fire one PATCH per cm. The hydrated guard prevents
   // writing the local defaults back over the user's saved values
   // before the prefill has landed.
   useEffect(() => {
-    if (!user?.id || !heightAgeHydrated.current) return;
+    if (!effectiveUserId || !heightAgeHydrated.current) return;
     const handle = window.setTimeout(() => {
-      updateUserHeightAge(user.id, { heightCm, heightLabel, ageLabel }).catch(() => {});
+      updateUserHeightAge(effectiveUserId, { heightCm, heightLabel, ageLabel }).catch(() => {});
     }, 600);
     return () => window.clearTimeout(handle);
-  }, [user?.id, heightCm, heightLabel, ageLabel]);
+  }, [effectiveUserId, heightCm, heightLabel, ageLabel]);
 
   // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -550,11 +605,12 @@ export default function GeneratePage() {
   // what still exists, in case any were deleted).
   const slotsHydrated = useRef(false);
   useEffect(() => {
-    if (!user?.id) return;
+    slotsHydrated.current = false;
+    if (!effectiveUserId || !effectiveUserReady) return;
     let cancelled = false;
     Promise.all([
-      listUserUploads(user.id),
-      getUserSlots(user.id, MAX_PHOTOS),
+      listUserUploads(effectiveUserId),
+      getUserSlots(effectiveUserId, MAX_PHOTOS),
     ]).then(([uploads, savedSlots]) => {
       if (cancelled) return;
       setExistingUploads(uploads);
@@ -563,27 +619,40 @@ export default function GeneratePage() {
       savedSlots.slice(0, MAX_PHOTOS).forEach((id, i) => {
         if (typeof id === 'string' && known.has(id)) restored[i] = id;
       });
+      // Admin-impersonation convenience: when no saved slots exist on
+      // the persona but reference photos do, auto-pick the most recent
+      // uploads so the admin doesn't have to drag them in by hand
+      // every time. Only fires when ALL slots are empty so we never
+      // overwrite a deliberate pick during a re-hydrate; the
+      // persist-on-change effect below saves the choice back so it
+      // sticks for the next session.
+      const noSavedPicks = restored.every(id => id === null);
+      if (impersonate && noSavedPicks && uploads.length > 0) {
+        uploads.slice(0, MAX_PHOTOS).forEach((u, i) => {
+          restored[i] = u.id;
+        });
+      }
       setSlots(restored);
       slotsHydrated.current = true;
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady, impersonate?.id]);
 
   // Persist slot changes back to Supabase so they survive across
   // sessions and devices. Skipped until after the initial hydrate so
   // we don't overwrite the saved row with the empty `[null,null,null]`
   // default before we've had a chance to read it.
   useEffect(() => {
-    if (!user?.id || !slotsHydrated.current) return;
-    saveUserSlots(user.id, slots);
-  }, [user?.id, slots]);
+    if (!effectiveUserId || !slotsHydrated.current) return;
+    saveUserSlots(effectiveUserId, slots);
+  }, [effectiveUserId, slots]);
 
   // Initial load of past generations - Phase 7 renders them as cards.
   useEffect(() => {
-    if (!user?.id) return;
+    if (!effectiveUserId || !effectiveUserReady) return;
     let cancelled = false;
     setLoadingList(true);
-    listUserGenerations(user.id).then(rows => {
+    listUserGenerations(effectiveUserId).then(rows => {
       if (cancelled) return;
       setGenerations(rows);
       setLoadingList(false);
@@ -596,7 +665,7 @@ export default function GeneratePage() {
       }
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Poll in-flight list rows every 3s so the grid promotes pending/generating
   // rows as soon as the edge function finishes.
@@ -661,16 +730,35 @@ export default function GeneratePage() {
   }, [step, productQuery, userGender]);
 
   // Phase 17 - poll the generation row every 2.5s until it lands on a
-  // terminal status, so the Result view replaces the spinner as soon as
-  // the edge function finishes.
+  // terminal status, so the Result view replaces the spinner as soon
+  // as the edge function finishes.
+  //
+  // Keyed off `generation?.id` only (not the whole `generation`
+  // object) so we don't tear down and rebuild the interval on every
+  // poll tick — the previous shape did, which left a ~2.5s gap each
+  // time the row updated and made the perceived "stuck at 99%" window
+  // longer than it had to be. We also kick a one-shot refetch when
+  // the tab becomes visible again, in case the browser throttled the
+  // interval while the page was backgrounded.
+  const generationIdForPoll = generation?.id ?? null;
+  const generationIsTerminal = generation?.status === 'done' || generation?.status === 'failed';
   useEffect(() => {
-    if (!generation || generation.status === 'done' || generation.status === 'failed') return;
-    const id = window.setInterval(async () => {
-      const next = await getGeneration(generation.id);
-      if (next) setGeneration(next);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [generation]);
+    if (!generationIdForPoll || generationIsTerminal) return;
+    let cancelled = false;
+    const tick = async () => {
+      const next = await getGeneration(generationIdForPoll);
+      if (cancelled || !next) return;
+      setGeneration(next);
+    };
+    const intervalId = window.setInterval(tick, 2500);
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [generationIdForPoll, generationIsTerminal]);
 
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
@@ -800,7 +888,7 @@ export default function GeneratePage() {
   // slot the upload should land in; pass `null` to fall back to the
   // first empty slot.
   const uploadFileIntoSlot = async (file: File, targetSlot: number | null) => {
-    if (!user?.id) return;
+    if (!effectiveUserId) return;
     setUploading(true);
     setUploadError(null);
     const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
@@ -887,7 +975,7 @@ export default function GeneratePage() {
       return;
     }
 
-    const { data, error } = await uploadUserPhoto(fileToUpload, user.id, (pct) => {
+    const { data, error } = await uploadUserPhoto(fileToUpload, effectiveUserId, (pct) => {
       setUploadProgress(prev => prev?.slot === slotForProgress
         ? { slot: slotForProgress, pct }
         : prev);
@@ -1107,8 +1195,8 @@ export default function GeneratePage() {
   }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
 
   const handleSubmit = async () => {
-    if (!user?.id) {
-      setSubmitError('Sign in required');
+    if (!effectiveUserId) {
+      setSubmitError(impersonationRequested ? 'Impersonation target unresolved' : 'Sign in required');
       return;
     }
     setSubmitting(true);
@@ -1126,7 +1214,7 @@ export default function GeneratePage() {
       })),
     });
     const { data, error } = await createGeneration({
-      userId: user.id,
+      userId: effectiveUserId,
       uploadIds: pickedUploadIds,
       products: picked.map((p, i) => ({ product_id: p.id, role_tag: p.role_tag, sort_order: i })),
       heightCm,
@@ -1136,6 +1224,10 @@ export default function GeneratePage() {
       prompt,
       durationSeconds: clipSeconds,
       model,
+      // Stamp the admin's auth id on the row when impersonating an AI
+      // persona so the admin user detail page can split its queue into
+      // "Triggered by Admin" vs "Self-triggered".
+      triggeredByAdminId: impersonate ? user?.id ?? null : null,
     });
     setSubmitting(false);
     if (error || !data) {
@@ -1167,10 +1259,66 @@ export default function GeneratePage() {
       </div>
     );
   }
+  // Admin asked to impersonate but the target lookup either failed or
+  // resolved to a non-AI profile. Hard-stop the wizard so the admin
+  // doesn't think they're generating "as" the persona while every
+  // write silently lands on their own row.
+  if (impersonationRequested && !impersonate && (impersonateError || effectiveUserReady)) {
+    return (
+      <div className="gen-page">
+        <div className="gen-empty">
+          <h2>Can't generate as that user</h2>
+          <p>{impersonateError ?? 'That user is not an AI persona.'}</p>
+          <button className="gen-btn-primary" onClick={() => navigate('/admin/users?tab=ai')}>
+            Back to AI users
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (impersonationRequested && !effectiveUserReady) {
+    return <div className="gen-page"><div className="gen-empty">Resolving impersonation target…</div></div>;
+  }
 
   return (
     <div className="gen-page">
       {confirmHostModal}
+      {impersonate && (
+        <div
+          role="status"
+          style={{
+            position: 'sticky', top: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: '#fef3c7', color: '#92400e',
+            border: '1px solid #fcd34d', borderRadius: 8,
+            padding: '8px 12px', margin: '8px 12px 0', fontSize: 13,
+          }}
+        >
+          {impersonate.avatar_url && (
+            <img
+              src={impersonate.avatar_url}
+              alt=""
+              width={24}
+              height={24}
+              style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }}
+            />
+          )}
+          <span>
+            <strong>Generating as</strong>{' '}
+            {impersonate.full_name || impersonate.id.slice(0, 8)} — every upload &amp; look attaches to this AI persona, not your admin account.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate(`/admin/user/${impersonate.id}`)}
+            style={{
+              marginLeft: 'auto', background: 'transparent', border: '1px solid #fcd34d',
+              color: '#92400e', padding: '4px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            Open persona
+          </button>
+        </div>
+      )}
       <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
         <button
           className="gen-back"
@@ -1956,9 +2104,9 @@ export default function GeneratePage() {
         </>
       )}
 
-      {editingStats && user && (
+      {editingStats && effectiveUserId && (
         <StatsEditorModal
-          userId={user.id}
+          userId={effectiveUserId}
           initial={{ heightCm, heightLabel, ageLabel, gender: userGender }}
           onClose={() => setEditingStats(false)}
           onSaved={(next) => {

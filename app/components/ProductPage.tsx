@@ -9,6 +9,8 @@ import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { getProductDetails, type ProductDetails } from '~/services/product-details';
+import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
 import { trackProductClickout } from '~/services/session-tracker';
 import {
@@ -549,6 +551,51 @@ export default function ProductPage({
     );
   }, [product.brand, product.name]);
 
+  // Lazy-fetch the spec-sheet copy (size_fit, materials_care) once per
+  // product open. The main feed/look loaders don't carry these fields
+  // — keeps their payloads tight — and only ~1% of rows have them
+  // populated today anyway, so we fall back to "Not available" for the
+  // rest. `null` = not loaded yet; the rendered section waits to paint
+  // until we have a definitive answer so it doesn't flash empty.
+  const productId  = (product as Product & { id?: string }).id;
+  const productUrl = product.url;
+  const seededFit  = product.size_fit;
+  const seededCare = product.materials_care;
+  const seededMeas = product.measurements;
+  const [details, setDetails] = useState<ProductDetails | null>(
+    seededFit !== undefined || seededCare !== undefined || seededMeas !== undefined
+      ? {
+          size_fit: seededFit ?? null,
+          materials_care: seededCare ?? null,
+          measurements: seededMeas ?? null,
+        }
+      : null,
+  );
+  useEffect(() => {
+    if (seededFit !== undefined || seededCare !== undefined || seededMeas !== undefined) {
+      setDetails({
+        size_fit: seededFit ?? null,
+        materials_care: seededCare ?? null,
+        measurements: seededMeas ?? null,
+      });
+      return;
+    }
+    let cancelled = false;
+    setDetails(null);
+    getProductDetails({
+      id: productId,
+      url: productUrl,
+      brand: product.brand,
+      name: product.name,
+    }).then(d => {
+      if (cancelled) return;
+      // Even if no row matched, render the section with nulls so the
+      // shopper sees "Not available" instead of an indefinite skeleton.
+      setDetails(d ?? { size_fit: null, materials_care: null, measurements: null });
+    });
+    return () => { cancelled = true; };
+  }, [productId, productUrl, product.brand, product.name, seededFit, seededCare, seededMeas]);
+
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
@@ -905,6 +952,34 @@ export default function ProductPage({
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Size & fit + Materials & care spec sheet. Stopgap render
+                of whatever the scraper extracted; "Not available" until
+                the backfill pass covers the rest of the catalog. */}
+            {details && (
+              <section className="pd-specs" aria-label="Size and fit details">
+                <h2 className="pd-specs-title">Size &amp; fit</h2>
+                {/* Structured measurement diagram — self-hides when the
+                    scraper hasn't backfilled the measurements column
+                    for this product yet. Sits above the copy so a
+                    shopper sees the visual spec sheet first. */}
+                <ProductMeasurementsDiagram measurements={details.measurements} />
+                <dl className="pd-specs-list">
+                  <div className="pd-specs-row">
+                    <dt className="pd-specs-label">Fit</dt>
+                    <dd className={`pd-specs-value${details.size_fit ? '' : ' is-empty'}`}>
+                      {details.size_fit || 'Not available'}
+                    </dd>
+                  </div>
+                  <div className="pd-specs-row">
+                    <dt className="pd-specs-label">Materials</dt>
+                    <dd className={`pd-specs-value${details.materials_care ? '' : ' is-empty'}`}>
+                      {details.materials_care || 'Not available'}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
             )}
 
             {/* "More from <brand>" rail - fills the negative space below

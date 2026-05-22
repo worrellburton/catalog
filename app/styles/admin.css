@@ -1847,6 +1847,82 @@ html.admin-on-dark-canvas .admin-topbar,
   border: 1px solid #e5e5e5;
 }
 
+/* Measurements column on /admin/content?tab=products. Icon-only cell;
+   the tooltip pops above on hover and shows the size_fit /
+   materials_care copy the scraper extracted. Faded out when both
+   are null so the row reads "no data" at a glance. */
+.admin-measurements {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: help;
+}
+.admin-measurements.has-data {
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+}
+
+.admin-measurements-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 280px;
+  padding: 10px 12px;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+/* Little arrow pointing back down at the icon. */
+.admin-measurements-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 10px;
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+.admin-measurements:hover .admin-measurements-tooltip,
+.admin-measurements:focus-within .admin-measurements-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.admin-measurements-row + .admin-measurements-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-measurements-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+.admin-measurements-value {
+  color: rgba(255, 255, 255, 0.9);
+  word-break: break-word;
+}
+.admin-measurements-value.is-empty {
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}
+
 .admin-product-actions {
   display: flex;
   gap: 2px;
@@ -3360,6 +3436,21 @@ html.admin-on-dark-canvas .admin-topbar,
   width: min(320px, calc(100% - 16px));
   z-index: auto;
   margin: 0;
+  /* The real bar lives over translucent video so 0.06 white reads
+     fine; on the preview's flat #050505 it disappears. Bump the
+     surface + border so the pill is actually visible inside the
+     tile, AND so the 2 px beam ring lands on something readable. */
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Thicken the beam ring inside the preview (3 px vs the 2 px the
+   real bar uses) so the animation is unmistakable at 64 px tile
+   height. Selector matches the existing beam ::before rule but
+   scoped to the admin mock. */
+.admin-ui-beam-mock.bottom-bar[class*="is-beam-"]:not(.is-beam-none)::before {
+  padding: 3px;
+  inset: -3px;
 }
 
 @media (max-width: 720px) {
