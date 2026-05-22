@@ -16,6 +16,7 @@
 //   /p/<brand?>-<name?>-<8-char-uuid>         → product
 //   /b/<brand-kebab>                          → brand
 //   /c/<creator-kebab>                        → creator catalog
+//   /?q=<query>                               → search-filtered catalog
 //
 // Anything else falls through to the generic shell with default
 // catalog.shop OG tags.
@@ -196,25 +197,71 @@ function brandMeta(slug: string, fullUrl: string): OgMeta {
   };
 }
 
-async function resolveMeta(pathname: string, fullUrl: string): Promise<OgMeta> {
+// Rotate the title verb so the same query shared twice doesn't unfurl
+// identically — keeps social feeds from looking spammy when the same
+// catalog link rolls through multiple threads.
+const SEARCH_VERBS = ['Shop', 'Get into', 'Browse', 'Find', 'Discover', 'Steal'];
+const SEARCH_TAILS = [
+  'looks on catalog',
+  'on catalog.shop',
+  '— shop the look',
+  'curated on catalog',
+  'fits on catalog',
+];
+function pickFrom<T>(arr: readonly T[], seed: string): T {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return arr[h % arr.length];
+}
+
+async function searchMeta(query: string, fullUrl: string): Promise<OgMeta> {
+  const clean = query.trim();
+  const pretty = clean
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const fallback: OgMeta = {
+    title: pretty
+      ? `${pickFrom(SEARCH_VERBS, clean)} ${pretty} ${pickFrom(SEARCH_TAILS, clean)}`
+      : 'Shop the catalog on catalog',
+    description: pretty
+      ? `Every ${pretty.toLowerCase()} piece and the looks they live in — tap to shop on catalog.shop.`
+      : 'Discover products through curated looks on catalog.shop.',
+    image: null,
+    url: fullUrl,
+  };
+  if (!clean) return fallback;
+
+  // Hero image: first product with an image whose name or brand
+  // matches the search query. One Supabase round trip; falls back
+  // to no image when nothing hits.
+  const orClause = `name.ilike.%${clean}%,brand.ilike.%${clean}%`;
+  const rows = await supaGet(
+    `products?or=(${encodeURIComponent(orClause)})&image_url=not.is.null&select=image_url,brand,name&limit=1`,
+  ) as Array<{ image_url: string | null; brand: string | null; name: string | null }>;
+  const hit = Array.isArray(rows) ? rows[0] : null;
+  if (!hit) return fallback;
+  return { ...fallback, image: hit.image_url ?? null };
+}
+
+async function resolveMeta(pathname: string, fullUrl: string, query: string | null): Promise<OgMeta> {
   const m = pathname.match(/^\/(l|p|b|c)\/(.+?)\/?$/);
-  if (!m) {
-    return {
-      title: 'catalog — shop the look',
-      description: 'A creator-powered shopping platform where you discover products through curated looks.',
-      image: null,
-      url: fullUrl,
-    };
+  if (m) {
+    const [, type, slug] = m;
+    const safeSlug = decodeURIComponent(slug);
+    if (type === 'l') return lookMeta(safeSlug, fullUrl);
+    if (type === 'p') return productMeta(safeSlug, fullUrl);
+    if (type === 'c') return creatorMeta(safeSlug, fullUrl);
+    if (type === 'b') return brandMeta(safeSlug, fullUrl);
   }
-  const [, type, slug] = m;
-  const safeSlug = decodeURIComponent(slug);
-  if (type === 'l') return lookMeta(safeSlug, fullUrl);
-  if (type === 'p') return productMeta(safeSlug, fullUrl);
-  if (type === 'c') return creatorMeta(safeSlug, fullUrl);
-  if (type === 'b') return brandMeta(safeSlug, fullUrl);
+  // Root path with a search query — the user shared a filtered
+  // catalog like catalog.shop/?q=jeans. Unfurl as that filter.
+  if ((pathname === '/' || pathname === '') && query && query.trim()) {
+    return searchMeta(query, fullUrl);
+  }
+  // Generic catalog landing.
   return {
     title: 'catalog — shop the look',
-    description: 'A creator-powered shopping platform.',
+    description: 'A creator-powered shopping platform where every look is shoppable. Tap in.',
     image: null,
     url: fullUrl,
   };
@@ -223,8 +270,13 @@ async function resolveMeta(pathname: string, fullUrl: string): Promise<OgMeta> {
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const target = url.searchParams.get('path') || url.pathname;
-  const fullUrl = `https://catalog.shop${target}`;
-  const meta = await resolveMeta(target, fullUrl);
+  // For search-filter unfurls we route /?q=<query> through vercel.json
+  // and the rewrite carries the q value over as a query param. Read
+  // it back here so the unfurled card reflects the filter.
+  const query = url.searchParams.get('q');
+  const queryString = query ? `?q=${encodeURIComponent(query)}` : '';
+  const fullUrl = `https://catalog.shop${target}${queryString}`;
+  const meta = await resolveMeta(target, fullUrl, query);
 
   // Fetch the static SPA shell so the same JS/CSS hashes ship through
   // — link unfurlers only read the head, but real bot fallbacks

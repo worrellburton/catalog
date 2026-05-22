@@ -12,6 +12,22 @@
       ],
       "destination": "/api/og?path=/:type/:slug"
     },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(facebookexternalhit|Twitterbot|Slackbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Applebot|iMessage|LinkPreview|Pinterest|SkypeUriPreview|redditbot|GoogleBot|bingbot|DuckDuckBot|YandexBot|Baiduspider).*"
+        },
+        {
+          "type": "query",
+          "key": "q",
+          "value": "(?<q>.*)"
+        }
+      ],
+      "destination": "/api/og?path=/&q=:q"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
