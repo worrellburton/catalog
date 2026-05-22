@@ -13,6 +13,7 @@ import {
 } from '~/services/analytics';
 import type { UserGender } from '~/services/genders';
 import StatsEditorModal from '~/components/StatsEditorModal';
+import { AvatarUpload } from '~/components/AvatarCropModal';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -268,6 +269,59 @@ export default function AdminUserDetail() {
     };
   }, [profile?.id]);
 
+  // Poll in-flight generations every 3s so the Generation queue card
+  // (and the Generated looks grid) promote pending → done|failed in
+  // place without an admin-side page refresh. Mirrors the consumer
+  // /generate page's list-polling pattern.
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    const targetId = profile.id;
+    const inFlight = generations.some(g => g.status === 'pending' || g.status === 'generating');
+    if (!inFlight) return;
+    const handle = window.setInterval(async () => {
+      const { data } = await supabase!
+        .from('user_generations')
+        .select('*')
+        .eq('user_id', targetId)
+        .order('created_at', { ascending: false });
+      if (!data) return;
+      setGenerations(data as UserGeneration[]);
+    }, 3000);
+    return () => window.clearInterval(handle);
+  }, [profile?.id, generations]);
+
+  // Resolve display names for every admin that has triggered a
+  // generation on this user, so the queue row can render
+  // "Triggered by <admin name>" instead of a bare UUID. One read on
+  // mount + whenever the set of admin ids referenced changes.
+  const [adminLabels, setAdminLabels] = useState<Record<string, string>>({});
+  const adminIdsKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const g of generations) {
+      if (g.triggered_by_admin_id) ids.add(g.triggered_by_admin_id);
+    }
+    return Array.from(ids).sort().join(',');
+  }, [generations]);
+  useEffect(() => {
+    if (!supabase || !adminIdsKey) { setAdminLabels({}); return; }
+    const ids = adminIdsKey.split(',').filter(Boolean);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const next: Record<string, string> = {};
+        for (const row of data as { id: string; full_name: string | null; email: string | null }[]) {
+          next[row.id] = row.full_name || row.email?.split('@')[0] || row.id.slice(0, 8);
+        }
+        setAdminLabels(next);
+      });
+    return () => { cancelled = true; };
+  }, [adminIdsKey]);
+
   // Header info - prefer real profile data over the URL slug. Fall
   // back to the slug + creator data for legacy creator links.
   const displayName = profile?.full_name || creator?.displayName || decoded;
@@ -285,7 +339,16 @@ export default function AdminUserDetail() {
           Back to Users
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {avatarUrl
+          {profile?.id ? (
+            <div style={{ width: 56, height: 56, position: 'relative' }}>
+              <AvatarUpload
+                userId={profile.id}
+                currentUrl={avatarUrl ?? undefined}
+                fallbackInitial={(displayName || '?').charAt(0)}
+                onUploaded={(url) => setProfile(p => p ? { ...p, avatar_url: url } : p)}
+              />
+            </div>
+          ) : avatarUrl
             ? <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 48, height: 48 }} />
             : <span className="admin-user-avatar-img admin-user-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 18 }}>
                 {(displayName || '?').charAt(0).toUpperCase()}

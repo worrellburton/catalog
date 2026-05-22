@@ -1192,6 +1192,10 @@ export default function GeneratePage() {
       prompt,
       durationSeconds: clipSeconds,
       model,
+      // Stamp the admin's auth id on the row when impersonating an AI
+      // persona so the admin user detail page can split its queue into
+      // "Triggered by Admin" vs "Self-triggered".
+      triggeredByAdminId: impersonate ? user?.id ?? null : null,
     });
     setSubmitting(false);
     if (error || !data) {

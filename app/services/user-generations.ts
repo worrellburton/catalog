@@ -47,6 +47,10 @@ export interface UserGeneration {
   /** Full raw error string from Fal/ByteDance, kept for the Show details
    *  panel so we can debug exotic failures. */
   error_raw?: string | null;
+  /** Auth.users.id of the admin who kicked this off via /generate?as_user=.
+   *  Null for normal self-triggered shopper rows. The admin user detail
+   *  page reads this to split the Generation queue into Admin / User. */
+  triggered_by_admin_id?: string | null;
 }
 
 export interface GenerationProduct {
@@ -669,6 +673,12 @@ export interface CreateGenerationInput {
   prompt: string;
   durationSeconds: number;
   model: 'fast' | 'pro';
+  /** Auth.users.id of the admin who triggered this generation via the
+   *  /generate?as_user=<id> impersonation flow. Null for the normal
+   *  shopper flow where the row's user_id IS the human triggering it.
+   *  Surfaced on the admin user detail page so the queue view can
+   *  split admin-triggered from self-triggered rows. */
+  triggeredByAdminId?: string | null;
 }
 
 /**
@@ -694,6 +704,7 @@ export async function createGeneration(
       prompt: input.prompt,
       duration_seconds: input.durationSeconds,
       model: input.model,
+      triggered_by_admin_id: input.triggeredByAdminId ?? null,
     })
     .select('*')
     .single();

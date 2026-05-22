@@ -2444,13 +2444,33 @@ export default function AdminData() {
                 setIngestingSpecs(true);
                 try {
                   if (!supabase) throw new Error('Supabase not configured');
-                  const { error } = await supabase
+                  // Update + select so we know exactly how many rows
+                  // RLS let through. A zero-row response means an admin
+                  // gate failed silently (the previous version threw a
+                  // bare PostgrestError that lost its message when the
+                  // catch tried err instanceof Error).
+                  const { data: updated, error } = await supabase
                     .from('products')
                     .update({ scrape_status: 'pending' })
-                    .in('id', ids);
-                  if (error) throw error;
+                    .in('id', ids)
+                    .select('id');
+                  if (error) {
+                    // PostgrestError is a plain object — pull the
+                    // human-readable bits out so the toast is actionable
+                    // ("permission denied for table products" etc.)
+                    // instead of "Unknown error".
+                    const parts = [error.message, error.details, error.hint, error.code]
+                      .filter((p): p is string => typeof p === 'string' && p.length > 0);
+                    throw new Error(parts.join(' · ') || 'Postgrest error');
+                  }
+                  const updatedIds = new Set((updated ?? []).map(r => r.id as string));
+                  if (updatedIds.size === 0) {
+                    throw new Error(
+                      'Update returned 0 rows — RLS likely blocked the write. Sign in as an admin user.',
+                    );
+                  }
                   setCrawledProducts(prev =>
-                    prev.map(r => ids.includes(r.id) ? { ...r, scrape_status: 'pending' } : r)
+                    prev.map(r => updatedIds.has(r.id) ? { ...r, scrape_status: 'pending' } : r)
                   );
                   // Fire-and-forget kick to Modal so the first batch
                   // starts now instead of waiting for the daily cron.
@@ -2458,10 +2478,19 @@ export default function AdminData() {
                   // remaining queue clears on subsequent cron runs.
                   void triggerScrapeFlush();
                   showToast(
-                    `Queued ${ids.length} product${ids.length === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
+                    `Queued ${updatedIds.size} product${updatedIds.size === 1 ? '' : 's'} for spec re-scrape. Modal is processing the first batch now.`,
                   );
                 } catch (err) {
-                  const msg = err instanceof Error ? err.message : 'Unknown error';
+                  // Cover both Error instances and bare strings / PostgrestError
+                  // objects that escaped the try block, so the toast is never
+                  // "Unknown error" — that swallowed too many real diagnostics.
+                  const msg = err instanceof Error
+                    ? err.message
+                    : (typeof err === 'string'
+                        ? err
+                        : (err && typeof err === 'object' && 'message' in err
+                            ? String((err as { message?: unknown }).message ?? 'Unknown error')
+                            : 'Unknown error'));
                   showToast(`Ingest failed: ${msg}`);
                 } finally {
                   setIngestingSpecs(false);
