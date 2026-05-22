@@ -619,11 +619,24 @@ export default function GeneratePage() {
       savedSlots.slice(0, MAX_PHOTOS).forEach((id, i) => {
         if (typeof id === 'string' && known.has(id)) restored[i] = id;
       });
+      // Admin-impersonation convenience: when no saved slots exist on
+      // the persona but reference photos do, auto-pick the most recent
+      // uploads so the admin doesn't have to drag them in by hand
+      // every time. Only fires when ALL slots are empty so we never
+      // overwrite a deliberate pick during a re-hydrate; the
+      // persist-on-change effect below saves the choice back so it
+      // sticks for the next session.
+      const noSavedPicks = restored.every(id => id === null);
+      if (impersonate && noSavedPicks && uploads.length > 0) {
+        uploads.slice(0, MAX_PHOTOS).forEach((u, i) => {
+          restored[i] = u.id;
+        });
+      }
       setSlots(restored);
       slotsHydrated.current = true;
     });
     return () => { cancelled = true; };
-  }, [effectiveUserId, effectiveUserReady]);
+  }, [effectiveUserId, effectiveUserReady, impersonate?.id]);
 
   // Persist slot changes back to Supabase so they survive across
   // sessions and devices. Skipped until after the initial hydrate so
