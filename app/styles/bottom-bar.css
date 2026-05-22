@@ -724,6 +724,11 @@
    so we no longer hide/swap blocks when search opens. The bar just lifts +
    widens slightly to read as "actively in use" while suggestions are up. */
 .bottom-bar.search-open {
+  /* Sit above the suggestions track (z-index: 101) so scrolling text
+     never renders on top of the bar. Solid background blocks any
+     content that bleeds through from behind. */
+  z-index: 102;
+  background: rgba(22, 22, 22, 0.96);
   bottom: 40px;
   width: 90%;
   max-width: 520px;
