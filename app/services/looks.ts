@@ -87,6 +87,39 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     return primary?.video_url && (!row.status || row.status === 'live');
   });
 
+  // Forward-rule: every visible look must back-resolve to a real
+  // entity in our DB. Either:
+  //   - the `creator_handle` exists in the `creators` table, OR
+  //   - the `user_id` exists in `profiles`.
+  // Anything else (legacy seed rows whose creator only existed in
+  // `app/data/looks.ts`, mis-imported handles, etc.) gets dropped so
+  // the consumer feed never renders a look whose attribution is
+  // fabricated. The two reference sets are tiny relative to the look
+  // count so a single round trip per fetch is fine.
+  const candidateHandles = Array.from(new Set(
+    liveLooks.map(r => r.creator_handle).filter((h): h is string => !!h),
+  ));
+  const candidateUserIds = Array.from(new Set(
+    liveLooks.map(r => r.user_id).filter((u): u is string => !!u),
+  ));
+  const knownHandles = new Set<string>();
+  const knownUserIds = new Set<string>();
+  if (candidateHandles.length > 0) {
+    const { data: rows } = await supabase
+      .from('creators').select('handle').in('handle', candidateHandles);
+    (rows || []).forEach((r: { handle: string }) => knownHandles.add(r.handle));
+  }
+  if (candidateUserIds.length > 0) {
+    const { data: rows } = await supabase
+      .from('profiles').select('id').in('id', candidateUserIds);
+    (rows || []).forEach((r: { id: string }) => knownUserIds.add(r.id));
+  }
+  const filteredLooks = liveLooks.filter(r => {
+    if (r.creator_handle && knownHandles.has(r.creator_handle)) return true;
+    if (r.user_id && knownUserIds.has(r.user_id)) return true;
+    return false;
+  });
+
   // For looks without a creator_handle (user-published looks created
   // via the manage-looks edge fn - handle is null because the fn
   // doesn't accept it), pull the publisher's profile so the admin
@@ -102,7 +135,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   //     creator's id directly (fall-through from row.user_id).
   const PROMOTED_RE = /Promoted from generation ([0-9a-f-]{36})/i;
   const generationIdToLookId = new Map<string, string>();
-  for (const r of liveLooks) {
+  for (const r of filteredLooks) {
     if (!r.creator_handle && r.description) {
       const m = r.description.match(PROMOTED_RE);
       if (m) generationIdToLookId.set(m[1], r.id);
@@ -122,7 +155,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   }
 
   const orphanUserIds = Array.from(new Set(
-    liveLooks
+    filteredLooks
       .filter(r => !r.creator_handle)
       .map(r => userIdByLookId.get(r.id) || r.user_id)
       .filter((v): v is string => !!v),
@@ -138,7 +171,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     });
   }
 
-  return liveLooks.map((row, index) => {
+  return filteredLooks.map((row, index) => {
     const primary = row.looks_creative[0];
     const profileUserId = !row.creator_handle ? (userIdByLookId.get(row.id) || row.user_id) : undefined;
     const fallbackProfile = profileUserId ? profileById.get(profileUserId) : undefined;
