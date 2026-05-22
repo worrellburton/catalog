@@ -292,7 +292,34 @@ export default function AdminUserDetail() {
               </span>
           }
           <div>
-            <h1 style={{ margin: 0 }}>{displayName}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0 }}>{displayName}</h1>
+              {profile?.is_ai && (
+                <span
+                  title="This profile is a synthetic AI persona (is_ai=true). Generated looks attach to this user, but the row has no real human behind it."
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    borderRadius: 999,
+                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    boxShadow: '0 1px 2px rgba(99, 102, 241, 0.3)',
+                  }}
+                >
+                  {/* Sparkles glyph — quick visual cue for "synthetic" */}
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2zM19 14l.9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14z"/>
+                  </svg>
+                  AI persona
+                </span>
+              )}
+            </div>
             <p className="admin-page-subtitle" style={{ margin: 0 }}>
               {profile?.is_ai
                 ? 'AI persona profile and activity'
