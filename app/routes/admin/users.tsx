@@ -1102,26 +1102,47 @@ export default function AdminUsers() {
           separate tab was redundant. The previous Shoppers/Creators
           split was a false dichotomy — a "shopper" who publishes a
           look becomes a "creator" with no other state change. */}
-      <div className="admin-tabs">
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
-            Waitlist{waitlistIds.size > 0 && <span className="admin-tab-count">{waitlistIds.size}</span>}
-          </button>
+      {/* Group label distinguishes real people (Waitlist / Users /
+          Admins) from synthetic AI personas living on their own tab.
+          Pure visual — the active tab still drives the table below. */}
+      <div className="admin-tabs" style={{ alignItems: 'flex-end', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: '#888',
+          }}>
+            Human
+          </span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'waitlist' ? 'active' : ''}`} onClick={() => setActiveTab('waitlist')}>
+                Waitlist{waitlistIds.size > 0 && <span className="admin-tab-count">{waitlistIds.size}</span>}
+              </button>
+            </div>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+                Users{users.length > 0 && <span className="admin-tab-count">{users.length}</span>}
+              </button>
+            </div>
+            <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
+                Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-            Users{users.length > 0 && <span className="admin-tab-count">{users.length}</span>}
-          </button>
-        </div>
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
-            Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
-          </button>
-        </div>
-        <div className="admin-tab-group">
-          <button className={`admin-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>
-            AI{aiUsers.length > 0 && <span className="admin-tab-count">{aiUsers.length}</span>}
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: '#888',
+          }}>
+            Synthetic
+          </span>
+          <div className="admin-tab-group">
+            <button className={`admin-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>
+              AI{aiUsers.length > 0 && <span className="admin-tab-count">{aiUsers.length}</span>}
+            </button>
+          </div>
         </div>
       </div>
 

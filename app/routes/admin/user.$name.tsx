@@ -11,6 +11,8 @@ import {
   formatDurationMs,
   type UserAnalyticsRow,
 } from '~/services/analytics';
+import type { UserGender } from '~/services/genders';
+import StatsEditorModal from '~/components/StatsEditorModal';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -141,6 +143,7 @@ export default function AdminUserDetail() {
   const [styleGens, setStyleGens] = useState<StyleGenWithImages[]>([]);
   const [analytics, setAnalytics] = useState<UserAnalyticsRow | null>(null);
   const [resolved, setResolved] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   useEffect(() => {
     if (!supabase) { setResolved(true); return; }
     let cancelled = false;
@@ -291,7 +294,9 @@ export default function AdminUserDetail() {
           <div>
             <h1 style={{ margin: 0 }}>{displayName}</h1>
             <p className="admin-page-subtitle" style={{ margin: 0 }}>
-              {isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}
+              {profile?.is_ai
+                ? 'AI persona profile and activity'
+                : isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}
             </p>
           </div>
         </div>
@@ -299,8 +304,21 @@ export default function AdminUserDetail() {
 
       <div className="admin-detail-grid">
         <div className="admin-detail-card">
-          <h3>Profile</h3>
-          <div className="admin-detail-rows">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <h3 style={{ margin: 0 }}>Profile</h3>
+            {profile?.id && (
+              <button
+                type="button"
+                className="admin-btn admin-btn-secondary"
+                onClick={() => setEditingProfile(true)}
+                style={{ padding: '4px 10px', fontSize: 12 }}
+                title="Edit name, gender, height, and age"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          <div className="admin-detail-rows" style={{ marginTop: 10 }}>
             <div className="admin-detail-row"><span>Name</span><span>{displayName}</span></div>
             {profile?.email && <div className="admin-detail-row"><span>Email</span><span>{profile.email}</span></div>}
             {profile?.provider && <div className="admin-detail-row"><span>SSO</span><span style={{ textTransform: 'capitalize' }}>{profile.provider}</span></div>}
@@ -598,6 +616,35 @@ export default function AdminUserDetail() {
           </div>
         )}
       </div>
+
+      {editingProfile && profile?.id && (
+        <StatsEditorModal
+          userId={profile.id}
+          editName
+          title="Edit profile"
+          initial={{
+            heightCm: profile.height_cm,
+            heightLabel: profile.height_label,
+            ageLabel: profile.age_label,
+            gender: (profile.gender === 'male' || profile.gender === 'female')
+              ? (profile.gender as UserGender)
+              : 'unknown',
+            fullName: profile.full_name,
+          }}
+          onClose={() => setEditingProfile(false)}
+          onSaved={(next) => {
+            setProfile(prev => prev ? {
+              ...prev,
+              height_cm: next.heightCm,
+              height_label: next.heightLabel,
+              age_label: next.ageLabel,
+              gender: next.gender,
+              ...(next.fullName != null ? { full_name: next.fullName } : {}),
+            } : prev);
+            setEditingProfile(false);
+          }}
+        />
+      )}
     </div>
   );
 }

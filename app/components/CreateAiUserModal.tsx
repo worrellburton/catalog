@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { createAiUser } from '~/services/ai-users';
+import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 
 interface CreateAiUserModalProps {
   onClose: () => void;
@@ -11,15 +12,25 @@ interface CreateAiUserModalProps {
  * /admin/users. Posts to the create-ai-user edge function which
  * provisions the auth row + flips is_ai=true server-side
  * (necessary because profiles.id has a hard FK to auth.users(id)).
+ *
+ * Height + age use the shared HEIGHT_OPTIONS / AGE_OPTIONS sets from
+ * `~/constants/stats` so the label strings the AI persona inherits
+ * match exactly what /generate and /style serve real shoppers —
+ * Seedance hears the same height phrase regardless of how the persona
+ * was created.
  */
 export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserModalProps) {
   const [fullName, setFullName] = useState('');
   const [gender, setGender] = useState<'men' | 'women' | 'unisex' | ''>('');
-  const [heightCm, setHeightCm] = useState('');
-  const [heightLabel, setHeightLabel] = useState('');
+  // Single height picker: storing cm as the key keeps the label string
+  // derivable so we never end up with a label that doesn't match the
+  // cm value (the typo-prone case the free-text field caused).
+  const [heightCm, setHeightCm] = useState<number | ''>('');
   const [ageLabel, setAgeLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const heightLabel = heightCm === '' ? '' : (HEIGHT_OPTIONS.find(h => h.cm === heightCm)?.label ?? '');
 
   const canSubmit = fullName.trim().length > 0 && !submitting;
 
@@ -29,13 +40,12 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
     setSubmitting(true);
     setError(null);
     try {
-      const parsedHeight = heightCm ? parseInt(heightCm, 10) : null;
       const result = await createAiUser({
         full_name: fullName.trim(),
         gender: gender || null,
-        height_cm: Number.isFinite(parsedHeight) ? parsedHeight : null,
-        height_label: heightLabel.trim() || null,
-        age_label: ageLabel.trim() || null,
+        height_cm: heightCm === '' ? null : heightCm,
+        height_label: heightLabel || null,
+        age_label: ageLabel || null,
       });
       onCreated(result.user_id);
     } catch (err) {
@@ -84,36 +94,30 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-              <span style={{ fontWeight: 600 }}>Age label</span>
-              <input
-                type="text"
+              <span style={{ fontWeight: 600 }}>Age</span>
+              <select
                 value={ageLabel}
                 onChange={e => setAgeLabel(e.target.value)}
-                placeholder="e.g. 25-29"
                 style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e5e5' }}
-              />
+              >
+                <option value="">—</option>
+                {AGE_OPTIONS.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-              <span style={{ fontWeight: 600 }}>Height (cm)</span>
-              <input
-                type="number"
-                min={50}
-                max={250}
-                value={heightCm}
-                onChange={e => setHeightCm(e.target.value)}
-                placeholder="e.g. 175"
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, gridColumn: '1 / -1' }}>
+              <span style={{ fontWeight: 600 }}>Height</span>
+              <select
+                value={heightCm === '' ? '' : String(heightCm)}
+                onChange={e => setHeightCm(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                 style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e5e5' }}
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-              <span style={{ fontWeight: 600 }}>Height label</span>
-              <input
-                type="text"
-                value={heightLabel}
-                onChange={e => setHeightLabel(e.target.value)}
-                placeholder="e.g. 5'9&quot;"
-                style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e5e5' }}
-              />
+              >
+                <option value="">—</option>
+                {HEIGHT_OPTIONS.map(h => (
+                  <option key={h.cm} value={h.cm}>{h.label} ({h.cm} cm)</option>
+                ))}
+              </select>
             </label>
           </div>
           {error && (

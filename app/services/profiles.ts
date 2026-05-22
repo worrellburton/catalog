@@ -45,6 +45,7 @@ export async function getProfiles(): Promise<Profile[]> {
     provider: (p.provider as string) || null,
     role: (p.role as UserRole) || 'shopper',
     is_admin: (p.is_admin as boolean) ?? (p.role === 'admin' || p.role === 'super_admin'),
+    is_ai: (p.is_ai as boolean) === true,
     gender: ((p.gender as string) === 'male' || (p.gender as string) === 'female')
       ? (p.gender as 'male' | 'female')
       : 'unknown',
@@ -70,6 +71,7 @@ export async function getProfilesByRole(role: UserRole): Promise<Profile[]> {
       ...p,
       role: p.role || 'shopper',
       is_admin: (p as { is_admin?: boolean }).is_admin ?? (p.role === 'admin' || p.role === 'super_admin'),
+      is_ai: (p as { is_ai?: boolean }).is_ai === true,
       gender: (g === 'male' || g === 'female') ? g : 'unknown',
     };
   });
@@ -193,6 +195,27 @@ export async function getUserHeightAge(
     heightLabel: (data?.height_label as string | null) ?? null,
     ageLabel:    (data?.age_label    as string | null) ?? null,
   };
+}
+
+/**
+ * Update a profile's display name. Used by the AI persona editor on
+ * /admin/user/<id> — the create form picks the initial name; admins
+ * can rename a persona after the fact without round-tripping through
+ * the create flow.
+ */
+export async function updateUserFullName(
+  userId: string,
+  fullName: string,
+): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const trimmed = fullName.trim();
+  if (!trimmed) return { error: 'Name cannot be empty' };
+  const { error } = await supabase
+    .from('profiles')
+    .update({ full_name: trimmed })
+    .eq('id', userId);
+  if (error) return { error: error.message };
+  return {};
 }
 
 /**
