@@ -6,10 +6,15 @@ import {
   autoAssignCatalogProducts,
   autoAssignLookProducts,
   removeCatalogProduct,
+  updateCatalogToggles,
+  getCatalogSearchCounts,
   type Catalog,
   type CatalogProductDetail,
+  type CatalogSearchCounts,
 } from '~/services/catalogs';
 import { supabase } from '~/utils/supabase';
+import { getFeedSearchResults } from '~/services/feed-search';
+import type { ProductAd } from '~/services/product-creative';
 
 interface CatalogLookRow {
   legacyId: number | null;
@@ -23,6 +28,9 @@ export default function AdminCatalogDetail() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [products, setProducts] = useState<CatalogProductDetail[]>([]);
   const [looks, setLooks] = useState<CatalogLookRow[]>([]);
+  const [feedResults, setFeedResults] = useState<ProductAd[]>([]);
+  const [feedResultsLoading, setFeedResultsLoading] = useState(false);
+  const [searchCounts, setSearchCounts] = useState<CatalogSearchCounts | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -43,6 +51,24 @@ export default function AdminCatalogDetail() {
     setProducts(prods);
     setLooks(lookRows);
     setLoading(false);
+
+    // Search counts for this catalog name
+    getCatalogSearchCounts([c.name]).then(r => setSearchCounts(r[0] ?? null)).catch(() => {});
+
+    // Mirror the consumer feed search for this catalog name so admins can
+    // see exactly what a shopper would see if they typed the catalog name
+    // into the feed search bar. Fired in the background - the main page
+    // doesn't block on it.
+    setFeedResultsLoading(true);
+    try {
+      const ads = await getFeedSearchResults(c.name);
+      setFeedResults(ads.filter(a => !!a.video_url));
+    } catch (err) {
+      console.warn('[AdminCatalogDetail] feed search failed:', err);
+      setFeedResults([]);
+    } finally {
+      setFeedResultsLoading(false);
+    }
   }, [slug]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -120,6 +146,80 @@ export default function AdminCatalogDetail() {
       {toast && (
         <div style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
           {toast}
+        </div>
+      )}
+
+      {/* Home catalog banner */}
+      {catalog.isHome && (
+        <div style={{ padding: '8px 12px', borderRadius: 6, background: '#fef9c3', border: '1px solid #fde047', color: '#713f12', fontSize: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>🏠</span>
+          <span><strong>Home feed catalog.</strong> Products here pin to the top of the consumer landing feed before the organic creative stream.</span>
+        </div>
+      )}
+
+      {/* Feed-control toggles */}
+      <div style={{ display: 'flex', gap: 12, padding: '0 0 16px', flexWrap: 'wrap' }}>
+        {([
+          { key: 'filterGender'       as const, label: 'Gender filter',        desc: "Hide products whose gender tag mismatches the shopper's profile" },
+          { key: 'filterAge'          as const, label: 'Age filter',            desc: 'Hide age_group-mismatched products (run tag-product-age-groups.mjs first)', disabled: true },
+          { key: 'boostTopConverting' as const, label: 'Top-converting first', desc: 'Sort pinned block by conversion_score desc' },
+        ]).map(t => {
+          const on = !!(catalog as Record<string, unknown>)[t.key];
+          return (
+            <div
+              key={t.key}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                borderRadius: 8, border: `1px solid ${on ? '#111' : '#e5e7eb'}`,
+                background: on ? '#f8fafc' : '#fff', opacity: t.disabled ? 0.5 : 1,
+              }}
+            >
+              <button
+                role="switch"
+                aria-checked={on}
+                disabled={t.disabled}
+                onClick={async () => {
+                  if (t.disabled) return;
+                  const next = !on;
+                  setCatalog(prev => prev ? { ...prev, [t.key]: next } : prev);
+                  await updateCatalogToggles(catalog.slug, { [t.key]: next });
+                }}
+                title={t.disabled ? 'Run scripts/tag-product-age-groups.mjs first' : undefined}
+                style={{
+                  width: 36, height: 20, borderRadius: 10, border: 'none',
+                  background: on ? '#111' : '#d1d5db', position: 'relative',
+                  cursor: t.disabled ? 'not-allowed' : 'pointer', flexShrink: 0,
+                  transition: 'background 0.15s',
+                }}
+              >
+                <span style={{
+                  position: 'absolute', top: 2, left: on ? 18 : 2,
+                  width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.15s',
+                }} />
+              </button>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{t.label}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>{t.desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Search activity */}
+      {searchCounts && (
+        <div style={{ display: 'flex', gap: 12, padding: '0 0 16px', flexWrap: 'wrap' }}>
+          {([
+            { label: 'Searches 24h',   value: searchCounts.count24h },
+            { label: 'Searches 7d',    value: searchCounts.count7d },
+            { label: 'Searches total', value: searchCounts.countTotal },
+          ] as const).map(s => (
+            <div key={s.label} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', minWidth: 100, textAlign: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>{s.value.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -215,6 +315,58 @@ export default function AdminCatalogDetail() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <h2 style={{ fontSize: 14, fontWeight: 600, margin: '24px 0 8px', color: '#111' }}>
+        Feed search results
+        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#888' }}>
+          What a shopper sees when they search &ldquo;{catalog.name}&rdquo; in the feed
+        </span>
+      </h2>
+      {feedResultsLoading && feedResults.length === 0 ? (
+        <div style={{ padding: 16, color: '#888', fontSize: 12 }}>Loading feed results…</div>
+      ) : feedResults.length === 0 ? (
+        <div style={{ padding: 16, color: '#888', fontSize: 12 }}>No creatives surface for this query in the consumer feed.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+          {feedResults.map(ad => (
+            <FeedResultThumb key={ad.id} ad={ad} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeedResultThumb({ ad }: { ad: ProductAd }) {
+  return (
+    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}>
+      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000' }}>
+        {ad.video_url ? (
+          <video
+            src={ad.video_url}
+            poster={ad.thumbnail_url ?? undefined}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onMouseEnter={e => { (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
+            onMouseLeave={e => {
+              const v = e.currentTarget as HTMLVideoElement;
+              v.pause();
+              v.currentTime = 0;
+            }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : null}
+      </div>
+      <div style={{ padding: 6, background: '#fff' }}>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {ad.product?.brand ?? ' - '}
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {ad.product?.name ?? ' - '}
+        </div>
       </div>
     </div>
   );

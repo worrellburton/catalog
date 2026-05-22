@@ -9,12 +9,26 @@ import {
   type BrainstormedProduct,
   type ProductGender,
 } from '~/services/product-research';
+import { getFeedSearchResults } from '~/services/feed-search';
+import type { ProductAd } from '~/services/product-creative';
+import {
+  getHomeCatalog,
+  updateCatalogToggles,
+  getCatalogSearchCounts,
+  type Catalog as CatalogService,
+  type CatalogSearchCounts,
+} from '~/services/catalogs';
 
 interface Catalog {
   id: string;
   name: string;
   source: 'featured' | 'custom';
   createdAt: string;
+  isHome?: boolean;
+  filterGender?: boolean;
+  filterAge?: boolean;
+  boostTopConverting?: boolean;
+  slug?: string;
 }
 
 // Slugify a human-typed catalog name the same way ensure_catalog() does in
@@ -59,6 +73,7 @@ interface CatalogCreativePayload {
   looks: CatalogLookRow[];
   products: ProductRow[];
   creatives: CatalogCreativeVideo[];
+  feedResults: CatalogCreativeVideo[];
 }
 
 const ALL_CATALOG_NAME = 'all';
@@ -120,6 +135,8 @@ function reorderArray<T>(items: T[], fromIndex: number, toIndex: number): T[] {
 
 export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
+  const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
+  const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -136,7 +153,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('catalogs')
-      .select('id, slug, name, created_at, is_featured, status')
+      .select('id, slug, name, created_at, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
       .eq('is_featured', false)
       .eq('status', 'live')
       .order('created_at', { ascending: false });
@@ -145,12 +162,59 @@ export default function AdminCatalogs() {
       return;
     }
     if (data) {
-      setCustom((data as { id: string; name: string; created_at: string }[]).map(r => ({
+      const rows = data as {
+        id: string; name: string; slug: string; created_at: string;
+        is_home: boolean; filter_gender: boolean; filter_age: boolean; boost_top_converting: boolean;
+      }[];
+      // Home catalog goes into its own state slot; all others fill `custom`.
+      const homeRow = rows.find(r => r.is_home);
+      const regularRows = rows.filter(r => !r.is_home);
+
+      setCustom(regularRows.map(r => ({
         id: r.id,
         name: r.name,
+        slug: r.slug,
         source: 'custom' as const,
         createdAt: r.created_at,
+        filterGender: r.filter_gender,
+        filterAge: r.filter_age,
+        boostTopConverting: r.boost_top_converting,
       })));
+
+      if (homeRow) {
+        // Reuse the service shape so toggle handlers can call updateCatalogToggles.
+        setHomeCatalog(prev => ({
+          id: homeRow.id,
+          slug: homeRow.slug ?? 'home',
+          name: homeRow.name,
+          description: null,
+          themePrompt: null,
+          gender: 'all' as const,
+          coverUrl: null,
+          sortOrder: -1,
+          isFeatured: false,
+          status: 'live' as const,
+          isHome: true,
+          filterGender: homeRow.filter_gender,
+          filterAge: homeRow.filter_age,
+          boostTopConverting: homeRow.boost_top_converting,
+          ...(prev ? {} : {}),
+        }));
+      } else {
+        // Not yet seeded — try a dedicated fetch (needed if migration not applied yet).
+        getHomeCatalog().then(h => setHomeCatalog(h));
+      }
+
+      // Batch-fetch search counts for every catalog name now visible.
+      const names = [
+        ...(homeRow ? [homeRow.name] : []),
+        ...regularRows.map(r => r.name),
+      ];
+      if (names.length > 0) {
+        getCatalogSearchCounts(names).then(counts => {
+          setSearchCounts(new Map(counts.map(c => [c.catalogName.toLowerCase(), c])));
+        }).catch(() => {});
+      }
     }
   }, []);
 
@@ -266,6 +330,44 @@ export default function AdminCatalogs() {
           status: r.status,
         }));
 
+      // Feed search results - same pipeline the consumer feed runs when a user
+      // types this catalog name in the search bar. Skipped for the synthetic
+      // `all` row (no meaningful query) and on failure (network/edge errors).
+      let feedResults: CatalogCreativeVideo[] = [];
+      if (!isAll) {
+        try {
+          const feedAds = await getFeedSearchResults(catalog.name);
+          feedResults = feedAds
+            .filter(a => !!a.video_url)
+            .map(a => ({
+              id: a.id,
+              productId: a.product_id,
+              videoUrl: a.video_url as string,
+              thumbnailUrl: a.thumbnail_url,
+              title: a.title,
+              productName: a.product?.name ?? null,
+              productBrand: a.product?.brand ?? null,
+              status: a.status,
+            }));
+        } catch (err) {
+          console.warn('[loadCreative] feed search failed:', err);
+        }
+      }
+
+      // Merge products from feed search results so catalogs whose items don't
+      // yet have catalog_tags still populate the Products section. Deduped by id.
+      let displayProducts = catalogProducts;
+      if (!isAll && feedResults.length > 0) {
+        const existingIds = new Set(catalogProducts.map(p => p.id));
+        const feedProductIds = new Set(feedResults.map(f => f.productId).filter(Boolean));
+        const feedOnlyProducts = products.filter(
+          p => feedProductIds.has(p.id) && !existingIds.has(p.id),
+        );
+        if (feedOnlyProducts.length > 0) {
+          displayProducts = [...catalogProducts, ...feedOnlyProducts];
+        }
+      }
+
       if (isAll) {
         const order = loadAllOrder();
         const orderedLooks = applyOrder(looks, l => l.id, order.looks);
@@ -273,12 +375,12 @@ export default function AdminCatalogs() {
         const orderedProducts = applyOrder(catalogProducts, p => p.id, order.products);
         setCreativeByCatalog(prev => ({
           ...prev,
-          [catalog.id]: { looks: orderedLooks, products: orderedProducts, creatives: orderedCreatives },
+          [catalog.id]: { looks: orderedLooks, products: orderedProducts, creatives: orderedCreatives, feedResults },
         }));
       } else {
         setCreativeByCatalog(prev => ({
           ...prev,
-          [catalog.id]: { looks, products: catalogProducts, creatives },
+          [catalog.id]: { looks, products: displayProducts, creatives, feedResults },
         }));
       }
     } finally {
@@ -868,13 +970,103 @@ export default function AdminCatalogs() {
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Source</th>
               <th>Products</th>
+              <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
+              <th>Toggles</th>
             </tr>
           </thead>
           <tbody>
+            {/* ── Home catalog row ─────────────────────────────────────── */}
+            {homeCatalog && (() => {
+              const homeAsLocal: Catalog = {
+                id: homeCatalog.id,
+                name: homeCatalog.name,
+                slug: homeCatalog.slug,
+                source: 'custom' as const,
+                createdAt: ' - ',
+                isHome: true,
+                filterGender: homeCatalog.filterGender,
+                filterAge: homeCatalog.filterAge,
+                boostTopConverting: homeCatalog.boostTopConverting,
+              };
+              const isOpen = expanded.has(homeCatalog.id);
+              const creative = creativeByCatalog[homeCatalog.id];
+              const isLoadingCreative = creativeLoading.has(homeCatalog.id);
+              const homeProductCount = catalogProductCounts.get(homeCatalog.name) || 0;
+              return (
+                <React.Fragment key={homeCatalog.id}>
+                  <tr style={{ background: '#fffbeb' }}>
+                    <td style={{ textAlign: 'left', fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          onClick={() => toggleExpanded(homeAsLocal)}
+                          aria-label={isOpen ? 'Collapse' : 'Expand'}
+                          style={{
+                            width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 4,
+                            color: '#6b7280', cursor: 'pointer', padding: 0,
+                            transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.12s ease',
+                          }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                        <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fef08a', color: '#713f12', marginRight: 2 }}>HOME</span>
+                        <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>{homeCatalog.name}</Link>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: '#ecfdf5', color: '#047857' }}>custom</span>
+                    </td>
+                    <td>
+                      {homeProductCount > 0 ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8' }}>{homeProductCount}</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
+                      )}
+                    </td>
+                    <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
+                    <td style={{ fontSize: 12, color: '#888' }}> - </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                        <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
+                        <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
+                      </div>
+                    </td>
+                    <td>
+                      <TogglePills
+                        filterGender={homeCatalog.filterGender}
+                        filterAge={homeCatalog.filterAge}
+                        boostTopConverting={homeCatalog.boostTopConverting}
+                        onToggle={async (field, val) => {
+                          setHomeCatalog(prev => prev ? { ...prev, [field]: val } : prev);
+                          await updateCatalogToggles(homeCatalog.slug, { [field]: val });
+                        }}
+                      />
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                        <CatalogCreativeDropdown isAll={false} loading={isLoadingCreative} creative={creative} onReorder={() => {}} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })()}
+
+            {/* ── Regular catalog rows ─────────────────────────────────── */}
             {all.map(c => {
-              const productCount = catalogProductCounts.get(c.name) || 0;
+              // Use expanded-state count (includes feed-derived products) when
+            // the row has already been loaded; fall back to the tag-based count.
+            const productCount =
+              creativeByCatalog[c.id]?.products.length ??
+              catalogProductCounts.get(c.name) ??
+              0;
               const isOpen = expanded.has(c.id);
               const creative = creativeByCatalog[c.id];
               const isLoadingCreative = creativeLoading.has(c.id);
@@ -938,6 +1130,7 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
+                <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
                 </td>
@@ -979,10 +1172,23 @@ export default function AdminCatalogs() {
                     )}
                   </div>
                 </td>
+                <td>
+                  {c.source === 'custom' ? (
+                    <TogglePills
+                      filterGender={c.filterGender}
+                      filterAge={c.filterAge}
+                      boostTopConverting={c.boostTopConverting}
+                      onToggle={async (field, val) => {
+                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: val } : x));
+                        if (c.slug) await updateCatalogToggles(c.slug, { [field]: val });
+                      }}
+                    />
+                  ) : null}
+                </td>
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={5} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       loading={isLoadingCreative}
@@ -1472,6 +1678,69 @@ interface CatalogCreativeDropdownProps {
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
 }
 
+// ── Search count pill ──────────────────────────────────────────────────────
+function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
+  if (!counts || counts.countTotal === 0) return <span style={{ fontSize: 11, color: '#ccc' }}>—</span>;
+  const primary = counts.count24h > 0 ? counts.count24h : counts.count7d;
+  const label = counts.count24h > 0 ? '24h' : '7d';
+  return (
+    <span
+      title={`7d: ${counts.count7d.toLocaleString()} · All time: ${counts.countTotal.toLocaleString()}`}
+      style={{
+        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        background: '#f0f9ff', color: '#0369a1', cursor: 'default',
+      }}
+    >
+      {primary.toLocaleString()}
+      <span style={{ fontWeight: 400, marginLeft: 3, fontSize: 10, color: '#64748b' }}>{label}</span>
+    </span>
+  );
+}
+
+// ── Toggle pills ────────────────────────────────────────────────────────────
+type ToggleField = 'filterGender' | 'filterAge' | 'boostTopConverting';
+interface TogglePillsProps {
+  filterGender?: boolean;
+  filterAge?: boolean;
+  boostTopConverting?: boolean;
+  onToggle: (field: ToggleField, value: boolean) => void;
+}
+
+function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: TogglePillsProps) {
+  const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean }[] = [
+    { key: 'filterGender',        label: 'Gender',  value: filterGender ?? false },
+    { key: 'filterAge',           label: 'Age',     value: filterAge ?? false, disabled: true },
+    { key: 'boostTopConverting',  label: 'Top ↑',   value: boostTopConverting ?? false },
+  ];
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {pills.map(p => (
+        <button
+          key={p.key}
+          onClick={() => !p.disabled && onToggle(p.key, !p.value)}
+          disabled={p.disabled}
+          title={
+            p.disabled
+              ? 'Run scripts/tag-product-age-groups.mjs first to enable age filtering'
+              : `${p.label}: ${p.value ? 'ON — click to disable' : 'OFF — click to enable'}`
+          }
+          style={{
+            padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+            border: '1px solid', cursor: p.disabled ? 'not-allowed' : 'pointer',
+            borderColor: p.value ? '#111' : '#e2e8f0',
+            background: p.value ? '#111' : p.disabled ? '#f8fafc' : '#fff',
+            color: p.value ? '#fff' : p.disabled ? '#cbd5e1' : '#64748b',
+            opacity: p.disabled ? 0.5 : 1,
+            transition: 'all 0.1s',
+          }}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: CatalogCreativeDropdownProps) {
   if (loading && !creative) {
     return (
@@ -1480,8 +1749,8 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
   }
   if (!creative) return null;
 
-  const { looks, products, creatives } = creative;
-  const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0;
+  const { looks, products, creatives, feedResults } = creative;
+  const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0 || (feedResults?.length ?? 0) > 0;
   if (!hasAny) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
@@ -1523,6 +1792,21 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
           <CreativeThumb key={c.id} creative={c} />
         ))}
       </DraggableSection>
+
+      {!isAll && (
+        <DraggableSection
+          title="Feed search results"
+          count={feedResults?.length ?? 0}
+          emptyMessage="No creatives surface for this query in the consumer feed search."
+          minColumnPx={140}
+          draggable={false}
+          onReorder={() => {}}
+        >
+          {(feedResults ?? []).map(c => (
+            <CreativeThumb key={`feed-${c.id}`} creative={c} />
+          ))}
+        </DraggableSection>
+      )}
 
       <DraggableSection
         title="Products"
