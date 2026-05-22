@@ -717,16 +717,35 @@ export default function GeneratePage() {
   }, [step, productQuery, userGender]);
 
   // Phase 17 - poll the generation row every 2.5s until it lands on a
-  // terminal status, so the Result view replaces the spinner as soon as
-  // the edge function finishes.
+  // terminal status, so the Result view replaces the spinner as soon
+  // as the edge function finishes.
+  //
+  // Keyed off `generation?.id` only (not the whole `generation`
+  // object) so we don't tear down and rebuild the interval on every
+  // poll tick — the previous shape did, which left a ~2.5s gap each
+  // time the row updated and made the perceived "stuck at 99%" window
+  // longer than it had to be. We also kick a one-shot refetch when
+  // the tab becomes visible again, in case the browser throttled the
+  // interval while the page was backgrounded.
+  const generationIdForPoll = generation?.id ?? null;
+  const generationIsTerminal = generation?.status === 'done' || generation?.status === 'failed';
   useEffect(() => {
-    if (!generation || generation.status === 'done' || generation.status === 'failed') return;
-    const id = window.setInterval(async () => {
-      const next = await getGeneration(generation.id);
-      if (next) setGeneration(next);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [generation]);
+    if (!generationIdForPoll || generationIsTerminal) return;
+    let cancelled = false;
+    const tick = async () => {
+      const next = await getGeneration(generationIdForPoll);
+      if (cancelled || !next) return;
+      setGeneration(next);
+    };
+    const intervalId = window.setInterval(tick, 2500);
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [generationIdForPoll, generationIsTerminal]);
 
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.

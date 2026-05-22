@@ -242,7 +242,18 @@ interface UnpublishedLook {
   creator_name: string | null;
   creator_avatar: string | null;
   creator_email: string | null;
+  /** True when the look's owning profile is_ai=true. Drives the
+   *  AI vs Human split filter on the /admin/data Looks tab. */
+  creator_is_ai: boolean;
 }
+
+/** AI vs Human sub-filter for the Looks tab. 'all' shows every row,
+ *  'human' filters to looks owned by real profiles, 'ai' filters to
+ *  looks owned by AI personas (regardless of who triggered them —
+ *  admin impersonations still count as AI looks because the row
+ *  attaches to the persona). Persisted in the URL alongside the
+ *  existing ?looks=published|unpublished|failed pill. */
+type LookSource = 'all' | 'human' | 'ai';
 
 // Defers attaching the <video> until the row scrolls into the
 // viewport. Without this, the Unpublished tab stamps ~14 cross-
@@ -796,6 +807,20 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
+
+  // AI vs Human source filter — second axis on the Looks tab. Persisted
+  // in the URL so reloads stay on the same view and links shared with
+  // other admins land them on the same filter.
+  const urlSource = (searchParams.get('source') as LookSource | null) || 'all';
+  const lookSource: LookSource = (['all', 'human', 'ai'].includes(urlSource) ? urlSource : 'all') as LookSource;
+  const setLookSource = useCallback((next: LookSource) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (next === 'all') p.delete('source');
+      else p.set('source', next);
+      return p;
+    }, { replace: false });
+  }, [setSearchParams]);
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
@@ -848,14 +873,19 @@ export default function AdminData() {
         return;
       }
       const userIds = Array.from(new Set((gens || []).map((g: { user_id: string }) => g.user_id)));
-      const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
+      const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
       if (userIds.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, email')
+          .select('id, full_name, avatar_url, email, is_ai')
           .in('id', userIds);
-        (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null }) => {
-          profilesById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email });
+        (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
+          profilesById.set(p.id, {
+            full_name: p.full_name,
+            avatar_url: p.avatar_url,
+            email: p.email,
+            is_ai: p.is_ai === true,
+          });
         });
       }
       if (cancelled) return;
@@ -892,6 +922,7 @@ export default function AdminData() {
           creator_name: prof?.full_name ?? null,
           creator_avatar: prof?.avatar_url ?? null,
           creator_email: prof?.email ?? null,
+          creator_is_ai: prof?.is_ai === true,
         };
       });
       setUnpublished(rows);
@@ -902,14 +933,30 @@ export default function AdminData() {
 
   // Split user_generations into pending/done (Unpublished tab) and failed
   // (Failed tab) so admins can triage without scrolling past dead rows.
+  // The source filter (All / Human / AI) layers on top of the
+  // published/unpublished/failed pill so admins can answer "show me
+  // every AI-persona look still pending" or "every human-generated
+  // failure" without combining queries by hand.
+  const sourceMatch = useCallback((g: UnpublishedLook) => {
+    if (lookSource === 'all') return true;
+    return lookSource === 'ai' ? g.creator_is_ai : !g.creator_is_ai;
+  }, [lookSource]);
   const unpublishedActive = useMemo(
-    () => unpublished.filter(g => g.status !== 'failed'),
-    [unpublished],
+    () => unpublished.filter(g => g.status !== 'failed' && sourceMatch(g)),
+    [unpublished, sourceMatch],
   );
   const failedLooks = useMemo(
-    () => unpublished.filter(g => g.status === 'failed'),
-    [unpublished],
+    () => unpublished.filter(g => g.status === 'failed' && sourceMatch(g)),
+    [unpublished, sourceMatch],
   );
+  // Source-filter counts, unscoped by the published/unpublished pill —
+  // shown next to the All / Human / AI buttons so the admin sees the
+  // distribution at a glance.
+  const sourceCounts = useMemo(() => ({
+    all:   unpublished.length,
+    human: unpublished.filter(g => !g.creator_is_ai).length,
+    ai:    unpublished.filter(g =>  g.creator_is_ai).length,
+  }), [unpublished]);
 
   // Bottom-center publish toast. Stays up ~3.2s and fades. The
   // unpublished-row Publish button drives this - single-shot so we
@@ -2588,7 +2635,8 @@ export default function AdminData() {
       </div>
 
       {activeTab === 'looks' && (
-        <div className="admin-tabs" style={{ marginBottom: 12 }}>
+        <>
+        <div className="admin-tabs" style={{ marginBottom: 8 }}>
           <button
             className={`admin-tab ${looksFilter === 'published' ? 'active' : ''}`}
             onClick={() => setLooksFilter('published')}
@@ -2614,6 +2662,41 @@ export default function AdminData() {
             <span className="admin-tab-badge">{failedLooks.length}</span>
           </button>
         </div>
+        {/* Source split: AI vs Human looks. Independent axis from the
+            Published/Unpublished/Failed pills above so admins can
+            triage e.g. "all failed AI looks" or "all unpublished
+            human looks" without combining queries by hand. Hidden on
+            Published since that tab reads from the curated `looks`
+            table where we don't track is_ai. */}
+        {looksFilter !== 'published' && (
+          <div className="admin-tabs" style={{ marginBottom: 12 }}>
+            <button
+              className={`admin-tab ${lookSource === 'all' ? 'active' : ''}`}
+              onClick={() => setLookSource('all')}
+              title="Show every look in the current pill, regardless of creator type"
+            >
+              All
+              <span className="admin-tab-badge">{sourceCounts.all}</span>
+            </button>
+            <button
+              className={`admin-tab ${lookSource === 'human' ? 'active' : ''}`}
+              onClick={() => setLookSource('human')}
+              title="Looks created by real shoppers / creators (profile.is_ai = false)"
+            >
+              Human
+              <span className="admin-tab-badge">{sourceCounts.human}</span>
+            </button>
+            <button
+              className={`admin-tab ${lookSource === 'ai' ? 'active' : ''}`}
+              onClick={() => setLookSource('ai')}
+              title="Looks owned by AI personas (profile.is_ai = true) — admin impersonations land here"
+            >
+              AI
+              <span className="admin-tab-badge">{sourceCounts.ai}</span>
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {activeTab === 'looks' && (

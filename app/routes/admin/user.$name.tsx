@@ -635,10 +635,27 @@ export default function AdminUserDetail() {
                   ? (adminLabels[g.triggered_by_admin_id] || g.triggered_by_admin_id.slice(0, 8))
                   : null;
                 return (
-                  <div key={g.id} style={{
-                    borderRadius: 8, overflow: 'hidden', background: '#fff',
-                    border: '1px solid #eee', padding: 10, fontSize: 12,
-                  }}>
+                  <div
+                    key={g.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/admin/publish/${g.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/admin/publish/${g.id}`);
+                      }
+                    }}
+                    style={{
+                      borderRadius: 8, overflow: 'hidden', background: '#fff',
+                      border: '1px solid #eee', padding: 10, fontSize: 12,
+                      cursor: 'pointer',
+                      transition: 'border-color 120ms ease, transform 120ms ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1a1a1a'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#eee'; }}
+                    title="Open look detail to publish, review, or retry"
+                  >
                     {g.video_url ? (
                       <video src={g.video_url} muted loop playsInline autoPlay
                         style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
