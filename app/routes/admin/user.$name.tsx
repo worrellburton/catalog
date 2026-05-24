@@ -14,6 +14,7 @@ import {
 import type { UserGender } from '~/services/genders';
 import AdminProfileEditor from '~/components/AdminProfileEditor';
 import { AvatarUpload } from '~/components/AvatarCropModal';
+import CountUp from '~/components/CountUp';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -338,68 +339,66 @@ export default function AdminUserDetail() {
   const uniqueBrands = new Set(creatorLooks.flatMap(l => l.products.map(p => p.brand)));
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
-        <button className="admin-back-link" onClick={() => navigate('/admin/users')}>
+    <div className="admin-page aud-page">
+      <div className="aud-hero">
+        <button className="aud-back" onClick={() => navigate('/admin/users')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Users
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {profile?.id ? (
-            <div style={{ width: 56, height: 56, position: 'relative' }}>
+        <div className="aud-identity">
+          <div className={`aud-avatar-ring ${profile?.is_ai ? 'is-ai' : 'is-human'}`}>
+            {profile?.id ? (
               <AvatarUpload
                 userId={profile.id}
                 currentUrl={avatarUrl ?? undefined}
                 fallbackInitial={(displayName || '?').charAt(0)}
                 onUploaded={(url) => setProfile(p => p ? { ...p, avatar_url: url } : p)}
               />
-            </div>
-          ) : avatarUrl
-            ? <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 48, height: 48 }} />
-            : <span className="admin-user-avatar-img admin-user-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 18 }}>
+            ) : avatarUrl ? (
+              <img src={avatarUrl} alt="" className="aud-avatar-img" />
+            ) : (
+              <span className="aud-avatar-fallback">
                 {(displayName || '?').charAt(0).toUpperCase()}
               </span>
-          }
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0 }}>{displayName}</h1>
-              {profile?.is_ai && (
-                <span
-                  title="This profile is a synthetic AI persona (is_ai=true). Generated looks attach to this user, but the row has no real human behind it."
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '3px 8px',
-                    borderRadius: 999,
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    boxShadow: '0 1px 2px rgba(99, 102, 241, 0.3)',
-                  }}
-                >
-                  {/* Sparkles glyph — quick visual cue for "synthetic" */}
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2zM19 14l.9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14z"/>
-                  </svg>
-                  AI persona
-                </span>
-              )}
+            )}
+          </div>
+          <div className="aud-identity-text">
+            <div className="aud-chip-row">
+              <span className={`ape-kind-chip ${profile?.is_ai ? 'is-ai' : 'is-human'}`}>
+                {profile?.is_ai ? (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2zm6 12l1 2.5L21.5 17 19 18l-1 2.5L17 18l-2.5-1L17 16l1-2z"/>
+                    </svg>
+                    AI persona
+                  </>
+                ) : (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"/>
+                      <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
+                    </svg>
+                    Human
+                  </>
+                )}
+              </span>
+              <span className="aud-status-dot" aria-label="Active">
+                <span className="aud-status-pulse" />
+              </span>
+              <span className="aud-status-text">Active</span>
             </div>
-            <p className="admin-page-subtitle" style={{ margin: 0 }}>
+            <h1 className="aud-name">{displayName}</h1>
+            <p className="aud-subtitle">
               {profile?.is_ai
-                ? 'AI persona profile and activity'
-                : isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}
+                ? 'Synthetic persona — generated looks attach to this profile.'
+                : isCreator ? 'Creator profile and looks.' : 'Shopper profile and activity.'}
             </p>
           </div>
         </div>
       </div>
 
       <div className="admin-detail-grid">
-        <div className="admin-detail-card">
+        <div className="admin-detail-card aud-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <h3 style={{ margin: 0 }}>Profile</h3>
             {profile?.id && (
@@ -442,21 +441,21 @@ export default function AdminUserDetail() {
             {profile?.id && <div className="admin-detail-row"><span>User ID</span><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{profile.id.slice(0, 8)}…</span></div>}
           </div>
         </div>
-        <div className="admin-detail-card">
+        <div className="admin-detail-card aud-card">
           <h3>Activity</h3>
           <div className="admin-detail-rows">
-            <div className="admin-detail-row"><span>Looks</span><span>{creatorLooks.length + generations.length}</span></div>
-            <div className="admin-detail-row"><span>Products</span><span>{totalProducts}</span></div>
-            <div className="admin-detail-row"><span>Brands</span><span>{uniqueBrands.size}</span></div>
-            <div className="admin-detail-row"><span>Reference photos</span><span>{uploads.length}</span></div>
-            <div className="admin-detail-row"><span>Saved</span><span>0</span></div>
+            <div className="admin-detail-row"><span>Looks</span><CountUp value={creatorLooks.length + generations.length} /></div>
+            <div className="admin-detail-row"><span>Products</span><CountUp value={totalProducts} /></div>
+            <div className="admin-detail-row"><span>Brands</span><CountUp value={uniqueBrands.size} /></div>
+            <div className="admin-detail-row"><span>Reference photos</span><CountUp value={uploads.length} /></div>
+            <div className="admin-detail-row"><span>Saved</span><CountUp value={0} /></div>
           </div>
         </div>
         {/* Engagement card mirrors the per-row data in /admin/analytics
             so the user detail page is a 1:1 view into the same telemetry.
             Realtime: a session heartbeat or new event re-renders these
             rows the moment they hit the DB. */}
-        <div className="admin-detail-card">
+        <div className="admin-detail-card aud-card">
           <h3>Engagement</h3>
           <div className="admin-detail-rows">
             <div className="admin-detail-row">
@@ -467,10 +466,10 @@ export default function AdminUserDetail() {
                     ? new Date(profile.last_sign_in_at).toLocaleString()
                     : '—')}</span>
             </div>
-            <div className="admin-detail-row"><span>Sign-ins</span><span>{analytics?.sign_in_count ?? 0}</span></div>
-            <div className="admin-detail-row"><span>Impressions</span><span>{(analytics?.total_impressions ?? 0).toLocaleString()}</span></div>
-            <div className="admin-detail-row"><span>Clicks</span><span>{(analytics?.total_clicks ?? 0).toLocaleString()}</span></div>
-            <div className="admin-detail-row"><span>Clickouts</span><span>{(analytics?.total_clickouts ?? 0).toLocaleString()}</span></div>
+            <div className="admin-detail-row"><span>Sign-ins</span><CountUp value={analytics?.sign_in_count ?? 0} /></div>
+            <div className="admin-detail-row"><span>Impressions</span><CountUp value={analytics?.total_impressions ?? 0} /></div>
+            <div className="admin-detail-row"><span>Clicks</span><CountUp value={analytics?.total_clicks ?? 0} /></div>
+            <div className="admin-detail-row"><span>Clickouts</span><CountUp value={analytics?.total_clickouts ?? 0} /></div>
             <div className="admin-detail-row">
               <span>CTR</span>
               <span>{(() => {

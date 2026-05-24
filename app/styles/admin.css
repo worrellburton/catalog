@@ -5028,3 +5028,172 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .ape-btn-primary { background: #fafafa; color: #18181b; border-color: #fafafa; }
 .admin-dark .ape-btn-primary:hover:not(:disabled) { background: #e4e4e7; }
 .admin-dark .ape-error { background: #2a1212; color: #fca5a5; border-color: #5b1d1d; }
+
+/* ── Admin User Detail (aud-) — hero + cards ────────────────────────────── */
+@keyframes aud-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes aud-ring-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes aud-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.aud-page { padding-top: 24px; }
+.aud-hero {
+  display: flex; flex-direction: column; gap: 18px;
+  margin-bottom: 28px;
+  animation: aud-fade-up 480ms cubic-bezier(.32,.72,0,1) both;
+}
+.aud-back {
+  appearance: none;
+  background: none; border: none; padding: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #71717a;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: color 160ms ease, transform 160ms ease;
+}
+.aud-back:hover { color: #18181b; transform: translateX(-2px); }
+.aud-back:focus-visible { outline: 2px solid #6366f1; outline-offset: 4px; border-radius: 4px; }
+
+.aud-identity {
+  display: flex; align-items: center; gap: 20px;
+}
+.aud-avatar-ring {
+  position: relative;
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #e4e4e7 0%, #d4d4d8 100%);
+  flex-shrink: 0;
+  animation: aud-fade-up 540ms cubic-bezier(.32,.72,0,1) 60ms both;
+}
+.aud-avatar-ring.is-ai {
+  background: conic-gradient(from 180deg, #a855f7, #6366f1, #06b6d4, #a855f7);
+}
+.aud-avatar-ring.is-human {
+  background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ef4444 100%);
+}
+.aud-avatar-ring > * {
+  width: 100%; height: 100%; border-radius: 50%;
+  display: block; overflow: hidden;
+  background: #fff;
+  border: 3px solid #fff;
+}
+.aud-avatar-ring .admin-user-avatar-img,
+.aud-avatar-ring .aud-avatar-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.aud-avatar-ring .aud-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 700;
+  color: #71717a;
+  background: #f4f4f5;
+}
+
+.aud-identity-text { min-width: 0; }
+.aud-chip-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+  animation: aud-fade-up 540ms cubic-bezier(.32,.72,0,1) 100ms both;
+}
+.aud-status-dot {
+  position: relative;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+}
+.aud-status-dot::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: aud-pulse 1800ms cubic-bezier(.32,.72,0,1) infinite;
+}
+.aud-status-text { font-size: 12px; color: #16a34a; font-weight: 600; }
+.aud-name {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #18181b;
+  line-height: 1.1;
+  animation: aud-fade-up 540ms cubic-bezier(.32,.72,0,1) 140ms both;
+}
+.aud-subtitle {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: #71717a;
+  animation: aud-fade-up 540ms cubic-bezier(.32,.72,0,1) 180ms both;
+}
+
+/* Metric cards. Override the bare .admin-detail-card with a softer
+   shadow, hover lift, and entry stagger. */
+.aud-page .admin-detail-grid { gap: 14px; }
+.aud-page .admin-detail-card,
+.aud-card {
+  background: #fff;
+  border: 1px solid #ececef;
+  border-radius: 14px;
+  padding: 18px 20px;
+  transition:
+    transform 220ms cubic-bezier(.32,.72,0,1),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+  animation: aud-fade-up 540ms cubic-bezier(.32,.72,0,1) both;
+}
+.aud-page .admin-detail-grid > .admin-detail-card:nth-child(1) { animation-delay: 120ms; }
+.aud-page .admin-detail-grid > .admin-detail-card:nth-child(2) { animation-delay: 180ms; }
+.aud-page .admin-detail-grid > .admin-detail-card:nth-child(3) { animation-delay: 240ms; }
+.aud-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -16px rgba(0, 0, 0, 0.18);
+  border-color: #e4e4e7;
+}
+.aud-card h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #71717a;
+  margin: 0 0 14px;
+}
+.aud-page .admin-detail-row {
+  font-size: 13px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f4f4f5;
+}
+.aud-page .admin-detail-row:last-child { border-bottom: none; }
+.aud-page .admin-detail-row span:first-child { color: #71717a; font-weight: 500; }
+.aud-page .admin-detail-row span:last-child,
+.aud-page .admin-detail-row > :last-child:not(span) { color: #18181b; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aud-hero, .aud-card, .aud-status-dot::before, .aud-chip-row, .aud-name, .aud-subtitle, .aud-avatar-ring {
+    animation: none !important;
+  }
+  .aud-card:hover { transform: none; }
+}
+
+/* Dark-mode variants. */
+.admin-dark .aud-card { background: #18181b; border-color: #27272a; }
+.admin-dark .aud-card:hover { border-color: #3f3f46; box-shadow: 0 12px 28px -16px rgba(0, 0, 0, 0.6); }
+.admin-dark .aud-card h3 { color: #71717a; }
+.admin-dark .aud-name { color: #fafafa; }
+.admin-dark .aud-subtitle,
+.admin-dark .aud-back { color: #a1a1aa; }
+.admin-dark .aud-back:hover { color: #fafafa; }
+.admin-dark .aud-page .admin-detail-row { border-color: #27272a; }
+.admin-dark .aud-page .admin-detail-row span:first-child { color: #a1a1aa; }
+.admin-dark .aud-page .admin-detail-row span:last-child,
+.admin-dark .aud-page .admin-detail-row > :last-child:not(span) { color: #fafafa; }
+.admin-dark .aud-avatar-ring > * { border-color: #18181b; background: #18181b; }
+.admin-dark .aud-avatar-ring .aud-avatar-fallback { background: #27272a; color: #a1a1aa; }
