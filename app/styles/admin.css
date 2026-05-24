@@ -4793,16 +4793,13 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 }
 
 .ape-header {
-  padding: 22px 24px 18px;
+  padding: 20px 22px 16px;
   border-bottom: 1px solid #f0f0f2;
-  display: flex; align-items: flex-start; gap: 12px;
   flex-shrink: 0;
 }
-.ape-header-inner { flex: 1; min-width: 0; }
 .ape-eyebrow {
   display: flex; align-items: center; gap: 10px;
-  margin-bottom: 8px;
-  animation: ape-pop 420ms cubic-bezier(.32,.72,0,1) both;
+  margin-bottom: 10px;
 }
 .ape-kind-chip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -4811,6 +4808,7 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 .ape-kind-chip.is-ai {
   background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
@@ -4828,41 +4826,45 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 .ape-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #18181b;
-  animation: ape-pop 460ms cubic-bezier(.32,.72,0,1) 50ms both;
+  line-height: 1.2;
 }
 .ape-header p {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #71717a;
-  line-height: 1.45;
-  animation: ape-pop 480ms cubic-bezier(.32,.72,0,1) 100ms both;
+  line-height: 1.4;
 }
 .ape-close {
   appearance: none;
   background: #fafafa;
-  border: 1px solid #f4f4f5;
-  width: 32px; height: 32px;
+  border: 1px solid #e4e4e7;
+  width: 28px; height: 28px;
   border-radius: 999px;
   display: flex; align-items: center; justify-content: center;
   color: #52525b;
   cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 .ape-close:hover { background: #f4f4f5; color: #18181b; transform: rotate(90deg); }
 .ape-close:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
 
 .ape-body {
-  padding: 22px 24px 4px;
-  flex: 1;
+  padding: 18px 22px;
+  flex: 1 1 auto;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: 14px;
+  min-height: 0;
 }
 .ape-row {
   display: grid;
@@ -4870,20 +4872,28 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   gap: 12px;
 }
 
-/* Floating label field. Labels live above the field; lift/scale when
-   the input is focused or has a value. */
-.ape-float {
-  position: relative;
-  display: block;
-  animation: ape-pop 460ms cubic-bezier(.32,.72,0,1) 120ms both;
+/* Plain field — static label above input. Replaces the prior
+   floating-label pattern which broke when the modal was constrained
+   (labels escaped their container and stacked on top of the header). */
+.ape-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.ape-float input,
-.ape-float select {
+.ape-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #71717a;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ape-field input,
+.ape-field select {
   width: 100%;
-  padding: 22px 14px 8px;
+  padding: 10px 13px;
   background: #fafafa;
   border: 1.5px solid #e4e4e7;
-  border-radius: 10px;
+  border-radius: 9px;
   font-size: 14px;
   color: #18181b;
   font-family: inherit;
@@ -4891,38 +4901,18 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   -webkit-appearance: none;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
-.ape-float select {
+.ape-field select {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 38px;
+  background-position: right 12px center;
+  padding-right: 34px;
 }
-.ape-float input:focus,
-.ape-float select:focus {
+.ape-field input:focus,
+.ape-field select:focus {
   outline: none;
   border-color: #6366f1;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
-}
-.ape-float-label {
-  position: absolute;
-  top: 50%;
-  left: 14px;
-  transform: translateY(-50%);
-  font-size: 14px;
-  color: #71717a;
-  pointer-events: none;
-  transition: transform 200ms cubic-bezier(.32,.72,0,1), font-size 200ms ease, color 200ms ease;
-  background: transparent;
-}
-.ape-float.is-filled .ape-float-label,
-.ape-float:focus-within .ape-float-label {
-  transform: translateY(-18px);
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #6366f1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 /* Segmented control for gender. */
@@ -5038,15 +5028,15 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .ape-close { background: #27272a; border-color: #27272a; color: #a1a1aa; }
 .admin-dark .ape-close:hover { background: #3f3f46; color: #fafafa; }
 .admin-dark .ape-kind-chip.is-human { background: #27272a; color: #d4d4d8; border-color: #3f3f46; }
-.admin-dark .ape-float input,
-.admin-dark .ape-float select {
+.admin-dark .ape-field input,
+.admin-dark .ape-field select {
   background: #0f0f10;
   border-color: #27272a;
   color: #fafafa;
 }
-.admin-dark .ape-float input:focus,
-.admin-dark .ape-float select:focus { background: #18181b; box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.18); }
-.admin-dark .ape-float-label { color: #71717a; }
+.admin-dark .ape-field input:focus,
+.admin-dark .ape-field select:focus { background: #18181b; box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.18); }
+.admin-dark .ape-field-label { color: #a1a1aa; }
 .admin-dark .ape-segmented-options { background: #0f0f10; }
 .admin-dark .ape-segmented-opt { color: #a1a1aa; }
 .admin-dark .ape-segmented-opt.is-selected { background: #27272a; box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px #3f3f46; color: #fafafa; }
