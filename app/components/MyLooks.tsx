@@ -26,19 +26,27 @@ const STATUS_COLORS: Record<LookStatus, string> = {
   archived:  '#777',
 };
 
-// Pick the best preview asset for the tile. Photos win over poster
-// frames because the catalog flow writes look_photos with thumbnails
-// first; video posters only land once a video upload completes.
-function previewFor(look: ManagedLook): { src: string; isVideo: boolean } | null {
+// Pick the best preview asset for the tile. looks_creative is where
+// every generated look lands today (video_url + thumbnail_url), so it
+// wins. look_photos / look_videos only get rows from the legacy
+// manual-upload path and stay as a fallback. Returning the video and
+// poster separately lets the tile autoplay the clip on top of a real
+// still — same pattern the main feed uses on LookCard.
+function previewFor(look: ManagedLook): { video: string | null; poster: string | null } | null {
+  const creatives = look.looks_creative ?? [];
+  const primary = creatives.find(c => c.is_primary) ?? creatives[0];
+  if (primary) {
+    const video = primary.mobile_video_url || primary.video_url || null;
+    const poster = primary.thumbnail_url || null;
+    if (video || poster) return { video, poster };
+  }
   if (look.look_photos?.length > 0) {
     const src = look.look_photos[0].thumbnail_url || look.look_photos[0].url;
-    if (src) return { src, isVideo: false };
+    if (src) return { video: null, poster: src };
   }
   if (look.look_videos?.length > 0) {
-    const poster = look.look_videos[0].poster_url;
-    if (poster) return { src: poster, isVideo: true };
-    const video = look.look_videos[0].url;
-    if (video) return { src: video, isVideo: true };
+    const v = look.look_videos[0];
+    if (v.url || v.poster_url) return { video: v.url ?? null, poster: v.poster_url ?? null };
   }
   return null;
 }
@@ -271,24 +279,31 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                     (photo, poster frame, color placeholder). */}
                 <div className="my-cat-tile-media">
                   {preview ? (
-                    preview.isVideo ? (
+                    preview.video ? (
+                      // Autoplay + loop muted so tiles read as motion,
+                      // matching LookCard in the main feed. poster paints
+                      // an instant still while the MP4 buffers, and we
+                      // skip setting poster when none exists (an empty
+                      // string causes a broken-image flash in Safari).
                       <video
                         className="my-cat-tile-img"
-                        src={preview.src}
-                        poster={preview.src}
+                        src={preview.video}
+                        poster={preview.poster ?? undefined}
+                        autoPlay
+                        loop
                         muted
                         playsInline
                         preload="metadata"
                       />
-                    ) : (
+                    ) : preview.poster ? (
                       <img
                         className="my-cat-tile-img"
-                        src={preview.src}
+                        src={preview.poster}
                         alt={managed.title}
                         loading="lazy"
                         decoding="async"
                       />
-                    )
+                    ) : null
                   ) : (
                     <div
                       className="my-cat-tile-placeholder"

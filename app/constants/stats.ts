@@ -22,6 +22,29 @@ export const HEIGHT_OPTIONS: HeightOption[] = (() => {
   return out;
 })();
 
+export interface WeightOption {
+  /** Storage value, kilograms with one decimal. */
+  kg: number;
+  /** Human label the Seedance/Veo prompt hears verbatim. Imperial-first
+   *  to match how shoppers self-report in the US; the kg figure is
+   *  appended for the model so it has unambiguous build data. */
+  label: string;
+}
+
+// 90–280 lb in 5-lb steps. Covers the shopper range without exploding
+// the dropdown; the prompt reads the label verbatim so we keep the
+// "lb (kg)" hybrid so models with non-US training data still get a
+// metric anchor. Same scheme as HEIGHT_OPTIONS: kg is the storage
+// value, label is what the model sees.
+export const WEIGHT_OPTIONS: WeightOption[] = (() => {
+  const out: WeightOption[] = [];
+  for (let lb = 90; lb <= 280; lb += 5) {
+    const kg = Math.round(lb * 0.45359237 * 10) / 10;
+    out.push({ kg, label: `${lb} lb (${kg} kg)` });
+  }
+  return out;
+})();
+
 export const AGE_OPTIONS: readonly string[] = [
   'teens',
   'early 20s',

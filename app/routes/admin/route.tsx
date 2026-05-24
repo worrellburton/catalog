@@ -47,6 +47,7 @@ const navItems: NavItem[] = [
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
   { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
   { to: '/admin/projections', label: 'Projections', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
+  { to: '/admin/sharing', label: 'Sharing', icon: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13' },
 ];
 
 interface SearchItem {
@@ -101,6 +102,10 @@ const allSearchItems: SearchItem[] = [
   { label: 'Analytics — Products', type: 'Page', to: '/admin/analytics?tab=products' },
   { label: 'Prompts', type: 'Page', to: '/admin/prompts' },
   { label: 'Style prompt', type: 'Page', to: '/admin/prompts' },
+  { label: 'Sharing', type: 'Page', to: '/admin/sharing' },
+  { label: 'Link Previews', type: 'Page', to: '/admin/sharing' },
+  { label: 'iMessage', type: 'Page', to: '/admin/sharing' },
+  { label: 'Open Graph', type: 'Page', to: '/admin/sharing' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
   { label: 'Collection Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=collections' },

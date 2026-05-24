@@ -97,6 +97,7 @@ export function useOverlayRouter({
     const slug = lookSlug({
       id: selectedLook.id ?? null,
       creator: selectedLook.creator ?? null,
+      creatorDisplayName: selectedLook.creatorDisplayName ?? null,
       title: selectedLook.title ?? null,
     });
     if (!slug) return;

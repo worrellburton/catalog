@@ -267,10 +267,15 @@ function LookTile({
   look,
   index,
   onOpen,
+  onOpenCreator,
 }: {
   look: Look;
   index: number;
   onOpen: (l: Look) => void;
+  /** Click on the creator chip jumps to that creator's catalog
+   *  page instead of opening the look. Routed via the same
+   *  handleOpenCreator wired through to ContinuousFeed elsewhere. */
+  onOpenCreator?: (creatorName: string) => void;
 }) {
   const wrapRef = useRef<HTMLButtonElement | null>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
@@ -343,6 +348,15 @@ function LookTile({
     if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
   }, [fullResVideoUrl]);
 
+  // Creator click jumps to that creator's catalog page instead of
+  // opening the look. We stopPropagation so the tile-level onClick
+  // (which opens the look overlay) doesn't also fire.
+  const handleCreatorClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onOpenCreator || !look.creator) return;
+    onOpenCreator(look.creator);
+  }, [onOpenCreator, look.creator]);
+
   return (
     <button
       type="button"
@@ -373,27 +387,40 @@ function LookTile({
         style={{ position: 'relative', zIndex: 1 }}
       />
 
-      <div className="pd-look-tile-meta">
-        {/* Always render the creator chip in the lower-left so every
-            look has a visible attribution. Static creators get their
-            real avatar + name; user-generated orphan looks fall back
-            to an initial circle so the chip never disappears. */}
-        <span className="pd-look-tile-creator">
-          {avatarUrl ? (
-            <img
-              className="pd-look-tile-avatar"
-              src={avatarUrl}
-              alt=""
-              loading="lazy"
-            />
-          ) : (
-            <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
-              {(displayName || look.creator || '?').charAt(0).toUpperCase()}
-            </span>
-          )}
-          <span>{displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}</span>
+      {/* Creator chip pinned to the lower-left of the tile. Rendered
+          as a nested clickable role="button" — the outer <button>
+          opens the look; stopPropagation on this chip routes to the
+          creator catalog instead. Avatar pulls profiles.avatar_url
+          via the looks fetcher (see services/looks.ts), so once the
+          admin uploads a profile pic via AvatarUpload it lights up
+          here automatically. */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="pd-look-tile-meta"
+        onClick={handleCreatorClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCreatorClick(e as unknown as React.MouseEvent); }
+        }}
+        title={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+        aria-label={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+      >
+        {avatarUrl ? (
+          <img
+            className="pd-look-tile-avatar"
+            src={avatarUrl}
+            alt=""
+            loading="lazy"
+          />
+        ) : (
+          <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
+            {(displayName || look.creator || '?').charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className="pd-look-tile-creator-name">
+          {displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}
         </span>
-      </div>
+      </span>
     </button>
   );
 }
@@ -1045,7 +1072,7 @@ export default function ProductPage({
                   Same video URL, served from browser cache: zero extra
                   network cost. */}
               {padLooks(lookCreatives, 8).map((l, i) => (
-                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} />
+                <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} onOpenCreator={onOpenCreator} />
               ))}
             </div>
           </section>

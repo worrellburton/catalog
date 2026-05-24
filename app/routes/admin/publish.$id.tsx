@@ -28,6 +28,7 @@ interface PublishDraft {
   status: string;
   creatorName: string;
   creatorAvatar: string | null;
+  creatorUserId: string | null;
   products: PublishProduct[];
 }
 
@@ -115,6 +116,7 @@ export default function AdminPublishScreen() {
         status: gen.status,
         creatorName,
         creatorAvatar,
+        creatorUserId: gen.user_id ?? null,
         products,
       });
       setTitle(`${creatorName}’s ${gen.style} look`);
@@ -153,11 +155,31 @@ export default function AdminPublishScreen() {
         if (creativeErr) console.warn('[publish] looks_creative insert failed:', creativeErr.message);
       }
       if (supabase) {
+        // Move ownership to the persona who generated the source video
+        // (createLook stamped user_id = auth.uid() = admin). The DB
+        // trigger `looks_sync_creator_handle` will fill creator_handle
+        // from the matching creators row.
+        const updates: Record<string, unknown> = { status: 'live' };
+        if (draft.creatorUserId) {
+          updates.user_id = draft.creatorUserId;
+          updates.creator_handle = null;
+        }
         const { error: statusErr } = await supabase
           .from('looks')
-          .update({ status: 'live' })
+          .update(updates)
           .eq('id', look.id);
         if (statusErr) console.warn('[publish] status update failed:', statusErr.message);
+
+        // Preserve the publisher in created_by so the audit trail
+        // survives the user_id move.
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser?.id) {
+          const { error: createdByErr } = await supabase
+            .from('looks')
+            .update({ created_by: authUser.id })
+            .eq('id', look.id);
+          if (createdByErr) console.warn('[publish] created_by update failed:', createdByErr.message);
+        }
       }
       // Drop the cached promise so the next /admin/data render
       // refetches and shows the new row in the Published tab.

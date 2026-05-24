@@ -12,8 +12,9 @@ import {
   type UserAnalyticsRow,
 } from '~/services/analytics';
 import type { UserGender } from '~/services/genders';
-import StatsEditorModal from '~/components/StatsEditorModal';
+import AdminProfileEditor from '~/components/AdminProfileEditor';
 import { AvatarUpload } from '~/components/AvatarCropModal';
+import CountUp from '~/components/CountUp';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -338,68 +339,66 @@ export default function AdminUserDetail() {
   const uniqueBrands = new Set(creatorLooks.flatMap(l => l.products.map(p => p.brand)));
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
-        <button className="admin-back-link" onClick={() => navigate('/admin/users')}>
+    <div className="admin-page aud-page">
+      <div className="aud-hero">
+        <button className="aud-back" onClick={() => navigate('/admin/users')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Users
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {profile?.id ? (
-            <div style={{ width: 56, height: 56, position: 'relative' }}>
+        <div className="aud-identity">
+          <div className={`aud-avatar-ring ${profile?.is_ai ? 'is-ai' : 'is-human'}`}>
+            {profile?.id ? (
               <AvatarUpload
                 userId={profile.id}
                 currentUrl={avatarUrl ?? undefined}
                 fallbackInitial={(displayName || '?').charAt(0)}
                 onUploaded={(url) => setProfile(p => p ? { ...p, avatar_url: url } : p)}
               />
-            </div>
-          ) : avatarUrl
-            ? <img src={avatarUrl} alt="" className="admin-user-avatar-img" style={{ width: 48, height: 48 }} />
-            : <span className="admin-user-avatar-img admin-user-avatar-placeholder" style={{ width: 48, height: 48, fontSize: 18 }}>
+            ) : avatarUrl ? (
+              <img src={avatarUrl} alt="" className="aud-avatar-img" />
+            ) : (
+              <span className="aud-avatar-fallback">
                 {(displayName || '?').charAt(0).toUpperCase()}
               </span>
-          }
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0 }}>{displayName}</h1>
-              {profile?.is_ai && (
-                <span
-                  title="This profile is a synthetic AI persona (is_ai=true). Generated looks attach to this user, but the row has no real human behind it."
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '3px 8px',
-                    borderRadius: 999,
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    boxShadow: '0 1px 2px rgba(99, 102, 241, 0.3)',
-                  }}
-                >
-                  {/* Sparkles glyph — quick visual cue for "synthetic" */}
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2zM19 14l.9 3.1L23 18l-3.1.9L19 22l-.9-3.1L15 18l3.1-.9L19 14z"/>
-                  </svg>
-                  AI persona
-                </span>
-              )}
+            )}
+          </div>
+          <div className="aud-identity-text">
+            <div className="aud-chip-row">
+              <span className={`ape-kind-chip ${profile?.is_ai ? 'is-ai' : 'is-human'}`}>
+                {profile?.is_ai ? (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2zm6 12l1 2.5L21.5 17 19 18l-1 2.5L17 18l-2.5-1L17 16l1-2z"/>
+                    </svg>
+                    AI persona
+                  </>
+                ) : (
+                  <>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"/>
+                      <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
+                    </svg>
+                    Human
+                  </>
+                )}
+              </span>
+              <span className="aud-status-dot" aria-label="Active">
+                <span className="aud-status-pulse" />
+              </span>
+              <span className="aud-status-text">Active</span>
             </div>
-            <p className="admin-page-subtitle" style={{ margin: 0 }}>
+            <h1 className="aud-name">{displayName}</h1>
+            <p className="aud-subtitle">
               {profile?.is_ai
-                ? 'AI persona profile and activity'
-                : isCreator ? 'Creator profile and looks' : 'Shopper profile and activity'}
+                ? 'Synthetic persona — generated looks attach to this profile.'
+                : isCreator ? 'Creator profile and looks.' : 'Shopper profile and activity.'}
             </p>
           </div>
         </div>
       </div>
 
       <div className="admin-detail-grid">
-        <div className="admin-detail-card">
+        <div className="admin-detail-card aud-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <h3 style={{ margin: 0 }}>Profile</h3>
             {profile?.id && (
@@ -442,22 +441,31 @@ export default function AdminUserDetail() {
             {profile?.id && <div className="admin-detail-row"><span>User ID</span><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{profile.id.slice(0, 8)}…</span></div>}
           </div>
         </div>
-        <div className="admin-detail-card">
+        <div className="admin-detail-card aud-card">
           <h3>Activity</h3>
           <div className="admin-detail-rows">
-            <div className="admin-detail-row"><span>Looks</span><span>{creatorLooks.length + generations.length}</span></div>
-            <div className="admin-detail-row"><span>Products</span><span>{totalProducts}</span></div>
-            <div className="admin-detail-row"><span>Brands</span><span>{uniqueBrands.size}</span></div>
-            <div className="admin-detail-row"><span>Reference photos</span><span>{uploads.length}</span></div>
-            <div className="admin-detail-row"><span>Saved</span><span>0</span></div>
+            <div className="admin-detail-row"><span>Looks</span><CountUp value={creatorLooks.length + generations.length} /></div>
+            <div className="admin-detail-row"><span>Products</span><CountUp value={totalProducts} /></div>
+            <div className="admin-detail-row"><span>Brands</span><CountUp value={uniqueBrands.size} /></div>
+            <div className="admin-detail-row"><span>Reference photos</span><CountUp value={uploads.length} /></div>
+            <div className="admin-detail-row"><span>Saved</span><CountUp value={0} /></div>
           </div>
         </div>
         {/* Engagement card mirrors the per-row data in /admin/analytics
             so the user detail page is a 1:1 view into the same telemetry.
             Realtime: a session heartbeat or new event re-renders these
             rows the moment they hit the DB. */}
-        <div className="admin-detail-card">
-          <h3>Engagement</h3>
+        <div className="admin-detail-card aud-card">
+          <div className="aud-card-head">
+            <h3>Engagement</h3>
+            <span className="aud-private" title="Visible to admins only. Users don't see their own engagement telemetry.">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Admin only
+            </span>
+          </div>
           <div className="admin-detail-rows">
             <div className="admin-detail-row">
               <span>Last sign-in</span>
@@ -467,10 +475,10 @@ export default function AdminUserDetail() {
                     ? new Date(profile.last_sign_in_at).toLocaleString()
                     : '—')}</span>
             </div>
-            <div className="admin-detail-row"><span>Sign-ins</span><span>{analytics?.sign_in_count ?? 0}</span></div>
-            <div className="admin-detail-row"><span>Impressions</span><span>{(analytics?.total_impressions ?? 0).toLocaleString()}</span></div>
-            <div className="admin-detail-row"><span>Clicks</span><span>{(analytics?.total_clicks ?? 0).toLocaleString()}</span></div>
-            <div className="admin-detail-row"><span>Clickouts</span><span>{(analytics?.total_clickouts ?? 0).toLocaleString()}</span></div>
+            <div className="admin-detail-row"><span>Sign-ins</span><CountUp value={analytics?.sign_in_count ?? 0} /></div>
+            <div className="admin-detail-row"><span>Impressions</span><CountUp value={analytics?.total_impressions ?? 0} /></div>
+            <div className="admin-detail-row"><span>Clicks</span><CountUp value={analytics?.total_clicks ?? 0} /></div>
+            <div className="admin-detail-row"><span>Clickouts</span><CountUp value={analytics?.total_clickouts ?? 0} /></div>
             <div className="admin-detail-row">
               <span>CTR</span>
               <span>{(() => {
@@ -520,13 +528,25 @@ export default function AdminUserDetail() {
 
       {!isCreator && (
         <div className="admin-detail-grid" style={{ marginTop: 16 }}>
-          <div className="admin-detail-card">
+          <div className="admin-detail-card aud-card">
             <h3>Recent Searches</h3>
-            <p className="admin-detail-empty">No searches yet</p>
+            <div className="aud-empty">
+              <svg className="aud-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <span>No searches yet</span>
+            </div>
           </div>
-          <div className="admin-detail-card">
+          <div className="admin-detail-card aud-card">
             <h3>Recent Clicks</h3>
-            <p className="admin-detail-empty">No clicks yet</p>
+            <div className="aud-empty">
+              <svg className="aud-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 11l3 3 8-8"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              <span>No clicks yet</span>
+            </div>
           </div>
         </div>
       )}
@@ -538,15 +558,30 @@ export default function AdminUserDetail() {
           onUploaded={u => setUploads(prev => [u, ...prev])}
         />
         {!resolved ? (
-          <p className="admin-detail-empty">Loading…</p>
+          <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>
         ) : uploads.length === 0 ? (
           <p className="admin-detail-empty">No reference photos uploaded yet</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-            {uploads.map(u => (
-              <a key={u.id} href={u.public_url} target="_blank" rel="noopener noreferrer"
-                 style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', background: '#111' }}>
-                <img src={u.public_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div className="aud-photo-grid">
+            {uploads.map((u, i) => (
+              <a
+                key={u.id}
+                href={u.public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="aud-photo-tile"
+                style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+              >
+                <img src={u.public_url} alt="" loading="lazy" />
+                <span className="aud-photo-tile-overlay">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/>
+                  </svg>
+                </span>
               </a>
             ))}
           </div>
@@ -583,40 +618,29 @@ export default function AdminUserDetail() {
             { key: 'failed', label: 'Failed',      count: failedCount },
           ];
           return (
-            <div style={{
-              display: 'flex', gap: 4, marginTop: 12, marginBottom: 12,
-              flexWrap: 'wrap',
-            }}>
+            <div className="aud-tabs" role="tablist">
               {tabs.map(t => (
                 <button
                   key={t.key}
                   type="button"
+                  role="tab"
+                  aria-selected={genTab === t.key}
                   onClick={() => setGenTab(t.key)}
-                  style={{
-                    padding: '6px 12px', borderRadius: 999,
-                    border: '1px solid ' + (genTab === t.key ? '#0a0a0a' : '#e5e5e5'),
-                    background: genTab === t.key ? '#0a0a0a' : '#fff',
-                    color: genTab === t.key ? '#fff' : '#1a1a1a',
-                    cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}
+                  className={`aud-tab ${genTab === t.key ? 'is-active' : ''}`}
                 >
-                  {t.label}
-                  <span style={{
-                    background: genTab === t.key ? 'rgba(255,255,255,0.18)' : '#f1f1f1',
-                    color: genTab === t.key ? '#fff' : '#888',
-                    borderRadius: 999, padding: '0 6px',
-                    fontSize: 10, fontWeight: 700,
-                  }}>
-                    {t.count}
-                  </span>
+                  <span className="aud-tab-label">{t.label}</span>
+                  <span className="aud-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>
           );
         })()}
         {(() => {
-          if (!resolved) return <p className="admin-detail-empty">Loading…</p>;
+          if (!resolved) return <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>;
           if (generations.length === 0) return <p className="admin-detail-empty">No looks generated yet</p>;
           const filtered = generations.filter(g => {
             if (genTab === 'all') return true;
@@ -627,8 +651,8 @@ export default function AdminUserDetail() {
             return <p className="admin-detail-empty">No looks in this tab</p>;
           }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {filtered.map(g => {
+            <div className="aud-look-grid">
+              {filtered.map((g, i) => {
                 const triggeredByAdmin = !!g.triggered_by_admin_id
                   && g.triggered_by_admin_id !== profile?.id;
                 const adminName = g.triggered_by_admin_id
@@ -646,61 +670,46 @@ export default function AdminUserDetail() {
                         navigate(`/admin/publish/${g.id}`);
                       }
                     }}
-                    style={{
-                      borderRadius: 8, overflow: 'hidden', background: '#fff',
-                      border: '1px solid #eee', padding: 10, fontSize: 12,
-                      cursor: 'pointer',
-                      transition: 'border-color 120ms ease, transform 120ms ease',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1a1a1a'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#eee'; }}
+                    className="aud-look-tile"
+                    style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                     title="Open look detail to publish, review, or retry"
                   >
-                    {g.video_url ? (
-                      <video src={g.video_url} muted loop playsInline autoPlay
-                        style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
-                    ) : (
-                      <div style={{
-                        width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
-                        color: '#aaa', display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center',
-                        padding: '12px 10px', textAlign: 'center', fontSize: 11, gap: 8,
-                      }}>
-                        <div style={{ fontWeight: 600, color: g.status === 'failed' ? '#fca5a5' : '#aaa' }}>
-                          {g.status === 'failed' ? 'Failed' : 'Processing…'}
-                        </div>
-                        {g.status === 'failed' && g.error && (
-                          <div
-                            title={g.error}
-                            style={{
-                              color: '#fca5a5', fontSize: 10, lineHeight: 1.35,
-                              display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden', wordBreak: 'break-word',
-                            }}
-                          >
-                            {g.error}
+                    <div className="aud-look-tile-media">
+                      {g.video_url ? (
+                        <video src={g.video_url} muted loop playsInline autoPlay />
+                      ) : (
+                        <div className={`aud-look-tile-empty ${g.status === 'failed' ? 'is-failed' : ''}`}>
+                          <div className="aud-look-tile-status">
+                            {g.status === 'failed' ? 'Failed' : 'Processing…'}
                           </div>
+                          {g.status === 'failed' && g.error && (
+                            <div className="aud-look-tile-error" title={g.error}>{g.error}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="aud-look-tile-meta">
+                      <div className="aud-look-tile-title">{g.style} · {g.height_label || ' - '}</div>
+                      <div className="aud-look-tile-sub">{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div className="aud-look-tile-attribution">
+                      <span className={`aud-trigger-chip ${triggeredByAdmin ? 'is-admin' : 'is-self'}`}>
+                        {triggeredByAdmin ? (
+                          <>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <circle cx="12" cy="8" r="4"/>
+                              <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
+                            </svg>
+                            Admin · {adminName}
+                          </>
+                        ) : (
+                          <>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
+                            </svg>
+                            Self
+                          </>
                         )}
-                      </div>
-                    )}
-                    <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || ' - '}</div>
-                    <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
-                    {/* Tiny chip flags WHO kicked this off. Admin-triggered
-                        rows came in through /generate?as_user=; otherwise
-                        the persona/user self-triggered (the row's user_id
-                        matches the page's user). */}
-                    <div style={{ marginTop: 6 }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 6px', borderRadius: 999,
-                        background: triggeredByAdmin ? '#ede9fe' : '#f1f5f9',
-                        color:      triggeredByAdmin ? '#5b21b6' : '#475569',
-                        fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-                        textTransform: 'uppercase',
-                      }}>
-                        {triggeredByAdmin
-                          ? `Admin · ${adminName}`
-                          : 'User'}
                       </span>
                     </div>
                     {g.status === 'failed' && g.error && (
@@ -728,7 +737,11 @@ export default function AdminUserDetail() {
       <div style={{ marginTop: 24 }}>
         <h2 className="admin-section-title">Generated styles ({styleGens.length})</h2>
         {!resolved ? (
-          <p className="admin-detail-empty">Loading…</p>
+          <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>
         ) : styleGens.length === 0 ? (
           <p className="admin-detail-empty">No style sheets generated yet</p>
         ) : (
@@ -810,28 +823,28 @@ export default function AdminUserDetail() {
       </div>
 
       {editingProfile && profile?.id && (
-        <StatsEditorModal
+        <AdminProfileEditor
           userId={profile.id}
-          editName
-          title="Edit profile"
           initial={{
+            fullName: profile.full_name,
             heightCm: profile.height_cm,
             heightLabel: profile.height_label,
             ageLabel: profile.age_label,
             gender: (profile.gender === 'male' || profile.gender === 'female')
               ? (profile.gender as UserGender)
               : 'unknown',
-            fullName: profile.full_name,
+            isAi: !!profile.is_ai,
+            email: profile.email ?? null,
           }}
           onClose={() => setEditingProfile(false)}
           onSaved={(next) => {
             setProfile(prev => prev ? {
               ...prev,
+              full_name: next.fullName,
               height_cm: next.heightCm,
               height_label: next.heightLabel,
               age_label: next.ageLabel,
               gender: next.gender,
-              ...(next.fullName != null ? { full_name: next.fullName } : {}),
             } : prev);
             setEditingProfile(false);
           }}

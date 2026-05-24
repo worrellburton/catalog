@@ -59,6 +59,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
           name="description"
           content="A creator-powered shopping platform where you discover products through curated looks."
         />
+        {/* Open Graph + Twitter Card tags drive the rich link preview
+            iMessage, Slack, WhatsApp, Twitter, and Facebook show when
+            someone shares catalog.shop. Without these, iMessage falls
+            back to "<title> + Safari compass icon". The values mirror
+            the admin Sharing page (/admin/sharing) so editing there
+            and redeploying updates the preview everywhere. */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="catalog" />
+        <meta property="og:title" content="catalog" />
+        <meta
+          property="og:description"
+          content="A creator-powered shopping platform where you discover products through curated looks."
+        />
+        <meta property="og:url" content="https://catalog.shop" />
+        <meta property="og:image" content="https://catalog.shop/og-default.svg" />
+        <meta property="og:image:type" content="image/svg+xml" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="catalog — curated looks" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="catalog" />
+        <meta
+          name="twitter:description"
+          content="A creator-powered shopping platform where you discover products through curated looks."
+        />
+        <meta name="twitter:image" content="https://catalog.shop/og-default.svg" />
+        <link rel="canonical" href="https://catalog.shop" />
+        <meta name="apple-mobile-web-app-title" content="catalog" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         {/* Open the TCP/TLS connection to Supabase before the JS bundle even

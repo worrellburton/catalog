@@ -115,13 +115,19 @@ export async function updateUserRole(userId: string, role: UserRole): Promise<{ 
  */
 export async function updateUserHeightAge(
   userId: string,
-  patch: { heightCm?: number | null; heightLabel?: string | null; ageLabel?: string | null },
+  patch: {
+    heightCm?: number | null; heightLabel?: string | null;
+    ageLabel?: string | null;
+    weightKg?: number | null; weightLabel?: string | null;
+  },
 ): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
   const update: Record<string, number | string | null> = {};
   if (patch.heightCm !== undefined)    update.height_cm    = patch.heightCm;
   if (patch.heightLabel !== undefined) update.height_label = patch.heightLabel;
   if (patch.ageLabel !== undefined)    update.age_label    = patch.ageLabel;
+  if (patch.weightKg !== undefined)    update.weight_kg    = patch.weightKg;
+  if (patch.weightLabel !== undefined) update.weight_label = patch.weightLabel;
   if (Object.keys(update).length === 0) return {};
   const { error } = await supabase
     .from('profiles')
@@ -180,20 +186,26 @@ export async function updateUserAvatar(
   return { url };
 }
 
-/** Read prior height + age picks so the wizard re-opens prefilled. */
+/** Read prior height + age + weight picks so the wizard re-opens prefilled. */
 export async function getUserHeightAge(
   userId: string,
-): Promise<{ heightCm: number | null; heightLabel: string | null; ageLabel: string | null }> {
-  if (!supabase) return { heightCm: null, heightLabel: null, ageLabel: null };
+): Promise<{
+  heightCm: number | null; heightLabel: string | null;
+  ageLabel: string | null;
+  weightKg: number | null; weightLabel: string | null;
+}> {
+  if (!supabase) return { heightCm: null, heightLabel: null, ageLabel: null, weightKg: null, weightLabel: null };
   const { data } = await supabase
     .from('profiles')
-    .select('height_cm, height_label, age_label')
+    .select('height_cm, height_label, age_label, weight_kg, weight_label')
     .eq('id', userId)
     .maybeSingle();
   return {
     heightCm:    (data?.height_cm    as number | null) ?? null,
     heightLabel: (data?.height_label as string | null) ?? null,
     ageLabel:    (data?.age_label    as string | null) ?? null,
+    weightKg:    (data?.weight_kg    as number | null) ?? null,
+    weightLabel: (data?.weight_label as string | null) ?? null,
   };
 }
 
