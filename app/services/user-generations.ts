@@ -861,6 +861,12 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
  */
 export function buildGenerationPrompt(opts: {
   heightLabel: string;
+  /** Frozen weight phrase ("160 lb", "73 kg"). When set the model gets
+   *  a body-mass cue that materially improves silhouette accuracy
+   *  (Seedance otherwise defaults to a generic build regardless of
+   *  height). Omitted when the profile hasn't captured one yet — the
+   *  prompt just skips the clause instead of fabricating a number. */
+  weightLabel?: string | null;
   ageLabel?: string;
   style: string;
   // Free-text occasion ("West Village Date Night", "work", etc.) —
@@ -884,6 +890,12 @@ export function buildGenerationPrompt(opts: {
     .join(', ');
 
   const ageClause = opts.ageLabel ? ` They look ${opts.ageLabel}.` : '';
+  // Weight is appended INSIDE the height clause so Seedance reads the
+  // build as one unit ("5'10" tall, ~160 lb"). Falsy/blank weight drops
+  // the clause entirely so the model isn't fed a phantom number.
+  const buildClause = opts.weightLabel
+    ? `${opts.heightLabel} tall, around ${opts.weightLabel}`
+    : `${opts.heightLabel} tall`;
   // Picked-zone framing: only show body regions where the shopper
   // actually picked an item. Stops Seedance from inventing pants /
   // shoes / accessories that were never selected.
@@ -925,7 +937,7 @@ export function buildGenerationPrompt(opts: {
       ? 'Structure across the clip in 4 beats: (1) hero entrance - wide composed frame, subject walks/turns into shot; (2) push-in close-up at ~25% - face / detail moment; (3) action beat at ~55% - wardrobe interaction (zip pull, hand-in-pocket, head turn) with a motion-blur transition that reads as a cut; (4) hero stance + product reveal in the final third with a clean rack focus.'
       : 'Structure across the clip in 3 beats: (1) hero entrance in the first ~30%; (2) action / wardrobe interaction with a motion-blur transition that reads as a cut around the midpoint; (3) close-up product or expression hero in the final third.';
     return [
-      `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
+      `Use this person's face. Make them ${buildClause}.${ageClause}`,
       productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
       castLine,
       cameraLine,

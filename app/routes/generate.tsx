@@ -516,6 +516,8 @@ export default function GeneratePage() {
   // Phase 9/10 - height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
+  const [weightKg, setWeightKg] = useState<number | null>(null);
+  const [weightLabel, setWeightLabel] = useState<string | null>(null);
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
   // Stats editor visibility (shared StatsEditorModal). The chips
   // render next to the "You" title so the user can adjust height /
@@ -554,6 +556,8 @@ export default function GeneratePage() {
       if (cancelled) return;
       if (saved.heightCm)    setHeightCm(saved.heightCm);
       if (saved.heightLabel) setHeightLabel(saved.heightLabel);
+      if (saved.weightKg != null) setWeightKg(saved.weightKg);
+      if (saved.weightLabel) setWeightLabel(saved.weightLabel);
       if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
       heightAgeHydrated.current = true;
     });
@@ -567,10 +571,10 @@ export default function GeneratePage() {
   useEffect(() => {
     if (!effectiveUserId || !heightAgeHydrated.current) return;
     const handle = window.setTimeout(() => {
-      updateUserHeightAge(effectiveUserId, { heightCm, heightLabel, ageLabel }).catch(() => {});
+      updateUserHeightAge(effectiveUserId, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }).catch(() => {});
     }, 600);
     return () => window.clearTimeout(handle);
-  }, [effectiveUserId, heightCm, heightLabel, ageLabel]);
+  }, [effectiveUserId, heightCm, heightLabel, weightKg, weightLabel, ageLabel]);
 
   // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -1203,6 +1207,7 @@ export default function GeneratePage() {
     setSubmitError(null);
     const prompt = buildGenerationPrompt({
       heightLabel,
+      weightLabel,
       ageLabel,
       style,
       occasion: occasionHint || undefined,
@@ -1219,6 +1224,7 @@ export default function GeneratePage() {
       products: picked.map((p, i) => ({ product_id: p.id, role_tag: p.role_tag, sort_order: i })),
       heightCm,
       heightLabel,
+      weightLabel,
       ageLabel,
       style,
       prompt,

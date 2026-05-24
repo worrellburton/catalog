@@ -89,6 +89,7 @@ export default defineConfig({
             route("product-ads", "routes/admin/product-ads.tsx");
             route("search", "routes/admin/search.tsx");
             route("settings", "routes/admin/settings.tsx");
+            route("sharing", "routes/admin/sharing.tsx");
             route("shoppers", "routes/admin/shoppers.tsx");
             route("video-generation", "routes/admin/video-generation.tsx");
             route("whats-new", "routes/admin/whats-new.tsx");
