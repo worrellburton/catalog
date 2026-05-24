@@ -4719,7 +4719,7 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .admin-sharing-image-thumb { background: #0f0f10; border-color: #27272a; }
 .admin-dark .admin-sharing-image-empty { color: #52525b; }
 
-/* ── Admin Profile Editor (slide-over sheet) ────────────────────────────── */
+/* ── Admin Profile Editor (centered modal) ──────────────────────────────── */
 @keyframes ape-pop {
   from { opacity: 0; transform: translateY(2px) scale(.98); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
@@ -4738,28 +4738,32 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   background: rgba(10, 10, 12, 0);
   backdrop-filter: blur(0);
   -webkit-backdrop-filter: blur(0);
-  display: flex; justify-content: flex-end;
-  transition: background 320ms cubic-bezier(.4,0,.2,1), backdrop-filter 320ms cubic-bezier(.4,0,.2,1);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  transition: background 280ms cubic-bezier(.4,0,.2,1), backdrop-filter 280ms cubic-bezier(.4,0,.2,1);
 }
 .ape-backdrop.is-mounted {
   background: rgba(10, 10, 12, 0.52);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .ape-sheet {
-  width: min(460px, 100vw);
-  height: 100vh;
+  width: min(520px, 100%);
+  max-height: min(90vh, 760px);
   background: #fff;
+  border-radius: 18px;
   display: flex; flex-direction: column;
-  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.22);
-  transform: translateX(24px);
+  box-shadow:
+    0 24px 56px -16px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  transform: translateY(12px) scale(0.96);
   opacity: 0;
   transition:
-    transform 420ms cubic-bezier(.32, .72, 0, 1),
-    opacity   320ms cubic-bezier(.32, .72, 0, 1);
+    transform 320ms cubic-bezier(.32, .72, 0, 1),
+    opacity   240ms cubic-bezier(.32, .72, 0, 1);
   overflow: hidden;
 }
-.ape-sheet.is-mounted { transform: translateX(0); opacity: 1; }
+.ape-sheet.is-mounted { transform: translateY(0) scale(1); opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .ape-backdrop, .ape-sheet { transition: opacity 120ms linear; }
   .ape-sheet { transform: none; }
