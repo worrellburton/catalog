@@ -478,9 +478,38 @@ export default function AdminLayout() {
   }, [genNotifications]);
 
   useEffect(() => {
+    // Initial load.
     pollGenerations();
-    const interval = setInterval(pollGenerations, 5000);
-    return () => clearInterval(interval);
+
+    // Subscribe to product_creative row changes via Supabase Realtime
+    // (postgres_changes WebSocket). Replaces the previous setInterval
+    // that hit the REST API every 5 seconds whether anything had
+    // changed or not — admins keeping the tab open burned ~720 hits
+    // an hour just for queue updates. Now we only re-poll when a row
+    // actually inserts / updates.
+    let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+    if (supabase) {
+      channel = supabase
+        .channel('admin-product-creative-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'product_creative' },
+          () => { pollGenerations(); },
+        )
+        .subscribe();
+    }
+
+    // Self-heal + promote-queued steps still run on a slow timer
+    // (every 30s) — these aren't triggered by row changes, they sweep
+    // for stuck rows that the worker forgot to flip.
+    const sweepInterval = setInterval(() => {
+      pollGenerations();
+    }, 30000);
+
+    return () => {
+      clearInterval(sweepInterval);
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
