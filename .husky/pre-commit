@@ -1,0 +1,19 @@
+#!/bin/sh
+# Pre-commit: typecheck + lint-staged on changed files only. Stops
+# the slow "push → wait for Vercel → discover build failure" cycle
+# that hit us multiple times this week (unregistered admin route,
+# floating-label modal overflow). Skips if node_modules is absent so
+# fresh clones / containers without `npm ci` aren't blocked.
+
+if [ ! -d node_modules ]; then
+  echo "[husky] node_modules missing — skipping pre-commit checks."
+  exit 0
+fi
+
+# Lint + autofix only the staged files (fast, ~1-3s).
+npx lint-staged || exit 1
+
+# Full typecheck — TS is the only signal that catches "I forgot to
+# register the route" / "this prop doesn't exist" mistakes. Slower
+# (~10s) but worth it given the deploy cost of a broken build.
+npx tsc --noEmit || exit 1
