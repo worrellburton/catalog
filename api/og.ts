@@ -334,7 +334,14 @@ export default async function handler(req: Request): Promise<Response> {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600',
+      // Aggressive edge cache — link unfurls are deterministic for the
+      // same URL until the underlying content (creator name, product
+      // image, share.* admin settings) actually changes. s-maxage on
+      // Vercel's edge keeps the function cold for an hour; SWR lets a
+      // stale response serve while we refresh in the background. The
+      // browser cache (max-age) stays short so the iMessage / Slack
+      // crawler doesn't re-pull a stale title.
+      'Cache-Control': 'public, max-age=60, s-maxage=3600, stale-while-revalidate=86400',
     },
   });
 }

@@ -15,6 +15,7 @@ import type { UserGender } from '~/services/genders';
 import AdminProfileEditor from '~/components/AdminProfileEditor';
 import { AvatarUpload } from '~/components/AvatarCropModal';
 import CountUp from '~/components/CountUp';
+import AutoplayVideo from '~/components/AutoplayVideo';
 import { withTransform } from '~/utils/supabase-image';
 
 interface StyleGenWithImages extends StyleGeneration {
@@ -687,7 +688,7 @@ export default function AdminUserDetail() {
                   >
                     <div className="aud-look-tile-media">
                       {g.video_url ? (
-                        <video src={g.video_url} muted loop playsInline autoPlay />
+                        <AutoplayVideo src={g.video_url} />
                       ) : (
                         <div className={`aud-look-tile-empty ${g.status === 'failed' ? 'is-failed' : ''}`}>
                           <div className="aud-look-tile-status">

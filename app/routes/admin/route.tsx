@@ -596,6 +596,10 @@ export default function AdminLayout() {
                 <NavLink
                   to={item.to}
                   end={item.to === '/admin'}
+                  // prefetch on hover/focus so the route chunk lands
+                  // before the user clicks. Cuts perceived nav latency
+                  // to ~0 on the second click.
+                  prefetch="intent"
                   className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
                   onClick={() => setSidebarOpen(false)}
                 >

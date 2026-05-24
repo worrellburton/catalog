@@ -4,6 +4,7 @@ import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
 import { withTransform } from '~/utils/supabase-image';
+import AutoplayVideo from '~/components/AutoplayVideo';
 
 interface MyLooksProps {
   onClose: () => void;
@@ -281,20 +282,13 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <div className="my-cat-tile-media">
                   {preview ? (
                     preview.video ? (
-                      // Autoplay + loop muted so tiles read as motion,
-                      // matching LookCard in the main feed. poster paints
-                      // an instant still while the MP4 buffers (now
-                      // pre-shrunk via Supabase transform — full-res
-                      // posters were the heaviest item on the page).
-                      <video
+                      // AutoplayVideo pauses when scrolled off-screen
+                      // via the shared useInViewport pool, so tiles
+                      // below the fold stop spending CPU on muted loops.
+                      <AutoplayVideo
                         className="my-cat-tile-img"
                         src={preview.video}
                         poster={withTransform(preview.poster, { width: 540, quality: 70 })}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        preload="metadata"
                       />
                     ) : preview.poster ? (
                       <img
