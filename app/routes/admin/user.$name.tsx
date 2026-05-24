@@ -425,27 +425,21 @@ export default function AdminUserDetail() {
             {profile?.gender && (
               <div className="admin-detail-row"><span>Gender</span><span style={{ textTransform: 'capitalize' }}>{profile.gender}</span></div>
             )}
-            {(profile?.height_label || profile?.height_cm) && (
-              <div className="admin-detail-row">
-                <span>Height</span>
-                <span>
-                  {profile.height_label || `${profile.height_cm} cm`}
-                  {profile.height_label && profile.height_cm ? ` (${profile.height_cm} cm)` : ''}
-                </span>
-              </div>
-            )}
-            {(profile?.weight_label || profile?.weight_kg) && (
-              <div className="admin-detail-row">
-                <span>Weight</span>
-                <span>
-                  {profile.weight_label || `${profile.weight_kg} kg`}
-                  {profile.weight_label && profile.weight_kg ? ` (${profile.weight_kg} kg)` : ''}
-                </span>
-              </div>
-            )}
-            {profile?.age_label && (
-              <div className="admin-detail-row"><span>Age</span><span>{profile.age_label}</span></div>
-            )}
+            <div className="admin-detail-row">
+              <span>Height</span>
+              <span>
+                {profile?.height_label || (profile?.height_cm ? `${profile.height_cm} cm` : '—')}
+                {profile?.height_label && profile?.height_cm ? ` (${profile.height_cm} cm)` : ''}
+              </span>
+            </div>
+            <div className="admin-detail-row">
+              <span>Weight</span>
+              <span>
+                {profile?.weight_label || (profile?.weight_kg ? `${profile.weight_kg} kg` : '—')}
+                {profile?.weight_label && profile?.weight_kg ? ` (${profile.weight_kg} kg)` : ''}
+              </span>
+            </div>
+            <div className="admin-detail-row"><span>Age</span><span>{profile?.age_label || '—'}</span></div>
             {profile?.created_at && (
               <div className="admin-detail-row"><span>Joined</span><span>{new Date(profile.created_at).toLocaleDateString()}</span></div>
             )}
@@ -704,24 +698,27 @@ export default function AdminUserDetail() {
                       <div className="aud-look-tile-sub">{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
                     </div>
                     <div className="aud-look-tile-attribution">
-                      <span className={`aud-trigger-chip ${triggeredByAdmin ? 'is-admin' : 'is-self'}`}>
-                        {triggeredByAdmin ? (
-                          <>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      {triggeredByAdmin ? (
+                        <div className="aud-trigger-stack">
+                          <span className="aud-trigger-handle">
+                            @{profile?.full_name?.replace(/\s+/g, '').toLowerCase() || (profile?.email?.split('@')[0] ?? '')}
+                          </span>
+                          <span className="aud-trigger-byline">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <circle cx="12" cy="8" r="4"/>
                               <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
                             </svg>
-                            Admin · {adminName}
-                          </>
-                        ) : (
-                          <>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                              <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
-                            </svg>
-                            Self
-                          </>
-                        )}
-                      </span>
+                            Made by {adminName}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="aud-trigger-chip is-self">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
+                          </svg>
+                          Self
+                        </span>
+                      )}
                     </div>
                     {g.status === 'failed' && g.error && (
                       <div
