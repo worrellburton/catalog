@@ -5433,3 +5433,40 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .aud-empty { color: #71717a; }
 .admin-dark .aud-private { background: #422006; color: #fcd34d; }
 .admin-dark .aud-private:hover { background: #713f12; }
+
+/* ── Skeleton loaders ───────────────────────────────────────────────────── */
+@keyframes aud-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.aud-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.aud-skeleton {
+  background:
+    linear-gradient(90deg,
+      rgba(244, 244, 245, 1) 0%,
+      rgba(228, 228, 231, 1) 50%,
+      rgba(244, 244, 245, 1) 100%);
+  background-size: 200% 100%;
+  border-radius: 10px;
+  animation: aud-skeleton-shimmer 1.6s linear infinite;
+}
+.aud-skeleton-tile {
+  aspect-ratio: 9 / 16;
+  border-radius: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aud-skeleton { animation: none; background: #f4f4f5; }
+}
+.admin-dark .aud-skeleton {
+  background:
+    linear-gradient(90deg,
+      rgba(39, 39, 42, 1) 0%,
+      rgba(63, 63, 70, 1) 50%,
+      rgba(39, 39, 42, 1) 100%);
+  background-size: 200% 100%;
+}

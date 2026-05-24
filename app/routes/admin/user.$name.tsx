@@ -558,7 +558,11 @@ export default function AdminUserDetail() {
           onUploaded={u => setUploads(prev => [u, ...prev])}
         />
         {!resolved ? (
-          <p className="admin-detail-empty">Loading…</p>
+          <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>
         ) : uploads.length === 0 ? (
           <p className="admin-detail-empty">No reference photos uploaded yet</p>
         ) : (
@@ -632,7 +636,11 @@ export default function AdminUserDetail() {
           );
         })()}
         {(() => {
-          if (!resolved) return <p className="admin-detail-empty">Loading…</p>;
+          if (!resolved) return <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>;
           if (generations.length === 0) return <p className="admin-detail-empty">No looks generated yet</p>;
           const filtered = generations.filter(g => {
             if (genTab === 'all') return true;
@@ -729,7 +737,11 @@ export default function AdminUserDetail() {
       <div style={{ marginTop: 24 }}>
         <h2 className="admin-section-title">Generated styles ({styleGens.length})</h2>
         {!resolved ? (
-          <p className="admin-detail-empty">Loading…</p>
+          <div className="aud-skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aud-skeleton aud-skeleton-tile" style={{ animationDelay: `${i * 60}ms` }} />
+            ))}
+          </div>
         ) : styleGens.length === 0 ? (
           <p className="admin-detail-empty">No style sheets generated yet</p>
         ) : (
