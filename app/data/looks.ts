@@ -42,6 +42,9 @@ export interface Look {
   // and avatar.
   creatorDisplayName?: string;
   creatorAvatar?: string;
+  /** True when the owning profile/creator is_ai=true. Drives the
+   *  Human / AI split filter on the admin Looks (Published) tab. */
+  creatorIsAi?: boolean;
   /** Server-extracted first frame of the video, used as the
    *  <video poster=> so the card paints a real image while the MP4
    *  streams. Populated by the Modal worker on upload + by the

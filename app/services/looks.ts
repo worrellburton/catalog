@@ -160,14 +160,29 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       .map(r => userIdByLookId.get(r.id) || r.user_id)
       .filter((v): v is string => !!v),
   ));
-  const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null }>();
+  const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
   if (orphanUserIds.length > 0) {
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url, email')
+      .select('id, full_name, avatar_url, email, is_ai')
       .in('id', orphanUserIds);
-    (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null }) => {
-      profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email });
+    (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
+      profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email, is_ai: p.is_ai === true });
+    });
+  }
+
+  // Resolve is_ai for every creator_handle referenced by the result
+  // set. The admin Looks (Published) tab uses this to filter the table
+  // by Human / AI source — without this map the tab would land empty.
+  const handles = Array.from(new Set(filteredLooks.map(r => r.creator_handle).filter((h): h is string => !!h)));
+  const isAiByHandle = new Map<string, boolean>();
+  if (handles.length > 0) {
+    const { data: crs } = await supabase
+      .from('creators')
+      .select('handle, is_ai')
+      .in('handle', handles);
+    (crs || []).forEach((c: { handle: string; is_ai: boolean | null }) => {
+      isAiByHandle.set(c.handle, c.is_ai === true);
     });
   }
 
@@ -189,6 +204,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       creator: row.creator_handle || (profileUserId ? `user:${profileUserId}` : ''),
       creatorDisplayName: fallbackName || undefined,
       creatorAvatar: fallbackProfile?.avatar_url || undefined,
+      creatorIsAi: row.creator_handle
+        ? (isAiByHandle.get(row.creator_handle) ?? false)
+        : (fallbackProfile?.is_ai ?? false),
       description: row.description || '',
       color: row.color || '#888',
       products: (row.look_products || [])
