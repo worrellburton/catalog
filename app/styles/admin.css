@@ -5396,3 +5396,40 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .aud-look-tile-title { color: #fafafa; }
 .admin-dark .aud-look-tile-sub { color: #a1a1aa; }
 .admin-dark .aud-trigger-chip.is-admin { background: #422006; color: #fcd34d; }
+
+/* ── Empty states + privacy indicators ──────────────────────────────────── */
+.aud-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 18px 12px 12px;
+  color: #a1a1aa;
+  font-size: 12.5px;
+  text-align: center;
+}
+.aud-empty-icon { color: #d4d4d8; }
+.aud-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.aud-card-head h3 { margin: 0; }
+.aud-private {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: help;
+  transition: background 200ms ease, transform 200ms ease;
+}
+.aud-private:hover { background: #fde68a; transform: translateY(-1px); }
+
+.admin-dark .aud-empty-icon { color: #3f3f46; }
+.admin-dark .aud-empty { color: #71717a; }
+.admin-dark .aud-private { background: #422006; color: #fcd34d; }
+.admin-dark .aud-private:hover { background: #713f12; }

@@ -456,7 +456,16 @@ export default function AdminUserDetail() {
             Realtime: a session heartbeat or new event re-renders these
             rows the moment they hit the DB. */}
         <div className="admin-detail-card aud-card">
-          <h3>Engagement</h3>
+          <div className="aud-card-head">
+            <h3>Engagement</h3>
+            <span className="aud-private" title="Visible to admins only. Users don't see their own engagement telemetry.">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Admin only
+            </span>
+          </div>
           <div className="admin-detail-rows">
             <div className="admin-detail-row">
               <span>Last sign-in</span>
@@ -519,13 +528,25 @@ export default function AdminUserDetail() {
 
       {!isCreator && (
         <div className="admin-detail-grid" style={{ marginTop: 16 }}>
-          <div className="admin-detail-card">
+          <div className="admin-detail-card aud-card">
             <h3>Recent Searches</h3>
-            <p className="admin-detail-empty">No searches yet</p>
+            <div className="aud-empty">
+              <svg className="aud-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <span>No searches yet</span>
+            </div>
           </div>
-          <div className="admin-detail-card">
+          <div className="admin-detail-card aud-card">
             <h3>Recent Clicks</h3>
-            <p className="admin-detail-empty">No clicks yet</p>
+            <div className="aud-empty">
+              <svg className="aud-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 11l3 3 8-8"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              <span>No clicks yet</span>
+            </div>
           </div>
         </div>
       )}
