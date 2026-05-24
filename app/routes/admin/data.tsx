@@ -211,6 +211,9 @@ interface LookRow {
   creator: string;
   creatorDisplay: string;
   creatorAvatar: string;
+  /** True when the owning creator profile is_ai=true — drives the
+   *  Human / AI source filter on the Published tab. */
+  creatorIsAi: boolean;
   video: string;
   products: number;
 }
@@ -958,6 +961,18 @@ export default function AdminData() {
     ai:    unpublished.filter(g =>  g.creator_is_ai).length,
   }), [unpublished]);
 
+  // Mirror of sourceCounts for the Published tab — Published looks
+  // come from the seed/Supabase Look[] not the user_generations table,
+  // so they need their own count keyed off look.creatorIsAi.
+  const publishedSourceCounts = useMemo(() => {
+    const live = looks.filter(l => !deletedLookIds.has(l.id));
+    return {
+      all:   live.length,
+      human: live.filter(l => !l.creatorIsAi).length,
+      ai:    live.filter(l =>  l.creatorIsAi).length,
+    };
+  }, [looks, deletedLookIds]);
+
   // Bottom-center publish toast. Stays up ~3.2s and fades. The
   // unpublished-row Publish button drives this - single-shot so we
   // don't need a queue.
@@ -1526,6 +1541,10 @@ export default function AdminData() {
 
   const lookRows: LookRow[] = useMemo(() => {
     let filtered = looks.filter(l => !deletedLookIds.has(l.id));
+    if (lookSource !== 'all') {
+      filtered = filtered.filter(l =>
+        lookSource === 'ai' ? l.creatorIsAi : !l.creatorIsAi);
+    }
     if (adminQuery) {
       filtered = filtered.filter(l => {
         const c = creators[l.creator];
@@ -1551,6 +1570,7 @@ export default function AdminData() {
         creator: look.creator,
         creatorDisplay: display,
         creatorAvatar: avatar,
+        creatorIsAi: !!look.creatorIsAi,
         video: look.video,
         products: look.products.length,
       };
@@ -1559,7 +1579,7 @@ export default function AdminData() {
     // rows array goes stale after a publish (cache is invalidated and
     // looks state refetches, but the table keeps rendering the
     // previous snapshot).
-  }, [looks, creators, deletedLookIds, lookOrder, adminQuery]);
+  }, [looks, creators, deletedLookIds, lookOrder, adminQuery, lookSource]);
 
   // Brand-to-domain mapping for Brandfetch logos
   const brandDomains: Record<string, string> = useMemo(() => ({
@@ -2656,36 +2676,41 @@ export default function AdminData() {
         {/* Source split sits ABOVE the status pills — it's the
             primary axis the admin reasons in ("show me AI looks vs
             human looks"), with status as the sub-filter inside that.
-            Hidden on Published since the curated `looks` table
-            doesn't track is_ai today. */}
-        {looksFilter !== 'published' && (
-          <div className="admin-tabs" style={{ marginBottom: 8 }}>
-            <button
-              className={`admin-tab ${lookSource === 'all' ? 'active' : ''}`}
-              onClick={() => setLookSource('all')}
-              title="Show every look in the current pill, regardless of creator type"
-            >
-              All
-              <span className="admin-tab-badge">{sourceCounts.all}</span>
-            </button>
-            <button
-              className={`admin-tab ${lookSource === 'human' ? 'active' : ''}`}
-              onClick={() => setLookSource('human')}
-              title="Looks created by real shoppers / creators (profile.is_ai = false)"
-            >
-              Human
-              <span className="admin-tab-badge">{sourceCounts.human}</span>
-            </button>
-            <button
-              className={`admin-tab ${lookSource === 'ai' ? 'active' : ''}`}
-              onClick={() => setLookSource('ai')}
-              title="Looks owned by AI personas (profile.is_ai = true) — admin impersonations land here"
-            >
-              AI
-              <span className="admin-tab-badge">{sourceCounts.ai}</span>
-            </button>
-          </div>
-        )}
+            Published uses publishedSourceCounts (keyed off the
+            curated looks table joined with creators.is_ai); the
+            unpublished/failed pills use sourceCounts (off
+            user_generations.creator_is_ai). */}
+        {(() => {
+          const counts = looksFilter === 'published' ? publishedSourceCounts : sourceCounts;
+          return (
+            <div className="admin-tabs" style={{ marginBottom: 8 }}>
+              <button
+                className={`admin-tab ${lookSource === 'all' ? 'active' : ''}`}
+                onClick={() => setLookSource('all')}
+                title="Show every look in the current pill, regardless of creator type"
+              >
+                All
+                <span className="admin-tab-badge">{counts.all}</span>
+              </button>
+              <button
+                className={`admin-tab ${lookSource === 'human' ? 'active' : ''}`}
+                onClick={() => setLookSource('human')}
+                title="Looks created by real shoppers / creators (profile.is_ai = false)"
+              >
+                Human
+                <span className="admin-tab-badge">{counts.human}</span>
+              </button>
+              <button
+                className={`admin-tab ${lookSource === 'ai' ? 'active' : ''}`}
+                onClick={() => setLookSource('ai')}
+                title="Looks owned by AI personas (profile.is_ai = true) — admin impersonations land here"
+              >
+                AI
+                <span className="admin-tab-badge">{counts.ai}</span>
+              </button>
+            </div>
+          );
+        })()}
         <div className="admin-tabs" style={{ marginBottom: 12 }}>
           <button
             className={`admin-tab ${looksFilter === 'published' ? 'active' : ''}`}

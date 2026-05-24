@@ -98,6 +98,8 @@ interface ProfileRow {
   gender: string | null;
   height_cm: number | null;
   height_label: string | null;
+  weight_kg: number | null;
+  weight_label: string | null;
   age_label: string | null;
   is_ai: boolean | null;
 }
@@ -164,7 +166,7 @@ export default function AdminUserDetail() {
       if (UUID_RE.test(decoded)) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, weight_kg, weight_label, age_label, is_ai')
           .eq('id', decoded)
           .maybeSingle();
         prof = (data ?? null) as ProfileRow | null;
@@ -176,7 +178,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, weight_kg, weight_label, age_label, is_ai')
           .ilike('full_name', decoded);
         const candidates = (data ?? []) as ProfileRow[];
         if (candidates.length === 1) {
@@ -199,7 +201,7 @@ export default function AdminUserDetail() {
       if (!prof) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, age_label, is_ai')
+          .select('id, email, full_name, avatar_url, provider, role, created_at, last_sign_in_at, gender, height_cm, height_label, weight_kg, weight_label, age_label, is_ai')
           .ilike('email', `${decoded}@%`)
           .limit(1)
           .maybeSingle();
@@ -429,6 +431,15 @@ export default function AdminUserDetail() {
                 <span>
                   {profile.height_label || `${profile.height_cm} cm`}
                   {profile.height_label && profile.height_cm ? ` (${profile.height_cm} cm)` : ''}
+                </span>
+              </div>
+            )}
+            {(profile?.weight_label || profile?.weight_kg) && (
+              <div className="admin-detail-row">
+                <span>Weight</span>
+                <span>
+                  {profile.weight_label || `${profile.weight_kg} kg`}
+                  {profile.weight_label && profile.weight_kg ? ` (${profile.weight_kg} kg)` : ''}
                 </span>
               </div>
             )}
@@ -829,6 +840,8 @@ export default function AdminUserDetail() {
             fullName: profile.full_name,
             heightCm: profile.height_cm,
             heightLabel: profile.height_label,
+            weightKg: profile.weight_kg,
+            weightLabel: profile.weight_label,
             ageLabel: profile.age_label,
             gender: (profile.gender === 'male' || profile.gender === 'female')
               ? (profile.gender as UserGender)
@@ -843,6 +856,8 @@ export default function AdminUserDetail() {
               full_name: next.fullName,
               height_cm: next.heightCm,
               height_label: next.heightLabel,
+              weight_kg: next.weightKg,
+              weight_label: next.weightLabel,
               age_label: next.ageLabel,
               gender: next.gender,
             } : prev);

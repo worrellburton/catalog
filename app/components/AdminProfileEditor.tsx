@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 import { updateUserHeightAge, updateUserFullName } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
 
@@ -20,6 +20,8 @@ export interface AdminProfileEditorInitial {
   fullName: string | null;
   heightCm: number | null;
   heightLabel: string | null;
+  weightKg: number | null;
+  weightLabel: string | null;
   ageLabel: string | null;
   gender: UserGender;
   isAi: boolean;
@@ -34,6 +36,8 @@ interface Props {
     fullName: string;
     heightCm: number;
     heightLabel: string;
+    weightKg: number;
+    weightLabel: string;
     ageLabel: string;
     gender: UserGender;
   }) => void;
@@ -52,9 +56,23 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
     return HEIGHT_OPTIONS.find(h => h.label === "5'10\"") ?? HEIGHT_OPTIONS[0];
   }, [initial.heightCm, initial.heightLabel]);
 
+  const initialWeight = useMemo(() => {
+    if (initial.weightKg != null) {
+      const byKg = WEIGHT_OPTIONS.find(w => w.kg === initial.weightKg);
+      if (byKg) return byKg;
+    }
+    if (initial.weightLabel) {
+      const byLabel = WEIGHT_OPTIONS.find(w => w.label === initial.weightLabel);
+      if (byLabel) return byLabel;
+    }
+    return WEIGHT_OPTIONS.find(w => w.label === '160 lb') ?? WEIGHT_OPTIONS[Math.floor(WEIGHT_OPTIONS.length / 2)];
+  }, [initial.weightKg, initial.weightLabel]);
+
   const [fullName, setFullName] = useState(initial.fullName ?? '');
   const [heightCm, setHeightCm] = useState<number>(initialHeight.cm);
   const [heightLabel, setHeightLabel] = useState<string>(initialHeight.label);
+  const [weightKg, setWeightKg] = useState<number>(initialWeight.kg);
+  const [weightLabel, setWeightLabel] = useState<string>(initialWeight.label);
   const [ageLabel, setAgeLabel] = useState<string>(initial.ageLabel ?? 'mid 20s');
   const [gender, setGender] = useState<UserGender>(initial.gender);
   const [saving, setSaving] = useState(false);
@@ -99,7 +117,7 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
     setError(null);
     setSavedFlash(false);
     const results = await Promise.all([
-      updateUserHeightAge(userId, { heightCm, heightLabel, ageLabel }),
+      updateUserHeightAge(userId, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }),
       updateUserGender(userId, gender),
       updateUserFullName(userId, fullName),
     ]);
@@ -108,13 +126,14 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
     if (firstError) { setError(firstError); return; }
     setSavedFlash(true);
     setTimeout(() => {
-      onSaved({ fullName: fullName.trim(), heightCm, heightLabel, ageLabel, gender });
+      onSaved({ fullName: fullName.trim(), heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender });
     }, 350);
   }
 
   const isDirty =
     fullName !== (initial.fullName ?? '') ||
     heightCm !== (initial.heightCm ?? initialHeight.cm) ||
+    weightKg !== (initial.weightKg ?? initialWeight.kg) ||
     ageLabel !== (initial.ageLabel ?? 'mid 20s') ||
     gender !== initial.gender;
 
@@ -200,18 +219,36 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
                 ))}
               </select>
             </FloatField>
-            <FloatField label="Age" value={ageLabel}>
+            <FloatField label="Weight" value={String(weightKg)}>
               <select
-                value={ageLabel}
-                onChange={e => setAgeLabel(e.target.value)}
+                value={weightKg}
+                onChange={e => {
+                  const kg = Number(e.target.value);
+                  const opt = WEIGHT_OPTIONS.find(w => w.kg === kg);
+                  if (!opt) return;
+                  setWeightKg(opt.kg);
+                  setWeightLabel(opt.label);
+                }}
                 disabled={saving}
               >
-                {AGE_OPTIONS.map(a => (
-                  <option key={a} value={a}>{a}</option>
+                {WEIGHT_OPTIONS.map(w => (
+                  <option key={w.kg} value={w.kg}>{w.label}</option>
                 ))}
               </select>
             </FloatField>
           </div>
+
+          <FloatField label="Age" value={ageLabel}>
+            <select
+              value={ageLabel}
+              onChange={e => setAgeLabel(e.target.value)}
+              disabled={saving}
+            >
+              {AGE_OPTIONS.map(a => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+          </FloatField>
 
           <fieldset className="ape-segmented">
             <legend>Gender</legend>
