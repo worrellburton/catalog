@@ -5197,3 +5197,202 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 .admin-dark .aud-page .admin-detail-row > :last-child:not(span) { color: #fafafa; }
 .admin-dark .aud-avatar-ring > * { border-color: #18181b; background: #18181b; }
 .admin-dark .aud-avatar-ring .aud-avatar-fallback { background: #27272a; color: #a1a1aa; }
+
+/* ── Reference photo gallery ────────────────────────────────────────────── */
+.aud-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+.aud-photo-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #18181b;
+  animation: aud-fade-up 460ms cubic-bezier(.32,.72,0,1) both;
+  transition: transform 240ms cubic-bezier(.32,.72,0,1), box-shadow 240ms ease;
+  cursor: zoom-in;
+}
+.aud-photo-tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 600ms cubic-bezier(.32,.72,0,1), filter 240ms ease;
+}
+.aud-photo-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -16px rgba(0, 0, 0, 0.32);
+}
+.aud-photo-tile:hover img { transform: scale(1.06); }
+.aud-photo-tile-overlay {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 200ms ease, transform 200ms cubic-bezier(.32,.72,0,1);
+}
+.aud-photo-tile:hover .aud-photo-tile-overlay,
+.aud-photo-tile:focus-visible .aud-photo-tile-overlay { opacity: 1; transform: translateY(0); }
+
+/* ── Filter tabs ────────────────────────────────────────────────────────── */
+.aud-tabs {
+  display: inline-flex;
+  gap: 0;
+  margin: 14px 0;
+  padding: 4px;
+  background: #f4f4f5;
+  border-radius: 999px;
+  flex-wrap: wrap;
+}
+.aud-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #52525b;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: color 180ms ease, background 220ms cubic-bezier(.32,.72,0,1);
+  font-family: inherit;
+}
+.aud-tab:hover:not(.is-active) { color: #18181b; }
+.aud-tab.is-active {
+  background: #18181b;
+  color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.2);
+}
+.aud-tab:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+.aud-tab-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.aud-tab.is-active .aud-tab-count {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ── Generated look tiles ───────────────────────────────────────────────── */
+.aud-look-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.aud-look-tile {
+  position: relative;
+  background: #fff;
+  border: 1px solid #ececef;
+  border-radius: 12px;
+  padding: 10px;
+  cursor: pointer;
+  transition:
+    transform 220ms cubic-bezier(.32,.72,0,1),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+  animation: aud-fade-up 460ms cubic-bezier(.32,.72,0,1) both;
+}
+.aud-look-tile:hover {
+  transform: translateY(-3px);
+  border-color: #d4d4d8;
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.25);
+}
+.aud-look-tile:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+.aud-look-tile-media {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+.aud-look-tile-media video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.aud-look-tile-empty {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 11px;
+  gap: 8px;
+  color: #a1a1aa;
+}
+.aud-look-tile-empty.is-failed { color: #fca5a5; }
+.aud-look-tile-status { font-weight: 600; }
+.aud-look-tile-error {
+  font-size: 10px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.aud-look-tile-meta { margin-top: 10px; }
+.aud-look-tile-title {
+  color: #18181b;
+  font-weight: 600;
+  font-size: 12.5px;
+  text-transform: capitalize;
+}
+.aud-look-tile-sub {
+  color: #71717a;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.aud-look-tile-attribution { margin-top: 8px; }
+.aud-trigger-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.aud-trigger-chip.is-admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+.aud-trigger-chip.is-self {
+  background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aud-photo-tile, .aud-look-tile { animation: none !important; }
+  .aud-photo-tile:hover, .aud-look-tile:hover { transform: none; }
+  .aud-photo-tile:hover img { transform: none; }
+}
+
+/* Dark-mode variants */
+.admin-dark .aud-tabs { background: #18181b; }
+.admin-dark .aud-tab { color: #a1a1aa; }
+.admin-dark .aud-tab:hover:not(.is-active) { color: #fafafa; }
+.admin-dark .aud-tab.is-active { background: #fafafa; color: #18181b; }
+.admin-dark .aud-tab-count { background: rgba(255,255,255,0.1); }
+.admin-dark .aud-tab.is-active .aud-tab-count { background: rgba(0,0,0,0.1); }
+.admin-dark .aud-look-tile { background: #18181b; border-color: #27272a; }
+.admin-dark .aud-look-tile:hover { border-color: #3f3f46; box-shadow: 0 18px 40px -20px rgba(0,0,0,0.55); }
+.admin-dark .aud-look-tile-title { color: #fafafa; }
+.admin-dark .aud-look-tile-sub { color: #a1a1aa; }
+.admin-dark .aud-trigger-chip.is-admin { background: #422006; color: #fcd34d; }

@@ -541,11 +541,22 @@ export default function AdminUserDetail() {
         ) : uploads.length === 0 ? (
           <p className="admin-detail-empty">No reference photos uploaded yet</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-            {uploads.map(u => (
-              <a key={u.id} href={u.public_url} target="_blank" rel="noopener noreferrer"
-                 style={{ display: 'block', aspectRatio: '3/4', borderRadius: 8, overflow: 'hidden', background: '#111' }}>
-                <img src={u.public_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div className="aud-photo-grid">
+            {uploads.map((u, i) => (
+              <a
+                key={u.id}
+                href={u.public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="aud-photo-tile"
+                style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+              >
+                <img src={u.public_url} alt="" loading="lazy" />
+                <span className="aud-photo-tile-overlay">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/>
+                  </svg>
+                </span>
               </a>
             ))}
           </div>
@@ -582,33 +593,18 @@ export default function AdminUserDetail() {
             { key: 'failed', label: 'Failed',      count: failedCount },
           ];
           return (
-            <div style={{
-              display: 'flex', gap: 4, marginTop: 12, marginBottom: 12,
-              flexWrap: 'wrap',
-            }}>
+            <div className="aud-tabs" role="tablist">
               {tabs.map(t => (
                 <button
                   key={t.key}
                   type="button"
+                  role="tab"
+                  aria-selected={genTab === t.key}
                   onClick={() => setGenTab(t.key)}
-                  style={{
-                    padding: '6px 12px', borderRadius: 999,
-                    border: '1px solid ' + (genTab === t.key ? '#0a0a0a' : '#e5e5e5'),
-                    background: genTab === t.key ? '#0a0a0a' : '#fff',
-                    color: genTab === t.key ? '#fff' : '#1a1a1a',
-                    cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}
+                  className={`aud-tab ${genTab === t.key ? 'is-active' : ''}`}
                 >
-                  {t.label}
-                  <span style={{
-                    background: genTab === t.key ? 'rgba(255,255,255,0.18)' : '#f1f1f1',
-                    color: genTab === t.key ? '#fff' : '#888',
-                    borderRadius: 999, padding: '0 6px',
-                    fontSize: 10, fontWeight: 700,
-                  }}>
-                    {t.count}
-                  </span>
+                  <span className="aud-tab-label">{t.label}</span>
+                  <span className="aud-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>
@@ -626,8 +622,8 @@ export default function AdminUserDetail() {
             return <p className="admin-detail-empty">No looks in this tab</p>;
           }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {filtered.map(g => {
+            <div className="aud-look-grid">
+              {filtered.map((g, i) => {
                 const triggeredByAdmin = !!g.triggered_by_admin_id
                   && g.triggered_by_admin_id !== profile?.id;
                 const adminName = g.triggered_by_admin_id
@@ -645,61 +641,46 @@ export default function AdminUserDetail() {
                         navigate(`/admin/publish/${g.id}`);
                       }
                     }}
-                    style={{
-                      borderRadius: 8, overflow: 'hidden', background: '#fff',
-                      border: '1px solid #eee', padding: 10, fontSize: 12,
-                      cursor: 'pointer',
-                      transition: 'border-color 120ms ease, transform 120ms ease',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1a1a1a'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#eee'; }}
+                    className="aud-look-tile"
+                    style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                     title="Open look detail to publish, review, or retry"
                   >
-                    {g.video_url ? (
-                      <video src={g.video_url} muted loop playsInline autoPlay
-                        style={{ width: '100%', aspectRatio: '9/16', borderRadius: 6, objectFit: 'cover', background: '#000' }} />
-                    ) : (
-                      <div style={{
-                        width: '100%', aspectRatio: '9/16', borderRadius: 6, background: '#000',
-                        color: '#aaa', display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center',
-                        padding: '12px 10px', textAlign: 'center', fontSize: 11, gap: 8,
-                      }}>
-                        <div style={{ fontWeight: 600, color: g.status === 'failed' ? '#fca5a5' : '#aaa' }}>
-                          {g.status === 'failed' ? 'Failed' : 'Processing…'}
-                        </div>
-                        {g.status === 'failed' && g.error && (
-                          <div
-                            title={g.error}
-                            style={{
-                              color: '#fca5a5', fontSize: 10, lineHeight: 1.35,
-                              display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden', wordBreak: 'break-word',
-                            }}
-                          >
-                            {g.error}
+                    <div className="aud-look-tile-media">
+                      {g.video_url ? (
+                        <video src={g.video_url} muted loop playsInline autoPlay />
+                      ) : (
+                        <div className={`aud-look-tile-empty ${g.status === 'failed' ? 'is-failed' : ''}`}>
+                          <div className="aud-look-tile-status">
+                            {g.status === 'failed' ? 'Failed' : 'Processing…'}
                           </div>
+                          {g.status === 'failed' && g.error && (
+                            <div className="aud-look-tile-error" title={g.error}>{g.error}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="aud-look-tile-meta">
+                      <div className="aud-look-tile-title">{g.style} · {g.height_label || ' - '}</div>
+                      <div className="aud-look-tile-sub">{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div className="aud-look-tile-attribution">
+                      <span className={`aud-trigger-chip ${triggeredByAdmin ? 'is-admin' : 'is-self'}`}>
+                        {triggeredByAdmin ? (
+                          <>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <circle cx="12" cy="8" r="4"/>
+                              <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
+                            </svg>
+                            Admin · {adminName}
+                          </>
+                        ) : (
+                          <>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
+                            </svg>
+                            Self
+                          </>
                         )}
-                      </div>
-                    )}
-                    <div style={{ marginTop: 8, color: '#1a1a1a', fontWeight: 600 }}>{g.style} · {g.height_label || ' - '}</div>
-                    <div style={{ color: '#666', fontSize: 11 }}>{g.status} · {new Date(g.created_at).toLocaleDateString()}</div>
-                    {/* Tiny chip flags WHO kicked this off. Admin-triggered
-                        rows came in through /generate?as_user=; otherwise
-                        the persona/user self-triggered (the row's user_id
-                        matches the page's user). */}
-                    <div style={{ marginTop: 6 }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 6px', borderRadius: 999,
-                        background: triggeredByAdmin ? '#ede9fe' : '#f1f5f9',
-                        color:      triggeredByAdmin ? '#5b21b6' : '#475569',
-                        fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-                        textTransform: 'uppercase',
-                      }}>
-                        {triggeredByAdmin
-                          ? `Admin · ${adminName}`
-                          : 'User'}
                       </span>
                     </div>
                     {g.status === 'failed' && g.error && (
