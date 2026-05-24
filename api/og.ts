@@ -94,6 +94,22 @@ function extractTrailingHexPrefix(slug: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+// Convert an 8-char UUID prefix into a [gte, lt) UUID range so the
+// lookup can use the primary-key b-tree index instead of a LIKE
+// substring scan. PostgREST takes `id=gte.X&id=lt.Y` to mean
+// `WHERE id >= X AND id < Y`. ~50-100× faster than `id=like.X*` once
+// the table grows past a few thousand rows.
+function uuidPrefixRange(prefix: string): { gte: string; lt: string } | null {
+  if (!/^[0-9a-f]{8}$/.test(prefix)) return null;
+  const hex = parseInt(prefix, 16);
+  if (!Number.isFinite(hex)) return null;
+  const upperHex = ((hex + 1) >>> 0).toString(16).padStart(8, '0');
+  return {
+    gte: `${prefix}-0000-0000-0000-000000000000`,
+    lt:  `${upperHex}-0000-0000-0000-000000000000`,
+  };
+}
+
 async function lookMeta(slug: string, fullUrl: string): Promise<OgMeta> {
   const fallback: OgMeta = {
     title: 'Shop this look on catalog',
@@ -110,8 +126,11 @@ async function lookMeta(slug: string, fullUrl: string): Promise<OgMeta> {
     if (Array.isArray(rows) && rows[0]) lookRow = rows[0]!;
   }
   if (!lookRow && uuidPrefix) {
-    const rows = await supaGet(`looks?id=like.${uuidPrefix}*&select=id,title,description,user_id,creator_handle&limit=1`) as Array<typeof lookRow>;
-    if (Array.isArray(rows) && rows[0]) lookRow = rows[0]!;
+    const range = uuidPrefixRange(uuidPrefix);
+    if (range) {
+      const rows = await supaGet(`looks?id=gte.${range.gte}&id=lt.${range.lt}&select=id,title,description,user_id,creator_handle&limit=1`) as Array<typeof lookRow>;
+      if (Array.isArray(rows) && rows[0]) lookRow = rows[0]!;
+    }
   }
   if (!lookRow) return fallback;
 
@@ -186,7 +205,9 @@ async function productMeta(slug: string, fullUrl: string): Promise<OgMeta> {
   };
   const prefix = extractTrailingHexPrefix(slug);
   if (!prefix) return fallback;
-  const rows = await supaGet(`products?id=like.${prefix}*&select=name,brand,image_url&limit=1`) as Array<{ name: string | null; brand: string | null; image_url: string | null }>;
+  const range = uuidPrefixRange(prefix);
+  if (!range) return fallback;
+  const rows = await supaGet(`products?id=gte.${range.gte}&id=lt.${range.lt}&select=name,brand,image_url&limit=1`) as Array<{ name: string | null; brand: string | null; image_url: string | null }>;
   const p = Array.isArray(rows) ? rows[0] : null;
   if (!p) return fallback;
   const title = [p.brand, p.name].filter(Boolean).join(' — ') || 'Shop this product on catalog';
