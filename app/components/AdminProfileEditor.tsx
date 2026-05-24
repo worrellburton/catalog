@@ -151,58 +151,55 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
         onClick={e => e.stopPropagation()}
       >
         <header className="ape-header">
-          <div className="ape-header-inner">
-            <div className="ape-eyebrow">
-              <span className={`ape-kind-chip ${initial.isAi ? 'is-ai' : 'is-human'}`}>
-                {initial.isAi ? (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2zm6 12l1 2.5L21.5 17 19 18l-1 2.5L17 18l-2.5-1L17 16l1-2z"/>
-                    </svg>
-                    AI persona
-                  </>
-                ) : (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="8" r="4"/>
-                      <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
-                    </svg>
-                    Human
-                  </>
-                )}
-              </span>
-              {initial.email && <span className="ape-email">{initial.email}</span>}
-            </div>
-            <h2 id="ape-title">Edit profile</h2>
-            <p>These stats power every generated look so the model matches the build.</p>
+          <div className="ape-eyebrow">
+            <span className={`ape-kind-chip ${initial.isAi ? 'is-ai' : 'is-human'}`}>
+              {initial.isAi ? (
+                <>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2zm6 12l1 2.5L21.5 17 19 18l-1 2.5L17 18l-2.5-1L17 16l1-2z"/>
+                  </svg>
+                  AI persona
+                </>
+              ) : (
+                <>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
+                  </svg>
+                  Human
+                </>
+              )}
+            </span>
+            {initial.email && <span className="ape-email">{initial.email}</span>}
+            <button
+              type="button"
+              className="ape-close"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
-          <button
-            type="button"
-            className="ape-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <h2 id="ape-title">Edit profile</h2>
+          <p>These stats power every generated look so the model matches the build.</p>
         </header>
 
         <div className="ape-body">
-          <FloatField label="Name" value={fullName}>
+          <Field label="Name">
             <input
               type="text"
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               disabled={saving}
-              placeholder=" "
               autoFocus
             />
-          </FloatField>
+          </Field>
 
           <div className="ape-row">
-            <FloatField label="Height" value={String(heightCm)}>
+            <Field label="Height">
               <select
                 value={heightCm}
                 onChange={e => {
@@ -218,8 +215,8 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
                   <option key={h.cm} value={h.cm}>{h.label}</option>
                 ))}
               </select>
-            </FloatField>
-            <FloatField label="Weight" value={String(weightKg)}>
+            </Field>
+            <Field label="Weight">
               <select
                 value={weightKg}
                 onChange={e => {
@@ -235,10 +232,10 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
                   <option key={w.kg} value={w.kg}>{w.label}</option>
                 ))}
               </select>
-            </FloatField>
+            </Field>
           </div>
 
-          <FloatField label="Age" value={ageLabel}>
+          <Field label="Age">
             <select
               value={ageLabel}
               onChange={e => setAgeLabel(e.target.value)}
@@ -248,7 +245,7 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
                 <option key={a} value={a}>{a}</option>
               ))}
             </select>
-          </FloatField>
+          </Field>
 
           <fieldset className="ape-segmented">
             <legend>Gender</legend>
@@ -303,14 +300,13 @@ export default function AdminProfileEditor({ userId, initial, onClose, onSaved }
   );
 }
 
-// Floating-label wrapper for an <input> or <select>. Labels lift to
-// the top edge when the field is focused or filled.
-function FloatField({ label, value, children }: { label: string; value: string; children: React.ReactElement }) {
-  const filled = value !== '' && value !== undefined && value !== null;
+// Static-label wrapper. Label sits above the input; no floating
+// position trickery — that broke when the modal was constrained.
+function Field({ label, children }: { label: string; children: React.ReactElement }) {
   return (
-    <label className={`ape-float ${filled ? 'is-filled' : ''}`}>
+    <label className="ape-field">
+      <span className="ape-field-label">{label}</span>
       {children}
-      <span className="ape-float-label">{label}</span>
     </label>
   );
 }
