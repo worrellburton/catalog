@@ -1024,21 +1024,23 @@ export default function AdminUsers() {
                 <td className="admin-cell-muted">{u.creator}</td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                    {showPromoteButton && (
-                      // "Move to admin" — single-click promote. Skips
-                      // the seed-data ("content-*") rows since those
-                      // aren't real auth users and have nothing to
-                      // promote in the DB.
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn-secondary admin-row-promote"
-                        onClick={() => handleAdminToggle(u.id, true)}
-                        disabled={u.id.startsWith('content-')}
-                        title={u.id.startsWith('content-') ? 'Seed creator — sign-up required first' : `Move ${u.name} to admin`}
-                        aria-label={`Move ${u.name} to admin`}
+                    {showPromoteButton && !u.id.startsWith('content-') && (
+                      // Admin toggle — flips is_admin both ways. Seed
+                      // rows (content-*) aren't real auth users so the
+                      // toggle is hidden entirely there.
+                      <label
+                        className="admin-toggle"
+                        title={u.isAdmin ? `Revoke admin from ${u.name}` : `Make ${u.name} admin`}
                       >
-                        Move to admin
-                      </button>
+                        <input
+                          type="checkbox"
+                          checked={u.isAdmin}
+                          onChange={(e) => handleAdminToggle(u.id, e.target.checked)}
+                          aria-label={u.isAdmin ? `Revoke admin from ${u.name}` : `Make ${u.name} admin`}
+                        />
+                        <span className="admin-toggle-track" />
+                        <span className="admin-toggle-text">Admin</span>
+                      </label>
                     )}
                     <button
                       type="button"

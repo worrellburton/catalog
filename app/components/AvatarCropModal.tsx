@@ -572,6 +572,10 @@ export function AvatarUpload({
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
         hidden
         onChange={handleFileChange}
+        // Belt-and-suspenders: some browsers / extensions render the
+        // native "Choose File" button text even with the hidden
+        // attribute. Inline style guarantees it never paints.
+        style={{ display: 'none', position: 'absolute', width: 0, height: 0 }}
       />
       {pickerOpen && (
         <FileDropModal

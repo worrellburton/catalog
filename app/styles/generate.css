@@ -1968,10 +1968,15 @@ html[data-shell="catalog-app"] .gen-page {
   overflow-y: hidden;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  /* Hide scrollbar - we have plenty of cards spilling off-screen as the
-     visual cue that the row scrolls. */
+  scroll-behavior: smooth;
+  /* Hide scrollbar - the right-edge fade-mask below is the visual cue
+     that the row scrolls. */
   scrollbar-width: none;
   padding: 4px 4px 12px;
+  /* Right-edge fade so the user sees there's more content. Uses a
+     mask-image so the fade respects the underlying dark backdrop. */
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 48px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 48px), transparent 100%);
 }
 .gen-cat-row-scroll::-webkit-scrollbar { display: none; }
 
