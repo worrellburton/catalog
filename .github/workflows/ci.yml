@@ -1,0 +1,78 @@
+name: CI
+
+# Runs on every push to dev/main + every PR targeting them.
+# Catches build-breakers that would otherwise only surface on Vercel
+# (e.g. the unregistered `/admin/sharing` route that deployed as a
+# blank page until we noticed). Each job is independent so a failing
+# lint doesn't mask a failing typecheck.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main, staging]
+
+# Cancel in-progress runs when a newer commit lands on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      # Soft-fail until the codebase is lint-clean; flip to required
+      # once outstanding warnings are addressed.
+      - run: npm run lint || true
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+
+  build:
+    name: Vite build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      # Catches missing route registrations, malformed CSS, missing
+      # files — the exact class of bug that snuck through this week.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://vtarjrnqvcqbhoclvcur.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 'placeholder' }}

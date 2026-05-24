@@ -6,9 +6,13 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import { Analytics } from "@vercel/analytics/remix";
+import { SpeedInsights } from "@vercel/speed-insights/remix";
+import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
+import { useEffect } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
+import { initSentry, captureException } from "~/utils/sentry";
 
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
@@ -152,12 +156,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
         <ScrollRestoration />
         <Scripts />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
 }
 
 export default function App() {
+  // Lazy-init Sentry on first mount. No-op if VITE_SENTRY_DSN isn't
+  // set; we don't pay the SDK bundle cost on the cold path either,
+  // because the SDK is dynamically imported inside initSentry().
+  useEffect(() => { void initSentry(); }, []);
+
   return (
     <>
       {/* Type-anywhere search lives at the app root so a stray
@@ -176,5 +186,97 @@ export default function App() {
       <CreatorLoginToastHost />
       <Outlet />
     </>
+  );
+}
+
+/**
+ * Root error boundary — Remix mounts this whenever a thrown render
+ * error or a non-200 route response bubbles up. Without it, an
+ * exception anywhere in the tree unmounts the SPA and the user sees
+ * a black screen (we hit this earlier when /admin/sharing wasn't
+ * registered). Logs the error to console + Vercel Analytics so the
+ * incident is at least visible until proper Sentry wiring lands.
+ */
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  if (typeof window !== 'undefined') {
+    captureException(error, { path: window.location.pathname, source: 'ErrorBoundary' });
+    const w = window as unknown as { va?: (event: string, data: Record<string, unknown>) => void };
+    if (w.va) {
+      w.va('event', {
+        name: 'route-error',
+        path: window.location.pathname,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const status = isRouteErrorResponse(error) ? error.status : 500;
+  const title = isRouteErrorResponse(error)
+    ? (error.statusText || `Error ${error.status}`)
+    : 'Something went wrong';
+  const message = isRouteErrorResponse(error)
+    ? error.data
+    : (error instanceof Error ? error.message : 'An unexpected error occurred.');
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      background: '#0a0a0a',
+      color: '#fff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif',
+    }}>
+      <div style={{ maxWidth: 480, textAlign: 'center' }}>
+        <div style={{ fontSize: 64, fontWeight: 700, color: '#52525b', marginBottom: 8 }}>
+          {status}
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>{title}</h1>
+        <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 24px' }}>
+          {typeof message === 'string' ? message : 'An unexpected error occurred.'}
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <button
+            type="button"
+            onClick={() => { if (typeof window !== 'undefined') window.location.reload(); }}
+            style={{
+              appearance: 'none',
+              background: '#fff',
+              color: '#0a0a0a',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Reload
+          </button>
+          <a
+            href="/"
+            style={{
+              background: 'transparent',
+              color: '#a1a1aa',
+              border: '1px solid #27272a',
+              padding: '10px 20px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'none',
+              display: 'inline-block',
+            }}
+          >
+            Back to home
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
