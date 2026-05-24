@@ -49,6 +49,15 @@ interface ProductRow {
   catalog_tags: string[] | null;
 }
 
+interface LookRow {
+  id: string;
+  legacyId: number | null;
+  title: string | null;
+  creatorHandle: string | null;
+  videoPath: string | null;
+  catalog_tags: string[];
+}
+
 interface CatalogLookRow {
   id: string;
   legacyId: number | null;
@@ -229,6 +238,48 @@ export default function AdminCatalogs() {
   }, []);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
+
+  // Library of looks for the "+ Add Looks" picker. Only pulls live,
+  // enabled, non-archived rows — same filter the consumer feed uses —
+  // so the picker doesn't show drafts or removed content. Catalog
+  // assignment is stored in looks.catalog_tags (jsonb array, mirrors
+  // the products.catalog_tags shape — see migration 021).
+  const [looks, setLooks] = useState<LookRow[]>([]);
+  const loadLooks = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('looks')
+      .select(`
+        id, legacy_id, title, creator_handle, catalog_tags,
+        looks_creative ( video_url, is_primary )
+      `)
+      .eq('status', 'live')
+      .eq('enabled', true)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false });
+    if (!data) return;
+    type LookPayload = {
+      id: string;
+      legacy_id: number | null;
+      title: string | null;
+      creator_handle: string | null;
+      catalog_tags: string[] | null;
+      looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
+    };
+    const mapped: LookRow[] = (data as LookPayload[]).map(r => ({
+      id: r.id,
+      legacyId: r.legacy_id,
+      title: r.title,
+      creatorHandle: r.creator_handle,
+      videoPath: r.looks_creative?.find(c => c.is_primary)?.video_url
+        ?? r.looks_creative?.[0]?.video_url
+        ?? null,
+      catalog_tags: Array.isArray(r.catalog_tags) ? r.catalog_tags : [],
+    }));
+    setLooks(mapped);
+  }, []);
+
+  useEffect(() => { loadLooks(); }, [loadLooks]);
 
   // Expandable creative dropdown per catalog row.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -771,6 +822,91 @@ export default function AdminCatalogs() {
     }
   }, [addProductsCatalog, addSelected, products, loadProducts, showToast]);
 
+  // Add Looks modal state - mirrors Add Products. Tags the catalog
+  // name into looks.catalog_tags so the consumer feed (which filters
+  // by `contains(catalog_tags, [name])`) picks them up.
+  const [addLooksCatalog, setAddLooksCatalog] = useState<Catalog | null>(null);
+  const [addLooksSearch, setAddLooksSearch] = useState('');
+  const [addLooksSelected, setAddLooksSelected] = useState<Set<string>>(new Set());
+  const [addLooksBusy, setAddLooksBusy] = useState(false);
+
+  const openAddLooks = useCallback((catalog: Catalog) => {
+    setAddLooksCatalog(catalog);
+    setAddLooksSearch('');
+    setAddLooksSelected(new Set());
+  }, []);
+
+  const closeAddLooks = useCallback(() => {
+    if (addLooksBusy) return;
+    setAddLooksCatalog(null);
+    setAddLooksSearch('');
+    setAddLooksSelected(new Set());
+  }, [addLooksBusy]);
+
+  const toggleAddLookSelected = useCallback((id: string) => {
+    setAddLooksSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const commitAddLooks = useCallback(async () => {
+    if (!supabase || !addLooksCatalog || addLooksSelected.size === 0) return;
+    setAddLooksBusy(true);
+    try {
+      const name = addLooksCatalog.name;
+      const updates = Array.from(addLooksSelected).map(id => {
+        const l = looks.find(x => x.id === id);
+        const tags = new Set([...(l?.catalog_tags || []), name]);
+        return supabase!
+          .from('looks')
+          .update({ catalog_tags: Array.from(tags) })
+          .eq('id', id)
+          .select('id');
+      });
+      const results = await Promise.all(updates);
+      const errored = results.filter(r => r.error);
+      const blocked = results.filter(r => !r.error && (!r.data || r.data.length === 0));
+      const succeeded = results.length - errored.length - blocked.length;
+
+      if (errored.length > 0) {
+        console.error('[add-looks] update errors:', errored.map(r => r.error));
+      }
+      if (blocked.length > 0) {
+        console.warn('[add-looks] no rows updated for', blocked.length, 'looks - RLS may be blocking writes on public.looks');
+      }
+
+      if (succeeded === 0) {
+        showToast(
+          errored.length > 0
+            ? `Update failed: ${errored[0].error?.message || 'unknown error'}`
+            : `No looks were written - check RLS policies on public.looks (admin needs UPDATE).`,
+        );
+      } else if (succeeded < results.length) {
+        showToast(`Added ${succeeded} of ${results.length} looks to ${name} (${results.length - succeeded} blocked).`);
+      } else {
+        showToast(`Added ${succeeded} look${succeeded === 1 ? '' : 's'} to ${name}.`);
+      }
+
+      if (succeeded > 0) {
+        await loadLooks();
+        // Drop the cached expanded-row payload for this catalog so the
+        // dropdown re-fetches with the new looks.
+        setCreativeByCatalog(prev => {
+          const next = { ...prev };
+          delete next[addLooksCatalog.id];
+          return next;
+        });
+        setAddLooksCatalog(null);
+        setAddLooksSelected(new Set());
+        setAddLooksSearch('');
+      }
+    } finally {
+      setAddLooksBusy(false);
+    }
+  }, [addLooksCatalog, addLooksSelected, looks, loadLooks, showToast]);
+
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
     setSuggestCatalog(null);
@@ -1033,6 +1169,7 @@ export default function AdminCatalogs() {
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                         <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
+                        <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
                         <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
                       </div>
                     </td>
@@ -1144,6 +1281,15 @@ export default function AdminCatalogs() {
                       title="Pick existing products from the library and tag them to this catalog"
                     >
                       + Add Products
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => openAddLooks(c)}
+                      disabled={looks.length === 0}
+                      title="Pick existing looks from the library and tag them to this catalog"
+                    >
+                      + Add Looks
                     </button>
                     <button
                       className="admin-btn admin-btn-primary"
@@ -1263,6 +1409,21 @@ export default function AdminCatalogs() {
           onAutoPick={autoPickRelevant}
           onClose={closeAdd}
           onCommit={commitAdd}
+        />
+      )}
+
+      {/* Add Looks modal - pick from existing library */}
+      {addLooksCatalog && (
+        <AddLooksModal
+          catalog={addLooksCatalog}
+          looks={looks}
+          search={addLooksSearch}
+          onSearch={setAddLooksSearch}
+          selected={addLooksSelected}
+          onToggle={toggleAddLookSelected}
+          busy={addLooksBusy}
+          onClose={closeAddLooks}
+          onCommit={commitAddLooks}
         />
       )}
 
@@ -2156,5 +2317,195 @@ function AddProductsModal({
         </div>
       </div>
     </div>
+  );
+}
+
+interface AddLooksModalProps {
+  catalog: Catalog;
+  looks: LookRow[];
+  search: string;
+  onSearch: (value: string) => void;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  busy: boolean;
+  onClose: () => void;
+  onCommit: () => void;
+}
+
+function AddLooksModal({
+  catalog,
+  looks,
+  search,
+  onSearch,
+  selected,
+  onToggle,
+  busy,
+  onClose,
+  onCommit,
+}: AddLooksModalProps) {
+  const tagged = useMemo(
+    () => new Set(looks.filter(l => l.catalog_tags.includes(catalog.name)).map(l => l.id)),
+    [looks, catalog.name],
+  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return looks;
+    return looks.filter(l =>
+      (l.title || '').toLowerCase().includes(q)
+      || (l.creatorHandle || '').toLowerCase().includes(q),
+    );
+  }, [looks, search]);
+
+  return (
+    <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(1040px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Add Looks to “{catalog.name}”</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
+              {tagged.size} already in this catalog · {looks.length} live in library
+            </p>
+          </div>
+          <input
+            type="text"
+            placeholder="Search by title or creator handle"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            autoFocus
+            style={{ flex: '0 1 260px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+          />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
+              {looks.length === 0 ? 'No live looks in the library.' : `No looks match “${search}”.`}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+              {filtered.map(l => {
+                const isTagged = tagged.has(l.id);
+                const isSelected = selected.has(l.id);
+                return (
+                  <AddLookTile
+                    key={l.id}
+                    look={l}
+                    isTagged={isTagged}
+                    isSelected={isSelected}
+                    onToggle={() => !isTagged && onToggle(l.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: '#666' }}>
+            {selected.size} selected
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={onClose}
+              disabled={busy}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              Cancel
+            </button>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={onCommit}
+              disabled={busy || selected.size === 0}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              {busy ? 'Adding…' : `Add ${selected.size} look${selected.size === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddLookTile({
+  look,
+  isTagged,
+  isSelected,
+  onToggle,
+}: {
+  look: LookRow;
+  isTagged: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const src = look.videoPath
+    ? (look.videoPath.startsWith('http')
+        ? look.videoPath
+        : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
+    : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={isTagged}
+      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
+      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+      style={{
+        textAlign: 'left',
+        padding: 0,
+        border: `2px solid ${isSelected ? '#2563eb' : isTagged ? '#d1fae5' : '#e5e7eb'}`,
+        borderRadius: 8,
+        overflow: 'hidden',
+        background: '#fff',
+        cursor: isTagged ? 'default' : 'pointer',
+        opacity: isTagged ? 0.55 : 1,
+        position: 'relative',
+      }}
+    >
+      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000' }}>
+        {src ? (
+          <video
+            ref={videoRef}
+            src={src}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>
+            No video
+          </div>
+        )}
+      </div>
+      <div style={{ padding: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.title || `Look #${look.legacyId ?? ''}`}
+        </div>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '}
+        </div>
+      </div>
+      {isTagged && (
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          padding: '2px 6px', borderRadius: 4,
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: '#10b981', color: '#fff',
+        }}>Added</span>
+      )}
+      {isSelected && !isTagged && (
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          padding: '2px 6px', borderRadius: 4,
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: '#2563eb', color: '#fff',
+        }}>Selected</span>
+      )}
+    </button>
   );
 }
