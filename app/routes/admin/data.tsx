@@ -1104,13 +1104,19 @@ export default function AdminData() {
           }));
       }
       if (supabase) {
-        // Also overwrite user_id with the source generation's creator
-        // so the consumer + admin Looks list attribute the look to the
+        // Overwrite user_id with the source generation's creator so
+        // the consumer + admin Looks list attribute the look to the
         // person who *made* it, not the admin who clicked Publish.
         // manage-looks writes user_id = auth.uid() (the admin), and
         // fetchLooksFromSupabase keys the profile lookup off user_id.
+        // creator_handle is also synced by the DB trigger
+        // looks_sync_creator_handle, but we set it explicitly when we
+        // have it to avoid the round-trip to creators.
         const updates: Record<string, unknown> = { status: 'live' };
-        if (g.user_id) updates.user_id = g.user_id;
+        if (g.user_id) {
+          updates.user_id = g.user_id;
+          updates.creator_handle = null; // let trigger backfill from creators
+        }
         followUps.push(supabase
           .from('looks')
           .update(updates)
@@ -1118,6 +1124,17 @@ export default function AdminData() {
           .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] status update failed:', error.message);
           }));
+        // Also record the admin who actually ran the publish so the
+        // audit trail survives the user_id move.
+        followUps.push((async () => {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (!authUser?.id) return;
+          const { error } = await supabase
+            .from('looks')
+            .update({ created_by: authUser.id })
+            .eq('id', look.id);
+          if (error) console.warn('[publish-inline] created_by update failed:', error.message);
+        })());
       }
       await Promise.all(followUps);
       invalidateLooksCache();
