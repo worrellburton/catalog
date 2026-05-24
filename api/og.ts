@@ -28,6 +28,13 @@ const SUPABASE_URL = (globalThis as { process?: { env?: Record<string, string> }
 const SUPABASE_ANON_KEY = (globalThis as { process?: { env?: Record<string, string> } })
   .process?.env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? '';
 
+// Universal image fallback. When a look/product/brand/search resolves
+// without a specific hero image, the iMessage card would otherwise
+// render image-less (which Apple downgrades to the bare compass icon).
+// Pointing every miss at og-default.svg guarantees a real card every
+// time. The SVG is shipped from /public so it's edge-cached for free.
+const DEFAULT_OG_IMAGE = 'https://catalog.shop/og-default.svg';
+
 interface OgMeta {
   title: string;
   description: string;
@@ -45,17 +52,21 @@ function escapeHtml(s: string): string {
 }
 
 function metaTags(m: OgMeta): string {
-  const img = m.image ? `<meta property="og:image" content="${escapeHtml(m.image)}"/><meta name="twitter:image" content="${escapeHtml(m.image)}"/>` : '';
+  // Always emit an og:image — fall back to the branded default so
+  // iMessage never shows the "compass icon" bare-link state.
+  const finalImage = m.image || DEFAULT_OG_IMAGE;
   return [
     `<meta property="og:type" content="website"/>`,
     `<meta property="og:site_name" content="catalog"/>`,
     `<meta property="og:title" content="${escapeHtml(m.title)}"/>`,
     `<meta property="og:description" content="${escapeHtml(m.description)}"/>`,
     `<meta property="og:url" content="${escapeHtml(m.url)}"/>`,
-    img,
-    `<meta name="twitter:card" content="${m.image ? 'summary_large_image' : 'summary'}"/>`,
+    `<meta property="og:image" content="${escapeHtml(finalImage)}"/>`,
+    `<meta property="og:image:alt" content="${escapeHtml(m.title)}"/>`,
+    `<meta name="twitter:card" content="summary_large_image"/>`,
     `<meta name="twitter:title" content="${escapeHtml(m.title)}"/>`,
     `<meta name="twitter:description" content="${escapeHtml(m.description)}"/>`,
+    `<meta name="twitter:image" content="${escapeHtml(finalImage)}"/>`,
     `<meta name="description" content="${escapeHtml(m.description)}"/>`,
   ].join('');
 }
@@ -243,6 +254,30 @@ async function searchMeta(query: string, fullUrl: string): Promise<OgMeta> {
   return { ...fallback, image: hit.image_url ?? null };
 }
 
+// Root-URL defaults are admin-editable via /admin/sharing. Reading
+// them here lets the admin update the iMessage card without a
+// redeploy — the edge function picks up new values on the next
+// crawler hit.
+async function rootMeta(fullUrl: string): Promise<OgMeta> {
+  const fallback: OgMeta = {
+    title: 'catalog — shop the look',
+    description: 'A creator-powered shopping platform where every look is shoppable. Tap in.',
+    image: null,
+    url: fullUrl,
+  };
+  const rows = await supaGet(
+    `app_settings?key=in.(share.title,share.description,share.image_url)&select=key,value`,
+  ) as Array<{ key: string; value: string | null }> | null;
+  if (!Array.isArray(rows)) return fallback;
+  const map = new Map(rows.map(r => [r.key, r.value ?? '']));
+  return {
+    title: map.get('share.title') || fallback.title,
+    description: map.get('share.description') || fallback.description,
+    image: map.get('share.image_url') || null,
+    url: fullUrl,
+  };
+}
+
 async function resolveMeta(pathname: string, fullUrl: string, query: string | null): Promise<OgMeta> {
   const m = pathname.match(/^\/(l|p|b|c)\/(.+?)\/?$/);
   if (m) {
@@ -258,13 +293,8 @@ async function resolveMeta(pathname: string, fullUrl: string, query: string | nu
   if ((pathname === '/' || pathname === '') && query && query.trim()) {
     return searchMeta(query, fullUrl);
   }
-  // Generic catalog landing.
-  return {
-    title: 'catalog — shop the look',
-    description: 'A creator-powered shopping platform where every look is shoppable. Tap in.',
-    image: null,
-    url: fullUrl,
-  };
+  // Generic catalog landing — admin-editable via /admin/sharing.
+  return rootMeta(fullUrl);
 }
 
 export default async function handler(req: Request): Promise<Response> {
