@@ -150,13 +150,16 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // Build query. looks_creative is the canonical home for generated
-  // videos + posters; look_photos/look_videos only get rows from the
-  // legacy manual-upload path. Include both so the tile can fall back.
+  // Build query. Explicit column list — the old `select *` was
+  // dragging back catalog_tags (jsonb), description, embedded_at,
+  // archived_at, etc. none of which MyLooks renders. looks_creative
+  // is the canonical home for generated videos + posters;
+  // look_photos/look_videos only get rows from the legacy manual-
+  // upload path. Include both so the tile can fall back.
   let query = supabase
     .from('looks')
     .select(`
-      *,
+      id, title, description, gender, color, status, enabled, created_at, updated_at,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
       looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
@@ -197,7 +200,7 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
   const { data, error } = await supabase
     .from('looks')
     .select(`
-      *,
+      id, title, description, gender, color, status, enabled, created_at, updated_at,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
       looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
