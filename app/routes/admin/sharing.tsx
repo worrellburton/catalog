@@ -7,6 +7,10 @@ import {
   type ShareSettings,
 } from '~/services/share-settings';
 
+// Page-local stylesheet — extracted from admin.css so the Sharing
+// preview/mockup styles don't ship to every other admin route.
+import '~/styles/admin-sharing.css';
+
 export default function AdminSharing() {
   const [loaded, setLoaded] = useState<ShareSettings>(SHARE_DEFAULTS);
   const [draft, setDraft] = useState<ShareSettings>(SHARE_DEFAULTS);

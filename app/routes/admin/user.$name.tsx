@@ -1,5 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from '@remix-run/react';
+
+// Page-local stylesheet (Edit profile modal + user-detail hero/cards
+// /tiles/skeletons) — 759 lines extracted from admin.css so other
+// admin routes don't pay for it.
+import '~/styles/admin-user-detail.css';
 import { looks, creators, type Look } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
