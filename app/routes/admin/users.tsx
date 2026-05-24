@@ -679,11 +679,14 @@ export default function AdminUsers() {
   // out — admins live on their own tab and waitlisters live on theirs.
   // Seed-data creators from app/data/looks.ts are folded in too so
   // every person who shows up in the consumer feed has a row here.
+  // Admins are intentionally INCLUDED — they're humans too, and the
+  // earlier "Users tab = non-admin humans" split hid them entirely
+  // from this surface. The Admins tab is still the focused view; this
+  // is the catch-all.
   const dbUsers = useMemo(
     () => allUsers.filter(u =>
-      (u.role === 'shopper' || u.role === 'creator')
+      (u.role === 'shopper' || u.role === 'creator' || u.role === 'admin' || u.role === 'super_admin')
       && !waitlistIds.has(u.id)
-      && !u.isAdmin
     ),
     [allUsers, waitlistIds],
   );
