@@ -36,6 +36,16 @@ export interface LookProduct {
   };
 }
 
+export interface LookCreative {
+  id: string;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  mobile_video_url: string | null;
+  is_primary: boolean;
+  status: string | null;
+  created_at: string;
+}
+
 export interface ManagedLook {
   id: string;
   title: string;
@@ -49,6 +59,7 @@ export interface ManagedLook {
   look_photos: LookPhoto[];
   look_videos: LookVideo[];
   look_products: LookProduct[];
+  looks_creative: LookCreative[];
 }
 
 export interface CreateLookInput {
@@ -139,13 +150,16 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // Build query
+  // Build query. looks_creative is the canonical home for generated
+  // videos + posters; look_photos/look_videos only get rows from the
+  // legacy manual-upload path. Include both so the tile can fall back.
   let query = supabase
     .from('looks')
     .select(`
       *,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `, { count: 'exact' })
     .eq('user_id', userId)
@@ -166,6 +180,7 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
     look_photos: (row.look_photos as LookPhoto[]) || [],
     look_videos: (row.look_videos as LookVideo[]) || [],
     look_products: (row.look_products as LookProduct[]) || [],
+    looks_creative: (row.looks_creative as LookCreative[]) || [],
   })) as ManagedLook[];
 
   return {
@@ -185,6 +200,7 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
       *,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `)
     .eq('id', lookId)
@@ -200,6 +216,7 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
       look_photos: data.look_photos || [],
       look_videos: data.look_videos || [],
       look_products: data.look_products || [],
+      looks_creative: data.looks_creative || [],
     } as ManagedLook,
   };
 }

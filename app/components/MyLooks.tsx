@@ -26,19 +26,26 @@ const STATUS_COLORS: Record<LookStatus, string> = {
   archived:  '#777',
 };
 
-// Pick the best preview asset for the tile. Photos win over poster
-// frames because the catalog flow writes look_photos with thumbnails
-// first; video posters only land once a video upload completes.
-function previewFor(look: ManagedLook): { src: string; isVideo: boolean } | null {
+// Pick the best preview asset for the tile. looks_creative is where
+// every generated look lands today (video_url + thumbnail_url), so it
+// wins. look_photos / look_videos only get rows from the legacy
+// manual-upload path and stay as a fallback.
+function previewFor(look: ManagedLook): { src: string; isVideo: boolean; poster: string | null } | null {
+  const creatives = look.looks_creative ?? [];
+  const primary = creatives.find(c => c.is_primary) ?? creatives[0];
+  if (primary) {
+    if (primary.thumbnail_url) return { src: primary.thumbnail_url, isVideo: false, poster: null };
+    const vid = primary.mobile_video_url || primary.video_url;
+    if (vid) return { src: vid, isVideo: true, poster: null };
+  }
   if (look.look_photos?.length > 0) {
     const src = look.look_photos[0].thumbnail_url || look.look_photos[0].url;
-    if (src) return { src, isVideo: false };
+    if (src) return { src, isVideo: false, poster: null };
   }
   if (look.look_videos?.length > 0) {
-    const poster = look.look_videos[0].poster_url;
-    if (poster) return { src: poster, isVideo: true };
-    const video = look.look_videos[0].url;
-    if (video) return { src: video, isVideo: true };
+    const v = look.look_videos[0];
+    if (v.poster_url) return { src: v.poster_url, isVideo: false, poster: null };
+    if (v.url) return { src: v.url, isVideo: true, poster: null };
   }
   return null;
 }
@@ -272,10 +279,15 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <div className="my-cat-tile-media">
                   {preview ? (
                     preview.isVideo ? (
+                      // No real poster yet — let preload="metadata"
+                      // fetch enough of the stream that the first
+                      // frame paints. Setting poster={video src} (the
+                      // old behavior) made browsers fail to load it as
+                      // an image and render nothing.
                       <video
                         className="my-cat-tile-img"
                         src={preview.src}
-                        poster={preview.src}
+                        poster={preview.poster ?? undefined}
                         muted
                         playsInline
                         preload="metadata"
