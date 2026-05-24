@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import CreateAiUserModal from '~/components/CreateAiUserModal';
+import AdminAvatar from '~/components/AdminAvatar';
 import { getProfiles, updateUserRole, updateUserIsAdmin, deleteProfile, type Profile } from '~/services/profiles';
 import { supabase } from '~/utils/supabase';
 import { auditAllUserGenders, type UserGender } from '~/services/genders';
@@ -43,7 +44,7 @@ interface UserRow {
   initials: string;
   name: string;
   email: string;
-  avatar: string;
+  avatar: string | null;
   sso: string;
   role: UserRole;
   isAdmin: boolean;
@@ -71,7 +72,7 @@ function profileToRow(p: Profile): UserRow {
     initials: name.slice(0, 2).toUpperCase(),
     name,
     email: p.email || '',
-    avatar: p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`,
+    avatar: p.avatar_url ?? null,
     sso: p.provider === 'google' ? 'Google' : p.provider === 'phone' ? 'Phone' : 'SSO',
     role: p.role || 'shopper',
     isAdmin: p.is_admin === true,
@@ -974,7 +975,7 @@ export default function AdminUsers() {
                 onClick={() => navigate(`/admin/user/${u.id}`)}
               >
                 <td className="admin-cell-name" title={u.email || undefined}>
-                  <img className="admin-user-avatar-img" src={u.avatar} alt={u.name} />
+                  <AdminAvatar name={u.name} url={u.avatar} isAi={u.isAi} size={32} />
                   {u.name}
                 </td>
                 <td onClick={(e) => e.stopPropagation()}>

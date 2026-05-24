@@ -1373,6 +1373,29 @@ html.admin-on-dark-canvas .admin-topbar,
   flex-shrink: 0;
 }
 
+/* Robust admin avatar — used in lists. Falls back from real photo to
+   a gradient-initial circle with Human/AI color coding when the URL
+   is missing or fails to load. */
+.adm-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.adm-avatar-img { object-fit: cover; }
+.adm-avatar-fallback {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  text-transform: uppercase;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 /* SSO badge */
 .admin-sso-badge {
   font-size: 11px;
