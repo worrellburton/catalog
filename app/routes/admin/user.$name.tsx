@@ -12,7 +12,7 @@ import {
   type UserAnalyticsRow,
 } from '~/services/analytics';
 import type { UserGender } from '~/services/genders';
-import StatsEditorModal from '~/components/StatsEditorModal';
+import AdminProfileEditor from '~/components/AdminProfileEditor';
 import { AvatarUpload } from '~/components/AvatarCropModal';
 
 interface StyleGenWithImages extends StyleGeneration {
@@ -810,28 +810,28 @@ export default function AdminUserDetail() {
       </div>
 
       {editingProfile && profile?.id && (
-        <StatsEditorModal
+        <AdminProfileEditor
           userId={profile.id}
-          editName
-          title="Edit profile"
           initial={{
+            fullName: profile.full_name,
             heightCm: profile.height_cm,
             heightLabel: profile.height_label,
             ageLabel: profile.age_label,
             gender: (profile.gender === 'male' || profile.gender === 'female')
               ? (profile.gender as UserGender)
               : 'unknown',
-            fullName: profile.full_name,
+            isAi: !!profile.is_ai,
+            email: profile.email ?? null,
           }}
           onClose={() => setEditingProfile(false)}
           onSaved={(next) => {
             setProfile(prev => prev ? {
               ...prev,
+              full_name: next.fullName,
               height_cm: next.heightCm,
               height_label: next.heightLabel,
               age_label: next.ageLabel,
               gender: next.gender,
-              ...(next.fullName != null ? { full_name: next.fullName } : {}),
             } : prev);
             setEditingProfile(false);
           }}
