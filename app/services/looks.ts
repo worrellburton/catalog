@@ -102,18 +102,26 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   const candidateUserIds = Array.from(new Set(
     liveLooks.map(r => r.user_id).filter((u): u is string => !!u),
   ));
+  // Run the two validation lookups in parallel — they're independent
+  // and were the serial bottleneck on every page load.
+  const [creatorsByHandle, profilesById_validation] = await Promise.all([
+    candidateHandles.length === 0
+      ? Promise.resolve({ data: [] as Array<{ handle: string; is_ai: boolean | null }> })
+      : supabase.from('creators').select('handle, is_ai').in('handle', candidateHandles),
+    candidateUserIds.length === 0
+      ? Promise.resolve({ data: [] as Array<{ id: string }> })
+      : supabase.from('profiles').select('id').in('id', candidateUserIds),
+  ]);
   const knownHandles = new Set<string>();
   const knownUserIds = new Set<string>();
-  if (candidateHandles.length > 0) {
-    const { data: rows } = await supabase
-      .from('creators').select('handle').in('handle', candidateHandles);
-    (rows || []).forEach((r: { handle: string }) => knownHandles.add(r.handle));
-  }
-  if (candidateUserIds.length > 0) {
-    const { data: rows } = await supabase
-      .from('profiles').select('id').in('id', candidateUserIds);
-    (rows || []).forEach((r: { id: string }) => knownUserIds.add(r.id));
-  }
+  // Reuse the creators payload for is_ai resolution below — saves the
+  // separate handle-only query we used to do further down.
+  const isAiByHandle = new Map<string, boolean>();
+  (creatorsByHandle.data || []).forEach((r: { handle: string; is_ai: boolean | null }) => {
+    knownHandles.add(r.handle);
+    isAiByHandle.set(r.handle, r.is_ai === true);
+  });
+  (profilesById_validation.data || []).forEach((r: { id: string }) => knownUserIds.add(r.id));
   const filteredLooks = liveLooks.filter(r => {
     if (r.creator_handle && knownHandles.has(r.creator_handle)) return true;
     if (r.user_id && knownUserIds.has(r.user_id)) return true;
@@ -171,20 +179,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     });
   }
 
-  // Resolve is_ai for every creator_handle referenced by the result
-  // set. The admin Looks (Published) tab uses this to filter the table
-  // by Human / AI source — without this map the tab would land empty.
-  const handles = Array.from(new Set(filteredLooks.map(r => r.creator_handle).filter((h): h is string => !!h)));
-  const isAiByHandle = new Map<string, boolean>();
-  if (handles.length > 0) {
-    const { data: crs } = await supabase
-      .from('creators')
-      .select('handle, is_ai')
-      .in('handle', handles);
-    (crs || []).forEach((c: { handle: string; is_ai: boolean | null }) => {
-      isAiByHandle.set(c.handle, c.is_ai === true);
-    });
-  }
+  // is_ai by creator_handle was already populated above when we
+  // queried creators for handle validation — single round trip.
 
   return filteredLooks.map((row, index) => {
     const primary = row.looks_creative[0];

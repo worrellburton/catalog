@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { withTransform, transformSrcSet } from '~/utils/supabase-image';
 
 interface Props {
   name: string;
@@ -30,10 +31,13 @@ export default function AdminAvatar({ name, url, isAi, size = 32, className }: P
   const showImage = url && !errored;
 
   if (showImage) {
+    const sized = withTransform(url, { width: size, height: size }) ?? url;
+    const srcSet = transformSrcSet(url, { width: size, height: size });
     return (
       <img
         className={`adm-avatar adm-avatar-img ${className ?? ''}`}
-        src={url}
+        src={sized}
+        srcSet={srcSet}
         alt={name}
         width={size}
         height={size}

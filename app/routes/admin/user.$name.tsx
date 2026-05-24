@@ -1,5 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from '@remix-run/react';
+
+// Page-local stylesheet (Edit profile modal + user-detail hero/cards
+// /tiles/skeletons) — 759 lines extracted from admin.css so other
+// admin routes don't pay for it.
+import '~/styles/admin-user-detail.css';
 import { looks, creators, type Look } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
@@ -15,6 +20,8 @@ import type { UserGender } from '~/services/genders';
 import AdminProfileEditor from '~/components/AdminProfileEditor';
 import { AvatarUpload } from '~/components/AvatarCropModal';
 import CountUp from '~/components/CountUp';
+import AutoplayVideo from '~/components/AutoplayVideo';
+import { withTransform } from '~/utils/supabase-image';
 
 interface StyleGenWithImages extends StyleGeneration {
   images: StyleGenerationImage[];
@@ -581,7 +588,12 @@ export default function AdminUserDetail() {
                 className="aud-photo-tile"
                 style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
               >
-                <img src={u.public_url} alt="" loading="lazy" />
+                <img
+                  src={withTransform(u.public_url, { width: 240, height: 320, quality: 72 })}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
                 <span className="aud-photo-tile-overlay">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/>
@@ -681,7 +693,7 @@ export default function AdminUserDetail() {
                   >
                     <div className="aud-look-tile-media">
                       {g.video_url ? (
-                        <video src={g.video_url} muted loop playsInline autoPlay />
+                        <AutoplayVideo src={g.video_url} />
                       ) : (
                         <div className={`aud-look-tile-empty ${g.status === 'failed' ? 'is-failed' : ''}`}>
                           <div className="aud-look-tile-status">
