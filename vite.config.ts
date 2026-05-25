@@ -8,9 +8,67 @@ const isProduction = process.env.NODE_ENV === "production";
 const rawBase = process.env.NEXT_PUBLIC_BASE_PATH || "";
 const basePath = rawBase ? `${rawBase}/` : "/";
 
+// Surface the deployed git SHA into the bundle so the ErrorBoundary
+// diagnostic can show the exact commit when a user reports a bug.
+// Vercel sets VERCEL_GIT_COMMIT_SHA at build time. Without re-export,
+// Vite's envPrefix gate would hide it from the client bundle.
+const COMMIT_SHA =
+  process.env.VITE_VERCEL_GIT_COMMIT_SHA
+  ?? process.env.VERCEL_GIT_COMMIT_SHA
+  ?? "dev";
+
 export default defineConfig({
   base: basePath,
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+  define: {
+    "import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA": JSON.stringify(COMMIT_SHA),
+  },
+  // ESBuild minification config — preserves function names and avoids
+  // the transformation that breaks function-declaration hoisting in
+  // production. Without these, large route files (e.g. admin/catalogs.tsx,
+  // admin/data.tsx) where the default export references helper
+  // components defined later in the same file would convert into a
+  // chunk that initialises components in declaration order and throws
+  // "Cannot access 'X' before initialization" (TDZ) when React tries
+  // to render the default export before the helpers have initialised.
+  esbuild: {
+    keepNames: true,
+  },
+  build: {
+    // Switch minifier from esbuild's aggressive default to terser with
+    // hoist_funs enabled. Terser hoists function declarations BACK to
+    // the top of their scope after minification, preserving the
+    // semantics dev mode relies on.
+    minify: "terser",
+    terserOptions: {
+      compress: {
+        // Hoist function declarations so they're available from any
+        // reference point in the chunk, regardless of source order.
+        hoist_funs: true,
+        // Don't inline functions used multiple times — keeps the chunk
+        // init graph simple.
+        inline: 1,
+      },
+      mangle: {
+        // Preserve function names so error stacks are readable AND so
+        // the React DevTools / profiler can identify components.
+        keep_fnames: true,
+      },
+      format: {
+        comments: false,
+      },
+    },
+    rollupOptions: {
+      output: {
+        // Hoisting transitive imports into the entry chunk can cause
+        // the same TDZ class: a transitive dep referenced before its
+        // chunk has initialised. Disabling guarantees a chunk only
+        // sees bindings from chunks it has DIRECTLY imported, which
+        // load first.
+        hoistTransitiveImports: false,
+      },
+    },
+  },
   plugins: [
     remix({
       ssr: false,
