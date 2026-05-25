@@ -2989,6 +2989,7 @@ const VIEW_MODE_LS_KEY = 'catalog-admin:dropdown-view-mode';
 type DrawerSubject =
   | { kind: 'look'; look: CatalogLookRow }
   | { kind: 'product'; product: ProductRow }
+  | { kind: 'creative'; creative: CatalogCreativeVideo }
   | null;
 
 function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
@@ -3230,7 +3231,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
             onReorder={(from, to) => onReorder('creatives', from, to)}
           >
             {creatives.map(c => (
-              <CreativeThumb key={c.id} creative={c} />
+              <CreativeThumb key={c.id} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
             ))}
           </DraggableSection>
 
@@ -3244,7 +3245,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
               onReorder={() => {}}
             >
               {(feedResults ?? []).map(c => (
-                <CreativeThumb key={`feed-${c.id}`} creative={c} />
+                <CreativeThumb key={`feed-${c.id}`} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
               ))}
             </DraggableSection>
           )}
@@ -3333,12 +3334,14 @@ function DetailDrawer({ subject, catalogName, onClose }: { subject: NonNullable<
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #e5e7eb' }}>
           <div>
             <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
-              {subject.kind === 'look' ? 'Look' : 'Product'} · {catalogName}
+              {subject.kind === 'look' ? 'Look' : subject.kind === 'product' ? 'Product' : 'Creative'} · {catalogName}
             </div>
             <h2 style={{ margin: '2px 0 0', fontSize: 16, color: '#0f172a' }}>
               {subject.kind === 'look'
                 ? (subject.look.title || `Look #${subject.look.legacyId ?? ''}`)
-                : (subject.product.name || 'Unnamed product')}
+                : subject.kind === 'product'
+                ? (subject.product.name || 'Unnamed product')
+                : (subject.creative.productName || subject.creative.title || 'Creative')}
             </h2>
           </div>
           <button
@@ -3355,7 +3358,9 @@ function DetailDrawer({ subject, catalogName, onClose }: { subject: NonNullable<
         <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {subject.kind === 'look'
             ? <LookDetailBody look={subject.look} />
-            : <ProductDetailBody product={subject.product} />}
+            : subject.kind === 'product'
+            ? <ProductDetailBody product={subject.product} />
+            : <CreativeDetailBody creative={subject.creative} />}
         </div>
       </aside>
     </>
@@ -3525,6 +3530,57 @@ function LookDetailBody({ look }: { look: CatalogLookRow }) {
       {look.createdAt && (
         <div style={{ fontSize: 11, color: '#94a3b8' }}>
           Created {new Date(look.createdAt).toLocaleDateString()}
+        </div>
+      )}
+    </>
+  );
+}
+
+function CreativeDetailBody({ creative }: { creative: CatalogCreativeVideo }) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  return (
+    <>
+      <div style={{ aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#000', maxHeight: 360 }}>
+        <video
+          ref={videoRef}
+          src={creative.videoUrl}
+          poster={creative.thumbnailUrl ?? undefined}
+          muted loop playsInline autoPlay
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, color: '#64748b' }}>{creative.productBrand || '—'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>
+          {creative.productName || creative.title || 'Creative'}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{
+          padding: '2px 8px', borderRadius: 4,
+          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
+          background: creative.status === 'live' ? '#10b981' : '#e5e7eb',
+          color: creative.status === 'live' ? '#fff' : '#475569',
+        }}>
+          {creative.status}
+        </span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+          product_creative.id · {creative.id.slice(0, 8)}…
+        </span>
+      </div>
+
+      {creative.productImageUrl && (
+        <div>
+          <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+            Source product
+          </div>
+          <img
+            src={creative.productImageUrl}
+            alt=""
+            style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 6, background: '#f1f5f9' }}
+          />
         </div>
       )}
     </>
@@ -4730,7 +4786,7 @@ function LookThumb({ look, selected, onSelect, onOpenDetail }: { look: CatalogLo
   );
 }
 
-function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
+function CreativeThumb({ creative, onOpenDetail }: { creative: CatalogCreativeVideo; onOpenDetail?: () => void }) {
   // Default poster is the product's catalog image (the merchandised
   // still — e.g. the New Balance sneaker on a clean background); we
   // only swap to the rendered creative video on hover so the grid
@@ -4799,6 +4855,7 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
         }}>
           {creative.status}
         </span>
+        {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
