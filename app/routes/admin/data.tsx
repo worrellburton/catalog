@@ -47,6 +47,25 @@ interface CrawledProduct {
   materials_care?: string | null;
 }
 
+// localStorage fallback for hidden looks/products. Module-scope so
+// the useState initializers inside AdminData (which run on mount,
+// before the body has finished evaluating its own local const list)
+// can call them without TDZ. Was the cause of the production
+// "Cannot access 'tn' before initialization" 500 on /admin/data.
+const LOCAL_LOOKS_KEY = 'admin:hiddenLookIds';
+const LOCAL_PRODUCTS_KEY = 'admin:hiddenProductKeys';
+function readLocalSet<T extends string | number>(key: string): Set<T> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+function writeLocalSet(key: string, set: Set<string | number>) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   google_shopping: 'Google Shopping',
   amazon: 'Amazon',
@@ -1429,19 +1448,6 @@ export default function AdminData() {
   // localStorage keys act as a durable fallback when the Supabase
   // admin_hidden_* migrations haven't been applied - otherwise deletes would
   // vanish on page refresh and look "undone" to the admin.
-  const LOCAL_LOOKS_KEY = 'admin:hiddenLookIds';
-  const LOCAL_PRODUCTS_KEY = 'admin:hiddenProductKeys';
-  const readLocalSet = <T extends string | number>(key: string): Set<T> => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return new Set();
-      const arr = JSON.parse(raw);
-      return new Set(Array.isArray(arr) ? arr : []);
-    } catch { return new Set(); }
-  };
-  const writeLocalSet = (key: string, set: Set<string | number>) => {
-    try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
-  };
 
 
   // Merge Supabase hidden sets on top of the local fallback. If the remote
