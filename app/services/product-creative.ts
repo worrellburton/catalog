@@ -198,10 +198,107 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     seen.add(key);
     deduped.push(ad);
   }
-  if (opts.ignoreGender) return deduped;
-  return deduped.filter(ad =>
+  // Looks that admin tagged with catalog_tags=['home'] should also
+  // render in the home feed — they're a separate content type, but
+  // the consumer grid is a video grid, so we fabricate ProductAd
+  // records on the fly. The renderer doesn't care that they didn't
+  // come from product_creative; look_id is set so downstream code can
+  // distinguish look-tiles from product-tiles if needed.
+  const looksAds = await getHomeLooksAsProductAds();
+  // Interleave: looks lead 1-in-5 so the feed reads as product-first
+  // with editorial breaks. Cheaper than ranking — admins can refine
+  // later via the Phase 7 KPI strip in /admin/catalogs.
+  const merged: ProductAd[] = [];
+  let li = 0;
+  for (let i = 0; i < deduped.length; i++) {
+    merged.push(deduped[i]);
+    if ((i + 1) % 5 === 0 && li < looksAds.length) {
+      merged.push(looksAds[li++]);
+    }
+  }
+  // Any remaining looks tail-append so nothing gets dropped if the
+  // product feed is short.
+  while (li < looksAds.length) merged.push(looksAds[li++]);
+
+  if (opts.ignoreGender) return merged;
+  return merged.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );
+}
+
+// Pull looks tagged catalog_tags=['home'] and return them as
+// ProductAd-shaped rows so the consumer feed's existing render path
+// just works. Synthesized id is prefixed `look-` to avoid collisions
+// with real product_creative UUIDs.
+async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('looks')
+    .select(`
+      id, title, creator_handle, gender, created_at, catalog_tags,
+      looks_creative ( video_url, is_primary ),
+      look_products ( product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
+    `)
+    .eq('status', 'live')
+    .eq('enabled', true)
+    .is('archived_at', null)
+    .contains('catalog_tags', ['home'])
+    .order('created_at', { ascending: false })
+    .limit(60);
+  if (error) {
+    console.error('[getHomeLooksAsProductAds] query error:', error.message);
+    return [];
+  }
+  type LookRow = {
+    id: string;
+    title: string | null;
+    creator_handle: string | null;
+    gender: string | null;
+    created_at: string;
+    catalog_tags: string[] | null;
+    looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
+    look_products: { product: ProductAd['product'] | null }[] | null;
+  };
+  const rows = (data as LookRow[] | null) || [];
+  const out: ProductAd[] = [];
+  for (const r of rows) {
+    const video = r.looks_creative?.find(c => c.is_primary)?.video_url
+      ?? r.looks_creative?.[0]?.video_url
+      ?? null;
+    if (!video) continue;
+    const firstProduct = r.look_products?.[0]?.product ?? null;
+    out.push({
+      id: `look-${r.id}`,
+      product_id: firstProduct?.id ?? '',
+      look_id: r.id,
+      title: r.title,
+      description: null,
+      video_url: video,
+      mobile_video_url: null,
+      storage_path: null,
+      thumbnail_url: null,
+      affiliate_url: firstProduct?.url ?? null,
+      prompt: null,
+      prompt_extra: null,
+      style: 'look',
+      model: null,
+      status: 'live',
+      duration_seconds: null,
+      aspect_ratio: '9:16',
+      resolution: null,
+      cost_usd: null,
+      impressions: 0,
+      clicks: 0,
+      error: null,
+      enabled: true,
+      is_elite: false,
+      created_at: r.created_at,
+      completed_at: null,
+      updated_at: null,
+      product: firstProduct ?? undefined,
+    });
+  }
+  return out;
 }
 
 // ── Home-feed prefetch ──────────────────────────────────────────────────
@@ -225,7 +322,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
 // mass admin Home-toggle flip).
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v6';
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v7';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -344,6 +441,7 @@ export function invalidateHomeFeed(): void {
         'catalog:home-feed-cache:v3',     // v3 (briefly included product-only rows)
         'catalog:home-feed-cache:v4',     // v4 (type-required gate)
         'catalog:home-feed-cache:v5',     // v5 (no per-product dedup)
+        'catalog:home-feed-cache:v6',     // v6 (pre-look-injection)
         HOME_FEED_LS_KEY,                 // current
       ];
       for (const base of legacyBases) {

@@ -66,6 +66,8 @@ interface CatalogLookRow {
   title: string;
   videoPath: string | null;
   creatorHandle: string | null;
+  creatorName: string | null;
+  creatorAvatarUrl: string | null;
   productCount: number;
   createdAt?: string | null;
   metrics?: ItemMetrics;
@@ -402,7 +404,8 @@ export default function AdminCatalogs() {
       let looksQuery = supabase
         .from('looks')
         .select(`
-          id, legacy_id, title, creator_handle, status, enabled, archived_at, created_at,
+          id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at,
+          creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
           looks_creative!inner ( video_url, is_primary ),
           look_products ( product_id )
         `)
@@ -422,19 +425,27 @@ export default function AdminCatalogs() {
         title: string;
         creator_handle: string | null;
         created_at: string | null;
+        creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
         looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
         look_products: { product_id: string }[] | null;
       };
-      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
-        id: r.id,
-        legacyId: r.legacy_id,
-        title: r.title,
-        videoPath: r.looks_creative?.[0]?.video_url ?? null,
-        creatorHandle: r.creator_handle,
-        productCount: (r.look_products || []).length,
-        createdAt: r.created_at,
-        metrics: metricFor('look', r.id, r.legacy_id),
-      }));
+      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => {
+        // PostgREST sometimes returns the embedded profile as an array
+        // (one-to-many style) and sometimes as a single object; normalise.
+        const creator = Array.isArray(r.creator) ? r.creator[0] : r.creator;
+        return {
+          id: r.id,
+          legacyId: r.legacy_id,
+          title: r.title,
+          videoPath: r.looks_creative?.[0]?.video_url ?? null,
+          creatorHandle: r.creator_handle,
+          creatorName: creator?.full_name ?? null,
+          creatorAvatarUrl: creator?.avatar_url ?? null,
+          productCount: (r.look_products || []).length,
+          createdAt: r.created_at,
+          metrics: metricFor('look', r.id, r.legacy_id),
+        };
+      });
 
       // Universe view collapses dupes - if multiple looks share the
       // same primary creative video they'd render as visual dupes, so
@@ -628,7 +639,18 @@ export default function AdminCatalogs() {
   };
   const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
-  const all = [allRow, ...customWithoutAll, ...featured];
+  // Rank by total search volume so the catalogs shoppers actually care
+  // about float to the top. Home is rendered separately above this
+  // table so it's already pinned at #1; the synthetic `all` row stays
+  // pinned at #2 as the admin meta-view (it would otherwise sink to
+  // the bottom with 0 searches). Featured + custom catalogs sort by
+  // searchCounts.countTotal desc, with countTotal=0 rows preserving
+  // the original order (stable sort keeps recent admin work near the
+  // top).
+  const searchRank = (c: Catalog): number =>
+    searchCounts.get(c.name.toLowerCase())?.countTotal ?? 0;
+  const rankable = [...customWithoutAll, ...featured].sort((a, b) => searchRank(b) - searchRank(a));
+  const all = [allRow, ...rankable];
 
   const addCatalog = async () => {
     const name = newName.trim();
