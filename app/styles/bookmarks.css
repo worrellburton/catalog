@@ -323,6 +323,7 @@ html[data-shell="catalog-app"] .bookmarks-page {
   overflow: hidden;
   background: #111;
   border: none;
+  border-radius: 12px;
   padding: 0;
   cursor: pointer;
   text-align: left;
