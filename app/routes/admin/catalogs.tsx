@@ -400,6 +400,75 @@ export default function AdminCatalogs() {
 
   useEffect(() => { loadMetrics(); }, [loadMetrics]);
 
+  // Phase 9: live monitoring. Subscribe to user_events INSERT stream
+  // via Supabase Realtime so impressions/clicks/clickouts tick up in
+  // place while the admin watches. Two side effects:
+  //   1. metricsByKey: increment the matching look/product row's
+  //      curr-window counts so the per-tile pills and trend stay live.
+  //   2. catalogImpressions: increment the matching catalog row's
+  //      impressions count so the column updates without refresh.
+  // liveTick increments on every accepted event so the "Live"
+  // indicator can pulse + a small recent-event counter can render.
+  const [liveTick, setLiveTick] = useState(0);
+  const [liveActive, setLiveActive] = useState(false);
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin-catalogs-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'user_events' },
+        (payload) => {
+          const row = payload.new as {
+            target_type: string | null;
+            target_id: string | null;
+            target_uuid: string | null;
+            event_type: string | null;
+          };
+          if (!row?.event_type) return;
+          const key = row.target_uuid ?? row.target_id;
+          if (!key) return;
+
+          if (row.target_type === 'look' || row.target_type === 'product') {
+            setMetricsByKey(prev => {
+              const k = `${row.target_type}:${key}`;
+              const existing = prev.get(k);
+              if (!existing) return prev;
+              const next = new Map(prev);
+              const delta: Partial<ItemMetrics> = {};
+              if (row.event_type === 'impression') delta.impressions = existing.impressions + 1;
+              if (row.event_type === 'click' || row.event_type === 'clickout') delta.clicks = existing.clicks + 1;
+              if (row.event_type === 'clickout') delta.clickouts = existing.clickouts + 1;
+              const merged: ItemMetrics = { ...existing, ...delta };
+              merged.ctr = merged.impressions > 0 ? merged.clicks / merged.impressions : 0;
+              merged.clickoutRate = merged.impressions > 0 ? merged.clickouts / merged.impressions : 0;
+              merged.trendPct = merged.impressionsPrev > 0
+                ? Math.round(((merged.impressions - merged.impressionsPrev) / merged.impressionsPrev) * 100)
+                : (merged.impressions > 0 ? null : 0);
+              next.set(k, merged);
+              return next;
+            });
+            setLiveTick(t => t + 1);
+          } else if (row.target_type === 'catalog' && row.event_type === 'impression') {
+            const cKey = (key || '').toLowerCase();
+            setCatalogImpressions(prev => {
+              const existing = prev.get(cKey) ?? { curr: 0, prev: 0 };
+              const next = new Map(prev);
+              next.set(cKey, { ...existing, curr: existing.curr + 1 });
+              return next;
+            });
+            setLiveTick(t => t + 1);
+          }
+        },
+      )
+      .subscribe((status) => {
+        setLiveActive(status === 'SUBSCRIBED');
+      });
+    return () => {
+      void supabase!.removeChannel(channel);
+    };
+  }, []);
+
   // Lookup that tries both target_uuid form (newer events) and the
   // legacy_id form (legacy clients used the integer id). Look rows
   // expose both; product rows always use uuid.
@@ -1280,6 +1349,8 @@ export default function AdminCatalogs() {
         </div>
       </div>
 
+      <LiveIndicator active={liveActive} tick={liveTick} />
+
       <CatalogsDashboard
         catalogs={all}
         impressionsByName={catalogImpressions}
@@ -2067,6 +2138,44 @@ interface CatalogCreativeDropdownProps {
   metricsLoading: boolean;
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
   onAfterBulkMutation: () => void;
+}
+
+// ── Phase 9: live indicator ───────────────────────────────────────────
+// Pulses on every accepted realtime event; shows total events seen
+// this session so admins can confirm the channel is hot.
+function LiveIndicator({ active, tick }: { active: boolean; tick: number }) {
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (tick === 0) return;
+    setPulse(true);
+    const t = window.setTimeout(() => setPulse(false), 500);
+    return () => window.clearTimeout(t);
+  }, [tick]);
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '4px 10px',
+      borderRadius: 999,
+      background: active ? '#ecfdf5' : '#f1f5f9',
+      border: `1px solid ${active ? '#a7f3d0' : '#e2e8f0'}`,
+      marginBottom: 10,
+      fontSize: 11,
+      fontWeight: 600,
+      color: active ? '#047857' : '#64748b',
+    }}>
+      <span style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: active ? '#10b981' : '#cbd5e1',
+        boxShadow: pulse ? '0 0 0 6px rgba(16,185,129,0.25)' : 'none',
+        transition: 'box-shadow 200ms ease',
+      }} />
+      {active ? 'Live' : 'Connecting…'} · {tick} event{tick === 1 ? '' : 's'} this session
+    </div>
+  );
 }
 
 // ── Phase 7: catalog-system dashboard ─────────────────────────────────
