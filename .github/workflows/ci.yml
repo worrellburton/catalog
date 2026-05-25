@@ -76,3 +76,41 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://vtarjrnqvcqbhoclvcur.supabase.co
           VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 'placeholder' }}
+
+  guard-typeof-import:
+    name: Guard `typeof import(...)`
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Pure node script — no install needed. Cheap.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-no-typeof-import.mjs
+
+  smoke:
+    name: Smoke (admin routes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    # Catches the TDZ class of bug that broke /admin/data + /admin/catalogs
+    # in prod. Builds the app, serves the dist with `vite preview`, then
+    # loads each critical route in a real browser and fails if any of
+    # them render the ErrorBoundary or throw uncaught.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke
+        env:
+          VITE_SUPABASE_URL: https://vtarjrnqvcqbhoclvcur.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 'placeholder' }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace
+          path: test-results/
