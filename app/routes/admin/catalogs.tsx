@@ -248,42 +248,15 @@ export default function AdminCatalogs() {
   // full 14-day series with zeros filled.
   const [catalogDaily, setCatalogDaily] = useState<Map<string, number[]>>(new Map());
 
-  // Drag-reorder state. dragId is the slug being dragged; dropTargetId
-  // is the slug currently under the cursor (used for the highlight
-  // ring). Persisted via admin_set_catalog_sort_order on drop.
+  // Drag-reorder STATE only. The handlers are declared further down
+  // — after loadCatalogs / showToast — to keep the useCallback deps
+  // array within their TDZ-safe scope (referencing a useCallback
+  // declared later in the same function body would TDZ here).
   const [dragSlug, setDragSlug] = useState<string | null>(null);
   const [dropTargetSlug, setDropTargetSlug] = useState<string | null>(null);
-  const handleRowDragStart = useCallback((slug: string) => {
-    setDragSlug(slug);
-  }, []);
-  const handleRowDragOver = useCallback((slug: string, e: React.DragEvent) => {
-    e.preventDefault();
-    if (slug !== dropTargetSlug) setDropTargetSlug(slug);
-  }, [dropTargetSlug]);
-  const handleRowDrop = useCallback(async (overSlug: string) => {
-    const source = dragSlug;
-    setDragSlug(null);
-    setDropTargetSlug(null);
-    if (!source || source === overSlug) return;
-    // Build the new order from the rendered `rankable` list.
-    const order = rankable.map(c => c.slug || '');
-    const fromIdx = order.indexOf(source);
-    const toIdx = order.indexOf(overSlug);
-    if (fromIdx === -1 || toIdx === -1) return;
-    const [moved] = order.splice(fromIdx, 1);
-    order.splice(toIdx, 0, moved);
-    // Optimistic update — write sortOrder locally so the row reflows
-    // before the RPC returns.
-    setCustom(prev => prev.map(c => {
-      const idx = order.indexOf(c.slug || '');
-      return idx >= 0 ? { ...c, sortOrder: idx } : c;
-    }));
-    const ok = await setCatalogSortOrder(order.filter(Boolean));
-    if (!ok) {
-      showToast('Could not save order — reverting');
-      loadCatalogs();
-    }
-  }, [dragSlug, rankable, loadCatalogs, showToast]);
+  // rankable is computed downstream this render; the handler reads
+  // it via this ref, updated AFTER the rankable computation.
+  const rankableRef = useRef<Catalog[]>([]);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -414,6 +387,39 @@ export default function AdminCatalogs() {
   }, []);
 
   useEffect(() => { loadCatalogs(); }, [loadCatalogs]);
+
+  // Drag-reorder handlers. Declared HERE — after loadCatalogs and
+  // showToast — so the useCallback deps don't TDZ. Moving these
+  // before their referenced bindings was the actual cause of the
+  // production "Cannot access 'je' before initialization" 500.
+  const handleRowDragStart = useCallback((slug: string) => {
+    setDragSlug(slug);
+  }, []);
+  const handleRowDragOver = useCallback((slug: string, e: React.DragEvent) => {
+    e.preventDefault();
+    if (slug !== dropTargetSlug) setDropTargetSlug(slug);
+  }, [dropTargetSlug]);
+  const handleRowDrop = useCallback(async (overSlug: string) => {
+    const source = dragSlug;
+    setDragSlug(null);
+    setDropTargetSlug(null);
+    if (!source || source === overSlug) return;
+    const order = rankableRef.current.map(c => c.slug || '');
+    const fromIdx = order.indexOf(source);
+    const toIdx = order.indexOf(overSlug);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, moved);
+    setCustom(prev => prev.map(c => {
+      const idx = order.indexOf(c.slug || '');
+      return idx >= 0 ? { ...c, sortOrder: idx } : c;
+    }));
+    const ok = await setCatalogSortOrder(order.filter(Boolean));
+    if (!ok) {
+      showToast('Could not save order — reverting');
+      loadCatalogs();
+    }
+  }, [dragSlug, loadCatalogs, showToast]);
 
   const loadProducts = useCallback(async () => {
     if (!supabase) return;
@@ -877,6 +883,19 @@ export default function AdminCatalogs() {
   };
   const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
+  // Count products tagged with each catalog. Declared HERE (before
+  // the table useMemo that depends on it) so the deps array doesn't
+  // TDZ in production.
+  const catalogProductCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    products.forEach(p => {
+      (p.catalog_tags || []).forEach(tag => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [products]);
+
   // Rank by total search volume so the catalogs shoppers actually care
   // about float to the top. Home is rendered separately above this
   // table so it's already pinned at #1; the synthetic `all` row stays
@@ -900,6 +919,8 @@ export default function AdminCatalogs() {
     return searchRank(b) - searchRank(a);
   });
   const allUnfiltered = [allRow, ...rankable];
+  // Sync the drag handler's ref now that `rankable` exists.
+  rankableRef.current = rankable;
 
   // Table-level search + quick filter chips. Operate on the
   // rankable list (skip the synthetic `all` row which always stays
@@ -1426,17 +1447,6 @@ export default function AdminCatalogs() {
       p => researchGender === 'all' || p.gender === researchGender || p.gender === 'unisex'
     ),
   [researchResults, researchGender]);
-
-  // Count products tagged with each catalog
-  const catalogProductCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    products.forEach(p => {
-      (p.catalog_tags || []).forEach(tag => {
-        counts.set(tag, (counts.get(tag) || 0) + 1);
-      });
-    });
-    return counts;
-  }, [products]);
 
   const runAutoTag = useCallback(async () => {
     if (!supabase || products.length === 0) return;
