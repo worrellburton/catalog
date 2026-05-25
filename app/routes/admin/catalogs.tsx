@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from '@remix-run/react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
@@ -14,10 +14,14 @@ import type { ProductAd } from '~/services/product-creative';
 import {
   getHomeCatalog,
   updateCatalogToggles,
+  setCatalogGender,
+  setCatalogSortOrder,
   getCatalogSearchCounts,
   type Catalog as CatalogService,
   type CatalogSearchCounts,
 } from '~/services/catalogs';
+
+type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 
 interface Catalog {
   id: string;
@@ -28,6 +32,8 @@ interface Catalog {
   filterGender?: boolean;
   filterAge?: boolean;
   boostTopConverting?: boolean;
+  gender?: CatalogGenderUI;
+  sortOrder?: number | null;
   slug?: string;
 }
 
@@ -41,12 +47,72 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+// CSV cell escape: wrap any cell containing a comma, quote, or
+// newline in double-quotes; double-up any internal quotes.
+function csvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCatalogsCSV(
+  catalogs: { name: string; source: string; createdAt: string; gender?: string; filterAge?: boolean; boostTopConverting?: boolean }[],
+  productCounts: Map<string, number>,
+  impressions: Map<string, { curr: number; prev: number }>,
+  searches: Map<string, CatalogSearchCounts>,
+) {
+  const header = [
+    'name', 'source', 'gender', 'products',
+    'impressions_7d', 'impressions_prev_7d', 'impressions_trend_pct',
+    'searches_7d', 'searches_total',
+    'boost_top_converting', 'created_at',
+  ];
+  const rows = catalogs.map(c => {
+    const key = c.name.toLowerCase();
+    const imp = impressions.get(key);
+    const trend = imp && imp.prev > 0
+      ? Math.round(((imp.curr - imp.prev) / imp.prev) * 100)
+      : '';
+    const sc = searches.get(key);
+    return [
+      c.name, c.source, c.gender ?? 'all',
+      productCounts.get(c.name) ?? 0,
+      imp?.curr ?? 0, imp?.prev ?? 0, trend,
+      sc?.count7d ?? 0, sc?.countTotal ?? 0,
+      c.boostTopConverting ? '1' : '0',
+      c.createdAt && c.createdAt !== ' - ' ? new Date(c.createdAt).toISOString() : '',
+    ];
+  });
+  const body = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `catalogs-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 interface ProductRow {
   id: string;
   name: string | null;
   brand: string | null;
   image_url: string | null;
   catalog_tags: string[] | null;
+  createdAt?: string | null;
+  metrics?: ItemMetrics;
+}
+
+interface LookRow {
+  id: string;
+  legacyId: number | null;
+  title: string | null;
+  creatorHandle: string | null;
+  videoPath: string | null;
+  catalog_tags: string[];
 }
 
 interface CatalogLookRow {
@@ -55,7 +121,11 @@ interface CatalogLookRow {
   title: string;
   videoPath: string | null;
   creatorHandle: string | null;
+  creatorName: string | null;
+  creatorAvatarUrl: string | null;
   productCount: number;
+  createdAt?: string | null;
+  metrics?: ItemMetrics;
 }
 
 interface CatalogCreativeVideo {
@@ -63,6 +133,7 @@ interface CatalogCreativeVideo {
   productId: string;
   videoUrl: string;
   thumbnailUrl: string | null;
+  productImageUrl: string | null;
   title: string | null;
   productName: string | null;
   productBrand: string | null;
@@ -77,6 +148,7 @@ interface CatalogCreativePayload {
 }
 
 const ALL_CATALOG_NAME = 'all';
+const HOME_CATALOG_NAME = 'home';
 const ALL_ORDER_KEY = 'catalog_admin_all_order';
 
 type CatalogSection = 'looks' | 'creatives' | 'products';
@@ -84,6 +156,35 @@ type CatalogSection = 'looks' | 'creatives' | 'products';
 function isAllCatalog(name: string) {
   return name.trim().toLowerCase() === ALL_CATALOG_NAME;
 }
+
+function isHomeCatalog(name: string) {
+  return name.trim().toLowerCase() === HOME_CATALOG_NAME;
+}
+
+// "Universe" view: catalogs that should show every live look/product
+// rather than only the rows whose catalog_tags contain the catalog
+// name. Both `all` (admin meta-catalog) and `home` (consumer landing
+// feed) qualify — the consumer home feed is unfiltered, so admins
+// should see the same universe of candidates when triaging.
+function isUniverseCatalog(name: string) {
+  return isAllCatalog(name) || isHomeCatalog(name);
+}
+
+// Phase 1 RPC payload + derived per-item metrics. Keyed by either the
+// look/product UUID (string form) — same key shape the RPC returns.
+export interface ItemMetrics {
+  impressions: number;
+  clicks: number;
+  clickouts: number;
+  impressionsPrev: number;
+  ctr: number;            // clicks ÷ impressions (current window)
+  clickoutRate: number;   // clickouts ÷ impressions
+  trendPct: number | null; // % change in impressions vs prior window; null if no prior signal
+}
+
+// Sort + filter chip vocabulary for the dropdown control bar (Phase 5).
+type MetricSort = 'most-viewed' | 'highest-ctr' | 'biggest-riser' | 'biggest-faller' | 'newest' | 'never-viewed';
+type MetricFilter = 'all' | 'rising' | 'falling' | 'zombie' | 'never-viewed';
 
 function loadAllOrder(): Record<CatalogSection, string[]> {
   if (typeof window === 'undefined') return { looks: [], creatives: [], products: [] };
@@ -137,6 +238,96 @@ export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
   const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
+  // Per-catalog impression counts keyed by lowercased name (matches
+  // how the consumer feed fires the event — see ContinuousFeed's
+  // catalog impression effect). { curr, prev } enables trend in the
+  // column.
+  const [catalogImpressions, setCatalogImpressions] = useState<Map<string, { curr: number; prev: number }>>(new Map());
+  // Per-catalog 14-day daily impressions for the inline sparkline
+  // column. One batch fetch keyed by lower(name). Each value is the
+  // full 14-day series with zeros filled.
+  const [catalogDaily, setCatalogDaily] = useState<Map<string, number[]>>(new Map());
+
+  // Drag-reorder state. dragId is the slug being dragged; dropTargetId
+  // is the slug currently under the cursor (used for the highlight
+  // ring). Persisted via admin_set_catalog_sort_order on drop.
+  const [dragSlug, setDragSlug] = useState<string | null>(null);
+  const [dropTargetSlug, setDropTargetSlug] = useState<string | null>(null);
+  const handleRowDragStart = useCallback((slug: string) => {
+    setDragSlug(slug);
+  }, []);
+  const handleRowDragOver = useCallback((slug: string, e: React.DragEvent) => {
+    e.preventDefault();
+    if (slug !== dropTargetSlug) setDropTargetSlug(slug);
+  }, [dropTargetSlug]);
+  const handleRowDrop = useCallback(async (overSlug: string) => {
+    const source = dragSlug;
+    setDragSlug(null);
+    setDropTargetSlug(null);
+    if (!source || source === overSlug) return;
+    // Build the new order from the rendered `rankable` list.
+    const order = rankable.map(c => c.slug || '');
+    const fromIdx = order.indexOf(source);
+    const toIdx = order.indexOf(overSlug);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, moved);
+    // Optimistic update — write sortOrder locally so the row reflows
+    // before the RPC returns.
+    setCustom(prev => prev.map(c => {
+      const idx = order.indexOf(c.slug || '');
+      return idx >= 0 ? { ...c, sortOrder: idx } : c;
+    }));
+    const ok = await setCatalogSortOrder(order.filter(Boolean));
+    if (!ok) {
+      showToast('Could not save order — reverting');
+      loadCatalogs();
+    }
+  }, [dragSlug, rankable, loadCatalogs, showToast]);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('catalog_view_counts_daily', { window_days: 14 });
+      if (cancelled || error || !data) return;
+      type Row = { catalog_key: string; day: string; impressions: number | string };
+      // Bucket by catalog_key.
+      const byKey = new Map<string, Map<string, number>>();
+      for (const r of data as Row[]) {
+        const inner = byKey.get(r.catalog_key) ?? new Map<string, number>();
+        inner.set(r.day, Number(r.impressions) || 0);
+        byKey.set(r.catalog_key, inner);
+      }
+      // Build the 14-day series for each catalog with zeros filled.
+      const today = new Date();
+      const days: string[] = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(today.getTime() - i * 86400_000);
+        days.push(d.toISOString().slice(0, 10));
+      }
+      const out = new Map<string, number[]>();
+      byKey.forEach((dayMap, key) => {
+        out.set(key, days.map(d => dayMap.get(d) ?? 0));
+      });
+      setCatalogDaily(out);
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('catalog_view_counts', { window_days: 7 });
+      if (cancelled || error || !data) return;
+      type Row = { catalog_key: string; impressions_curr: number | string; impressions_prev: number | string };
+      const map = new Map<string, { curr: number; prev: number }>();
+      for (const r of data as Row[]) {
+        map.set(r.catalog_key, { curr: Number(r.impressions_curr) || 0, prev: Number(r.impressions_prev) || 0 });
+      }
+      setCatalogImpressions(map);
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -153,7 +344,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('catalogs')
-      .select('id, slug, name, created_at, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
+      .select('id, slug, name, created_at, gender, sort_order, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
       .eq('is_featured', false)
       .eq('status', 'live')
       .order('created_at', { ascending: false });
@@ -164,6 +355,8 @@ export default function AdminCatalogs() {
     if (data) {
       const rows = data as {
         id: string; name: string; slug: string; created_at: string;
+        gender: CatalogGenderUI | null;
+        sort_order: number | null;
         is_home: boolean; filter_gender: boolean; filter_age: boolean; boost_top_converting: boolean;
       }[];
       // Home catalog goes into its own state slot; all others fill `custom`.
@@ -176,6 +369,8 @@ export default function AdminCatalogs() {
         slug: r.slug,
         source: 'custom' as const,
         createdAt: r.created_at,
+        gender: (r.gender ?? 'all') as CatalogGenderUI,
+        sortOrder: r.sort_order,
         filterGender: r.filter_gender,
         filterAge: r.filter_age,
         boostTopConverting: r.boost_top_converting,
@@ -189,7 +384,7 @@ export default function AdminCatalogs() {
           name: homeRow.name,
           description: null,
           themePrompt: null,
-          gender: 'all' as const,
+          gender: ((homeRow as { gender?: string | null }).gender as 'all' | 'men' | 'women' | 'unisex' | null) ?? 'all',
           coverUrl: null,
           sortOrder: -1,
           isFeatured: false,
@@ -230,6 +425,202 @@ export default function AdminCatalogs() {
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
+  // Library of looks for the "+ Add Looks" picker. Only pulls live,
+  // enabled, non-archived rows — same filter the consumer feed uses —
+  // so the picker doesn't show drafts or removed content. Catalog
+  // assignment is stored in looks.catalog_tags (jsonb array, mirrors
+  // the products.catalog_tags shape — see migration 021).
+  const [looks, setLooks] = useState<LookRow[]>([]);
+  const loadLooks = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('looks')
+      .select(`
+        id, legacy_id, title, creator_handle, catalog_tags,
+        looks_creative ( video_url, is_primary )
+      `)
+      .eq('status', 'live')
+      .eq('enabled', true)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false });
+    if (!data) return;
+    type LookPayload = {
+      id: string;
+      legacy_id: number | null;
+      title: string | null;
+      creator_handle: string | null;
+      catalog_tags: string[] | null;
+      looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
+    };
+    const mapped: LookRow[] = (data as LookPayload[]).map(r => ({
+      id: r.id,
+      legacyId: r.legacy_id,
+      title: r.title,
+      creatorHandle: r.creator_handle,
+      videoPath: r.looks_creative?.find(c => c.is_primary)?.video_url
+        ?? r.looks_creative?.[0]?.video_url
+        ?? null,
+      catalog_tags: Array.isArray(r.catalog_tags) ? r.catalog_tags : [],
+    }));
+    setLooks(mapped);
+  }, []);
+
+  useEffect(() => { loadLooks(); }, [loadLooks]);
+
+  // Phase 1 client wiring: per-item analytics map keyed by
+  // `${target_type}:${target_key}`. Powers per-tile pills (Phase 3),
+  // trend arrows (Phase 4), and sort/filter (Phase 5). One fetch per
+  // session — cheap because the RPC is a single grouped aggregation
+  // over a covered time-range index.
+  const [metricsByKey, setMetricsByKey] = useState<Map<string, ItemMetrics>>(new Map());
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const METRIC_WINDOW_DAYS = 7;
+
+  const loadMetrics = useCallback(async () => {
+    if (!supabase) return;
+    setMetricsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('catalog_item_metrics', {
+        window_days: METRIC_WINDOW_DAYS,
+      });
+      if (error) {
+        console.warn('[catalog-metrics] rpc failed:', error.message);
+        return;
+      }
+      type Row = {
+        target_type: string;
+        target_key: string;
+        impressions_curr: number | string;
+        clicks_curr: number | string;
+        clickouts_curr: number | string;
+        impressions_prev: number | string;
+        clicks_prev: number | string;
+        clickouts_prev: number | string;
+      };
+      const next = new Map<string, ItemMetrics>();
+      for (const r of (data as Row[] | null) || []) {
+        const impressions = Number(r.impressions_curr) || 0;
+        const clicks = Number(r.clicks_curr) || 0;
+        const clickouts = Number(r.clickouts_curr) || 0;
+        const impressionsPrev = Number(r.impressions_prev) || 0;
+        const ctr = impressions > 0 ? clicks / impressions : 0;
+        const clickoutRate = impressions > 0 ? clickouts / impressions : 0;
+        // Trend is null when there's no prior signal — UI shows "new"
+        // rather than a misleading "+∞%". When prior > 0 and curr = 0
+        // we surface -100% as "fell off the cliff."
+        const trendPct = impressionsPrev > 0
+          ? Math.round(((impressions - impressionsPrev) / impressionsPrev) * 100)
+          : (impressions > 0 ? null : 0);
+        next.set(`${r.target_type}:${r.target_key}`, {
+          impressions, clicks, clickouts, impressionsPrev, ctr, clickoutRate, trendPct,
+        });
+      }
+      setMetricsByKey(next);
+    } finally {
+      setMetricsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMetrics(); }, [loadMetrics]);
+
+  // Phase 9: live monitoring. Subscribe to user_events INSERT stream
+  // via Supabase Realtime so impressions/clicks/clickouts tick up in
+  // place while the admin watches. Two side effects:
+  //   1. metricsByKey: increment the matching look/product row's
+  //      curr-window counts so the per-tile pills and trend stay live.
+  //   2. catalogImpressions: increment the matching catalog row's
+  //      impressions count so the column updates without refresh.
+  // liveTick increments on every accepted event so the "Live"
+  // indicator can pulse + a small recent-event counter can render.
+  const [liveTick, setLiveTick] = useState(0);
+  const [liveActive, setLiveActive] = useState(false);
+  // Pulse one specific catalog row briefly when a realtime event
+  // lands on it (catalog impression OR a look/product whose catalog
+  // we can infer via the tags map). Cleared 700ms later so a steady
+  // stream of events produces a steady-strobe effect.
+  const [pulseRowId, setPulseRowId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<number | null>(null);
+  const triggerPulse = useCallback((catalogRowId: string) => {
+    setPulseRowId(catalogRowId);
+    if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseRowId(null), 700);
+  }, []);
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin-catalogs-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'user_events' },
+        (payload) => {
+          const row = payload.new as {
+            target_type: string | null;
+            target_id: string | null;
+            target_uuid: string | null;
+            event_type: string | null;
+          };
+          if (!row?.event_type) return;
+          const key = row.target_uuid ?? row.target_id;
+          if (!key) return;
+
+          if (row.target_type === 'look' || row.target_type === 'product') {
+            setMetricsByKey(prev => {
+              const k = `${row.target_type}:${key}`;
+              const existing = prev.get(k);
+              if (!existing) return prev;
+              const next = new Map(prev);
+              const delta: Partial<ItemMetrics> = {};
+              if (row.event_type === 'impression') delta.impressions = existing.impressions + 1;
+              if (row.event_type === 'click' || row.event_type === 'clickout') delta.clicks = existing.clicks + 1;
+              if (row.event_type === 'clickout') delta.clickouts = existing.clickouts + 1;
+              const merged: ItemMetrics = { ...existing, ...delta };
+              merged.ctr = merged.impressions > 0 ? merged.clicks / merged.impressions : 0;
+              merged.clickoutRate = merged.impressions > 0 ? merged.clickouts / merged.impressions : 0;
+              merged.trendPct = merged.impressionsPrev > 0
+                ? Math.round(((merged.impressions - merged.impressionsPrev) / merged.impressionsPrev) * 100)
+                : (merged.impressions > 0 ? null : 0);
+              next.set(k, merged);
+              return next;
+            });
+            setLiveTick(t => t + 1);
+          } else if (row.target_type === 'catalog' && row.event_type === 'impression') {
+            const cKey = (key || '').toLowerCase();
+            setCatalogImpressions(prev => {
+              const existing = prev.get(cKey) ?? { curr: 0, prev: 0 };
+              const next = new Map(prev);
+              next.set(cKey, { ...existing, curr: existing.curr + 1 });
+              return next;
+            });
+            // Pulse the matching row if it's in the rendered list.
+            // We don't have id-by-name here at definition time, so we
+            // do a quick DOM lookup via the data attribute — same
+            // pattern the health-card jump uses.
+            requestAnimationFrame(() => {
+              const row = document.querySelector(`[data-catalog-row][data-catalog-name="${cKey}"]`);
+              const id = row?.getAttribute('data-catalog-row');
+              if (id) triggerPulse(id);
+            });
+            setLiveTick(t => t + 1);
+          }
+        },
+      )
+      .subscribe((status) => {
+        setLiveActive(status === 'SUBSCRIBED');
+      });
+    return () => {
+      void supabase!.removeChannel(channel);
+    };
+  }, []);
+
+  // Lookup that tries both target_uuid form (newer events) and the
+  // legacy_id form (legacy clients used the integer id). Look rows
+  // expose both; product rows always use uuid.
+  const metricFor = useCallback((targetType: 'look' | 'product', primary: string, secondary?: string | number | null): ItemMetrics | undefined => {
+    const m = metricsByKey;
+    return m.get(`${targetType}:${primary}`)
+      ?? (secondary != null ? m.get(`${targetType}:${secondary}`) : undefined);
+  }, [metricsByKey]);
+
   // Expandable creative dropdown per catalog row.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [creativeByCatalog, setCreativeByCatalog] = useState<Record<string, CatalogCreativePayload>>({});
@@ -240,13 +631,19 @@ export default function AdminCatalogs() {
     setCreativeLoading(prev => new Set(prev).add(catalog.id));
     try {
       const isAll = isAllCatalog(catalog.name);
+      // Phase 2: Home shares the "show every live row" semantics with
+      // All — the consumer home feed isn't tag-filtered, so admins
+      // should see the same universe of candidates.
+      const isUniverse = isUniverseCatalog(catalog.name);
 
-      // Looks: `all` catalog pulls every live look so admins can browse the
-      // entire active set; other catalogs filter by catalog_tags.
+      // Looks: universe catalogs (all / home) pull every live look so
+      // admins can browse the entire active set; other catalogs filter
+      // by catalog_tags.
       let looksQuery = supabase
         .from('looks')
         .select(`
-          id, legacy_id, title, creator_handle, status, enabled, archived_at,
+          id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at,
+          creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
           looks_creative!inner ( video_url, is_primary ),
           look_products ( product_id )
         `)
@@ -255,7 +652,7 @@ export default function AdminCatalogs() {
         .is('archived_at', null)
         .eq('looks_creative.is_primary', true)
         .order('created_at', { ascending: false });
-      if (!isAll) {
+      if (!isUniverse) {
         looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
       }
       const { data: lookRows } = await looksQuery;
@@ -265,42 +662,59 @@ export default function AdminCatalogs() {
         legacy_id: number | null;
         title: string;
         creator_handle: string | null;
+        created_at: string | null;
+        creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
         looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
         look_products: { product_id: string }[] | null;
       };
-      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => ({
-        id: r.id,
-        legacyId: r.legacy_id,
-        title: r.title,
-        videoPath: r.looks_creative?.[0]?.video_url ?? null,
-        creatorHandle: r.creator_handle,
-        productCount: (r.look_products || []).length,
-      }));
+      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => {
+        // PostgREST sometimes returns the embedded profile as an array
+        // (one-to-many style) and sometimes as a single object; normalise.
+        const creator = Array.isArray(r.creator) ? r.creator[0] : r.creator;
+        return {
+          id: r.id,
+          legacyId: r.legacy_id,
+          title: r.title,
+          videoPath: r.looks_creative?.[0]?.video_url ?? null,
+          creatorHandle: r.creator_handle,
+          creatorName: creator?.full_name ?? null,
+          creatorAvatarUrl: creator?.avatar_url ?? null,
+          productCount: (r.look_products || []).length,
+          createdAt: r.created_at,
+          metrics: metricFor('look', r.id, r.legacy_id),
+        };
+      });
 
-      // The `all` catalog is a superset view - if multiple looks share the
-      // same primary creative video they'd render as visual dupes, so collapse
-      // to the first occurrence per video. Other catalogs keep every row.
-      const looks = isAll
+      // Universe view collapses dupes - if multiple looks share the
+      // same primary creative video they'd render as visual dupes, so
+      // we keep the first occurrence per video. Named catalogs keep
+      // every row.
+      const looks = isUniverse
         ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
         : mappedLooks;
 
-      // Products: `all` catalog uses every product currently loaded; others
-      // filter by catalog_tags. Both paths dedupe so nothing repeats.
-      const catalogProducts = isAll
+      // Products: universe catalogs use every live product currently
+      // loaded; others filter by catalog_tags. Both paths dedupe so
+      // nothing repeats. Hydrate metrics in either case.
+      const catalogProductsBase = isUniverse
         ? products
         : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
+      const catalogProducts = catalogProductsBase.map(p => ({
+        ...p,
+        metrics: metricFor('product', p.id),
+      }));
 
-      // Creative videos (product_creative). `all` pulls every rendered ad so admins
-      // see the full library of creative in one place; named catalogs filter
-      // to ads whose underlying product is tagged with this catalog.
+      // Creative videos (product_creative). Universe catalogs pull every
+      // rendered ad so admins see the full library in one place; named
+      // catalogs filter to ads whose underlying product is tagged.
       const catalogProductIds = new Set(catalogProducts.map(p => p.id));
       let adsQuery = supabase
         .from('product_creative')
-        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand)')
+        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand, image_url)')
         .not('video_url', 'is', null)
         .in('status', ['done', 'live'])
         .order('created_at', { ascending: false });
-      if (!isAll) {
+      if (!isUniverse) {
         adsQuery = adsQuery.in(
           'product_id',
           catalogProducts.length > 0 ? catalogProducts.map(p => p.id) : ['00000000-0000-0000-0000-000000000000'],
@@ -315,7 +729,7 @@ export default function AdminCatalogs() {
         video_url: string;
         thumbnail_url: string | null;
         status: string;
-        products: { id: string; name: string | null; brand: string | null } | null;
+        products: { id: string; name: string | null; brand: string | null; image_url: string | null } | null;
       };
       const creatives: CatalogCreativeVideo[] = ((adRows as unknown as AdPayload[] | null) || [])
         .filter(r => isAll || catalogProductIds.has(r.product_id))
@@ -324,6 +738,7 @@ export default function AdminCatalogs() {
           productId: r.product_id,
           videoUrl: r.video_url,
           thumbnailUrl: r.thumbnail_url,
+          productImageUrl: r.products?.image_url ?? null,
           title: r.title,
           productName: r.products?.name ?? null,
           productBrand: r.products?.brand ?? null,
@@ -390,7 +805,25 @@ export default function AdminCatalogs() {
         return next;
       });
     }
-  }, [products]);
+  }, [products, metricFor]);
+
+  // When the metrics map arrives after a dropdown has already rendered,
+  // rehydrate the open payloads in place so pills/arrows light up
+  // without forcing the admin to collapse + re-expand.
+  useEffect(() => {
+    if (metricsByKey.size === 0) return;
+    setCreativeByCatalog(prev => {
+      const next: Record<string, CatalogCreativePayload> = { ...prev };
+      let changed = false;
+      for (const [catalogId, payload] of Object.entries(prev)) {
+        const looks = payload.looks.map(l => ({ ...l, metrics: metricFor('look', l.id, l.legacyId) }));
+        const products = payload.products.map(p => ({ ...p, metrics: metricFor('product', p.id) }));
+        next[catalogId] = { ...payload, looks, products };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [metricsByKey, metricFor]);
 
   const reorderAllSection = useCallback((catalogId: string, section: CatalogSection, fromIndex: number, toIndex: number) => {
     setCreativeByCatalog(prev => {
@@ -444,7 +877,67 @@ export default function AdminCatalogs() {
   };
   const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
-  const all = [allRow, ...customWithoutAll, ...featured];
+  // Rank by total search volume so the catalogs shoppers actually care
+  // about float to the top. Home is rendered separately above this
+  // table so it's already pinned at #1; the synthetic `all` row stays
+  // pinned at #2 as the admin meta-view (it would otherwise sink to
+  // the bottom with 0 searches). Featured + custom catalogs sort by
+  // searchCounts.countTotal desc, with countTotal=0 rows preserving
+  // the original order (stable sort keeps recent admin work near the
+  // top).
+  const searchRank = (c: Catalog): number =>
+    searchCounts.get(c.name.toLowerCase())?.countTotal ?? 0;
+  // Ranking: pinned catalogs (sort_order != null) take priority in
+  // their pinned order; unpinned catalogs fall back to search-rank
+  // desc. Drag-reorder updates sort_order so the manual pin order
+  // survives reloads.
+  const rankable = [...customWithoutAll, ...featured].sort((a, b) => {
+    const aPinned = a.sortOrder ?? null;
+    const bPinned = b.sortOrder ?? null;
+    if (aPinned !== null && bPinned !== null) return aPinned - bPinned;
+    if (aPinned !== null) return -1;
+    if (bPinned !== null) return 1;
+    return searchRank(b) - searchRank(a);
+  });
+  const allUnfiltered = [allRow, ...rankable];
+
+  // Table-level search + quick filter chips. Operate on the
+  // rankable list (skip the synthetic `all` row which always stays
+  // at the top regardless). Empty query + 'all' filter = full list.
+  const [tableQuery, setTableQuery] = useState('');
+  const [tableFilter, setTableFilter] = useState<'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues'>('all');
+
+  const all = useMemo(() => {
+    const q = tableQuery.trim().toLowerCase();
+    const filtered = rankable.filter(c => {
+      // text match first
+      if (q && !c.name.toLowerCase().includes(q)) return false;
+      // quick filter predicates
+      const imp = catalogImpressions.get(c.name.toLowerCase());
+      const sc = searchCounts.get(c.name.toLowerCase());
+      const productCount = catalogProductCounts.get(c.name) ?? 0;
+      const trendPct = imp && imp.prev > 0 ? ((imp.curr - imp.prev) / imp.prev) * 100 : null;
+      switch (tableFilter) {
+        case 'rising':  return trendPct !== null && trendPct >= 25;
+        case 'falling': return trendPct !== null && trendPct <= -25;
+        case 'empty':   return productCount === 0;
+        case 'zombie':  return productCount > 0
+                             && (!imp || imp.curr === 0)
+                             && (!sc || sc.count7d === 0);
+        case 'issues':  return productCount === 0
+                             || (productCount > 0 && (!imp || imp.curr === 0) && (!sc || sc.count7d === 0))
+                             || (trendPct !== null && trendPct <= -50);
+        default:        return true;
+      }
+    });
+    // synthetic `all` row only shows when the unfiltered + unsearched
+    // view is up — otherwise it's noise.
+    if (tableQuery || tableFilter !== 'all') return filtered;
+    return [allRow, ...filtered];
+  }, [rankable, tableQuery, tableFilter, allRow, catalogImpressions, searchCounts, catalogProductCounts]);
+  // allUnfiltered powers the dashboard + health panel — they reflect
+  // the whole catalog system, not just the in-table filter. `all` is
+  // what the table renders.
 
   const addCatalog = async () => {
     const name = newName.trim();
@@ -771,6 +1264,91 @@ export default function AdminCatalogs() {
     }
   }, [addProductsCatalog, addSelected, products, loadProducts, showToast]);
 
+  // Add Looks modal state - mirrors Add Products. Tags the catalog
+  // name into looks.catalog_tags so the consumer feed (which filters
+  // by `contains(catalog_tags, [name])`) picks them up.
+  const [addLooksCatalog, setAddLooksCatalog] = useState<Catalog | null>(null);
+  const [addLooksSearch, setAddLooksSearch] = useState('');
+  const [addLooksSelected, setAddLooksSelected] = useState<Set<string>>(new Set());
+  const [addLooksBusy, setAddLooksBusy] = useState(false);
+
+  const openAddLooks = useCallback((catalog: Catalog) => {
+    setAddLooksCatalog(catalog);
+    setAddLooksSearch('');
+    setAddLooksSelected(new Set());
+  }, []);
+
+  const closeAddLooks = useCallback(() => {
+    if (addLooksBusy) return;
+    setAddLooksCatalog(null);
+    setAddLooksSearch('');
+    setAddLooksSelected(new Set());
+  }, [addLooksBusy]);
+
+  const toggleAddLookSelected = useCallback((id: string) => {
+    setAddLooksSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const commitAddLooks = useCallback(async () => {
+    if (!supabase || !addLooksCatalog || addLooksSelected.size === 0) return;
+    setAddLooksBusy(true);
+    try {
+      const name = addLooksCatalog.name;
+      const updates = Array.from(addLooksSelected).map(id => {
+        const l = looks.find(x => x.id === id);
+        const tags = new Set([...(l?.catalog_tags || []), name]);
+        return supabase!
+          .from('looks')
+          .update({ catalog_tags: Array.from(tags) })
+          .eq('id', id)
+          .select('id');
+      });
+      const results = await Promise.all(updates);
+      const errored = results.filter(r => r.error);
+      const blocked = results.filter(r => !r.error && (!r.data || r.data.length === 0));
+      const succeeded = results.length - errored.length - blocked.length;
+
+      if (errored.length > 0) {
+        console.error('[add-looks] update errors:', errored.map(r => r.error));
+      }
+      if (blocked.length > 0) {
+        console.warn('[add-looks] no rows updated for', blocked.length, 'looks - RLS may be blocking writes on public.looks');
+      }
+
+      if (succeeded === 0) {
+        showToast(
+          errored.length > 0
+            ? `Update failed: ${errored[0].error?.message || 'unknown error'}`
+            : `No looks were written - check RLS policies on public.looks (admin needs UPDATE).`,
+        );
+      } else if (succeeded < results.length) {
+        showToast(`Added ${succeeded} of ${results.length} looks to ${name} (${results.length - succeeded} blocked).`);
+      } else {
+        showToast(`Added ${succeeded} look${succeeded === 1 ? '' : 's'} to ${name}.`);
+      }
+
+      if (succeeded > 0) {
+        await loadLooks();
+        // Drop the cached expanded-row payload for this catalog so the
+        // dropdown re-fetches with the new looks.
+        setCreativeByCatalog(prev => {
+          const next = { ...prev };
+          delete next[addLooksCatalog.id];
+          return next;
+        });
+        setAddLooksCatalog(null);
+        setAddLooksSelected(new Set());
+        setAddLooksSearch('');
+      }
+    } finally {
+      setAddLooksBusy(false);
+    }
+  }, [addLooksCatalog, addLooksSelected, looks, loadLooks, showToast]);
+
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
     setSuggestCatalog(null);
@@ -939,6 +1517,18 @@ export default function AdminCatalogs() {
               </>
             )}
           </button>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={() => exportCatalogsCSV(allUnfiltered, catalogProductCounts, catalogImpressions, searchCounts)}
+            title="Download a CSV of every catalog with metrics"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export CSV
+          </button>
           <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -963,6 +1553,48 @@ export default function AdminCatalogs() {
         </div>
       </div>
 
+      <LiveIndicator active={liveActive} tick={liveTick} />
+
+      <CatalogsDashboard
+        catalogs={allUnfiltered}
+        impressionsByName={catalogImpressions}
+        searchCountsByName={searchCounts}
+      />
+
+      <CatalogsHealthPanel
+        catalogs={allUnfiltered}
+        impressionsByName={catalogImpressions}
+        searchCountsByName={searchCounts}
+        productCountsByName={catalogProductCounts}
+        onJumpToCatalog={(name) => {
+          // Strip the "↑22%" / "↓45%" trailing suffix used in sample
+          // labels for trend issues — the actual catalog name is what
+          // appears before " (".
+          const cleanName = name.split(' (')[0];
+          const match = allUnfiltered.find(c => c.name === cleanName);
+          if (!match) return;
+          // Drop any active filter so the row is actually present.
+          if (tableFilter !== 'all') setTableFilter('all');
+          if (tableQuery) setTableQuery('');
+          setExpanded(prev => new Set(prev).add(match.id));
+          if (!creativeByCatalog[match.id]) loadCreative(match);
+          // Scroll the row into view after the state flush.
+          requestAnimationFrame(() => {
+            const row = document.querySelector(`[data-catalog-row="${match.id}"]`);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }}
+      />
+
+      <CatalogsTableFilterBar
+        query={tableQuery}
+        filter={tableFilter}
+        onQuery={setTableQuery}
+        onFilter={setTableFilter}
+        total={rankable.length}
+        showing={all.length - (tableQuery || tableFilter !== 'all' ? 0 : 1)}
+      />
+
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
@@ -970,6 +1602,8 @@ export default function AdminCatalogs() {
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Source</th>
               <th>Products</th>
+              <th>Impressions</th>
+              <th>14d</th>
               <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
@@ -996,7 +1630,14 @@ export default function AdminCatalogs() {
               const homeProductCount = catalogProductCounts.get(homeCatalog.name) || 0;
               return (
                 <React.Fragment key={homeCatalog.id}>
-                  <tr style={{ background: '#fffbeb' }}>
+                  <tr
+                    data-catalog-row={homeCatalog.id}
+                    data-catalog-name={homeCatalog.name.toLowerCase()}
+                    style={{
+                      background: pulseRowId === homeCatalog.id ? '#dcfce7' : '#fffbeb',
+                      transition: 'background-color 600ms ease',
+                    }}
+                  >
                     <td style={{ textAlign: 'left', fontWeight: 600 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button
@@ -1028,30 +1669,52 @@ export default function AdminCatalogs() {
                         <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                       )}
                     </td>
+                    <td><ImpressionsPill counts={catalogImpressions.get(homeCatalog.name.toLowerCase())} /></td>
+                    <td><MiniSparkline series={catalogDaily.get(homeCatalog.name.toLowerCase())} /></td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                         <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
+                        <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
                         <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
                       </div>
                     </td>
                     <td>
                       <TogglePills
-                        filterGender={homeCatalog.filterGender}
+                        gender={(homeCatalog.gender ?? 'all') as CatalogGenderUI}
                         filterAge={homeCatalog.filterAge}
                         boostTopConverting={homeCatalog.boostTopConverting}
                         onToggle={async (field, val) => {
                           setHomeCatalog(prev => prev ? { ...prev, [field]: val } : prev);
                           await updateCatalogToggles(homeCatalog.slug, { [field]: val });
                         }}
+                        onGender={async (val) => {
+                          setHomeCatalog(prev => prev ? { ...prev, gender: val } : prev);
+                          const ok = await setCatalogGender(homeCatalog.slug, val);
+                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
+                        }}
                       />
                     </td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        <CatalogCreativeDropdown isAll={false} loading={isLoadingCreative} creative={creative} onReorder={() => {}} />
+                      <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                        <CatalogCreativeDropdown
+                          isAll={false}
+                          isUniverse={true}
+                          catalogName={homeCatalog.name}
+                          loading={isLoadingCreative}
+                          creative={creative}
+                          metricsLoading={metricsLoading}
+                          catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
+                          onReorder={() => {}}
+                          onAfterBulkMutation={() => {
+                            setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
+                            loadLooks();
+                            loadProducts();
+                          }}
+                        />
                       </td>
                     </tr>
                   )}
@@ -1072,9 +1735,43 @@ export default function AdminCatalogs() {
               const isLoadingCreative = creativeLoading.has(c.id);
               return (
               <React.Fragment key={c.id}>
-              <tr>
+              <tr
+                data-catalog-row={c.id}
+                data-catalog-name={c.name.toLowerCase()}
+                draggable={!!c.slug}
+                onDragStart={() => c.slug && handleRowDragStart(c.slug)}
+                onDragOver={(e) => c.slug && handleRowDragOver(c.slug, e)}
+                onDragLeave={() => setDropTargetSlug(null)}
+                onDrop={() => c.slug && handleRowDrop(c.slug)}
+                onDragEnd={() => { setDragSlug(null); setDropTargetSlug(null); }}
+                style={{
+                  background: pulseRowId === c.id
+                    ? '#dcfce7'
+                    : dropTargetSlug === c.slug && dragSlug && dragSlug !== c.slug
+                      ? '#dbeafe'
+                      : 'transparent',
+                  opacity: dragSlug === c.slug ? 0.5 : 1,
+                  transition: 'background-color 200ms ease, opacity 120ms',
+                  cursor: c.slug ? 'grab' : 'default',
+                }}
+              >
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      title="Drag to reorder. Pinned catalogs take priority over search rank."
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        color: c.sortOrder != null ? '#1d4ed8' : '#cbd5e1',
+                        cursor: 'grab',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="9" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/>
+                        <circle cx="15" cy="6" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+                      </svg>
+                    </span>
                     <button
                       onClick={() => toggleExpanded(c)}
                       aria-label={isOpen ? 'Collapse creative' : 'Expand creative'}
@@ -1130,6 +1827,8 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
+                <td><ImpressionsPill counts={catalogImpressions.get(c.name.toLowerCase())} /></td>
+                <td><MiniSparkline series={catalogDaily.get(c.name.toLowerCase())} /></td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
@@ -1144,6 +1843,15 @@ export default function AdminCatalogs() {
                       title="Pick existing products from the library and tag them to this catalog"
                     >
                       + Add Products
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => openAddLooks(c)}
+                      disabled={looks.length === 0}
+                      title="Pick existing looks from the library and tag them to this catalog"
+                    >
+                      + Add Looks
                     </button>
                     <button
                       className="admin-btn admin-btn-primary"
@@ -1175,12 +1883,19 @@ export default function AdminCatalogs() {
                 <td>
                   {c.source === 'custom' ? (
                     <TogglePills
-                      filterGender={c.filterGender}
+                      gender={c.gender ?? 'all'}
                       filterAge={c.filterAge}
                       boostTopConverting={c.boostTopConverting}
                       onToggle={async (field, val) => {
                         setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: val } : x));
                         if (c.slug) await updateCatalogToggles(c.slug, { [field]: val });
+                      }}
+                      onGender={async (val) => {
+                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, gender: val } : x));
+                        if (c.slug) {
+                          const ok = await setCatalogGender(c.slug, val);
+                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
+                        }
                       }}
                     />
                   ) : null}
@@ -1188,12 +1903,24 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
+                      isUniverse={isUniverseCatalog(c.name)}
+                      catalogName={c.name}
                       loading={isLoadingCreative}
                       creative={creative}
+                      metricsLoading={metricsLoading}
+                      catalogNames={all.filter(x => x.name !== c.name && !isAllCatalog(x.name)).map(x => x.name)}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
+                      onAfterBulkMutation={() => {
+                        // Drop the cached creative payload + refetch
+                        // looks/products so the dropdown reflects the
+                        // mutation immediately.
+                        setCreativeByCatalog(prev => { const next = { ...prev }; delete next[c.id]; return next; });
+                        loadLooks();
+                        loadProducts();
+                      }}
                     />
                   </td>
                 </tr>
@@ -1263,6 +1990,21 @@ export default function AdminCatalogs() {
           onAutoPick={autoPickRelevant}
           onClose={closeAdd}
           onCommit={commitAdd}
+        />
+      )}
+
+      {/* Add Looks modal - pick from existing library */}
+      {addLooksCatalog && (
+        <AddLooksModal
+          catalog={addLooksCatalog}
+          looks={looks}
+          search={addLooksSearch}
+          onSearch={setAddLooksSearch}
+          selected={addLooksSelected}
+          onToggle={toggleAddLookSelected}
+          busy={addLooksBusy}
+          onClose={closeAddLooks}
+          onCommit={commitAddLooks}
         />
       )}
 
@@ -1673,9 +2415,433 @@ export default function AdminCatalogs() {
 
 interface CatalogCreativeDropdownProps {
   isAll: boolean;
+  isUniverse: boolean;
+  catalogName: string;
   loading: boolean;
   creative: CatalogCreativePayload | undefined;
+  metricsLoading: boolean;
+  /** Other catalog names this row can fan out to via bulk "Add to…". */
+  catalogNames: string[];
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
+  onAfterBulkMutation: () => void;
+}
+
+// ── Phase 10: catalog health panel ────────────────────────────────────
+// Synthesizes actionable warnings from the data already in memory.
+// Each issue has: severity, count, optional sample catalog names
+// (so the admin can jump straight to the worst offenders), and a
+// one-line action hint.
+interface HealthIssue {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  samples: string[];
+  action: string;
+}
+
+function CatalogsHealthPanel({
+  catalogs,
+  impressionsByName,
+  searchCountsByName,
+  productCountsByName,
+  onJumpToCatalog,
+}: {
+  catalogs: Catalog[];
+  impressionsByName: Map<string, { curr: number; prev: number }>;
+  searchCountsByName: Map<string, CatalogSearchCounts>;
+  productCountsByName: Map<string, number>;
+  onJumpToCatalog?: (name: string) => void;
+}) {
+  const issues = useMemo<HealthIssue[]>(() => {
+    const out: HealthIssue[] = [];
+    // Skip the synthetic `all` row — it's an admin meta-view, not a
+    // real catalog.
+    const real = catalogs.filter(c => !isAllCatalog(c.name) && c.id !== 'synthetic-all');
+
+    const empty = real.filter(c => (productCountsByName.get(c.name) ?? 0) === 0);
+    if (empty.length > 0) {
+      out.push({
+        severity: 'warning',
+        title: `${empty.length} catalog${empty.length === 1 ? '' : 's'} with no products`,
+        detail: 'Shoppers landing here see an empty grid. Tag products via "+ Add Products" or "Suggest Products."',
+        samples: empty.slice(0, 4).map(c => c.name),
+        action: 'Add products or archive',
+      });
+    }
+
+    const zombies = real.filter(c => {
+      const imp = impressionsByName.get(c.name.toLowerCase());
+      const sc = searchCountsByName.get(c.name.toLowerCase());
+      const noImpressions = !imp || imp.curr === 0;
+      const noSearches = !sc || sc.count7d === 0;
+      return noImpressions && noSearches && (productCountsByName.get(c.name) ?? 0) > 0;
+    });
+    if (zombies.length > 0) {
+      out.push({
+        severity: 'warning',
+        title: `${zombies.length} zombie catalog${zombies.length === 1 ? '' : 's'}`,
+        detail: 'Have products tagged but received 0 impressions AND 0 searches in the last 7 days.',
+        samples: zombies.slice(0, 4).map(c => c.name),
+        action: 'Boost or retire',
+      });
+    }
+
+    const falling = real
+      .map(c => {
+        const imp = impressionsByName.get(c.name.toLowerCase());
+        if (!imp || imp.prev === 0 || imp.curr === 0) return null;
+        const pct = Math.round(((imp.curr - imp.prev) / imp.prev) * 100);
+        return pct <= -50 ? { name: c.name, pct } : null;
+      })
+      .filter((x): x is { name: string; pct: number } => x !== null);
+    if (falling.length > 0) {
+      out.push({
+        severity: 'critical',
+        title: `${falling.length} catalog${falling.length === 1 ? '' : 's'} fell off (>50% drop)`,
+        detail: 'Impressions collapsed vs the prior 7-day window. Likely a content or ranking regression.',
+        samples: falling.slice(0, 4).map(f => `${f.name} (↓${Math.abs(f.pct)}%)`),
+        action: 'Investigate',
+      });
+    }
+
+    const rising = real
+      .map(c => {
+        const imp = impressionsByName.get(c.name.toLowerCase());
+        if (!imp || imp.prev === 0 || imp.curr === 0) return null;
+        const pct = Math.round(((imp.curr - imp.prev) / imp.prev) * 100);
+        return pct >= 50 ? { name: c.name, pct } : null;
+      })
+      .filter((x): x is { name: string; pct: number } => x !== null);
+    if (rising.length > 0) {
+      out.push({
+        severity: 'info',
+        title: `${rising.length} catalog${rising.length === 1 ? '' : 's'} breaking out (>50% growth)`,
+        detail: 'Impressions surging vs the prior 7-day window. Consider promoting on Home or featuring.',
+        samples: rising.slice(0, 4).map(r => `${r.name} (↑${r.pct}%)`),
+        action: 'Promote',
+      });
+    }
+
+    // Sweet-spot detection: catalogs with high search volume but
+    // missing products. These are the highest-leverage actions an
+    // admin can take.
+    const demanded = real.filter(c => {
+      const sc = searchCountsByName.get(c.name.toLowerCase());
+      const productCount = productCountsByName.get(c.name) ?? 0;
+      return sc && sc.count7d >= 3 && productCount === 0;
+    });
+    if (demanded.length > 0) {
+      out.push({
+        severity: 'critical',
+        title: `${demanded.length} high-demand catalog${demanded.length === 1 ? '' : 's'} with no products`,
+        detail: 'Shoppers are searching for these but the grid is empty — every search is a dead end.',
+        samples: demanded.slice(0, 4).map(c => c.name),
+        action: 'Tag products immediately',
+      });
+    }
+
+    if (out.length === 0) {
+      out.push({
+        severity: 'info',
+        title: 'No critical issues detected',
+        detail: 'Every real catalog has products tagged, no >50% drops, no high-demand catalogs sitting empty.',
+        samples: [],
+        action: 'Keep monitoring',
+      });
+    }
+
+    return out;
+  }, [catalogs, impressionsByName, searchCountsByName, productCountsByName]);
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 6 }}>
+        Catalog Health
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
+        {issues.map((issue, idx) => (
+          <HealthCard key={idx} issue={issue} onJumpToCatalog={onJumpToCatalog} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HealthCard({ issue, onJumpToCatalog }: { issue: HealthIssue; onJumpToCatalog?: (name: string) => void }) {
+  const palette = {
+    critical: { bg: '#fef2f2', border: '#fecaca', accent: '#b91c1c', icon: '⚠' },
+    warning:  { bg: '#fffbeb', border: '#fde68a', accent: '#a16207', icon: '⚠' },
+    info:     { bg: '#ecfdf5', border: '#a7f3d0', accent: '#047857', icon: '✓' },
+  }[issue.severity];
+  return (
+    <div style={{
+      background: palette.bg,
+      border: `1px solid ${palette.border}`,
+      borderRadius: 8,
+      padding: 12,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ color: palette.accent, fontSize: 13, fontWeight: 700 }}>{palette.icon}</span>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{issue.title}</div>
+      </div>
+      <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>{issue.detail}</div>
+      {issue.samples.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+          {issue.samples.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onJumpToCatalog?.(s)}
+              disabled={!onJumpToCatalog}
+              title={onJumpToCatalog ? 'Jump to this catalog' : undefined}
+              style={{
+                padding: '1px 6px', borderRadius: 4,
+                background: 'rgba(255,255,255,0.6)', border: `1px solid ${palette.border}`,
+                fontSize: 10, fontWeight: 600, color: palette.accent,
+                cursor: onJumpToCatalog ? 'pointer' : 'default',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={onJumpToCatalog ? (e) => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; } : undefined}
+              onMouseLeave={onJumpToCatalog ? (e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.6)'; } : undefined}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: palette.accent, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginTop: 2 }}>
+        → {issue.action}
+      </div>
+    </div>
+  );
+}
+
+// ── Phase 9: live indicator ───────────────────────────────────────────
+// Pulses on every accepted realtime event; shows total events seen
+// this session so admins can confirm the channel is hot.
+function LiveIndicator({ active, tick }: { active: boolean; tick: number }) {
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (tick === 0) return;
+    setPulse(true);
+    const t = window.setTimeout(() => setPulse(false), 500);
+    return () => window.clearTimeout(t);
+  }, [tick]);
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '4px 10px',
+      borderRadius: 999,
+      background: active ? '#ecfdf5' : '#f1f5f9',
+      border: `1px solid ${active ? '#a7f3d0' : '#e2e8f0'}`,
+      marginBottom: 10,
+      fontSize: 11,
+      fontWeight: 600,
+      color: active ? '#047857' : '#64748b',
+    }}>
+      <span style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: active ? '#10b981' : '#cbd5e1',
+        boxShadow: pulse ? '0 0 0 6px rgba(16,185,129,0.25)' : 'none',
+        transition: 'box-shadow 200ms ease',
+      }} />
+      {active ? 'Live' : 'Connecting…'} · {tick} event{tick === 1 ? '' : 's'} this session
+    </div>
+  );
+}
+
+// ── Table-level search + quick filter ────────────────────────────────
+// Sits between the health panel and the table. Search filters by
+// name substring; quick chips slice by health-style predicates
+// (all / rising / falling / empty / zombie / has issues).
+interface CatalogsTableFilterBarProps {
+  query: string;
+  filter: 'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues';
+  onQuery: (q: string) => void;
+  onFilter: (f: 'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues') => void;
+  total: number;
+  showing: number;
+}
+
+function CatalogsTableFilterBar({ query, filter, onQuery, onFilter, total, showing }: CatalogsTableFilterBarProps) {
+  const chips: { value: typeof filter; label: string; color?: string }[] = [
+    { value: 'all',     label: 'All' },
+    { value: 'rising',  label: '↑ Rising', color: '#047857' },
+    { value: 'falling', label: '↓ Falling', color: '#b91c1c' },
+    { value: 'empty',   label: '∅ Empty', color: '#a16207' },
+    { value: 'zombie',  label: '⚠ Zombie', color: '#a16207' },
+    { value: 'issues',  label: 'Has issues', color: '#b91c1c' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0 12px' }}>
+      <input
+        type="text"
+        placeholder="Search catalogs by name…"
+        value={query}
+        onChange={e => onQuery(e.target.value)}
+        style={{
+          flex: '0 1 260px',
+          padding: '6px 10px',
+          fontSize: 12,
+          border: '1px solid #cbd5e1',
+          borderRadius: 6,
+          background: '#fff',
+        }}
+      />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {chips.map(c => {
+          const active = filter === c.value;
+          return (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onFilter(c.value)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+                border: '1px solid',
+                cursor: 'pointer',
+                borderColor: active ? (c.color || '#111') : '#e2e8f0',
+                background: active ? (c.color || '#111') : '#fff',
+                color: active ? '#fff' : (c.color || '#475569'),
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>
+        {filter === 'all' && !query ? `${total} catalog${total === 1 ? '' : 's'}` : `${Math.max(0, showing)} of ${total}`}
+      </span>
+    </div>
+  );
+}
+
+// ── Phase 7: catalog-system dashboard ─────────────────────────────────
+// Page-level summary card above the catalogs table. Bird's-eye view of
+// every metric we already aggregate so admins can answer "is the
+// catalog system healthy?" without expanding a single row.
+interface CatalogsDashboardProps {
+  catalogs: Catalog[];
+  impressionsByName: Map<string, { curr: number; prev: number }>;
+  searchCountsByName: Map<string, CatalogSearchCounts>;
+}
+
+function CatalogsDashboard({ catalogs, impressionsByName, searchCountsByName }: CatalogsDashboardProps) {
+  // Build derived figures from the maps we already have in scope.
+  // No extra fetch — Phase 4's catalog_view_counts already powers the
+  // impressions data; SearchCountPill data drives searches.
+  const stats = useMemo(() => {
+    let totalImp = 0, totalPrevImp = 0, totalSearches = 0, withImp = 0, withSearches = 0;
+    let topMover: { name: string; pct: number } | null = null;
+    let worstFaller: { name: string; pct: number } | null = null;
+    let topByImp: { name: string; n: number } | null = null;
+    let topBySearch: { name: string; n: number } | null = null;
+    for (const c of catalogs) {
+      const key = c.name.toLowerCase();
+      const imp = impressionsByName.get(key);
+      const sc = searchCountsByName.get(key);
+      if (imp) {
+        totalImp += imp.curr;
+        totalPrevImp += imp.prev;
+        if (imp.curr > 0) withImp++;
+        if (!topByImp || imp.curr > topByImp.n) topByImp = { name: c.name, n: imp.curr };
+        const pct = imp.prev > 0 ? ((imp.curr - imp.prev) / imp.prev) * 100 : null;
+        if (pct !== null) {
+          if (!topMover || pct > topMover.pct) topMover = { name: c.name, pct: Math.round(pct) };
+          if (!worstFaller || pct < worstFaller.pct) worstFaller = { name: c.name, pct: Math.round(pct) };
+        }
+      }
+      if (sc && sc.countTotal > 0) {
+        totalSearches += sc.count7d;
+        withSearches++;
+        if (!topBySearch || sc.count7d > topBySearch.n) topBySearch = { name: c.name, n: sc.count7d };
+      }
+    }
+    const trendPct = totalPrevImp > 0
+      ? Math.round(((totalImp - totalPrevImp) / totalPrevImp) * 100)
+      : null;
+    const darkPct = catalogs.length > 0 ? Math.round((1 - withImp / catalogs.length) * 100) : 0;
+    return { totalImp, totalPrevImp, trendPct, totalSearches, withImp, withSearches, topMover, worstFaller, topByImp, topBySearch, darkPct };
+  }, [catalogs, impressionsByName, searchCountsByName]);
+
+  const trendColor = stats.trendPct === null
+    ? '#475569'
+    : stats.trendPct >= 25 ? '#047857'
+    : stats.trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  const trendLabel = stats.trendPct === null
+    ? '—'
+    : stats.trendPct === 0 ? '—'
+    : `${stats.trendPct > 0 ? '↑' : '↓'}${Math.abs(stats.trendPct)}% vs prior 7d`;
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: 1,
+      background: '#e5e7eb',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      overflow: 'hidden',
+      marginBottom: 14,
+    }}>
+      <DashCell label="Impressions 7d" value={stats.totalImp.toLocaleString()} sub={trendLabel} accent={trendColor} />
+      <DashCell label="Searches 7d" value={stats.totalSearches.toLocaleString()} sub={`across ${stats.withSearches} catalogs`} />
+      <DashCell
+        label="Top catalog · Impressions"
+        value={stats.topByImp?.name ?? '—'}
+        sub={stats.topByImp ? `${stats.topByImp.n.toLocaleString()} views` : 'no data'}
+        accent="#0f172a"
+      />
+      <DashCell
+        label="Top catalog · Searches"
+        value={stats.topBySearch?.name ?? '—'}
+        sub={stats.topBySearch ? `${stats.topBySearch.n.toLocaleString()} searches` : 'no data'}
+        accent="#0f172a"
+      />
+      <DashCell
+        label="Biggest riser"
+        value={stats.topMover?.name ?? '—'}
+        sub={stats.topMover ? `↑ ${stats.topMover.pct}% vs prior` : 'no data'}
+        accent="#047857"
+      />
+      <DashCell
+        label="Biggest faller"
+        value={stats.worstFaller?.name ?? '—'}
+        sub={stats.worstFaller ? `↓ ${Math.abs(stats.worstFaller.pct)}% vs prior` : 'no data'}
+        accent="#b91c1c"
+      />
+      <DashCell
+        label="Dark inventory"
+        value={`${stats.darkPct}%`}
+        sub={`${catalogs.length - stats.withImp} of ${catalogs.length} catalogs had 0 views`}
+        accent={stats.darkPct > 50 ? '#b91c1c' : '#0f172a'}
+      />
+    </div>
+  );
+}
+
+function DashCell({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div style={{ background: '#fff', padding: '10px 12px', minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: accent || '#0f172a', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 }
 
 // ── Search count pill ──────────────────────────────────────────────────────
@@ -1697,23 +2863,174 @@ function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
   );
 }
 
+// ── 14-day mini sparkline (inline in the catalogs table) ──────────────────
+// Hovering opens a richer popover with the day-by-day breakdown.
+function MiniSparkline({ series }: { series?: number[] }) {
+  const [hover, setHover] = useState(false);
+  if (!series || series.length === 0 || series.every(n => n === 0)) {
+    return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+  }
+  const W = 64; const H = 18;
+  const max = Math.max(1, ...series);
+  const barW = W / series.length;
+  const total = series.reduce((a, b) => a + b, 0);
+  const days: string[] = [];
+  const today = new Date();
+  for (let i = series.length - 1; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 86400_000);
+    days.push(d.toISOString().slice(5, 10));
+  }
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-block', cursor: 'help' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img">
+        <title>{`14-day impressions · total ${total} · peak ${max}`}</title>
+        {series.map((v, i) => {
+          const h = (v / max) * (H - 2);
+          return (
+            <rect
+              key={i}
+              x={i * barW + 0.5}
+              y={H - h}
+              width={Math.max(1, barW - 1)}
+              height={h}
+              fill="#2563eb"
+              opacity={v === 0 ? 0.18 : 1}
+              rx={1}
+            />
+          );
+        })}
+      </svg>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+            width: 200,
+            background: '#0f172a',
+            color: '#fff',
+            borderRadius: 6,
+            padding: 8,
+            pointerEvents: 'none',
+            boxShadow: '0 10px 28px rgba(15,23,42,0.35)',
+            textAlign: 'left',
+          }}
+        >
+          <div style={{ fontSize: 10, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 700, marginBottom: 4 }}>
+            Last 14 days
+          </div>
+          <div style={{ fontSize: 11, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+            <span>total</span><span style={{ fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+          </div>
+          <div style={{ fontSize: 11, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+            <span>peak</span><span style={{ fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{max}</span>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 6, paddingTop: 6 }}>
+            {series.map((v, i) => (
+              <div key={i} style={{ fontSize: 10, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
+                <span>{days[i]}</span>
+                <span style={{ fontWeight: 600, color: v > 0 ? '#fff' : '#475569', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+// ── Impressions pill ──────────────────────────────────────────────────────
+// Renders the 7-day catalog impression count + trend vs prior 7d.
+// Driven by catalog_view_counts RPC; counts fire from the consumer
+// ContinuousFeed when committedQuery commits to a catalog name.
+function ImpressionsPill({ counts }: { counts?: { curr: number; prev: number } }) {
+  if (!counts || counts.curr === 0) {
+    return <span style={{ fontSize: 11, color: '#ccc' }}>—</span>;
+  }
+  const trendPct = counts.prev > 0
+    ? Math.round(((counts.curr - counts.prev) / counts.prev) * 100)
+    : null;
+  const trendLabel = trendPct === null
+    ? 'NEW'
+    : trendPct === 0 ? '' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#64748b';
+  return (
+    <span
+      title={`7d impressions: ${counts.curr.toLocaleString()} · Prior 7d: ${counts.prev.toLocaleString()}`}
+      style={{
+        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        background: '#ecfdf5', color: '#047857', cursor: 'default',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+      }}
+    >
+      {counts.curr.toLocaleString()}
+      {trendLabel && (
+        <span style={{ fontSize: 9, fontWeight: 700, color: trendColor, marginLeft: 1 }}>
+          {trendLabel}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Toggle pills ────────────────────────────────────────────────────────────
-type ToggleField = 'filterGender' | 'filterAge' | 'boostTopConverting';
+type ToggleField = 'filterAge' | 'boostTopConverting';
 interface TogglePillsProps {
-  filterGender?: boolean;
+  gender?: CatalogGenderUI;
   filterAge?: boolean;
   boostTopConverting?: boolean;
   onToggle: (field: ToggleField, value: boolean) => void;
+  onGender?: (value: CatalogGenderUI) => void;
 }
 
-function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: TogglePillsProps) {
+function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender }: TogglePillsProps) {
   const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean }[] = [
-    { key: 'filterGender',        label: 'Gender',  value: filterGender ?? false },
     { key: 'filterAge',           label: 'Age',     value: filterAge ?? false, disabled: true },
     { key: 'boostTopConverting',  label: 'Top ↑',   value: boostTopConverting ?? false },
   ];
+  const currentGender: CatalogGenderUI = gender ?? 'all';
+  const genderActive = currentGender !== 'all';
+  const genderLabel: Record<CatalogGenderUI, string> = {
+    all: 'Any gender', women: 'Women', men: 'Men', unisex: 'Unisex',
+  };
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <select
+        value={currentGender}
+        onChange={e => onGender?.(e.target.value as CatalogGenderUI)}
+        disabled={!onGender}
+        title={`Gender lens: ${genderLabel[currentGender]}`}
+        style={{
+          padding: '2px 6px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+          border: '1px solid',
+          borderColor: genderActive ? '#111' : '#e2e8f0',
+          background: genderActive ? '#111' : '#fff',
+          color: genderActive ? '#fff' : '#64748b',
+          cursor: onGender ? 'pointer' : 'default',
+          appearance: 'none',
+          paddingRight: 18,
+          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${genderActive ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 5px center',
+          transition: 'all 0.1s',
+        }}
+      >
+        <option value="all">Any</option>
+        <option value="women">Women</option>
+        <option value="men">Men</option>
+        <option value="unisex">Unisex</option>
+      </select>
       {pills.map(p => (
         <button
           key={p.key}
@@ -1741,7 +3058,53 @@ function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: 
   );
 }
 
-function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: CatalogCreativeDropdownProps) {
+type ViewMode = 'grid' | 'list';
+const VIEW_MODE_LS_KEY = 'catalog-admin:dropdown-view-mode';
+
+// Phase 8: detail-drawer subject — what's open in the side panel,
+// if anything. The drawer is rendered as a fixed-position overlay
+// inside the dropdown component so it follows the catalog row's
+// lifecycle (closes automatically when the dropdown collapses).
+type DrawerSubject =
+  | { kind: 'look'; look: CatalogLookRow }
+  | { kind: 'product'; product: ProductRow }
+  | { kind: 'creative'; creative: CatalogCreativeVideo }
+  | null;
+
+function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
+  const [drawer, setDrawer] = useState<DrawerSubject>(null);
+  // Phase 5: local sort/filter state. Per-dropdown so different
+  // expanded catalogs can be sliced differently without interference.
+  const [sort, setSort] = useState<MetricSort>('most-viewed');
+  const [filter, setFilter] = useState<MetricFilter>('all');
+  // Phase 6: bulk selection. Two parallel sets so admins can pick
+  // looks and products independently. Cleared on filter/sort/view
+  // change to keep mental model sane.
+  const [selectedLookIds, setSelectedLookIds] = useState<Set<string>>(new Set());
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  // Shift-click range anchor — last index clicked per section. Reset
+  // whenever the underlying ordering changes.
+  const lookAnchorRef = useRef<number | null>(null);
+  const productAnchorRef = useRef<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => {
+    setSelectedLookIds(new Set());
+    setSelectedProductIds(new Set());
+    lookAnchorRef.current = null;
+    productAnchorRef.current = null;
+  }, [sort, filter]);
+  // Grid vs spreadsheet-list view. Persisted to localStorage so an
+  // admin who lives in list mode doesn't have to re-toggle every
+  // session.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try { return (window.localStorage.getItem(VIEW_MODE_LS_KEY) as ViewMode) || 'grid'; }
+    catch { return 'grid'; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
+  }, [viewMode]);
+
   if (loading && !creative) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
@@ -1754,85 +3117,1592 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
   if (!hasAny) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
-        No looks, products, or creative {isAll ? 'are currently active.' : 'tagged with this catalog yet.'}
+        No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
       </div>
     );
   }
 
+  // Apply Phase 5 filter then sort to BOTH looks and products. Same
+  // predicate runs against the metrics-decorated rows.
+  const sortedLooks = sortAndFilterItems(looks, sort, filter);
+  const sortedProducts = sortAndFilterItems(products, sort, filter);
+
+  // Phase 7-lite: KPI strip across the top. Sums over the currently
+  // visible rows (post-filter) so the numbers track what the admin is
+  // actually looking at, not the full library.
+  const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
+
+  // Phase 6: selection toggle with shift-click range support. Generic
+  // helper so looks and products share the same UX.
+  const toggleSelection = useCallback(
+    (kind: 'look' | 'product', id: string, index: number, items: { id: string }[], extendRange: boolean) => {
+      const setSelected = kind === 'look' ? setSelectedLookIds : setSelectedProductIds;
+      const anchorRef = kind === 'look' ? lookAnchorRef : productAnchorRef;
+      if (extendRange && anchorRef.current !== null) {
+        const from = Math.min(anchorRef.current, index);
+        const to = Math.max(anchorRef.current, index);
+        setSelected(prev => {
+          const next = new Set(prev);
+          for (let i = from; i <= to; i++) next.add(items[i].id);
+          return next;
+        });
+      } else {
+        setSelected(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+        });
+        anchorRef.current = index;
+      }
+    },
+    [],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedLookIds(new Set());
+    setSelectedProductIds(new Set());
+  }, []);
+
+  // Bulk: remove this catalog from each selected row's catalog_tags
+  // array (Add Looks / Add Products do the inverse). RLS errors are
+  // toasted and the dropdown refetches afterward.
+  const bulkRemoveFromCatalog = useCallback(async () => {
+    if (!supabase) return;
+    setBulkBusy(true);
+    try {
+      const lookOps = [...selectedLookIds].map(async id => {
+        const look = looks.find(l => l.id === id);
+        if (!look) return;
+        const { data: row } = await supabase!.from('looks').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
+        await supabase!.from('looks').update({ catalog_tags: tags }).eq('id', id);
+      });
+      const productOps = [...selectedProductIds].map(async id => {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        const { data: row } = await supabase!.from('products').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
+        await supabase!.from('products').update({ catalog_tags: tags }).eq('id', id);
+      });
+      await Promise.all([...lookOps, ...productOps]);
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, selectedProductIds, looks, products, catalogName, clearSelection, onAfterBulkMutation]);
+
+  // Bulk: hide the selected looks from the consumer feed by flipping
+  // enabled=false. Products don't have a comparable on/off flag so
+  // for now we no-op them with a toast hint.
+  const bulkHide = useCallback(async () => {
+    if (!supabase) return;
+    setBulkBusy(true);
+    try {
+      const lookIds = [...selectedLookIds];
+      if (lookIds.length > 0) {
+        await supabase.from('looks').update({ enabled: false }).in('id', lookIds);
+      }
+      // products.is_active gate would belong here when an admin-write
+      // RLS allows it. Surfacing the no-op via toast keeps expectations
+      // clear without blocking the looks hide.
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, clearSelection, onAfterBulkMutation]);
+
+  // Bulk: append a target catalog name to each selected row's
+  // catalog_tags array. Lets admins fan out a curated selection to
+  // multiple catalogs in one click instead of running the Add Looks
+  // / Add Products picker per-catalog.
+  const bulkAddToCatalog = useCallback(async (targetName: string) => {
+    if (!supabase || !targetName.trim() || targetName === catalogName) return;
+    setBulkBusy(true);
+    try {
+      const lookOps = [...selectedLookIds].map(async id => {
+        const { data: row } = await supabase!.from('looks').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = new Set([...(row?.catalog_tags as string[] | null) || [], targetName]);
+        await supabase!.from('looks').update({ catalog_tags: Array.from(tags) }).eq('id', id);
+      });
+      const productOps = [...selectedProductIds].map(async id => {
+        const { data: row } = await supabase!.from('products').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = new Set([...(row?.catalog_tags as string[] | null) || [], targetName]);
+        await supabase!.from('products').update({ catalog_tags: Array.from(tags) }).eq('id', id);
+      });
+      await Promise.all([...lookOps, ...productOps]);
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, selectedProductIds, catalogName, clearSelection, onAfterBulkMutation]);
+
+  const selectionCount = selectedLookIds.size + selectedProductIds.size;
+
   return (
-    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
           The <strong>all</strong> catalog pulls every live look, rendered creative, and product - no duplicates, every entry shown in its entirety. Drag any tile to reorder.
         </div>
       )}
-
-      <DraggableSection
-        title="Looks"
-        count={looks.length}
-        emptyMessage="No looks in this catalog."
-        minColumnPx={140}
-        draggable={isAll}
-        onReorder={(from, to) => onReorder('looks', from, to)}
-      >
-        {looks.map(l => (
-          <LookThumb key={l.id} look={l} />
-        ))}
-      </DraggableSection>
-
-      <DraggableSection
-        title="Creative Videos"
-        count={creatives.length}
-        emptyMessage="No rendered product ads in this catalog yet."
-        minColumnPx={140}
-        draggable={isAll}
-        onReorder={(from, to) => onReorder('creatives', from, to)}
-      >
-        {creatives.map(c => (
-          <CreativeThumb key={c.id} creative={c} />
-        ))}
-      </DraggableSection>
-
-      {!isAll && (
-        <DraggableSection
-          title="Feed search results"
-          count={feedResults?.length ?? 0}
-          emptyMessage="No creatives surface for this query in the consumer feed search."
-          minColumnPx={140}
-          draggable={false}
-          onReorder={() => {}}
-        >
-          {(feedResults ?? []).map(c => (
-            <CreativeThumb key={`feed-${c.id}`} creative={c} />
-          ))}
-        </DraggableSection>
+      {!isAll && isUniverse && (
+        <div style={{ fontSize: 11, color: '#475569', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 10px' }}>
+          The <strong>home</strong> catalog mirrors the consumer landing feed — every live look and product, ranked by what shoppers see right now.
+        </div>
       )}
 
-      <DraggableSection
-        title="Products"
-        count={products.length}
-        emptyMessage="No products in this catalog."
-        minColumnPx={110}
-        draggable={isAll}
-        onReorder={(from, to) => onReorder('products', from, to)}
-      >
-        {products.map(p => (
-          <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
-            {p.image_url ? (
-              <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
-            ) : (
-              <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
-            )}
-            <div style={{ padding: 6 }}>
-              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || ' - '}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || ' - '}</div>
-            </div>
-          </div>
-        ))}
-      </DraggableSection>
+      <KpiStrip kpi={kpi} metricsLoading={metricsLoading} />
+
+      <MetricControlBar
+        sort={sort} filter={filter} viewMode={viewMode}
+        onSort={setSort} onFilter={setFilter} onViewMode={setViewMode}
+      />
+
+      {viewMode === 'list' ? (
+        <>
+          <LooksListTable
+            looks={sortedLooks}
+            selectedIds={selectedLookIds}
+            onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
+            onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
+          />
+          <CreativesListTable title="Creative Videos" creatives={creatives} />
+          {!isUniverse && (
+            <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
+          )}
+          <ProductsListTable
+            products={sortedProducts}
+            selectedIds={selectedProductIds}
+            onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+            onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
+          />
+        </>
+      ) : (
+        <>
+          <DraggableSection
+            title="Looks"
+            count={sortedLooks.length}
+            emptyMessage="No looks match the current filter."
+            minColumnPx={140}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+            onReorder={(from, to) => onReorder('looks', from, to)}
+          >
+            {sortedLooks.map((l, idx) => (
+              <LookThumb
+                key={l.id}
+                look={l}
+                selected={selectedLookIds.has(l.id)}
+                onSelect={(ext) => toggleSelection('look', l.id, idx, sortedLooks, ext)}
+                onOpenDetail={() => setDrawer({ kind: 'look', look: l })}
+              />
+            ))}
+          </DraggableSection>
+
+          <DraggableSection
+            title="Creative Videos"
+            count={creatives.length}
+            emptyMessage="No rendered product ads in this catalog yet."
+            minColumnPx={140}
+            draggable={isAll}
+            onReorder={(from, to) => onReorder('creatives', from, to)}
+          >
+            {creatives.map(c => (
+              <CreativeThumb key={c.id} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
+            ))}
+          </DraggableSection>
+
+          {!isUniverse && (
+            <DraggableSection
+              title="Feed search results"
+              count={feedResults?.length ?? 0}
+              emptyMessage="No creatives surface for this query in the consumer feed search."
+              minColumnPx={140}
+              draggable={false}
+              onReorder={() => {}}
+            >
+              {(feedResults ?? []).map(c => (
+                <CreativeThumb key={`feed-${c.id}`} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
+              ))}
+            </DraggableSection>
+          )}
+
+          <DraggableSection
+            title="Products"
+            count={sortedProducts.length}
+            emptyMessage="No products match the current filter."
+            minColumnPx={140}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+            onReorder={(from, to) => onReorder('products', from, to)}
+          >
+            {sortedProducts.map((p, idx) => (
+              <ProductMetricTile
+                key={p.id}
+                product={p}
+                selected={selectedProductIds.has(p.id)}
+                onSelect={(ext) => toggleSelection('product', p.id, idx, sortedProducts, ext)}
+                onOpenDetail={() => setDrawer({ kind: 'product', product: p })}
+              />
+            ))}
+          </DraggableSection>
+        </>
+      )}
+
+      {selectionCount > 0 && (
+        <BulkActionBar
+          count={selectionCount}
+          catalogName={catalogName}
+          catalogNames={catalogNames}
+          busy={bulkBusy}
+          onClear={clearSelection}
+          onRemove={bulkRemoveFromCatalog}
+          onHide={bulkHide}
+          onAddTo={bulkAddToCatalog}
+          looksCount={selectedLookIds.size}
+          productsCount={selectedProductIds.size}
+        />
+      )}
+
+      {drawer && (
+        <DetailDrawer subject={drawer} catalogName={catalogName} onClose={() => setDrawer(null)} />
+      )}
     </div>
   );
 }
+
+// ── Phase 8: detail drawer ──────────────────────────────────────────
+// Side panel that slides in from the right when an admin clicks the
+// expand icon on a look or product tile. No new RPCs — everything
+// it shows is already on the row (video, image, metrics, attached
+// products / brand) or in the catalog tags array.
+
+function DetailDrawer({ subject, catalogName, onClose }: { subject: NonNullable<DrawerSubject>; catalogName: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(15,23,42,0.45)',
+          zIndex: 90,
+        }}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0,
+          width: 'min(440px, 92vw)',
+          background: '#fff',
+          boxShadow: '-16px 0 48px rgba(15,23,42,0.25)',
+          zIndex: 100,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #e5e7eb' }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+              {subject.kind === 'look' ? 'Look' : subject.kind === 'product' ? 'Product' : 'Creative'} · {catalogName}
+            </div>
+            <h2 style={{ margin: '2px 0 0', fontSize: 16, color: '#0f172a' }}>
+              {subject.kind === 'look'
+                ? (subject.look.title || `Look #${subject.look.legacyId ?? ''}`)
+                : subject.kind === 'product'
+                ? (subject.product.name || 'Unnamed product')
+                : (subject.creative.productName || subject.creative.title || 'Creative')}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6, color: '#475569' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </header>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {subject.kind === 'look'
+            ? <LookDetailBody look={subject.look} />
+            : subject.kind === 'product'
+            ? <ProductDetailBody product={subject.product} />
+            : <CreativeDetailBody creative={subject.creative} />}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function MetricMiniCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div style={{ flex: '1 1 0', minWidth: 0, padding: '8px 10px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: accent || '#0f172a' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// Daily metrics hook for the detail drawer sparkline. Loads on first
+// mount + on subject change; null while loading or if the RPC errors
+// so the sparkline can render an "awaiting data" placeholder.
+function useDailyMetrics(targetType: 'look' | 'product', primaryKey: string, fallbackKey?: string | number | null) {
+  const [data, setData] = useState<{ day: string; impressions: number; clicks: number; clickouts: number }[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let cancelled = false;
+    const keys = [primaryKey, fallbackKey].filter((k): k is string | number => k !== null && k !== undefined);
+    (async () => {
+      setLoading(true);
+      for (const k of keys) {
+        const { data: rows, error } = await supabase!.rpc('catalog_item_daily_metrics', {
+          p_target_type: targetType,
+          p_target_key: String(k),
+          p_days: 14,
+        });
+        if (cancelled) return;
+        if (error) continue;
+        if (rows && (rows as unknown[]).length > 0) {
+          const typed = (rows as { day: string; impressions: number | string; clicks: number | string; clickouts: number | string }[]).map(r => ({
+            day: r.day,
+            impressions: Number(r.impressions) || 0,
+            clicks: Number(r.clicks) || 0,
+            clickouts: Number(r.clickouts) || 0,
+          }));
+          // Only commit if there's any signal — otherwise keep
+          // checking the fallback key (legacy_id).
+          if (typed.some(d => d.impressions > 0 || d.clicks > 0)) {
+            setData(typed);
+            setLoading(false);
+            return;
+          }
+          setData(typed);
+        }
+      }
+      setLoading(false);
+    })().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [targetType, primaryKey, fallbackKey]);
+  return { data, loading };
+}
+
+// 14-day impressions sparkline. Inline SVG so we don't pull a charting
+// dep. Bars scale to the max value; faint baseline grid every 25%.
+function DailySparkline({ data, accent = '#2563eb' }: { data: { day: string; impressions: number }[] | null; accent?: string }) {
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ fontSize: 11, color: '#94a3b8', padding: '12px 0', textAlign: 'center' }}>
+        No daily activity in the last 14 days.
+      </div>
+    );
+  }
+  const max = Math.max(1, ...data.map(d => d.impressions));
+  const W = 380; const H = 80;
+  const barW = W / data.length;
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        <line x1={0} y1={H * 0.5} x2={W} y2={H * 0.5} stroke="#f1f5f9" strokeWidth={1} />
+        <line x1={0} y1={H * 0.25} x2={W} y2={H * 0.25} stroke="#f8fafc" strokeWidth={1} />
+        <line x1={0} y1={H * 0.75} x2={W} y2={H * 0.75} stroke="#f8fafc" strokeWidth={1} />
+        {data.map((d, i) => {
+          const h = max > 0 ? (d.impressions / max) * (H - 6) : 0;
+          return (
+            <g key={d.day}>
+              <rect
+                x={i * barW + 1}
+                y={H - h}
+                width={Math.max(1, barW - 2)}
+                height={h}
+                fill={accent}
+                rx={1.5}
+                opacity={d.impressions === 0 ? 0.2 : 1}
+              >
+                <title>{`${d.day}: ${d.impressions} impression${d.impressions === 1 ? '' : 's'}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>{data[0]?.day}</span>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>peak {max}</span>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>{data[data.length - 1]?.day}</span>
+      </div>
+    </div>
+  );
+}
+
+function LookDetailBody({ look }: { look: CatalogLookRow }) {
+  const src = look.videoPath
+    ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
+    : null;
+  const m = look.metrics;
+  const trendLabel = m?.trendPct === null || m?.trendPct === undefined
+    ? '—'
+    : m.trendPct === 0 ? '—' : `${m.trendPct > 0 ? '↑' : '↓'}${Math.abs(m.trendPct)}%`;
+  const trendColor = (m?.trendPct ?? 0) >= 25 ? '#047857'
+    : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
+    : '#475569';
+  const { data: daily } = useDailyMetrics('look', look.id, look.legacyId);
+  return (
+    <>
+      <div style={{ aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#000', maxHeight: 360 }}>
+        {src ? (
+          <video src={src} muted loop playsInline autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: 12 }}>No video</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {look.creatorAvatarUrl ? (
+          <img src={look.creatorAvatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e2e8f0' }} />
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{look.creatorName || look.creatorHandle || 'Unknown'}</div>
+          {look.creatorHandle && (
+            <div style={{ fontSize: 11, color: '#64748b' }}>@{look.creatorHandle}</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <MetricMiniCard label="Impressions 7d" value={(m?.impressions ?? 0).toLocaleString()} sub={m ? `was ${m.impressionsPrev.toLocaleString()}` : undefined} />
+        <MetricMiniCard label="CTR" value={m && m.impressions > 0 ? `${(m.ctr * 100).toFixed(1)}%` : '—'} />
+        <MetricMiniCard label="Clickouts" value={(m?.clickouts ?? 0).toLocaleString()} />
+        <MetricMiniCard label="Trend" value={trendLabel} accent={trendColor} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Last 14 days
+        </div>
+        <DailySparkline data={daily} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Attached products
+        </div>
+        <div style={{ fontSize: 13, color: '#475569' }}>
+          {look.productCount} product{look.productCount === 1 ? '' : 's'} tagged on this look.
+        </div>
+      </div>
+
+      {look.createdAt && (
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>
+          Created {new Date(look.createdAt).toLocaleDateString()}
+        </div>
+      )}
+    </>
+  );
+}
+
+function CreativeDetailBody({ creative }: { creative: CatalogCreativeVideo }) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  return (
+    <>
+      <div style={{ aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#000', maxHeight: 360 }}>
+        <video
+          ref={videoRef}
+          src={creative.videoUrl}
+          poster={creative.thumbnailUrl ?? undefined}
+          muted loop playsInline autoPlay
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, color: '#64748b' }}>{creative.productBrand || '—'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>
+          {creative.productName || creative.title || 'Creative'}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{
+          padding: '2px 8px', borderRadius: 4,
+          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
+          background: creative.status === 'live' ? '#10b981' : '#e5e7eb',
+          color: creative.status === 'live' ? '#fff' : '#475569',
+        }}>
+          {creative.status}
+        </span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+          product_creative.id · {creative.id.slice(0, 8)}…
+        </span>
+      </div>
+
+      {creative.productImageUrl && (
+        <div>
+          <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+            Source product
+          </div>
+          <img
+            src={creative.productImageUrl}
+            alt=""
+            style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 6, background: '#f1f5f9' }}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function ProductDetailBody({ product }: { product: ProductRow }) {
+  const m = product.metrics;
+  const trendLabel = m?.trendPct === null || m?.trendPct === undefined
+    ? '—'
+    : m.trendPct === 0 ? '—' : `${m.trendPct > 0 ? '↑' : '↓'}${Math.abs(m.trendPct)}%`;
+  const trendColor = (m?.trendPct ?? 0) >= 25 ? '#047857'
+    : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
+    : '#475569';
+  const tags = product.catalog_tags || [];
+  const { data: daily } = useDailyMetrics('product', product.id);
+  return (
+    <>
+      <div style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', maxHeight: 360 }}>
+        {product.image_url ? (
+          <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', fontSize: 12 }}>No image</div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, color: '#64748b' }}>{product.brand || '—'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{product.name || 'Unnamed product'}</div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <MetricMiniCard label="Impressions 7d" value={(m?.impressions ?? 0).toLocaleString()} sub={m ? `was ${m.impressionsPrev.toLocaleString()}` : undefined} />
+        <MetricMiniCard label="CTR" value={m && m.impressions > 0 ? `${(m.ctr * 100).toFixed(1)}%` : '—'} />
+        <MetricMiniCard label="Clickouts" value={(m?.clickouts ?? 0).toLocaleString()} />
+        <MetricMiniCard label="Trend" value={trendLabel} accent={trendColor} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Last 14 days
+        </div>
+        <DailySparkline data={daily} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Catalog tags ({tags.length})
+        </div>
+        {tags.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>No catalogs tagged.</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {tags.map(t => (
+              <span key={t} style={{ padding: '2px 8px', borderRadius: 4, background: '#eff6ff', color: '#1d4ed8', fontSize: 11, fontWeight: 600 }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Phase 6: floating bulk-action bar ───────────────────────────────
+interface BulkActionBarProps {
+  count: number;
+  catalogName: string;
+  catalogNames: string[];
+  looksCount: number;
+  productsCount: number;
+  busy: boolean;
+  onClear: () => void;
+  onRemove: () => void;
+  onHide: () => void;
+  onAddTo: (targetName: string) => void;
+}
+
+function BulkActionBar({ count, catalogName, catalogNames, looksCount, productsCount, busy, onClear, onRemove, onHide, onAddTo }: BulkActionBarProps) {
+  const [showAddTo, setShowAddTo] = useState(false);
+  const [addToQuery, setAddToQuery] = useState('');
+  const candidates = useMemo(() => {
+    const q = addToQuery.trim().toLowerCase();
+    const sorted = [...catalogNames].sort((a, b) => a.localeCompare(b));
+    return q ? sorted.filter(n => n.toLowerCase().includes(q)) : sorted;
+  }, [catalogNames, addToQuery]);
+  return (
+    <div style={{
+      position: 'sticky',
+      bottom: 14,
+      alignSelf: 'center',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '8px 14px',
+      background: '#0f172a',
+      color: '#fff',
+      borderRadius: 999,
+      boxShadow: '0 16px 36px rgba(15,23,42,0.35)',
+      zIndex: 20,
+    }}>
+      <span style={{ fontSize: 12, fontWeight: 700 }}>
+        {count} selected
+        {looksCount > 0 && productsCount > 0 ? ` · ${looksCount} look${looksCount === 1 ? '' : 's'}, ${productsCount} product${productsCount === 1 ? '' : 's'}` : ''}
+      </span>
+      <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.18)' }} />
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={() => setShowAddTo(v => !v)}
+          disabled={busy || catalogNames.length === 0}
+          title={catalogNames.length === 0 ? 'No other catalogs available' : 'Add the selection to another catalog'}
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.28)',
+            color: '#fff',
+            padding: '4px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: busy ? 'wait' : (catalogNames.length === 0 ? 'not-allowed' : 'pointer'),
+            opacity: catalogNames.length === 0 ? 0.45 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          Add to…
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        {showAddTo && (
+          <div style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            left: 0,
+            width: 240,
+            maxHeight: 280,
+            background: '#fff',
+            color: '#0f172a',
+            border: '1px solid #e5e7eb',
+            borderRadius: 8,
+            boxShadow: '0 18px 40px rgba(15,23,42,0.25)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Find a catalog…"
+              value={addToQuery}
+              onChange={e => setAddToQuery(e.target.value)}
+              style={{
+                padding: '8px 10px',
+                fontSize: 12,
+                border: 'none',
+                borderBottom: '1px solid #f1f5f9',
+                outline: 'none',
+                background: '#fff',
+              }}
+            />
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {candidates.length === 0 ? (
+                <div style={{ padding: 12, color: '#94a3b8', fontSize: 12 }}>No matches.</div>
+              ) : (
+                candidates.map(name => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      onAddTo(name);
+                      setShowAddTo(false);
+                      setAddToQuery('');
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '6px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#0f172a',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'}
+                    onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+                  >
+                    {name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={busy}
+        title={`Strip "${catalogName}" from each selected item's catalog_tags`}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.28)',
+          color: '#fff',
+          padding: '4px 12px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? 'wait' : 'pointer',
+        }}
+      >
+        {busy ? 'Working…' : `Remove from "${catalogName}"`}
+      </button>
+      {catalogName.toLowerCase() !== 'home' && (
+        <button
+          type="button"
+          onClick={() => onAddTo('home')}
+          disabled={busy}
+          title="Append 'home' to each selected item's catalog_tags — they'll surface on the consumer landing feed"
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.28)',
+            color: '#fff',
+            padding: '4px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: busy ? 'wait' : 'pointer',
+          }}
+        >
+          ★ Promote to Home
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onHide}
+        disabled={busy || looksCount === 0}
+        title={looksCount === 0 ? 'Select looks to hide' : 'Set looks.enabled = false'}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.28)',
+          color: '#fff',
+          padding: '4px 12px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? 'wait' : (looksCount === 0 ? 'not-allowed' : 'pointer'),
+          opacity: looksCount === 0 ? 0.45 : 1,
+        }}
+      >
+        Hide looks
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={busy}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: 'rgba(255,255,255,0.65)',
+          padding: '4px 8px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// ── Spreadsheet / list view renderers ───────────────────────────────
+// Compact tabular layout — same data, denser scan. Sortable upstream
+// via MetricControlBar; clicking a row expands a preview on hover.
+
+const listTableShellStyle: React.CSSProperties = {
+  width: '100%',
+  borderCollapse: 'collapse',
+  background: '#fff',
+  border: '1px solid #e5e7eb',
+  borderRadius: 6,
+  overflow: 'hidden',
+  fontSize: 12,
+};
+
+const listHeadCellStyle: React.CSSProperties = {
+  fontSize: 10,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  fontWeight: 700,
+  color: '#94a3b8',
+  textAlign: 'left',
+  padding: '8px 10px',
+  borderBottom: '1px solid #e5e7eb',
+  background: '#f8fafc',
+};
+
+const listBodyCellStyle: React.CSSProperties = {
+  padding: '7px 10px',
+  borderBottom: '1px solid #f1f5f9',
+  verticalAlign: 'middle',
+};
+
+function ListSectionHeader({ title, count }: { title: string; count: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+      <h4 style={{ margin: 0, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#475569', fontWeight: 700 }}>{title}</h4>
+      <span style={{ fontSize: 11, color: '#94a3b8' }}>{count}</span>
+    </div>
+  );
+}
+
+function MetricCells({ metrics }: { metrics?: ItemMetrics }) {
+  if (!metrics) {
+    return (
+      <>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+      </>
+    );
+  }
+  const { impressions, ctr, clickouts, trendPct } = metrics;
+  const trendLabel = trendPct === null ? 'NEW' : trendPct === 0 ? '—' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  return (
+    <>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{impressions.toLocaleString()}</td>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{impressions > 0 ? `${(ctr * 100).toFixed(1)}%` : '—'}</td>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{clickouts}</td>
+      <td style={{ ...listBodyCellStyle, color: trendColor, fontWeight: 700 }}>{trendLabel}</td>
+    </>
+  );
+}
+
+function LooksListTable({
+  looks,
+  selectedIds,
+  onSelect,
+  onOpenDetail,
+}: {
+  looks: CatalogLookRow[];
+  selectedIds?: Set<string>;
+  onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  onOpenDetail?: (look: CatalogLookRow) => void;
+}) {
+  if (looks.length === 0) return (
+    <div>
+      <ListSectionHeader title="Looks" count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No looks match the current filter.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title="Looks" count={looks.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Title</th>
+            <th style={listHeadCellStyle}>Creator</th>
+            <th style={listHeadCellStyle}>Products</th>
+            <th style={listHeadCellStyle}>Impressions</th>
+            <th style={listHeadCellStyle}>CTR</th>
+            <th style={listHeadCellStyle}>Clickouts</th>
+            <th style={listHeadCellStyle}>Trend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {looks.map((l, idx) => {
+            const checked = selectedIds?.has(l.id) ?? false;
+            return (
+              <tr
+                key={l.id}
+                onClick={(e) => {
+                  if (!onSelect) return;
+                  // Same metric-pill guard as the grid tiles.
+                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+                  onSelect(l.id, idx, e.shiftKey);
+                }}
+                style={{
+                  cursor: onSelect ? 'pointer' : 'default',
+                  background: checked ? '#eff6ff' : 'transparent',
+                }}
+              >
+                {onSelect && (
+                  <td style={listBodyCellStyle}>
+                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                  </td>
+                )}
+                <td style={listBodyCellStyle}>
+                  <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                    {l.videoPath && (
+                      <video
+                        src={l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`}
+                        muted playsInline preload="metadata"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    )}
+                  </div>
+                </td>
+                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
+                <td style={listBodyCellStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {l.creatorAvatarUrl ? (
+                      <img src={l.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e2e8f0' }} />
+                    )}
+                    <span style={{ color: '#111', fontWeight: 600 }}>{l.creatorName || l.creatorHandle || 'Unknown'}</span>
+                    {l.creatorHandle && l.creatorName && (
+                      <span style={{ color: '#94a3b8' }}>@{l.creatorHandle}</span>
+                    )}
+                  </div>
+                </td>
+                <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{l.productCount}</td>
+                <MetricCells metrics={l.metrics} />
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProductsListTable({
+  products,
+  selectedIds,
+  onSelect,
+  onOpenDetail,
+}: {
+  products: ProductRow[];
+  selectedIds?: Set<string>;
+  onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  onOpenDetail?: (product: ProductRow) => void;
+}) {
+  if (products.length === 0) return (
+    <div>
+      <ListSectionHeader title="Products" count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No products match the current filter.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title="Products" count={products.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Product</th>
+            <th style={listHeadCellStyle}>Brand</th>
+            <th style={listHeadCellStyle}>Impressions</th>
+            <th style={listHeadCellStyle}>CTR</th>
+            <th style={listHeadCellStyle}>Clickouts</th>
+            <th style={listHeadCellStyle}>Trend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((p, idx) => {
+            const checked = selectedIds?.has(p.id) ?? false;
+            return (
+              <tr
+                key={p.id}
+                onClick={(e) => {
+                  if (!onSelect) return;
+                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+                  onSelect(p.id, idx, e.shiftKey);
+                }}
+                style={{
+                  cursor: onSelect ? 'pointer' : 'default',
+                  background: checked ? '#eff6ff' : 'transparent',
+                }}
+              >
+                {onSelect && (
+                  <td style={listBodyCellStyle}>
+                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                  </td>
+                )}
+                <td style={listBodyCellStyle}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                  ) : (
+                    <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                  )}
+                </td>
+                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
+                <td style={{ ...listBodyCellStyle, color: '#475569' }}>{p.brand || '—'}</td>
+                <MetricCells metrics={p.metrics} />
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CreativesListTable({ title, creatives }: { title: string; creatives: CatalogCreativeVideo[] }) {
+  if (creatives.length === 0) return (
+    <div>
+      <ListSectionHeader title={title} count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No rendered creative in this section.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title={title} count={creatives.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Title</th>
+            <th style={listHeadCellStyle}>Brand</th>
+            <th style={listHeadCellStyle}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {creatives.map(c => (
+            <tr key={c.id}>
+              <td style={listBodyCellStyle}>
+                {c.productImageUrl ? (
+                  <img src={c.productImageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                ) : (
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                )}
+              </td>
+              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{c.productName || c.title || '—'}</td>
+              <td style={{ ...listBodyCellStyle, color: '#475569' }}>{c.productBrand || '—'}</td>
+              <td style={listBodyCellStyle}>
+                <span style={{
+                  fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                  background: c.status === 'live' ? '#10b981' : '#e5e7eb',
+                  color: c.status === 'live' ? '#fff' : '#475569',
+                  fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                }}>{c.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Phase 5: sort + filter helpers shared by looks and products ─────
+type MetricBearing = { metrics?: ItemMetrics; createdAt?: string | null };
+
+function sortAndFilterItems<T extends MetricBearing>(items: T[], sort: MetricSort, filter: MetricFilter): T[] {
+  const FRESH_DAYS = 14;
+  const ZOMBIE_THRESHOLD = 0; // zero impressions in window = zombie
+  const RISING_PCT = 25;
+  const FALLING_PCT = -25;
+  const cutoff = Date.now() - FRESH_DAYS * 86400_000;
+
+  const filtered = items.filter(it => {
+    const m = it.metrics;
+    const impressions = m?.impressions ?? 0;
+    const trend = m?.trendPct ?? null;
+    switch (filter) {
+      case 'rising': return trend !== null && trend >= RISING_PCT;
+      case 'falling': return trend !== null && trend <= FALLING_PCT;
+      case 'zombie': return impressions <= ZOMBIE_THRESHOLD;
+      case 'never-viewed': return impressions === 0;
+      default: return true;
+    }
+  });
+
+  const cmp = (a: T, b: T): number => {
+    const am = a.metrics; const bm = b.metrics;
+    switch (sort) {
+      case 'highest-ctr': return (bm?.ctr ?? 0) - (am?.ctr ?? 0);
+      case 'biggest-riser': {
+        const at = am?.trendPct ?? -Infinity;
+        const bt = bm?.trendPct ?? -Infinity;
+        return bt - at;
+      }
+      case 'biggest-faller': {
+        const at = am?.trendPct ?? Infinity;
+        const bt = bm?.trendPct ?? Infinity;
+        return at - bt;
+      }
+      case 'newest': {
+        const at = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return bt - at;
+      }
+      case 'never-viewed': {
+        const ai = am?.impressions ?? 0;
+        const bi = bm?.impressions ?? 0;
+        if (ai === 0 && bi === 0) {
+          // tiebreak by newest
+          const at = a.createdAt ? Date.parse(a.createdAt) : 0;
+          const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
+          return bt - at;
+        }
+        return ai - bi;
+      }
+      case 'most-viewed':
+      default:
+        return (bm?.impressions ?? 0) - (am?.impressions ?? 0);
+    }
+  };
+
+  // Unused FRESH_DAYS cutoff retained for future "stale" filter; quiet
+  // the linter without changing behaviour.
+  void cutoff;
+  return [...filtered].sort(cmp);
+}
+
+// ── Phase 7-lite: header KPI strip ──────────────────────────────────
+interface KpiSnapshot {
+  totalImpressions: number;
+  totalClickouts: number;
+  blendedCtr: number;
+  risers: number;
+  fallers: number;
+  zeroViewPct: number;
+  itemsCount: number;
+}
+
+function buildKpiStrip(items: MetricBearing[]): KpiSnapshot {
+  let imp = 0, clk = 0, co = 0, risers = 0, fallers = 0, zero = 0;
+  for (const it of items) {
+    const m = it.metrics;
+    if (!m) { zero++; continue; }
+    imp += m.impressions;
+    clk += m.clicks;
+    co += m.clickouts;
+    if ((m.trendPct ?? 0) >= 25) risers++;
+    if ((m.trendPct ?? 0) <= -25) fallers++;
+    if (m.impressions === 0) zero++;
+  }
+  return {
+    totalImpressions: imp,
+    totalClickouts: co,
+    blendedCtr: imp > 0 ? clk / imp : 0,
+    risers,
+    fallers,
+    zeroViewPct: items.length > 0 ? zero / items.length : 0,
+    itemsCount: items.length,
+  };
+}
+
+function KpiStrip({ kpi, metricsLoading }: { kpi: KpiSnapshot; metricsLoading: boolean }) {
+  const cell = (label: string, value: string, accent?: string, sub?: string) => (
+    <div style={{ flex: '1 1 0', padding: '8px 12px', borderRight: '1px solid #e5e7eb', minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: accent || '#0f172a', lineHeight: 1.15 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'stretch',
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      overflow: 'hidden',
+      opacity: metricsLoading ? 0.65 : 1,
+      transition: 'opacity 120ms',
+    }}>
+      {cell('Impressions 7d', kpi.totalImpressions.toLocaleString())}
+      {cell('Clickouts 7d', kpi.totalClickouts.toLocaleString())}
+      {cell('Blended CTR', `${(kpi.blendedCtr * 100).toFixed(1)}%`)}
+      {cell('Rising', String(kpi.risers), '#047857', '+25% vs prior')}
+      {cell('Falling', String(kpi.fallers), '#b91c1c', '−25% vs prior')}
+      <div style={{ flex: '1 1 0', padding: '8px 12px', minWidth: 0 }}>
+        <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>Dark inventory</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: kpi.zeroViewPct > 0.4 ? '#b91c1c' : '#0f172a', lineHeight: 1.15 }}>
+          {(kpi.zeroViewPct * 100).toFixed(0)}%
+        </div>
+        <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>of {kpi.itemsCount} items had 0 views</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Phase 5 control bar ─────────────────────────────────────────────
+interface MetricControlBarProps {
+  sort: MetricSort;
+  filter: MetricFilter;
+  viewMode: ViewMode;
+  onSort: (s: MetricSort) => void;
+  onFilter: (f: MetricFilter) => void;
+  onViewMode: (v: ViewMode) => void;
+}
+
+function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode }: MetricControlBarProps) {
+  const sortOpts: { value: MetricSort; label: string }[] = [
+    { value: 'most-viewed', label: 'Most viewed' },
+    { value: 'highest-ctr', label: 'Highest CTR' },
+    { value: 'biggest-riser', label: 'Biggest riser' },
+    { value: 'biggest-faller', label: 'Biggest faller' },
+    { value: 'newest', label: 'Newest' },
+    { value: 'never-viewed', label: 'Never viewed' },
+  ];
+  const filterChips: { value: MetricFilter; label: string; color?: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'rising', label: '↑ Rising', color: '#047857' },
+    { value: 'falling', label: '↓ Falling', color: '#b91c1c' },
+    { value: 'zombie', label: '⚠ Zombie', color: '#a16207' },
+    { value: 'never-viewed', label: 'Never viewed', color: '#6b7280' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569' }}>
+        Sort
+        <select
+          value={sort}
+          onChange={e => onSort(e.target.value as MetricSort)}
+          style={{ fontSize: 12, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff' }}
+        >
+          {sortOpts.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+        </select>
+      </label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {filterChips.map(c => {
+          const active = filter === c.value;
+          return (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onFilter(c.value)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+                border: '1px solid',
+                cursor: 'pointer',
+                borderColor: active ? (c.color || '#111') : '#e2e8f0',
+                background: active ? (c.color || '#111') : '#fff',
+                color: active ? '#fff' : (c.color || '#475569'),
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ marginLeft: 'auto', display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+        <button
+          type="button"
+          onClick={() => onViewMode('grid')}
+          title="Grid view"
+          aria-label="Grid view"
+          style={{
+            padding: '4px 10px',
+            border: 'none',
+            background: viewMode === 'grid' ? '#111' : '#fff',
+            color: viewMode === 'grid' ? '#fff' : '#475569',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Grid
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewMode('list')}
+          title="Spreadsheet / list view"
+          aria-label="List view"
+          style={{
+            padding: '4px 10px',
+            border: 'none',
+            borderLeft: '1px solid #e2e8f0',
+            background: viewMode === 'list' ? '#111' : '#fff',
+            color: viewMode === 'list' ? '#fff' : '#475569',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          List
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Phases 3 + 4: per-tile metric overlay for products ──────────────
+function ProductMetricTile({ product, selected, onSelect, onOpenDetail }: { product: ProductRow; selected?: boolean; onSelect?: (extendRange: boolean) => void; onOpenDetail?: () => void }) {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (!onSelect) return;
+    e.preventDefault();
+    onSelect(e.shiftKey);
+  }, [onSelect]);
+  return (
+    <div
+      onClick={handleClick}
+      style={{
+        border: `2px solid ${selected ? '#2563eb' : '#e5e7eb'}`,
+        borderRadius: 6,
+        overflow: 'hidden',
+        background: '#fff',
+        position: 'relative',
+        cursor: onSelect ? 'pointer' : 'default',
+        outline: selected ? '2px solid #bfdbfe' : 'none',
+        outlineOffset: -4,
+      }}
+    >
+      {product.image_url ? (
+        <img src={product.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+      ) : (
+        <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
+      )}
+      <MetricBadgeRow metrics={product.metrics} />
+      {selected && <SelectionBadge />}
+      {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
+      <div style={{ padding: 6 }}>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.brand || ' - '}</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name || ' - '}</div>
+      </div>
+    </div>
+  );
+}
+
+function ExpandTileButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="Open detail drawer"
+      style={{
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(15,23,42,0.6)',
+        color: '#fff',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 3,
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 3 21 3 21 9"/>
+        <polyline points="9 21 3 21 3 15"/>
+        <line x1="21" y1="3" x2="14" y2="10"/>
+        <line x1="3" y1="21" x2="10" y2="14"/>
+      </svg>
+    </button>
+  );
+}
+
+function SelectionBadge() {
+  return (
+    <span style={{
+      position: 'absolute',
+      bottom: 6,
+      right: 6,
+      width: 18,
+      height: 18,
+      borderRadius: '50%',
+      background: '#2563eb',
+      color: '#fff',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      boxShadow: '0 1px 3px rgba(15,23,42,0.35)',
+    }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </span>
+  );
+}
+
+// Shared metric strip used by both LookThumb and ProductMetricTile.
+// Hovering the chip cluster opens a rich insights popover with the
+// underlying numbers, prior period, derived rates and a textual
+// trend interpretation. Native title= tooltips remain as a fallback
+// for accessibility / keyboard users.
+function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
+  const [showInsights, setShowInsights] = React.useState(false);
+
+  if (!metrics) {
+    return (
+      <div style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4 }}>
+        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.45)', color: '#fff' }}>—</span>
+      </div>
+    );
+  }
+  const { impressions, clicks, clickouts, impressionsPrev, ctr, clickoutRate, trendPct } = metrics;
+  const trendLabel = trendPct === null
+    ? 'NEW'
+    : trendPct === 0 ? '—' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+
+  return (
+    <div
+      data-role="metric-pill"
+      onClick={(e) => e.stopPropagation()}
+      style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4, flexWrap: 'wrap', pointerEvents: 'auto', zIndex: 2 }}
+      onMouseEnter={() => setShowInsights(true)}
+      onMouseLeave={() => setShowInsights(false)}
+    >
+      <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }}>
+        {impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}k` : impressions}
+      </span>
+      {impressions > 0 && (
+        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }}>
+          {(ctr * 100).toFixed(0)}%
+        </span>
+      )}
+      <span style={{ ...metricChipBase, background: trendColor, color: '#fff' }}>
+        {trendLabel}
+      </span>
+      {showInsights && (
+        <MetricInsightsPopover
+          impressions={impressions}
+          impressionsPrev={impressionsPrev}
+          clicks={clicks}
+          clickouts={clickouts}
+          ctr={ctr}
+          clickoutRate={clickoutRate}
+          trendPct={trendPct}
+        />
+      )}
+    </div>
+  );
+}
+
+// Rich hover popover. Positioned below + slightly right of the chip
+// cluster. Doesn't try to be the world's smartest popover — no flip
+// logic — but it's contained within the dropdown's scroll surface so
+// clipping is rarely an issue.
+interface MetricInsightsPopoverProps {
+  impressions: number;
+  impressionsPrev: number;
+  clicks: number;
+  clickouts: number;
+  ctr: number;
+  clickoutRate: number;
+  trendPct: number | null;
+}
+
+function MetricInsightsPopover({
+  impressions, impressionsPrev, clicks, clickouts, ctr, clickoutRate, trendPct,
+}: MetricInsightsPopoverProps) {
+  const trendVerdict = trendPct === null
+    ? 'New this week — no prior period to compare.'
+    : trendPct >= 50 ? 'Breaking out.'
+    : trendPct >= 25 ? 'Rising fast.'
+    : trendPct > 0 ? 'Trending up.'
+    : trendPct === 0 ? 'Flat vs prior 7d.'
+    : trendPct >= -25 ? 'Slipping.'
+    : 'Fell off — investigate.';
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  const row = (label: string, value: string, hint?: string) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '3px 0' }}>
+      <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 700 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#0f172a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+        {hint && <span style={{ marginLeft: 4, fontSize: 9, color: '#94a3b8', fontWeight: 500 }}>{hint}</span>}
+      </span>
+    </div>
+  );
+  return (
+    <div
+      role="tooltip"
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        left: 0,
+        width: 220,
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 8,
+        boxShadow: '0 10px 28px rgba(15,23,42,0.18)',
+        padding: 10,
+        zIndex: 10,
+        pointerEvents: 'none',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Insights · 7d</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: trendColor }}>
+          {trendPct === null ? 'NEW' : trendPct === 0 ? '—' : `${trendPct > 0 ? '+' : ''}${trendPct}%`}
+        </span>
+      </div>
+      {row('Impressions', impressions.toLocaleString(), `was ${impressionsPrev.toLocaleString()}`)}
+      {row('Clicks', clicks.toLocaleString(), impressions > 0 ? `${(ctr * 100).toFixed(1)}% CTR` : undefined)}
+      {row('Clickouts', clickouts.toLocaleString(), impressions > 0 ? `${(clickoutRate * 100).toFixed(2)}% rate` : undefined)}
+      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #f1f5f9', fontSize: 11, color: trendColor, fontWeight: 600 }}>
+        {trendVerdict}
+      </div>
+    </div>
+  );
+}
+
+const metricChipBase: React.CSSProperties = {
+  padding: '1px 6px',
+  borderRadius: 4,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.3px',
+  lineHeight: '14px',
+  cursor: 'help',
+};
 
 interface DraggableSectionProps {
   title: string;
@@ -1913,15 +4783,37 @@ function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, 
   );
 }
 
-function LookThumb({ look }: { look: CatalogLookRow }) {
+function LookThumb({ look, selected, onSelect, onOpenDetail }: { look: CatalogLookRow; selected?: boolean; onSelect?: (extendRange: boolean) => void; onOpenDetail?: () => void }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const src = look.videoPath
     ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
     : null;
 
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (!onSelect) return;
+    // Don't intercept clicks that started on the metric pill cluster
+    // (those open the insights popover — let them through). The
+    // MetricBadgeRow sets pointer-events: auto so cursor: help is
+    // reachable; this guards against accidental selection toggle.
+    const tgt = e.target as HTMLElement;
+    if (tgt.closest('[data-role="metric-pill"]')) return;
+    e.preventDefault();
+    onSelect(e.shiftKey);
+  }, [onSelect]);
+
   return (
     <div
-      style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
+      onClick={handleClick}
+      style={{
+        border: `2px solid ${selected ? '#2563eb' : '#e5e7eb'}`,
+        borderRadius: 6,
+        overflow: 'hidden',
+        background: '#111',
+        cursor: onSelect ? 'pointer' : 'default',
+        outline: selected ? '2px solid #bfdbfe' : 'none',
+        outlineOffset: -4,
+        position: 'relative',
+      }}
       onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
       onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
     >
@@ -1941,29 +4833,79 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
             No video
           </div>
         )}
+        <MetricBadgeRow metrics={look.metrics} />
+        {selected && <SelectionBadge />}
+        {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {look.title || `Look #${look.legacyId ?? ''}`}
         </div>
-        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+          {look.creatorAvatarUrl ? (
+            <img
+              src={look.creatorAvatarUrl}
+              alt=""
+              style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', background: '#f1f5f9', flexShrink: 0 }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+            />
+          ) : (
+            <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#e2e8f0', flexShrink: 0 }} />
+          )}
+          <div style={{ fontSize: 10, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>
+            <span style={{ fontWeight: 600, color: '#111' }}>{look.creatorName || look.creatorHandle || 'Unknown'}</span>
+            {look.creatorHandle && look.creatorName ? <span style={{ color: '#94a3b8' }}> · @{look.creatorHandle}</span> : null}
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+          {look.productCount} product{look.productCount === 1 ? '' : 's'}
         </div>
       </div>
     </div>
   );
 }
 
-function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
+function CreativeThumb({ creative, onOpenDetail }: { creative: CatalogCreativeVideo; onOpenDetail?: () => void }) {
+  // Default poster is the product's catalog image (the merchandised
+  // still — e.g. the New Balance sneaker on a clean background); we
+  // only swap to the rendered creative video on hover so the grid
+  // reads as "products you can search through" until the admin
+  // explicitly inspects one. Fallback chain: product image →
+  // creative thumbnail (poster frame extracted from the video) →
+  // dark placeholder.
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const [hover, setHover] = React.useState(false);
+  const [videoLoaded, setVideoLoaded] = React.useState(false);
   const label = creative.productName || creative.title || 'Creative';
+  const posterSrc = creative.productImageUrl || creative.thumbnailUrl || null;
+
   return (
     <div
       style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
-      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
-      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+      onMouseEnter={() => {
+        setHover(true);
+        videoRef.current?.play().catch(() => {});
+      }}
+      onMouseLeave={() => {
+        setHover(false);
+        if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; }
+      }}
     >
       <div style={{ width: '100%', aspectRatio: '9/16', background: '#000', position: 'relative' }}>
+        {posterSrc && (
+          <img
+            src={posterSrc}
+            alt=""
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+              position: 'absolute', inset: 0,
+              // Fade the poster out once the video is loaded AND we're
+              // hovering — keeps the swap clean instead of a hard cut.
+              opacity: hover && videoLoaded ? 0 : 1,
+              transition: 'opacity 120ms ease',
+            }}
+          />
+        )}
         <video
           ref={videoRef}
           src={creative.videoUrl}
@@ -1971,8 +4913,17 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
           muted
           loop
           playsInline
-          preload="metadata"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          // metadata until first hover; switch to auto so the next
+          // hover gets an instant play. Keeps page-load light when
+          // there are 100+ tiles below the fold.
+          preload={hover ? 'auto' : 'metadata'}
+          onLoadedData={() => setVideoLoaded(true)}
+          style={{
+            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+            position: 'absolute', inset: 0,
+            opacity: hover ? 1 : 0,
+            transition: 'opacity 120ms ease',
+          }}
         />
         <span style={{
           position: 'absolute', top: 6, right: 6,
@@ -1983,6 +4934,7 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
         }}>
           {creative.status}
         </span>
+        {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2156,5 +5108,195 @@ function AddProductsModal({
         </div>
       </div>
     </div>
+  );
+}
+
+interface AddLooksModalProps {
+  catalog: Catalog;
+  looks: LookRow[];
+  search: string;
+  onSearch: (value: string) => void;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  busy: boolean;
+  onClose: () => void;
+  onCommit: () => void;
+}
+
+function AddLooksModal({
+  catalog,
+  looks,
+  search,
+  onSearch,
+  selected,
+  onToggle,
+  busy,
+  onClose,
+  onCommit,
+}: AddLooksModalProps) {
+  const tagged = useMemo(
+    () => new Set(looks.filter(l => l.catalog_tags.includes(catalog.name)).map(l => l.id)),
+    [looks, catalog.name],
+  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return looks;
+    return looks.filter(l =>
+      (l.title || '').toLowerCase().includes(q)
+      || (l.creatorHandle || '').toLowerCase().includes(q),
+    );
+  }, [looks, search]);
+
+  return (
+    <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(1040px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Add Looks to “{catalog.name}”</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
+              {tagged.size} already in this catalog · {looks.length} live in library
+            </p>
+          </div>
+          <input
+            type="text"
+            placeholder="Search by title or creator handle"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            autoFocus
+            style={{ flex: '0 1 260px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+          />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
+              {looks.length === 0 ? 'No live looks in the library.' : `No looks match “${search}”.`}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+              {filtered.map(l => {
+                const isTagged = tagged.has(l.id);
+                const isSelected = selected.has(l.id);
+                return (
+                  <AddLookTile
+                    key={l.id}
+                    look={l}
+                    isTagged={isTagged}
+                    isSelected={isSelected}
+                    onToggle={() => !isTagged && onToggle(l.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: '#666' }}>
+            {selected.size} selected
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={onClose}
+              disabled={busy}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              Cancel
+            </button>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={onCommit}
+              disabled={busy || selected.size === 0}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+            >
+              {busy ? 'Adding…' : `Add ${selected.size} look${selected.size === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddLookTile({
+  look,
+  isTagged,
+  isSelected,
+  onToggle,
+}: {
+  look: LookRow;
+  isTagged: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const src = look.videoPath
+    ? (look.videoPath.startsWith('http')
+        ? look.videoPath
+        : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
+    : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={isTagged}
+      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
+      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+      style={{
+        textAlign: 'left',
+        padding: 0,
+        border: `2px solid ${isSelected ? '#2563eb' : isTagged ? '#d1fae5' : '#e5e7eb'}`,
+        borderRadius: 8,
+        overflow: 'hidden',
+        background: '#fff',
+        cursor: isTagged ? 'default' : 'pointer',
+        opacity: isTagged ? 0.55 : 1,
+        position: 'relative',
+      }}
+    >
+      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000' }}>
+        {src ? (
+          <video
+            ref={videoRef}
+            src={src}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>
+            No video
+          </div>
+        )}
+      </div>
+      <div style={{ padding: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.title || `Look #${look.legacyId ?? ''}`}
+        </div>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '}
+        </div>
+      </div>
+      {isTagged && (
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          padding: '2px 6px', borderRadius: 4,
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: '#10b981', color: '#fff',
+        }}>Added</span>
+      )}
+      {isSelected && !isTagged && (
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          padding: '2px 6px', borderRadius: 4,
+          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: '#2563eb', color: '#fff',
+        }}>Selected</span>
+      )}
+    </button>
   );
 }

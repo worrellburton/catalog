@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
 import { getLooks } from '~/services/looks';
+import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
@@ -155,6 +156,23 @@ export default function ContinuousFeed({
       setCommittedQuery(searchQuery);
     }
   }, [searchQuery]);
+
+  // ── Catalog impression telemetry ──────────────────────────────────────
+  // When committedQuery commits to a catalog name (resolved by the
+  // catalog-types fast path or surfaced as tier-1 catalog_tag hits)
+  // the user is effectively "viewing" that catalog. Fire one
+  // impression per distinct catalog name per session — admins read
+  // this in /admin/catalogs to rank by audience demand. Empty/short
+  // queries are skipped; the home feed already logs its own
+  // impressions via look + product trackers.
+  const catalogImpressionFiredRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const q = committedQuery.trim().toLowerCase();
+    if (q.length < 2) return;
+    if (catalogImpressionFiredRef.current.has(q)) return;
+    catalogImpressionFiredRef.current.add(q);
+    trackImpression({ type: 'catalog', id: q, context: q.slice(0, 120) });
+  }, [committedQuery]);
 
   // ── Director scroll notifications ─────────────────────────────────────
   // Keeps the playback director in sync with the page scroll position so

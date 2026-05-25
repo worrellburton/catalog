@@ -1,12 +1,15 @@
 import { supabase } from '~/utils/supabase';
 
+export type CatalogGender = 'all' | 'men' | 'women' | 'unisex';
+export const CATALOG_GENDERS: CatalogGender[] = ['all', 'women', 'men', 'unisex'];
+
 export interface Catalog {
   id: string;
   slug: string;
   name: string;
   description: string | null;
   themePrompt: string | null;
-  gender: 'all' | 'men' | 'women';
+  gender: CatalogGender;
   coverUrl: string | null;
   sortOrder: number;
   isFeatured: boolean;
@@ -23,7 +26,7 @@ interface CatalogRow {
   name: string;
   description: string | null;
   theme_prompt: string | null;
-  gender: 'all' | 'men' | 'women';
+  gender: CatalogGender;
   cover_url: string | null;
   sort_order: number;
   is_featured: boolean;
@@ -296,6 +299,41 @@ export async function getHomeCatalog(): Promise<Catalog | null> {
     .maybeSingle();
   if (error || !data) return null;
   return fromRow(data as CatalogRow);
+}
+
+// Sets the catalogs.gender enum (all / women / men / unisex) directly.
+// Uses a thin admin RPC because the catalogs table has no broad
+// UPDATE RLS for the anon admin client — same constraint that drove
+// admin_update_catalog_toggles. Returns false on RPC failure so the
+// caller can toast.
+// Bulk-update catalogs.sort_order by passing an ordered list of
+// slugs. The RPC writes sort_order = index for each, so the order
+// the slugs arrive in IS the persisted order. Used by the drag-
+// reorder UX in /admin/catalogs.
+// Re-export for the admin/catalogs route which imports its types
+// directly from this module.
+
+export async function setCatalogSortOrder(slugs: string[]): Promise<boolean> {
+  if (!supabase || slugs.length === 0) return false;
+  const { error } = await supabase.rpc('admin_set_catalog_sort_order', { p_slugs: slugs });
+  if (error) {
+    console.error('setCatalogSortOrder failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function setCatalogGender(slug: string, gender: CatalogGender): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc('admin_set_catalog_gender', {
+    p_slug: slug,
+    p_gender: gender,
+  });
+  if (error) {
+    console.error('setCatalogGender failed:', error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function updateCatalogToggles(
