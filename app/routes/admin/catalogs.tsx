@@ -1280,6 +1280,12 @@ export default function AdminCatalogs() {
         </div>
       </div>
 
+      <CatalogsDashboard
+        catalogs={all}
+        impressionsByName={catalogImpressions}
+        searchCountsByName={searchCounts}
+      />
+
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
@@ -2061,6 +2067,123 @@ interface CatalogCreativeDropdownProps {
   metricsLoading: boolean;
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
   onAfterBulkMutation: () => void;
+}
+
+// ── Phase 7: catalog-system dashboard ─────────────────────────────────
+// Page-level summary card above the catalogs table. Bird's-eye view of
+// every metric we already aggregate so admins can answer "is the
+// catalog system healthy?" without expanding a single row.
+interface CatalogsDashboardProps {
+  catalogs: Catalog[];
+  impressionsByName: Map<string, { curr: number; prev: number }>;
+  searchCountsByName: Map<string, CatalogSearchCounts>;
+}
+
+function CatalogsDashboard({ catalogs, impressionsByName, searchCountsByName }: CatalogsDashboardProps) {
+  // Build derived figures from the maps we already have in scope.
+  // No extra fetch — Phase 4's catalog_view_counts already powers the
+  // impressions data; SearchCountPill data drives searches.
+  const stats = useMemo(() => {
+    let totalImp = 0, totalPrevImp = 0, totalSearches = 0, withImp = 0, withSearches = 0;
+    let topMover: { name: string; pct: number } | null = null;
+    let worstFaller: { name: string; pct: number } | null = null;
+    let topByImp: { name: string; n: number } | null = null;
+    let topBySearch: { name: string; n: number } | null = null;
+    for (const c of catalogs) {
+      const key = c.name.toLowerCase();
+      const imp = impressionsByName.get(key);
+      const sc = searchCountsByName.get(key);
+      if (imp) {
+        totalImp += imp.curr;
+        totalPrevImp += imp.prev;
+        if (imp.curr > 0) withImp++;
+        if (!topByImp || imp.curr > topByImp.n) topByImp = { name: c.name, n: imp.curr };
+        const pct = imp.prev > 0 ? ((imp.curr - imp.prev) / imp.prev) * 100 : null;
+        if (pct !== null) {
+          if (!topMover || pct > topMover.pct) topMover = { name: c.name, pct: Math.round(pct) };
+          if (!worstFaller || pct < worstFaller.pct) worstFaller = { name: c.name, pct: Math.round(pct) };
+        }
+      }
+      if (sc && sc.countTotal > 0) {
+        totalSearches += sc.count7d;
+        withSearches++;
+        if (!topBySearch || sc.count7d > topBySearch.n) topBySearch = { name: c.name, n: sc.count7d };
+      }
+    }
+    const trendPct = totalPrevImp > 0
+      ? Math.round(((totalImp - totalPrevImp) / totalPrevImp) * 100)
+      : null;
+    const darkPct = catalogs.length > 0 ? Math.round((1 - withImp / catalogs.length) * 100) : 0;
+    return { totalImp, totalPrevImp, trendPct, totalSearches, withImp, withSearches, topMover, worstFaller, topByImp, topBySearch, darkPct };
+  }, [catalogs, impressionsByName, searchCountsByName]);
+
+  const trendColor = stats.trendPct === null
+    ? '#475569'
+    : stats.trendPct >= 25 ? '#047857'
+    : stats.trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  const trendLabel = stats.trendPct === null
+    ? '—'
+    : stats.trendPct === 0 ? '—'
+    : `${stats.trendPct > 0 ? '↑' : '↓'}${Math.abs(stats.trendPct)}% vs prior 7d`;
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: 1,
+      background: '#e5e7eb',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      overflow: 'hidden',
+      marginBottom: 14,
+    }}>
+      <DashCell label="Impressions 7d" value={stats.totalImp.toLocaleString()} sub={trendLabel} accent={trendColor} />
+      <DashCell label="Searches 7d" value={stats.totalSearches.toLocaleString()} sub={`across ${stats.withSearches} catalogs`} />
+      <DashCell
+        label="Top catalog · Impressions"
+        value={stats.topByImp?.name ?? '—'}
+        sub={stats.topByImp ? `${stats.topByImp.n.toLocaleString()} views` : 'no data'}
+        accent="#0f172a"
+      />
+      <DashCell
+        label="Top catalog · Searches"
+        value={stats.topBySearch?.name ?? '—'}
+        sub={stats.topBySearch ? `${stats.topBySearch.n.toLocaleString()} searches` : 'no data'}
+        accent="#0f172a"
+      />
+      <DashCell
+        label="Biggest riser"
+        value={stats.topMover?.name ?? '—'}
+        sub={stats.topMover ? `↑ ${stats.topMover.pct}% vs prior` : 'no data'}
+        accent="#047857"
+      />
+      <DashCell
+        label="Biggest faller"
+        value={stats.worstFaller?.name ?? '—'}
+        sub={stats.worstFaller ? `↓ ${Math.abs(stats.worstFaller.pct)}% vs prior` : 'no data'}
+        accent="#b91c1c"
+      />
+      <DashCell
+        label="Dark inventory"
+        value={`${stats.darkPct}%`}
+        sub={`${catalogs.length - stats.withImp} of ${catalogs.length} catalogs had 0 views`}
+        accent={stats.darkPct > 50 ? '#b91c1c' : '#0f172a'}
+      />
+    </div>
+  );
+}
+
+function DashCell({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div style={{ background: '#fff', padding: '10px 12px', minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: accent || '#0f172a', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 }
 
 // ── Search count pill ──────────────────────────────────────────────────────
