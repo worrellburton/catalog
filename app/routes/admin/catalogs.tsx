@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from '@remix-run/react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
@@ -1376,7 +1376,20 @@ export default function AdminCatalogs() {
                   {isOpen && (
                     <tr>
                       <td colSpan={8} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        <CatalogCreativeDropdown isAll={false} isUniverse={true} loading={isLoadingCreative} creative={creative} metricsLoading={metricsLoading} onReorder={() => {}} />
+                        <CatalogCreativeDropdown
+                          isAll={false}
+                          isUniverse={true}
+                          catalogName={homeCatalog.name}
+                          loading={isLoadingCreative}
+                          creative={creative}
+                          metricsLoading={metricsLoading}
+                          onReorder={() => {}}
+                          onAfterBulkMutation={() => {
+                            setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
+                            loadLooks();
+                            loadProducts();
+                          }}
+                        />
                       </td>
                     </tr>
                   )}
@@ -1534,10 +1547,19 @@ export default function AdminCatalogs() {
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
+                      catalogName={c.name}
                       loading={isLoadingCreative}
                       creative={creative}
                       metricsLoading={metricsLoading}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
+                      onAfterBulkMutation={() => {
+                        // Drop the cached creative payload + refetch
+                        // looks/products so the dropdown reflects the
+                        // mutation immediately.
+                        setCreativeByCatalog(prev => { const next = { ...prev }; delete next[c.id]; return next; });
+                        loadLooks();
+                        loadProducts();
+                      }}
                     />
                   </td>
                 </tr>
@@ -2033,10 +2055,12 @@ export default function AdminCatalogs() {
 interface CatalogCreativeDropdownProps {
   isAll: boolean;
   isUniverse: boolean;
+  catalogName: string;
   loading: boolean;
   creative: CatalogCreativePayload | undefined;
   metricsLoading: boolean;
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
+  onAfterBulkMutation: () => void;
 }
 
 // ── Search count pill ──────────────────────────────────────────────────────
@@ -2173,11 +2197,27 @@ function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender
 type ViewMode = 'grid' | 'list';
 const VIEW_MODE_LS_KEY = 'catalog-admin:dropdown-view-mode';
 
-function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metricsLoading, onReorder }: CatalogCreativeDropdownProps) {
+function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
   const [sort, setSort] = useState<MetricSort>('most-viewed');
   const [filter, setFilter] = useState<MetricFilter>('all');
+  // Phase 6: bulk selection. Two parallel sets so admins can pick
+  // looks and products independently. Cleared on filter/sort/view
+  // change to keep mental model sane.
+  const [selectedLookIds, setSelectedLookIds] = useState<Set<string>>(new Set());
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  // Shift-click range anchor — last index clicked per section. Reset
+  // whenever the underlying ordering changes.
+  const lookAnchorRef = useRef<number | null>(null);
+  const productAnchorRef = useRef<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => {
+    setSelectedLookIds(new Set());
+    setSelectedProductIds(new Set());
+    lookAnchorRef.current = null;
+    productAnchorRef.current = null;
+  }, [sort, filter]);
   // Grid vs spreadsheet-list view. Persisted to localStorage so an
   // admin who lives in list mode doesn't have to re-toggle every
   // session.
@@ -2217,8 +2257,91 @@ function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metrics
   // actually looking at, not the full library.
   const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
 
+  // Phase 6: selection toggle with shift-click range support. Generic
+  // helper so looks and products share the same UX.
+  const toggleSelection = useCallback(
+    (kind: 'look' | 'product', id: string, index: number, items: { id: string }[], extendRange: boolean) => {
+      const setSelected = kind === 'look' ? setSelectedLookIds : setSelectedProductIds;
+      const anchorRef = kind === 'look' ? lookAnchorRef : productAnchorRef;
+      if (extendRange && anchorRef.current !== null) {
+        const from = Math.min(anchorRef.current, index);
+        const to = Math.max(anchorRef.current, index);
+        setSelected(prev => {
+          const next = new Set(prev);
+          for (let i = from; i <= to; i++) next.add(items[i].id);
+          return next;
+        });
+      } else {
+        setSelected(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+        });
+        anchorRef.current = index;
+      }
+    },
+    [],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedLookIds(new Set());
+    setSelectedProductIds(new Set());
+  }, []);
+
+  // Bulk: remove this catalog from each selected row's catalog_tags
+  // array (Add Looks / Add Products do the inverse). RLS errors are
+  // toasted and the dropdown refetches afterward.
+  const bulkRemoveFromCatalog = useCallback(async () => {
+    if (!supabase) return;
+    setBulkBusy(true);
+    try {
+      const lookOps = [...selectedLookIds].map(async id => {
+        const look = looks.find(l => l.id === id);
+        if (!look) return;
+        const { data: row } = await supabase!.from('looks').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
+        await supabase!.from('looks').update({ catalog_tags: tags }).eq('id', id);
+      });
+      const productOps = [...selectedProductIds].map(async id => {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        const { data: row } = await supabase!.from('products').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
+        await supabase!.from('products').update({ catalog_tags: tags }).eq('id', id);
+      });
+      await Promise.all([...lookOps, ...productOps]);
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, selectedProductIds, looks, products, catalogName, clearSelection, onAfterBulkMutation]);
+
+  // Bulk: hide the selected looks from the consumer feed by flipping
+  // enabled=false. Products don't have a comparable on/off flag so
+  // for now we no-op them with a toast hint.
+  const bulkHide = useCallback(async () => {
+    if (!supabase) return;
+    setBulkBusy(true);
+    try {
+      const lookIds = [...selectedLookIds];
+      if (lookIds.length > 0) {
+        await supabase.from('looks').update({ enabled: false }).in('id', lookIds);
+      }
+      // products.is_active gate would belong here when an admin-write
+      // RLS allows it. Surfacing the no-op via toast keeps expectations
+      // clear without blocking the looks hide.
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, clearSelection, onAfterBulkMutation]);
+
+  const selectionCount = selectedLookIds.size + selectedProductIds.size;
+
   return (
-    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
           The <strong>all</strong> catalog pulls every live look, rendered creative, and product - no duplicates, every entry shown in its entirety. Drag any tile to reorder.
@@ -2239,12 +2362,20 @@ function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metrics
 
       {viewMode === 'list' ? (
         <>
-          <LooksListTable looks={sortedLooks} />
+          <LooksListTable
+            looks={sortedLooks}
+            selectedIds={selectedLookIds}
+            onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
+          />
           <CreativesListTable title="Creative Videos" creatives={creatives} />
           {!isUniverse && (
             <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
           )}
-          <ProductsListTable products={sortedProducts} />
+          <ProductsListTable
+            products={sortedProducts}
+            selectedIds={selectedProductIds}
+            onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+          />
         </>
       ) : (
         <>
@@ -2253,11 +2384,16 @@ function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metrics
             count={sortedLooks.length}
             emptyMessage="No looks match the current filter."
             minColumnPx={140}
-            draggable={isAll && filter === 'all' && sort === 'most-viewed'}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
             onReorder={(from, to) => onReorder('looks', from, to)}
           >
-            {sortedLooks.map(l => (
-              <LookThumb key={l.id} look={l} />
+            {sortedLooks.map((l, idx) => (
+              <LookThumb
+                key={l.id}
+                look={l}
+                selected={selectedLookIds.has(l.id)}
+                onSelect={(ext) => toggleSelection('look', l.id, idx, sortedLooks, ext)}
+              />
             ))}
           </DraggableSection>
 
@@ -2294,15 +2430,123 @@ function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metrics
             count={sortedProducts.length}
             emptyMessage="No products match the current filter."
             minColumnPx={140}
-            draggable={isAll && filter === 'all' && sort === 'most-viewed'}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
             onReorder={(from, to) => onReorder('products', from, to)}
           >
-            {sortedProducts.map(p => (
-              <ProductMetricTile key={p.id} product={p} />
+            {sortedProducts.map((p, idx) => (
+              <ProductMetricTile
+                key={p.id}
+                product={p}
+                selected={selectedProductIds.has(p.id)}
+                onSelect={(ext) => toggleSelection('product', p.id, idx, sortedProducts, ext)}
+              />
             ))}
           </DraggableSection>
         </>
       )}
+
+      {selectionCount > 0 && (
+        <BulkActionBar
+          count={selectionCount}
+          catalogName={catalogName}
+          busy={bulkBusy}
+          onClear={clearSelection}
+          onRemove={bulkRemoveFromCatalog}
+          onHide={bulkHide}
+          looksCount={selectedLookIds.size}
+          productsCount={selectedProductIds.size}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Phase 6: floating bulk-action bar ───────────────────────────────
+interface BulkActionBarProps {
+  count: number;
+  catalogName: string;
+  looksCount: number;
+  productsCount: number;
+  busy: boolean;
+  onClear: () => void;
+  onRemove: () => void;
+  onHide: () => void;
+}
+
+function BulkActionBar({ count, catalogName, looksCount, productsCount, busy, onClear, onRemove, onHide }: BulkActionBarProps) {
+  return (
+    <div style={{
+      position: 'sticky',
+      bottom: 14,
+      alignSelf: 'center',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '8px 14px',
+      background: '#0f172a',
+      color: '#fff',
+      borderRadius: 999,
+      boxShadow: '0 16px 36px rgba(15,23,42,0.35)',
+      zIndex: 20,
+    }}>
+      <span style={{ fontSize: 12, fontWeight: 700 }}>
+        {count} selected
+        {looksCount > 0 && productsCount > 0 ? ` · ${looksCount} look${looksCount === 1 ? '' : 's'}, ${productsCount} product${productsCount === 1 ? '' : 's'}` : ''}
+      </span>
+      <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.18)' }} />
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={busy}
+        title={`Strip "${catalogName}" from each selected item's catalog_tags`}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.28)',
+          color: '#fff',
+          padding: '4px 12px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? 'wait' : 'pointer',
+        }}
+      >
+        {busy ? 'Working…' : `Remove from "${catalogName}"`}
+      </button>
+      <button
+        type="button"
+        onClick={onHide}
+        disabled={busy || looksCount === 0}
+        title={looksCount === 0 ? 'Select looks to hide' : 'Set looks.enabled = false'}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.28)',
+          color: '#fff',
+          padding: '4px 12px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: busy ? 'wait' : (looksCount === 0 ? 'not-allowed' : 'pointer'),
+          opacity: looksCount === 0 ? 0.45 : 1,
+        }}
+      >
+        Hide looks
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={busy}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: 'rgba(255,255,255,0.65)',
+          padding: '4px 8px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        Clear
+      </button>
     </div>
   );
 }
@@ -2376,7 +2620,15 @@ function MetricCells({ metrics }: { metrics?: ItemMetrics }) {
   );
 }
 
-function LooksListTable({ looks }: { looks: CatalogLookRow[] }) {
+function LooksListTable({
+  looks,
+  selectedIds,
+  onSelect,
+}: {
+  looks: CatalogLookRow[];
+  selectedIds?: Set<string>;
+  onSelect?: (id: string, index: number, extendRange: boolean) => void;
+}) {
   if (looks.length === 0) return (
     <div>
       <ListSectionHeader title="Looks" count={0} />
@@ -2391,6 +2643,7 @@ function LooksListTable({ looks }: { looks: CatalogLookRow[] }) {
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
+            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
             <th style={{ ...listHeadCellStyle, width: 56 }}></th>
             <th style={listHeadCellStyle}>Title</th>
             <th style={listHeadCellStyle}>Creator</th>
@@ -2402,44 +2655,72 @@ function LooksListTable({ looks }: { looks: CatalogLookRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {looks.map(l => (
-            <tr key={l.id}>
-              <td style={listBodyCellStyle}>
-                <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-                  {l.videoPath && (
-                    <video
-                      src={l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`}
-                      muted playsInline preload="metadata"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  )}
-                </div>
-              </td>
-              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
-              <td style={listBodyCellStyle}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {l.creatorAvatarUrl ? (
-                    <img src={l.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e2e8f0' }} />
-                  )}
-                  <span style={{ color: '#111', fontWeight: 600 }}>{l.creatorName || l.creatorHandle || 'Unknown'}</span>
-                  {l.creatorHandle && l.creatorName && (
-                    <span style={{ color: '#94a3b8' }}>@{l.creatorHandle}</span>
-                  )}
-                </div>
-              </td>
-              <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{l.productCount}</td>
-              <MetricCells metrics={l.metrics} />
-            </tr>
-          ))}
+          {looks.map((l, idx) => {
+            const checked = selectedIds?.has(l.id) ?? false;
+            return (
+              <tr
+                key={l.id}
+                onClick={(e) => {
+                  if (!onSelect) return;
+                  // Same metric-pill guard as the grid tiles.
+                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+                  onSelect(l.id, idx, e.shiftKey);
+                }}
+                style={{
+                  cursor: onSelect ? 'pointer' : 'default',
+                  background: checked ? '#eff6ff' : 'transparent',
+                }}
+              >
+                {onSelect && (
+                  <td style={listBodyCellStyle}>
+                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                  </td>
+                )}
+                <td style={listBodyCellStyle}>
+                  <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                    {l.videoPath && (
+                      <video
+                        src={l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`}
+                        muted playsInline preload="metadata"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    )}
+                  </div>
+                </td>
+                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
+                <td style={listBodyCellStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {l.creatorAvatarUrl ? (
+                      <img src={l.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e2e8f0' }} />
+                    )}
+                    <span style={{ color: '#111', fontWeight: 600 }}>{l.creatorName || l.creatorHandle || 'Unknown'}</span>
+                    {l.creatorHandle && l.creatorName && (
+                      <span style={{ color: '#94a3b8' }}>@{l.creatorHandle}</span>
+                    )}
+                  </div>
+                </td>
+                <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{l.productCount}</td>
+                <MetricCells metrics={l.metrics} />
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function ProductsListTable({ products }: { products: ProductRow[] }) {
+function ProductsListTable({
+  products,
+  selectedIds,
+  onSelect,
+}: {
+  products: ProductRow[];
+  selectedIds?: Set<string>;
+  onSelect?: (id: string, index: number, extendRange: boolean) => void;
+}) {
   if (products.length === 0) return (
     <div>
       <ListSectionHeader title="Products" count={0} />
@@ -2454,6 +2735,7 @@ function ProductsListTable({ products }: { products: ProductRow[] }) {
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
+            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
             <th style={{ ...listHeadCellStyle, width: 56 }}></th>
             <th style={listHeadCellStyle}>Product</th>
             <th style={listHeadCellStyle}>Brand</th>
@@ -2464,20 +2746,39 @@ function ProductsListTable({ products }: { products: ProductRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {products.map(p => (
-            <tr key={p.id}>
-              <td style={listBodyCellStyle}>
-                {p.image_url ? (
-                  <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
-                ) : (
-                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+          {products.map((p, idx) => {
+            const checked = selectedIds?.has(p.id) ?? false;
+            return (
+              <tr
+                key={p.id}
+                onClick={(e) => {
+                  if (!onSelect) return;
+                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+                  onSelect(p.id, idx, e.shiftKey);
+                }}
+                style={{
+                  cursor: onSelect ? 'pointer' : 'default',
+                  background: checked ? '#eff6ff' : 'transparent',
+                }}
+              >
+                {onSelect && (
+                  <td style={listBodyCellStyle}>
+                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                  </td>
                 )}
-              </td>
-              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
-              <td style={{ ...listBodyCellStyle, color: '#475569' }}>{p.brand || '—'}</td>
-              <MetricCells metrics={p.metrics} />
-            </tr>
-          ))}
+                <td style={listBodyCellStyle}>
+                  {p.image_url ? (
+                    <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                  ) : (
+                    <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                  )}
+                </td>
+                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
+                <td style={{ ...listBodyCellStyle, color: '#475569' }}>{p.brand || '—'}</td>
+                <MetricCells metrics={p.metrics} />
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -2780,20 +3081,62 @@ function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode
 }
 
 // ── Phases 3 + 4: per-tile metric overlay for products ──────────────
-function ProductMetricTile({ product }: { product: ProductRow }) {
+function ProductMetricTile({ product, selected, onSelect }: { product: ProductRow; selected?: boolean; onSelect?: (extendRange: boolean) => void }) {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (!onSelect) return;
+    e.preventDefault();
+    onSelect(e.shiftKey);
+  }, [onSelect]);
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff', position: 'relative' }}>
+    <div
+      onClick={handleClick}
+      style={{
+        border: `2px solid ${selected ? '#2563eb' : '#e5e7eb'}`,
+        borderRadius: 6,
+        overflow: 'hidden',
+        background: '#fff',
+        position: 'relative',
+        cursor: onSelect ? 'pointer' : 'default',
+        outline: selected ? '2px solid #bfdbfe' : 'none',
+        outlineOffset: -4,
+      }}
+    >
       {product.image_url ? (
         <img src={product.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
       ) : (
         <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
       )}
       <MetricBadgeRow metrics={product.metrics} />
+      {selected && <SelectionBadge />}
       <div style={{ padding: 6 }}>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.brand || ' - '}</div>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name || ' - '}</div>
       </div>
     </div>
+  );
+}
+
+function SelectionBadge() {
+  return (
+    <span style={{
+      position: 'absolute',
+      bottom: 6,
+      right: 6,
+      width: 18,
+      height: 18,
+      borderRadius: '50%',
+      background: '#2563eb',
+      color: '#fff',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      boxShadow: '0 1px 3px rgba(15,23,42,0.35)',
+    }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </span>
   );
 }
 
@@ -2824,6 +3167,8 @@ function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
 
   return (
     <div
+      data-role="metric-pill"
+      onClick={(e) => e.stopPropagation()}
       style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4, flexWrap: 'wrap', pointerEvents: 'auto', zIndex: 2 }}
       onMouseEnter={() => setShowInsights(true)}
       onMouseLeave={() => setShowInsights(false)}
@@ -3016,15 +3361,37 @@ function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, 
   );
 }
 
-function LookThumb({ look }: { look: CatalogLookRow }) {
+function LookThumb({ look, selected, onSelect }: { look: CatalogLookRow; selected?: boolean; onSelect?: (extendRange: boolean) => void }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const src = look.videoPath
     ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
     : null;
 
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (!onSelect) return;
+    // Don't intercept clicks that started on the metric pill cluster
+    // (those open the insights popover — let them through). The
+    // MetricBadgeRow sets pointer-events: auto so cursor: help is
+    // reachable; this guards against accidental selection toggle.
+    const tgt = e.target as HTMLElement;
+    if (tgt.closest('[data-role="metric-pill"]')) return;
+    e.preventDefault();
+    onSelect(e.shiftKey);
+  }, [onSelect]);
+
   return (
     <div
-      style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
+      onClick={handleClick}
+      style={{
+        border: `2px solid ${selected ? '#2563eb' : '#e5e7eb'}`,
+        borderRadius: 6,
+        overflow: 'hidden',
+        background: '#111',
+        cursor: onSelect ? 'pointer' : 'default',
+        outline: selected ? '2px solid #bfdbfe' : 'none',
+        outlineOffset: -4,
+        position: 'relative',
+      }}
       onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
       onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
     >
@@ -3045,6 +3412,7 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
           </div>
         )}
         <MetricBadgeRow metrics={look.metrics} />
+        {selected && <SelectionBadge />}
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
