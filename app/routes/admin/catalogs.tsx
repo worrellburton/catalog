@@ -192,6 +192,39 @@ export default function AdminCatalogs() {
   // catalog impression effect). { curr, prev } enables trend in the
   // column.
   const [catalogImpressions, setCatalogImpressions] = useState<Map<string, { curr: number; prev: number }>>(new Map());
+  // Per-catalog 14-day daily impressions for the inline sparkline
+  // column. One batch fetch keyed by lower(name). Each value is the
+  // full 14-day series with zeros filled.
+  const [catalogDaily, setCatalogDaily] = useState<Map<string, number[]>>(new Map());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('catalog_view_counts_daily', { window_days: 14 });
+      if (cancelled || error || !data) return;
+      type Row = { catalog_key: string; day: string; impressions: number | string };
+      // Bucket by catalog_key.
+      const byKey = new Map<string, Map<string, number>>();
+      for (const r of data as Row[]) {
+        const inner = byKey.get(r.catalog_key) ?? new Map<string, number>();
+        inner.set(r.day, Number(r.impressions) || 0);
+        byKey.set(r.catalog_key, inner);
+      }
+      // Build the 14-day series for each catalog with zeros filled.
+      const today = new Date();
+      const days: string[] = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(today.getTime() - i * 86400_000);
+        days.push(d.toISOString().slice(0, 10));
+      }
+      const out = new Map<string, number[]>();
+      byKey.forEach((dayMap, key) => {
+        out.set(key, days.map(d => dayMap.get(d) ?? 0));
+      });
+      setCatalogDaily(out);
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -1437,6 +1470,7 @@ export default function AdminCatalogs() {
               <th>Source</th>
               <th>Products</th>
               <th>Impressions</th>
+              <th>14d</th>
               <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
@@ -1496,6 +1530,7 @@ export default function AdminCatalogs() {
                       )}
                     </td>
                     <td><ImpressionsPill counts={catalogImpressions.get(homeCatalog.name.toLowerCase())} /></td>
+                    <td><MiniSparkline series={catalogDaily.get(homeCatalog.name.toLowerCase())} /></td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                     <td>
@@ -1524,7 +1559,7 @@ export default function AdminCatalogs() {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={8} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
@@ -1619,6 +1654,7 @@ export default function AdminCatalogs() {
                   )}
                 </td>
                 <td><ImpressionsPill counts={catalogImpressions.get(c.name.toLowerCase())} /></td>
+                <td><MiniSparkline series={catalogDaily.get(c.name.toLowerCase())} /></td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
@@ -1693,7 +1729,7 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={8} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
@@ -2650,6 +2686,37 @@ function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
       {primary.toLocaleString()}
       <span style={{ fontWeight: 400, marginLeft: 3, fontSize: 10, color: '#64748b' }}>{label}</span>
     </span>
+  );
+}
+
+// ── 14-day mini sparkline (inline in the catalogs table) ──────────────────
+function MiniSparkline({ series }: { series?: number[] }) {
+  if (!series || series.length === 0 || series.every(n => n === 0)) {
+    return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+  }
+  const W = 64; const H = 18;
+  const max = Math.max(1, ...series);
+  const barW = W / series.length;
+  const total = series.reduce((a, b) => a + b, 0);
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img">
+      <title>{`14-day impressions · total ${total} · peak ${max}`}</title>
+      {series.map((v, i) => {
+        const h = (v / max) * (H - 2);
+        return (
+          <rect
+            key={i}
+            x={i * barW + 0.5}
+            y={H - h}
+            width={Math.max(1, barW - 1)}
+            height={h}
+            fill="#2563eb"
+            opacity={v === 0 ? 0.18 : 1}
+            rx={1}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
