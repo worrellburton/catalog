@@ -14,10 +14,13 @@ import type { ProductAd } from '~/services/product-creative';
 import {
   getHomeCatalog,
   updateCatalogToggles,
+  setCatalogGender,
   getCatalogSearchCounts,
   type Catalog as CatalogService,
   type CatalogSearchCounts,
 } from '~/services/catalogs';
+
+type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 
 interface Catalog {
   id: string;
@@ -28,6 +31,7 @@ interface Catalog {
   filterGender?: boolean;
   filterAge?: boolean;
   boostTopConverting?: boolean;
+  gender?: CatalogGenderUI;
   slug?: string;
 }
 
@@ -199,7 +203,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('catalogs')
-      .select('id, slug, name, created_at, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
+      .select('id, slug, name, created_at, gender, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
       .eq('is_featured', false)
       .eq('status', 'live')
       .order('created_at', { ascending: false });
@@ -210,6 +214,7 @@ export default function AdminCatalogs() {
     if (data) {
       const rows = data as {
         id: string; name: string; slug: string; created_at: string;
+        gender: CatalogGenderUI | null;
         is_home: boolean; filter_gender: boolean; filter_age: boolean; boost_top_converting: boolean;
       }[];
       // Home catalog goes into its own state slot; all others fill `custom`.
@@ -222,6 +227,7 @@ export default function AdminCatalogs() {
         slug: r.slug,
         source: 'custom' as const,
         createdAt: r.created_at,
+        gender: (r.gender ?? 'all') as CatalogGenderUI,
         filterGender: r.filter_gender,
         filterAge: r.filter_age,
         boostTopConverting: r.boost_top_converting,
@@ -235,7 +241,7 @@ export default function AdminCatalogs() {
           name: homeRow.name,
           description: null,
           themePrompt: null,
-          gender: 'all' as const,
+          gender: ((homeRow as { gender?: string | null }).gender as 'all' | 'men' | 'women' | 'unisex' | null) ?? 'all',
           coverUrl: null,
           sortOrder: -1,
           isFeatured: false,
@@ -1330,12 +1336,17 @@ export default function AdminCatalogs() {
                     </td>
                     <td>
                       <TogglePills
-                        filterGender={homeCatalog.filterGender}
+                        gender={(homeCatalog.gender ?? 'all') as CatalogGenderUI}
                         filterAge={homeCatalog.filterAge}
                         boostTopConverting={homeCatalog.boostTopConverting}
                         onToggle={async (field, val) => {
                           setHomeCatalog(prev => prev ? { ...prev, [field]: val } : prev);
                           await updateCatalogToggles(homeCatalog.slug, { [field]: val });
+                        }}
+                        onGender={async (val) => {
+                          setHomeCatalog(prev => prev ? { ...prev, gender: val } : prev);
+                          const ok = await setCatalogGender(homeCatalog.slug, val);
+                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
                         }}
                       />
                     </td>
@@ -1476,12 +1487,19 @@ export default function AdminCatalogs() {
                 <td>
                   {c.source === 'custom' ? (
                     <TogglePills
-                      filterGender={c.filterGender}
+                      gender={c.gender ?? 'all'}
                       filterAge={c.filterAge}
                       boostTopConverting={c.boostTopConverting}
                       onToggle={async (field, val) => {
                         setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: val } : x));
                         if (c.slug) await updateCatalogToggles(c.slug, { [field]: val });
+                      }}
+                      onGender={async (val) => {
+                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, gender: val } : x));
+                        if (c.slug) {
+                          const ok = await setCatalogGender(c.slug, val);
+                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
+                        }
                       }}
                     />
                   ) : null}
@@ -2018,22 +2036,52 @@ function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
 }
 
 // ── Toggle pills ────────────────────────────────────────────────────────────
-type ToggleField = 'filterGender' | 'filterAge' | 'boostTopConverting';
+type ToggleField = 'filterAge' | 'boostTopConverting';
 interface TogglePillsProps {
-  filterGender?: boolean;
+  gender?: CatalogGenderUI;
   filterAge?: boolean;
   boostTopConverting?: boolean;
   onToggle: (field: ToggleField, value: boolean) => void;
+  onGender?: (value: CatalogGenderUI) => void;
 }
 
-function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: TogglePillsProps) {
+function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender }: TogglePillsProps) {
   const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean }[] = [
-    { key: 'filterGender',        label: 'Gender',  value: filterGender ?? false },
     { key: 'filterAge',           label: 'Age',     value: filterAge ?? false, disabled: true },
     { key: 'boostTopConverting',  label: 'Top ↑',   value: boostTopConverting ?? false },
   ];
+  const currentGender: CatalogGenderUI = gender ?? 'all';
+  const genderActive = currentGender !== 'all';
+  const genderLabel: Record<CatalogGenderUI, string> = {
+    all: 'Any gender', women: 'Women', men: 'Men', unisex: 'Unisex',
+  };
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <select
+        value={currentGender}
+        onChange={e => onGender?.(e.target.value as CatalogGenderUI)}
+        disabled={!onGender}
+        title={`Gender lens: ${genderLabel[currentGender]}`}
+        style={{
+          padding: '2px 6px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+          border: '1px solid',
+          borderColor: genderActive ? '#111' : '#e2e8f0',
+          background: genderActive ? '#111' : '#fff',
+          color: genderActive ? '#fff' : '#64748b',
+          cursor: onGender ? 'pointer' : 'default',
+          appearance: 'none',
+          paddingRight: 18,
+          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${genderActive ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 5px center',
+          transition: 'all 0.1s',
+        }}
+      >
+        <option value="all">Any</option>
+        <option value="women">Women</option>
+        <option value="men">Men</option>
+        <option value="unisex">Unisex</option>
+      </select>
       {pills.map(p => (
         <button
           key={p.key}
