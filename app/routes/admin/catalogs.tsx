@@ -1467,6 +1467,7 @@ export default function AdminCatalogs() {
                           loading={isLoadingCreative}
                           creative={creative}
                           metricsLoading={metricsLoading}
+                          catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
                           onReorder={() => {}}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
@@ -1635,6 +1636,7 @@ export default function AdminCatalogs() {
                       loading={isLoadingCreative}
                       creative={creative}
                       metricsLoading={metricsLoading}
+                      catalogNames={all.filter(x => x.name !== c.name && !isAllCatalog(x.name)).map(x => x.name)}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
                       onAfterBulkMutation={() => {
                         // Drop the cached creative payload + refetch
@@ -2143,6 +2145,8 @@ interface CatalogCreativeDropdownProps {
   loading: boolean;
   creative: CatalogCreativePayload | undefined;
   metricsLoading: boolean;
+  /** Other catalog names this row can fan out to via bulk "Add to…". */
+  catalogNames: string[];
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
   onAfterBulkMutation: () => void;
 }
@@ -2625,7 +2629,7 @@ type DrawerSubject =
   | { kind: 'product'; product: ProductRow }
   | null;
 
-function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
+function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
   const [drawer, setDrawer] = useState<DrawerSubject>(null);
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
@@ -2767,6 +2771,32 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
     }
   }, [selectedLookIds, clearSelection, onAfterBulkMutation]);
 
+  // Bulk: append a target catalog name to each selected row's
+  // catalog_tags array. Lets admins fan out a curated selection to
+  // multiple catalogs in one click instead of running the Add Looks
+  // / Add Products picker per-catalog.
+  const bulkAddToCatalog = useCallback(async (targetName: string) => {
+    if (!supabase || !targetName.trim() || targetName === catalogName) return;
+    setBulkBusy(true);
+    try {
+      const lookOps = [...selectedLookIds].map(async id => {
+        const { data: row } = await supabase!.from('looks').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = new Set([...(row?.catalog_tags as string[] | null) || [], targetName]);
+        await supabase!.from('looks').update({ catalog_tags: Array.from(tags) }).eq('id', id);
+      });
+      const productOps = [...selectedProductIds].map(async id => {
+        const { data: row } = await supabase!.from('products').select('catalog_tags').eq('id', id).maybeSingle();
+        const tags = new Set([...(row?.catalog_tags as string[] | null) || [], targetName]);
+        await supabase!.from('products').update({ catalog_tags: Array.from(tags) }).eq('id', id);
+      });
+      await Promise.all([...lookOps, ...productOps]);
+      clearSelection();
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedLookIds, selectedProductIds, catalogName, clearSelection, onAfterBulkMutation]);
+
   const selectionCount = selectedLookIds.size + selectedProductIds.size;
 
   return (
@@ -2882,10 +2912,12 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
         <BulkActionBar
           count={selectionCount}
           catalogName={catalogName}
+          catalogNames={catalogNames}
           busy={bulkBusy}
           onClear={clearSelection}
           onRemove={bulkRemoveFromCatalog}
           onHide={bulkHide}
+          onAddTo={bulkAddToCatalog}
           looksCount={selectedLookIds.size}
           productsCount={selectedProductIds.size}
         />
@@ -3093,15 +3125,24 @@ function ProductDetailBody({ product }: { product: ProductRow }) {
 interface BulkActionBarProps {
   count: number;
   catalogName: string;
+  catalogNames: string[];
   looksCount: number;
   productsCount: number;
   busy: boolean;
   onClear: () => void;
   onRemove: () => void;
   onHide: () => void;
+  onAddTo: (targetName: string) => void;
 }
 
-function BulkActionBar({ count, catalogName, looksCount, productsCount, busy, onClear, onRemove, onHide }: BulkActionBarProps) {
+function BulkActionBar({ count, catalogName, catalogNames, looksCount, productsCount, busy, onClear, onRemove, onHide, onAddTo }: BulkActionBarProps) {
+  const [showAddTo, setShowAddTo] = useState(false);
+  const [addToQuery, setAddToQuery] = useState('');
+  const candidates = useMemo(() => {
+    const q = addToQuery.trim().toLowerCase();
+    const sorted = [...catalogNames].sort((a, b) => a.localeCompare(b));
+    return q ? sorted.filter(n => n.toLowerCase().includes(q)) : sorted;
+  }, [catalogNames, addToQuery]);
   return (
     <div style={{
       position: 'sticky',
@@ -3122,6 +3163,97 @@ function BulkActionBar({ count, catalogName, looksCount, productsCount, busy, on
         {looksCount > 0 && productsCount > 0 ? ` · ${looksCount} look${looksCount === 1 ? '' : 's'}, ${productsCount} product${productsCount === 1 ? '' : 's'}` : ''}
       </span>
       <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.18)' }} />
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={() => setShowAddTo(v => !v)}
+          disabled={busy || catalogNames.length === 0}
+          title={catalogNames.length === 0 ? 'No other catalogs available' : 'Add the selection to another catalog'}
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.28)',
+            color: '#fff',
+            padding: '4px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: busy ? 'wait' : (catalogNames.length === 0 ? 'not-allowed' : 'pointer'),
+            opacity: catalogNames.length === 0 ? 0.45 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          Add to…
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        {showAddTo && (
+          <div style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            left: 0,
+            width: 240,
+            maxHeight: 280,
+            background: '#fff',
+            color: '#0f172a',
+            border: '1px solid #e5e7eb',
+            borderRadius: 8,
+            boxShadow: '0 18px 40px rgba(15,23,42,0.25)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Find a catalog…"
+              value={addToQuery}
+              onChange={e => setAddToQuery(e.target.value)}
+              style={{
+                padding: '8px 10px',
+                fontSize: 12,
+                border: 'none',
+                borderBottom: '1px solid #f1f5f9',
+                outline: 'none',
+                background: '#fff',
+              }}
+            />
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {candidates.length === 0 ? (
+                <div style={{ padding: 12, color: '#94a3b8', fontSize: 12 }}>No matches.</div>
+              ) : (
+                candidates.map(name => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      onAddTo(name);
+                      setShowAddTo(false);
+                      setAddToQuery('');
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '6px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#0f172a',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'}
+                    onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+                  >
+                    {name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       <button
         type="button"
         onClick={onRemove}
