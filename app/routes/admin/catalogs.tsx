@@ -47,6 +47,8 @@ interface ProductRow {
   brand: string | null;
   image_url: string | null;
   catalog_tags: string[] | null;
+  createdAt?: string | null;
+  metrics?: ItemMetrics;
 }
 
 interface LookRow {
@@ -65,6 +67,8 @@ interface CatalogLookRow {
   videoPath: string | null;
   creatorHandle: string | null;
   productCount: number;
+  createdAt?: string | null;
+  metrics?: ItemMetrics;
 }
 
 interface CatalogCreativeVideo {
@@ -86,6 +90,7 @@ interface CatalogCreativePayload {
 }
 
 const ALL_CATALOG_NAME = 'all';
+const HOME_CATALOG_NAME = 'home';
 const ALL_ORDER_KEY = 'catalog_admin_all_order';
 
 type CatalogSection = 'looks' | 'creatives' | 'products';
@@ -93,6 +98,35 @@ type CatalogSection = 'looks' | 'creatives' | 'products';
 function isAllCatalog(name: string) {
   return name.trim().toLowerCase() === ALL_CATALOG_NAME;
 }
+
+function isHomeCatalog(name: string) {
+  return name.trim().toLowerCase() === HOME_CATALOG_NAME;
+}
+
+// "Universe" view: catalogs that should show every live look/product
+// rather than only the rows whose catalog_tags contain the catalog
+// name. Both `all` (admin meta-catalog) and `home` (consumer landing
+// feed) qualify — the consumer home feed is unfiltered, so admins
+// should see the same universe of candidates when triaging.
+function isUniverseCatalog(name: string) {
+  return isAllCatalog(name) || isHomeCatalog(name);
+}
+
+// Phase 1 RPC payload + derived per-item metrics. Keyed by either the
+// look/product UUID (string form) — same key shape the RPC returns.
+export interface ItemMetrics {
+  impressions: number;
+  clicks: number;
+  clickouts: number;
+  impressionsPrev: number;
+  ctr: number;            // clicks ÷ impressions (current window)
+  clickoutRate: number;   // clickouts ÷ impressions
+  trendPct: number | null; // % change in impressions vs prior window; null if no prior signal
+}
+
+// Sort + filter chip vocabulary for the dropdown control bar (Phase 5).
+type MetricSort = 'most-viewed' | 'highest-ctr' | 'biggest-riser' | 'biggest-faller' | 'newest' | 'never-viewed';
+type MetricFilter = 'all' | 'rising' | 'falling' | 'zombie' | 'never-viewed';
 
 function loadAllOrder(): Record<CatalogSection, string[]> {
   if (typeof window === 'undefined') return { looks: [], creatives: [], products: [] };
@@ -281,6 +315,71 @@ export default function AdminCatalogs() {
 
   useEffect(() => { loadLooks(); }, [loadLooks]);
 
+  // Phase 1 client wiring: per-item analytics map keyed by
+  // `${target_type}:${target_key}`. Powers per-tile pills (Phase 3),
+  // trend arrows (Phase 4), and sort/filter (Phase 5). One fetch per
+  // session — cheap because the RPC is a single grouped aggregation
+  // over a covered time-range index.
+  const [metricsByKey, setMetricsByKey] = useState<Map<string, ItemMetrics>>(new Map());
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const METRIC_WINDOW_DAYS = 7;
+
+  const loadMetrics = useCallback(async () => {
+    if (!supabase) return;
+    setMetricsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('catalog_item_metrics', {
+        window_days: METRIC_WINDOW_DAYS,
+      });
+      if (error) {
+        console.warn('[catalog-metrics] rpc failed:', error.message);
+        return;
+      }
+      type Row = {
+        target_type: string;
+        target_key: string;
+        impressions_curr: number | string;
+        clicks_curr: number | string;
+        clickouts_curr: number | string;
+        impressions_prev: number | string;
+        clicks_prev: number | string;
+        clickouts_prev: number | string;
+      };
+      const next = new Map<string, ItemMetrics>();
+      for (const r of (data as Row[] | null) || []) {
+        const impressions = Number(r.impressions_curr) || 0;
+        const clicks = Number(r.clicks_curr) || 0;
+        const clickouts = Number(r.clickouts_curr) || 0;
+        const impressionsPrev = Number(r.impressions_prev) || 0;
+        const ctr = impressions > 0 ? clicks / impressions : 0;
+        const clickoutRate = impressions > 0 ? clickouts / impressions : 0;
+        // Trend is null when there's no prior signal — UI shows "new"
+        // rather than a misleading "+∞%". When prior > 0 and curr = 0
+        // we surface -100% as "fell off the cliff."
+        const trendPct = impressionsPrev > 0
+          ? Math.round(((impressions - impressionsPrev) / impressionsPrev) * 100)
+          : (impressions > 0 ? null : 0);
+        next.set(`${r.target_type}:${r.target_key}`, {
+          impressions, clicks, clickouts, impressionsPrev, ctr, clickoutRate, trendPct,
+        });
+      }
+      setMetricsByKey(next);
+    } finally {
+      setMetricsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMetrics(); }, [loadMetrics]);
+
+  // Lookup that tries both target_uuid form (newer events) and the
+  // legacy_id form (legacy clients used the integer id). Look rows
+  // expose both; product rows always use uuid.
+  const metricFor = useCallback((targetType: 'look' | 'product', primary: string, secondary?: string | number | null): ItemMetrics | undefined => {
+    const m = metricsByKey;
+    return m.get(`${targetType}:${primary}`)
+      ?? (secondary != null ? m.get(`${targetType}:${secondary}`) : undefined);
+  }, [metricsByKey]);
+
   // Expandable creative dropdown per catalog row.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [creativeByCatalog, setCreativeByCatalog] = useState<Record<string, CatalogCreativePayload>>({});
@@ -291,13 +390,18 @@ export default function AdminCatalogs() {
     setCreativeLoading(prev => new Set(prev).add(catalog.id));
     try {
       const isAll = isAllCatalog(catalog.name);
+      // Phase 2: Home shares the "show every live row" semantics with
+      // All — the consumer home feed isn't tag-filtered, so admins
+      // should see the same universe of candidates.
+      const isUniverse = isUniverseCatalog(catalog.name);
 
-      // Looks: `all` catalog pulls every live look so admins can browse the
-      // entire active set; other catalogs filter by catalog_tags.
+      // Looks: universe catalogs (all / home) pull every live look so
+      // admins can browse the entire active set; other catalogs filter
+      // by catalog_tags.
       let looksQuery = supabase
         .from('looks')
         .select(`
-          id, legacy_id, title, creator_handle, status, enabled, archived_at,
+          id, legacy_id, title, creator_handle, status, enabled, archived_at, created_at,
           looks_creative!inner ( video_url, is_primary ),
           look_products ( product_id )
         `)
@@ -306,7 +410,7 @@ export default function AdminCatalogs() {
         .is('archived_at', null)
         .eq('looks_creative.is_primary', true)
         .order('created_at', { ascending: false });
-      if (!isAll) {
+      if (!isUniverse) {
         looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
       }
       const { data: lookRows } = await looksQuery;
@@ -316,6 +420,7 @@ export default function AdminCatalogs() {
         legacy_id: number | null;
         title: string;
         creator_handle: string | null;
+        created_at: string | null;
         looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
         look_products: { product_id: string }[] | null;
       };
@@ -326,24 +431,32 @@ export default function AdminCatalogs() {
         videoPath: r.looks_creative?.[0]?.video_url ?? null,
         creatorHandle: r.creator_handle,
         productCount: (r.look_products || []).length,
+        createdAt: r.created_at,
+        metrics: metricFor('look', r.id, r.legacy_id),
       }));
 
-      // The `all` catalog is a superset view - if multiple looks share the
-      // same primary creative video they'd render as visual dupes, so collapse
-      // to the first occurrence per video. Other catalogs keep every row.
-      const looks = isAll
+      // Universe view collapses dupes - if multiple looks share the
+      // same primary creative video they'd render as visual dupes, so
+      // we keep the first occurrence per video. Named catalogs keep
+      // every row.
+      const looks = isUniverse
         ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
         : mappedLooks;
 
-      // Products: `all` catalog uses every product currently loaded; others
-      // filter by catalog_tags. Both paths dedupe so nothing repeats.
-      const catalogProducts = isAll
+      // Products: universe catalogs use every live product currently
+      // loaded; others filter by catalog_tags. Both paths dedupe so
+      // nothing repeats. Hydrate metrics in either case.
+      const catalogProductsBase = isUniverse
         ? products
         : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
+      const catalogProducts = catalogProductsBase.map(p => ({
+        ...p,
+        metrics: metricFor('product', p.id),
+      }));
 
-      // Creative videos (product_creative). `all` pulls every rendered ad so admins
-      // see the full library of creative in one place; named catalogs filter
-      // to ads whose underlying product is tagged with this catalog.
+      // Creative videos (product_creative). Universe catalogs pull every
+      // rendered ad so admins see the full library in one place; named
+      // catalogs filter to ads whose underlying product is tagged.
       const catalogProductIds = new Set(catalogProducts.map(p => p.id));
       let adsQuery = supabase
         .from('product_creative')
@@ -351,7 +464,7 @@ export default function AdminCatalogs() {
         .not('video_url', 'is', null)
         .in('status', ['done', 'live'])
         .order('created_at', { ascending: false });
-      if (!isAll) {
+      if (!isUniverse) {
         adsQuery = adsQuery.in(
           'product_id',
           catalogProducts.length > 0 ? catalogProducts.map(p => p.id) : ['00000000-0000-0000-0000-000000000000'],
@@ -441,7 +554,25 @@ export default function AdminCatalogs() {
         return next;
       });
     }
-  }, [products]);
+  }, [products, metricFor]);
+
+  // When the metrics map arrives after a dropdown has already rendered,
+  // rehydrate the open payloads in place so pills/arrows light up
+  // without forcing the admin to collapse + re-expand.
+  useEffect(() => {
+    if (metricsByKey.size === 0) return;
+    setCreativeByCatalog(prev => {
+      const next: Record<string, CatalogCreativePayload> = { ...prev };
+      let changed = false;
+      for (const [catalogId, payload] of Object.entries(prev)) {
+        const looks = payload.looks.map(l => ({ ...l, metrics: metricFor('look', l.id, l.legacyId) }));
+        const products = payload.products.map(p => ({ ...p, metrics: metricFor('product', p.id) }));
+        next[catalogId] = { ...payload, looks, products };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [metricsByKey, metricFor]);
 
   const reorderAllSection = useCallback((catalogId: string, section: CatalogSection, fromIndex: number, toIndex: number) => {
     setCreativeByCatalog(prev => {
@@ -1188,7 +1319,7 @@ export default function AdminCatalogs() {
                   {isOpen && (
                     <tr>
                       <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        <CatalogCreativeDropdown isAll={false} loading={isLoadingCreative} creative={creative} onReorder={() => {}} />
+                        <CatalogCreativeDropdown isAll={false} isUniverse={true} loading={isLoadingCreative} creative={creative} metricsLoading={metricsLoading} onReorder={() => {}} />
                       </td>
                     </tr>
                   )}
@@ -1337,8 +1468,10 @@ export default function AdminCatalogs() {
                   <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
+                      isUniverse={isUniverseCatalog(c.name)}
                       loading={isLoadingCreative}
                       creative={creative}
+                      metricsLoading={metricsLoading}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
                     />
                   </td>
@@ -1834,8 +1967,10 @@ export default function AdminCatalogs() {
 
 interface CatalogCreativeDropdownProps {
   isAll: boolean;
+  isUniverse: boolean;
   loading: boolean;
   creative: CatalogCreativePayload | undefined;
+  metricsLoading: boolean;
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
 }
 
@@ -1902,7 +2037,12 @@ function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: 
   );
 }
 
-function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: CatalogCreativeDropdownProps) {
+function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metricsLoading, onReorder }: CatalogCreativeDropdownProps) {
+  // Phase 5: local sort/filter state. Per-dropdown so different
+  // expanded catalogs can be sliced differently without interference.
+  const [sort, setSort] = useState<MetricSort>('most-viewed');
+  const [filter, setFilter] = useState<MetricFilter>('all');
+
   if (loading && !creative) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
@@ -1915,28 +2055,47 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
   if (!hasAny) {
     return (
       <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
-        No looks, products, or creative {isAll ? 'are currently active.' : 'tagged with this catalog yet.'}
+        No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
       </div>
     );
   }
 
+  // Apply Phase 5 filter then sort to BOTH looks and products. Same
+  // predicate runs against the metrics-decorated rows.
+  const sortedLooks = sortAndFilterItems(looks, sort, filter);
+  const sortedProducts = sortAndFilterItems(products, sort, filter);
+
+  // Phase 7-lite: KPI strip across the top. Sums over the currently
+  // visible rows (post-filter) so the numbers track what the admin is
+  // actually looking at, not the full library.
+  const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
+
   return (
-    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
           The <strong>all</strong> catalog pulls every live look, rendered creative, and product - no duplicates, every entry shown in its entirety. Drag any tile to reorder.
         </div>
       )}
+      {!isAll && isUniverse && (
+        <div style={{ fontSize: 11, color: '#475569', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 10px' }}>
+          The <strong>home</strong> catalog mirrors the consumer landing feed — every live look and product, ranked by what shoppers see right now.
+        </div>
+      )}
+
+      <KpiStrip kpi={kpi} metricsLoading={metricsLoading} />
+
+      <MetricControlBar sort={sort} filter={filter} onSort={setSort} onFilter={setFilter} />
 
       <DraggableSection
         title="Looks"
-        count={looks.length}
-        emptyMessage="No looks in this catalog."
+        count={sortedLooks.length}
+        emptyMessage="No looks match the current filter."
         minColumnPx={140}
-        draggable={isAll}
+        draggable={isAll && filter === 'all' && sort === 'most-viewed'}
         onReorder={(from, to) => onReorder('looks', from, to)}
       >
-        {looks.map(l => (
+        {sortedLooks.map(l => (
           <LookThumb key={l.id} look={l} />
         ))}
       </DraggableSection>
@@ -1954,7 +2113,7 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
         ))}
       </DraggableSection>
 
-      {!isAll && (
+      {!isUniverse && (
         <DraggableSection
           title="Feed search results"
           count={feedResults?.length ?? 0}
@@ -1971,29 +2130,281 @@ function CatalogCreativeDropdown({ isAll, loading, creative, onReorder }: Catalo
 
       <DraggableSection
         title="Products"
-        count={products.length}
-        emptyMessage="No products in this catalog."
-        minColumnPx={110}
-        draggable={isAll}
+        count={sortedProducts.length}
+        emptyMessage="No products match the current filter."
+        minColumnPx={140}
+        draggable={isAll && filter === 'all' && sort === 'most-viewed'}
         onReorder={(from, to) => onReorder('products', from, to)}
       >
-        {products.map(p => (
-          <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
-            {p.image_url ? (
-              <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
-            ) : (
-              <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
-            )}
-            <div style={{ padding: 6 }}>
-              <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || ' - '}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || ' - '}</div>
-            </div>
-          </div>
+        {sortedProducts.map(p => (
+          <ProductMetricTile key={p.id} product={p} />
         ))}
       </DraggableSection>
     </div>
   );
 }
+
+// ── Phase 5: sort + filter helpers shared by looks and products ─────
+type MetricBearing = { metrics?: ItemMetrics; createdAt?: string | null };
+
+function sortAndFilterItems<T extends MetricBearing>(items: T[], sort: MetricSort, filter: MetricFilter): T[] {
+  const FRESH_DAYS = 14;
+  const ZOMBIE_THRESHOLD = 0; // zero impressions in window = zombie
+  const RISING_PCT = 25;
+  const FALLING_PCT = -25;
+  const cutoff = Date.now() - FRESH_DAYS * 86400_000;
+
+  const filtered = items.filter(it => {
+    const m = it.metrics;
+    const impressions = m?.impressions ?? 0;
+    const trend = m?.trendPct ?? null;
+    switch (filter) {
+      case 'rising': return trend !== null && trend >= RISING_PCT;
+      case 'falling': return trend !== null && trend <= FALLING_PCT;
+      case 'zombie': return impressions <= ZOMBIE_THRESHOLD;
+      case 'never-viewed': return impressions === 0;
+      default: return true;
+    }
+  });
+
+  const cmp = (a: T, b: T): number => {
+    const am = a.metrics; const bm = b.metrics;
+    switch (sort) {
+      case 'highest-ctr': return (bm?.ctr ?? 0) - (am?.ctr ?? 0);
+      case 'biggest-riser': {
+        const at = am?.trendPct ?? -Infinity;
+        const bt = bm?.trendPct ?? -Infinity;
+        return bt - at;
+      }
+      case 'biggest-faller': {
+        const at = am?.trendPct ?? Infinity;
+        const bt = bm?.trendPct ?? Infinity;
+        return at - bt;
+      }
+      case 'newest': {
+        const at = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return bt - at;
+      }
+      case 'never-viewed': {
+        const ai = am?.impressions ?? 0;
+        const bi = bm?.impressions ?? 0;
+        if (ai === 0 && bi === 0) {
+          // tiebreak by newest
+          const at = a.createdAt ? Date.parse(a.createdAt) : 0;
+          const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
+          return bt - at;
+        }
+        return ai - bi;
+      }
+      case 'most-viewed':
+      default:
+        return (bm?.impressions ?? 0) - (am?.impressions ?? 0);
+    }
+  };
+
+  // Unused FRESH_DAYS cutoff retained for future "stale" filter; quiet
+  // the linter without changing behaviour.
+  void cutoff;
+  return [...filtered].sort(cmp);
+}
+
+// ── Phase 7-lite: header KPI strip ──────────────────────────────────
+interface KpiSnapshot {
+  totalImpressions: number;
+  totalClickouts: number;
+  blendedCtr: number;
+  risers: number;
+  fallers: number;
+  zeroViewPct: number;
+  itemsCount: number;
+}
+
+function buildKpiStrip(items: MetricBearing[]): KpiSnapshot {
+  let imp = 0, clk = 0, co = 0, risers = 0, fallers = 0, zero = 0;
+  for (const it of items) {
+    const m = it.metrics;
+    if (!m) { zero++; continue; }
+    imp += m.impressions;
+    clk += m.clicks;
+    co += m.clickouts;
+    if ((m.trendPct ?? 0) >= 25) risers++;
+    if ((m.trendPct ?? 0) <= -25) fallers++;
+    if (m.impressions === 0) zero++;
+  }
+  return {
+    totalImpressions: imp,
+    totalClickouts: co,
+    blendedCtr: imp > 0 ? clk / imp : 0,
+    risers,
+    fallers,
+    zeroViewPct: items.length > 0 ? zero / items.length : 0,
+    itemsCount: items.length,
+  };
+}
+
+function KpiStrip({ kpi, metricsLoading }: { kpi: KpiSnapshot; metricsLoading: boolean }) {
+  const cell = (label: string, value: string, accent?: string, sub?: string) => (
+    <div style={{ flex: '1 1 0', padding: '8px 12px', borderRight: '1px solid #e5e7eb', minWidth: 0 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: accent || '#0f172a', lineHeight: 1.15 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'stretch',
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      overflow: 'hidden',
+      opacity: metricsLoading ? 0.65 : 1,
+      transition: 'opacity 120ms',
+    }}>
+      {cell('Impressions 7d', kpi.totalImpressions.toLocaleString())}
+      {cell('Clickouts 7d', kpi.totalClickouts.toLocaleString())}
+      {cell('Blended CTR', `${(kpi.blendedCtr * 100).toFixed(1)}%`)}
+      {cell('Rising', String(kpi.risers), '#047857', '+25% vs prior')}
+      {cell('Falling', String(kpi.fallers), '#b91c1c', '−25% vs prior')}
+      <div style={{ flex: '1 1 0', padding: '8px 12px', minWidth: 0 }}>
+        <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>Dark inventory</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: kpi.zeroViewPct > 0.4 ? '#b91c1c' : '#0f172a', lineHeight: 1.15 }}>
+          {(kpi.zeroViewPct * 100).toFixed(0)}%
+        </div>
+        <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>of {kpi.itemsCount} items had 0 views</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Phase 5 control bar ─────────────────────────────────────────────
+interface MetricControlBarProps {
+  sort: MetricSort;
+  filter: MetricFilter;
+  onSort: (s: MetricSort) => void;
+  onFilter: (f: MetricFilter) => void;
+}
+
+function MetricControlBar({ sort, filter, onSort, onFilter }: MetricControlBarProps) {
+  const sortOpts: { value: MetricSort; label: string }[] = [
+    { value: 'most-viewed', label: 'Most viewed' },
+    { value: 'highest-ctr', label: 'Highest CTR' },
+    { value: 'biggest-riser', label: 'Biggest riser' },
+    { value: 'biggest-faller', label: 'Biggest faller' },
+    { value: 'newest', label: 'Newest' },
+    { value: 'never-viewed', label: 'Never viewed' },
+  ];
+  const filterChips: { value: MetricFilter; label: string; color?: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'rising', label: '↑ Rising', color: '#047857' },
+    { value: 'falling', label: '↓ Falling', color: '#b91c1c' },
+    { value: 'zombie', label: '⚠ Zombie', color: '#a16207' },
+    { value: 'never-viewed', label: 'Never viewed', color: '#6b7280' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569' }}>
+        Sort
+        <select
+          value={sort}
+          onChange={e => onSort(e.target.value as MetricSort)}
+          style={{ fontSize: 12, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff' }}
+        >
+          {sortOpts.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+        </select>
+      </label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {filterChips.map(c => {
+          const active = filter === c.value;
+          return (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onFilter(c.value)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+                border: '1px solid',
+                cursor: 'pointer',
+                borderColor: active ? (c.color || '#111') : '#e2e8f0',
+                background: active ? (c.color || '#111') : '#fff',
+                color: active ? '#fff' : (c.color || '#475569'),
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Phases 3 + 4: per-tile metric overlay for products ──────────────
+function ProductMetricTile({ product }: { product: ProductRow }) {
+  return (
+    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff', position: 'relative' }}>
+      {product.image_url ? (
+        <img src={product.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+      ) : (
+        <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
+      )}
+      <MetricBadgeRow metrics={product.metrics} />
+      <div style={{ padding: 6 }}>
+        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.brand || ' - '}</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name || ' - '}</div>
+      </div>
+    </div>
+  );
+}
+
+// Shared metric strip used by both LookThumb and ProductMetricTile.
+function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
+  if (!metrics) {
+    return (
+      <div style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4 }}>
+        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.45)', color: '#fff' }}>—</span>
+      </div>
+    );
+  }
+  const { impressions, ctr, trendPct } = metrics;
+  const trendLabel = trendPct === null
+    ? 'NEW'
+    : trendPct === 0 ? '—' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  return (
+    <div style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }} title="Impressions in last 7 days">
+        {impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}k` : impressions}
+      </span>
+      {impressions > 0 && (
+        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }} title="Click-through rate">
+          {(ctr * 100).toFixed(0)}%
+        </span>
+      )}
+      <span style={{ ...metricChipBase, background: trendColor, color: '#fff' }} title="Change vs prior 7-day window">
+        {trendLabel}
+      </span>
+    </div>
+  );
+}
+
+const metricChipBase: React.CSSProperties = {
+  padding: '1px 6px',
+  borderRadius: 4,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.3px',
+  lineHeight: '14px',
+  pointerEvents: 'none',
+};
 
 interface DraggableSectionProps {
   title: string;
@@ -2102,6 +2513,7 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
             No video
           </div>
         )}
+        <MetricBadgeRow metrics={look.metrics} />
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
