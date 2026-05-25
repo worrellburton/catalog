@@ -89,6 +89,20 @@ jobs:
           node-version: '22'
       - run: node scripts/check-no-typeof-import.mjs
 
+  guard-tdz-forward-refs:
+    name: Guard TDZ forward-refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Catches the production TDZ class that broke /admin/catalogs.
+    # Strict mode fails on warnings too — codebase is currently clean
+    # and we want to keep it that way.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-tdz-forward-refs.mjs --strict
+
   smoke:
     name: Smoke (admin routes)
     runs-on: ubuntu-latest

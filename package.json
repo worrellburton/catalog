@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:smoke": "playwright test",
     "check:no-typeof-import": "node scripts/check-no-typeof-import.mjs",
+    "check:tdz": "node scripts/check-tdz-forward-refs.mjs --strict",
     "eval:search": "node tests/search/run-golden.mjs",
     "eval:search:warm": "node tests/search/run-golden.mjs --warm",
     "prepare": "husky || true"

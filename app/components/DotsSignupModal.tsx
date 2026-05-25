@@ -15,6 +15,25 @@ interface Props {
   onClose: () => void;
 }
 
+// Module-level style consts must precede the components that use
+// them — see scripts/check-tdz-forward-refs.mjs.
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 12, fontWeight: 500,
+  color: '#374151', marginBottom: 5,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '10px 12px', borderRadius: 8,
+  border: '1.5px solid #e0e0e0', fontSize: 14, outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  width: '100%', padding: '12px 0', background: '#000', color: '#fff',
+  border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 600,
+  cursor: 'pointer',
+};
+
 export default function DotsSignupModal({ userEmail, onConnected, onClose }: Props) {
   const [step, setStep] = useState<Step>('form');
   const [loading, setLoading] = useState(false);
@@ -277,19 +296,3 @@ export default function DotsSignupModal({ userEmail, onConnected, onClose }: Pro
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 12, fontWeight: 500,
-  color: '#374151', marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', borderRadius: 8,
-  border: '1.5px solid #e0e0e0', fontSize: 14, outline: 'none',
-  boxSizing: 'border-box',
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  width: '100%', padding: '12px 0', background: '#000', color: '#fff',
-  border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 600,
-  cursor: 'pointer',
-};

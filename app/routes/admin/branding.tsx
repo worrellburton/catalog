@@ -10,6 +10,27 @@ import { BRAND_VARIANTS, ensureBrandFont, getVariant, type BrandVariant } from '
 import { useInViewport } from '~/hooks/useInViewport';
 import CatalogLogo from '~/components/CatalogLogo';
 
+// Module-level const declarations live above every component that
+// reads them — see scripts/check-tdz-forward-refs.mjs for why.
+
+// Variants grouped by visual character so the admin scans by feel, not
+// alphabetically. Order roughly mirrors the brandFonts.ts comment groups.
+const GROUP_DEFS: Array<{ label: string; ids: string[] }> = [
+  { label: 'Default', ids: ['original'] },
+  { label: 'Geometric sans', ids: ['inter', 'manrope', 'jakarta', 'space-grotesk', 'sora', 'outfit', 'rubik'] },
+  { label: 'Bold display', ids: ['archivo-black', 'big-shoulders', 'unbounded', 'monoton', 'tilt-warp'] },
+  { label: 'Serif', ids: ['playfair', 'bodoni', 'cormorant', 'cinzel', 'dm-serif', 'fraunces', 'instrument'] },
+  { label: 'Mono', ids: ['plex-mono', 'jetbrains-mono'] },
+  { label: 'Hand', ids: ['caveat'] },
+];
+
+const VARIANT_GROUPS: Array<{ label: string; variants: BrandVariant[] }> = GROUP_DEFS.map(g => ({
+  label: g.label,
+  variants: g.ids
+    .map(id => BRAND_VARIANTS.find(v => v.id === id))
+    .filter((v): v is BrandVariant => Boolean(v)),
+}));
+
 /** Render a single variant preview WITHOUT reading from useBrandLogo  - 
  *  this is the catalog of choices, so each tile has to render its own
  *  variant, not whatever's currently active globally. The font for
@@ -124,20 +145,3 @@ export default function AdminBranding() {
   );
 }
 
-// Variants grouped by visual character so the admin scans by feel, not
-// alphabetically. Order roughly mirrors the brandFonts.ts comment groups.
-const GROUP_DEFS: Array<{ label: string; ids: string[] }> = [
-  { label: 'Default', ids: ['original'] },
-  { label: 'Geometric sans', ids: ['inter', 'manrope', 'jakarta', 'space-grotesk', 'sora', 'outfit', 'rubik'] },
-  { label: 'Bold display', ids: ['archivo-black', 'big-shoulders', 'unbounded', 'monoton', 'tilt-warp'] },
-  { label: 'Serif', ids: ['playfair', 'bodoni', 'cormorant', 'cinzel', 'dm-serif', 'fraunces', 'instrument'] },
-  { label: 'Mono', ids: ['plex-mono', 'jetbrains-mono'] },
-  { label: 'Hand', ids: ['caveat'] },
-];
-
-const VARIANT_GROUPS: Array<{ label: string; variants: BrandVariant[] }> = GROUP_DEFS.map(g => ({
-  label: g.label,
-  variants: g.ids
-    .map(id => BRAND_VARIANTS.find(v => v.id === id))
-    .filter((v): v is BrandVariant => Boolean(v)),
-}));
