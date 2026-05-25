@@ -76,6 +76,7 @@ interface CatalogCreativeVideo {
   productId: string;
   videoUrl: string;
   thumbnailUrl: string | null;
+  productImageUrl: string | null;
   title: string | null;
   productName: string | null;
   productBrand: string | null;
@@ -460,7 +461,7 @@ export default function AdminCatalogs() {
       const catalogProductIds = new Set(catalogProducts.map(p => p.id));
       let adsQuery = supabase
         .from('product_creative')
-        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand)')
+        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand, image_url)')
         .not('video_url', 'is', null)
         .in('status', ['done', 'live'])
         .order('created_at', { ascending: false });
@@ -479,7 +480,7 @@ export default function AdminCatalogs() {
         video_url: string;
         thumbnail_url: string | null;
         status: string;
-        products: { id: string; name: string | null; brand: string | null } | null;
+        products: { id: string; name: string | null; brand: string | null; image_url: string | null } | null;
       };
       const creatives: CatalogCreativeVideo[] = ((adRows as unknown as AdPayload[] | null) || [])
         .filter(r => isAll || catalogProductIds.has(r.product_id))
@@ -488,6 +489,7 @@ export default function AdminCatalogs() {
           productId: r.product_id,
           videoUrl: r.video_url,
           thumbnailUrl: r.thumbnail_url,
+          productImageUrl: r.products?.image_url ?? null,
           title: r.title,
           productName: r.products?.name ?? null,
           productBrand: r.products?.brand ?? null,
@@ -2528,15 +2530,46 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
 }
 
 function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
+  // Default poster is the product's catalog image (the merchandised
+  // still — e.g. the New Balance sneaker on a clean background); we
+  // only swap to the rendered creative video on hover so the grid
+  // reads as "products you can search through" until the admin
+  // explicitly inspects one. Fallback chain: product image →
+  // creative thumbnail (poster frame extracted from the video) →
+  // dark placeholder.
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const [hover, setHover] = React.useState(false);
+  const [videoLoaded, setVideoLoaded] = React.useState(false);
   const label = creative.productName || creative.title || 'Creative';
+  const posterSrc = creative.productImageUrl || creative.thumbnailUrl || null;
+
   return (
     <div
       style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#111' }}
-      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
-      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+      onMouseEnter={() => {
+        setHover(true);
+        videoRef.current?.play().catch(() => {});
+      }}
+      onMouseLeave={() => {
+        setHover(false);
+        if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; }
+      }}
     >
       <div style={{ width: '100%', aspectRatio: '9/16', background: '#000', position: 'relative' }}>
+        {posterSrc && (
+          <img
+            src={posterSrc}
+            alt=""
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+              position: 'absolute', inset: 0,
+              // Fade the poster out once the video is loaded AND we're
+              // hovering — keeps the swap clean instead of a hard cut.
+              opacity: hover && videoLoaded ? 0 : 1,
+              transition: 'opacity 120ms ease',
+            }}
+          />
+        )}
         <video
           ref={videoRef}
           src={creative.videoUrl}
@@ -2544,8 +2577,17 @@ function CreativeThumb({ creative }: { creative: CatalogCreativeVideo }) {
           muted
           loop
           playsInline
-          preload="metadata"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          // metadata until first hover; switch to auto so the next
+          // hover gets an instant play. Keeps page-load light when
+          // there are 100+ tiles below the fold.
+          preload={hover ? 'auto' : 'metadata'}
+          onLoadedData={() => setVideoLoaded(true)}
+          style={{
+            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+            position: 'absolute', inset: 0,
+            opacity: hover ? 1 : 0,
+            transition: 'opacity 120ms ease',
+          }}
         />
         <span style={{
           position: 'absolute', top: 6, right: 6,
