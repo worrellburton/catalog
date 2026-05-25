@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke": "playwright test",
+    "check:no-typeof-import": "node scripts/check-no-typeof-import.mjs",
     "eval:search": "node tests/search/run-golden.mjs",
     "eval:search:warm": "node tests/search/run-golden.mjs --warm",
     "prepare": "husky || true"
@@ -29,6 +31,7 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@remix-run/dev": "^2.17.4",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
