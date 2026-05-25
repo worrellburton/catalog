@@ -4562,6 +4562,22 @@ function SelectionBadge() {
   );
 }
 
+// Base style for every chip in MetricBadgeRow. Must be declared
+// BEFORE the components that read it — Rollup converts the function
+// declarations to const expressions during minification, and an
+// out-of-order const reference can TDZ on first access. That was
+// the cause of the production "Cannot access 'Le'/'Fe' before
+// initialization" 500 on /admin/catalogs and /admin/data.
+const metricChipBase: React.CSSProperties = {
+  padding: '1px 6px',
+  borderRadius: 4,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.3px',
+  lineHeight: '14px',
+  cursor: 'help',
+};
+
 // Shared metric strip used by both LookThumb and ProductMetricTile.
 // Hovering the chip cluster opens a rich insights popover with the
 // underlying numbers, prior period, derived rates and a textual
@@ -4693,16 +4709,6 @@ function MetricInsightsPopover({
     </div>
   );
 }
-
-const metricChipBase: React.CSSProperties = {
-  padding: '1px 6px',
-  borderRadius: 4,
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: '0.3px',
-  lineHeight: '14px',
-  cursor: 'help',
-};
 
 interface DraggableSectionProps {
   title: string;
