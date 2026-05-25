@@ -1357,6 +1357,13 @@ export default function AdminCatalogs() {
         searchCountsByName={searchCounts}
       />
 
+      <CatalogsHealthPanel
+        catalogs={all}
+        impressionsByName={catalogImpressions}
+        searchCountsByName={searchCounts}
+        productCountsByName={catalogProductCounts}
+      />
+
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
@@ -2138,6 +2145,186 @@ interface CatalogCreativeDropdownProps {
   metricsLoading: boolean;
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
   onAfterBulkMutation: () => void;
+}
+
+// ── Phase 10: catalog health panel ────────────────────────────────────
+// Synthesizes actionable warnings from the data already in memory.
+// Each issue has: severity, count, optional sample catalog names
+// (so the admin can jump straight to the worst offenders), and a
+// one-line action hint.
+interface HealthIssue {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  samples: string[];
+  action: string;
+}
+
+function CatalogsHealthPanel({
+  catalogs,
+  impressionsByName,
+  searchCountsByName,
+  productCountsByName,
+}: {
+  catalogs: Catalog[];
+  impressionsByName: Map<string, { curr: number; prev: number }>;
+  searchCountsByName: Map<string, CatalogSearchCounts>;
+  productCountsByName: Map<string, number>;
+}) {
+  const issues = useMemo<HealthIssue[]>(() => {
+    const out: HealthIssue[] = [];
+    // Skip the synthetic `all` row — it's an admin meta-view, not a
+    // real catalog.
+    const real = catalogs.filter(c => !isAllCatalog(c.name) && c.id !== 'synthetic-all');
+
+    const empty = real.filter(c => (productCountsByName.get(c.name) ?? 0) === 0);
+    if (empty.length > 0) {
+      out.push({
+        severity: 'warning',
+        title: `${empty.length} catalog${empty.length === 1 ? '' : 's'} with no products`,
+        detail: 'Shoppers landing here see an empty grid. Tag products via "+ Add Products" or "Suggest Products."',
+        samples: empty.slice(0, 4).map(c => c.name),
+        action: 'Add products or archive',
+      });
+    }
+
+    const zombies = real.filter(c => {
+      const imp = impressionsByName.get(c.name.toLowerCase());
+      const sc = searchCountsByName.get(c.name.toLowerCase());
+      const noImpressions = !imp || imp.curr === 0;
+      const noSearches = !sc || sc.count7d === 0;
+      return noImpressions && noSearches && (productCountsByName.get(c.name) ?? 0) > 0;
+    });
+    if (zombies.length > 0) {
+      out.push({
+        severity: 'warning',
+        title: `${zombies.length} zombie catalog${zombies.length === 1 ? '' : 's'}`,
+        detail: 'Have products tagged but received 0 impressions AND 0 searches in the last 7 days.',
+        samples: zombies.slice(0, 4).map(c => c.name),
+        action: 'Boost or retire',
+      });
+    }
+
+    const falling = real
+      .map(c => {
+        const imp = impressionsByName.get(c.name.toLowerCase());
+        if (!imp || imp.prev === 0 || imp.curr === 0) return null;
+        const pct = Math.round(((imp.curr - imp.prev) / imp.prev) * 100);
+        return pct <= -50 ? { name: c.name, pct } : null;
+      })
+      .filter((x): x is { name: string; pct: number } => x !== null);
+    if (falling.length > 0) {
+      out.push({
+        severity: 'critical',
+        title: `${falling.length} catalog${falling.length === 1 ? '' : 's'} fell off (>50% drop)`,
+        detail: 'Impressions collapsed vs the prior 7-day window. Likely a content or ranking regression.',
+        samples: falling.slice(0, 4).map(f => `${f.name} (↓${Math.abs(f.pct)}%)`),
+        action: 'Investigate',
+      });
+    }
+
+    const rising = real
+      .map(c => {
+        const imp = impressionsByName.get(c.name.toLowerCase());
+        if (!imp || imp.prev === 0 || imp.curr === 0) return null;
+        const pct = Math.round(((imp.curr - imp.prev) / imp.prev) * 100);
+        return pct >= 50 ? { name: c.name, pct } : null;
+      })
+      .filter((x): x is { name: string; pct: number } => x !== null);
+    if (rising.length > 0) {
+      out.push({
+        severity: 'info',
+        title: `${rising.length} catalog${rising.length === 1 ? '' : 's'} breaking out (>50% growth)`,
+        detail: 'Impressions surging vs the prior 7-day window. Consider promoting on Home or featuring.',
+        samples: rising.slice(0, 4).map(r => `${r.name} (↑${r.pct}%)`),
+        action: 'Promote',
+      });
+    }
+
+    // Sweet-spot detection: catalogs with high search volume but
+    // missing products. These are the highest-leverage actions an
+    // admin can take.
+    const demanded = real.filter(c => {
+      const sc = searchCountsByName.get(c.name.toLowerCase());
+      const productCount = productCountsByName.get(c.name) ?? 0;
+      return sc && sc.count7d >= 3 && productCount === 0;
+    });
+    if (demanded.length > 0) {
+      out.push({
+        severity: 'critical',
+        title: `${demanded.length} high-demand catalog${demanded.length === 1 ? '' : 's'} with no products`,
+        detail: 'Shoppers are searching for these but the grid is empty — every search is a dead end.',
+        samples: demanded.slice(0, 4).map(c => c.name),
+        action: 'Tag products immediately',
+      });
+    }
+
+    if (out.length === 0) {
+      out.push({
+        severity: 'info',
+        title: 'No critical issues detected',
+        detail: 'Every real catalog has products tagged, no >50% drops, no high-demand catalogs sitting empty.',
+        samples: [],
+        action: 'Keep monitoring',
+      });
+    }
+
+    return out;
+  }, [catalogs, impressionsByName, searchCountsByName, productCountsByName]);
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 6 }}>
+        Catalog Health
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
+        {issues.map((issue, idx) => (
+          <HealthCard key={idx} issue={issue} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HealthCard({ issue }: { issue: HealthIssue }) {
+  const palette = {
+    critical: { bg: '#fef2f2', border: '#fecaca', accent: '#b91c1c', icon: '⚠' },
+    warning:  { bg: '#fffbeb', border: '#fde68a', accent: '#a16207', icon: '⚠' },
+    info:     { bg: '#ecfdf5', border: '#a7f3d0', accent: '#047857', icon: '✓' },
+  }[issue.severity];
+  return (
+    <div style={{
+      background: palette.bg,
+      border: `1px solid ${palette.border}`,
+      borderRadius: 8,
+      padding: 12,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ color: palette.accent, fontSize: 13, fontWeight: 700 }}>{palette.icon}</span>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{issue.title}</div>
+      </div>
+      <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.4 }}>{issue.detail}</div>
+      {issue.samples.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+          {issue.samples.map((s, i) => (
+            <span key={i} style={{
+              padding: '1px 6px', borderRadius: 4,
+              background: 'rgba(255,255,255,0.6)', border: `1px solid ${palette.border}`,
+              fontSize: 10, fontWeight: 600, color: palette.accent,
+            }}>
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 10, color: palette.accent, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', marginTop: 2 }}>
+        → {issue.action}
+      </div>
+    </div>
+  );
 }
 
 // ── Phase 9: live indicator ───────────────────────────────────────────
