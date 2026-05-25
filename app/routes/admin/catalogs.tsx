@@ -1362,6 +1362,21 @@ export default function AdminCatalogs() {
         impressionsByName={catalogImpressions}
         searchCountsByName={searchCounts}
         productCountsByName={catalogProductCounts}
+        onJumpToCatalog={(name) => {
+          // Strip the "↑22%" / "↓45%" trailing suffix used in sample
+          // labels for trend issues — the actual catalog name is what
+          // appears before " (".
+          const cleanName = name.split(' (')[0];
+          const match = all.find(c => c.name === cleanName);
+          if (!match) return;
+          setExpanded(prev => new Set(prev).add(match.id));
+          if (!creativeByCatalog[match.id]) loadCreative(match);
+          // Scroll the row into view after the state flush.
+          requestAnimationFrame(() => {
+            const row = document.querySelector(`[data-catalog-row="${match.id}"]`);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }}
       />
 
       <div className="admin-table-wrap">
@@ -1398,7 +1413,7 @@ export default function AdminCatalogs() {
               const homeProductCount = catalogProductCounts.get(homeCatalog.name) || 0;
               return (
                 <React.Fragment key={homeCatalog.id}>
-                  <tr style={{ background: '#fffbeb' }}>
+                  <tr data-catalog-row={homeCatalog.id} style={{ background: '#fffbeb' }}>
                     <td style={{ textAlign: 'left', fontWeight: 600 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button
@@ -1495,7 +1510,7 @@ export default function AdminCatalogs() {
               const isLoadingCreative = creativeLoading.has(c.id);
               return (
               <React.Fragment key={c.id}>
-              <tr>
+              <tr data-catalog-row={c.id}>
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
@@ -2169,11 +2184,13 @@ function CatalogsHealthPanel({
   impressionsByName,
   searchCountsByName,
   productCountsByName,
+  onJumpToCatalog,
 }: {
   catalogs: Catalog[];
   impressionsByName: Map<string, { curr: number; prev: number }>;
   searchCountsByName: Map<string, CatalogSearchCounts>;
   productCountsByName: Map<string, number>;
+  onJumpToCatalog?: (name: string) => void;
 }) {
   const issues = useMemo<HealthIssue[]>(() => {
     const out: HealthIssue[] = [];
@@ -2283,14 +2300,14 @@ function CatalogsHealthPanel({
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
         {issues.map((issue, idx) => (
-          <HealthCard key={idx} issue={issue} />
+          <HealthCard key={idx} issue={issue} onJumpToCatalog={onJumpToCatalog} />
         ))}
       </div>
     </div>
   );
 }
 
-function HealthCard({ issue }: { issue: HealthIssue }) {
+function HealthCard({ issue, onJumpToCatalog }: { issue: HealthIssue; onJumpToCatalog?: (name: string) => void }) {
   const palette = {
     critical: { bg: '#fef2f2', border: '#fecaca', accent: '#b91c1c', icon: '⚠' },
     warning:  { bg: '#fffbeb', border: '#fde68a', accent: '#a16207', icon: '⚠' },
@@ -2314,13 +2331,24 @@ function HealthCard({ issue }: { issue: HealthIssue }) {
       {issue.samples.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
           {issue.samples.map((s, i) => (
-            <span key={i} style={{
-              padding: '1px 6px', borderRadius: 4,
-              background: 'rgba(255,255,255,0.6)', border: `1px solid ${palette.border}`,
-              fontSize: 10, fontWeight: 600, color: palette.accent,
-            }}>
+            <button
+              key={i}
+              type="button"
+              onClick={() => onJumpToCatalog?.(s)}
+              disabled={!onJumpToCatalog}
+              title={onJumpToCatalog ? 'Jump to this catalog' : undefined}
+              style={{
+                padding: '1px 6px', borderRadius: 4,
+                background: 'rgba(255,255,255,0.6)', border: `1px solid ${palette.border}`,
+                fontSize: 10, fontWeight: 600, color: palette.accent,
+                cursor: onJumpToCatalog ? 'pointer' : 'default',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={onJumpToCatalog ? (e) => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; } : undefined}
+              onMouseLeave={onJumpToCatalog ? (e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.6)'; } : undefined}
+            >
               {s}
-            </span>
+            </button>
           ))}
         </div>
       )}
