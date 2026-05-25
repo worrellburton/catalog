@@ -7,6 +7,37 @@ import { looks as staticLooks, creators as staticCreators, searchSuggestions as 
 const USE_SUPABASE = true;
 
 // ============================================
+// localStorage SWR cache (mirrors product-creative pattern)
+// ============================================
+const LOOKS_LS_KEY = 'catalog:looks-cache:v1';
+const LOOKS_LS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function readLooksFromStorage(): Look[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(LOOKS_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt: number; rows: Look[] };
+    if (!parsed || typeof parsed.savedAt !== 'number' || !Array.isArray(parsed.rows)) return null;
+    if (Date.now() - parsed.savedAt > LOOKS_LS_MAX_AGE_MS) return null;
+    return parsed.rows;
+  } catch {
+    return null;
+  }
+}
+
+function writeLooksToStorage(rows: Look[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOOKS_LS_KEY, JSON.stringify({ savedAt: Date.now(), rows }));
+  } catch { /* quota exceeded - feed still works, just no fast-path next time */ }
+}
+
+export function getCachedLooks(): Look[] | null {
+  return readLooksFromStorage();
+}
+
+// ============================================
 // Supabase fetchers
 // ============================================
 
@@ -187,7 +218,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // is_ai by creator_handle was already populated above when we
   // queried creators for handle validation — single round trip.
 
-  return filteredLooks.map((row, index) => {
+  const result = filteredLooks.map((row, index) => {
     const primary = row.looks_creative[0];
     // Always look up profile by user_id when available — the avatar
     // belongs to the human/AI who owns this look, regardless of
@@ -226,6 +257,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         })),
     };
   });
+
+  writeLooksToStorage(result);
+  return result;
 }
 
 async function fetchCreatorsFromSupabase(): Promise<Record<string, Creator>> {

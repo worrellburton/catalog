@@ -11,6 +11,7 @@
 // Idempotent - calling twice with the same rows is a no-op.
 
 import type { ProductAd } from '~/services/product-creative';
+import type { Look } from '~/data/looks';
 import { supabaseImage } from './supabaseImage';
 
 const POSTERS_TO_WARM = 16;
@@ -95,6 +96,28 @@ export function primeTrailAssets(rows: ProductAd[]): void {
   if (!networkLooksHealthy()) return;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
     const url = row.video_url;
+    if (!url || warmedVideos.has(url)) continue;
+    warmedVideos.add(url);
+    injectPreload(url, 'video', 'video/mp4');
+  }
+}
+
+export function primeLookAssets(rows: Look[]): void {
+  if (!rows?.length) return;
+
+  for (const row of rows.slice(0, POSTERS_TO_WARM)) {
+    const rawPoster = row.thumbnail_url;
+    if (!rawPoster) continue;
+    const poster = supabaseImage(rawPoster, { width: 480, quality: 70 });
+    if (warmedPosters.has(poster)) continue;
+    warmedPosters.add(poster);
+    injectPreload(poster, 'image');
+    void decodeImage(poster);
+  }
+
+  if (!networkLooksHealthy()) return;
+  for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
+    const url = row.mobile_video_url || row.video;
     if (!url || warmedVideos.has(url)) continue;
     warmedVideos.add(url);
     injectPreload(url, 'video', 'video/mp4');

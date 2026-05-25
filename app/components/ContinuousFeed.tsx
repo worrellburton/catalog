@@ -1,13 +1,13 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
-import { getLooks } from '~/services/looks';
+import { getLooks, getCachedLooks } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
 import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
-import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
@@ -188,19 +188,23 @@ export default function ContinuousFeed({
   const hiddenLookIds = useHiddenLooks();
   const hiddenProductKeys = useHiddenProductKeys();
 
-  // Load looks live from Supabase. Initial state is empty so we don't burn
-  // a render pass filtering the seed dataset (and don't briefly leak its
-  // 2-creator content into the "More like this" rails on slow networks).
-  // The first segment is creative-only anyway, so an empty looks array
-  // costs nothing on first paint - sub-segments only matter after the
-  // user taps a look, by which point Supabase has resolved.
-  const [dbLooks, setDbLooks] = useState<Look[]>([]);
+  // Load looks live from Supabase. Stale-while-revalidate: seed from
+  // localStorage on mount (instant on return visits) and revalidate in
+  // the background so the cache stays fresh.
+  const initialCachedLooks = useMemo(() => getCachedLooks(), []);
+  const [dbLooks, setDbLooks] = useState<Look[]>(initialCachedLooks || []);
+  useEffect(() => {
+    if (initialCachedLooks?.length) primeLookAssets(initialCachedLooks);
+  }, [initialCachedLooks]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const fetched = await getLooks();
-        if (!cancelled && fetched.length > 0) setDbLooks(fetched);
+        if (!cancelled && fetched.length > 0) {
+          setDbLooks(fetched);
+          primeLookAssets(fetched);
+        }
       } catch {
         // Supabase unreachable - fall back to the static seed so sub-segments
         // have *something* to draw similars from instead of an empty rail.

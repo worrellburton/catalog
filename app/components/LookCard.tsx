@@ -4,7 +4,7 @@ import { Look, creators } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
-import { useTrailVideo } from './TrailVideoHost';
+import { useTrailVideo, useTrailPrewarm } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackImpression } from '~/services/session-tracker';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
@@ -190,23 +190,21 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     };
   }, [videoActive, trailId]);
 
-  // Phase 8 — Background-warm the HTTP cache while the card sits in the
-  // wider render band (2 viewports). By the time the user actually scrolls
-  // it into the active band (or taps it for the overlay), the moov atom
-  // + first GOP are already cached and the <video> element gets first
-  // frame instantly. Mirrors CreativeCard's prefetch and is the single
-  // biggest perceived-latency win for cold-tap navigations.
-  //
-  // Prefetch BOTH the chosen variant and the full-res so the LookOverlay
-  // hero (which uses the same chosenUrl) is covered, and any consumer
-  // that picks full-res independently still hits the cache.
+  // Pre-warm: create the <video> element in the offscreen pool as soon as
+  // the card enters the render band (~2 viewports away). The media pipeline
+  // starts buffering immediately. When the card enters the active band,
+  // useTrailVideo's attach() finds the already-loading element and starts
+  // playing near-instantly instead of cold-starting from zero.
+  // This mirrors what the VideoPlaybackDirector does for CreativeCardV2.
+  const prewarmId  = inRenderBand && !previewOnly && allowVideoForThisCard ? trailId   : undefined;
+  const prewarmSrc = inRenderBand && !previewOnly && allowVideoForThisCard ? videoUrl  : undefined;
+  useTrailPrewarm(prewarmId, prewarmSrc, posterUrl || undefined);
+
+  // For the overlay: when serving a down-sized mobile variant on this card,
+  // also warm the full-res URL so tapping in opens the overlay instantly.
   useEffect(() => {
-    if (!inRenderBand) return;
-    if (previewOnly) return;
-    const t = window.setTimeout(() => {
-      prefetchVideoBytes(videoUrl);
-      if (videoUrl !== fullVideoUrl) prefetchVideoBytes(fullVideoUrl);
-    }, 500);
+    if (!inRenderBand || previewOnly || videoUrl === fullVideoUrl) return;
+    const t = window.setTimeout(() => prefetchVideoBytes(fullVideoUrl), 500);
     return () => window.clearTimeout(t);
   }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl]);
 

@@ -43,6 +43,11 @@ interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
    *  Returns a cleanup that returns the element to the off-screen pool. */
   attach: (id: string, src: string, container: HTMLElement, poster?: string) => () => void;
+  /** Pre-create the video element for `id` in the off-screen pool so the
+   *  media pipeline starts buffering before the card enters the active band.
+   *  attach() will reuse the already-loading element, so playback begins
+   *  near-instantly instead of cold-starting from zero. */
+  prewarm: (id: string, src: string, poster?: string) => void;
   /** Pause every in-slot video except `heroTrailId`. Call when a detail
    *  overlay opens so background feed cards stop competing for bandwidth. */
   suspendFeed: (heroTrailId: string) => void;
@@ -230,7 +235,43 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const manager = useMemo<TrailVideoManager>(() => ({ attach, suspendFeed, resumeFeed }), [attach, suspendFeed, resumeFeed]);
+  // Pre-creates a video element in the offscreen pool so the media pipeline
+  // starts buffering before the card enters the active (play) band. When
+  // attach() is called later it finds the element already loading and can
+  // start playing near-instantly.
+  const prewarm = useCallback((id: string, src: string, poster?: string): void => {
+    const pool = elementsRef.current;
+    const offscreen = poolRef.current;
+    if (!offscreen) return;
+    // Already pooled (in-slot or parked) — just refresh the poster, done.
+    const existing = pool.get(id);
+    if (existing) {
+      if (poster && existing.el.getAttribute('poster') !== poster) {
+        existing.el.setAttribute('poster', poster);
+      }
+      return;
+    }
+    const el = document.createElement('video');
+    el.muted = true;
+    el.defaultMuted = true;
+    // Deliberately NOT setting autoplay — we want buffering, not playing.
+    // play() is called by attach() when the card enters the active band.
+    el.loop = true;
+    el.playsInline = true;
+    el.setAttribute('muted', '');
+    el.setAttribute('playsinline', '');
+    el.preload = 'auto';
+    el.crossOrigin = 'anonymous';
+    if (poster) el.setAttribute('poster', poster);
+    el.src = src;
+    el.setAttribute('data-trail-id', id);
+    el.style.cssText = 'width:1px;height:1px;display:block;';
+    offscreen.appendChild(el);
+    pool.set(id, { el, src, lastUsed: ++tickRef.current });
+    evictIfNeeded();
+  }, [evictIfNeeded]);
+
+  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed }), [attach, prewarm, suspendFeed, resumeFeed]);
 
   // Visibility + gesture playback recovery. Three sources of frozen-frame
   // bugs we have to handle:
@@ -331,6 +372,18 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
  *  the TrailVideoHost component (e.g. LookOverlay mounts/unmounts). */
 export function useTrailVideoManager() {
   return useContext(TrailVideoContext);
+}
+
+/** Pre-warms the video element for `id` into the off-screen pool so the
+ *  media pipeline starts buffering before the card enters the active band.
+ *  Call when the card enters the render band; call useTrailVideo (attach)
+ *  separately when it enters the active (play) band. */
+export function useTrailPrewarm(id: string | undefined, src: string | undefined, poster?: string) {
+  const mgr = useContext(TrailVideoContext);
+  useEffect(() => {
+    if (!mgr || !id || !src) return;
+    mgr.prewarm(id, src, poster);
+  }, [mgr, id, src, poster]);
 }
 
 /** Returns a ref callback; assign to the slot div. The optional poster
