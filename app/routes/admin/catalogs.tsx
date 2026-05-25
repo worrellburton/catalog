@@ -3010,6 +3010,97 @@ function MetricMiniCard({ label, value, sub, accent }: { label: string; value: s
   );
 }
 
+// Daily metrics hook for the detail drawer sparkline. Loads on first
+// mount + on subject change; null while loading or if the RPC errors
+// so the sparkline can render an "awaiting data" placeholder.
+function useDailyMetrics(targetType: 'look' | 'product', primaryKey: string, fallbackKey?: string | number | null) {
+  const [data, setData] = useState<{ day: string; impressions: number; clicks: number; clickouts: number }[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let cancelled = false;
+    const keys = [primaryKey, fallbackKey].filter((k): k is string | number => k !== null && k !== undefined);
+    (async () => {
+      setLoading(true);
+      for (const k of keys) {
+        const { data: rows, error } = await supabase!.rpc('catalog_item_daily_metrics', {
+          p_target_type: targetType,
+          p_target_key: String(k),
+          p_days: 14,
+        });
+        if (cancelled) return;
+        if (error) continue;
+        if (rows && (rows as unknown[]).length > 0) {
+          const typed = (rows as { day: string; impressions: number | string; clicks: number | string; clickouts: number | string }[]).map(r => ({
+            day: r.day,
+            impressions: Number(r.impressions) || 0,
+            clicks: Number(r.clicks) || 0,
+            clickouts: Number(r.clickouts) || 0,
+          }));
+          // Only commit if there's any signal — otherwise keep
+          // checking the fallback key (legacy_id).
+          if (typed.some(d => d.impressions > 0 || d.clicks > 0)) {
+            setData(typed);
+            setLoading(false);
+            return;
+          }
+          setData(typed);
+        }
+      }
+      setLoading(false);
+    })().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [targetType, primaryKey, fallbackKey]);
+  return { data, loading };
+}
+
+// 14-day impressions sparkline. Inline SVG so we don't pull a charting
+// dep. Bars scale to the max value; faint baseline grid every 25%.
+function DailySparkline({ data, accent = '#2563eb' }: { data: { day: string; impressions: number }[] | null; accent?: string }) {
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ fontSize: 11, color: '#94a3b8', padding: '12px 0', textAlign: 'center' }}>
+        No daily activity in the last 14 days.
+      </div>
+    );
+  }
+  const max = Math.max(1, ...data.map(d => d.impressions));
+  const W = 380; const H = 80;
+  const barW = W / data.length;
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        <line x1={0} y1={H * 0.5} x2={W} y2={H * 0.5} stroke="#f1f5f9" strokeWidth={1} />
+        <line x1={0} y1={H * 0.25} x2={W} y2={H * 0.25} stroke="#f8fafc" strokeWidth={1} />
+        <line x1={0} y1={H * 0.75} x2={W} y2={H * 0.75} stroke="#f8fafc" strokeWidth={1} />
+        {data.map((d, i) => {
+          const h = max > 0 ? (d.impressions / max) * (H - 6) : 0;
+          return (
+            <g key={d.day}>
+              <rect
+                x={i * barW + 1}
+                y={H - h}
+                width={Math.max(1, barW - 2)}
+                height={h}
+                fill={accent}
+                rx={1.5}
+                opacity={d.impressions === 0 ? 0.2 : 1}
+              >
+                <title>{`${d.day}: ${d.impressions} impression${d.impressions === 1 ? '' : 's'}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>{data[0]?.day}</span>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>peak {max}</span>
+        <span style={{ fontSize: 9, color: '#94a3b8' }}>{data[data.length - 1]?.day}</span>
+      </div>
+    </div>
+  );
+}
+
 function LookDetailBody({ look }: { look: CatalogLookRow }) {
   const src = look.videoPath
     ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
@@ -3021,6 +3112,7 @@ function LookDetailBody({ look }: { look: CatalogLookRow }) {
   const trendColor = (m?.trendPct ?? 0) >= 25 ? '#047857'
     : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
     : '#475569';
+  const { data: daily } = useDailyMetrics('look', look.id, look.legacyId);
   return (
     <>
       <div style={{ aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#000', maxHeight: 360 }}>
@@ -3054,6 +3146,13 @@ function LookDetailBody({ look }: { look: CatalogLookRow }) {
 
       <div>
         <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Last 14 days
+        </div>
+        <DailySparkline data={daily} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
           Attached products
         </div>
         <div style={{ fontSize: 13, color: '#475569' }}>
@@ -3079,6 +3178,7 @@ function ProductDetailBody({ product }: { product: ProductRow }) {
     : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
     : '#475569';
   const tags = product.catalog_tags || [];
+  const { data: daily } = useDailyMetrics('product', product.id);
   return (
     <>
       <div style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', maxHeight: 360 }}>
@@ -3099,6 +3199,13 @@ function ProductDetailBody({ product }: { product: ProductRow }) {
         <MetricMiniCard label="CTR" value={m && m.impressions > 0 ? `${(m.ctr * 100).toFixed(1)}%` : '—'} />
         <MetricMiniCard label="Clickouts" value={(m?.clickouts ?? 0).toLocaleString()} />
         <MetricMiniCard label="Trend" value={trendLabel} accent={trendColor} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Last 14 days
+        </div>
+        <DailySparkline data={daily} />
       </div>
 
       <div>
