@@ -768,6 +768,7 @@ export default function AdminCatalogs() {
               title: a.title,
               productName: a.product?.name ?? null,
               productBrand: a.product?.brand ?? null,
+              productImageUrl: a.product?.image_url ?? null,
               status: a.status,
             }));
         } catch (err) {
@@ -777,7 +778,7 @@ export default function AdminCatalogs() {
 
       // Merge products from feed search results so catalogs whose items don't
       // yet have catalog_tags still populate the Products section. Deduped by id.
-      let displayProducts = catalogProducts;
+      let displayProducts: ProductRow[] = catalogProducts as ProductRow[];
       if (!isAll && feedResults.length > 0) {
         const existingIds = new Set(catalogProducts.map(p => p.id));
         const feedProductIds = new Set(feedResults.map(f => f.productId).filter(Boolean));

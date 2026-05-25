@@ -195,8 +195,7 @@ export async function getFeedSearchBundle(query: string, limit = 60): Promise<Fe
       .eq('is_active', true)
       .order('conversion_score', { ascending: false })
       .limit(limit)
-      .then(({ data }) => (data ?? []) as FeedProduct[])
-      .catch(() => [] as FeedProduct[]),
+      .then(({ data }) => (data ?? []) as FeedProduct[], () => [] as FeedProduct[]),
 
     // Looks: catalog_tags contains the query.
     supabase
@@ -227,8 +226,7 @@ export async function getFeedSearchBundle(query: string, limit = 60): Promise<Fe
           creatorHandle: r.creator_handle,
           productCount: (r.look_products ?? []).length,
         }));
-      })
-      .catch(() => [] as FeedLook[]),
+      }, () => [] as FeedLook[]),
   ]);
 
   return { creatives, products, looks };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactElement } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
@@ -1185,7 +1185,7 @@ interface AiUsersTabProps {
     table: ReturnType<typeof useSortableTable<UserRow>>,
     label: string,
     options?: { showSuperToggle?: boolean; showAdminToggle?: boolean; showPromoteButton?: boolean },
-  ) => JSX.Element;
+  ) => ReactElement;
   onCreated: (userId: string) => void;
 }
 

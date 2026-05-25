@@ -1137,12 +1137,12 @@ export default function AdminData() {
       // the new row never appears in the Published list.
       const followUps: Promise<unknown>[] = [];
       if (supabase && g.video_url) {
-        followUps.push(supabase
+        followUps.push(Promise.resolve(supabase
           .from('looks_creative')
           .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
           .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
-          }));
+          })));
       }
       if (supabase) {
         // Overwrite user_id with the source generation's creator so
@@ -1158,13 +1158,13 @@ export default function AdminData() {
           updates.user_id = g.user_id;
           updates.creator_handle = null; // let trigger backfill from creators
         }
-        followUps.push(supabase
+        followUps.push(Promise.resolve(supabase
           .from('looks')
           .update(updates)
           .eq('id', look.id)
           .then(({ error }: { error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] status update failed:', error.message);
-          }));
+          })));
         // Also record the admin who actually ran the publish so the
         // audit trail survives the user_id move.
         followUps.push((async () => {
@@ -1445,10 +1445,6 @@ export default function AdminData() {
 
   // Toggle states per look: { [lookId]: { platform, featured, splash } }
   const [toggles, setToggles] = useState<Record<number, { platform: boolean; featured: boolean; splash: boolean }>>({});
-  // localStorage keys act as a durable fallback when the Supabase
-  // admin_hidden_* migrations haven't been applied - otherwise deletes would
-  // vanish on page refresh and look "undone" to the admin.
-
 
   // Merge Supabase hidden sets on top of the local fallback. If the remote
   // table is missing or errors, the local set still wins - deletions stick.

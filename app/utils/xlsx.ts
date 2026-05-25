@@ -227,7 +227,7 @@ export function buildXlsx(sheet: Sheet): Uint8Array {
 
 export function downloadXlsx(sheet: Sheet, filename: string): void {
   const bytes = buildXlsx(sheet);
-  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

@@ -13,6 +13,11 @@ export interface Product {
    *  Surfaced as the SVG measurement diagram on /p/<slug>. Null until
    *  the scraper backfills it; the diagram self-hides when empty. */
   measurements?: Record<string, number> | null;
+  /** Set when bookmarked from a product creative — carries the video so
+   *  the saved-items page can render a video card instead of a still. */
+  video_url?: string;
+  thumbnail_url?: string;
+  creative_id?: string;
 }
 
 export interface Creator {

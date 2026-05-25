@@ -126,12 +126,12 @@ function UserMenu({
         const connected = data?.is_payout_active ?? false;
         setDotsConnected(connected);
         if (connected) {
-          getWallet(1, 1).then(w => {
-            if (!cancelled) setWalletBalance(w.current_balance);
-          }).catch(() => {});
+          getWallet(1, 1).then(
+            w => { if (!cancelled) setWalletBalance(w.current_balance); },
+            () => {},
+          );
         }
-      })
-      .catch(() => { if (!cancelled) setDotsConnected(false); });
+      }, () => { if (!cancelled) setDotsConnected(false); });
     return () => { cancelled = true; };
   }, [open, user?.id]);
 

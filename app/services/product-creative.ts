@@ -259,7 +259,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
     looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
     look_products: { product: ProductAd['product'] | null }[] | null;
   };
-  const rows = (data as LookRow[] | null) || [];
+  const rows = (data as unknown as LookRow[] | null) || [];
   const out: ProductAd[] = [];
   for (const r of rows) {
     const video = r.looks_creative?.find(c => c.is_primary)?.video_url

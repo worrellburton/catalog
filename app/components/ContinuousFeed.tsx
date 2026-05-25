@@ -569,6 +569,7 @@ export default function ContinuousFeed({
       impressions:      0,
       clicks:           0,
       error:            null,
+      mobile_video_url: null,
       enabled:          true,
       is_elite:         c.is_elite ?? false,
       created_at:       new Date().toISOString(),

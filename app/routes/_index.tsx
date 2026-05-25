@@ -704,6 +704,11 @@ export default function Home() {
     onOpenBrand: handleOpenBrand,
   });
 
+  const handleBookmarksOpenLook = useCallback((look: Look) => {
+    setShowBookmarks(false);
+    handleOpenLook(look);
+  }, [handleOpenLook]);
+
   const handleBookmarksOpenCreator = useCallback((handle: string) => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -884,10 +889,13 @@ export default function Home() {
               <BookmarksPage
                 bookmarks={bookmarks}
                 onClose={closeBookmarks}
-                onOpenLook={handleOpenLook}
+                onOpenLook={handleBookmarksOpenLook}
                 onOpenBrowser={handleOpenBrowser}
+                onOpenProduct={handleOpenProduct}
+                onOpenCreative={handleOpenCreative}
                 onOpenCreator={handleBookmarksOpenCreator}
                 onOpenBrand={handleOpenBrand}
+                savedLooks={savedLooksForMenu}
               />
             </Suspense>
           )}
