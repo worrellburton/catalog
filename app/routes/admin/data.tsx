@@ -836,6 +836,13 @@ export default function AdminData() {
   // live DB instead of the hardcoded seed in app/data/looks.ts. Fall back to
   // the static module only if the Supabase fetch returns nothing (e.g.
   // offline or first-boot before seed has been applied).
+  // Deleted-look + deleted-product state — declared HERE (above
+  // publishedSourceCounts and other consumers) so deps arrays don't
+  // TDZ in production. Was the cause of the "Cannot access 'Zt'
+  // before initialization" 500 on /admin/data.
+  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(() => readLocalSet<number>(LOCAL_LOOKS_KEY));
+  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => readLocalSet<string>(LOCAL_PRODUCTS_KEY));
+
   const [looks, setLooks] = useState<Look[]>(staticLooks);
   const [creators, setCreators] = useState<Record<string, Creator>>(staticCreators);
   useEffect(() => {
@@ -1436,8 +1443,6 @@ export default function AdminData() {
     try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
   };
 
-  const [deletedLookIds, setDeletedLookIds] = useState<Set<number>>(() => readLocalSet<number>(LOCAL_LOOKS_KEY));
-  const [deletedProductKeys, setDeletedProductKeys] = useState<Set<string>>(() => readLocalSet<string>(LOCAL_PRODUCTS_KEY));
 
   // Merge Supabase hidden sets on top of the local fallback. If the remote
   // table is missing or errors, the local set still wins - deletions stick.
