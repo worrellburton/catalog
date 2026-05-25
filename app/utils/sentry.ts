@@ -7,17 +7,44 @@
  * Wire-up: set VITE_SENTRY_DSN in Vercel → Project → Environment
  * Variables, then redeploy. The SDK pulls in lazily at runtime, so
  * the cold path doesn't pay for it.
+ *
+ * Defensive design notes
+ * ----------------------
+ * The dynamic import is hidden behind a string-concatenated module
+ * id so Vite/Rollup does NOT try to bundle or trace it at build
+ * time. Without this, an unconfigured environment (no DSN, package
+ * missing, etc.) could produce a TDZ-style "Cannot access X before
+ * initialization" error in the minified chunk because of how
+ * Rollup hoists references to dynamic-import targets. The string
+ * concat opts us out of that analysis cleanly.
+ *
+ * We also avoid `typeof import('@sentry/remix')` at the module
+ * level so the type-only reference never leaks into the chunk
+ * graph — the SDK object is typed as `any` after dynamic load,
+ * which is acceptable for two call sites.
  */
 
 let initialized = false;
-let sentry: typeof import('@sentry/remix') | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let sentry: any = null;
+
+function readDsn(): string | undefined {
+  try {
+    return (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_SENTRY_DSN;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function initSentry(): Promise<void> {
   if (initialized || typeof window === 'undefined') return;
-  const dsn = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_SENTRY_DSN;
+  const dsn = readDsn();
   if (!dsn) return;
   try {
-    sentry = await import('@sentry/remix');
+    // String concat keeps Vite from statically analysing the dynamic
+    // import. Combined with @vite-ignore it's belt + suspenders.
+    const moduleId = '@sentry' + '/remix';
+    sentry = await import(/* @vite-ignore */ moduleId);
     sentry.init({
       dsn,
       environment: (import.meta as { env?: Record<string, string | undefined> }).env?.MODE || 'production',
@@ -30,7 +57,7 @@ export async function initSentry(): Promise<void> {
     initialized = true;
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[sentry] init failed:', err);
+    console.warn('[sentry] init skipped:', err);
   }
 }
 
@@ -40,6 +67,6 @@ export function captureException(err: unknown, context?: Record<string, unknown>
   // eslint-disable-next-line no-console
   console.error('[error]', err, context);
   if (sentry) {
-    sentry.captureException(err, { extra: context });
+    try { sentry.captureException(err, { extra: context }); } catch { /* swallow */ }
   }
 }
