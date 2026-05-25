@@ -156,9 +156,9 @@ function FeedSection({
       return items;
     }
 
-    // Initial segment is elite-creative-only - no static looks mixed in.
-    // Secondary "More like this" segments (isInitial=false) still pull from
-    // their look set since that's where look-driven discovery lives.
+    // Both initial and sub-segments pull from a mixed looks + creatives deck.
+    // The initial segment now includes look cards so creators' looks are
+    // discoverable from the main feed.
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
     // Seed combines layoutMode + sizes of the input arrays so the shuffle
     // is stable for a given (layoutMode, looks, creatives) but visibly
@@ -168,12 +168,10 @@ function FeedSection({
     const buildDeck = (): DeckEntry[] => {
       cycleSeed = (cycleSeed * 31 + 7) | 0;
       return seededShuffle<DeckEntry>(
-        isInitial
-          ? creativeList.map(creative => ({ type: 'creative' as const, creative }))
-          : [
-              ...looks.map(look => ({ type: 'look' as const, look })),
-              ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
-            ],
+        [
+          ...looks.map(look => ({ type: 'look' as const, look })),
+          ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+        ],
         cycleSeed,
       );
     };
@@ -182,8 +180,7 @@ function FeedSection({
     let deck = buildDeck();
     let displayIndex = 0;
 
-    // Empty deck (e.g. no elite creatives flagged yet on the initial segment)
-    // - leave the grid empty rather than falling back to looks.
+    // Empty deck (no looks and no creatives available yet) - nothing to render.
     if (deck.length === 0) return items;
 
     // In search mode: render each creative exactly once (no cycling).
@@ -316,7 +313,7 @@ function FeedSection({
             <LookCard
               key={`${item.look.id}-${item.look.displayIndex}`}
               look={item.look}
-              className={getCardClass(item.look.displayIndex)}
+              className={getCardClass(idx)}
               onOpenLook={onOpenLook}
               onOpenCreator={onOpenCreator}
               onCreateCatalog={onCreateCatalog}
