@@ -2798,7 +2798,13 @@ function ProductMetricTile({ product }: { product: ProductRow }) {
 }
 
 // Shared metric strip used by both LookThumb and ProductMetricTile.
+// Hovering the chip cluster opens a rich insights popover with the
+// underlying numbers, prior period, derived rates and a textual
+// trend interpretation. Native title= tooltips remain as a fallback
+// for accessibility / keyboard users.
 function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
+  const [showInsights, setShowInsights] = React.useState(false);
+
   if (!metrics) {
     return (
       <div style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4 }}>
@@ -2806,7 +2812,7 @@ function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
       </div>
     );
   }
-  const { impressions, ctr, trendPct } = metrics;
+  const { impressions, clicks, clickouts, impressionsPrev, ctr, clickoutRate, trendPct } = metrics;
   const trendLabel = trendPct === null
     ? 'NEW'
     : trendPct === 0 ? '—' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
@@ -2815,19 +2821,108 @@ function MetricBadgeRow({ metrics }: { metrics?: ItemMetrics }) {
     : trendPct >= 25 ? '#047857'
     : trendPct <= -25 ? '#b91c1c'
     : '#475569';
+
   return (
-    <div style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }} title="Impressions in last 7 days">
+    <div
+      style={{ position: 'absolute', top: 6, left: 6, right: 6, display: 'flex', gap: 4, flexWrap: 'wrap', pointerEvents: 'auto', zIndex: 2 }}
+      onMouseEnter={() => setShowInsights(true)}
+      onMouseLeave={() => setShowInsights(false)}
+    >
+      <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }}>
         {impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}k` : impressions}
       </span>
       {impressions > 0 && (
-        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }} title="Click-through rate">
+        <span style={{ ...metricChipBase, background: 'rgba(15,23,42,0.78)', color: '#fff' }}>
           {(ctr * 100).toFixed(0)}%
         </span>
       )}
-      <span style={{ ...metricChipBase, background: trendColor, color: '#fff' }} title="Change vs prior 7-day window">
+      <span style={{ ...metricChipBase, background: trendColor, color: '#fff' }}>
         {trendLabel}
       </span>
+      {showInsights && (
+        <MetricInsightsPopover
+          impressions={impressions}
+          impressionsPrev={impressionsPrev}
+          clicks={clicks}
+          clickouts={clickouts}
+          ctr={ctr}
+          clickoutRate={clickoutRate}
+          trendPct={trendPct}
+        />
+      )}
+    </div>
+  );
+}
+
+// Rich hover popover. Positioned below + slightly right of the chip
+// cluster. Doesn't try to be the world's smartest popover — no flip
+// logic — but it's contained within the dropdown's scroll surface so
+// clipping is rarely an issue.
+interface MetricInsightsPopoverProps {
+  impressions: number;
+  impressionsPrev: number;
+  clicks: number;
+  clickouts: number;
+  ctr: number;
+  clickoutRate: number;
+  trendPct: number | null;
+}
+
+function MetricInsightsPopover({
+  impressions, impressionsPrev, clicks, clickouts, ctr, clickoutRate, trendPct,
+}: MetricInsightsPopoverProps) {
+  const trendVerdict = trendPct === null
+    ? 'New this week — no prior period to compare.'
+    : trendPct >= 50 ? 'Breaking out.'
+    : trendPct >= 25 ? 'Rising fast.'
+    : trendPct > 0 ? 'Trending up.'
+    : trendPct === 0 ? 'Flat vs prior 7d.'
+    : trendPct >= -25 ? 'Slipping.'
+    : 'Fell off — investigate.';
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  const row = (label: string, value: string, hint?: string) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '3px 0' }}>
+      <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 700 }}>{label}</span>
+      <span style={{ fontSize: 12, color: '#0f172a', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+        {hint && <span style={{ marginLeft: 4, fontSize: 9, color: '#94a3b8', fontWeight: 500 }}>{hint}</span>}
+      </span>
+    </div>
+  );
+  return (
+    <div
+      role="tooltip"
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 6px)',
+        left: 0,
+        width: 220,
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 8,
+        boxShadow: '0 10px 28px rgba(15,23,42,0.18)',
+        padding: 10,
+        zIndex: 10,
+        pointerEvents: 'none',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Insights · 7d</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: trendColor }}>
+          {trendPct === null ? 'NEW' : trendPct === 0 ? '—' : `${trendPct > 0 ? '+' : ''}${trendPct}%`}
+        </span>
+      </div>
+      {row('Impressions', impressions.toLocaleString(), `was ${impressionsPrev.toLocaleString()}`)}
+      {row('Clicks', clicks.toLocaleString(), impressions > 0 ? `${(ctr * 100).toFixed(1)}% CTR` : undefined)}
+      {row('Clickouts', clickouts.toLocaleString(), impressions > 0 ? `${(clickoutRate * 100).toFixed(2)}% rate` : undefined)}
+      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #f1f5f9', fontSize: 11, color: trendColor, fontWeight: 600 }}>
+        {trendVerdict}
+      </div>
     </div>
   );
 }
@@ -2839,7 +2934,7 @@ const metricChipBase: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: '0.3px',
   lineHeight: '14px',
-  pointerEvents: 'none',
+  cursor: 'help',
 };
 
 interface DraggableSectionProps {
