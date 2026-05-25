@@ -15,6 +15,7 @@ import {
   getHomeCatalog,
   updateCatalogToggles,
   setCatalogGender,
+  setCatalogSortOrder,
   getCatalogSearchCounts,
   type Catalog as CatalogService,
   type CatalogSearchCounts,
@@ -32,6 +33,7 @@ interface Catalog {
   filterAge?: boolean;
   boostTopConverting?: boolean;
   gender?: CatalogGenderUI;
+  sortOrder?: number | null;
   slug?: string;
 }
 
@@ -245,6 +247,43 @@ export default function AdminCatalogs() {
   // column. One batch fetch keyed by lower(name). Each value is the
   // full 14-day series with zeros filled.
   const [catalogDaily, setCatalogDaily] = useState<Map<string, number[]>>(new Map());
+
+  // Drag-reorder state. dragId is the slug being dragged; dropTargetId
+  // is the slug currently under the cursor (used for the highlight
+  // ring). Persisted via admin_set_catalog_sort_order on drop.
+  const [dragSlug, setDragSlug] = useState<string | null>(null);
+  const [dropTargetSlug, setDropTargetSlug] = useState<string | null>(null);
+  const handleRowDragStart = useCallback((slug: string) => {
+    setDragSlug(slug);
+  }, []);
+  const handleRowDragOver = useCallback((slug: string, e: React.DragEvent) => {
+    e.preventDefault();
+    if (slug !== dropTargetSlug) setDropTargetSlug(slug);
+  }, [dropTargetSlug]);
+  const handleRowDrop = useCallback(async (overSlug: string) => {
+    const source = dragSlug;
+    setDragSlug(null);
+    setDropTargetSlug(null);
+    if (!source || source === overSlug) return;
+    // Build the new order from the rendered `rankable` list.
+    const order = rankable.map(c => c.slug || '');
+    const fromIdx = order.indexOf(source);
+    const toIdx = order.indexOf(overSlug);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, moved);
+    // Optimistic update — write sortOrder locally so the row reflows
+    // before the RPC returns.
+    setCustom(prev => prev.map(c => {
+      const idx = order.indexOf(c.slug || '');
+      return idx >= 0 ? { ...c, sortOrder: idx } : c;
+    }));
+    const ok = await setCatalogSortOrder(order.filter(Boolean));
+    if (!ok) {
+      showToast('Could not save order — reverting');
+      loadCatalogs();
+    }
+  }, [dragSlug, rankable, loadCatalogs, showToast]);
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -305,7 +344,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('catalogs')
-      .select('id, slug, name, created_at, gender, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
+      .select('id, slug, name, created_at, gender, sort_order, is_featured, status, is_home, filter_gender, filter_age, boost_top_converting')
       .eq('is_featured', false)
       .eq('status', 'live')
       .order('created_at', { ascending: false });
@@ -317,6 +356,7 @@ export default function AdminCatalogs() {
       const rows = data as {
         id: string; name: string; slug: string; created_at: string;
         gender: CatalogGenderUI | null;
+        sort_order: number | null;
         is_home: boolean; filter_gender: boolean; filter_age: boolean; boost_top_converting: boolean;
       }[];
       // Home catalog goes into its own state slot; all others fill `custom`.
@@ -330,6 +370,7 @@ export default function AdminCatalogs() {
         source: 'custom' as const,
         createdAt: r.created_at,
         gender: (r.gender ?? 'all') as CatalogGenderUI,
+        sortOrder: r.sort_order,
         filterGender: r.filter_gender,
         filterAge: r.filter_age,
         boostTopConverting: r.boost_top_converting,
@@ -846,7 +887,18 @@ export default function AdminCatalogs() {
   // top).
   const searchRank = (c: Catalog): number =>
     searchCounts.get(c.name.toLowerCase())?.countTotal ?? 0;
-  const rankable = [...customWithoutAll, ...featured].sort((a, b) => searchRank(b) - searchRank(a));
+  // Ranking: pinned catalogs (sort_order != null) take priority in
+  // their pinned order; unpinned catalogs fall back to search-rank
+  // desc. Drag-reorder updates sort_order so the manual pin order
+  // survives reloads.
+  const rankable = [...customWithoutAll, ...featured].sort((a, b) => {
+    const aPinned = a.sortOrder ?? null;
+    const bPinned = b.sortOrder ?? null;
+    if (aPinned !== null && bPinned !== null) return aPinned - bPinned;
+    if (aPinned !== null) return -1;
+    if (bPinned !== null) return 1;
+    return searchRank(b) - searchRank(a);
+  });
   const allUnfiltered = [allRow, ...rankable];
 
   // Table-level search + quick filter chips. Operate on the
@@ -1686,13 +1738,40 @@ export default function AdminCatalogs() {
               <tr
                 data-catalog-row={c.id}
                 data-catalog-name={c.name.toLowerCase()}
+                draggable={!!c.slug}
+                onDragStart={() => c.slug && handleRowDragStart(c.slug)}
+                onDragOver={(e) => c.slug && handleRowDragOver(c.slug, e)}
+                onDragLeave={() => setDropTargetSlug(null)}
+                onDrop={() => c.slug && handleRowDrop(c.slug)}
+                onDragEnd={() => { setDragSlug(null); setDropTargetSlug(null); }}
                 style={{
-                  background: pulseRowId === c.id ? '#dcfce7' : 'transparent',
-                  transition: 'background-color 600ms ease',
+                  background: pulseRowId === c.id
+                    ? '#dcfce7'
+                    : dropTargetSlug === c.slug && dragSlug && dragSlug !== c.slug
+                      ? '#dbeafe'
+                      : 'transparent',
+                  opacity: dragSlug === c.slug ? 0.5 : 1,
+                  transition: 'background-color 200ms ease, opacity 120ms',
+                  cursor: c.slug ? 'grab' : 'default',
                 }}
               >
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      title="Drag to reorder. Pinned catalogs take priority over search rank."
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        color: c.sortOrder != null ? '#1d4ed8' : '#cbd5e1',
+                        cursor: 'grab',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="9" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/>
+                        <circle cx="15" cy="6" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+                      </svg>
+                    </span>
                     <button
                       onClick={() => toggleExpanded(c)}
                       aria-label={isOpen ? 'Collapse creative' : 'Expand creative'}

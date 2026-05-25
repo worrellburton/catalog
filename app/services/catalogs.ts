@@ -306,6 +306,23 @@ export async function getHomeCatalog(): Promise<Catalog | null> {
 // UPDATE RLS for the anon admin client — same constraint that drove
 // admin_update_catalog_toggles. Returns false on RPC failure so the
 // caller can toast.
+// Bulk-update catalogs.sort_order by passing an ordered list of
+// slugs. The RPC writes sort_order = index for each, so the order
+// the slugs arrive in IS the persisted order. Used by the drag-
+// reorder UX in /admin/catalogs.
+// Re-export for the admin/catalogs route which imports its types
+// directly from this module.
+
+export async function setCatalogSortOrder(slugs: string[]): Promise<boolean> {
+  if (!supabase || slugs.length === 0) return false;
+  const { error } = await supabase.rpc('admin_set_catalog_sort_order', { p_slugs: slugs });
+  if (error) {
+    console.error('setCatalogSortOrder failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function setCatalogGender(slug: string, gender: CatalogGender): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.rpc('admin_set_catalog_gender', {
