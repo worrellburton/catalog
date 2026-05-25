@@ -493,6 +493,17 @@ export default function AdminCatalogs() {
   // indicator can pulse + a small recent-event counter can render.
   const [liveTick, setLiveTick] = useState(0);
   const [liveActive, setLiveActive] = useState(false);
+  // Pulse one specific catalog row briefly when a realtime event
+  // lands on it (catalog impression OR a look/product whose catalog
+  // we can infer via the tags map). Cleared 700ms later so a steady
+  // stream of events produces a steady-strobe effect.
+  const [pulseRowId, setPulseRowId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<number | null>(null);
+  const triggerPulse = useCallback((catalogRowId: string) => {
+    setPulseRowId(catalogRowId);
+    if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseRowId(null), 700);
+  }, []);
   useEffect(() => {
     if (!supabase) return;
     const channel = supabase
@@ -538,6 +549,15 @@ export default function AdminCatalogs() {
               const next = new Map(prev);
               next.set(cKey, { ...existing, curr: existing.curr + 1 });
               return next;
+            });
+            // Pulse the matching row if it's in the rendered list.
+            // We don't have id-by-name here at definition time, so we
+            // do a quick DOM lookup via the data attribute — same
+            // pattern the health-card jump uses.
+            requestAnimationFrame(() => {
+              const row = document.querySelector(`[data-catalog-row][data-catalog-name="${cKey}"]`);
+              const id = row?.getAttribute('data-catalog-row');
+              if (id) triggerPulse(id);
             });
             setLiveTick(t => t + 1);
           }
@@ -1558,7 +1578,14 @@ export default function AdminCatalogs() {
               const homeProductCount = catalogProductCounts.get(homeCatalog.name) || 0;
               return (
                 <React.Fragment key={homeCatalog.id}>
-                  <tr data-catalog-row={homeCatalog.id} style={{ background: '#fffbeb' }}>
+                  <tr
+                    data-catalog-row={homeCatalog.id}
+                    data-catalog-name={homeCatalog.name.toLowerCase()}
+                    style={{
+                      background: pulseRowId === homeCatalog.id ? '#dcfce7' : '#fffbeb',
+                      transition: 'background-color 600ms ease',
+                    }}
+                  >
                     <td style={{ textAlign: 'left', fontWeight: 600 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button
@@ -1656,7 +1683,14 @@ export default function AdminCatalogs() {
               const isLoadingCreative = creativeLoading.has(c.id);
               return (
               <React.Fragment key={c.id}>
-              <tr data-catalog-row={c.id}>
+              <tr
+                data-catalog-row={c.id}
+                data-catalog-name={c.name.toLowerCase()}
+                style={{
+                  background: pulseRowId === c.id ? '#dcfce7' : 'transparent',
+                  transition: 'background-color 600ms ease',
+                }}
+              >
                 <td style={{ textAlign: 'left', fontWeight: 600 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button
@@ -2751,7 +2785,9 @@ function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
 }
 
 // ── 14-day mini sparkline (inline in the catalogs table) ──────────────────
+// Hovering opens a richer popover with the day-by-day breakdown.
 function MiniSparkline({ series }: { series?: number[] }) {
+  const [hover, setHover] = useState(false);
   if (!series || series.length === 0 || series.every(n => n === 0)) {
     return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
   }
@@ -2759,25 +2795,75 @@ function MiniSparkline({ series }: { series?: number[] }) {
   const max = Math.max(1, ...series);
   const barW = W / series.length;
   const total = series.reduce((a, b) => a + b, 0);
+  const days: string[] = [];
+  const today = new Date();
+  for (let i = series.length - 1; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 86400_000);
+    days.push(d.toISOString().slice(5, 10));
+  }
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img">
-      <title>{`14-day impressions · total ${total} · peak ${max}`}</title>
-      {series.map((v, i) => {
-        const h = (v / max) * (H - 2);
-        return (
-          <rect
-            key={i}
-            x={i * barW + 0.5}
-            y={H - h}
-            width={Math.max(1, barW - 1)}
-            height={h}
-            fill="#2563eb"
-            opacity={v === 0 ? 0.18 : 1}
-            rx={1}
-          />
-        );
-      })}
-    </svg>
+    <span
+      style={{ position: 'relative', display: 'inline-block', cursor: 'help' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img">
+        <title>{`14-day impressions · total ${total} · peak ${max}`}</title>
+        {series.map((v, i) => {
+          const h = (v / max) * (H - 2);
+          return (
+            <rect
+              key={i}
+              x={i * barW + 0.5}
+              y={H - h}
+              width={Math.max(1, barW - 1)}
+              height={h}
+              fill="#2563eb"
+              opacity={v === 0 ? 0.18 : 1}
+              rx={1}
+            />
+          );
+        })}
+      </svg>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+            width: 200,
+            background: '#0f172a',
+            color: '#fff',
+            borderRadius: 6,
+            padding: 8,
+            pointerEvents: 'none',
+            boxShadow: '0 10px 28px rgba(15,23,42,0.35)',
+            textAlign: 'left',
+          }}
+        >
+          <div style={{ fontSize: 10, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 700, marginBottom: 4 }}>
+            Last 14 days
+          </div>
+          <div style={{ fontSize: 11, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+            <span>total</span><span style={{ fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+          </div>
+          <div style={{ fontSize: 11, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+            <span>peak</span><span style={{ fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{max}</span>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 6, paddingTop: 6 }}>
+            {series.map((v, i) => (
+              <div key={i} style={{ fontSize: 10, color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
+                <span>{days[i]}</span>
+                <span style={{ fontWeight: 600, color: v > 0 ? '#fff' : '#475569', fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </span>
   );
 }
 
