@@ -187,6 +187,26 @@ export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
   const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
+  // Per-catalog impression counts keyed by lowercased name (matches
+  // how the consumer feed fires the event — see ContinuousFeed's
+  // catalog impression effect). { curr, prev } enables trend in the
+  // column.
+  const [catalogImpressions, setCatalogImpressions] = useState<Map<string, { curr: number; prev: number }>>(new Map());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('catalog_view_counts', { window_days: 7 });
+      if (cancelled || error || !data) return;
+      type Row = { catalog_key: string; impressions_curr: number | string; impressions_prev: number | string };
+      const map = new Map<string, { curr: number; prev: number }>();
+      for (const r of data as Row[]) {
+        map.set(r.catalog_key, { curr: Number(r.impressions_curr) || 0, prev: Number(r.impressions_prev) || 0 });
+      }
+      setCatalogImpressions(map);
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -1267,6 +1287,7 @@ export default function AdminCatalogs() {
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Source</th>
               <th>Products</th>
+              <th>Impressions</th>
               <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
@@ -1325,6 +1346,7 @@ export default function AdminCatalogs() {
                         <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                       )}
                     </td>
+                    <td><ImpressionsPill counts={catalogImpressions.get(homeCatalog.name.toLowerCase())} /></td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                     <td>
@@ -1353,7 +1375,7 @@ export default function AdminCatalogs() {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={8} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown isAll={false} isUniverse={true} loading={isLoadingCreative} creative={creative} metricsLoading={metricsLoading} onReorder={() => {}} />
                       </td>
                     </tr>
@@ -1433,6 +1455,7 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
+                <td><ImpressionsPill counts={catalogImpressions.get(c.name.toLowerCase())} /></td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
@@ -1507,7 +1530,7 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={8} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
@@ -2031,6 +2054,44 @@ function SearchCountPill({ counts }: { counts?: CatalogSearchCounts }) {
     >
       {primary.toLocaleString()}
       <span style={{ fontWeight: 400, marginLeft: 3, fontSize: 10, color: '#64748b' }}>{label}</span>
+    </span>
+  );
+}
+
+// ── Impressions pill ──────────────────────────────────────────────────────
+// Renders the 7-day catalog impression count + trend vs prior 7d.
+// Driven by catalog_view_counts RPC; counts fire from the consumer
+// ContinuousFeed when committedQuery commits to a catalog name.
+function ImpressionsPill({ counts }: { counts?: { curr: number; prev: number } }) {
+  if (!counts || counts.curr === 0) {
+    return <span style={{ fontSize: 11, color: '#ccc' }}>—</span>;
+  }
+  const trendPct = counts.prev > 0
+    ? Math.round(((counts.curr - counts.prev) / counts.prev) * 100)
+    : null;
+  const trendLabel = trendPct === null
+    ? 'NEW'
+    : trendPct === 0 ? '' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#64748b';
+  return (
+    <span
+      title={`7d impressions: ${counts.curr.toLocaleString()} · Prior 7d: ${counts.prev.toLocaleString()}`}
+      style={{
+        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+        background: '#ecfdf5', color: '#047857', cursor: 'default',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+      }}
+    >
+      {counts.curr.toLocaleString()}
+      {trendLabel && (
+        <span style={{ fontSize: 9, fontWeight: 700, color: trendColor, marginLeft: 1 }}>
+          {trendLabel}
+        </span>
+      )}
     </span>
   );
 }
