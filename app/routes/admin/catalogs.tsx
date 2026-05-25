@@ -745,7 +745,45 @@ export default function AdminCatalogs() {
   const searchRank = (c: Catalog): number =>
     searchCounts.get(c.name.toLowerCase())?.countTotal ?? 0;
   const rankable = [...customWithoutAll, ...featured].sort((a, b) => searchRank(b) - searchRank(a));
-  const all = [allRow, ...rankable];
+  const allUnfiltered = [allRow, ...rankable];
+
+  // Table-level search + quick filter chips. Operate on the
+  // rankable list (skip the synthetic `all` row which always stays
+  // at the top regardless). Empty query + 'all' filter = full list.
+  const [tableQuery, setTableQuery] = useState('');
+  const [tableFilter, setTableFilter] = useState<'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues'>('all');
+
+  const all = useMemo(() => {
+    const q = tableQuery.trim().toLowerCase();
+    const filtered = rankable.filter(c => {
+      // text match first
+      if (q && !c.name.toLowerCase().includes(q)) return false;
+      // quick filter predicates
+      const imp = catalogImpressions.get(c.name.toLowerCase());
+      const sc = searchCounts.get(c.name.toLowerCase());
+      const productCount = catalogProductCounts.get(c.name) ?? 0;
+      const trendPct = imp && imp.prev > 0 ? ((imp.curr - imp.prev) / imp.prev) * 100 : null;
+      switch (tableFilter) {
+        case 'rising':  return trendPct !== null && trendPct >= 25;
+        case 'falling': return trendPct !== null && trendPct <= -25;
+        case 'empty':   return productCount === 0;
+        case 'zombie':  return productCount > 0
+                             && (!imp || imp.curr === 0)
+                             && (!sc || sc.count7d === 0);
+        case 'issues':  return productCount === 0
+                             || (productCount > 0 && (!imp || imp.curr === 0) && (!sc || sc.count7d === 0))
+                             || (trendPct !== null && trendPct <= -50);
+        default:        return true;
+      }
+    });
+    // synthetic `all` row only shows when the unfiltered + unsearched
+    // view is up — otherwise it's noise.
+    if (tableQuery || tableFilter !== 'all') return filtered;
+    return [allRow, ...filtered];
+  }, [rankable, tableQuery, tableFilter, allRow, catalogImpressions, searchCounts, catalogProductCounts]);
+  // allUnfiltered powers the dashboard + health panel — they reflect
+  // the whole catalog system, not just the in-table filter. `all` is
+  // what the table renders.
 
   const addCatalog = async () => {
     const name = newName.trim();
@@ -1352,13 +1390,13 @@ export default function AdminCatalogs() {
       <LiveIndicator active={liveActive} tick={liveTick} />
 
       <CatalogsDashboard
-        catalogs={all}
+        catalogs={allUnfiltered}
         impressionsByName={catalogImpressions}
         searchCountsByName={searchCounts}
       />
 
       <CatalogsHealthPanel
-        catalogs={all}
+        catalogs={allUnfiltered}
         impressionsByName={catalogImpressions}
         searchCountsByName={searchCounts}
         productCountsByName={catalogProductCounts}
@@ -1367,8 +1405,11 @@ export default function AdminCatalogs() {
           // labels for trend issues — the actual catalog name is what
           // appears before " (".
           const cleanName = name.split(' (')[0];
-          const match = all.find(c => c.name === cleanName);
+          const match = allUnfiltered.find(c => c.name === cleanName);
           if (!match) return;
+          // Drop any active filter so the row is actually present.
+          if (tableFilter !== 'all') setTableFilter('all');
+          if (tableQuery) setTableQuery('');
           setExpanded(prev => new Set(prev).add(match.id));
           if (!creativeByCatalog[match.id]) loadCreative(match);
           // Scroll the row into view after the state flush.
@@ -1377,6 +1418,15 @@ export default function AdminCatalogs() {
             if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
           });
         }}
+      />
+
+      <CatalogsTableFilterBar
+        query={tableQuery}
+        filter={tableFilter}
+        onQuery={setTableQuery}
+        onFilter={setTableFilter}
+        total={rankable.length}
+        showing={all.length - (tableQuery || tableFilter !== 'all' ? 0 : 1)}
       />
 
       <div className="admin-table-wrap">
@@ -2393,6 +2443,76 @@ function LiveIndicator({ active, tick }: { active: boolean; tick: number }) {
         transition: 'box-shadow 200ms ease',
       }} />
       {active ? 'Live' : 'Connecting…'} · {tick} event{tick === 1 ? '' : 's'} this session
+    </div>
+  );
+}
+
+// ── Table-level search + quick filter ────────────────────────────────
+// Sits between the health panel and the table. Search filters by
+// name substring; quick chips slice by health-style predicates
+// (all / rising / falling / empty / zombie / has issues).
+interface CatalogsTableFilterBarProps {
+  query: string;
+  filter: 'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues';
+  onQuery: (q: string) => void;
+  onFilter: (f: 'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues') => void;
+  total: number;
+  showing: number;
+}
+
+function CatalogsTableFilterBar({ query, filter, onQuery, onFilter, total, showing }: CatalogsTableFilterBarProps) {
+  const chips: { value: typeof filter; label: string; color?: string }[] = [
+    { value: 'all',     label: 'All' },
+    { value: 'rising',  label: '↑ Rising', color: '#047857' },
+    { value: 'falling', label: '↓ Falling', color: '#b91c1c' },
+    { value: 'empty',   label: '∅ Empty', color: '#a16207' },
+    { value: 'zombie',  label: '⚠ Zombie', color: '#a16207' },
+    { value: 'issues',  label: 'Has issues', color: '#b91c1c' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0 12px' }}>
+      <input
+        type="text"
+        placeholder="Search catalogs by name…"
+        value={query}
+        onChange={e => onQuery(e.target.value)}
+        style={{
+          flex: '0 1 260px',
+          padding: '6px 10px',
+          fontSize: 12,
+          border: '1px solid #cbd5e1',
+          borderRadius: 6,
+          background: '#fff',
+        }}
+      />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {chips.map(c => {
+          const active = filter === c.value;
+          return (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onFilter(c.value)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+                border: '1px solid',
+                cursor: 'pointer',
+                borderColor: active ? (c.color || '#111') : '#e2e8f0',
+                background: active ? (c.color || '#111') : '#fff',
+                color: active ? '#fff' : (c.color || '#475569'),
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>
+        {filter === 'all' && !query ? `${total} catalog${total === 1 ? '' : 's'}` : `${Math.max(0, showing)} of ${total}`}
+      </span>
     </div>
   );
 }
