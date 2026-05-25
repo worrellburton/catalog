@@ -2061,11 +2061,25 @@ function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: 
   );
 }
 
+type ViewMode = 'grid' | 'list';
+const VIEW_MODE_LS_KEY = 'catalog-admin:dropdown-view-mode';
+
 function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metricsLoading, onReorder }: CatalogCreativeDropdownProps) {
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
   const [sort, setSort] = useState<MetricSort>('most-viewed');
   const [filter, setFilter] = useState<MetricFilter>('all');
+  // Grid vs spreadsheet-list view. Persisted to localStorage so an
+  // admin who lives in list mode doesn't have to re-toggle every
+  // session.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try { return (window.localStorage.getItem(VIEW_MODE_LS_KEY) as ViewMode) || 'grid'; }
+    catch { return 'grid'; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
+  }, [viewMode]);
 
   if (loading && !creative) {
     return (
@@ -2109,61 +2123,303 @@ function CatalogCreativeDropdown({ isAll, isUniverse, loading, creative, metrics
 
       <KpiStrip kpi={kpi} metricsLoading={metricsLoading} />
 
-      <MetricControlBar sort={sort} filter={filter} onSort={setSort} onFilter={setFilter} />
+      <MetricControlBar
+        sort={sort} filter={filter} viewMode={viewMode}
+        onSort={setSort} onFilter={setFilter} onViewMode={setViewMode}
+      />
 
-      <DraggableSection
-        title="Looks"
-        count={sortedLooks.length}
-        emptyMessage="No looks match the current filter."
-        minColumnPx={140}
-        draggable={isAll && filter === 'all' && sort === 'most-viewed'}
-        onReorder={(from, to) => onReorder('looks', from, to)}
-      >
-        {sortedLooks.map(l => (
-          <LookThumb key={l.id} look={l} />
-        ))}
-      </DraggableSection>
+      {viewMode === 'list' ? (
+        <>
+          <LooksListTable looks={sortedLooks} />
+          <CreativesListTable title="Creative Videos" creatives={creatives} />
+          {!isUniverse && (
+            <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
+          )}
+          <ProductsListTable products={sortedProducts} />
+        </>
+      ) : (
+        <>
+          <DraggableSection
+            title="Looks"
+            count={sortedLooks.length}
+            emptyMessage="No looks match the current filter."
+            minColumnPx={140}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed'}
+            onReorder={(from, to) => onReorder('looks', from, to)}
+          >
+            {sortedLooks.map(l => (
+              <LookThumb key={l.id} look={l} />
+            ))}
+          </DraggableSection>
 
-      <DraggableSection
-        title="Creative Videos"
-        count={creatives.length}
-        emptyMessage="No rendered product ads in this catalog yet."
-        minColumnPx={140}
-        draggable={isAll}
-        onReorder={(from, to) => onReorder('creatives', from, to)}
-      >
-        {creatives.map(c => (
-          <CreativeThumb key={c.id} creative={c} />
-        ))}
-      </DraggableSection>
+          <DraggableSection
+            title="Creative Videos"
+            count={creatives.length}
+            emptyMessage="No rendered product ads in this catalog yet."
+            minColumnPx={140}
+            draggable={isAll}
+            onReorder={(from, to) => onReorder('creatives', from, to)}
+          >
+            {creatives.map(c => (
+              <CreativeThumb key={c.id} creative={c} />
+            ))}
+          </DraggableSection>
 
-      {!isUniverse && (
-        <DraggableSection
-          title="Feed search results"
-          count={feedResults?.length ?? 0}
-          emptyMessage="No creatives surface for this query in the consumer feed search."
-          minColumnPx={140}
-          draggable={false}
-          onReorder={() => {}}
-        >
-          {(feedResults ?? []).map(c => (
-            <CreativeThumb key={`feed-${c.id}`} creative={c} />
-          ))}
-        </DraggableSection>
+          {!isUniverse && (
+            <DraggableSection
+              title="Feed search results"
+              count={feedResults?.length ?? 0}
+              emptyMessage="No creatives surface for this query in the consumer feed search."
+              minColumnPx={140}
+              draggable={false}
+              onReorder={() => {}}
+            >
+              {(feedResults ?? []).map(c => (
+                <CreativeThumb key={`feed-${c.id}`} creative={c} />
+              ))}
+            </DraggableSection>
+          )}
+
+          <DraggableSection
+            title="Products"
+            count={sortedProducts.length}
+            emptyMessage="No products match the current filter."
+            minColumnPx={140}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed'}
+            onReorder={(from, to) => onReorder('products', from, to)}
+          >
+            {sortedProducts.map(p => (
+              <ProductMetricTile key={p.id} product={p} />
+            ))}
+          </DraggableSection>
+        </>
       )}
+    </div>
+  );
+}
 
-      <DraggableSection
-        title="Products"
-        count={sortedProducts.length}
-        emptyMessage="No products match the current filter."
-        minColumnPx={140}
-        draggable={isAll && filter === 'all' && sort === 'most-viewed'}
-        onReorder={(from, to) => onReorder('products', from, to)}
-      >
-        {sortedProducts.map(p => (
-          <ProductMetricTile key={p.id} product={p} />
-        ))}
-      </DraggableSection>
+// ── Spreadsheet / list view renderers ───────────────────────────────
+// Compact tabular layout — same data, denser scan. Sortable upstream
+// via MetricControlBar; clicking a row expands a preview on hover.
+
+const listTableShellStyle: React.CSSProperties = {
+  width: '100%',
+  borderCollapse: 'collapse',
+  background: '#fff',
+  border: '1px solid #e5e7eb',
+  borderRadius: 6,
+  overflow: 'hidden',
+  fontSize: 12,
+};
+
+const listHeadCellStyle: React.CSSProperties = {
+  fontSize: 10,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  fontWeight: 700,
+  color: '#94a3b8',
+  textAlign: 'left',
+  padding: '8px 10px',
+  borderBottom: '1px solid #e5e7eb',
+  background: '#f8fafc',
+};
+
+const listBodyCellStyle: React.CSSProperties = {
+  padding: '7px 10px',
+  borderBottom: '1px solid #f1f5f9',
+  verticalAlign: 'middle',
+};
+
+function ListSectionHeader({ title, count }: { title: string; count: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+      <h4 style={{ margin: 0, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#475569', fontWeight: 700 }}>{title}</h4>
+      <span style={{ fontSize: 11, color: '#94a3b8' }}>{count}</span>
+    </div>
+  );
+}
+
+function MetricCells({ metrics }: { metrics?: ItemMetrics }) {
+  if (!metrics) {
+    return (
+      <>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+        <td style={{ ...listBodyCellStyle, color: '#cbd5e1' }}>—</td>
+      </>
+    );
+  }
+  const { impressions, ctr, clickouts, trendPct } = metrics;
+  const trendLabel = trendPct === null ? 'NEW' : trendPct === 0 ? '—' : `${trendPct > 0 ? '↑' : '↓'}${Math.abs(trendPct)}%`;
+  const trendColor = trendPct === null
+    ? '#1d4ed8'
+    : trendPct >= 25 ? '#047857'
+    : trendPct <= -25 ? '#b91c1c'
+    : '#475569';
+  return (
+    <>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{impressions.toLocaleString()}</td>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{impressions > 0 ? `${(ctr * 100).toFixed(1)}%` : '—'}</td>
+      <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{clickouts}</td>
+      <td style={{ ...listBodyCellStyle, color: trendColor, fontWeight: 700 }}>{trendLabel}</td>
+    </>
+  );
+}
+
+function LooksListTable({ looks }: { looks: CatalogLookRow[] }) {
+  if (looks.length === 0) return (
+    <div>
+      <ListSectionHeader title="Looks" count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No looks match the current filter.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title="Looks" count={looks.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Title</th>
+            <th style={listHeadCellStyle}>Creator</th>
+            <th style={listHeadCellStyle}>Products</th>
+            <th style={listHeadCellStyle}>Impressions</th>
+            <th style={listHeadCellStyle}>CTR</th>
+            <th style={listHeadCellStyle}>Clickouts</th>
+            <th style={listHeadCellStyle}>Trend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {looks.map(l => (
+            <tr key={l.id}>
+              <td style={listBodyCellStyle}>
+                <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                  {l.videoPath && (
+                    <video
+                      src={l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`}
+                      muted playsInline preload="metadata"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
+                </div>
+              </td>
+              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
+              <td style={listBodyCellStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {l.creatorAvatarUrl ? (
+                    <img src={l.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e2e8f0' }} />
+                  )}
+                  <span style={{ color: '#111', fontWeight: 600 }}>{l.creatorName || l.creatorHandle || 'Unknown'}</span>
+                  {l.creatorHandle && l.creatorName && (
+                    <span style={{ color: '#94a3b8' }}>@{l.creatorHandle}</span>
+                  )}
+                </div>
+              </td>
+              <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{l.productCount}</td>
+              <MetricCells metrics={l.metrics} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProductsListTable({ products }: { products: ProductRow[] }) {
+  if (products.length === 0) return (
+    <div>
+      <ListSectionHeader title="Products" count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No products match the current filter.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title="Products" count={products.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Product</th>
+            <th style={listHeadCellStyle}>Brand</th>
+            <th style={listHeadCellStyle}>Impressions</th>
+            <th style={listHeadCellStyle}>CTR</th>
+            <th style={listHeadCellStyle}>Clickouts</th>
+            <th style={listHeadCellStyle}>Trend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map(p => (
+            <tr key={p.id}>
+              <td style={listBodyCellStyle}>
+                {p.image_url ? (
+                  <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                ) : (
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                )}
+              </td>
+              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
+              <td style={{ ...listBodyCellStyle, color: '#475569' }}>{p.brand || '—'}</td>
+              <MetricCells metrics={p.metrics} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CreativesListTable({ title, creatives }: { title: string; creatives: CatalogCreativeVideo[] }) {
+  if (creatives.length === 0) return (
+    <div>
+      <ListSectionHeader title={title} count={0} />
+      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
+        No rendered creative in this section.
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <ListSectionHeader title={title} count={creatives.length} />
+      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+        <thead>
+          <tr>
+            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+            <th style={listHeadCellStyle}>Title</th>
+            <th style={listHeadCellStyle}>Brand</th>
+            <th style={listHeadCellStyle}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {creatives.map(c => (
+            <tr key={c.id}>
+              <td style={listBodyCellStyle}>
+                {c.productImageUrl ? (
+                  <img src={c.productImageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                ) : (
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                )}
+              </td>
+              <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{c.productName || c.title || '—'}</td>
+              <td style={{ ...listBodyCellStyle, color: '#475569' }}>{c.productBrand || '—'}</td>
+              <td style={listBodyCellStyle}>
+                <span style={{
+                  fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                  background: c.status === 'live' ? '#10b981' : '#e5e7eb',
+                  color: c.status === 'live' ? '#fff' : '#475569',
+                  fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                }}>{c.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -2306,11 +2562,13 @@ function KpiStrip({ kpi, metricsLoading }: { kpi: KpiSnapshot; metricsLoading: b
 interface MetricControlBarProps {
   sort: MetricSort;
   filter: MetricFilter;
+  viewMode: ViewMode;
   onSort: (s: MetricSort) => void;
   onFilter: (f: MetricFilter) => void;
+  onViewMode: (v: ViewMode) => void;
 }
 
-function MetricControlBar({ sort, filter, onSort, onFilter }: MetricControlBarProps) {
+function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode }: MetricControlBarProps) {
   const sortOpts: { value: MetricSort; label: string }[] = [
     { value: 'most-viewed', label: 'Most viewed' },
     { value: 'highest-ctr', label: 'Highest CTR' },
@@ -2362,6 +2620,51 @@ function MetricControlBar({ sort, filter, onSort, onFilter }: MetricControlBarPr
             </button>
           );
         })}
+      </div>
+      <div style={{ marginLeft: 'auto', display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+        <button
+          type="button"
+          onClick={() => onViewMode('grid')}
+          title="Grid view"
+          aria-label="Grid view"
+          style={{
+            padding: '4px 10px',
+            border: 'none',
+            background: viewMode === 'grid' ? '#111' : '#fff',
+            color: viewMode === 'grid' ? '#fff' : '#475569',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Grid
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewMode('list')}
+          title="Spreadsheet / list view"
+          aria-label="List view"
+          style={{
+            padding: '4px 10px',
+            border: 'none',
+            borderLeft: '1px solid #e2e8f0',
+            background: viewMode === 'list' ? '#111' : '#fff',
+            color: viewMode === 'list' ? '#fff' : '#475569',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          List
+        </button>
       </div>
     </div>
   );
@@ -2543,8 +2846,24 @@ function LookThumb({ look }: { look: CatalogLookRow }) {
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {look.title || `Look #${look.legacyId ?? ''}`}
         </div>
-        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '} · {look.productCount} product{look.productCount === 1 ? '' : 's'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+          {look.creatorAvatarUrl ? (
+            <img
+              src={look.creatorAvatarUrl}
+              alt=""
+              style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', background: '#f1f5f9', flexShrink: 0 }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+            />
+          ) : (
+            <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#e2e8f0', flexShrink: 0 }} />
+          )}
+          <div style={{ fontSize: 10, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>
+            <span style={{ fontWeight: 600, color: '#111' }}>{look.creatorName || look.creatorHandle || 'Unknown'}</span>
+            {look.creatorHandle && look.creatorName ? <span style={{ color: '#94a3b8' }}> · @{look.creatorHandle}</span> : null}
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+          {look.productCount} product{look.productCount === 1 ? '' : 's'}
         </div>
       </div>
     </div>
