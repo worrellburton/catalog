@@ -45,6 +45,55 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+// CSV cell escape: wrap any cell containing a comma, quote, or
+// newline in double-quotes; double-up any internal quotes.
+function csvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCatalogsCSV(
+  catalogs: { name: string; source: string; createdAt: string; gender?: string; filterAge?: boolean; boostTopConverting?: boolean }[],
+  productCounts: Map<string, number>,
+  impressions: Map<string, { curr: number; prev: number }>,
+  searches: Map<string, CatalogSearchCounts>,
+) {
+  const header = [
+    'name', 'source', 'gender', 'products',
+    'impressions_7d', 'impressions_prev_7d', 'impressions_trend_pct',
+    'searches_7d', 'searches_total',
+    'boost_top_converting', 'created_at',
+  ];
+  const rows = catalogs.map(c => {
+    const key = c.name.toLowerCase();
+    const imp = impressions.get(key);
+    const trend = imp && imp.prev > 0
+      ? Math.round(((imp.curr - imp.prev) / imp.prev) * 100)
+      : '';
+    const sc = searches.get(key);
+    return [
+      c.name, c.source, c.gender ?? 'all',
+      productCounts.get(c.name) ?? 0,
+      imp?.curr ?? 0, imp?.prev ?? 0, trend,
+      sc?.count7d ?? 0, sc?.countTotal ?? 0,
+      c.boostTopConverting ? '1' : '0',
+      c.createdAt && c.createdAt !== ' - ' ? new Date(c.createdAt).toISOString() : '',
+    ];
+  });
+  const body = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `catalogs-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 interface ProductRow {
   id: string;
   name: string | null;
@@ -1395,6 +1444,18 @@ export default function AdminCatalogs() {
                 Auto-tag with Claude
               </>
             )}
+          </button>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={() => exportCatalogsCSV(allUnfiltered, catalogProductCounts, catalogImpressions, searchCounts)}
+            title="Download a CSV of every catalog with metrics"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export CSV
           </button>
           <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
@@ -3594,6 +3655,26 @@ function BulkActionBar({ count, catalogName, catalogNames, looksCount, productsC
       >
         {busy ? 'Working…' : `Remove from "${catalogName}"`}
       </button>
+      {catalogName.toLowerCase() !== 'home' && (
+        <button
+          type="button"
+          onClick={() => onAddTo('home')}
+          disabled={busy}
+          title="Append 'home' to each selected item's catalog_tags — they'll surface on the consumer landing feed"
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.28)',
+            color: '#fff',
+            padding: '4px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: busy ? 'wait' : 'pointer',
+          }}
+        >
+          ★ Promote to Home
+        </button>
+      )}
       <button
         type="button"
         onClick={onHide}
