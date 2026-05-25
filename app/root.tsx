@@ -8,7 +8,7 @@ import {
 import { Analytics } from "@vercel/analytics/remix";
 import { SpeedInsights } from "@vercel/speed-insights/remix";
 import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
@@ -62,6 +62,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta
           name="description"
           content="A creator-powered shopping platform where you discover products through curated looks."
+        />
+        {/* Build SHA — surfaced in the 500 ErrorBoundary diagnostic so
+            an admin can copy-paste the exact deployed version when
+            reporting a bug. Vite inlines VITE_VERCEL_GIT_COMMIT_SHA
+            at build time; Vercel sets the underlying env var on
+            every production + preview deploy. */}
+        <meta
+          name="git-commit"
+          content={(import.meta as { env?: Record<string, string | undefined> }).env?.VITE_VERCEL_GIT_COMMIT_SHA ?? 'dev'}
         />
         {/* Open Graph + Twitter Card tags drive the rich link preview
             iMessage, Slack, WhatsApp, Twitter, and Facebook show when
@@ -199,6 +208,7 @@ export default function App() {
  */
 export function ErrorBoundary() {
   const error = useRouteError();
+  const [copied, setCopied] = useState(false);
 
   if (typeof window !== 'undefined') {
     captureException(error, { path: window.location.pathname, source: 'ErrorBoundary' });
@@ -220,6 +230,61 @@ export function ErrorBoundary() {
     ? error.data
     : (error instanceof Error ? error.message : 'An unexpected error occurred.');
 
+  // Build a copy-paste diagnostic block. Single triple-backtick block so
+  // pasting it into a chat preserves the structure. Includes everything
+  // needed to triage a production-only TDZ/chunk-init bug: minified
+  // identifier, route, build SHA (if Vercel injected it), user-agent,
+  // stack trace truncated to the first 12 frames.
+  const buildSha = typeof window !== 'undefined'
+    ? ((window as unknown as { __VERCEL_GIT_COMMIT_SHA?: string }).__VERCEL_GIT_COMMIT_SHA
+        ?? document.querySelector('meta[name="git-commit"]')?.getAttribute('content')
+        ?? 'unknown')
+    : 'ssr';
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
+  const path = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '';
+  const stack = error instanceof Error && error.stack
+    ? error.stack.split('\n').slice(0, 13).join('\n')
+    : '(no stack)';
+  const diagnostic = [
+    '```',
+    `route:   ${path}`,
+    `status:  ${status}`,
+    `message: ${typeof message === 'string' ? message : JSON.stringify(message)}`,
+    `build:   ${buildSha}`,
+    `time:    ${new Date().toISOString()}`,
+    `ua:      ${ua}`,
+    '',
+    'stack:',
+    stack,
+    '```',
+  ].join('\n');
+
+  const copyDiagnostic = async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return false;
+    try {
+      await navigator.clipboard.writeText(diagnostic);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+      return true;
+    } catch {
+      // Fallback: select the textarea so the user can ⌘C themselves.
+      const ta = document.getElementById('error-diag-textarea') as HTMLTextAreaElement | null;
+      ta?.select();
+      return false;
+    }
+  };
+
+  // Copy the diagnostic AND open Claude in a new tab — admin pastes
+  // the report into chat in one move. We don't pass the body via URL
+  // because Claude's web app doesn't accept prefilled messages, and
+  // the diagnostic is already in the clipboard.
+  const sendToClaude = async () => {
+    await copyDiagnostic();
+    if (typeof window !== 'undefined') {
+      window.open('https://claude.ai/new', '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -231,18 +296,102 @@ export function ErrorBoundary() {
       color: '#fff',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif',
     }}>
-      <div style={{ maxWidth: 480, textAlign: 'center' }}>
+      <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <div style={{ fontSize: 64, fontWeight: 700, color: '#52525b', marginBottom: 8 }}>
           {status}
         </div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>{title}</h1>
-        <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 24px' }}>
+        <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 18px' }}>
           {typeof message === 'string' ? message : 'An unexpected error occurred.'}
         </p>
+
+        {/* Diagnostic block — pre-formatted so the user can copy + paste
+            into a chat with the full context (route, build SHA, stack
+            trace) in one click. */}
+        <div style={{
+          background: '#111113',
+          border: '1px solid #27272a',
+          borderRadius: 8,
+          padding: 12,
+          marginBottom: 18,
+          textAlign: 'left',
+          position: 'relative',
+        }}>
+          <pre style={{
+            margin: 0,
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: '#d4d4d8',
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            maxHeight: 220,
+            overflowY: 'auto',
+          }}>{diagnostic}</pre>
+          <textarea
+            id="error-diag-textarea"
+            readOnly
+            value={diagnostic}
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: -9999, top: -9999, opacity: 0, height: 1, width: 1 }}
+          />
+          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={copyDiagnostic}
+              style={{
+                background: copied ? '#16a34a' : '#27272a',
+                color: '#fff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'background 120ms',
+              }}
+            >
+              {copied ? '✓ Copied' : 'Copy details'}
+            </button>
+            <button
+              type="button"
+              onClick={sendToClaude}
+              title="Copies the diagnostic to your clipboard and opens claude.ai in a new tab — just paste."
+              style={{
+                background: '#d97757',
+                color: '#fff',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              ✦ Send to Claude
+            </button>
+          </div>
+        </div>
+
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
           <button
             type="button"
-            onClick={() => { if (typeof window !== 'undefined') window.location.reload(); }}
+            onClick={() => {
+              if (typeof window === 'undefined') return;
+              // Hard reload, bypassing the HTTP cache. The earlier
+              // "Reload" button used location.reload() which often
+              // serves the cached bundle; this version adds a cache-
+              // bust query param so the browser fetches fresh JS.
+              const u = new URL(window.location.href);
+              u.searchParams.set('_r', String(Date.now()));
+              window.location.replace(u.toString());
+            }}
             style={{
               appearance: 'none',
               background: '#fff',
@@ -256,7 +405,7 @@ export function ErrorBoundary() {
               fontFamily: 'inherit',
             }}
           >
-            Reload
+            Hard reload
           </button>
           <a
             href="/"
