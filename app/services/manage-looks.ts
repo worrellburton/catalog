@@ -220,7 +220,7 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
       look_videos: data.look_videos || [],
       look_products: data.look_products || [],
       looks_creative: data.looks_creative || [],
-    } as ManagedLook,
+    } as unknown as ManagedLook,
   };
 }
 

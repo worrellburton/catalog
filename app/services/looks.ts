@@ -162,18 +162,23 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     });
   }
 
-  const orphanUserIds = Array.from(new Set(
+  // Fetch profile (avatar + name + is_ai) for EVERY look's user_id,
+  // not just the handle-less orphans. The admin tables show creators
+  // by handle most of the time, but the static creators map doesn't
+  // cover every handle — without this lookup, real creators
+  // (janehamilton, taylor-phillips, robert-burton, etc.) end up with
+  // empty avatar placeholders in /admin/data.
+  const profileUserIds = Array.from(new Set(
     filteredLooks
-      .filter(r => !r.creator_handle)
       .map(r => userIdByLookId.get(r.id) || r.user_id)
       .filter((v): v is string => !!v),
   ));
   const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
-  if (orphanUserIds.length > 0) {
+  if (profileUserIds.length > 0) {
     const { data: profs } = await supabase
       .from('profiles')
       .select('id, full_name, avatar_url, email, is_ai')
-      .in('id', orphanUserIds);
+      .in('id', profileUserIds);
     (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
       profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email, is_ai: p.is_ai === true });
     });
@@ -184,7 +189,12 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
 
   return filteredLooks.map((row, index) => {
     const primary = row.looks_creative[0];
-    const profileUserId = !row.creator_handle ? (userIdByLookId.get(row.id) || row.user_id) : undefined;
+    // Always look up profile by user_id when available — the avatar
+    // belongs to the human/AI who owns this look, regardless of
+    // whether creator_handle is set. The display-name fallback chain
+    // (handle → static creator map → profile name) still respects
+    // the handle as primary.
+    const profileUserId = userIdByLookId.get(row.id) || row.user_id || undefined;
     const fallbackProfile = profileUserId ? profileById.get(profileUserId) : undefined;
     const fallbackName = fallbackProfile?.full_name || fallbackProfile?.email?.split('@')[0] || null;
     return {

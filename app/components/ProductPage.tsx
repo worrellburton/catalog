@@ -445,7 +445,7 @@ function padLooks(arr: Look[], count: number): Look[] {
   const out: Look[] = [...arr];
   while (out.length < count) {
     const src = arr[out.length % arr.length];
-    out.push({ ...src, id: `${src.id}-slot-${out.length}` });
+    out.push({ ...src, id: -(out.length + 1) });
   }
   return out;
 }
@@ -709,8 +709,11 @@ export default function ProductPage({
   const isSaved = bookmarks.isProductBookmarked(product);
 
   const handleToggleSave = useCallback(() => {
-    bookmarks.toggleProductBookmark(product);
-  }, [bookmarks, product]);
+    const productToSave = creative
+      ? { ...product, video_url: creative.videoUrl, thumbnail_url: creative.thumbnailUrl ?? undefined, creative_id: creative.id }
+      : product;
+    bookmarks.toggleProductBookmark(productToSave);
+  }, [bookmarks, product, creative]);
 
   // Dummy social proof. Stable per product so the count + avatars don't
   // reshuffle on every re-render. Wire to a real `product_saves` table when

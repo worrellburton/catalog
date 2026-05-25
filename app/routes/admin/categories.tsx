@@ -90,7 +90,7 @@ export default function AdminCategories() {
     // Add taxonomy rows that aren't in canonical (manually added types)
     taxonomy.forEach(t => {
       if (!merged.find(m => m.type === t.type)) {
-        merged.push({ type: t.type, active_count: 0, total_count: 0, ...t });
+        merged.push({ active_count: 0, total_count: 0, ...t });
       }
     });
 

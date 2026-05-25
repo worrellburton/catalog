@@ -136,7 +136,7 @@ export default function CreatorPage({
         if (cancelled) return;
         const productById = new Map<string, Product>();
         const productsByGen = new Map<string, Set<string>>();
-        for (const row of (pickRows || []) as Array<{
+        for (const row of (pickRows || []) as unknown as Array<{
           generation_id: string; product_id: string;
           products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images: string[] | null; url: string | null } | null;
         }>) {

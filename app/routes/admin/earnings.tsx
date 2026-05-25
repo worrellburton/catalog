@@ -138,6 +138,7 @@ export default function AdminEarnings() {
 
   async function doTransfer() {
     setTransferring(true); setTransferMsg('');
+    if (!transferTarget) return;
     try {
       await adminCreditCreator(transferTarget.id, parseFloat(transferAmount), transferComment || undefined);
       setTransferMsg('Transfer sent successfully');

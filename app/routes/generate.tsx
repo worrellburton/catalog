@@ -633,7 +633,7 @@ export default function GeneratePage() {
       const noSavedPicks = restored.every(id => id === null);
       if (impersonate && noSavedPicks && uploads.length > 0) {
         uploads.slice(0, MAX_PHOTOS).forEach((u, i) => {
-          restored[i] = u.id;
+          (restored as Array<string | null>)[i] = u.id;
         });
       }
       setSlots(restored);

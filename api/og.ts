@@ -128,7 +128,7 @@ async function lookMeta(slug: string, fullUrl: string): Promise<OgMeta> {
   if (!lookRow && uuidPrefix) {
     const range = uuidPrefixRange(uuidPrefix);
     if (range) {
-      const rows = await supaGet(`looks?id=gte.${range.gte}&id=lt.${range.lt}&select=id,title,description,user_id,creator_handle&limit=1`) as Array<typeof lookRow>;
+      const rows = await supaGet(`looks?id=gte.${range.gte}&id=lt.${range.lt}&select=id,title,description,user_id,creator_handle&limit=1`) as Array<{ id: string; title: string | null; description: string | null; user_id: string | null; creator_handle: string | null } | null>;
       if (Array.isArray(rows) && rows[0]) lookRow = rows[0]!;
     }
   }

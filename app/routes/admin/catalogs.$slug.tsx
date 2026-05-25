@@ -164,7 +164,7 @@ export default function AdminCatalogDetail() {
           { key: 'filterAge'          as const, label: 'Age filter',            desc: 'Hide age_group-mismatched products (run tag-product-age-groups.mjs first)', disabled: true },
           { key: 'boostTopConverting' as const, label: 'Top-converting first', desc: 'Sort pinned block by conversion_score desc' },
         ]).map(t => {
-          const on = !!(catalog as Record<string, unknown>)[t.key];
+          const on = !!((catalog as unknown as Record<string, unknown>)[t.key]);
           return (
             <div
               key={t.key}

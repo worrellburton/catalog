@@ -3,8 +3,9 @@
 // subroutes; this index just orients the admin.
 
 import { Link } from '@remix-run/react';
+import { type ReactElement } from 'react';
 
-const SECTIONS: Array<{ to: string; label: string; blurb: string; icon: JSX.Element }> = [
+const SECTIONS: Array<{ to: string; label: string; blurb: string; icon: ReactElement }> = [
   {
     to: '/admin/ui/brand',
     label: 'Brand',
