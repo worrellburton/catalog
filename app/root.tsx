@@ -274,16 +274,6 @@ export function ErrorBoundary() {
     }
   };
 
-  // Copy the diagnostic AND open Claude in a new tab — admin pastes
-  // the report into chat in one move. We don't pass the body via URL
-  // because Claude's web app doesn't accept prefilled messages, and
-  // the diagnostic is already in the clipboard.
-  const sendToClaude = async () => {
-    await copyDiagnostic();
-    if (typeof window !== 'undefined') {
-      window.open('https://claude.ai/new', '_blank', 'noopener,noreferrer');
-    }
-  };
 
   return (
     <div style={{
@@ -354,27 +344,6 @@ export function ErrorBoundary() {
               }}
             >
               {copied ? '✓ Copied' : 'Copy details'}
-            </button>
-            <button
-              type="button"
-              onClick={sendToClaude}
-              title="Copies the diagnostic to your clipboard and opens claude.ai in a new tab — just paste."
-              style={{
-                background: '#d97757',
-                color: '#fff',
-                border: 'none',
-                padding: '4px 10px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              ✦ Send to Claude
             </button>
           </div>
         </div>
