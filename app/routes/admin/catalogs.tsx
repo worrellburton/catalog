@@ -2320,7 +2320,17 @@ function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender
 type ViewMode = 'grid' | 'list';
 const VIEW_MODE_LS_KEY = 'catalog-admin:dropdown-view-mode';
 
+// Phase 8: detail-drawer subject — what's open in the side panel,
+// if anything. The drawer is rendered as a fixed-position overlay
+// inside the dropdown component so it follows the catalog row's
+// lifecycle (closes automatically when the dropdown collapses).
+type DrawerSubject =
+  | { kind: 'look'; look: CatalogLookRow }
+  | { kind: 'product'; product: ProductRow }
+  | null;
+
 function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
+  const [drawer, setDrawer] = useState<DrawerSubject>(null);
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
   const [sort, setSort] = useState<MetricSort>('most-viewed');
@@ -2489,6 +2499,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
             looks={sortedLooks}
             selectedIds={selectedLookIds}
             onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
+            onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
           />
           <CreativesListTable title="Creative Videos" creatives={creatives} />
           {!isUniverse && (
@@ -2498,6 +2509,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
             products={sortedProducts}
             selectedIds={selectedProductIds}
             onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+            onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
           />
         </>
       ) : (
@@ -2516,6 +2528,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
                 look={l}
                 selected={selectedLookIds.has(l.id)}
                 onSelect={(ext) => toggleSelection('look', l.id, idx, sortedLooks, ext)}
+                onOpenDetail={() => setDrawer({ kind: 'look', look: l })}
               />
             ))}
           </DraggableSection>
@@ -2562,6 +2575,7 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
                 product={p}
                 selected={selectedProductIds.has(p.id)}
                 onSelect={(ext) => toggleSelection('product', p.id, idx, sortedProducts, ext)}
+                onOpenDetail={() => setDrawer({ kind: 'product', product: p })}
               />
             ))}
           </DraggableSection>
@@ -2580,7 +2594,202 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
           productsCount={selectedProductIds.size}
         />
       )}
+
+      {drawer && (
+        <DetailDrawer subject={drawer} catalogName={catalogName} onClose={() => setDrawer(null)} />
+      )}
     </div>
+  );
+}
+
+// ── Phase 8: detail drawer ──────────────────────────────────────────
+// Side panel that slides in from the right when an admin clicks the
+// expand icon on a look or product tile. No new RPCs — everything
+// it shows is already on the row (video, image, metrics, attached
+// products / brand) or in the catalog tags array.
+
+function DetailDrawer({ subject, catalogName, onClose }: { subject: NonNullable<DrawerSubject>; catalogName: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(15,23,42,0.45)',
+          zIndex: 90,
+        }}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0,
+          width: 'min(440px, 92vw)',
+          background: '#fff',
+          boxShadow: '-16px 0 48px rgba(15,23,42,0.25)',
+          zIndex: 100,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #e5e7eb' }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+              {subject.kind === 'look' ? 'Look' : 'Product'} · {catalogName}
+            </div>
+            <h2 style={{ margin: '2px 0 0', fontSize: 16, color: '#0f172a' }}>
+              {subject.kind === 'look'
+                ? (subject.look.title || `Look #${subject.look.legacyId ?? ''}`)
+                : (subject.product.name || 'Unnamed product')}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6, color: '#475569' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </header>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {subject.kind === 'look'
+            ? <LookDetailBody look={subject.look} />
+            : <ProductDetailBody product={subject.product} />}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function MetricMiniCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div style={{ flex: '1 1 0', minWidth: 0, padding: '8px 10px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+      <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: accent || '#0f172a' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function LookDetailBody({ look }: { look: CatalogLookRow }) {
+  const src = look.videoPath
+    ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
+    : null;
+  const m = look.metrics;
+  const trendLabel = m?.trendPct === null || m?.trendPct === undefined
+    ? '—'
+    : m.trendPct === 0 ? '—' : `${m.trendPct > 0 ? '↑' : '↓'}${Math.abs(m.trendPct)}%`;
+  const trendColor = (m?.trendPct ?? 0) >= 25 ? '#047857'
+    : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
+    : '#475569';
+  return (
+    <>
+      <div style={{ aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: '#000', maxHeight: 360 }}>
+        {src ? (
+          <video src={src} muted loop playsInline autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', fontSize: 12 }}>No video</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {look.creatorAvatarUrl ? (
+          <img src={look.creatorAvatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e2e8f0' }} />
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{look.creatorName || look.creatorHandle || 'Unknown'}</div>
+          {look.creatorHandle && (
+            <div style={{ fontSize: 11, color: '#64748b' }}>@{look.creatorHandle}</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <MetricMiniCard label="Impressions 7d" value={(m?.impressions ?? 0).toLocaleString()} sub={m ? `was ${m.impressionsPrev.toLocaleString()}` : undefined} />
+        <MetricMiniCard label="CTR" value={m && m.impressions > 0 ? `${(m.ctr * 100).toFixed(1)}%` : '—'} />
+        <MetricMiniCard label="Clickouts" value={(m?.clickouts ?? 0).toLocaleString()} />
+        <MetricMiniCard label="Trend" value={trendLabel} accent={trendColor} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Attached products
+        </div>
+        <div style={{ fontSize: 13, color: '#475569' }}>
+          {look.productCount} product{look.productCount === 1 ? '' : 's'} tagged on this look.
+        </div>
+      </div>
+
+      {look.createdAt && (
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>
+          Created {new Date(look.createdAt).toLocaleDateString()}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ProductDetailBody({ product }: { product: ProductRow }) {
+  const m = product.metrics;
+  const trendLabel = m?.trendPct === null || m?.trendPct === undefined
+    ? '—'
+    : m.trendPct === 0 ? '—' : `${m.trendPct > 0 ? '↑' : '↓'}${Math.abs(m.trendPct)}%`;
+  const trendColor = (m?.trendPct ?? 0) >= 25 ? '#047857'
+    : (m?.trendPct ?? 0) <= -25 ? '#b91c1c'
+    : '#475569';
+  const tags = product.catalog_tags || [];
+  return (
+    <>
+      <div style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', maxHeight: 360 }}>
+        {product.image_url ? (
+          <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', fontSize: 12 }}>No image</div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, color: '#64748b' }}>{product.brand || '—'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{product.name || 'Unnamed product'}</div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <MetricMiniCard label="Impressions 7d" value={(m?.impressions ?? 0).toLocaleString()} sub={m ? `was ${m.impressionsPrev.toLocaleString()}` : undefined} />
+        <MetricMiniCard label="CTR" value={m && m.impressions > 0 ? `${(m.ctr * 100).toFixed(1)}%` : '—'} />
+        <MetricMiniCard label="Clickouts" value={(m?.clickouts ?? 0).toLocaleString()} />
+        <MetricMiniCard label="Trend" value={trendLabel} accent={trendColor} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 4 }}>
+          Catalog tags ({tags.length})
+        </div>
+        {tags.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>No catalogs tagged.</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {tags.map(t => (
+              <span key={t} style={{ padding: '2px 8px', borderRadius: 4, background: '#eff6ff', color: '#1d4ed8', fontSize: 11, fontWeight: 600 }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -2747,10 +2956,12 @@ function LooksListTable({
   looks,
   selectedIds,
   onSelect,
+  onOpenDetail,
 }: {
   looks: CatalogLookRow[];
   selectedIds?: Set<string>;
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  onOpenDetail?: (look: CatalogLookRow) => void;
 }) {
   if (looks.length === 0) return (
     <div>
@@ -2839,10 +3050,12 @@ function ProductsListTable({
   products,
   selectedIds,
   onSelect,
+  onOpenDetail,
 }: {
   products: ProductRow[];
   selectedIds?: Set<string>;
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  onOpenDetail?: (product: ProductRow) => void;
 }) {
   if (products.length === 0) return (
     <div>
@@ -3204,7 +3417,7 @@ function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode
 }
 
 // ── Phases 3 + 4: per-tile metric overlay for products ──────────────
-function ProductMetricTile({ product, selected, onSelect }: { product: ProductRow; selected?: boolean; onSelect?: (extendRange: boolean) => void }) {
+function ProductMetricTile({ product, selected, onSelect, onOpenDetail }: { product: ProductRow; selected?: boolean; onSelect?: (extendRange: boolean) => void; onOpenDetail?: () => void }) {
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (!onSelect) return;
     e.preventDefault();
@@ -3231,11 +3444,45 @@ function ProductMetricTile({ product, selected, onSelect }: { product: ProductRo
       )}
       <MetricBadgeRow metrics={product.metrics} />
       {selected && <SelectionBadge />}
+      {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
       <div style={{ padding: 6 }}>
         <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.brand || ' - '}</div>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name || ' - '}</div>
       </div>
     </div>
+  );
+}
+
+function ExpandTileButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="Open detail drawer"
+      style={{
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        border: 'none',
+        background: 'rgba(15,23,42,0.6)',
+        color: '#fff',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 3,
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 3 21 3 21 9"/>
+        <polyline points="9 21 3 21 3 15"/>
+        <line x1="21" y1="3" x2="14" y2="10"/>
+        <line x1="3" y1="21" x2="10" y2="14"/>
+      </svg>
+    </button>
   );
 }
 
@@ -3484,7 +3731,7 @@ function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, 
   );
 }
 
-function LookThumb({ look, selected, onSelect }: { look: CatalogLookRow; selected?: boolean; onSelect?: (extendRange: boolean) => void }) {
+function LookThumb({ look, selected, onSelect, onOpenDetail }: { look: CatalogLookRow; selected?: boolean; onSelect?: (extendRange: boolean) => void; onOpenDetail?: () => void }) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const src = look.videoPath
     ? (look.videoPath.startsWith('http') ? look.videoPath : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
@@ -3536,6 +3783,7 @@ function LookThumb({ look, selected, onSelect }: { look: CatalogLookRow; selecte
         )}
         <MetricBadgeRow metrics={look.metrics} />
         {selected && <SelectionBadge />}
+        {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
       </div>
       <div style={{ padding: 6, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
