@@ -82,3 +82,67 @@ export function subscribeVideoStillRatio(
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// "Products image-only" toggle. When ON, the consumer feed renders
+// any tile backed by a product (no look attached) as just the
+// product's image — no autoplay video. Looks (look_id present)
+// continue to play video as normal.
+//
+// Default: false (current behaviour — products and looks both play
+// video). Boolean value persisted as 'true' / 'false' string in
+// app_settings to keep the same simple text column the ratio uses.
+// ────────────────────────────────────────────────────────────────────
+
+export const PRODUCTS_IMAGE_ONLY_KEY = 'products_image_only';
+export const DEFAULT_PRODUCTS_IMAGE_ONLY = false;
+
+function parseBool(raw: string | null | undefined, fallback: boolean): boolean {
+  if (raw == null) return fallback;
+  return raw.trim().toLowerCase() === 'true';
+}
+
+export async function getProductsImageOnly(): Promise<boolean> {
+  if (!supabase) return DEFAULT_PRODUCTS_IMAGE_ONLY;
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', PRODUCTS_IMAGE_ONLY_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn('[dials] products_image_only read failed:', error.message);
+    return DEFAULT_PRODUCTS_IMAGE_ONLY;
+  }
+  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_PRODUCTS_IMAGE_ONLY);
+}
+
+export async function setProductsImageOnly(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: PRODUCTS_IMAGE_ONLY_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeProductsImageOnly(
+  onChange: (value: boolean) => void,
+): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${PRODUCTS_IMAGE_ONLY_KEY}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'app_settings',
+        filter: `key=eq.${PRODUCTS_IMAGE_ONLY_KEY}`,
+      },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_PRODUCTS_IMAGE_ONLY));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}

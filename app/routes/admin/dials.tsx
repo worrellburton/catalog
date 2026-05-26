@@ -4,6 +4,10 @@ import {
   setVideoStillRatio,
   subscribeVideoStillRatio,
   DEFAULT_VIDEO_STILL_RATIO,
+  getProductsImageOnly,
+  setProductsImageOnly,
+  subscribeProductsImageOnly,
+  DEFAULT_PRODUCTS_IMAGE_ONLY,
 } from '~/services/dials';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 
@@ -73,6 +77,42 @@ export default function AdminDials() {
     const videoCount = PREVIEW_CARD_IDS.filter(id => shouldBeVideo(id, ratio)).length;
     return { videoCount, stillCount: PREVIEW_CARD_IDS.length - videoCount };
   }, [ratio]);
+
+  // ── Products image-only toggle ──────────────────────────────────────
+  // When ON, the consumer feed renders product tiles as static images
+  // (looks still play video). Mirrors the ratio dial's
+  // realtime-sync + optimistic-update pattern.
+  const [productsImageOnly, setProductsImageOnlyState] = useState<boolean>(DEFAULT_PRODUCTS_IMAGE_ONLY);
+  const [productsImageOnlyLoaded, setProductsImageOnlyLoaded] = useState(false);
+  const [productsImageOnlySaving, setProductsImageOnlySaving] = useState(false);
+  const inflightProductsImageOnly = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getProductsImageOnly().then(v => {
+      if (cancelled) return;
+      setProductsImageOnlyState(v);
+      setProductsImageOnlyLoaded(true);
+    });
+    const unsub = subscribeProductsImageOnly(v => {
+      if (cancelled) return;
+      if (inflightProductsImageOnly.current === v) return;
+      setProductsImageOnlyState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleProductsImageOnly = (next: boolean) => {
+    setProductsImageOnlyState(next);
+    inflightProductsImageOnly.current = next;
+    setProductsImageOnlySaving(true);
+    setProductsImageOnly(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setProductsImageOnlySaving(false);
+        window.setTimeout(() => {
+          if (inflightProductsImageOnly.current === next) inflightProductsImageOnly.current = null;
+        }, 1500);
+      });
+  };
 
   return (
     <div className="admin-page">
@@ -189,6 +229,68 @@ export default function AdminDials() {
                 </div>
               </div>
             </>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Products: only show product image</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every product tile in the consumer feed renders as
+            a still product image — no autoplay video. Looks keep their
+            video playback. Use this to silence the feed and lean on
+            the clean catalog imagery brands already produce.
+          </p>
+          {!productsImageOnlyLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {productsImageOnly ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {productsImageOnly
+                    ? 'Products show as images. Looks still play video.'
+                    : 'Products and looks both play video (default).'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {productsImageOnlySaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={productsImageOnly}
+                  onClick={() => onToggleProductsImageOnly(!productsImageOnly)}
+                  style={{
+                    position: 'relative',
+                    width: 44,
+                    height: 24,
+                    borderRadius: 999,
+                    border: 'none',
+                    background: productsImageOnly ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer',
+                    transition: 'background 160ms ease',
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: productsImageOnly ? 23 : 3,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: '#fff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
