@@ -3733,6 +3733,59 @@ export default function AdminData() {
               Generate
             </button>
             <button
+              className="bulk-pill"
+              title="Run the vision picker on the selected products only — overrides any existing primary."
+              onClick={async () => {
+                if (!supabase) return;
+                // Resolve to the subset with cloud ids + at least one image.
+                type Row = { id: string; name: string | null; brand: string | null; image_url: string | null; images: string[] | null };
+                const rows: Row[] = [];
+                for (const k of selectedProductKeys) {
+                  const match = allProducts.find(ap => `${ap.brand}-${ap.name}` === k);
+                  if (match?.id) rows.push({
+                    id: match.id,
+                    name: match.name,
+                    brand: match.brand,
+                    image_url: (match as { image_url?: string | null }).image_url ?? null,
+                    images: (match as { images?: string[] | null }).images ?? null,
+                  });
+                }
+                if (rows.length === 0) {
+                  showToast('None of the selected products are saved in the cloud yet.');
+                  return;
+                }
+                setPickingPrimary(true);
+                setPrimaryProgress({ done: 0, total: rows.length, failed: 0 });
+                let done = 0;
+                let failed = 0;
+                for (const row of rows) {
+                  const urls: string[] = [];
+                  if (Array.isArray(row.images)) {
+                    for (const u of row.images) if (typeof u === 'string' && u) urls.push(u);
+                  }
+                  if (row.image_url && !urls.includes(row.image_url)) urls.push(row.image_url);
+                  if (urls.length === 0) { done += 1; failed += 1; setPrimaryProgress({ done, total: rows.length, failed }); continue; }
+                  try {
+                    const { data, error } = await supabase.functions.invoke('pick-primary-image', {
+                      body: { product_id: row.id, name: row.name || '', brand: row.brand || '', image_urls: urls },
+                    });
+                    if (error || !data?.success) failed += 1;
+                  } catch { failed += 1; }
+                  done += 1;
+                  setPrimaryProgress({ done, total: rows.length, failed });
+                }
+                setPickingPrimary(false);
+                setPrimaryProgress(null);
+                if (failed > 0) showToast(`Primary images: ${done - failed}/${done} picked — ${failed} failed`);
+                else            showToast(`Primary images picked for ${done} product${done === 1 ? '' : 's'}`);
+              }}
+              disabled={pickingPrimary}
+            >
+              {pickingPrimary && primaryProgress
+                ? `Picking ${primaryProgress.done}/${primaryProgress.total}…`
+                : 'Pick primary'}
+            </button>
+            <button
               className="bulk-pill bulk-pill--danger"
               onClick={async () => {
                 if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}? This will also remove any generated creatives.`)) return;
