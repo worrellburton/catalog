@@ -172,12 +172,18 @@ export async function updateUserAvatar(
     .eq('id', userId);
   if (profErr) return { error: profErr.message };
 
-  // Also write the URL onto the auth user's metadata so the next
-  // sign-in / session refresh surfaces the new avatar everywhere
-  // useAuth() is consumed (header, comment cards, etc.) without
-  // needing a separate profiles read on every consumer.
+  // Mirror the URL onto auth.user.user_metadata so getCurrentUser()
+  // can prefer it as a fast read. CRITICAL: supabase.auth.updateUser
+  // always targets the CURRENT session — so we must only run it when
+  // the upload target IS the signed-in user. Without this guard, an
+  // admin uploading an avatar for an AI persona (or another user)
+  // would have that URL silently overwritten onto their own auth
+  // metadata, cross-contaminating avatars between accounts.
   try {
-    await supabase.auth.updateUser({ data: { avatar_url: url } });
+    const { data: { user: signedInUser } } = await supabase.auth.getUser();
+    if (signedInUser?.id === userId) {
+      await supabase.auth.updateUser({ data: { avatar_url: url } });
+    }
   } catch {
     /* metadata write is non-critical - the profiles row is the
        source of truth and we already wrote that. */

@@ -109,7 +109,17 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
   // so the rail reads as "your following" at a glance.
   const visible = creators.slice(0, 3);
   return (
-    <div ref={wrapperRef} style={{ position: 'relative' }}>
+    <div
+      ref={wrapperRef}
+      style={{
+        position: 'fixed',
+        top: 12,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 950,
+        pointerEvents: 'auto',
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -155,7 +165,8 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
         <div style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
-          right: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
           minWidth: 240,
           maxWidth: 320,
           background: '#fff',

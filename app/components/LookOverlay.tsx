@@ -9,6 +9,7 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
+import FollowIconButton from './FollowIconButton';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 import { type ProductAd } from '~/services/product-creative';
 import {
@@ -601,6 +602,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </span>
                 {showHandle && <span className="look-creator-handle">{look.creator.startsWith('@') ? look.creator : `@${look.creator}`}</span>}
               </div>
+              <FollowIconButton
+                handle={look.creator}
+                size={22}
+                style={{
+                  marginLeft: 'auto',
+                  borderColor: 'rgba(0,0,0,0.55)',
+                  color: '#0f172a',
+                  background: 'transparent',
+                }}
+              />
             </div>
 
             {/* Look title */}

@@ -530,6 +530,18 @@ export function AvatarUpload({
         // timestamp it, but belt-and-suspenders).
         const cacheBusted = `${url}?t=${Date.now()}`;
         onUploaded(cacheBusted);
+        // Repaint every useAuth() consumer with the fresh avatar.
+        // Skip when an admin is uploading on behalf of another user
+        // — that mutation doesn't change the signed-in admin's own
+        // avatar so the auth singleton stays correct.
+        try {
+          const { supabase } = await import('~/utils/supabase');
+          const { data: { user: signedInUser } } = await supabase!.auth.getUser();
+          if (signedInUser?.id === userId) {
+            const { refreshAuthUser } = await import('~/hooks/useAuth');
+            refreshAuthUser();
+          }
+        } catch { /* non-fatal */ }
       } finally {
         setBusy(false);
       }
