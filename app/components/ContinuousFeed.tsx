@@ -224,6 +224,17 @@ export default function ContinuousFeed({
       }));
   }, [dbLooks, hiddenLookIds, hiddenProductKeys]);
 
+  // Shopper's profile gender, subscribed globally. Declared ABOVE
+  // filteredLooks so the useMemo below can read it without tripping
+  // the temporal dead zone — production minification can hoist the
+  // useMemo factory call ahead of the useState declaration if these
+  // are reordered.
+  const [profileGender, setProfileGender] = useState(() => getShopperGender());
+  useEffect(() => {
+    const off = subscribeToShopperGender(() => setProfileGender(getShopperGender()));
+    return off;
+  }, []);
+
   const filteredLooks = useMemo(() => {
     // Gender filter: 'men' includes 'unisex' looks too (and vice-versa)
     // so catalog-wide staples surface for everyone regardless of the
@@ -279,11 +290,9 @@ export default function ContinuousFeed({
   // Signed-out / 'unknown' still skips the filter so the public feed
   // shows everything. Subscribed to the global setter so a profile
   // change re-runs the search with the new gender.
-  const [profileGender, setProfileGender] = useState(() => getShopperGender());
-  useEffect(() => {
-    const off = subscribeToShopperGender(() => setProfileGender(getShopperGender()));
-    return off;
-  }, []);
+  // profileGender + its subscriber effect are declared higher up
+  // (above filteredLooks) so that useMemo can read profileGender
+  // without tripping the TDZ in production builds.
   const genderOpt: 'men' | 'women' | undefined =
     activeFilter === 'all'
       ? (profileGender === 'male'   ? 'men'
