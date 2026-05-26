@@ -3913,6 +3913,7 @@ export default function AdminData() {
                     }}
                   />
                 </th>
+                <th style={{ textAlign: 'left', minWidth: 56 }} title="Vision-picked solo-product image. Click any photo in the expanded row to override.">Primary</th>
                 <th style={{ textAlign: 'left' }}>Creative</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -4092,6 +4093,54 @@ export default function AdminData() {
                       onClick={(e) => e.preventDefault()}
                       style={{ pointerEvents: 'none' }}
                     />
+                  </td>
+                  {/* Primary column — vision-picked solo-product
+                      image. Clicking it expands the row so admins can
+                      override via the photo gallery's star button.
+                      Empty box when the picker hasn't run yet, with
+                      a subtle hint to expand. */}
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const primary = (p as { primary_image_url?: string | null }).primary_image_url;
+                      if (primary) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCreativeRow(creativeOpen ? null : rowKey);
+                            }}
+                            title="Primary image — click to expand the photo gallery and override"
+                            style={{
+                              width: 44, height: 44, borderRadius: 6, padding: 0,
+                              border: '2px solid #16a34a', boxShadow: '0 0 0 1px #16a34a',
+                              cursor: 'pointer', background: '#fff', overflow: 'hidden',
+                              display: 'block',
+                            }}
+                          >
+                            <img src={primary} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenCreativeRow(creativeOpen ? null : rowKey);
+                          }}
+                          title="No primary picked yet — open the gallery to set one"
+                          style={{
+                            width: 44, height: 44, borderRadius: 6,
+                            border: '1px dashed #cbd5e1', background: '#f8fafc',
+                            color: '#94a3b8', fontSize: 18, cursor: 'pointer', padding: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          ☆
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {(() => {
@@ -4551,7 +4600,7 @@ export default function AdminData() {
                 </tr>
                 {creativeOpen && (
                   <tr className="admin-product-creative-row">
-                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
@@ -4790,7 +4839,7 @@ export default function AdminData() {
                 )}
                 {tagsOpen && (
                   <tr className="admin-product-tags-row">
-                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', borderBottom: linksOpen ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                           Tags
@@ -4815,7 +4864,7 @@ export default function AdminData() {
                 )}
                 {linksOpen && (
                   <tr className="admin-product-links-row">
-                    <td colSpan={17} style={{ padding: 0, background: '#fafbff' }}>
+                    <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                           <div>
