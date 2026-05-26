@@ -26,6 +26,10 @@ interface CrawledProduct {
   url: string | null;
   image_url: string | null;
   images?: string[] | null;
+  /** Vision-picked solo-product image (no human, no other products).
+   *  Falls back to image_url when null. Populated by the
+   *  pick-primary-image edge function or the admin star-click. */
+  primary_image_url?: string | null;
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
@@ -671,7 +675,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1551,7 +1555,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1904,7 +1908,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2008,7 +2012,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2028,11 +2032,13 @@ export default function AdminData() {
       const key = `${brand}-${name}`;
       const images = Array.isArray(cp.images) ? cp.images.filter((u): u is string => typeof u === 'string') : [];
       const active = cp.is_active !== false; // default true for legacy rows
+      const primaryUrl = (cp as { primary_image_url?: string | null }).primary_image_url ?? null;
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
         entry.image_url = cp.image_url;
         entry.images = images;
+        entry.primary_image_url = primaryUrl;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
@@ -2061,6 +2067,7 @@ export default function AdminData() {
           url: cp.url || '',
           image_url: cp.image_url,
           images,
+          primary_image_url: primaryUrl,
           video_urls: adVideoMap.get(cp.id) || [],
           looks: new Set(),
           creators: new Set(),
@@ -2749,7 +2756,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2780,7 +2787,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
