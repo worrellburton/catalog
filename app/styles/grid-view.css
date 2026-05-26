@@ -380,6 +380,19 @@
   color: #0b0b0b;
 }
 
+/* When the creator pill flips to a white background on hover, the
+   default white-on-transparent follow icon disappears. Invert the
+   stroke + border so the icon stays legible against the new bg. */
+.look-card .card-creator-row:hover .follow-icon-btn {
+  border-color: rgba(0, 0, 0, 0.55) !important;
+  color: #0b0b0b !important;
+  background: transparent !important;
+}
+.look-card .card-creator-row:hover .follow-icon-btn[aria-pressed="true"] {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.4) !important;
+}
+
 .look-card .card-creator-row:active {
   transform: scale(0.97);
 }
