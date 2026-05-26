@@ -475,12 +475,14 @@ export default CreativeCardV2;
 function BrandLabel({ name }: { name: string }) {
   const showLogos = useShowBrandLogos();
   const logoUrl = useBrandLogo(name);
-  if (showLogos && logoUrl) {
+  const [imageBroken, setImageBroken] = useState(false);
+  if (showLogos && logoUrl && !imageBroken) {
     return (
       <img
         className="promo-product-brand promo-product-brand-logo"
         src={logoUrl}
         alt={name}
+        onError={() => setImageBroken(true)}
         style={{ height: 14, width: 'auto', objectFit: 'contain', display: 'inline-block' }}
       />
     );
