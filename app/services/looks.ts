@@ -65,6 +65,7 @@ interface SupabaseLook {
       price: string;
       url: string;
       image_url: string;
+      primary_image_url: string | null;
     };
   }[];
 }
@@ -99,7 +100,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           brand,
           price,
           url,
-          image_url
+          image_url,
+          primary_image_url
         )
       )
     `)
@@ -257,7 +259,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           brand: lp.products?.brand || '',
           price: lp.products?.price || '',
           url: lp.products?.url || '',
-          image: lp.products?.image_url,
+          image: lp.products?.primary_image_url || lp.products?.image_url,
         })),
     };
   });

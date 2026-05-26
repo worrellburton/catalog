@@ -149,14 +149,14 @@ export default function CreatorPage({
       if (genIds.length > 0) {
         const { data: pickRows } = await supabase!
           .from('user_generation_products')
-          .select('generation_id, product_id, products(id, name, brand, price, image_url, images, url)')
+          .select('generation_id, product_id, products(id, name, brand, price, image_url, primary_image_url, images, url)')
           .in('generation_id', genIds);
         if (cancelled) return;
         const productById = new Map<string, Product>();
         const productsByGen = new Map<string, Set<string>>();
         for (const row of (pickRows || []) as unknown as Array<{
           generation_id: string; product_id: string;
-          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images: string[] | null; url: string | null } | null;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; images: string[] | null; url: string | null } | null;
         }>) {
           const p = row.products;
           if (!p) continue;
@@ -166,7 +166,7 @@ export default function CreatorPage({
               name: p.name || 'Untitled',
               price: p.price || '',
               url: p.url || '',
-              image: p.image_url || (p.images && p.images[0]) || undefined,
+              image: p.primary_image_url || p.image_url || (p.images && p.images[0]) || undefined,
             });
           }
           const set = productsByGen.get(row.generation_id) || new Set<string>();
@@ -224,7 +224,7 @@ export default function CreatorPage({
         .select(`
           id, legacy_id, title, gender, creator_handle, user_id,
           looks_creative!inner ( video_url, thumbnail_url, is_primary ),
-          look_products ( products ( id, name, brand, price, image_url, url, images ) )
+          look_products ( products ( id, name, brand, price, image_url, primary_image_url, url, images ) )
         `)
         .eq('creator_handle', creatorName)
         .eq('status', 'live')
@@ -238,7 +238,7 @@ export default function CreatorPage({
         id: string; legacy_id: number | null; title: string;
         gender: string | null; creator_handle: string; user_id: string | null;
         looks_creative: { video_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
-        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
+        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
       };
       const rows = (lookRows as LookPayload[] | null) || [];
 
