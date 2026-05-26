@@ -2113,11 +2113,13 @@ export default function GeneratePage() {
       {editingStats && effectiveUserId && (
         <StatsEditorModal
           userId={effectiveUserId}
-          initial={{ heightCm, heightLabel, ageLabel, gender: userGender }}
+          initial={{ heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender: userGender }}
           onClose={() => setEditingStats(false)}
           onSaved={(next) => {
             if (next.heightCm != null) setHeightCm(next.heightCm);
             if (next.heightLabel) setHeightLabel(next.heightLabel);
+            if (next.weightKg != null) setWeightKg(next.weightKg);
+            if (next.weightLabel) setWeightLabel(next.weightLabel);
             if (next.ageLabel) setAgeLabel(next.ageLabel);
             setUserGender(next.gender);
             setEditingStats(false);

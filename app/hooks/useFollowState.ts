@@ -27,6 +27,20 @@ type FollowState = boolean | null;
 const cache = new Map<string, FollowState>();
 const inflight = new Map<string, Promise<boolean>>();
 const subscribers = new Map<string, Set<(v: FollowState) => void>>();
+// Pub/sub for "any follow changed" — used by the FollowingRail in
+// the header to refetch its list when a follow happens elsewhere
+// (CreatorPage CTA, in-feed icon toggle). Without this the rail
+// would stay frozen on its mount-time snapshot.
+const listListeners = new Set<() => void>();
+function notifyListChanged() {
+  for (const cb of listListeners) {
+    try { cb(); } catch { /* noop */ }
+  }
+}
+export function subscribeFollowingChanges(cb: () => void): () => void {
+  listListeners.add(cb);
+  return () => { listListeners.delete(cb); };
+}
 
 function normalize(handle: string | null | undefined): string {
   return (handle || '').toLowerCase().trim();
@@ -91,14 +105,17 @@ export async function toggleFollowShared(handle: string): Promise<boolean> {
   const optimistic = !prev;
   cache.set(key, optimistic);
   notify(key, optimistic);
+  notifyListChanged();
   try {
     const { following } = await serviceToggleFollow(handle);
     cache.set(key, following);
     notify(key, following);
+    notifyListChanged();
     return following;
   } catch (err) {
     cache.set(key, prev);
     notify(key, prev);
+    notifyListChanged();
     throw err;
   }
 }

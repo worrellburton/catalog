@@ -35,6 +35,8 @@ const OCCASION_SUGGESTIONS = [
 interface ProfileBadgeBits {
   heightCm: number | null;
   heightLabel: string | null;
+  weightKg: number | null;
+  weightLabel: string | null;
   ageLabel: string | null;
   gender: UserGender;
 }
@@ -49,7 +51,7 @@ export default function StylePage() {
   const [uploads, setUploads] = useState<UserUpload[]>([]);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [profileBits, setProfileBits] = useState<ProfileBadgeBits>({
-    heightCm: null, heightLabel: null, ageLabel: null, gender: 'unknown',
+    heightCm: null, heightLabel: null, weightKg: null, weightLabel: null, ageLabel: null, gender: 'unknown',
   });
   const [profileHydrated, setProfileHydrated] = useState(false);
   const [editingStats, setEditingStats] = useState(false);
@@ -133,6 +135,8 @@ export default function StylePage() {
       setProfileBits({
         heightCm: heightAge.heightCm,
         heightLabel: heightAge.heightLabel,
+        weightKg: heightAge.weightKg ?? null,
+        weightLabel: heightAge.weightLabel ?? null,
         ageLabel: heightAge.ageLabel,
         gender: (g === 'male' || g === 'female') ? g : 'unknown',
       });
