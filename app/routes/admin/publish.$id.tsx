@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
+import { setGenerationPublished } from '~/services/user-generations';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
@@ -181,6 +182,14 @@ export default function AdminPublishScreen() {
           if (createdByErr) console.warn('[publish] created_by update failed:', createdByErr.message);
         }
       }
+      // Flip is_published on the source generation so /admin/data's
+      // Unpublished tab stops showing this row — earlier the publish
+      // flow created a new looks row but left the user_generations
+      // row alone, so admins saw the same generation in BOTH the
+      // Unpublished tab and the Published tab.
+      const { error: flipErr } = await setGenerationPublished(draft.generationId, true);
+      if (flipErr) console.warn('[publish] setGenerationPublished failed:', flipErr);
+
       // Drop the cached promise so the next /admin/data render
       // refetches and shows the new row in the Published tab.
       invalidateLooksCache();
