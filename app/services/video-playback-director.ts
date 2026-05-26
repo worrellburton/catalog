@@ -136,6 +136,16 @@ class VideoPlaybackDirector {
         this.scheduleRank();
       }
     });
+    // iOS BFCache restoration (swipe-close + reopen) doesn't always
+    // fire visibilitychange. pageshow + the page-lifecycle "resume"
+    // event cover the remaining paths so videos pick back up where
+    // they left off instead of freezing on the first frame.
+    const onResume = () => {
+      this.scheduleRank();
+      setTimeout(() => this.scheduleRank(), 200);
+    };
+    window.addEventListener('pageshow', onResume);
+    document.addEventListener('resume', onResume as EventListener);
 
     // Heartbeat: every 1.5 s, re-rank so any card whose play() failed
     // (degraded or paused after retries) gets another attempt once data
