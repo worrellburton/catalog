@@ -270,6 +270,16 @@ export async function getUserGender(userId: string): Promise<UserGender> {
     .select('gender')
     .eq('id', userId)
     .maybeSingle();
-  const g = data?.gender as UserGender | undefined;
-  return g === 'male' || g === 'female' ? g : 'unknown';
+  // Profiles store gender as 'men' / 'women' / 'unisex' / 'all' (the
+  // catalog/CreateAiUserModal vocabulary), but products + the
+  // downstream filter live in 'male' / 'female' / 'unknown'.
+  // Normalise both sides so a creator tagged 'men' actually filters
+  // the product picker to male + unisex. Was the cause of the
+  // "Pick your products shows women-only items for a male creator"
+  // leak — strict equality to 'male'/'female' returned 'unknown' for
+  // every real profile and bypassed the filter entirely.
+  const raw = (data?.gender || '').toString().toLowerCase();
+  if (raw === 'male' || raw === 'men' || raw === 'm') return 'male';
+  if (raw === 'female' || raw === 'women' || raw === 'f') return 'female';
+  return 'unknown';
 }
