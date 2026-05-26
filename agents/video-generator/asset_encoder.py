@@ -88,11 +88,26 @@ def encode_assets_from_url(video_url: str, workdir: Optional[str] = None) -> Enc
         check=True,
     )
 
-    # 3. Mobile variant: 480p H.264, 600 kbps, faststart (moov atom at the
-    # head of the file so the browser starts decoding from the first byte
-    # range request), CRF disabled in favour of bitrate for predictable
-    # file sizes. -movflags +faststart is the single most important flag
-    # here for "first-frame on mobile" - without it the browser has to
+    # 3. Mobile variant: 480p H.264, 1.5 Mbps target. Earlier this
+    # ran at 600 kbps, which is borderline for 480p portrait at 24fps
+    # the moment there's real motion — model walking, hair, camera
+    # arc — and produced the "choppy" frame-drop look users reported
+    # on the feed. 1.5 Mbps gives the encoder enough budget to keep
+    # every frame without exploding the file size (still <500 KB for
+    # a 5 s clip).
+    #
+    # -preset medium (was veryfast) trades a few seconds of encode
+    # time for noticeably better compression efficiency at the same
+    # bitrate. Mobile feeds are batch-encoded so the wall-clock
+    # difference is invisible to the shopper.
+    #
+    # -r 24 locks framerate to the source-native 24 fps (matches Fal
+    # Seedance + Veo output). Without it, a re-encode could
+    # interpolate or drop frames inconsistently when the input has
+    # variable frame timing.
+    #
+    # -movflags +faststart is the single most important flag here
+    # for "first-frame on mobile" — without it the browser has to
     # download the whole file before any frame plays.
     subprocess.run(
         [
@@ -100,11 +115,14 @@ def encode_assets_from_url(video_url: str, workdir: Optional[str] = None) -> Enc
             "-loglevel", "error",
             "-i", src_path,
             "-vf", "scale='min(480,iw)':-2",
+            "-r", "24",
             "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-b:v", "600k",
-            "-maxrate", "800k",
-            "-bufsize", "1200k",
+            "-preset", "medium",
+            "-b:v", "1500k",
+            "-maxrate", "2000k",
+            "-bufsize", "3000k",
+            "-profile:v", "high",
+            "-level", "4.0",
             "-pix_fmt", "yuv420p",
             "-an",  # no audio - the consumer feed plays muted anyway
             "-movflags", "+faststart",
