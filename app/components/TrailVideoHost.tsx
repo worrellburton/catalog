@@ -343,6 +343,20 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       if (document.hidden) pauseAll();
       else resumeInSlot();
     };
+    // iOS Safari sometimes restores the page from the back-forward
+    // cache without firing visibilitychange — common when the user
+    // swipes Safari closed and reopens it later, or returns from a
+    // home-screen icon. pageshow + the "resume" doc event are the
+    // reliable cross-platform signals for that path. Without them
+    // every video on the page stayed paused at frame 0 until the
+    // first scroll/tap. We pile multiple kicks (one immediate, one
+    // after a tick) because the first call right after BFCache
+    // restore can race with the decoder.
+    const onResumeFromBackground = () => {
+      resumeInSlot();
+      window.setTimeout(resumeInSlot, 80);
+      window.setTimeout(resumeInSlot, 400);
+    };
 
     // First-gesture unblock for browsers that gate autoplay until the
     // user interacts with the page. Listeners are once: true so we don't
@@ -361,6 +375,12 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     const heartbeat = window.setInterval(resumeInSlot, 1000);
 
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onResumeFromBackground);
+    // Document-level "resume" fires on browsers that implement the
+    // Page Lifecycle API (Chrome, recent Safari) when the page is
+    // unfrozen after a long inactive period. Safe to listen for —
+    // browsers without it just never fire the event.
+    document.addEventListener('resume', onResumeFromBackground as EventListener);
     window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
     window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
     window.addEventListener('keydown',     onFirstGesture, { once: true });
@@ -370,6 +390,8 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     return () => {
       window.clearInterval(heartbeat);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onResumeFromBackground);
+      document.removeEventListener('resume', onResumeFromBackground as EventListener);
       window.removeEventListener('pointerdown', onFirstGesture);
       window.removeEventListener('touchstart', onFirstGesture);
       window.removeEventListener('keydown', onFirstGesture);
