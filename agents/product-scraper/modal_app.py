@@ -123,13 +123,327 @@ Return ONLY the enhanced description, nothing else."""
         return None
 
 
+# ─── Shared: materials parsing (no AI) ────────────────────────────────
+
+
+def parse_materials(materials_care: str | None) -> list[dict] | None:
+    """Parse material composition text into structured [{fiber, percentage}] array.
+
+    Handles common formats:
+      - "75% cotton, 25% polyester"
+      - "Cotton 100%"
+      - "75% Wool / 25% Lyocell"
+      - "TENCEL™ Lyocell"
+      - "Body: 95% Cotton, 5% Elastane. Trim: 100% Polyester"
+    """
+    import re
+
+    if not materials_care:
+        return None
+
+    text = materials_care.strip()
+    results = []
+    seen = set()
+
+    # Pattern 1: "75% cotton" or "cotton 75%"
+    pct_first = re.findall(r'(\d{1,3})\s*%\s*([A-Za-z™®][A-Za-z\s™®-]{1,30})', text)
+    for pct_str, fiber in pct_first:
+        fiber_clean = re.sub(r'[™®™®]', '', fiber).strip().lower()
+        fiber_clean = re.sub(r'\s*(,|/|\.|\band\b).*', '', fiber_clean).strip()
+        if fiber_clean and fiber_clean not in seen:
+            seen.add(fiber_clean)
+            results.append({"fiber": fiber_clean, "percentage": int(pct_str)})
+
+    fiber_first = re.findall(r'([A-Za-z™®][A-Za-z\s™®-]{1,30}?)\s+(\d{1,3})\s*%', text)
+    for fiber, pct_str in fiber_first:
+        fiber_clean = re.sub(r'[™®™®]', '', fiber).strip().lower()
+        fiber_clean = re.sub(r'\s*(,|/|\.|\band\b).*', '', fiber_clean).strip()
+        if fiber_clean and fiber_clean not in seen:
+            seen.add(fiber_clean)
+            results.append({"fiber": fiber_clean, "percentage": int(pct_str)})
+
+    if results:
+        return results
+
+    # Pattern 2: standalone fiber names without percentages
+    known_fibers = {
+        'cotton', 'polyester', 'nylon', 'silk', 'wool', 'linen', 'cashmere',
+        'viscose', 'rayon', 'spandex', 'elastane', 'lycra', 'modal', 'tencel',
+        'lyocell', 'acrylic', 'hemp', 'bamboo', 'leather', 'suede', 'denim',
+        'fleece', 'velvet', 'satin', 'chiffon', 'organza', 'tweed', 'corduroy',
+        'jersey', 'mesh', 'down', 'polyamide', 'polypropylene', 'cupro',
+    }
+    words = re.findall(r'[a-zA-Z]+', text.lower())
+    for word in words:
+        if word in known_fibers and word not in seen:
+            seen.add(word)
+            results.append({"fiber": word, "percentage": None})
+
+    return results if results else None
+
+
+# ─── Shared: AI fit intelligence ──────────────────────────────────────
+
+
+def enrich_fit_intelligence(product_data: dict) -> dict | None:
+    """AI-derived fit analysis: fit type, body type match, layering, warmth, stretch."""
+    import os
+    import anthropic
+
+    name = product_data.get("name", "Unknown")
+    brand = product_data.get("brand", "Unknown")
+    type_ = product_data.get("type", "Unknown")
+    gender = product_data.get("gender", "unisex")
+    size_fit = product_data.get("size_fit") or "Not available"
+    materials_care = product_data.get("materials_care") or "Not available"
+    size_chart = product_data.get("size_chart")
+    variants = product_data.get("variants")
+
+    size_chart_str = ""
+    if size_chart:
+        import json
+        size_chart_str = f"\nSize Chart: {json.dumps(size_chart)[:500]}"
+
+    variants_str = ""
+    if variants:
+        import json
+        variants_str = f"\nVariants: {json.dumps(variants)[:300]}"
+
+    prompt = f"""Analyze this product's fit characteristics. Return ONLY valid JSON.
+
+Product: {name}
+Brand: {brand}
+Type: {type_}
+Gender: {gender}
+Size & Fit: {size_fit}
+Materials & Care: {materials_care}{size_chart_str}{variants_str}
+
+Return this exact JSON structure:
+{{
+  "fit_type": "slim|regular|relaxed|oversized|tailored|athletic",
+  "body_type_match": ["lean", "athletic", "average", "broad", "petite", "tall", "plus"],
+  "layering": true/false,
+  "warmth_rating": "cool|light|medium|warm|heavy",
+  "stretch_behavior": "none|low|medium|high",
+  "likely_feel": "short description of fabric hand-feel",
+  "true_to_size": "runs_small|true_to_size|runs_large",
+  "best_for_occasions": ["casual", "office", "formal", "active", "lounge"],
+  "season": ["spring", "summer", "fall", "winter"]
+}}
+
+Rules:
+- Only include body_type_match entries that genuinely suit the garment
+- Infer from materials (e.g., wool=warm, linen=cool, elastane=stretch)
+- Infer from brand reputation if known (Zara=slim, Uniqlo=relaxed, etc.)
+- best_for_occasions max 3 entries
+- season: which seasons the garment is appropriate for"""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        import json
+        text = response.content[0].text.strip()
+        # Strip markdown code fences if present
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        return json.loads(text)
+    except Exception as e:
+        print(f"  ⚠️  [{product_data.get('name')}] Fit intelligence error: {e}")
+        return None
+
+
+# ─── Shared: AI taxonomy & styling ────────────────────────────────────
+
+
+def generate_taxonomy_and_styling(product_data: dict) -> tuple[dict | None, dict | None]:
+    """AI-generated product taxonomy and styling metadata.
+
+    Returns (taxonomy, styling) tuple.
+    """
+    import os
+    import anthropic
+
+    name = product_data.get("name", "Unknown")
+    brand = product_data.get("brand", "Unknown")
+    type_ = product_data.get("type", "Unknown")
+    gender = product_data.get("gender", "unisex")
+    description = product_data.get("description") or ""
+    materials = product_data.get("materials_care") or ""
+
+    prompt = f"""Categorize this product and generate styling metadata. Return ONLY valid JSON.
+
+Product: {name}
+Brand: {brand}
+Current type: {type_}
+Gender: {gender}
+Description: {description[:300]}
+Materials: {materials[:200]}
+
+Return this exact JSON structure:
+{{
+  "taxonomy": {{
+    "category": "fashion|beauty|home|tech|lifestyle|food",
+    "subcategory": "specific product type, e.g. 'half zip sweater', 'slim fit chinos', 'platform sneakers'",
+    "style": "aesthetic, e.g. 'minimal luxury', 'streetwear', 'classic', 'bohemian', 'athleisure', 'preppy'"
+  }},
+  "styling": {{
+    "works_with": ["max 5 complementary items, e.g. 'wide leg trousers', 'white sneakers'"],
+    "occasion": ["max 3, e.g. 'smart casual', 'weekend brunch', 'office'"],
+    "season": ["spring", "summer", "fall", "winter"]
+  }}
+}}
+
+Rules:
+- subcategory should be MORE specific than the type field, not less
+- works_with should be practical styling suggestions
+- occasion should reflect realistic use cases"""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        import json
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        result = json.loads(text)
+        return result.get("taxonomy"), result.get("styling")
+    except Exception as e:
+        print(f"  ⚠️  [{product_data.get('name')}] Taxonomy/styling error: {e}")
+        return None, None
+
+
+# ─── Shared: confidence scoring (no AI) ───────────────────────────────
+
+
+def compute_confidence_scores(product_data: dict) -> dict:
+    """Score each extracted field 0-1 based on source reliability."""
+    scores = {}
+
+    # Price confidence
+    if product_data.get("price"):
+        scores["price"] = 0.95
+    else:
+        scores["price"] = 0.0
+
+    # Brand
+    if product_data.get("brand"):
+        scores["brand"] = 0.90
+    else:
+        scores["brand"] = 0.0
+
+    # Size chart: HTML table > AI inference
+    if product_data.get("size_chart"):
+        scores["size_chart"] = 0.85
+    else:
+        scores["size_chart"] = 0.0
+
+    # Variants
+    if product_data.get("variants"):
+        variant_count = len(product_data["variants"])
+        scores["variants"] = min(0.95, 0.5 + variant_count * 0.05)
+    else:
+        scores["variants"] = 0.0
+
+    # Materials
+    if product_data.get("materials_detail") or product_data.get("materials_structured"):
+        has_pct = any(
+            m.get("percentage") is not None
+            for m in (product_data.get("materials_detail") or product_data.get("materials_structured") or [])
+        )
+        scores["materials"] = 0.90 if has_pct else 0.60
+    elif product_data.get("materials_care"):
+        scores["materials"] = 0.40
+    else:
+        scores["materials"] = 0.0
+
+    # Size fit
+    if product_data.get("size_fit"):
+        scores["size_fit"] = 0.80
+    else:
+        scores["size_fit"] = 0.0
+
+    # Fit intelligence (AI-derived)
+    if product_data.get("fit_intelligence"):
+        scores["fit_intelligence"] = 0.65
+    else:
+        scores["fit_intelligence"] = 0.0
+
+    # Type/gender
+    scores["type"] = 0.85 if product_data.get("type") else 0.0
+    scores["gender"] = 0.80 if product_data.get("gender") else 0.0
+
+    # Images
+    images = product_data.get("images") or []
+    if len(images) >= 3:
+        scores["images"] = 0.95
+    elif len(images) >= 1:
+        scores["images"] = 0.70
+    else:
+        scores["images"] = 0.0
+
+    return scores
+
+
+# ─── Shared: brand fit profile update ─────────────────────────────────
+
+
+def update_brand_profile(brand: str, fit_intelligence: dict, supabase) -> None:
+    """Update or create brand-level fit profile from individual product data."""
+    if not brand or not fit_intelligence:
+        return
+
+    # Fetch existing profile
+    existing = (
+        supabase.table("brand_fit_profiles")
+        .select("*")
+        .eq("brand", brand)
+        .maybe_single()
+        .execute()
+    )
+
+    row = existing.data
+    sample_count = (row.get("sample_count", 0) if row else 0) + 1
+
+    profile = {
+        "brand": brand,
+        "fit_bias": fit_intelligence.get("true_to_size", "true_to_size"),
+        "silhouette": fit_intelligence.get("fit_type", "regular"),
+        "stretch": fit_intelligence.get("stretch_behavior", "medium"),
+        "sample_count": sample_count,
+        "confidence": min(0.95, 0.3 + sample_count * 0.1),
+    }
+
+    if row:
+        # Only update if we have enough samples or no existing data
+        if sample_count >= 3 or not row.get("fit_bias"):
+            supabase.table("brand_fit_profiles").update(profile).eq("brand", brand).execute()
+    else:
+        supabase.table("brand_fit_profiles").insert(profile).execute()
+
+    print(f"  📊 [{brand}] Brand profile updated (sample #{sample_count})")
+
+
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
 
 @app.function(
     image=scraper_image,
     secrets=secrets,
-    timeout=300,        # 5 min max per product (Playwright + Claude calls)
+    timeout=420,        # 7 min max per product (Playwright + Claude scrape + enrichment pipeline)
     retries=1,          # retry once on transient failures
     max_containers=3,  # max 3 concurrent scrapes to stay within rate limits
 )
@@ -204,7 +518,14 @@ def scrape_and_update(product_id: str, url: str):
     def _write_to_db(product: dict):
         """Called immediately when Claude calls save_product — no waiting for loop end."""
         nonlocal saved_product_data
-        
+
+        # Parse materials into structured format (no AI, instant)
+        materials_structured = parse_materials(product.get("materials_care"))
+
+        # Snapshot the raw scraped data before any enrichment
+        import json as _json
+        raw_data = {k: v for k, v in product.items() if k != "images" or v}
+
         update_payload = {
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
@@ -222,6 +543,12 @@ def scrape_and_update(product_id: str, url: str):
             "gender": product.get("gender"),
             "size_fit": product.get("size_fit"),
             "materials_care": product.get("materials_care"),
+            # New enrichment columns
+            "raw_data": raw_data,
+            "variants": product.get("variants"),
+            "size_chart": product.get("size_chart"),
+            "materials_structured": materials_structured or product.get("materials_detail"),
+            "product_taxonomy": product.get("product_category"),
         }
         # If the original URL was a Google Shopping link, overwrite it with the
         # resolved merchant URL so the row points to the actual product page.
@@ -232,7 +559,7 @@ def scrape_and_update(product_id: str, url: str):
 
         supabase.table("products").update(update_payload).eq("id", product_id).execute()
         print(f"✅ [{product_id}] {product.get('title')} — saved to DB immediately")
-        
+
         # Store product data for enrichment after scraping completes
         saved_product_data = {
             "name": product.get("title"),
@@ -243,48 +570,87 @@ def scrape_and_update(product_id: str, url: str):
             "description": product.get("description"),
             "size_fit": product.get("size_fit"),
             "materials_care": product.get("materials_care"),
+            "variants": product.get("variants"),
+            "size_chart": product.get("size_chart"),
+            "materials_detail": product.get("materials_detail"),
+            "materials_structured": materials_structured,
+            "images": product.get("images", []),  # needed for confidence scoring
         }
-        
+
         # Note: quality_score is auto-computed by the trg_products_quality_score trigger
 
     try:
         run_agent(url, save=False, on_save=_write_to_db)
         print(f"✅ [{product_id}] agent loop complete")
-        
-        # Enrich description after successful scrape
+
+        # ── Post-scrape enrichment pipeline ──────────────────────────────
         if saved_product_data:
+            enrichment_update = {}
+
+            # Step 1: Enrich description (existing)
             print(f"🤖 [{product_id}] Enriching description with AI...")
             enriched = enrich_description(saved_product_data)
-            
             if enriched:
-                # Update with enriched description
-                supabase.table("products").update({
-                    "description": enriched,
-                    "description_enriched": True
-                }).eq("id", product_id).execute()
-                print(f"✨ [{product_id}] Description enriched (+{len(enriched) - len(saved_product_data.get('description', ''))} chars)")
-                
-                # Trigger re-embedding with enriched description
-                try:
-                    import requests
-                    response = requests.post(
-                        f"{sb_url}/functions/v1/embed-product",
-                        headers={
-                            "Authorization": f"Bearer {sb_key}",
-                            "apikey": sb_key,
-                            "Content-Type": "application/json",
-                        },
-                        json={"id": product_id, "force": True},
-                        timeout=30
-                    )
-                    if response.ok:
-                        print(f"🔍 [{product_id}] Re-embedded with enriched description")
-                    else:
-                        print(f"  ⚠️  [{product_id}] Re-embed warning: {response.text[:100]}")
-                except Exception as e:
-                    print(f"  ⚠️  [{product_id}] Re-embed error: {e}")
+                enrichment_update["description"] = enriched
+                enrichment_update["description_enriched"] = True
+                print(f"✨ [{product_id}] Description enriched")
             else:
-                print(f"  ⚠️  [{product_id}] Enrichment failed, keeping original description")
+                print(f"  ⚠️  [{product_id}] Description enrichment failed, keeping original")
+
+            # Step 2: AI fit intelligence
+            print(f"🧠 [{product_id}] Generating fit intelligence...")
+            fit_intel = enrich_fit_intelligence(saved_product_data)
+            if fit_intel:
+                enrichment_update["fit_intelligence"] = fit_intel
+                saved_product_data["fit_intelligence"] = fit_intel
+                print(f"✅ [{product_id}] Fit intelligence: {fit_intel.get('fit_type', '?')} / {fit_intel.get('true_to_size', '?')}")
+
+            # Step 3: AI taxonomy & styling
+            print(f"🏷️  [{product_id}] Generating taxonomy & styling...")
+            taxonomy, styling = generate_taxonomy_and_styling(saved_product_data)
+            if taxonomy:
+                enrichment_update["product_taxonomy"] = taxonomy
+                print(f"✅ [{product_id}] Taxonomy: {taxonomy.get('subcategory', '?')} ({taxonomy.get('style', '?')})")
+            if styling:
+                enrichment_update["styling_metadata"] = styling
+
+            # Step 4: Confidence scores (no AI)
+            confidence = compute_confidence_scores(saved_product_data)
+            enrichment_update["confidence_scores"] = confidence
+            enrichment_update["enrichment_version"] = 1
+
+            # Write all enrichment data in one update
+            if enrichment_update:
+                supabase.table("products").update(enrichment_update).eq("id", product_id).execute()
+                print(f"📦 [{product_id}] Enrichment pipeline complete ({len(enrichment_update)} fields)")
+
+            # Step 5: Update brand fit profile
+            brand = saved_product_data.get("brand")
+            if brand and fit_intel:
+                try:
+                    update_brand_profile(brand, fit_intel, supabase)
+                except Exception as e:
+                    print(f"  ⚠️  [{product_id}] Brand profile update failed: {e}")
+
+            # Step 6: Re-embed with enriched data
+            try:
+                import requests
+                response = requests.post(
+                    f"{sb_url}/functions/v1/embed-product",
+                    headers={
+                        "Authorization": f"Bearer {sb_key}",
+                        "apikey": sb_key,
+                        "Content-Type": "application/json",
+                    },
+                    json={"id": product_id, "force": True},
+                    timeout=30
+                )
+                if response.ok:
+                    print(f"🔍 [{product_id}] Re-embedded with enriched data")
+                else:
+                    print(f"  ⚠️  [{product_id}] Re-embed warning: {response.text[:100]}")
+            except Exception as e:
+                print(f"  ⚠️  [{product_id}] Re-embed error: {e}")
 
     except Exception as e:
         # If we already resolved a Google Shopping URL but the merchant page

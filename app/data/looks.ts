@@ -4,17 +4,37 @@ export interface Product {
   price: string;
   url: string;
   image?: string;
-  // Optional copy hydrated by ProductPage on open. The main loaders
-  // intentionally don't carry these to keep the look/grid payloads
-  // small — ProductPage fetches them once per product open.
   size_fit?: string | null;
   materials_care?: string | null;
-  /** Structured garment measurements keyed by code → centimeters.
-   *  Surfaced as the SVG measurement diagram on /p/<slug>. Null until
-   *  the scraper backfills it; the diagram self-hides when empty. */
   measurements?: Record<string, number> | null;
-  /** Set when bookmarked from a product creative — carries the video so
-   *  the saved-items page can render a video card instead of a still. */
+  variants?: Array<{
+    size: string | null;
+    color: string | null;
+    availability: boolean | null;
+  }> | null;
+  size_chart?: Record<string, Record<string, number>> | null;
+  fit_intelligence?: {
+    fit_type: string;
+    body_type_match: string[];
+    layering: boolean;
+    warmth_rating: string;
+    stretch_behavior: string;
+    likely_feel: string;
+    true_to_size: string;
+    best_for_occasions: string[];
+    season: string[];
+  } | null;
+  materials_structured?: Array<{ fiber: string; pct: number | null }> | null;
+  product_taxonomy?: {
+    category: string;
+    subcategory: string;
+    style: string | null;
+  } | null;
+  styling_metadata?: {
+    works_with: string[];
+    occasion: string[];
+    season: string[];
+  } | null;
   video_url?: string;
   thumbnail_url?: string;
   creative_id?: string;
