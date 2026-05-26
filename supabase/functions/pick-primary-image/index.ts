@@ -118,16 +118,23 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: 'edge function misconfigured' });
   }
 
-  // Admin gate via the caller's JWT.
+  // Auth: accept either an admin user's JWT (for the /admin/data
+  // batch button) OR the service-role key (for the post-insert
+  // trigger on public.products that fires this function from inside
+  // Postgres via pg_net). Service role bypasses the admin gate
+  // because the trigger is the caller and we trust DB-side code.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return json({ success: false, error: 'unauthorized' }, 401);
   const token = authHeader.replace('Bearer ', '');
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-  const { data: { user: caller } } = await admin.auth.getUser(token);
-  if (!caller) return json({ success: false, error: 'unauthorized' }, 401);
-  const { data: prof } = await admin.from('profiles').select('is_admin, role').eq('id', caller.id).maybeSingle();
-  const isAdmin = prof?.is_admin === true || prof?.role === 'admin' || prof?.role === 'super_admin';
-  if (!isAdmin) return json({ success: false, error: 'admin only' }, 403);
+  const isServiceRole = token === serviceRoleKey;
+  if (!isServiceRole) {
+    const { data: { user: caller } } = await admin.auth.getUser(token);
+    if (!caller) return json({ success: false, error: 'unauthorized' }, 401);
+    const { data: prof } = await admin.from('profiles').select('is_admin, role').eq('id', caller.id).maybeSingle();
+    const isAdmin = prof?.is_admin === true || prof?.role === 'admin' || prof?.role === 'super_admin';
+    if (!isAdmin) return json({ success: false, error: 'admin only' }, 403);
+  }
 
   let body: PickBody;
   try { body = await req.json(); }
