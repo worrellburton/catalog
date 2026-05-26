@@ -1079,33 +1079,14 @@ export default function ProductPage({
         </section>
         </div>
 
-        {/* "Similar" — the broad continuous feed scoped to the current
-            product. Lifted above More-like-this / Popular / Featured-in-
-            Looks per UX request: similar discovery always sits directly
-            below the product card, ahead of the curated rails. */}
-        <section className="pd-similar-feed">
-          <h2 className="pd-feed-title">Similar</h2>
-          <ContinuousFeed
-            nested
-            scrollRoot={scrollerEl}
-            activeFilter={activeFilter}
-            searchQuery=""
-            shuffleKey={0}
-            layoutMode={0}
-            onOpenLook={onOpenLook}
-            onOpenCreator={onOpenCreator || (() => {})}
-            onOpenBrowser={onOpenBrowser}
-            onOpenProduct={onOpenProduct}
-            onOpenCreative={onOpenCreative}
-            onOpenBrand={onOpenBrand}
-            bookmarks={bookmarks}
-            slotPrefix={`product:${product.brand}:${product.name}`}
-          />
-        </section>
-
+        {/* "Similar" — bounded rail of brand/tag-matched products
+            (was "More like this"). Sits directly below the product
+            card so the next-best matches always appear first. The
+            infinite "You might also like" feed lives at the bottom
+            for open-ended exploration. */}
         {moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">More like this</h2>
+            <h2 className="pd-feed-title">Similar</h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
@@ -1152,8 +1133,29 @@ export default function ProductPage({
           </section>
         )}
 
-        {/* Continuous feed previously lived here as "You might also
-            like"; lifted above More-like-this per UX request. */}
+        {/* Infinite "You might also like" feed — anchors the bottom
+            of the page so scrolling never dead-ends. Same
+            ContinuousFeed component the home page uses, scoped to
+            the current product via slotPrefix. */}
+        <section className="pd-similar-feed">
+          <h2 className="pd-feed-title">You might also like</h2>
+          <ContinuousFeed
+            nested
+            scrollRoot={scrollerEl}
+            activeFilter={activeFilter}
+            searchQuery=""
+            shuffleKey={0}
+            layoutMode={0}
+            onOpenLook={onOpenLook}
+            onOpenCreator={onOpenCreator || (() => {})}
+            onOpenBrowser={onOpenBrowser}
+            onOpenProduct={onOpenProduct}
+            onOpenCreative={onOpenCreative}
+            onOpenBrand={onOpenBrand}
+            bookmarks={bookmarks}
+            slotPrefix={`product:${product.brand}:${product.name}`}
+          />
+        </section>
       </div>
     </div>
   );
