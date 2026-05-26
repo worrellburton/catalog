@@ -52,7 +52,12 @@
   padding: 20px 22px 16px;
   border-bottom: 1px solid #f0f0f2;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
 }
+.admin-dark .ape-header { background: #18181b; }
 .ape-eyebrow {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 10px;

@@ -13,6 +13,7 @@ import {
   subscribeProductsImageOnly,
   DEFAULT_PRODUCTS_IMAGE_ONLY,
 } from '~/services/dials';
+import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 
 /**
@@ -121,6 +122,32 @@ export default function AdminDials() {
           if (inflightBrandLogos.current === next) inflightBrandLogos.current = null;
         }, 1500);
       });
+  };
+
+  // Brand logos backfill — walks distinct product brands, probes
+  // Brandfetch's CDN for each derived domain, and upserts the matching
+  // brand_logos row. Lets the admin canonicalize the logo table in one
+  // click instead of waiting for runtime lookups to populate it.
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ scanned: number; total: number; currentBrand?: string } | null>(null);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
+  const runBackfill = async () => {
+    setBackfillRunning(true);
+    setBackfillError(null);
+    setBackfillResult(null);
+    setBackfillProgress({ scanned: 0, total: 0 });
+    try {
+      const result = await backfillBrandLogos((p) => {
+        setBackfillProgress({ scanned: p.scanned, total: p.total, currentBrand: p.currentBrand });
+      });
+      setBackfillResult(result);
+    } catch (err) {
+      setBackfillError(err instanceof Error ? err.message : 'Backfill failed');
+    } finally {
+      setBackfillRunning(false);
+      setBackfillProgress(null);
+    }
   };
   const inflightProductsImageOnly = useRef<boolean | null>(null);
   useEffect(() => {
@@ -381,6 +408,106 @@ export default function AdminDials() {
               </div>
             </div>
           )}
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f0f2' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>Fetch missing brand logos</span>
+                <span style={{ fontSize: 11, color: '#999', lineHeight: 1.4 }}>
+                  Walk every distinct brand in the products table, probe
+                  Brandfetch's CDN for each derived domain, and upsert
+                  the match into <code style={{ fontSize: 10 }}>brand_logos</code>.
+                  Skips brands already registered and those without a
+                  resolvable domain.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={runBackfill}
+                disabled={backfillRunning}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #111',
+                  background: backfillRunning ? '#fafafa' : '#111',
+                  color: backfillRunning ? '#666' : '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: backfillRunning ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {backfillRunning ? 'Scanning…' : 'Run backfill'}
+              </button>
+            </div>
+
+            {backfillRunning && backfillProgress && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>
+                    {backfillProgress.total > 0
+                      ? `${backfillProgress.scanned} / ${backfillProgress.total}`
+                      : 'Counting brands…'}
+                    {backfillProgress.currentBrand && (
+                      <span style={{ color: '#999', marginLeft: 8, fontStyle: 'italic' }}>
+                        {backfillProgress.currentBrand}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div style={{ height: 4, background: '#e5e5e5', borderRadius: 999, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: backfillProgress.total > 0
+                        ? `${Math.round((backfillProgress.scanned / backfillProgress.total) * 100)}%`
+                        : '0%',
+                      background: '#111',
+                      transition: 'width 220ms ease',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {backfillResult && (
+              <div style={{
+                marginTop: 10,
+                padding: '8px 12px',
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#166534',
+                display: 'flex',
+                gap: 14,
+                flexWrap: 'wrap',
+              }}>
+                <span><strong>{backfillResult.added}</strong> added</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.alreadyHad}</strong> already had</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.skipped}</strong> skipped</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.total}</strong> total brands</span>
+              </div>
+            )}
+
+            {backfillError && (
+              <div style={{
+                marginTop: 10,
+                padding: '8px 12px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#991b1b',
+              }}>
+                {backfillError}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ type Mode = 'lookup' | 'search';
 interface AmazonLookupModalProps {
   onClose: () => void;
   onIngested: (count: number) => void;
+  onPending?: (urls: string[]) => void;
 }
 
 function extractAsin(raw: string): string | null {
@@ -27,7 +28,7 @@ function looksLikeUrlOrAsin(s: string): boolean {
   return /^[A-Z0-9]{10}$/i.test(t) || /^https?:\/\//i.test(t);
 }
 
-export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupModalProps) {
+export default function AmazonLookupModal({ onClose, onIngested, onPending }: AmazonLookupModalProps) {
   const [mode, setMode] = useState<Mode>('search');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -92,6 +93,7 @@ export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupM
     setIngesting(true);
     setError(null);
     try {
+      if (product.url) onPending?.([product.url]);
       const row = await ingestRainforestProduct(product);
       if (!row) throw new Error('Failed to save product');
       onIngested(1);
@@ -108,6 +110,8 @@ export default function AmazonLookupModal({ onClose, onIngested }: AmazonLookupM
     setIngesting(true);
     setError(null);
     try {
+      const pendingUrls = picks.map(p => p.url).filter((u): u is string => !!u);
+      if (pendingUrls.length > 0) onPending?.(pendingUrls);
       const { inserted, failed } = await ingestRainforestProducts(picks);
       if (failed > 0 && inserted === 0) {
         setError(`All ${failed} ingests failed`);
