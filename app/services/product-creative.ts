@@ -107,7 +107,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url?: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -118,7 +118,7 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+  product:products(id, name, brand, price, image_url, primary_image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
 `;
 
 export async function getProductAds(): Promise<ProductAd[]> {
@@ -169,7 +169,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+      product:products!inner(id, name, brand, price, image_url, primary_image_url, images, url, type, catalog_tags, is_active, is_elite, gender)
     `)
     .eq('status', 'live')
     .eq('product.is_active', true)
@@ -237,7 +237,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
     .select(`
       id, title, creator_handle, gender, created_at, catalog_tags,
       looks_creative ( video_url, is_primary ),
-      look_products ( product:products(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
+      look_products ( product:products(id, name, brand, price, image_url, primary_image_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
     `)
     .eq('status', 'live')
     .eq('enabled', true)
@@ -403,7 +403,7 @@ function warmAboveTheFoldAssets(rows: ProductAd[]): void {
   for (const ad of head) {
     // Image cache hit for the poster - the <img loading=eager> on the
     // card immediately reuses this without a fresh round-trip.
-    const poster = ad.thumbnail_url || ad.product?.image_url;
+    const poster = ad.thumbnail_url || ad.product?.primary_image_url || ad.product?.image_url;
     if (poster) {
       try {
         const img = new Image();
@@ -476,6 +476,7 @@ if (typeof window !== 'undefined') {
   if (cached) {
     for (const ad of cached.slice(0, 6)) {
       const url = ad.thumbnail_url
+        || ad.product?.primary_image_url
         || ad.product?.image_url
         || (ad.product?.images && ad.product.images[0])
         || '';
@@ -628,7 +629,7 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
+      product:products!inner(id, name, brand, price, image_url, primary_image_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
     `)
     .eq('status', 'live')
     .not('video_url', 'is', null)
@@ -978,7 +979,7 @@ export async function getCreativesByBrand(
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, images, url, catalog_tags, gender, is_platform)
+      product:products!inner(id, name, brand, price, image_url, primary_image_url, images, url, catalog_tags, gender, is_platform)
     `)
     .eq('status', 'live')
     .ilike('product.brand', normalizedBrand)

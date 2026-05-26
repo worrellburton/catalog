@@ -1438,6 +1438,17 @@ export default function AdminData() {
   const [copywriting, setCopywriting] = useState(false);
   const [copywriteProgress, setCopywriteProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // Primary-image picker — Claude Haiku vision scores every product
+  // image; the highest "solo product" shot becomes products.primary_image_url.
+  const [pickingPrimary, setPickingPrimary] = useState(false);
+  const [primaryProgress, setPrimaryProgress] = useState<{ done: number; total: number; failed: number } | null>(null);
+
+  // runPickPrimaryImages is defined further down — after showToast — to
+  // avoid the TDZ on the useCallback deps array. The button binds to
+  // the resolved callback below.
+  const runPickPrimaryImagesRef = useRef<() => Promise<void>>(async () => {});
+  const runPickPrimaryImages = useCallback(() => runPickPrimaryImagesRef.current(), []);
+
   const runCopywriter = useCallback(async () => {
     if (!supabase) return;
     // Rewrite products that don't have a display_name yet. Cap at 100 per run.
@@ -2236,6 +2247,50 @@ export default function AdminData() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  // Real implementation behind runPickPrimaryImages — stashed in a ref
+  // above so the trigger is callable from the toolbar before showToast
+  // is declared. See the note at the runPickPrimaryImagesRef
+  // declaration for the TDZ workaround motivation.
+  runPickPrimaryImagesRef.current = async () => {
+    if (!supabase) return;
+    const { data: candidates } = await supabase
+      .from('products')
+      .select('id, name, brand, image_url, images')
+      .is('primary_image_picked_at', null)
+      .limit(200);
+    if (!candidates || candidates.length === 0) {
+      showToast('Every product already has a primary image picked.');
+      return;
+    }
+    type Row = { id: string; name: string | null; brand: string | null; image_url: string | null; images: string[] | null };
+    setPickingPrimary(true);
+    setPrimaryProgress({ done: 0, total: candidates.length, failed: 0 });
+    let done = 0;
+    let failed = 0;
+    for (const row of candidates as Row[]) {
+      const urls: string[] = [];
+      if (Array.isArray(row.images)) {
+        for (const u of row.images) if (typeof u === 'string' && u) urls.push(u);
+      }
+      if (row.image_url && !urls.includes(row.image_url)) urls.push(row.image_url);
+      if (urls.length === 0) { done += 1; failed += 1; setPrimaryProgress({ done, total: candidates.length, failed }); continue; }
+      try {
+        const { data, error } = await supabase.functions.invoke('pick-primary-image', {
+          body: { product_id: row.id, name: row.name || '', brand: row.brand || '', image_urls: urls },
+        });
+        if (error || !data?.success) failed += 1;
+      } catch {
+        failed += 1;
+      }
+      done += 1;
+      setPrimaryProgress({ done, total: candidates.length, failed });
+    }
+    setPickingPrimary(false);
+    setPrimaryProgress(null);
+    if (failed > 0) showToast(`Primary images picked for ${done - failed}/${done} — ${failed} failed`);
+    else            showToast(`Primary images picked for ${done} product${done === 1 ? '' : 's'}`);
+  };
+
   // Delete a single creative (one product_creative row) by id. Used by
   // the X overlay on each video tile in the Products-row expanded view.
   // Optimistic local update so the tile vanishes immediately; on failure
@@ -2626,6 +2681,25 @@ export default function AdminData() {
         )}
         {activeTab === 'products' && (
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={runPickPrimaryImages}
+              disabled={pickingPrimary}
+              title="Claude vision picks the cleanest solo-product image for every product without one (no human, no other products)."
+            >
+              {pickingPrimary && primaryProgress ? (
+                <>Picking {primaryProgress.done}/{primaryProgress.total}…</>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  Pick primary images
+                </>
+              )}
+            </button>
             <button
               className="admin-btn admin-btn-secondary"
               onClick={runCopywriter}

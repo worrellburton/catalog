@@ -357,14 +357,14 @@ export default function Home() {
   const fetchSimilarProducts = useCallback(async (brand: string | null, catalogTags: string[] | null, excludeId: string | null): Promise<Product[]> => {
     if (!supabase) return [];
 
-    type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null };
+    type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null };
     const queries: Array<Promise<Row[]>> = [];
 
     if (brand) {
       queries.push((async () => {
         let q = supabase!
           .from('products')
-          .select('id, name, brand, price, image_url, url')
+          .select('id, name, brand, price, image_url, primary_image_url, url')
           .eq('is_active', true)
           .eq('brand', brand)
           .limit(18);
@@ -378,7 +378,7 @@ export default function Home() {
       queries.push((async () => {
         let q = supabase!
           .from('products')
-          .select('id, name, brand, price, image_url, url')
+          .select('id, name, brand, price, image_url, primary_image_url, url')
           .eq('is_active', true)
           .overlaps('catalog_tags', catalogTags)
           .limit(18);
@@ -402,7 +402,7 @@ export default function Home() {
           brand: row.brand || '',
           price: row.price || '',
           url: row.url || '',
-          image: row.image_url || undefined,
+          image: (row as { primary_image_url?: string | null }).primary_image_url || row.image_url || undefined,
         });
       }
     }
@@ -478,7 +478,7 @@ export default function Home() {
       brand: creative.product.brand || '',
       price: creative.product.price || '',
       url: creative.product.url || '',
-      image: creative.product.image_url || undefined,
+      image: creative.product.primary_image_url || creative.product.image_url || undefined,
     };
     pushRecent(mapped);
     setProductNavCount(c => c + 1);
