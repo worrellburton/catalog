@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from '@remix-run/react';
 import LookForm from './LookForm';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
@@ -71,9 +72,13 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Analytics modal — opened from the bar-chart FAB in the top-right.
-  // Calls user_creator_analytics_summary RPC and filters to the
-  // signed-in user's row so the creator sees their own numbers.
   const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // "+" FAB menu in the top-right. Opens to three actions: Upload
+  // New Look (existing form), Add AI looks (generate flow), Add
+  // product (admin/data ingest). Outside-click + Escape close.
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   // "Creator Mode" toggle. When ON the tiles overlay edit / archive /
   // delete actions on top of the standard LookCard so the curator can
@@ -203,17 +208,83 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             <rect x="16" y="14" width="3" height="6"/>
           </svg>
         </button>
-        <button
-          className="my-cat-create-fab"
-          onClick={handleCreateNew}
-          aria-label="Upload look"
-          title="Upload look"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            className="my-cat-create-fab"
+            onClick={() => setCreateMenuOpen(v => !v)}
+            aria-label="Add"
+            title="Add"
+            aria-expanded={createMenuOpen}
+            aria-haspopup="menu"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transition: 'transform 160ms ease', transform: createMenuOpen ? 'rotate(45deg)' : 'rotate(0)' }}>
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          {createMenuOpen && (
+            <>
+              {/* Tap-out scrim so any click outside the menu dismisses it */}
+              <div
+                onClick={() => setCreateMenuOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 38, background: 'transparent' }}
+                aria-hidden="true"
+              />
+              <div
+                role="menu"
+                className="my-cat-create-menu"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  minWidth: 220,
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 12,
+                  boxShadow: '0 18px 40px rgba(15,23,42,0.25)',
+                  padding: 6,
+                  zIndex: 40,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+              >
+                <MenuItem
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                  }
+                  label="Upload New Look"
+                  onClick={() => { setCreateMenuOpen(false); handleCreateNew(); }}
+                />
+                <MenuItem
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
+                      <path d="M19 14l1 2.5 2.5 1L20 18.5 19 21l-1-2.5L15.5 17.5 18 16.5z"/>
+                    </svg>
+                  }
+                  label="Add AI looks"
+                  onClick={() => { setCreateMenuOpen(false); navigate('/generate'); }}
+                />
+                <MenuItem
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+                      <line x1="3" y1="6" x2="21" y2="6"/>
+                      <path d="M16 10a4 4 0 0 1-8 0"/>
+                    </svg>
+                  }
+                  label="Add product"
+                  onClick={() => { setCreateMenuOpen(false); navigate('/admin/data?tab=products'); }}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {showAnalytics && <CreatorAnalyticsModal onClose={() => setShowAnalytics(false)} />}
@@ -505,5 +576,38 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <span className="my-cat-stat-value">{value}</span>
       {sub && <span className="my-cat-stat-sub">{sub}</span>}
     </div>
+  );
+}
+
+function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        padding: '10px 12px',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 8,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        fontSize: 13,
+        fontWeight: 500,
+        color: '#0f172a',
+        textAlign: 'left',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+    >
+      <span style={{ width: 28, height: 28, borderRadius: 6, background: '#f4f4f5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#0f172a', flexShrink: 0 }}>
+        {icon}
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
