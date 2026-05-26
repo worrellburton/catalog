@@ -233,52 +233,6 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
           <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, padding: '4px 6px 6px' }}>
             Following · {creators.length}
           </div>
-          {/* Catalog-of-following CTA — scopes the home feed to just
-              the creators in this list. Tap → parent assembles the
-              filter and we close the popover. Hidden when the parent
-              didn't wire the handler so the popover degrades to its
-              prior list-only behaviour. */}
-          {onCreateFollowingCatalog && (
-            <button
-              type="button"
-              className="follow-rail-make-catalog"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                onCreateFollowingCatalog(creators.map(c => c.handle));
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '10px 12px',
-                margin: '0 0 6px',
-                background: '#0f172a',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: '-0.005em',
-                textAlign: 'left',
-                boxShadow: '0 6px 18px rgba(15,23,42,0.18)',
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-              <span style={{ flex: 1 }}>Make a catalog of who I follow</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </button>
-          )}
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
             {creators.map(c => (
               <button

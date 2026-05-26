@@ -210,16 +210,24 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         </button>
         <div style={{ position: 'relative' }}>
           <button
-            className="my-cat-create-fab"
+            className="my-cat-create-fab my-cat-create-fab--dropdown"
             onClick={() => setCreateMenuOpen(v => !v)}
             aria-label="Add"
             title="Add"
             aria-expanded={createMenuOpen}
             aria-haspopup="menu"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transition: 'transform 160ms ease', transform: createMenuOpen ? 'rotate(45deg)' : 'rotate(0)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <svg
+              width="12" height="12" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ marginLeft: 2, transition: 'transform 180ms cubic-bezier(.32,.72,0,1)', transform: createMenuOpen ? 'rotate(180deg)' : 'rotate(0)' }}
+            >
+              <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
           {createMenuOpen && (

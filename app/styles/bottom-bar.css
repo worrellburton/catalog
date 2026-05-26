@@ -992,17 +992,16 @@ body:has(.bottom-bar.search-open) {
     border-radius: 22px;
   }
   .bottom-bar.search-open {
-    /* Keep the bar anchored at the bottom of the layout viewport
-       when the keyboard opens — the keyboard overlays it instead of
-       pushing it up. Per the UX direction, dropping the
-       --ios-bottom-chrome (visualViewport-driven) clause means the
-       bar stays put while the keyboard slides over the top. The
-       suggestions popover above the bar still sits above the
-       keyboard because it's a separate fixed element.
-
-       safe-area-inset-bottom + 8px is the resting position. The bar
-       is not visually lifted by the keyboard. */
-    bottom: calc(env(safe-area-inset-bottom) + 8px);
+    /* Anchor 200px above the bottom of the layout viewport. iOS
+       Safari treats fixed elements containing a focused input as if
+       they were relative to the visual viewport, so the bar floats
+       above the keyboard either way — but a hard 200px offset means
+       it never crashes into the keyboard's QuickType bar and reads
+       as deliberately suspended over the page rather than
+       glued-to-keyboard.
+       !important defeats the parent .bottom-bar mobile rule that
+       still references --ios-bottom-chrome. */
+    bottom: 200px !important;
   }
   .bottom-bar.filters-open {
     top: 0;
