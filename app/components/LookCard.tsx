@@ -6,7 +6,7 @@ import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo, useTrailPrewarm } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { toggleFollow, isFollowing as fetchIsFollowing } from '~/services/follows';
+import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
 import { trackImpression } from '~/services/session-tracker';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -75,7 +75,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // further down) — module-level cache in services/follows would be
   // nicer, but per-card fetch is cheap (single COUNT(*)) and avoids
   // a shared-state singleton for the first cut.
-  const [following, setFollowing] = useState<boolean | null>(null);
+  // Shared follow state — one query per handle, every card for the
+  // same creator stays in sync. Earlier this was per-card useState +
+  // useEffect which raced: with 8 cards for one creator, some
+  // resolved before others, so the "+ Follow" button appeared on
+  // some tiles and not others until every race settled.
+  const following = useFollowState(look.creator);
   const [followBusy, setFollowBusy] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
@@ -101,31 +106,18 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     }
   }, []);
 
-  // Fetch follow state for this card's creator on mount. Skipped
-  // for seed creators whose handle starts with "user:" placeholder —
-  // those aren't real creators and the toggle would no-op.
-  useEffect(() => {
-    if (!look.creator || look.creator.startsWith('user:')) return;
-    let cancelled = false;
-    fetchIsFollowing(look.creator).then(v => { if (!cancelled) setFollowing(v); });
-    return () => { cancelled = true; };
-  }, [look.creator]);
-
   const onToggleFollow = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (followBusy || !look.creator) return;
     setFollowBusy(true);
-    const prev = following;
-    setFollowing(!prev);
     try {
-      const { following: next } = await toggleFollow(look.creator);
-      setFollowing(next);
-    } catch {
-      setFollowing(prev);
-    } finally {
-      setFollowBusy(false);
-    }
-  }, [following, followBusy, look.creator]);
+      // toggleFollowShared updates the cache + every subscribed card
+      // before awaiting the DB write, so every tile for this creator
+      // flips together. Reverts cache-side on failure.
+      await toggleFollowShared(look.creator);
+    } catch { /* shared cache reverts itself */ }
+    finally { setFollowBusy(false); }
+  }, [followBusy, look.creator]);
 
   // Close the admin right-click menu on any outside click or Escape.
   useEffect(() => {
