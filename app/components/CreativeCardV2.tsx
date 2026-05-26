@@ -209,7 +209,14 @@ const CreativeCardV2 = memo(function CreativeCardV2({
       onTouchCancel={cancelLongPress}
       onMouseDown={beginLongPress}
       onMouseUp={cancelLongPress}
-      onMouseLeave={cancelLongPress}
+      onMouseLeave={() => {
+        cancelLongPress();
+        // Revert to the still image when the cursor leaves. Without
+        // this, the first hover stuck the tile in video mode for the
+        // rest of the session — the products-image-only dial said
+        // "still" and the feed slowly turned video-heavy anyway.
+        if (renderAsStill && hoverPlaying) setHoverPlaying(false);
+      }}
       onContextMenu={isSuperAdmin ? (e) => {
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });

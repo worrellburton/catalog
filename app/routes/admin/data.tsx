@@ -291,7 +291,16 @@ type LookSource = 'all' | 'human' | 'ai';
 // table is now display:none rather than conditionally rendered.
 function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inView, setInView] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  // Client-side first-frame extraction: when there's no admin-supplied
+  // thumbnail, we draw the first decoded frame of the video to a
+  // canvas, hold the resulting data URL as the poster, and the
+  // browser paints it instantly on every subsequent render. The
+  // video element fades in over it once `canplay` fires.
+  const [extractedPoster, setExtractedPoster] = useState<string | null>(null);
+
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -310,16 +319,54 @@ function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null 
     io.observe(node);
     return () => io.disconnect();
   }, []);
+
+  // Run the first-frame extraction once `inView` flips. We attach a
+  // hidden secondary <video>, seek 50ms in (some codecs render
+  // garbage at t=0), and snapshot via canvas. Best-effort — if the
+  // server doesn't return CORS headers the snapshot throws and we
+  // simply fall back to whatever the browser paints naturally.
+  useEffect(() => {
+    if (!inView || thumbnail || extractedPoster) return;
+    const v = document.createElement('video');
+    v.crossOrigin = 'anonymous';
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    v.src = url;
+    let cancelled = false;
+    const onLoaded = () => {
+      if (cancelled) return;
+      try { v.currentTime = Math.min(0.05, (v.duration || 1) / 2); } catch { /* */ }
+    };
+    const onSeeked = () => {
+      if (cancelled) return;
+      try {
+        const c = document.createElement('canvas');
+        c.width = v.videoWidth || 360;
+        c.height = v.videoHeight || 480;
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        setExtractedPoster(c.toDataURL('image/jpeg', 0.6));
+      } catch { /* CORS or cross-origin canvas taint — silent fallback */ }
+    };
+    v.addEventListener('loadeddata', onLoaded);
+    v.addEventListener('seeked', onSeeked);
+    return () => {
+      cancelled = true;
+      v.removeEventListener('loadeddata', onLoaded);
+      v.removeEventListener('seeked', onSeeked);
+      v.src = '';
+    };
+  }, [inView, url, thumbnail, extractedPoster]);
+
+  const posterSrc = thumbnail || extractedPoster;
+
   return (
-    <div ref={ref} style={{ width: '100%', height: '100%', position: 'relative' }}>
-      {/* Render the cheap poster image IMMEDIATELY when we have one
-          (~10–30 KB) so the row stops looking blank within the first
-          paint. The video then loads underneath and replaces the
-          poster once it can play. Eliminates the "all rows are gray
-          rectangles" effect on big admin pages. */}
-      {thumbnail && (
+    <div ref={ref} style={{ width: '100%', height: '100%', position: 'relative', background: '#111' }}>
+      {posterSrc && (
         <img
-          src={thumbnail}
+          src={posterSrc}
           alt=""
           loading="lazy"
           decoding="async"
@@ -327,24 +374,29 @@ function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null 
             position: 'absolute', inset: 0,
             width: '100%', height: '100%',
             objectFit: 'cover', display: 'block',
-            background: '#111',
+            opacity: videoReady ? 0 : 1,
+            transition: 'opacity 200ms ease',
           }}
         />
       )}
-      {inView ? (
+      {inView && (
         <>
           <video
+            ref={videoRef}
             src={url}
-            poster={thumbnail || undefined}
-            autoPlay muted loop playsInline preload="metadata"
-            style={{ position: 'relative', zIndex: 1 }}
+            poster={posterSrc || undefined}
+            autoPlay muted loop playsInline preload="auto"
+            onCanPlay={() => setVideoReady(true)}
+            style={{
+              position: 'relative', zIndex: 1,
+              opacity: videoReady ? 1 : 0,
+              transition: 'opacity 200ms ease',
+            }}
           />
           <div className="admin-look-preview">
-            <video src={url} poster={thumbnail || undefined} autoPlay muted loop playsInline />
+            <video src={url} poster={posterSrc || undefined} autoPlay muted loop playsInline />
           </div>
         </>
-      ) : (
-        !thumbnail && <div style={{ width: '100%', height: '100%', background: '#111' }} />
       )}
     </div>
   );
