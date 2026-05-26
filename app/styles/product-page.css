@@ -839,10 +839,10 @@
   .pd-brand-tile { width: 132px; height: 176px; }
 }
 
-/* "You might also like" - editorial look creatives in a real grid. */
+/* "Featured in Looks" — editorial look creatives in a real grid. */
 .pd-look-feed {
   padding: 32px 24px 56px;
-  max-width: 1280px;
+  max-width: none;
   margin: 0 auto;
 }
 
