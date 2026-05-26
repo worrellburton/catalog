@@ -323,6 +323,22 @@ export async function setCatalogSortOrder(slugs: string[]): Promise<boolean> {
   return true;
 }
 
+// Toggle catalogs.is_featured via admin RPC. Featured catalogs are
+// the ones the consumer suggestor surfaces; non-featured ("custom")
+// stay admin-only. Same admin-gated RPC shape as setCatalogGender.
+export async function setCatalogFeatured(slug: string, featured: boolean): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc('admin_set_catalog_featured', {
+    p_slug: slug,
+    p_featured: featured,
+  });
+  if (error) {
+    console.error('setCatalogFeatured failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function setCatalogGender(slug: string, gender: CatalogGender): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.rpc('admin_set_catalog_gender', {

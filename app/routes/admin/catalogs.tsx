@@ -15,6 +15,7 @@ import {
   getHomeCatalog,
   updateCatalogToggles,
   setCatalogGender,
+  setCatalogFeatured,
   setCatalogSortOrder,
   getCatalogSearchCounts,
   type Catalog as CatalogService,
@@ -138,6 +139,7 @@ interface CatalogCreativeVideo {
   productName: string | null;
   productBrand: string | null;
   status: string;
+  metrics?: ItemMetrics;
 }
 
 interface CatalogCreativePayload {
@@ -745,6 +747,10 @@ export default function AdminCatalogs() {
           videoUrl: r.video_url,
           thumbnailUrl: r.thumbnail_url,
           productImageUrl: r.products?.image_url ?? null,
+          // Creatives don't have their own metrics row — they
+          // inherit the underlying product's impressions/CTR so the
+          // list view can rank them by performance.
+          metrics: metricFor('product', r.product_id),
           title: r.title,
           productName: r.products?.name ?? null,
           productBrand: r.products?.brand ?? null,
@@ -3109,8 +3115,8 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
   // session.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === 'undefined') return 'grid';
-    try { return (window.localStorage.getItem(VIEW_MODE_LS_KEY) as ViewMode) || 'grid'; }
-    catch { return 'grid'; }
+    try { return (window.localStorage.getItem(VIEW_MODE_LS_KEY) as ViewMode) || 'list'; }
+    catch { return 'list'; }
   });
   useEffect(() => {
     try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
@@ -4197,6 +4203,10 @@ function CreativesListTable({ title, creatives }: { title: string; creatives: Ca
             <th style={listHeadCellStyle}>Title</th>
             <th style={listHeadCellStyle}>Brand</th>
             <th style={listHeadCellStyle}>Status</th>
+            <th style={listHeadCellStyle}>Impressions</th>
+            <th style={listHeadCellStyle}>CTR</th>
+            <th style={listHeadCellStyle}>Clickouts</th>
+            <th style={listHeadCellStyle}>Trend</th>
           </tr>
         </thead>
         <tbody>
@@ -4219,6 +4229,7 @@ function CreativesListTable({ title, creatives }: { title: string; creatives: Ca
                   fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
                 }}>{c.status}</span>
               </td>
+              <MetricCells metrics={c.metrics} />
             </tr>
           ))}
         </tbody>
