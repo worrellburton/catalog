@@ -431,9 +431,12 @@ header > * {
   .header-center {
     display: block;
     position: fixed;
-    top: 88px;
+    /* Vertically center on the left edge — the screen feels less
+       crowded with the rail sitting at the visual midpoint instead
+       of pinned under the header chrome. */
+    top: 50%;
     left: 10px;
-    transform: none;
+    transform: translateY(-50%);
     z-index: 90;
     pointer-events: auto;
   }
