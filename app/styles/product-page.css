@@ -601,7 +601,7 @@
    feed's two-column card grid so it visually blends with the home page. */
 .pd-similar-feed {
   padding: 32px 24px 16px;
-  max-width: 1280px;
+  max-width: none;
   margin: 0 auto;
   /* Make absolutely sure the rail is reachable on mobile - the
      bottom-sheet behaviour above can clip flyout overflow if a
@@ -676,9 +676,21 @@
   }
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .pd-similar-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -851,8 +863,14 @@
 @media (min-width: 768px) {
   .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .pd-look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .pd-look-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 1600px) {
+  .pd-look-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 .pd-look-tile {

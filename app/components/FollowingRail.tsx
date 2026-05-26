@@ -138,12 +138,9 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
     <div
       ref={wrapperRef}
       style={{
-        position: 'fixed',
-        top: 12,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 950,
-        pointerEvents: 'auto',
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
       }}
     >
       <button
