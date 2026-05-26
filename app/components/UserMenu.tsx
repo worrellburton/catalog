@@ -31,6 +31,10 @@ interface UserMenuProps {
   savedProducts?: Product[];
   onOpenLook?: (look: Look) => void;
   onOpenProduct?: (product: Product) => void;
+  /** Open a creator's catalog in-app. When provided, the Following
+   *  section uses it for instant transitions instead of a full
+   *  /c/<handle> page reload. */
+  onOpenCreator?: (handle: string) => void;
   // Catalog gender filter - wired through for the super-admin
   // "Shopping for" toggle. The page already auto-syncs activeFilter
   // from the profile gender, so when the toggle first renders it
@@ -67,6 +71,7 @@ function UserMenu({
   savedProducts = [],
   onOpenLook,
   onOpenProduct,
+  onOpenCreator,
   activeFilter,
   onChangeCatalogGender,
 }: UserMenuProps) {
@@ -276,7 +281,11 @@ function UserMenu({
                 admin/decks/logout). Following sits above Bookmarks
                 so the creators you've opted into reading rank ahead
                 of the things you've passively saved. */}
-            <FollowingMenuItem onOpenCreator={(handle) => { setOpen(false); if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`); }} />
+            <FollowingMenuItem onOpenCreator={(handle) => {
+              setOpen(false);
+              if (onOpenCreator) onOpenCreator(handle);
+              else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
+            }} />
             <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               <span>Bookmarks</span>

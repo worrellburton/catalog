@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getMyFollowing } from '~/services/follows';
+import { subscribeFollowingChanges } from '~/hooks/useFollowState';
 import { supabase } from '~/utils/supabase';
 
 interface FollowingRailProps {
@@ -23,7 +24,14 @@ interface FollowedCreator {
 export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
   const [creators, setCreators] = useState<FollowedCreator[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Refetch the rail whenever any follow toggles elsewhere (in-feed
+  // icon, CreatorPage CTA, etc.). Without this the rail froze on its
+  // first-mount snapshot and you'd have to reload the tab to see a
+  // newly-followed creator appear at the top of the screen.
+  useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +92,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
       }));
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     if (!open) return;

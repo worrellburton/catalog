@@ -8,11 +8,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { updateUserHeightAge, updateUserFullName } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
-import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 
 export interface StatsBits {
   heightCm: number | null;
   heightLabel: string | null;
+  weightKg: number | null;
+  weightLabel: string | null;
   ageLabel: string | null;
   gender: UserGender;
   /** Only carried when the modal was opened with `editName=true`. The
@@ -52,8 +54,22 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
     return HEIGHT_OPTIONS.find(h => h.label === "5'10\"") ?? HEIGHT_OPTIONS[0];
   }, [initial.heightCm, initial.heightLabel]);
 
+  const initialWeight = useMemo(() => {
+    if (initial.weightKg != null) {
+      const byKg = WEIGHT_OPTIONS.find(w => w.kg === initial.weightKg);
+      if (byKg) return byKg;
+    }
+    if (initial.weightLabel) {
+      const byLabel = WEIGHT_OPTIONS.find(w => w.label === initial.weightLabel);
+      if (byLabel) return byLabel;
+    }
+    return WEIGHT_OPTIONS.find(w => w.label === '160 lb') ?? WEIGHT_OPTIONS[Math.floor(WEIGHT_OPTIONS.length / 2)];
+  }, [initial.weightKg, initial.weightLabel]);
+
   const [heightCm, setHeightCm] = useState<number>(initialHeight.cm);
   const [heightLabel, setHeightLabel] = useState<string>(initialHeight.label);
+  const [weightKg, setWeightKg] = useState<number>(initialWeight.kg);
+  const [weightLabel, setWeightLabel] = useState<string>(initialWeight.label);
   const [ageLabel, setAgeLabel] = useState<string>(initial.ageLabel ?? 'mid 20s');
   const [gender, setGender] = useState<UserGender>(initial.gender);
   const [fullName, setFullName] = useState<string>(initial.fullName ?? '');
@@ -70,7 +86,7 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
     setSaving(true);
     setError(null);
     const promises: Promise<{ error?: string | null }>[] = [
-      updateUserHeightAge(userId, { heightCm, heightLabel, ageLabel }),
+      updateUserHeightAge(userId, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }),
       updateUserGender(userId, gender),
     ];
     if (editName) {
@@ -83,6 +99,8 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
     onSaved({
       heightCm,
       heightLabel,
+      weightKg,
+      weightLabel,
       ageLabel,
       gender,
       ...(editName ? { fullName: fullName.trim() } : {}),
@@ -133,6 +151,25 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
           >
             {HEIGHT_OPTIONS.map(h => (
               <option key={h.cm} value={h.cm}>{h.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="style-stats-field">
+          <span className="style-stats-label">Weight</span>
+          <select
+            value={weightKg}
+            onChange={e => {
+              const kg = Number(e.target.value);
+              const opt = WEIGHT_OPTIONS.find(w => w.kg === kg);
+              if (!opt) return;
+              setWeightKg(opt.kg);
+              setWeightLabel(opt.label);
+            }}
+            disabled={saving}
+          >
+            {WEIGHT_OPTIONS.map(w => (
+              <option key={w.kg} value={w.kg}>{w.label}</option>
             ))}
           </select>
         </label>
