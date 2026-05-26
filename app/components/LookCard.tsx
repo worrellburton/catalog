@@ -6,6 +6,7 @@ import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo, useTrailPrewarm } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import { toggleFollow, isFollowing as fetchIsFollowing } from '~/services/follows';
 import { trackImpression } from '~/services/session-tracker';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -69,6 +70,13 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Follow state for the inline creator chip. We only fetch when the
+  // card actually enters the viewport (useInViewport already fires
+  // further down) — module-level cache in services/follows would be
+  // nicer, but per-card fetch is cheap (single COUNT(*)) and avoids
+  // a shared-state singleton for the first cut.
+  const [following, setFollowing] = useState<boolean | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
 
@@ -92,6 +100,32 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       longPressTimer.current = null;
     }
   }, []);
+
+  // Fetch follow state for this card's creator on mount. Skipped
+  // for seed creators whose handle starts with "user:" placeholder —
+  // those aren't real creators and the toggle would no-op.
+  useEffect(() => {
+    if (!look.creator || look.creator.startsWith('user:')) return;
+    let cancelled = false;
+    fetchIsFollowing(look.creator).then(v => { if (!cancelled) setFollowing(v); });
+    return () => { cancelled = true; };
+  }, [look.creator]);
+
+  const onToggleFollow = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (followBusy || !look.creator) return;
+    setFollowBusy(true);
+    const prev = following;
+    setFollowing(!prev);
+    try {
+      const { following: next } = await toggleFollow(look.creator);
+      setFollowing(next);
+    } catch {
+      setFollowing(prev);
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [following, followBusy, look.creator]);
 
   // Close the admin right-click menu on any outside click or Escape.
   useEffect(() => {
