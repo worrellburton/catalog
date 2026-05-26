@@ -3,6 +3,7 @@ import { Look, creators, Product } from '~/data/looks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import FollowIconButton from './FollowIconButton';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -97,6 +98,16 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
             <span className="inline-look-creator-name">
               {creatorData?.displayName || look.creator}
             </span>
+            <FollowIconButton
+              handle={look.creator}
+              size={20}
+              style={{
+                marginLeft: 8,
+                borderColor: 'rgba(0,0,0,0.55)',
+                color: '#0f172a',
+                background: 'transparent',
+              }}
+            />
           </div>
           <button
             className={`inline-look-bookmark-btn ${lookBookmarked ? 'active' : ''}`}

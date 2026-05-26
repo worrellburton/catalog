@@ -40,6 +40,7 @@ import { useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
+import FollowIconButton from './FollowIconButton';
 import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
 import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -411,6 +412,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
               </span>
             )}
             <span className="card-creator-name">{creatorName}</span>
+            <FollowIconButton handle={look.creator} style={{ marginLeft: 6 }} />
           </div>
         ) : creative ? (
           <div className="promo-product-info">

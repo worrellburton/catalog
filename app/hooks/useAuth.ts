@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { getCurrentUser, onAuthStateChange, signOut, type AuthUser } from '~/services/auth';
+import { getCurrentUser, onAuthStateChange, signOut, invalidateAuthCache, type AuthUser } from '~/services/auth';
 
 // Singleton auth store. The previous implementation had each component spin
 // up its own getCurrentUser() promise and its own onAuthStateChange
@@ -84,6 +84,20 @@ function subscribe(listener: () => void) {
 
 function getSnapshot(): AuthState { return state; }
 function getServerSnapshot(): AuthState { return { user: null, loading: true }; }
+
+/**
+ * Force every useAuth() consumer to re-pull from getCurrentUser().
+ * Call this after a profile mutation (avatar upload, name change)
+ * so the UserMenu / FollowingRail / etc. re-render with the fresh
+ * fields immediately, without waiting for the next auth tick or
+ * page reload.
+ */
+export function refreshAuthUser(): void {
+  invalidateAuthCache();
+  getCurrentUser().then((u) => {
+    setState({ user: u, loading: false });
+  });
+}
 
 export function useAuth() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

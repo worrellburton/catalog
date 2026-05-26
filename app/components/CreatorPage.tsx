@@ -320,8 +320,8 @@ export default function CreatorPage({
   const displayName = (userId || isHandleBranch)
     ? (profile?.full_name || profile?.email?.split('@')[0] || creatorName)
     : (seedCreatorData?.displayName || creatorName);
-  const avatarUrl = userId
-    ? (profile?.avatar_url || '')
+  const avatarUrl = (userId || isHandleBranch)
+    ? (profile?.avatar_url || seedCreatorData?.avatar || '')
     : (seedCreatorData?.avatar || '');
   const creatorLooks = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
 

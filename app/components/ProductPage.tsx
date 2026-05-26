@@ -5,6 +5,7 @@ import ContinuousFeed from '~/components/ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
+import FollowIconButton from '~/components/FollowIconButton';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -420,6 +421,7 @@ function LookTile({
         <span className="pd-look-tile-creator-name">
           {displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}
         </span>
+        <FollowIconButton handle={look.creator} size={18} style={{ marginLeft: 6 }} />
       </span>
     </button>
   );
