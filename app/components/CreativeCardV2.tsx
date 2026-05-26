@@ -525,13 +525,18 @@ function BrandLabel({ name }: { name: string }) {
         style={{
           height: 14,
           width: 'auto',
-          maxWidth: 80,
+          maxWidth: 96,
           objectFit: 'contain',
           objectPosition: 'left center',
           display: 'block',
           alignSelf: 'flex-start',
           marginBottom: 2,
-          filter: 'brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.45))',
+          // No brightness/invert filter — Brandfetch's theme=dark
+          // wordmark variant is already designed for dark backgrounds
+          // (transparent PNG with white-ish text). The filter we used
+          // before flattened opaque-background variants into a solid
+          // white block; without it, the natural typeface shows.
+          filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.55))',
         }}
       />
     );
