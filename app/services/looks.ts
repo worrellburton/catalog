@@ -137,8 +137,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // and were the serial bottleneck on every page load.
   const [creatorsByHandle, profilesById_validation] = await Promise.all([
     candidateHandles.length === 0
-      ? Promise.resolve({ data: [] as Array<{ handle: string; is_ai: boolean | null }> })
-      : supabase.from('creators').select('handle, is_ai').in('handle', candidateHandles),
+      ? Promise.resolve({ data: [] as Array<{ handle: string; is_ai: boolean | null; display_name: string | null; avatar_url: string | null }> })
+      : supabase.from('creators').select('handle, is_ai, display_name, avatar_url').in('handle', candidateHandles),
     candidateUserIds.length === 0
       ? Promise.resolve({ data: [] as Array<{ id: string }> })
       : supabase.from('profiles').select('id').in('id', candidateUserIds),
@@ -148,9 +148,13 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // Reuse the creators payload for is_ai resolution below — saves the
   // separate handle-only query we used to do further down.
   const isAiByHandle = new Map<string, boolean>();
-  (creatorsByHandle.data || []).forEach((r: { handle: string; is_ai: boolean | null }) => {
+  const creatorDisplayByHandle = new Map<string, string | null>();
+  const creatorAvatarByHandle = new Map<string, string | null>();
+  (creatorsByHandle.data || []).forEach((r: { handle: string; is_ai: boolean | null; display_name: string | null; avatar_url: string | null }) => {
     knownHandles.add(r.handle);
     isAiByHandle.set(r.handle, r.is_ai === true);
+    creatorDisplayByHandle.set(r.handle, r.display_name ?? null);
+    creatorAvatarByHandle.set(r.handle, r.avatar_url ?? null);
   });
   (profilesById_validation.data || []).forEach((r: { id: string }) => knownUserIds.add(r.id));
   const filteredLooks = liveLooks.filter(r => {
@@ -239,8 +243,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       // Synthetic key so the creators-map lookup misses cleanly and
       // the consumer falls back to creatorDisplayName / Avatar below.
       creator: row.creator_handle || (profileUserId ? `user:${profileUserId}` : ''),
-      creatorDisplayName: fallbackName || undefined,
-      creatorAvatar: fallbackProfile?.avatar_url || undefined,
+      creatorDisplayName: (row.creator_handle ? (creatorDisplayByHandle.get(row.creator_handle) ?? null) : null) || fallbackName || undefined,
+      creatorAvatar: (row.creator_handle ? (creatorAvatarByHandle.get(row.creator_handle) ?? null) : null) || fallbackProfile?.avatar_url || undefined,
       creatorIsAi: row.creator_handle
         ? (isAiByHandle.get(row.creator_handle) ?? false)
         : (fallbackProfile?.is_ai ?? false),

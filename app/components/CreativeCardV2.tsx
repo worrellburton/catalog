@@ -12,6 +12,11 @@
 //     of a component-owned ref.
 //   - Small debug badge (status colour) in top-right corner.
 //     Remove before promoting to production.
+//
+// Polymorphic input: pass either `creative` (a ProductAd — the original
+// product-creative card) OR `look` (a Look — replaces the legacy LookCard
+// in the continuous feed so both surfaces share the same director-driven
+// playback pipeline, pool, preload, and visibility handling).
 
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import {
@@ -26,37 +31,80 @@ import {
   pickStillImageUrl,
   captureVideoFrame,
   markFeedMilestone,
+  prefetchVideoBytes,
 } from '~/services/video-loading';
 import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
+import { useTrailVideoManager } from '~/components/TrailVideoHost';
+import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
+import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
+import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
+import type { Look } from '~/data/looks';
+import { creators } from '~/data/looks';
+import { hideLookId } from '~/hooks/useHiddenLooks';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import { trackImpression } from '~/services/session-tracker';
 
 interface CreativeCardV2Props {
-  creative: ProductAd;
+  /** Provide either `creative` (product-creative card) or `look` (look card). */
+  creative?: ProductAd;
+  look?: Look;
   className?: string;
+  /** Creative-mode click handler. */
   onOpenProduct?: (creative: ProductAd) => void;
+  /** Look-mode click handler. */
+  onOpenLook?: (look: Look) => void;
+  /** Look-mode creator-row tap handler. */
+  onOpenCreator?: (creatorName: string) => void;
   canDelete?: boolean;
   onDelete?: (id: string) => void;
   /** Above-the-fold cards get eager poster fetch. */
   priority?: boolean;
-  /** Override the director slot ID (use when the same creative appears multiple times). */
+  /** Override the director slot ID (use when the same item appears multiple times). */
   slotId?: string;
 }
 
 const CreativeCardV2 = memo(function CreativeCardV2({
   creative,
+  look,
   className = 'look-card',
   onOpenProduct,
+  onOpenLook,
+  onOpenCreator,
   canDelete,
   onDelete,
   priority = false,
   slotId,
 }: CreativeCardV2Props) {
-  const posterUrl = pickPosterUrl(creative);
-  const playableUrl = pickVideoUrl(creative);
+  const isLook = !!look && !creative;
+
+  // ── Normalize inputs into the shape the playback pipeline expects ─────
+  // For look mode we derive video/poster/still URLs from the Look fields
+  // and reuse the same pickVideoUrl/pickStillImageUrl helpers so the
+  // mobile-variant + dial behaviour is identical to product creatives.
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const itemKey = isLook ? `look-${look!.id}` : creative!.id;
+  // dial split is deterministic on the item key (string)
+  const dialKey = itemKey;
+
+  const playableUrl = isLook
+    ? pickVideoUrl({
+        video_url: normalizeLookVideoUrl(look!.video, basePath),
+        mobile_video_url: look!.mobile_video_url ?? null,
+      })
+    : pickVideoUrl(creative!);
+
+  const posterUrl = isLook
+    ? (look!.thumbnail_url || look!.cover || '')
+    : pickPosterUrl(creative!);
+
+  const stillImageUrl = isLook
+    ? (look!.products?.find(p => !!p.image)?.image || posterUrl || '')
+    : pickStillImageUrl(creative!);
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
@@ -64,13 +112,12 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // merchandising quality than the auto-extracted thumbnail) and skip
   // the director entirely. On mouse-enter the card upgrades to video.
   const globalVideoRatio = useVideoStillRatio();
-  const dialPrefersVideo = shouldBeVideo(creative.id, globalVideoRatio);
-  const stillImageUrl = pickStillImageUrl(creative);
+  const dialPrefersVideo = shouldBeVideo(dialKey, globalVideoRatio);
   // "Products image-only" dial (/admin/dials). When ON, every tile
   // that ISN'T backed by a look (creative.look_id is null/undefined)
   // renders as the still product image. Looks keep video playback.
   const productsImageOnly = useProductsImageOnly();
-  const forceStillForProduct = productsImageOnly && !creative.look_id && !!stillImageUrl;
+  const forceStillForProduct = !isLook && !!productsImageOnly && !!creative && !creative.look_id && !!stillImageUrl;
   const renderAsStill = forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl);
 
   // Hover-to-play: when in still mode, a mouseenter activates video for
@@ -86,6 +133,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // to show yet — with a poster we already have pixels to display.
   const [loaded, setLoaded] = useState(() => !!posterUrl);
   const impressionTracked = useRef(false);
+  const trailMgr = useTrailVideoManager();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -93,8 +141,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   const longPressFired = useRef(false);
 
   // Use slotId when provided (e.g. duplicate positions in infinite feed),
-  // otherwise fall back to the creative's own id.
-  const directorId = slotId ?? creative.id;
+  // otherwise fall back to the item's own id.
+  const directorId = slotId ?? itemKey;
 
   // Wire to the director. containerRef goes on the card div — the
   // director will appendChild a pooled <video> here when promoted to top-K.
@@ -104,6 +152,27 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     activeVideoUrl,
     posterUrl,
   );
+
+  // Pre-warm look videos: start fetching the first 256 KB of the video
+  // when the card is within 2 viewports — this is the same lead distance
+  // the legacy LookCard's useTrailPrewarm gave. Look files are larger than
+  // AI-generated product clips so they need the extra buffer head-start.
+  // We track the element in a separate ref because containerRef is a
+  // callback ref (not an object ref) and useInViewport needs a RefObject.
+  const prewarmNodeRef = useRef<HTMLDivElement | null>(null);
+  const combinedRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      prewarmNodeRef.current = node;
+      containerRef(node);
+    },
+    [containerRef],
+  );
+  const inPrewarmBand = useInViewport(prewarmNodeRef, '200% 0%');
+  useEffect(() => {
+    if (isLook && inPrewarmBand && playableUrl) {
+      prefetchVideoBytes(playableUrl);
+    }
+  }, [isLook, inPrewarmBand, playableUrl]);
 
   // Remove shimmer as soon as the director has assigned a video element
   // (status 'loading' = play() in-flight, video appended to DOM).
@@ -117,14 +186,48 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   }, [status, directorId]);
 
   // Impression tracking — fire once on first promotion (status moves off idle).
+  // Creative mode hits the ad-impression endpoint; look mode emits a
+  // generic look impression to match the legacy LookCard telemetry.
   useEffect(() => {
     if (status !== 'idle' && !impressionTracked.current) {
       impressionTracked.current = true;
-      trackAdImpression(creative.id);
+      if (isLook && look) {
+        trackImpression({
+          type: 'look',
+          id: String(look.id),
+          uuid: look.uuid,
+          context: look.title?.slice(0, 200),
+        });
+      } else if (creative) {
+        trackAdImpression(creative.id);
+      }
     }
-  }, [status, creative.id]);
+  }, [status, creative, look, isLook]);
 
   const handleClick = useCallback(() => {
+    if (isLook && look) {
+      // Capture the playing frame so the overlay can paint it as an
+      // instant poster behind its hero <video> slot (mirrors the
+      // legacy LookCard handoff via __feedTapPosters[trailId]).
+      const frame = captureVideoFrame(director.getVideoElement(directorId));
+      if (frame) {
+        try {
+          const w = window as Window & { __feedTapPosters?: Record<string, string> };
+          w.__feedTapPosters = w.__feedTapPosters || {};
+          w.__feedTapPosters[lookTrailId(look.id)] = frame;
+        } catch { /* ignore */ }
+      }
+      // Donate the director's playing element to TrailVideoHost so the
+      // LookOverlay hero can reuse it without re-buffering. The element
+      // keeps its currentTime and decoded state — no black flash or stall.
+      const directorEl = director.stealVideoElement(directorId);
+      if (directorEl && trailMgr && playableUrl) {
+        trailMgr.donate(lookTrailId(look.id), directorEl, playableUrl, posterUrl || undefined);
+      }
+      onOpenLook?.(look);
+      return;
+    }
+    if (!creative) return;
     trackAdClick(creative.id);
     // Capture the playing frame for the detail-view hero handoff.
     // director.getVideoElement() returns the pooled element if assigned.
@@ -136,6 +239,12 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         w.__feedTapPosters[creative.id] = frame;
       } catch { /* ignore */ }
     }
+    // Donate the director's playing element to TrailVideoHost so the
+    // ProductPage hero can reuse it without re-buffering.
+    const directorEl = director.stealVideoElement(directorId);
+    if (directorEl && trailMgr && playableUrl) {
+      trailMgr.donate(creative.id, directorEl, playableUrl, posterUrl || undefined);
+    }
     if (onOpenProduct) {
       onOpenProduct(creative);
     } else if (creative.affiliate_url) {
@@ -143,12 +252,13 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     } else if (creative.product?.url) {
       window.open(creative.product.url, '_blank', 'noopener');
     }
-  }, [creative, onOpenProduct]);
+  }, [creative, look, isLook, onOpenProduct, onOpenLook, directorId, trailMgr, playableUrl, posterUrl]);
 
   // Hover/touch-start prefetch for the "More like this" rail.
+  // No-op for look mode — looks don't use the creative-similarity RPC.
   const handlePrefetch = useCallback(() => {
-    if (creative.id) prefetchSimilarCreatives(creative.id, 18);
-  }, [creative.id]);
+    if (!isLook && creative?.id) prefetchSimilarCreatives(creative.id, 18);
+  }, [creative, isLook]);
 
   const beginLongPress = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     if (!isSuperAdmin) return;
@@ -185,10 +295,21 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     };
   }, [menu]);
 
+  // Look-mode creator-row data (resolved from the static creators map
+  // with the same look-level fallbacks the legacy LookCard used).
+  const creatorData = isLook && look ? creators[look.creator] : undefined;
+  const creatorAvatar = isLook && look ? (creatorData?.avatar || look.creatorAvatar || '') : '';
+  const creatorName = isLook && look
+    ? (creatorData?.displayName
+        || look.creatorDisplayName
+        || (look.creator?.startsWith('user:') ? 'User' : look.creator || ''))
+    : '';
+
   return (
     <div
-      ref={containerRef}
-      className={`${className} promo-card ${loaded ? 'loaded' : ''}`}
+      ref={combinedRef}
+      className={`${className} ${isLook ? '' : 'promo-card '}${loaded ? 'loaded' : ''}`}
+      data-present-id={isLook && look ? `card:${look.id}` : undefined}
       style={{ position: 'relative', overflow: 'hidden' }}
       onClick={(e) => {
         if (longPressFired.current) {
@@ -197,6 +318,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           e.stopPropagation();
           return;
         }
+        // Don't fire the card click when the user tapped the creator row.
+        if (isLook && (e.target as HTMLElement).closest('.card-creator-row')) return;
         handleClick();
       }}
       onMouseEnter={() => {
@@ -250,7 +373,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
 
         <div className="card-gradient" />
 
-        {canDelete && onDelete && (
+        {!isLook && canDelete && onDelete && creative && (
           <button
             type="button"
             className="creative-delete-btn"
@@ -272,19 +395,38 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           </button>
         )}
 
-        <div className="promo-product-info">
-          <div className="promo-product-text">
-            {creative.product?.brand && (
-              <span className="promo-product-brand">{creative.product.brand}</span>
+        {isLook && look ? (
+          <div
+            className="card-creator-row"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCreator?.(look.creator);
+            }}
+          >
+            {creatorAvatar ? (
+              <img className="card-creator-avatar" src={creatorAvatar} alt={creatorName} />
+            ) : (
+              <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
+                {(creatorName || look.creator || '?').charAt(0).toUpperCase()}
+              </span>
             )}
-            <span className="promo-product-name">
-              {creative.product?.name || 'Shop Now'}
-            </span>
+            <span className="card-creator-name">{creatorName}</span>
           </div>
-          {creative.product?.price && (
-            <span className="promo-product-price">{creative.product.price}</span>
-          )}
-        </div>
+        ) : creative ? (
+          <div className="promo-product-info">
+            <div className="promo-product-text">
+              {creative.product?.brand && (
+                <BrandLabel name={creative.product.brand} />
+              )}
+              <span className="promo-product-name">
+                {creative.product?.name || 'Shop Now'}
+              </span>
+            </div>
+            {creative.product?.price && (
+              <span className="promo-product-price">{creative.product.price}</span>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {menu && isSuperAdmin && (
@@ -296,10 +438,14 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           <button
             type="button"
             className="trail-admin-menu-btn trail-admin-menu-btn--danger"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
               setMenu(null);
-              if (onDelete && confirm(`Delete product "${creative.product?.name || 'this product'}" everywhere?`)) {
+              if (isLook && look) {
+                await hideLookId(look.id);
+                return;
+              }
+              if (creative && onDelete && confirm(`Delete product "${creative.product?.name || 'this product'}" everywhere?`)) {
                 onDelete(creative.id);
               }
             }}
@@ -310,7 +456,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
               <path d="M10 11v6" />
               <path d="M14 11v6" />
             </svg>
-            Delete product
+            {isLook ? 'Delete look (admin)' : 'Delete product'}
           </button>
         </div>
       )}
@@ -320,3 +466,24 @@ const CreativeCardV2 = memo(function CreativeCardV2({
 });
 
 export default CreativeCardV2;
+
+// Brand label that swaps text → logo image when the
+// "Show brand logos on the feed" dial is ON AND we have a logo
+// registered in public.brand_logos for this brand. Falls back to
+// the plain text in every other case so flipping the dial never
+// blanks a label.
+function BrandLabel({ name }: { name: string }) {
+  const showLogos = useShowBrandLogos();
+  const logoUrl = useBrandLogo(name);
+  if (showLogos && logoUrl) {
+    return (
+      <img
+        className="promo-product-brand promo-product-brand-logo"
+        src={logoUrl}
+        alt={name}
+        style={{ height: 14, width: 'auto', objectFit: 'contain', display: 'inline-block' }}
+      />
+    );
+  }
+  return <span className="promo-product-brand">{name}</span>;
+}

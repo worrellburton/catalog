@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import LookCard from './LookCard';
 import CreativeCardV2 from './CreativeCardV2';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
@@ -310,13 +309,14 @@ function FeedSection({
             );
           }
           return (
-            <LookCard
+            <CreativeCardV2
               key={`${item.look.id}-${item.look.displayIndex}`}
+              slotId={`${slotPrefix ? `${slotPrefix}:` : ''}look-${item.look.id}-${item.look.displayIndex}`}
               look={item.look}
               className={getCardClass(idx)}
               onOpenLook={onOpenLook}
               onOpenCreator={onOpenCreator}
-              onCreateCatalog={onCreateCatalog}
+              priority={idx < 6}
             />
           );
         })}

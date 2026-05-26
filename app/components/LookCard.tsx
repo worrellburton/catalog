@@ -347,14 +347,48 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
               );
             })()}
             <span className="card-creator-name">
-              {/* Prefer the static-seed display name, then the look-level
-                  fallback emitted by user-published flows. If neither is
-                  set and the handle is a raw user:<uuid>, label as
-                  "User" so we never leak the uuid into the UI. */}
               {creatorData?.displayName
                 || look.creatorDisplayName
                 || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
             </span>
+            {/* Inline follow toggle. Hidden when we don't have a real
+                handle (no point following a "User:<uuid>" placeholder)
+                and while the initial isFollowing fetch is in flight
+                (null state). Optimistic flip + revert via onToggleFollow. */}
+            {look.creator && !look.creator.startsWith('user:') && following !== null && (
+              <button
+                type="button"
+                onClick={onToggleFollow}
+                disabled={followBusy}
+                aria-pressed={following}
+                className="card-creator-follow"
+                title={following ? 'Following — click to unfollow' : 'Follow this creator'}
+                style={{
+                  marginLeft: 6,
+                  padding: '2px 9px',
+                  borderRadius: 999,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.3px',
+                  cursor: followBusy ? 'wait' : 'pointer',
+                  border: '1px solid',
+                  borderColor: following ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.7)',
+                  background: following ? 'transparent' : '#fff',
+                  color: following ? '#fff' : '#0f172a',
+                  transition: 'background 160ms, color 160ms, border-color 160ms',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                {following ? (
+                  <>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Following
+                  </>
+                ) : '+ Follow'}
+              </button>
+            )}
           </div>
         )}
       </div>

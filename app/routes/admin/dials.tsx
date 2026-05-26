@@ -5,6 +5,10 @@ import {
   subscribeVideoStillRatio,
   DEFAULT_VIDEO_STILL_RATIO,
   getProductsImageOnly,
+  getShowBrandLogos,
+  setShowBrandLogos,
+  subscribeShowBrandLogos,
+  DEFAULT_SHOW_BRAND_LOGOS,
   setProductsImageOnly,
   subscribeProductsImageOnly,
   DEFAULT_PRODUCTS_IMAGE_ONLY,
@@ -85,6 +89,39 @@ export default function AdminDials() {
   const [productsImageOnly, setProductsImageOnlyState] = useState<boolean>(DEFAULT_PRODUCTS_IMAGE_ONLY);
   const [productsImageOnlyLoaded, setProductsImageOnlyLoaded] = useState(false);
   const [productsImageOnlySaving, setProductsImageOnlySaving] = useState(false);
+
+  // Brand-logos dial state. Same pattern as products-image-only.
+  const [showBrandLogos, setShowBrandLogosState] = useState<boolean>(DEFAULT_SHOW_BRAND_LOGOS);
+  const [brandLogosLoaded, setBrandLogosLoaded] = useState(false);
+  const [brandLogosSaving, setBrandLogosSaving] = useState(false);
+  const inflightBrandLogos = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getShowBrandLogos().then(v => {
+      if (cancelled) return;
+      setShowBrandLogosState(v);
+      setBrandLogosLoaded(true);
+    });
+    const unsub = subscribeShowBrandLogos(v => {
+      if (cancelled) return;
+      if (inflightBrandLogos.current === v) return;
+      setShowBrandLogosState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleBrandLogos = (next: boolean) => {
+    setShowBrandLogosState(next);
+    inflightBrandLogos.current = next;
+    setBrandLogosSaving(true);
+    setShowBrandLogos(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setBrandLogosSaving(false);
+        window.setTimeout(() => {
+          if (inflightBrandLogos.current === next) inflightBrandLogos.current = null;
+        }, 1500);
+      });
+  };
   const inflightProductsImageOnly = useRef<boolean | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -285,6 +322,58 @@ export default function AdminDials() {
                       borderRadius: '50%',
                       background: '#fff',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Show brand logos on the feed</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every tile in the consumer feed shows the brand's
+            logo image (from public.brand_logos) instead of the brand
+            name text. Tiles whose brand doesn't have a logo registered
+            fall back to the text — so flipping this dial never blanks
+            a label.
+          </p>
+          {!brandLogosLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {showBrandLogos ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {showBrandLogos
+                    ? 'Brand logos render in place of brand names.'
+                    : 'Brand names render as text (default).'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {brandLogosSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showBrandLogos}
+                  onClick={() => onToggleBrandLogos(!showBrandLogos)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: showBrandLogos ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: showBrandLogos ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
                       transition: 'left 160ms ease',
                     }}
                   />

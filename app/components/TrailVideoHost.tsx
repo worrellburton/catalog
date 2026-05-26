@@ -53,6 +53,12 @@ interface TrailVideoManager {
   suspendFeed: (heroTrailId: string) => void;
   /** Resume all paused in-slot videos. Call when the overlay closes. */
   resumeFeed: () => void;
+  /** Accept an externally-owned (e.g. director-managed) <video> element
+   *  into the pool under `id`. The element keeps its current src and
+   *  currentTime so attach() can hand it to the overlay hero immediately
+   *  without re-buffering. Use before opening an overlay when the card
+   *  was managed by the director rather than TrailVideoHost. */
+  donate: (id: string, el: HTMLVideoElement, src: string, poster?: string) => void;
 }
 
 const TrailVideoContext = createContext<TrailVideoManager | null>(null);
@@ -271,7 +277,34 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     evictIfNeeded();
   }, [evictIfNeeded]);
 
-  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed }), [attach, prewarm, suspendFeed, resumeFeed]);
+  const donate = useCallback((id: string, el: HTMLVideoElement, src: string, poster?: string): void => {
+    const pool = elementsRef.current;
+    const offscreen = poolRef.current;
+    if (!offscreen) return;
+    // If there is already a different element for this id, evict it cleanly.
+    const existing = pool.get(id);
+    if (existing && existing.el !== el) {
+      try { existing.el.pause(); existing.el.removeAttribute('src'); existing.el.load(); } catch {}
+      existing.el.remove();
+      pool.delete(id);
+    }
+    // Ensure required playback attributes are set.
+    el.muted = true;
+    el.defaultMuted = true;
+    el.loop = true;
+    el.playsInline = true;
+    if (poster && el.getAttribute('poster') !== poster) {
+      el.setAttribute('poster', poster);
+    }
+    // Park in the TrailVideoHost offscreen container. appendChild moves the
+    // element from wherever it currently lives (director slot, etc.) without
+    // pausing or resetting - currentTime and decode state are preserved.
+    offscreen.appendChild(el);
+    pool.set(id, { el, src, lastUsed: ++tickRef.current });
+    evictIfNeeded();
+  }, [evictIfNeeded]);
+
+  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed, donate }), [attach, prewarm, suspendFeed, resumeFeed, donate]);
 
   // Visibility + gesture playback recovery. Three sources of frozen-frame
   // bugs we have to handle:

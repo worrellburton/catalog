@@ -265,6 +265,32 @@ class VideoPlaybackDirector {
     return this.cards.get(cardId)?.videoEl ?? null;
   }
 
+  /**
+   * Releases the assigned <video> element from a card without returning
+   * it to the director's off-screen parking div. The caller takes full
+   * ownership of the element (e.g. to donate it to TrailVideoHost so an
+   * overlay hero can reuse the already-playing element seamlessly).
+   * The director re-assigns a fresh pool element to the card on the next
+   * rank cycle.
+   */
+  stealVideoElement(cardId: string): HTMLVideoElement | null {
+    const entry = this.cards.get(cardId);
+    if (!entry || !entry.videoEl) return null;
+    const el = entry.videoEl;
+    // Remove the slot from the pool entirely so rank() cannot reclaim this
+    // element. If we only mark assignedTo=null the director's next RAF
+    // immediately re-uses the "free" slot, stealing the element back from
+    // TrailVideoHost's offscreen pool before the overlay can attach() it.
+    const slotIdx = this.pool.findIndex(p => p.el === el);
+    if (slotIdx !== -1) this.pool.splice(slotIdx, 1);
+    entry.videoEl = null;
+    entry.status = 'idle';
+    this.emit(cardId, 'idle');
+    // Re-rank: director will create a fresh pool element for this card.
+    this.scheduleRank();
+    return el;
+  }
+
   // ── Private ──────────────────────────────────────────────────────────
 
   private scheduleRank(): void {

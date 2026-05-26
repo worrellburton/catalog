@@ -97,6 +97,9 @@ export function subscribeVideoStillRatio(
 export const PRODUCTS_IMAGE_ONLY_KEY = 'products_image_only';
 export const DEFAULT_PRODUCTS_IMAGE_ONLY = false;
 
+export const SHOW_BRAND_LOGOS_KEY = 'show_brand_logos';
+export const DEFAULT_SHOW_BRAND_LOGOS = false;
+
 function parseBool(raw: string | null | undefined, fallback: boolean): boolean {
   if (raw == null) return fallback;
   return raw.trim().toLowerCase() === 'true';
@@ -141,6 +144,50 @@ export function subscribeProductsImageOnly(
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_PRODUCTS_IMAGE_ONLY));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// "Show brand logos" toggle. When ON, the consumer feed swaps the
+// brand text label on each tile for the brand's logo image (fetched
+// from public.brand_logos). Default OFF.
+// ────────────────────────────────────────────────────────────────────
+
+export async function getShowBrandLogos(): Promise<boolean> {
+  if (!supabase) return DEFAULT_SHOW_BRAND_LOGOS;
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', SHOW_BRAND_LOGOS_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn('[dials] show_brand_logos read failed:', error.message);
+    return DEFAULT_SHOW_BRAND_LOGOS;
+  }
+  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_SHOW_BRAND_LOGOS);
+}
+
+export async function setShowBrandLogos(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: SHOW_BRAND_LOGOS_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${SHOW_BRAND_LOGOS_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${SHOW_BRAND_LOGOS_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_SHOW_BRAND_LOGOS));
       },
     )
     .subscribe();
