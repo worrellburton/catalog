@@ -1354,6 +1354,31 @@ export default function AdminData() {
   const [brandUrlInput, setBrandUrlInput] = useState('');
   const [brandUrlBusy, setBrandUrlBusy] = useState(false);
   const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
+  // Pending product ghost rows — added optimistically when an admin
+  // submits an "Add via …" URL. Each row sits at the top of the
+  // Products table with an indeterminate progress bar until the real
+  // product row materializes in the products list (matched by URL)
+  // or 90s elapses (timeout safety net).
+  interface PendingProduct { id: string; url: string; source: 'brand' | 'google' | 'amazon'; startedAt: number }
+  const [pendingProducts, setPendingProducts] = useState<PendingProduct[]>([]);
+  // Prune pending rows once the underlying product appears in the
+  // real list (by URL match) or 90 seconds elapse — whichever first.
+  // `allProducts` is declared further down; we read it via a ref so
+  // this effect can run regardless of declaration order and not TDZ.
+  const allProductsRef = useRef<{ url: string }[]>([]);
+  useEffect(() => {
+    if (pendingProducts.length === 0) return;
+    const interval = window.setInterval(() => {
+      setPendingProducts(prev => {
+        if (prev.length === 0) return prev;
+        const now = Date.now();
+        const realUrls = new Set(allProductsRef.current.map(p => p.url));
+        const next = prev.filter(pp => !realUrls.has(pp.url) && now - pp.startedAt < 90_000);
+        return next.length === prev.length ? prev : next;
+      });
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [pendingProducts.length]);
   // Stale product refresh
   const [refreshing, setRefreshing] = useState(false);
   const [auditingTypes, setAuditingTypes] = useState(false);
@@ -2015,6 +2040,10 @@ export default function AdminData() {
   }, []);
 
   const lookTable = useSortableTable(lookRows);
+
+  // Keep the ref in sync each render so the pending-row pruner sees
+  // the latest product URL set without re-running the interval.
+  allProductsRef.current = allProducts;
 
   const filteredProductsList = useMemo(
     () => allProducts.filter(p => {
@@ -3678,6 +3707,67 @@ export default function AdminData() {
               </tr>
             </thead>
             <tbody>
+              {/* Keyframes for the pending-row shimmer + progress bar
+                  sweep. Inlined here so the table is self-contained
+                  and the rest of the codebase doesn't need a CSS
+                  edit just for this one animation. */}
+              {pendingProducts.length > 0 && (
+                <tr style={{ height: 0, padding: 0 }}>
+                  <td style={{ padding: 0, border: 'none' }}>
+                    <style>{`
+                      @keyframes pendingShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+                      @keyframes pendingSweep { 0% { background-position: -60% 0; } 100% { background-position: 160% 0; } }
+                    `}</style>
+                  </td>
+                </tr>
+              )}
+              {/* Pending-product ghost rows. Indeterminate progress
+                  bar runs while the scraper resolves the URL into a
+                  real product row. Pruned automatically by the
+                  effect once the real row appears below. */}
+              {pendingProducts.map(pp => (
+                <tr key={pp.id} className="admin-row-pending" style={{ background: '#f8fafc' }}>
+                  <td />
+                  <td>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 6,
+                      background: 'linear-gradient(110deg, #e2e8f0 8%, #f1f5f9 18%, #e2e8f0 33%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'pendingShimmer 1.4s ease-in-out infinite',
+                    }} />
+                  </td>
+                  <td colSpan={20} style={{ padding: '8px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                        Scraping
+                      </span>
+                      <span style={{ fontSize: 12, color: '#475569', maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pp.url}>
+                        {pp.url}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 120, height: 4, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          background: 'linear-gradient(90deg, transparent 0%, #2563eb 50%, transparent 100%)',
+                          backgroundSize: '40% 100%',
+                          backgroundRepeat: 'no-repeat',
+                          animation: 'pendingSweep 1.6s linear infinite',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+                        {Math.round((Date.now() - pp.startedAt) / 1000)}s
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingProducts(prev => prev.filter(x => x.id !== pp.id))}
+                        title="Dismiss"
+                        style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4, fontSize: 14 }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {visibleRows.map((p, i) => {
                 const rowKey = `${p.brand}-${p.name}`;
                 const isSelected = selectedProductKeys.has(rowKey);
@@ -4996,10 +5086,20 @@ export default function AdminData() {
                     setBrandUrlError(null);
                     try {
                       await addProductUrl(url);
+                      // Push an optimistic ghost row at the top of
+                      // the Products table so the admin sees the
+                      // scrape progressing instead of an apparent
+                      // disappearance. The pending row is pruned
+                      // when the real product materialises (URL
+                      // match against allProducts) or 90s elapses.
+                      setPendingProducts(prev => [
+                        { id: `pending-${Date.now()}`, url, source: 'brand', startedAt: Date.now() },
+                        ...prev,
+                      ]);
                       setBrandUrlBusy(false);
                       setShowBrandUrl(false);
-                      showToast('Product queued for scrape - refreshing…');
-                      setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
+                      setBrandUrlInput('');
+                      showToast('Scraping — watch the top of the table.');
                     } catch (err) {
                       setBrandUrlBusy(false);
                       setBrandUrlError(err instanceof Error ? err.message : 'Failed to queue scrape');
