@@ -1235,6 +1235,132 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-dark .admin-cell-product-name { color: #f0f0f0; }
 
+/* ── Product enrichment expansion row ───────────────────────────────── */
+.admin-enrichment-row td {
+  padding: 0 !important;
+  border-bottom: 2px solid #e8e8f0;
+}
+.admin-dark .admin-enrichment-row td {
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+
+.admin-enrichment-panel {
+  padding: 16px 20px 20px;
+  background: #f7f8fc;
+  animation: admin-row-fade-in 0.18s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.admin-dark .admin-enrichment-panel {
+  background: rgba(255,255,255,0.02);
+}
+
+.admin-enrichment-images {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.admin-enrichment-thumb {
+  width: 72px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+.admin-dark .admin-enrichment-thumb {
+  border-color: rgba(255,255,255,0.08);
+}
+
+.admin-enrichment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.admin-detail-card--wide {
+  grid-column: 1 / -1;
+}
+
+.admin-enrichment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.admin-enrichment-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #eef0f6;
+  color: #444;
+  border: 1px solid rgba(0,0,0,0.06);
+  white-space: nowrap;
+}
+.admin-dark .admin-enrichment-chip {
+  background: rgba(255,255,255,0.07);
+  color: #ccc;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.admin-enrichment-chip--size {
+  background: #e8edff;
+  color: #3b4fc8;
+  border-color: #c5cef5;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.admin-dark .admin-enrichment-chip--size {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.admin-enrichment-chip--occasion {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+.admin-dark .admin-enrichment-chip--occasion {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.admin-enrichment-size-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.admin-enrichment-size-table th,
+.admin-enrichment-size-table td {
+  padding: 5px 10px;
+  text-align: right;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.admin-enrichment-size-table th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #999;
+  text-align: right;
+}
+.admin-enrichment-size-table th:first-child,
+.admin-enrichment-size-table td:first-child {
+  text-align: left;
+}
+.admin-enrichment-size-table tbody tr:hover td {
+  background: rgba(0,0,0,0.02);
+}
+.admin-dark .admin-enrichment-size-table th,
+.admin-dark .admin-enrichment-size-table td {
+  border-bottom-color: rgba(255,255,255,0.06);
+}
+
+
 /* Narrow actions column at the end of a table row */
 .admin-th-actions { width: 40px; }
 .admin-cell-actions {

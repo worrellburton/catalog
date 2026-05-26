@@ -1,23 +1,60 @@
 import { supabase } from '~/utils/supabase';
 
-/**
- * The extended "spec sheet" copy for a product — populated by the
- * product-scraper Modal agent when a URL is added. Today only ~1% of
- * rows have these fields filled in; the ProductPage UI fetches them
- * on demand and renders a graceful "Not available" fallback for the
- * rest.
- */
+export interface ProductVariant {
+  size: string | null;
+  color: string | null;
+  availability: boolean | null;
+  sku: string | null;
+  price_modifier: string | null;
+}
+
+export interface FitIntelligence {
+  fit_type: string;
+  body_type_match: string[];
+  layering: boolean;
+  warmth_rating: string;
+  stretch_behavior: string;
+  likely_feel: string;
+  true_to_size: string;
+  best_for_occasions: string[];
+  season: string[];
+}
+
+export interface MaterialComposition {
+  fiber: string;
+  pct: number | null;
+}
+
+export interface ProductTaxonomy {
+  category: string;
+  subcategory: string;
+  style: string | null;
+}
+
+export interface StylingMetadata {
+  works_with: string[];
+  occasion: string[];
+  season: string[];
+}
+
 export interface ProductDetails {
   size_fit: string | null;
   materials_care: string | null;
-  /** Structured per-product measurements keyed by code → centimeters
-   *  (e.g. `{ neck_width_cm: 16, chest_width_cm: 52 }`). Rendered as
-   *  the SVG measurement diagram next to the size_fit copy. Null when
-   *  the scraper hasn't backfilled the row yet. */
   measurements: Record<string, number> | null;
+  variants?: ProductVariant[] | null;
+  size_chart?: Record<string, Record<string, number>> | null;
+  normalized_measurements?: Record<string, Record<string, number>> | null;
+  fit_intelligence?: FitIntelligence | null;
+  materials_structured?: MaterialComposition[] | null;
+  product_taxonomy?: ProductTaxonomy | null;
+  styling_metadata?: StylingMetadata | null;
+  confidence_scores?: Record<string, number> | null;
 }
 
-const SELECT = 'size_fit, materials_care, measurements';
+const SELECT =
+  'size_fit, materials_care, measurements, variants, size_chart, ' +
+  'normalized_measurements, fit_intelligence, materials_structured, ' +
+  'product_taxonomy, styling_metadata, confidence_scores';
 
 /**
  * Fetch the spec-sheet fields for a single product. Tries the cheapest
@@ -44,7 +81,7 @@ export async function getProductDetails(opts: {
       console.error('[getProductDetails:id]', error.message);
       return null;
     }
-    if (data) return data as ProductDetails;
+    if (data) return data as unknown as ProductDetails;
   }
 
   if (url) {
@@ -58,7 +95,7 @@ export async function getProductDetails(opts: {
       console.error('[getProductDetails:url]', error.message);
       return null;
     }
-    if (data) return data as ProductDetails;
+    if (data) return data as unknown as ProductDetails;
   }
 
   if (brand && name) {
@@ -73,7 +110,7 @@ export async function getProductDetails(opts: {
       console.error('[getProductDetails:brand+name]', error.message);
       return null;
     }
-    if (data) return data as ProductDetails;
+    if (data) return data as unknown as ProductDetails;
   }
 
   return null;

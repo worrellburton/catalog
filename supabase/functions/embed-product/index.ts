@@ -37,13 +37,36 @@ const getSession = () => {
   return session;
 };
 
-const buildDoc = (p: { name: string | null; brand: string | null; type: string | null; description: string | null; size_fit?: string | null; materials_care?: string | null }): string => {
-  // Order matters: name first (carries the most weight in the model's
-  // attention), then brand, type, description. Keep it short — gte-small
-  // truncates at 512 tokens.
+const buildDoc = (p: {
+  name: string | null; brand: string | null; type: string | null;
+  description: string | null; size_fit?: string | null; materials_care?: string | null;
+  fit_intelligence?: Record<string, unknown> | null;
+  product_taxonomy?: Record<string, unknown> | null;
+  styling_metadata?: Record<string, unknown> | null;
+}): string => {
   const parts = [p.name, p.brand, p.type, p.description, p.size_fit, p.materials_care]
     .map(s => (s ?? '').trim())
     .filter(Boolean);
+
+  // Append AI-enriched fields for richer semantic search
+  if (p.fit_intelligence) {
+    const fi = p.fit_intelligence as Record<string, unknown>;
+    const fitParts = [fi.fit_type, fi.likely_feel, fi.warmth_rating]
+      .filter(Boolean).map(String);
+    if (Array.isArray(fi.best_for_occasions)) fitParts.push(...fi.best_for_occasions.map(String));
+    if (fitParts.length) parts.push(fitParts.join(', '));
+  }
+  if (p.product_taxonomy) {
+    const tx = p.product_taxonomy as Record<string, unknown>;
+    const txParts = [tx.subcategory, tx.style].filter(Boolean).map(String);
+    if (txParts.length) parts.push(txParts.join(', '));
+  }
+  if (p.styling_metadata) {
+    const sm = p.styling_metadata as Record<string, unknown>;
+    if (Array.isArray(sm.occasion)) parts.push(sm.occasion.map(String).join(', '));
+    if (Array.isArray(sm.works_with)) parts.push(sm.works_with.slice(0, 3).map(String).join(', '));
+  }
+
   return parts.join('. ').slice(0, 4000);
 };
 
@@ -68,7 +91,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: product, error: fetchErr } = await supabase
     .from('products')
-    .select('id, name, brand, type, description, size_fit, materials_care, is_active, embedding, embedded_at')
+    .select('id, name, brand, type, description, size_fit, materials_care, is_active, embedding, embedded_at, fit_intelligence, product_taxonomy, styling_metadata')
     .eq('id', id)
     .maybeSingle();
 
