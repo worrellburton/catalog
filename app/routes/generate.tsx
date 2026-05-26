@@ -1940,6 +1940,25 @@ export default function GeneratePage() {
                 <button className="gen-btn-primary" onClick={startNewLook}>
                   Get a new look going
                 </button>
+                {/* "Keep discovering" lets the shopper bail off the
+                    progress screen back to the catalog feed while the
+                    render finishes. The look continues processing in
+                    the background — generation state lives in
+                    user_generations and is polled the moment the user
+                    returns. Subtext reassures so they don't think the
+                    button cancels their in-flight look. */}
+                {generation.status !== 'done' && (
+                  <button
+                    type="button"
+                    className="gen-btn-secondary gen-btn-keep-discovering"
+                    onClick={() => navigate('/#app')}
+                  >
+                    <span className="gen-btn-keep-discovering-label">Keep discovering</span>
+                    <span className="gen-btn-keep-discovering-sub">
+                      Don&rsquo;t worry — this won&rsquo;t end your look
+                    </span>
+                  </button>
+                )}
                 {generation.status === 'done' && generation.video_url && (
                   <>
                     <button
@@ -1948,14 +1967,19 @@ export default function GeneratePage() {
                     >
                       Crop
                     </button>
-                    {/* Export bakes the Catalog wordmark onto the video
-                        and mints a public /s/:slug share link via the
-                        share-look edge function + Modal worker. */}
+                    {/* Mints a public /s/:slug share link via the
+                        share-look edge function + Modal worker. The
+                        modal shows the URL with a copy button. */}
                     <button
                       className="gen-btn-secondary"
                       onClick={handleExportShare}
                     >
-                      Export
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-2px' }}>
+                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                        <polyline points="16 6 12 2 8 6"/>
+                        <line x1="12" y1="2" x2="12" y2="15"/>
+                      </svg>
+                      Share link
                     </button>
                     {/* Edit & regenerate is only meaningful once the
                         current look has finished rendering — there's
