@@ -119,15 +119,28 @@ Deno.serve(async (req: Request) => {
   }
 
   // Auth: accept either an admin user's JWT (for the /admin/data
-  // batch button) OR the service-role key (for the post-insert
-  // trigger on public.products that fires this function from inside
-  // Postgres via pg_net). Service role bypasses the admin gate
-  // because the trigger is the caller and we trust DB-side code.
+  // batch button) OR a service-role JWT (for the post-insert trigger
+  // on public.products that fires this function from inside Postgres
+  // via pg_net). Service role bypasses the admin gate.
+  //
+  // Detection: decode the JWT payload's `role` claim — '"role":
+  // "service_role"' is unforgeable without the project secret used to
+  // sign it. Byte-equality against SUPABASE_SERVICE_ROLE_KEY was the
+  // earlier check, but the vault can hold a different (still valid)
+  // service-role JWT than the function's env var, so equality failed
+  // every trigger-driven call with a 401.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return json({ success: false, error: 'unauthorized' }, 401);
   const token = authHeader.replace('Bearer ', '');
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-  const isServiceRole = token === serviceRoleKey;
+  let isServiceRole = false;
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload?.role === 'service_role') isServiceRole = true;
+    }
+  } catch { /* fall through to user-JWT path */ }
   if (!isServiceRole) {
     const { data: { user: caller } } = await admin.auth.getUser(token);
     if (!caller) return json({ success: false, error: 'unauthorized' }, 401);

@@ -4,6 +4,7 @@ import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
 import { withTransform } from '~/utils/supabase-image';
+import { supabase } from '~/utils/supabase';
 import AutoplayVideo from '~/components/AutoplayVideo';
 
 interface MyLooksProps {
@@ -68,6 +69,11 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   // Delete confirmation.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Analytics modal — opened from the bar-chart FAB in the top-right.
+  // Calls user_creator_analytics_summary RPC and filters to the
+  // signed-in user's row so the creator sees their own numbers.
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // "Creator Mode" toggle. When ON the tiles overlay edit / archive /
   // delete actions on top of the standard LookCard so the curator can
@@ -181,19 +187,36 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         Back
       </button>
 
-      {/* Top-right "+" button — opens the create form. */}
-      <button
-        className="my-cat-create-fab"
-        onClick={handleCreateNew}
-        aria-label="Upload look"
-        title="Upload look"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        <span className="my-cat-create-fab-label">Upload look</span>
-      </button>
+      {/* Top-right pair: analytics + create. Both circular icon FABs
+          so they read as a coherent pill of creator-only actions. */}
+      <div className="my-cat-fab-row">
+        <button
+          className="my-cat-create-fab my-cat-analytics-fab"
+          onClick={() => setShowAnalytics(true)}
+          aria-label="Analytics"
+          title="Analytics"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="3" y1="20" x2="21" y2="20"/>
+            <rect x="6"  y="11" width="3" height="9"/>
+            <rect x="11" y="6"  width="3" height="14"/>
+            <rect x="16" y="14" width="3" height="6"/>
+          </svg>
+        </button>
+        <button
+          className="my-cat-create-fab"
+          onClick={handleCreateNew}
+          aria-label="Upload look"
+          title="Upload look"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      {showAnalytics && <CreatorAnalyticsModal onClose={() => setShowAnalytics(false)} />}
 
       {/* Hero — same layout as CreatorPage.creator-hero. */}
       <div className="my-cat-hero">
@@ -311,11 +334,11 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                       </svg>
                     </div>
                   )}
-                  {/* Soft bottom gradient so the title reads on bright photos. */}
+                  {/* Title intentionally hidden — the user asked for
+                      a clean tile-only grid here. Visual scrim kept
+                      so the status pill remains legible on bright
+                      thumbnails. */}
                   <div className="my-cat-tile-scrim" />
-                  {managed.title && (
-                    <span className="my-cat-tile-title">{managed.title}</span>
-                  )}
                 </div>
 
                 {/* Status pill — always visible so the curator can spot
@@ -400,6 +423,87 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+interface CreatorStatsRow {
+  user_id: string;
+  full_name: string | null;
+  looks_posted: number;
+  total_impressions: number;
+  total_clicks: number;
+  total_clickouts: number;
+}
+
+/**
+ * Modal that surfaces the creator's own analytics rollup. Same RPC
+ * the admin Creators tab uses (user_creator_analytics_summary) —
+ * we filter to the signed-in user's row so the creator sees just
+ * their numbers without admin clutter.
+ */
+function CreatorAnalyticsModal({ onClose }: { onClose: () => void }) {
+  const [row, setRow] = useState<CreatorStatsRow | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase) { setLoading(false); return; }
+      const { data: { user: signedIn } } = await supabase.auth.getUser();
+      if (!signedIn?.id) { if (!cancelled) setLoading(false); return; }
+      const { data } = await supabase.rpc('user_creator_analytics_summary');
+      if (cancelled) return;
+      const mine = (data as CreatorStatsRow[] | null)?.find(r => r.user_id === signedIn.id) ?? null;
+      setRow(mine);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const clickThroughPct = row && row.total_impressions > 0
+    ? ((row.total_clicks / row.total_impressions) * 100).toFixed(1)
+    : null;
+  const clickoutPct = row && row.total_clicks > 0
+    ? ((row.total_clickouts / row.total_clicks) * 100).toFixed(1)
+    : null;
+
+  return (
+    <div className="my-cat-analytics-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="my-cat-analytics-card" onClick={e => e.stopPropagation()}>
+        <header className="my-cat-analytics-head">
+          <h2>Your analytics</h2>
+          <button type="button" className="my-cat-analytics-close" onClick={onClose} aria-label="Close">×</button>
+        </header>
+        {loading ? (
+          <div className="my-cat-analytics-empty">Loading…</div>
+        ) : !row ? (
+          <div className="my-cat-analytics-empty">No analytics yet — your looks need impressions before stats land here.</div>
+        ) : (
+          <div className="my-cat-analytics-grid">
+            <Stat label="Looks live"     value={row.looks_posted.toLocaleString()} />
+            <Stat label="Impressions"    value={row.total_impressions.toLocaleString()} />
+            <Stat label="Clicks"         value={row.total_clicks.toLocaleString()} sub={clickThroughPct ? `${clickThroughPct}% CTR` : undefined} />
+            <Stat label="Clickouts"      value={row.total_clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : undefined} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="my-cat-stat">
+      <span className="my-cat-stat-label">{label}</span>
+      <span className="my-cat-stat-value">{value}</span>
+      {sub && <span className="my-cat-stat-sub">{sub}</span>}
     </div>
   );
 }
