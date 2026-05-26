@@ -13,7 +13,6 @@ import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/servic
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
-import { trackProductClickout } from '~/services/session-tracker';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -968,10 +967,9 @@ export default function ProductPage({
                       className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
                       onClick={() => {
                         setShowRetailers(false);
-                        // Fire-and-forget clickout telemetry. Resolves the
-                        // products.url → id so /admin/products + the per-
-                        // user CTR both attribute the right product.
-                        void trackProductClickout(offer.url, product.brand, product.name);
+                        // handleOpenBrowser in _index.tsx fires
+                        // trackProductClickout centrally now — no need
+                        // for a per-callsite trigger here.
                         onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
                       }}
                       role="listitem"
