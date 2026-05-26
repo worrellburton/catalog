@@ -72,17 +72,37 @@ const SOURCE_LABELS: Record<string, string> = {
   brand_url: 'Brand URL',
 };
 
+// Compact, unambiguous date format that's friendly to scan.
+// Recent dates use a relative phrase ("3h ago", "Yesterday", "Mon");
+// anything older falls back to "May 19" (current year) or "May 19, 2025"
+// (older years). The old DD/MM/YY format was ambiguous against MM/DD/YY
+// and unreadable at a glance.
 function formatDateAdded(iso: string | null | undefined): string {
   if (!iso) return ' - ';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return ' - ';
-  // DD/MM/YY (e.g. 05/05/26). Manual padding because toLocaleDateString
-  // can't emit a 2-digit year + 2-digit month + 2-digit day combo
-  // consistently across runtimes.
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}/${mm}/${yy}`;
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  // Future timestamps (clock skew, server-ahead) read awkwardly as
+  // negative — clamp to "just now".
+  if (diffMs < 0 || diffMs < 90_000) return 'Just now';
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m ago`;
+  if (diffMs < 12 * hour) return `${Math.floor(diffMs / hour)}h ago`;
+  // Within today or yesterday → relative day.
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dDay = new Date(d); dDay.setHours(0, 0, 0, 0);
+  const dayDiff = Math.round((today.getTime() - dDay.getTime()) / day);
+  if (dayDiff === 0) return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return d.toLocaleDateString(undefined, { weekday: 'short' });
+  // Within current year: "May 19". Older: "May 19, 2025".
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 const COLOR_WORDS = ['white', 'black', 'blue', 'navy', 'red', 'green', 'yellow', 'pink', 'purple', 'gray', 'grey', 'brown', 'tan', 'beige', 'cream', 'gold', 'silver', 'orange', 'khaki', 'olive', 'charcoal', 'burgundy', 'ivory'];
