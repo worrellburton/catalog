@@ -1861,6 +1861,30 @@ export default function AdminData() {
     };
     loadCrawled();
     loadAdProductIds();
+
+    // Realtime subscription on the products table so newly-scraped
+    // rows (or status flips like pending → done) surface in the
+    // Products tab without a manual refresh. Was the cause of
+    // "Tracksmith Eliot Runner doesn't show up after Add Products"
+    // — the initial load fired before the scrape finished.
+    if (!supabase) return;
+    const channel = supabase
+      .channel('admin-data-products-stream')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'products' }, (payload) => {
+        const p = payload.new as CrawledProduct;
+        setCrawledProducts(prev => {
+          if (prev.some(x => x.id === p.id)) return prev;
+          return [{ ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct, ...prev];
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
+        const p = payload.new as CrawledProduct;
+        setCrawledProducts(prev => prev.map(x => x.id === p.id
+          ? { ...x, ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct
+          : x));
+      })
+      .subscribe();
+    return () => { void supabase!.removeChannel(channel); };
   }, [loadAdProductIds]);
 
   // Poll active generation jobs - refresh statuses every 3s, remove finished
