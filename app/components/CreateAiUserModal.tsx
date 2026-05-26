@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { createAiUser } from '~/services/ai-users';
-import { HEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
 
 interface CreateAiUserModalProps {
   onClose: () => void;
@@ -26,11 +26,13 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
   // derivable so we never end up with a label that doesn't match the
   // cm value (the typo-prone case the free-text field caused).
   const [heightCm, setHeightCm] = useState<number | ''>('');
+  const [weightKg, setWeightKg] = useState<number | ''>('');
   const [ageLabel, setAgeLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const heightLabel = heightCm === '' ? '' : (HEIGHT_OPTIONS.find(h => h.cm === heightCm)?.label ?? '');
+  const weightLabel = weightKg === '' ? '' : (WEIGHT_OPTIONS.find(w => w.kg === weightKg)?.label ?? '');
 
   const canSubmit = fullName.trim().length > 0 && !submitting;
 
@@ -45,6 +47,8 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
         gender: gender || null,
         height_cm: heightCm === '' ? null : heightCm,
         height_label: heightLabel || null,
+        weight_kg: weightKg === '' ? null : weightKg,
+        weight_label: weightLabel || null,
         age_label: ageLabel || null,
       });
       onCreated(result.user_id);
@@ -52,7 +56,7 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
       setError(err instanceof Error ? err.message : 'Create failed');
       setSubmitting(false);
     }
-  }, [ageLabel, canSubmit, fullName, gender, heightCm, heightLabel, onCreated]);
+  }, [ageLabel, canSubmit, fullName, gender, heightCm, heightLabel, weightKg, weightLabel, onCreated]);
 
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
@@ -106,7 +110,7 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
                 ))}
               </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, gridColumn: '1 / -1' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
               <span style={{ fontWeight: 600 }}>Height</span>
               <select
                 value={heightCm === '' ? '' : String(heightCm)}
@@ -116,6 +120,19 @@ export default function CreateAiUserModal({ onClose, onCreated }: CreateAiUserMo
                 <option value="">—</option>
                 {HEIGHT_OPTIONS.map(h => (
                   <option key={h.cm} value={h.cm}>{h.label} ({h.cm} cm)</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+              <span style={{ fontWeight: 600 }}>Weight</span>
+              <select
+                value={weightKg === '' ? '' : String(weightKg)}
+                onChange={e => setWeightKg(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e5e5' }}
+              >
+                <option value="">—</option>
+                {WEIGHT_OPTIONS.map(w => (
+                  <option key={w.kg} value={w.kg}>{w.label} ({w.kg} kg)</option>
                 ))}
               </select>
             </label>

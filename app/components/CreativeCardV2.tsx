@@ -40,6 +40,8 @@ import { useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
+import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
+import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import type { Look } from '~/data/looks';
 import { creators } from '~/data/looks';
@@ -414,7 +416,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           <div className="promo-product-info">
             <div className="promo-product-text">
               {creative.product?.brand && (
-                <span className="promo-product-brand">{creative.product.brand}</span>
+                <BrandLabel name={creative.product.brand} />
               )}
               <span className="promo-product-name">
                 {creative.product?.name || 'Shop Now'}
@@ -464,3 +466,24 @@ const CreativeCardV2 = memo(function CreativeCardV2({
 });
 
 export default CreativeCardV2;
+
+// Brand label that swaps text → logo image when the
+// "Show brand logos on the feed" dial is ON AND we have a logo
+// registered in public.brand_logos for this brand. Falls back to
+// the plain text in every other case so flipping the dial never
+// blanks a label.
+function BrandLabel({ name }: { name: string }) {
+  const showLogos = useShowBrandLogos();
+  const logoUrl = useBrandLogo(name);
+  if (showLogos && logoUrl) {
+    return (
+      <img
+        className="promo-product-brand promo-product-brand-logo"
+        src={logoUrl}
+        alt={name}
+        style={{ height: 14, width: 'auto', objectFit: 'contain', display: 'inline-block' }}
+      />
+    );
+  }
+  return <span className="promo-product-brand">{name}</span>;
+}
