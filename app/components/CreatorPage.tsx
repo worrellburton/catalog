@@ -282,15 +282,32 @@ export default function CreatorPage({
       }
 
       // Pull the owner's profile via the first look's user_id so the
-      // hero avatar + name aren't placeholders.
+      // hero avatar + name. Fetch profile (by user_id) AND creators
+      // (by handle) in parallel — whichever has a non-null avatar
+      // wins. Some real creators have a creators-table row with an
+      // avatar but their auth profile's avatar_url is null, and
+      // vice versa.
       const ownerId = rows.find(r => r.user_id)?.user_id;
-      if (ownerId) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, email, gender')
-          .eq('id', ownerId)
-          .maybeSingle();
-        if (!cancelled && prof) setProfile(prof as UserProfile);
+      const [profRes, creatorRes] = await Promise.all([
+        ownerId
+          ? supabase!.from('profiles').select('id, full_name, avatar_url, email, gender').eq('id', ownerId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase!.from('creators').select('handle, display_name, avatar_url, is_ai').eq('handle', creatorName).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const prof = (profRes as { data: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; gender: string | null } | null }).data;
+      const creatorRow = (creatorRes as { data: { handle: string; display_name: string | null; avatar_url: string | null } | null }).data;
+      // Merge: prefer profile values, fall back to creators row.
+      const mergedAvatar = prof?.avatar_url || creatorRow?.avatar_url || null;
+      const mergedName = prof?.full_name || creatorRow?.display_name || null;
+      if (prof || creatorRow) {
+        setProfile({
+          id: ownerId || creatorName,
+          full_name: mergedName,
+          avatar_url: mergedAvatar,
+          email: prof?.email ?? null,
+          gender: prof?.gender ?? null,
+        });
       }
 
       if (!cancelled) setLoading(false);
