@@ -97,7 +97,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
         segments: [
           ...state.segments,
           { type: 'detail', id: `detail-${look.id}-${Date.now()}`, look },
-          { type: 'feed', id: `feed-${look.id}-${Date.now()}`, looks: related, title: 'More like this' },
+          { type: 'feed', id: `feed-${look.id}-${Date.now()}`, looks: related, title: 'Similar' },
         ],
         seenLookIds: newSeen,
       };
