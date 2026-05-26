@@ -314,17 +314,32 @@ function pickNavMatch(pathname: string, items: NavItem[]): string | null {
   return candidates[0]?.to ?? null;
 }
 
+// Routes that are PINNED at the top of the sidebar — never reordered
+// by the MRU bubble. Home is the user's compass; sliding it down
+// every time they click another tab made the sidebar feel rootless.
+const NAV_PINNED_TOP = new Set(['/admin']);
+
 function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
   const byTo = new Map(items.map(i => [i.to, i]));
   const seen = new Set<string>();
   const out: NavItem[] = [];
+  // 1. Pinned items first, in their original declaration order.
+  for (const item of items) {
+    if (NAV_PINNED_TOP.has(item.to) && !seen.has(item.to)) {
+      out.push(item);
+      seen.add(item.to);
+    }
+  }
+  // 2. MRU order for everything else.
   for (const to of mru) {
+    if (NAV_PINNED_TOP.has(to)) continue;
     const item = byTo.get(to);
     if (item && !seen.has(to)) {
       out.push(item);
       seen.add(to);
     }
   }
+  // 3. Remaining items in their original order.
   for (const item of items) {
     if (!seen.has(item.to)) {
       out.push(item);
