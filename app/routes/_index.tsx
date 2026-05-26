@@ -111,6 +111,11 @@ export default function Home() {
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
+  // "Make a catalog of who I follow" — handles array set when the
+  // shopper taps the CTA in the FollowingRail popover. Feeds the
+  // home feed through allowedCreatorHandles so only the followed
+  // creators' looks surface. null disables the filter.
+  const [followingCatalog, setFollowingCatalog] = useState<string[] | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
@@ -798,7 +803,18 @@ export default function Home() {
             </div>
             <div className="header-center">
               <PendingLookPill onOpen={() => navigate('/generate')} />
-              <FollowingRail onOpenCreator={handleOpenCreator} />
+              <FollowingRail
+                onOpenCreator={handleOpenCreator}
+                onCreateFollowingCatalog={(handles) => {
+                  // Lower-case + dedupe for safe matching against
+                  // looks.creator_handle / look.creator in the feed.
+                  const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+                  setFollowingCatalog(norm);
+                  setCatalogName('Following');
+                  setCreatorFilter(null);
+                  setBrandFilter(null);
+                }}
+              />
             </div>
             <div className="header-right">
               <HeaderWalletPill onOpenWallet={openWallet} />
@@ -840,6 +856,7 @@ export default function Home() {
             bookmarks={bookmarks}
             onSearchLoadingChange={handleSearchLoadingChange}
             searchTrigger={searchTrigger}
+            followedHandles={followingCatalog}
           />
 
           <BottomBar

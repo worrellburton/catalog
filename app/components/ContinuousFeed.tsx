@@ -41,6 +41,11 @@ interface ContinuousFeedProps {
   onSearchLoadingChange?: (loading: boolean) => void;
   /** Incremented on each Enter/submit to bypass debounce and fire immediately. */
   searchTrigger?: number;
+  /** When set, the feed only surfaces looks whose creator handle is
+   *  in this list (lower-cased). Used by the FollowingRail's
+   *  "Make a catalog of who I follow" CTA. null disables the
+   *  filter. */
+  followedHandles?: string[] | null;
   /**
    * When true the feed is rendered nested inside another scroll surface
    * (e.g. ProductPage or LookOverlay's "You might also like" slot). Omits
@@ -132,6 +137,7 @@ export default function ContinuousFeed({
   bookmarks,
   onSearchLoadingChange,
   searchTrigger = 0,
+  followedHandles,
   nested = false,
   scrollRoot = null,
   slotPrefix,
@@ -249,9 +255,20 @@ export default function ContinuousFeed({
       profileGender === 'male' ? 'men' : profileGender === 'female' ? 'women' : null;
     const effectiveFilter: 'all' | 'men' | 'women' =
       activeFilter !== 'all' ? activeFilter : (profileGenderFilter ?? 'all');
-    const base = effectiveFilter === 'all'
+    let base = effectiveFilter === 'all'
       ? allLooks
       : allLooks.filter(l => l.gender === effectiveFilter || l.gender === 'unisex');
+    // "Make a catalog of who I follow" — narrow to looks whose
+    // creator handle matches one in the followedHandles set.
+    // Empty list means "nobody followed" → empty feed instead of
+    // bypassing the filter.
+    if (followedHandles) {
+      const allow = new Set(followedHandles);
+      base = base.filter(l => {
+        const handle = (l.creator || '').toLowerCase().trim();
+        return allow.has(handle);
+      });
+    }
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
       // For searches >= 3 chars (semantic-eligible), suppress looks UNLESS
@@ -278,7 +295,7 @@ export default function ContinuousFeed({
       );
     }
     return base;
-  }, [activeFilter, committedQuery, allLooks]);
+  }, [activeFilter, committedQuery, allLooks, followedHandles, profileGender]);
 
   // ── Semantic search ────────────────────────────────────────────────────────
   // Kicks in for queries ≥ 3 chars; reorders filteredLooks so semantically
