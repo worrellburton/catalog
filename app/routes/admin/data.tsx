@@ -289,7 +289,7 @@ type LookSource = 'all' | 'human' | 'ai';
 // back is instant (no re-fetch). The wrapper also keeps the
 // <video> mounted across hidden-tab toggles since the parent
 // table is now display:none rather than conditionally rendered.
-function LazyThumb({ url }: { url: string }) {
+function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {
@@ -305,25 +305,46 @@ function LazyThumb({ url }: { url: string }) {
           }
         }
       },
-      // Generous margin so videos are pre-warmed well before the
-      // row enters the viewport. Big-enough number that on most
-      // first loads every row is already inside the threshold.
       { rootMargin: '1200px 0px' },
     );
     io.observe(node);
     return () => io.disconnect();
   }, []);
   return (
-    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+    <div ref={ref} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* Render the cheap poster image IMMEDIATELY when we have one
+          (~10–30 KB) so the row stops looking blank within the first
+          paint. The video then loads underneath and replaces the
+          poster once it can play. Eliminates the "all rows are gray
+          rectangles" effect on big admin pages. */}
+      {thumbnail && (
+        <img
+          src={thumbnail}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'cover', display: 'block',
+            background: '#111',
+          }}
+        />
+      )}
       {inView ? (
         <>
-          <video src={url} autoPlay muted loop playsInline preload="metadata" />
+          <video
+            src={url}
+            poster={thumbnail || undefined}
+            autoPlay muted loop playsInline preload="metadata"
+            style={{ position: 'relative', zIndex: 1 }}
+          />
           <div className="admin-look-preview">
-            <video src={url} autoPlay muted loop playsInline />
+            <video src={url} poster={thumbnail || undefined} autoPlay muted loop playsInline />
           </div>
         </>
       ) : (
-        <div style={{ width: '100%', height: '100%', background: '#111' }} />
+        !thumbnail && <div style={{ width: '100%', height: '100%', background: '#111' }} />
       )}
     </div>
   );
@@ -1579,6 +1600,7 @@ export default function AdminData() {
         creatorAvatar: avatar,
         creatorIsAi: !!look.creatorIsAi,
         video: look.video,
+        thumbnail: look.thumbnail_url || null,
         products: look.products.length,
       };
     });
@@ -2794,21 +2816,16 @@ export default function AdminData() {
                       <td>
                         <div className="admin-look-thumb">
                           {(() => {
-                            // New looks published from the unpublished
-                            // tab carry an absolute Supabase URL; legacy
-                            // seed rows are relative paths under
-                            // basePath. Branch so neither breaks.
                             const isAbsolute = row.video && /^https?:\/\//i.test(row.video);
                             const src = row.video ? (isAbsolute ? row.video : `${basePath}/${row.video}`) : '';
                             if (!src) return <div style={{ width: '100%', height: '100%', background: '#111' }} />;
-                            return (
-                              <>
-                                <video src={src} autoPlay muted loop playsInline preload="metadata" />
-                                <div className="admin-look-preview">
-                                  <video src={src} autoPlay muted loop playsInline />
-                                </div>
-                              </>
-                            );
+                            // Renders the thumbnail image FIRST (cheap),
+                            // then the video element underneath which
+                            // attaches when the row scrolls into the
+                            // 1200px pre-warm zone. Eliminates the
+                            // "all gray rectangles" first-paint state
+                            // on long admin pages.
+                            return <LazyThumb url={src} thumbnail={(row as { thumbnail?: string | null }).thumbnail || null} />;
                           })()}
                         </div>
                       </td>

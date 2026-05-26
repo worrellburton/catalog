@@ -31,6 +31,7 @@ import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 
 interface CreativeCardV2Props {
@@ -65,7 +66,12 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   const globalVideoRatio = useVideoStillRatio();
   const dialPrefersVideo = shouldBeVideo(creative.id, globalVideoRatio);
   const stillImageUrl = pickStillImageUrl(creative);
-  const renderAsStill = !dialPrefersVideo && !!stillImageUrl;
+  // "Products image-only" dial (/admin/dials). When ON, every tile
+  // that ISN'T backed by a look (creative.look_id is null/undefined)
+  // renders as the still product image. Looks keep video playback.
+  const productsImageOnly = useProductsImageOnly();
+  const forceStillForProduct = productsImageOnly && !creative.look_id && !!stillImageUrl;
+  const renderAsStill = forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl);
 
   // Hover-to-play: when in still mode, a mouseenter activates video for
   // this card. Stays active for the session — no revert on mouseleave.

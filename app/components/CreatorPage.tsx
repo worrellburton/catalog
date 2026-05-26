@@ -69,6 +69,12 @@ export default function CreatorPage({
 
   // Static-seed branch (legacy creators like @lilywittman / @garrett).
   const seedCreatorData = userId ? null : seedCreators[creatorName];
+
+  // Third path: real creator handles that don't have a static seed
+  // (e.g. `taylor-phillips`, `robert-burton`, `janehamilton`). The
+  // public creator page rendered blank for these because neither
+  // branch above matched. Resolve by querying looks directly.
+  const isHandleBranch = !userId && !seedCreatorData && !!creatorName;
   const seedCreatorLooks = useMemo(
     () => (userId ? [] : seedLooks.filter(l => l.creator === creatorName)),
     [creatorName, userId],
@@ -203,19 +209,108 @@ export default function CreatorPage({
     return () => { cancelled = true; };
   }, [userId, creatorName]);
 
+  // Handle-branch resolver — for `/c/<handle>` URLs that map to real
+  // creator_handles in the looks table. Pulls live looks + the
+  // owner's profile so the page renders with their actual avatar and
+  // name, not the placeholder initial circle.
+  useEffect(() => {
+    if (!isHandleBranch) return;
+    if (!supabase) { setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const { data: lookRows } = await supabase
+        .from('looks')
+        .select(`
+          id, legacy_id, title, gender, creator_handle, user_id,
+          looks_creative!inner ( video_url, thumbnail_url, is_primary ),
+          look_products ( products ( id, name, brand, price, image_url, url, images ) )
+        `)
+        .eq('creator_handle', creatorName)
+        .eq('status', 'live')
+        .eq('enabled', true)
+        .is('archived_at', null)
+        .eq('looks_creative.is_primary', true)
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+
+      type LookPayload = {
+        id: string; legacy_id: number | null; title: string;
+        gender: string | null; creator_handle: string; user_id: string | null;
+        looks_creative: { video_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
+        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
+      };
+      const rows = (lookRows as LookPayload[] | null) || [];
+
+      const mappedLooks: Look[] = rows.map((r, i) => {
+        const products: Product[] = (r.look_products || [])
+          .map(lp => lp.products)
+          .filter((p): p is NonNullable<typeof p> => !!p)
+          .map(p => ({
+            brand: p.brand || '',
+            name: p.name || 'Untitled',
+            price: p.price || '',
+            url: p.url || '',
+            image: p.image_url || (p.images && p.images[0]) || undefined,
+          }));
+        return {
+          id: r.legacy_id ?? -(i + 1),
+          title: r.title,
+          creator: creatorName,
+          gender: (r.gender as 'men' | 'women') || 'unisex',
+          description: '',
+          video: r.looks_creative[0]?.video_url || '',
+          thumbnail_url: r.looks_creative[0]?.thumbnail_url || undefined,
+          products,
+          color: '#222',
+        };
+      });
+      if (!cancelled) {
+        setUserLooks(mappedLooks);
+        // Aggregate products across all looks for the Shop tab.
+        const seen = new Set<string>();
+        const ordered: Product[] = [];
+        for (const l of mappedLooks) {
+          for (const p of l.products) {
+            const key = `${p.brand}::${p.name}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            ordered.push(p);
+          }
+        }
+        setUserProducts(ordered);
+      }
+
+      // Pull the owner's profile via the first look's user_id so the
+      // hero avatar + name aren't placeholders.
+      const ownerId = rows.find(r => r.user_id)?.user_id;
+      if (ownerId) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, email, gender')
+          .eq('id', ownerId)
+          .maybeSingle();
+        if (!cancelled && prof) setProfile(prof as UserProfile);
+      }
+
+      if (!cancelled) setLoading(false);
+    })().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isHandleBranch, creatorName]);
+
   // Resolved values that the JSX below reads. When userId is set we use
   // the live data; otherwise the static-seed values.
-  const displayName = userId
-    ? (profile?.full_name || profile?.email?.split('@')[0] || 'Curator')
+  const displayName = (userId || isHandleBranch)
+    ? (profile?.full_name || profile?.email?.split('@')[0] || creatorName)
     : (seedCreatorData?.displayName || creatorName);
   const avatarUrl = userId
     ? (profile?.avatar_url || '')
     : (seedCreatorData?.avatar || '');
-  const creatorLooks = userId ? userLooks : seedCreatorLooks;
+  const creatorLooks = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
 
   // Brand-grouped product list - powers the Shop tab chips.
   const allProducts = useMemo(() => {
-    if (userId) return userProducts;
+    if (userId || isHandleBranch) return userProducts;
     const seen = new Set<string>();
     const products: Product[] = [];
     seedCreatorLooks.forEach(look => {
@@ -228,7 +323,7 @@ export default function CreatorPage({
       });
     });
     return products;
-  }, [userId, userProducts, seedCreatorLooks]);
+  }, [userId, isHandleBranch, userProducts, seedCreatorLooks]);
 
   const brandCounts = useMemo(() => {
     const counts: Record<string, number> = {};

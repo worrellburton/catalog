@@ -284,6 +284,7 @@ function UserMenu({
                 <span>My Catalog</span>
               </button>
             )}
+            <FollowingMenuItem onOpenCreator={(handle) => { setOpen(false); if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`); }} />
             {onOpenWallet && dotsConnected === false && (
               <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -414,3 +415,68 @@ function UserMenu({
 // open. Without memo + stable callbacks from the parent, the menu re-ran
 // its avatar / strip layout for every state change.
 export default memo(UserMenu);
+
+/**
+ * "Following N" menu item — surfaces the list of creators the user
+ * follows directly in the user menu. Fetches lazily (only when the
+ * menu has rendered) and shows the first 6 handles as clickable chips
+ * with a "See all" link to the full list. No-op when the user follows
+ * nobody yet (the row hides instead of rendering "Following 0").
+ */
+function FollowingMenuItem({ onOpenCreator }: { onOpenCreator: (handle: string) => void }) {
+  const [handles, setHandles] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    import('~/services/follows').then(({ getMyFollowing }) => {
+      getMyFollowing().then(list => { if (!cancelled) setHandles(list); });
+    });
+    return () => { cancelled = true; };
+  }, []);
+  if (!handles || handles.length === 0) return null;
+  return (
+    <div>
+      <button
+        className="user-menu-item"
+        onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="8.5" cy="7" r="4"/>
+          <polyline points="17 11 19 13 23 9"/>
+        </svg>
+        <span>Following</span>
+        <span className="user-menu-badge">{handles.length}</span>
+      </button>
+      {expanded && (
+        <div style={{ padding: '4px 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {handles.slice(0, 12).map(h => (
+            <button
+              key={h}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenCreator(h); }}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 999,
+                background: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                color: '#0f172a',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              @{h}
+            </button>
+          ))}
+          {handles.length > 12 && (
+            <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center' }}>
+              +{handles.length - 12} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
