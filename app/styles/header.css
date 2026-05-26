@@ -98,6 +98,65 @@ header > * {
   gap: 8px;
 }
 
+/* "Your <style> look is rendering" pill — appears in the header
+   center when the signed-in user has bailed off /generate via
+   "Keep discovering" and a generation is still in-flight. Tap to
+   return. The spinner ring tells the user something is happening
+   without forcing them to read the label. */
+.pending-look-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.pending-look-pill:hover {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+.pending-look-pill-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: pending-look-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+.pending-look-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes pending-look-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-look-pill-spinner { animation: none; }
+}
+@media (max-width: 768px) {
+  .pending-look-pill {
+    max-width: 180px;
+    font-size: 11px;
+    padding: 4px 10px 4px 6px;
+  }
+}
+
 
 .header-right {
   display: flex;

@@ -829,6 +829,31 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-btn-secondary:hover { background: rgba(255, 255, 255, 0.18); }
 
+/* Two-line "keep discovering" button — primary label + a reassuring
+   subtitle so the user knows tapping it doesn't cancel the in-flight
+   render. Sits next to "Get a new look going" while a generation is
+   pending. */
+.gen-btn-keep-discovering {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 18px;
+  line-height: 1.2;
+}
+.gen-btn-keep-discovering-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+.gen-btn-keep-discovering-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.005em;
+}
+
 .gen-empty, .gen-spinner {
   padding: 40px 16px;
   text-align: center;
@@ -1581,6 +1606,48 @@ html[data-shell="catalog-app"] .gen-page {
 
 .gen-step-result .gen-result-actions {
   flex: 0 0 auto;
+}
+
+/* Mobile-optimize the result step:
+   - Compact 2-up button grid so Keep-discovering + Get-new-look both
+     fit above the iOS browser chrome instead of one being pushed off
+     screen.
+   - Bottom padding reserves room for the iOS URL toolbar + Safari's
+     home indicator. Without it the primary CTA hides behind the
+     bottom chrome (visible in the user's screenshot — "Get a new
+     look going" was clipped by catalog.shop URL bar).
+   - Phone-frame max-height tightened so the video doesn't crowd the
+     buttons on shorter devices. */
+@media (max-width: 768px) {
+  .gen-step-result {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+  .gen-step-result .gen-build-frame {
+    width: min(280px, 70vw, calc((100dvh - 360px) * 9 / 16));
+  }
+  .gen-step-result .gen-result-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+    padding: 0 12px;
+    width: 100%;
+    max-width: 480px;
+  }
+  /* Primary CTA spans both columns so it never gets squeezed below
+     the fold. */
+  .gen-step-result .gen-result-actions .gen-btn-primary {
+    grid-column: 1 / -1;
+  }
+  .gen-step-result .gen-result-products {
+    padding: 0 12px;
+    margin-top: 16px;
+  }
+  .gen-step-result .gen-feedback,
+  .gen-step-result .gen-feedback-done {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
 }
 
 /* Desktop two-column layout for the result step. Left column owns

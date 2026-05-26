@@ -29,6 +29,7 @@ import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProdu
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
+import PendingLookPill from '~/components/PendingLookPill';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -796,6 +797,7 @@ export default function Home() {
               </button>
             </div>
             <div className="header-center">
+              <PendingLookPill onOpen={() => navigate('/generate')} />
               <FollowingRail onOpenCreator={handleOpenCreator} />
             </div>
             <div className="header-right">
