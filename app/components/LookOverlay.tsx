@@ -765,7 +765,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
         {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">More like this</h3>
+            <h3 className="look-feed-heading">Similar</h3>
             <div className="look-feed-grid">
               {feedSections.looksLikeThis.map(fl => (
                 <LookCard
