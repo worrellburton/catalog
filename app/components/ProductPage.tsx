@@ -1079,6 +1079,30 @@ export default function ProductPage({
         </section>
         </div>
 
+        {/* "Similar" — the broad continuous feed scoped to the current
+            product. Lifted above More-like-this / Popular / Featured-in-
+            Looks per UX request: similar discovery always sits directly
+            below the product card, ahead of the curated rails. */}
+        <section className="pd-similar-feed">
+          <h2 className="pd-feed-title">Similar</h2>
+          <ContinuousFeed
+            nested
+            scrollRoot={scrollerEl}
+            activeFilter={activeFilter}
+            searchQuery=""
+            shuffleKey={0}
+            layoutMode={0}
+            onOpenLook={onOpenLook}
+            onOpenCreator={onOpenCreator || (() => {})}
+            onOpenBrowser={onOpenBrowser}
+            onOpenProduct={onOpenProduct}
+            onOpenCreative={onOpenCreative}
+            onOpenBrand={onOpenBrand}
+            bookmarks={bookmarks}
+            slotPrefix={`product:${product.brand}:${product.name}`}
+          />
+        </section>
+
         {moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
@@ -1128,25 +1152,8 @@ export default function ProductPage({
           </section>
         )}
 
-        <section className="pd-similar-feed">
-          <h2 className="pd-feed-title">You might also like</h2>
-          <ContinuousFeed
-            nested
-            scrollRoot={scrollerEl}
-            activeFilter={activeFilter}
-            searchQuery=""
-            shuffleKey={0}
-            layoutMode={0}
-            onOpenLook={onOpenLook}
-            onOpenCreator={onOpenCreator || (() => {})}
-            onOpenBrowser={onOpenBrowser}
-            onOpenProduct={onOpenProduct}
-            onOpenCreative={onOpenCreative}
-            onOpenBrand={onOpenBrand}
-            bookmarks={bookmarks}
-            slotPrefix={`product:${product.brand}:${product.name}`}
-          />
-        </section>
+        {/* Continuous feed previously lived here as "You might also
+            like"; lifted above More-like-this per UX request. */}
       </div>
     </div>
   );
