@@ -84,11 +84,17 @@ export default function AdminPublishScreen() {
       if (gen.user_id) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('full_name, email, avatar_url')
+          .select('full_name, email, avatar_url, gender')
           .eq('id', gen.user_id)
           .maybeSingle();
         creatorName = prof?.full_name || prof?.email || 'Unknown';
         creatorAvatar = prof?.avatar_url || null;
+        // Default the audience radio to the creator's own gender —
+        // earlier the form defaulted to 'unisex' so every published
+        // look slipped past the men/women filter for the wrong
+        // shopper. Admin can still override before clicking Publish.
+        if (prof?.gender === 'male')   setGender('men');
+        else if (prof?.gender === 'female') setGender('women');
       }
       if (prodErr) {
         setError(prodErr.message);
