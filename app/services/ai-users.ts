@@ -26,6 +26,8 @@ export interface CreateAiUserInput {
   gender?: 'men' | 'women' | 'unisex' | null;
   height_cm?: number | null;
   height_label?: string | null;
+  weight_kg?: number | null;
+  weight_label?: string | null;
   age_label?: string | null;
 }
 

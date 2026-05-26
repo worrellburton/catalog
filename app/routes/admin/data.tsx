@@ -66,6 +66,25 @@ function writeLocalSet(key: string, set: Set<string | number>) {
   try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
 }
 
+// Pull every http(s) URL out of a free-form paste — newlines, commas,
+// spaces, or smushed-together all work. De-duplicates within the
+// batch so admins can paste from a clipboard list without worrying
+// about accidental repeats.
+function extractUrls(raw: string): string[] {
+  if (!raw) return [];
+  const matches = raw.match(/https?:\/\/[^\s,;'"<>()]+/gi) ?? [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const m of matches) {
+    // Strip trailing punctuation that's not part of a URL.
+    const cleaned = m.replace(/[.,;:!?)]+$/, '');
+    if (!cleaned || seen.has(cleaned)) continue;
+    seen.add(cleaned);
+    out.push(cleaned);
+  }
+  return out;
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   google_shopping: 'Google Shopping',
   amazon: 'Amazon',
@@ -589,9 +608,10 @@ interface AddProductsModalProps {
   onClose: () => void;
   onIngested: (rows: CrawledProduct[]) => void;
   showToast: (msg: string) => void;
+  onPending?: (urls: string[], source: 'google' | 'amazon') => void;
 }
 
-function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalProps) {
+function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProductsModalProps) {
   const [researchQuery, setResearchQuery] = useState('');
   const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
   const [researchLoading, setResearchLoading] = useState(false);
@@ -642,6 +662,12 @@ function AddProductsModal({ onClose, onIngested, showToast }: AddProductsModalPr
       showToast('Nothing selected');
       return;
     }
+    // Push ghost rows immediately so the admin sees scraping
+    // progress as soon as they click Ingest — the INSERT round-trip
+    // can take a beat, and the post-insert scrape resolves the Google
+    // Shopping URL into a real merchant URL asynchronously.
+    const pendingUrls = rows.map(r => r.url).filter((u): u is string => !!u);
+    if (pendingUrls.length > 0) onPending?.(pendingUrls, 'google');
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
@@ -1368,12 +1394,14 @@ export default function AdminData() {
     return () => document.removeEventListener('mousedown', handler);
   }, [addMenuOpen]);
 
-  // Add via Brand Website - small modal with a URL input that hits the
-  // shared scrape-product service.
+  // Add via Brand Website - modal with URL input(s) that hit the
+  // shared scrape-product service. Supports a single URL or a
+  // paste-list (newline / comma / whitespace separated).
   const [showBrandUrl, setShowBrandUrl] = useState(false);
   const [brandUrlInput, setBrandUrlInput] = useState('');
   const [brandUrlBusy, setBrandUrlBusy] = useState(false);
   const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
+  const [brandBatchProgress, setBrandBatchProgress] = useState<{ done: number; total: number; failed: number } | null>(null);
   // Pending product ghost rows — added optimistically when an admin
   // submits an "Add via …" URL. Each row sits at the top of the
   // Products table with an indeterminate progress bar until the real
@@ -5163,10 +5191,15 @@ export default function AdminData() {
       {showAmazonLookup && (
         <AmazonLookupModal
           onClose={() => setShowAmazonLookup(false)}
+          onPending={(urls) => {
+            setPendingProducts(prev => [
+              ...urls.map(url => ({ id: `pending-${Date.now()}-${Math.random()}`, url, source: 'amazon' as const, startedAt: Date.now() })),
+              ...prev,
+            ]);
+          }}
           onIngested={(count) => {
             setShowAmazonLookup(false);
-            showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} - refreshing…`);
-            setTimeout(() => { if (typeof window !== 'undefined') window.location.reload(); }, 800);
+            showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} - scraping…`);
           }}
         />
       )}
@@ -5179,33 +5212,68 @@ export default function AdminData() {
           <div
             className="admin-modal"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 480 }}
+            style={{ maxWidth: 560 }}
           >
             <div style={{ padding: 20 }}>
               <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add via Brand Website</h2>
               <p style={{ margin: '0 0 16px', fontSize: 13, color: '#666' }}>
-                Paste a product URL from any brand site. We'll scrape the page
-                and ingest the product.
+                Paste one or many product URLs from any brand site (one
+                per line, comma-separated, or whitespace-separated).
+                We'll scrape each page and ingest the products.
               </p>
-              <input
-                type="url"
+              <textarea
                 autoFocus
                 value={brandUrlInput}
                 onChange={(e) => { setBrandUrlInput(e.target.value); setBrandUrlError(null); }}
-                placeholder="https://brand.com/products/..."
+                placeholder={'https://brand-a.com/products/foo\nhttps://brand-b.com/products/bar\nhttps://brand-c.com/p/baz'}
                 disabled={brandUrlBusy}
+                rows={6}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: 8,
                   border: `1px solid ${brandUrlError ? '#dc2626' : '#e5e7eb'}`,
-                  fontSize: 14,
-                  marginBottom: brandUrlError ? 6 : 16,
+                  fontSize: 13,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                  marginBottom: brandUrlError ? 6 : 12,
                   boxSizing: 'border-box',
                 }}
               />
+              {(() => {
+                const urls = extractUrls(brandUrlInput);
+                if (urls.length > 1) {
+                  return (
+                    <div style={{ fontSize: 11, color: '#666', marginBottom: 12 }}>
+                      <strong>{urls.length}</strong> URLs detected — all will be queued.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {brandUrlError && (
                 <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 16 }}>{brandUrlError}</div>
+              )}
+              {brandUrlBusy && brandBatchProgress && brandBatchProgress.total > 1 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Queueing — {brandBatchProgress.done} / {brandBatchProgress.total}</span>
+                    <span style={{ color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+                      {brandBatchProgress.failed > 0 ? `${brandBatchProgress.failed} failed` : ''}
+                    </span>
+                  </div>
+                  <div style={{ height: 4, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.round((brandBatchProgress.done / brandBatchProgress.total) * 100)}%`,
+                        background: '#2563eb',
+                        transition: 'width 220ms ease',
+                      }}
+                    />
+                  </div>
+                </div>
               )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button
@@ -5217,35 +5285,57 @@ export default function AdminData() {
                 </button>
                 <button
                   className="admin-btn admin-btn-primary"
-                  disabled={brandUrlBusy || !brandUrlInput.trim()}
+                  disabled={brandUrlBusy || extractUrls(brandUrlInput).length === 0}
                   onClick={async () => {
-                    const url = brandUrlInput.trim();
-                    if (!url) return;
+                    const urls = extractUrls(brandUrlInput);
+                    if (urls.length === 0) return;
                     setBrandUrlBusy(true);
                     setBrandUrlError(null);
-                    try {
-                      await addProductUrl(url);
-                      // Push an optimistic ghost row at the top of
-                      // the Products table so the admin sees the
-                      // scrape progressing instead of an apparent
-                      // disappearance. The pending row is pruned
-                      // when the real product materialises (URL
-                      // match against allProducts) or 90s elapses.
-                      setPendingProducts(prev => [
-                        { id: `pending-${Date.now()}`, url, source: 'brand', startedAt: Date.now() },
-                        ...prev,
-                      ]);
-                      setBrandUrlBusy(false);
-                      setShowBrandUrl(false);
-                      setBrandUrlInput('');
+                    setBrandBatchProgress({ done: 0, total: urls.length, failed: 0 });
+                    // Push ghost rows upfront so the admin sees the
+                    // batch entering scraping state immediately, even
+                    // before each INSERT round-trip completes.
+                    setPendingProducts(prev => [
+                      ...urls.map(url => ({ id: `pending-${Date.now()}-${Math.random()}`, url, source: 'brand' as const, startedAt: Date.now() })),
+                      ...prev,
+                    ]);
+                    let failed = 0;
+                    const firstErrors: string[] = [];
+                    for (let i = 0; i < urls.length; i++) {
+                      const url = urls[i];
+                      try {
+                        await addProductUrl(url);
+                      } catch (err) {
+                        failed += 1;
+                        if (firstErrors.length < 3) {
+                          firstErrors.push(`${url} — ${err instanceof Error ? err.message : 'failed'}`);
+                        }
+                        // Prune ghost row for the URL that failed so
+                        // admin sees the failure reflected.
+                        setPendingProducts(prev => prev.filter(pp => pp.url !== url));
+                      }
+                      setBrandBatchProgress({ done: i + 1, total: urls.length, failed });
+                    }
+                    setBrandUrlBusy(false);
+                    setBrandBatchProgress(null);
+                    if (urls.length === 1 && failed === 1) {
+                      setBrandUrlError(firstErrors[0] || 'Failed to queue scrape');
+                      return;
+                    }
+                    setShowBrandUrl(false);
+                    setBrandUrlInput('');
+                    if (failed > 0) {
+                      showToast(`${urls.length - failed}/${urls.length} queued — ${failed} failed`);
+                    } else if (urls.length === 1) {
                       showToast('Scraping — watch the top of the table.');
-                    } catch (err) {
-                      setBrandUrlBusy(false);
-                      setBrandUrlError(err instanceof Error ? err.message : 'Failed to queue scrape');
+                    } else {
+                      showToast(`${urls.length} URLs scraping — watch the top of the table.`);
                     }
                   }}
                 >
-                  {brandUrlBusy ? 'Adding…' : 'Add'}
+                  {brandUrlBusy
+                    ? (extractUrls(brandUrlInput).length > 1 ? 'Queueing…' : 'Adding…')
+                    : (extractUrls(brandUrlInput).length > 1 ? `Add ${extractUrls(brandUrlInput).length} URLs` : 'Add')}
                 </button>
               </div>
             </div>
@@ -5256,11 +5346,21 @@ export default function AdminData() {
       {showAddProducts && (
         <AddProductsModal
           onClose={() => setShowAddProducts(false)}
+          onPending={(urls, source) => {
+            setPendingProducts(prev => [
+              ...urls.map(url => ({ id: `pending-${Date.now()}-${Math.random()}`, url, source, startedAt: Date.now() })),
+              ...prev,
+            ]);
+          }}
           onIngested={(newRows) => {
             setCrawledProducts(prev => [
               ...newRows,
               ...prev.filter(r => !newRows.some(n => n.id === r.id)),
             ]);
+            const ingestedUrls = new Set(newRows.map(r => r.url).filter((u): u is string => !!u));
+            if (ingestedUrls.size > 0) {
+              setPendingProducts(prev => prev.filter(pp => !ingestedUrls.has(pp.url)));
+            }
           }}
           showToast={showToast}
         />
