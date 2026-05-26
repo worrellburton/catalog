@@ -25,7 +25,7 @@ import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
-import { trackClick, trackCreativeImpressions, resolveProductIdByUrl } from '~/services/session-tracker';
+import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
@@ -338,6 +338,14 @@ export default function Home() {
   const handleOpenBrowser = useCallback((url: string, title: string, product?: Product) => {
     if (!url) return;
     setBrowserState({ url, title, product });
+    // Every product clickout flows through this handler — feed tile,
+    // look-overlay product chips, bookmarks page, ProductPage offers.
+    // Centralising the trackProductClickout call here means a single
+    // clickout firing once per actual click, regardless of which
+    // surface initiated it. Earlier only the ProductPage offer
+    // buttons reported clickouts so the admin Creators/Products
+    // analytics undercounted by an order of magnitude.
+    void trackProductClickout(url, product?.brand ?? null, product?.name ?? title);
   }, []);
 
   // Pull a "like-kinded" feed for the product page. Union of two signals:
