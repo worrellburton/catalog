@@ -47,13 +47,15 @@ export function pickVideoUrl(creative: Pick<ProductAd, 'video_url' | 'mobile_vid
 
 /** Picks the best poster image. Order:
  *    1. Creative thumbnail (a frame extracted at upload time)
- *    2. First product image (always populated)
- *    3. Empty string - caller renders nothing.
+ *    2. Vision-picked primary product image (solo shot, no human)
+ *    3. Legacy product image_url
+ *    4. First product image
+ *    5. Empty string - caller renders nothing.
  *  Used as the <video poster=> attribute so the browser paints a
  *  real image on first paint, before the MP4 has decoded a frame. */
 export function pickPosterUrl(creative: {
   thumbnail_url?: string | null;
-  product?: { image_url?: string | null; images?: string[] | null } | null;
+  product?: { image_url?: string | null; primary_image_url?: string | null; images?: string[] | null } | null;
 }): string {
   return creative.thumbnail_url
     || creative.product?.image_url
@@ -62,16 +64,17 @@ export function pickPosterUrl(creative: {
 }
 
 /** Picks the best STILL image — used when the global Video → Still
- *  dial pushes a card into the image-only path. Inverts the poster
- *  order so the retail-site product photo wins over the video's own
- *  thumbnail (which is just a frame from the AI-generated MP4 and
- *  reads as less merchandising-grade). Falls back to the thumbnail
- *  only if no product image exists. */
+ *  dial pushes a card into the image-only path. Prefers the
+ *  vision-picked solo-product image (primary_image_url) so the feed
+ *  always merchandises clean packshots over lifestyle / on-model
+ *  frames. Falls back to legacy image_url → images[0] → thumbnail
+ *  only when the picker hasn't run on this product yet. */
 export function pickStillImageUrl(creative: {
   thumbnail_url?: string | null;
-  product?: { image_url?: string | null; images?: string[] | null } | null;
+  product?: { image_url?: string | null; primary_image_url?: string | null; images?: string[] | null } | null;
 }): string {
-  return creative.product?.image_url
+  return creative.product?.primary_image_url
+    || creative.product?.image_url
     || (creative.product?.images && creative.product.images[0])
     || creative.thumbnail_url
     || '';
