@@ -17,6 +17,30 @@
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+  display: block;
+}
+
+/* When the trigger renders the user's actual avatar instead of the
+   generic person silhouette, drop the chip background so the photo
+   fills the full circle. Same for the initial-letter fallback (which
+   gets a tinted bg). */
+.user-menu-trigger.has-avatar {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.18);
+  padding: 0;
+  overflow: hidden;
+}
+.user-menu-trigger.has-initial {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.user-menu-trigger-initial {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 .user-menu-header {
