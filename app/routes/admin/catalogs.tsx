@@ -3116,32 +3116,11 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
     try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
   }, [viewMode]);
 
-  if (loading && !creative) {
-    return (
-      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
-    );
-  }
-  if (!creative) return null;
-
-  const { looks, products, creatives, feedResults } = creative;
-  const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0 || (feedResults?.length ?? 0) > 0;
-  if (!hasAny) {
-    return (
-      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
-        No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
-      </div>
-    );
-  }
-
-  // Apply Phase 5 filter then sort to BOTH looks and products. Same
-  // predicate runs against the metrics-decorated rows.
-  const sortedLooks = sortAndFilterItems(looks, sort, filter);
-  const sortedProducts = sortAndFilterItems(products, sort, filter);
-
-  // Phase 7-lite: KPI strip across the top. Sums over the currently
-  // visible rows (post-filter) so the numbers track what the admin is
-  // actually looking at, not the full library.
-  const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
+  // ── ALL HOOKS MUST RUN BEFORE EARLY RETURNS (React Rule of Hooks) ──
+  // Previously: 3 early returns BEFORE the 5 useCallbacks below,
+  // producing React error #310 ("Rendered more hooks than during the
+  // previous render") when `loading && !creative` flipped to false on
+  // the second render. All useCallbacks now declared above any return.
 
   // Phase 6: selection toggle with shift-click range support. Generic
   // helper so looks and products share the same UX.
@@ -3174,22 +3153,22 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
     setSelectedProductIds(new Set());
   }, []);
 
-  // Bulk: remove this catalog from each selected row's catalog_tags
-  // array (Add Looks / Add Products do the inverse). RLS errors are
-  // toasted and the dropdown refetches afterward.
+  // Bulk handlers safely no-op when `creative` is missing — they only
+  // run on user-click which happens after the dropdown is rendered
+  // with data. Declared up here unconditionally to satisfy hook rules.
   const bulkRemoveFromCatalog = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase || !creative) return;
     setBulkBusy(true);
     try {
       const lookOps = [...selectedLookIds].map(async id => {
-        const look = looks.find(l => l.id === id);
+        const look = creative.looks.find(l => l.id === id);
         if (!look) return;
         const { data: row } = await supabase!.from('looks').select('catalog_tags').eq('id', id).maybeSingle();
         const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
         await supabase!.from('looks').update({ catalog_tags: tags }).eq('id', id);
       });
       const productOps = [...selectedProductIds].map(async id => {
-        const product = products.find(p => p.id === id);
+        const product = creative.products.find(p => p.id === id);
         if (!product) return;
         const { data: row } = await supabase!.from('products').select('catalog_tags').eq('id', id).maybeSingle();
         const tags = ((row?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
@@ -3201,11 +3180,8 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
     } finally {
       setBulkBusy(false);
     }
-  }, [selectedLookIds, selectedProductIds, looks, products, catalogName, clearSelection, onAfterBulkMutation]);
+  }, [selectedLookIds, selectedProductIds, creative, catalogName, clearSelection, onAfterBulkMutation]);
 
-  // Bulk: hide the selected looks from the consumer feed by flipping
-  // enabled=false. Products don't have a comparable on/off flag so
-  // for now we no-op them with a toast hint.
   const bulkHide = useCallback(async () => {
     if (!supabase) return;
     setBulkBusy(true);
@@ -3214,9 +3190,6 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
       if (lookIds.length > 0) {
         await supabase.from('looks').update({ enabled: false }).in('id', lookIds);
       }
-      // products.is_active gate would belong here when an admin-write
-      // RLS allows it. Surfacing the no-op via toast keeps expectations
-      // clear without blocking the looks hide.
       clearSelection();
       onAfterBulkMutation();
     } finally {
@@ -3224,10 +3197,6 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
     }
   }, [selectedLookIds, clearSelection, onAfterBulkMutation]);
 
-  // Bulk: append a target catalog name to each selected row's
-  // catalog_tags array. Lets admins fan out a curated selection to
-  // multiple catalogs in one click instead of running the Add Looks
-  // / Add Products picker per-catalog.
   const bulkAddToCatalog = useCallback(async (targetName: string) => {
     if (!supabase || !targetName.trim() || targetName === catalogName) return;
     setBulkBusy(true);
@@ -3249,6 +3218,31 @@ function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, crea
       setBulkBusy(false);
     }
   }, [selectedLookIds, selectedProductIds, catalogName, clearSelection, onAfterBulkMutation]);
+
+  // ── Early returns (now AFTER all hooks) ─────────────────────────────
+  if (loading && !creative) {
+    return (
+      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
+    );
+  }
+  if (!creative) return null;
+
+  const { looks, products, creatives, feedResults } = creative;
+  const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0 || (feedResults?.length ?? 0) > 0;
+  if (!hasAny) {
+    return (
+      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
+        No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
+      </div>
+    );
+  }
+
+  // Apply Phase 5 filter then sort to BOTH looks and products.
+  const sortedLooks = sortAndFilterItems(looks, sort, filter);
+  const sortedProducts = sortAndFilterItems(products, sort, filter);
+
+  // Phase 7-lite: KPI strip.
+  const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
 
   const selectionCount = selectedLookIds.size + selectedProductIds.size;
 
