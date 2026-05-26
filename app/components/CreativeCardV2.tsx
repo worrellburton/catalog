@@ -472,6 +472,15 @@ export default CreativeCardV2;
 // registered in public.brand_logos for this brand. Falls back to
 // the plain text in every other case so flipping the dial never
 // blanks a label.
+//
+// Logos are forced to a pure-white silhouette via CSS filter so
+// every brand reads consistently against the card's dark bottom-fade
+// gradient — Brandfetch returns whatever variants the brand has
+// registered, which can be near-black or full-colour and would
+// vanish on the gradient. `brightness(0) invert(1)` collapses every
+// pixel to white regardless of source palette. The logo is also
+// pinned to the left edge so it lines up with the product name
+// below it (not baseline-centered to the cap height of the SVG).
 function BrandLabel({ name }: { name: string }) {
   const showLogos = useShowBrandLogos();
   const logoUrl = useBrandLogo(name);
@@ -483,7 +492,17 @@ function BrandLabel({ name }: { name: string }) {
         src={logoUrl}
         alt={name}
         onError={() => setImageBroken(true)}
-        style={{ height: 14, width: 'auto', objectFit: 'contain', display: 'inline-block' }}
+        style={{
+          height: 14,
+          width: 'auto',
+          maxWidth: 80,
+          objectFit: 'contain',
+          objectPosition: 'left center',
+          display: 'block',
+          alignSelf: 'flex-start',
+          marginBottom: 2,
+          filter: 'brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.45))',
+        }}
       />
     );
   }
