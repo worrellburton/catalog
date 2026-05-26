@@ -992,13 +992,17 @@ body:has(.bottom-bar.search-open) {
     border-radius: 22px;
   }
   .bottom-bar.search-open {
-    /* Tight 8px gap when the search overlay is up — the keyboard sits
-       directly below the bar, so the user reads it as one continuous
-       input strip (was 28px which left a visible un-dimmed band). */
-    bottom: max(
-      calc(env(safe-area-inset-bottom) + 8px),
-      calc(var(--ios-bottom-chrome, 0px) + 8px)
-    );
+    /* Keep the bar anchored at the bottom of the layout viewport
+       when the keyboard opens — the keyboard overlays it instead of
+       pushing it up. Per the UX direction, dropping the
+       --ios-bottom-chrome (visualViewport-driven) clause means the
+       bar stays put while the keyboard slides over the top. The
+       suggestions popover above the bar still sits above the
+       keyboard because it's a separate fixed element.
+
+       safe-area-inset-bottom + 8px is the resting position. The bar
+       is not visually lifted by the keyboard. */
+    bottom: calc(env(safe-area-inset-bottom) + 8px);
   }
   .bottom-bar.filters-open {
     top: 0;
