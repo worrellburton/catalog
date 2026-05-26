@@ -137,6 +137,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
   return (
     <div
       ref={wrapperRef}
+      className="follow-rail"
       style={{
         position: 'relative',
         display: 'inline-flex',
@@ -148,6 +149,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
         onClick={() => setOpen(v => !v)}
         aria-label="Following"
         title={`Following ${creators.length} creator${creators.length === 1 ? '' : 's'}`}
+        className="follow-rail-trigger"
         style={{
           background: 'transparent',
           border: 'none',
@@ -157,10 +159,11 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
           alignItems: 'center',
         }}
       >
-        <span style={{ position: 'relative', display: 'inline-flex', height: 28 }}>
+        <span className="follow-rail-stack" style={{ position: 'relative', display: 'inline-flex', height: 28 }}>
           {visible.map((c, i) => (
             <span
               key={c.handle}
+              className="follow-rail-avatar"
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 border: '2px solid #fff',
@@ -183,6 +186,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
           ))}
           {overflow > 0 && (
             <span
+              className="follow-rail-avatar follow-rail-overflow"
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 border: '2px solid #fff',
@@ -207,7 +211,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
       </button>
 
       {open && (
-        <div style={{
+        <div className="follow-rail-popover" style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
           left: '50%',
