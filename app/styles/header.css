@@ -422,8 +422,44 @@ header > * {
     display: flex;
   }
 
+  /* On mobile we re-purpose header-center as a fixed-left wrapper
+     for the FollowingRail — see the .follow-rail overrides below.
+     Earlier this was display:none which hid the rail entirely on
+     phones; the rail still earns its place there, just stacked
+     vertically along the left edge instead of horizontally at the
+     top. */
   .header-center {
-    display: none;
+    display: block;
+    position: fixed;
+    top: 88px;
+    left: 10px;
+    transform: none;
+    z-index: 90;
+    pointer-events: auto;
+  }
+  /* Flip the avatar stack to a column with vertical overlap, and
+     let the trigger button own its own (vertical) flex flow so the
+     "+N" pill sits beneath the stack rather than next to it. */
+  .follow-rail-trigger {
+    flex-direction: column !important;
+  }
+  .follow-rail-stack {
+    flex-direction: column !important;
+    height: auto !important;
+    width: 28px;
+  }
+  .follow-rail-avatar {
+    margin-left: 0 !important;
+    margin-top: -10px !important;
+  }
+  .follow-rail-stack > .follow-rail-avatar:first-child {
+    margin-top: 0 !important;
+  }
+  /* Popover opens to the right of the rail instead of below it. */
+  .follow-rail .follow-rail-popover {
+    top: 0 !important;
+    left: calc(100% + 10px) !important;
+    transform: none !important;
   }
 
   header {
