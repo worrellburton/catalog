@@ -992,16 +992,13 @@ body:has(.bottom-bar.search-open) {
     border-radius: 22px;
   }
   .bottom-bar.search-open {
-    /* Anchor 200px above the bottom of the layout viewport. iOS
-       Safari treats fixed elements containing a focused input as if
-       they were relative to the visual viewport, so the bar floats
-       above the keyboard either way — but a hard 200px offset means
-       it never crashes into the keyboard's QuickType bar and reads
-       as deliberately suspended over the page rather than
-       glued-to-keyboard.
-       !important defeats the parent .bottom-bar mobile rule that
-       still references --ios-bottom-chrome. */
-    bottom: 200px !important;
+    /* Tight 8px gap when the search overlay is up — the keyboard sits
+       directly below the bar, so the user reads it as one continuous
+       input strip (was 28px which left a visible un-dimmed band). */
+    bottom: max(
+      calc(env(safe-area-inset-bottom) + 8px),
+      calc(var(--ios-bottom-chrome, 0px) + 8px)
+    );
   }
   .bottom-bar.filters-open {
     top: 0;
