@@ -613,14 +613,30 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    padding: 20px 12px 8px;
+    /* Match the home feed's edge-to-edge treatment on mobile:
+       no horizontal padding, 2-col grid with a 2px gap, dark
+       backdrop so any flex/grid gaps read as background instead
+       of pure-black holes. */
+    padding: 16px 0 8px;
   }
   .pd-similar-grid {
-    gap: 8px;
+    gap: 2px;
+    background: #111;
   }
   .pd-feed-title {
     font-size: 14px;
     letter-spacing: 0.06em;
+    padding-left: 16px;
+  }
+  .pd-look-feed {
+    padding: 16px 0 32px;
+  }
+  .pd-look-feed .pd-feed-title {
+    padding-left: 16px;
+  }
+  .pd-look-grid {
+    gap: 2px;
+    background: #111;
   }
 }
 
