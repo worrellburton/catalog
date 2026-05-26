@@ -276,6 +276,8 @@
   height: 60%;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
   pointer-events: none;
+  /* Must sit above the director-appended <video> (z-index: 2) */
+  z-index: 3;
 }
 
 .look-card .card-title {
@@ -338,7 +340,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  z-index: 2;
+  /* Must sit above the gradient (z-index: 3) and the director-appended
+     <video> (z-index: 2). Products use z-index: 3 on .promo-product-info;
+     looks need 4 so the creator row clears the gradient layer too. */
+  z-index: 4;
   cursor: pointer;
   text-decoration: none;
   padding: 4px 12px 4px 4px;

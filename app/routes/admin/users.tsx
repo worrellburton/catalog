@@ -797,6 +797,8 @@ export default function AdminUsers() {
         location: '-',
         saved: 0,
         followings: 0,
+        followers: 0,
+        handles: [],
         creator: '-',
       }));
   }, [dbUsers, deletedContentCreators]);
