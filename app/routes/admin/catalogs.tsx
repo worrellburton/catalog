@@ -30,6 +30,7 @@ interface Catalog {
   source: 'featured' | 'custom';
   createdAt: string;
   isHome?: boolean;
+  isFeatured?: boolean;
   filterGender?: boolean;
   filterAge?: boolean;
   boostTopConverting?: boolean;
@@ -332,6 +333,7 @@ export default function AdminCatalogs() {
         id: string; name: string; slug: string; created_at: string;
         gender: CatalogGenderUI | null;
         sort_order: number | null;
+        is_featured: boolean | null;
         is_home: boolean; filter_gender: boolean; filter_age: boolean; boost_top_converting: boolean;
       }[];
       // Home catalog goes into its own state slot; all others fill `custom`.
@@ -346,6 +348,7 @@ export default function AdminCatalogs() {
         createdAt: r.created_at,
         gender: (r.gender ?? 'all') as CatalogGenderUI,
         sortOrder: r.sort_order,
+        isFeatured: r.is_featured === true,
         filterGender: r.filter_gender,
         filterAge: r.filter_age,
         boostTopConverting: r.boost_top_converting,
@@ -362,7 +365,7 @@ export default function AdminCatalogs() {
           gender: ((homeRow as { gender?: string | null }).gender as 'all' | 'men' | 'women' | 'unisex' | null) ?? 'all',
           coverUrl: null,
           sortOrder: -1,
-          isFeatured: false,
+          isFeatured: homeRow.is_featured === true,
           status: 'live' as const,
           isHome: true,
           filterGender: homeRow.filter_gender,
@@ -1617,14 +1620,14 @@ export default function AdminCatalogs() {
           <thead>
             <tr>
               <th style={{ textAlign: 'left' }}>Catalog</th>
-              <th>Source</th>
+              <th>Featured</th>
+              <th>Gender</th>
               <th>Products</th>
               <th>Impressions</th>
               <th>14d</th>
               <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
-              <th>Toggles</th>
             </tr>
           </thead>
           <tbody>
@@ -1677,7 +1680,22 @@ export default function AdminCatalogs() {
                       </div>
                     </td>
                     <td>
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: '#ecfdf5', color: '#047857' }}>custom</span>
+                      <FeaturedToggle
+                        slug={homeCatalog.slug}
+                        value={homeCatalog.isFeatured}
+                        onChange={(v) => setHomeCatalog(prev => prev ? { ...prev, isFeatured: v } : prev)}
+                        onError={(msg) => showToast(msg)}
+                      />
+                    </td>
+                    <td>
+                      <GenderDropdown
+                        value={(homeCatalog.gender ?? 'all') as CatalogGenderUI}
+                        onChange={async (val) => {
+                          setHomeCatalog(prev => prev ? { ...prev, gender: val } : prev);
+                          const ok = await setCatalogGender(homeCatalog.slug, val);
+                          if (!ok) showToast('Could not save gender');
+                        }}
+                      />
                     </td>
                     <td>
                       {homeProductCount > 0 ? (
@@ -1696,22 +1714,6 @@ export default function AdminCatalogs() {
                         <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
                         <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
                       </div>
-                    </td>
-                    <td>
-                      <TogglePills
-                        gender={(homeCatalog.gender ?? 'all') as CatalogGenderUI}
-                        filterAge={homeCatalog.filterAge}
-                        boostTopConverting={homeCatalog.boostTopConverting}
-                        onToggle={async (field, val) => {
-                          setHomeCatalog(prev => prev ? { ...prev, [field]: val } : prev);
-                          await updateCatalogToggles(homeCatalog.slug, { [field]: val });
-                        }}
-                        onGender={async (val) => {
-                          setHomeCatalog(prev => prev ? { ...prev, gender: val } : prev);
-                          const ok = await setCatalogGender(homeCatalog.slug, val);
-                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
-                        }}
-                      />
                     </td>
                   </tr>
                   {isOpen && (
@@ -1815,18 +1817,29 @@ export default function AdminCatalogs() {
                   </div>
                 </td>
                 <td>
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    background: c.source === 'custom' ? '#ecfdf5' : '#f1f5f9',
-                    color: c.source === 'custom' ? '#047857' : '#475569',
-                  }}>
-                    {c.source}
-                  </span>
+                  <FeaturedToggle
+                    slug={c.slug}
+                    value={c.isFeatured}
+                    disabled={c.id === 'synthetic-all'}
+                    onChange={(v) => setCustom(prev => prev.map(x => x.id === c.id ? { ...x, isFeatured: v } : x))}
+                    onError={(msg) => showToast(msg)}
+                  />
+                </td>
+                <td>
+                  {c.id === 'synthetic-all' ? (
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                  ) : (
+                    <GenderDropdown
+                      value={c.gender ?? 'all'}
+                      onChange={async (val) => {
+                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, gender: val } : x));
+                        if (c.slug) {
+                          const ok = await setCatalogGender(c.slug, val);
+                          if (!ok) showToast('Could not save gender');
+                        }
+                      }}
+                    />
+                  )}
                 </td>
                 <td>
                   {productCount > 0 ? (
@@ -1896,26 +1909,6 @@ export default function AdminCatalogs() {
                       </button>
                     )}
                   </div>
-                </td>
-                <td>
-                  {c.source === 'custom' ? (
-                    <TogglePills
-                      gender={c.gender ?? 'all'}
-                      filterAge={c.filterAge}
-                      boostTopConverting={c.boostTopConverting}
-                      onToggle={async (field, val) => {
-                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: val } : x));
-                        if (c.slug) await updateCatalogToggles(c.slug, { [field]: val });
-                      }}
-                      onGender={async (val) => {
-                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, gender: val } : x));
-                        if (c.slug) {
-                          const ok = await setCatalogGender(c.slug, val);
-                          if (!ok) showToast('Could not save gender — check RLS / admin RPC');
-                        }
-                      }}
-                    />
-                  ) : null}
                 </td>
               </tr>
               {isOpen && (
@@ -5320,5 +5313,69 @@ function AddLookTile({
         }}>Selected</span>
       )}
     </button>
+  );
+}
+
+// ── Featured checkbox cell ────────────────────────────────────────────
+interface FeaturedToggleProps {
+  slug: string | undefined;
+  value: boolean | undefined;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+  onError: (msg: string) => void;
+}
+function FeaturedToggle({ slug, value, disabled, onChange, onError }: FeaturedToggleProps) {
+  const checked = value === true;
+  const handle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (!slug) return;
+    const next = e.target.checked;
+    onChange(next);
+    const ok = await setCatalogFeatured(slug, next);
+    if (!ok) { onError('Could not save Featured state'); onChange(!next); }
+  };
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', cursor: disabled ? 'not-allowed' : 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled || !slug}
+        onChange={handle}
+        onClick={e => e.stopPropagation()}
+        style={{ accentColor: '#2563eb', width: 16, height: 16, cursor: disabled ? 'not-allowed' : 'pointer' }}
+      />
+    </label>
+  );
+}
+
+// ── Gender dropdown cell ──────────────────────────────────────────────
+function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange: (v: CatalogGenderUI) => void }) {
+  const active = value !== 'all';
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as CatalogGenderUI)}
+      onClick={e => e.stopPropagation()}
+      style={{
+        padding: '2px 22px 2px 8px',
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 600,
+        border: '1px solid',
+        borderColor: active ? '#111' : '#e2e8f0',
+        background: active ? '#111' : '#fff',
+        color: active ? '#fff' : '#64748b',
+        cursor: 'pointer',
+        appearance: 'none',
+        backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${active ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 6px center',
+      }}
+    >
+      <option value="all">Any</option>
+      <option value="women">Female</option>
+      <option value="men">Male</option>
+      <option value="unisex">Unisex</option>
+    </select>
   );
 }
