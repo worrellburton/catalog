@@ -596,12 +596,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   </span>
                 );
               })()}
-              <div className="look-creator-text">
-                <span className="detail-creator-name">
-                  {creatorData?.displayName || look.creatorDisplayName || (showHandle ? look.creator : 'Creator')}
-                </span>
-                {showHandle && <span className="look-creator-handle">{look.creator.startsWith('@') ? look.creator : `@${look.creator}`}</span>}
-              </div>
+              {/* Creator name is intentionally not duplicated here —
+                  the chip overlay on the video card already shows
+                  the creator and the look title below (e.g.
+                  "Amir Malaklou's studio look") repeats it. Without
+                  this guard the same name read three times on the
+                  surface. Handle stays visible because it's the
+                  /c/<handle> link affordance. */}
+              {showHandle && (
+                <div className="look-creator-text">
+                  <span className="look-creator-handle">
+                    {look.creator.startsWith('@') ? look.creator : `@${look.creator}`}
+                  </span>
+                </div>
+              )}
               <FollowIconButton
                 handle={look.creator}
                 size={22}
