@@ -75,6 +75,35 @@ function isTab(v: string | null): v is Tab {
   return v !== null && (TAB_VALUES as readonly string[]).includes(v);
 }
 
+/**
+ * Avatar cell used by every analytics table. Renders the user's
+ * uploaded avatar when present, falls back to a single-letter
+ * placeholder. Falls back ALSO on img error so a stale storage URL
+ * (deleted bucket file, CORS-blocked CDN) doesn't surface as a
+ * broken-image glyph in the table — earlier rows where the URL
+ * was non-null but unreadable rendered as the broken default.
+ */
+function AvatarCell({ url, name }: { url: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
+  const initial = (name || '?').charAt(0).toUpperCase();
+  if (url && !broken) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="admin-user-avatar-img"
+        onError={() => setBroken(true)}
+        referrerPolicy="no-referrer"
+      />
+    );
+  }
+  return (
+    <span className="admin-user-avatar-img admin-user-avatar-placeholder">
+      {initial}
+    </span>
+  );
+}
+
 export default function AdminAnalytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: Tab = isTab(searchParams.get('tab')) ? (searchParams.get('tab') as Tab) : 'users';
@@ -258,12 +287,7 @@ function UsersAnalyticsTable({ onMeta }: { onMeta: (count: number, live: boolean
             return (
               <tr key={row.user_id}>
                 <td className="admin-cell-name">
-                  {row.avatar_url
-                    ? <img src={row.avatar_url} alt="" className="admin-user-avatar-img" />
-                    : <span className="admin-user-avatar-img admin-user-avatar-placeholder">
-                        {(row.full_name || row.email || '?').charAt(0).toUpperCase()}
-                      </span>
-                  }
+                  <AvatarCell url={row.avatar_url} name={row.full_name || row.email || '?'} />
                   <span>{row.full_name || row.email || row.user_id.slice(0, 8)}</span>
                 </td>
                 <td>{row.last_sign_in_at ? new Date(row.last_sign_in_at).toLocaleString() : '—'}</td>
@@ -719,12 +743,7 @@ function CreatorContentAnalyticsTable({ onMeta }: { onMeta: (count: number, live
             return (
               <tr key={row.user_id}>
                 <td className="admin-cell-name">
-                  {row.avatar_url
-                    ? <img src={row.avatar_url} alt="" className="admin-user-avatar-img" />
-                    : <span className="admin-user-avatar-img admin-user-avatar-placeholder">
-                        {(row.full_name || row.email || '?').charAt(0).toUpperCase()}
-                      </span>
-                  }
+                  <AvatarCell url={row.avatar_url} name={row.full_name || row.email || '?'} />
                   <span>{row.full_name || row.email || row.user_id.slice(0, 8)}</span>
                 </td>
                 <td>{row.last_sign_in_at ? new Date(row.last_sign_in_at).toLocaleString() : '—'}</td>
