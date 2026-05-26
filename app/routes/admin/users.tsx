@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactElement } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type ReactElement } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
@@ -56,6 +56,10 @@ interface UserRow {
   location: string;
   saved: number;
   followings: number;
+  followers: number;
+  /** Handle(s) this user is known as — comes from looks.creator_handle
+   *  rows owned by their user_id. Used to count followers. */
+  handles: string[];
   creator: string;
 }
 
@@ -84,6 +88,8 @@ function profileToRow(p: Profile): UserRow {
     location: '-',
     saved: 0,
     followings: 0,
+    followers: 0,
+    handles: [],
     creator: '-',
   };
 }
@@ -346,6 +352,46 @@ export default function AdminUsers() {
   // Pass 2: seed from module cache so re-entering the page paints
   // with data immediately. Realtime + initial fetch refresh in place.
   const [allUsers, setAllUsers] = useState<UserRow[]>(() => cachedUsers ?? []);
+  // Which row+side has its follow-list dropdown open. `${userId}:following`
+  // or `${userId}:followers`. Null = nothing expanded.
+  const [expandedFollows, setExpandedFollows] = useState<string | null>(null);
+  // Cached list payloads, keyed the same way as expandedFollows. Lazy-
+  // fetched on first expansion so we don't pull the rows for every
+  // user on mount.
+  const [followLists, setFollowLists] = useState<Map<string, string[]>>(new Map());
+  useEffect(() => {
+    if (!expandedFollows || !supabase) return;
+    if (followLists.has(expandedFollows)) return;
+    const [userId, side] = expandedFollows.split(':');
+    (async () => {
+      let handles: string[] = [];
+      if (side === 'following') {
+        const { data } = await supabase!
+          .from('creator_follows')
+          .select('followee_handle, created_at')
+          .eq('follower_id', userId)
+          .order('created_at', { ascending: false });
+        handles = ((data || []) as { followee_handle: string }[]).map(r => r.followee_handle);
+      } else {
+        // followers — fetch follower ids of every handle this user owns
+        const target = allUsers.find(u => u.id === userId);
+        const myHandles = target?.handles || [];
+        if (myHandles.length > 0) {
+          const { data } = await supabase!
+            .from('creator_follows')
+            .select('follower_id, created_at')
+            .in('followee_handle', myHandles)
+            .order('created_at', { ascending: false });
+          const ids = Array.from(new Set(((data || []) as { follower_id: string }[]).map(r => r.follower_id)));
+          handles = ids.map(id => {
+            const u = allUsers.find(x => x.id === id);
+            return u?.name || id.slice(0, 8);
+          });
+        }
+      }
+      setFollowLists(prev => new Map(prev).set(expandedFollows, handles));
+    })().catch(() => {});
+  }, [expandedFollows, allUsers, followLists]);
   const [waitlistIds, setWaitlistIds] = useState<Set<string>>(() => cachedWaitlistIds ?? new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [loaded, setLoaded] = useState<boolean>(() => cachedUsers !== null);
@@ -390,10 +436,22 @@ export default function AdminUsers() {
       // ids in parallel. Waitlist ids let us exclude users still
       // pending approval from the Shoppers tab - once you're on the
       // waitlist you're not a shopper.
-      const [profiles, genRowsRes, ids] = await Promise.all([
+      const [profiles, genRowsRes, ids, followsRes, handlesRes] = await Promise.all([
         getProfiles(),
         supabase ? supabase.from('user_generations').select('user_id') : Promise.resolve({ data: null }),
         getWaitlistIds(),
+        // creator_follows powers BOTH "following" (this user → others)
+        // and "followers" (others → this user). One round-trip, then
+        // bucketed client-side.
+        supabase
+          ? supabase.from('creator_follows').select('follower_id, followee_handle')
+          : Promise.resolve({ data: null }),
+        // Each authenticated user can own multiple creator_handles
+        // (their published looks). We use those handles as the join
+        // key for "followers" counts.
+        supabase
+          ? supabase.from('looks').select('user_id, creator_handle').not('creator_handle', 'is', null)
+          : Promise.resolve({ data: null }),
       ]);
       if (cancelled) return;
       setWaitlistIds(ids);
@@ -401,15 +459,41 @@ export default function AdminUsers() {
       const counts = new Map<string, number>();
       const rows = ((genRowsRes as { data: { user_id: string }[] | null }).data) || [];
       for (const r of rows) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
+
+      // following count per user_id
+      const followingByUser = new Map<string, number>();
+      // followers count per handle
+      const followersByHandle = new Map<string, number>();
+      const followRows = ((followsRes as { data: { follower_id: string; followee_handle: string }[] | null }).data) || [];
+      for (const f of followRows) {
+        followingByUser.set(f.follower_id, (followingByUser.get(f.follower_id) || 0) + 1);
+        followersByHandle.set(f.followee_handle, (followersByHandle.get(f.followee_handle) || 0) + 1);
+      }
+      // handles per user_id (a creator can have many)
+      const handlesByUser = new Map<string, Set<string>>();
+      const handleRows = ((handlesRes as { data: { user_id: string | null; creator_handle: string | null }[] | null }).data) || [];
+      for (const h of handleRows) {
+        if (!h.user_id || !h.creator_handle) continue;
+        const s = handlesByUser.get(h.user_id) ?? new Set<string>();
+        s.add(h.creator_handle);
+        handlesByUser.set(h.user_id, s);
+      }
       const next = profiles.map(p => {
         const row = profileToRow(p);
-        // Two sources contribute: (a) generated looks owned by the
-        // auth user, (b) seed-data look authorship matched by name.
         const seedHandle = Object.values(lookCreators).find(
           c => c.displayName.toLowerCase() === row.name.toLowerCase(),
         )?.name;
         const seedCount = seedHandle ? (looksPerCreator[seedHandle] || 0) : 0;
-        return { ...row, looksCount: (counts.get(p.id) || 0) + seedCount };
+        const handles = Array.from(handlesByUser.get(p.id) || []);
+        if (seedHandle && !handles.includes(seedHandle)) handles.push(seedHandle);
+        const followers = handles.reduce((acc, h) => acc + (followersByHandle.get(h) || 0), 0);
+        return {
+          ...row,
+          looksCount: (counts.get(p.id) || 0) + seedCount,
+          followings: followingByUser.get(p.id) || 0,
+          followers,
+          handles,
+        };
       });
       setAllUsers(next);
       cachedUsers = next;
@@ -966,14 +1050,15 @@ export default function AdminUsers() {
               <SortableTh label="Location" sortKey="location" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Saved" sortKey="saved" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Following" sortKey="followings" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Followers" sortKey="followers" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Via Creator" sortKey="creator" currentSort={table.sort} onSort={table.handleSort} />
               <th style={{ width: showPromoteButton ? 180 : 80 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {table.sortedData.map(u => (
+              <Fragment key={u.id}>
               <tr
-                key={u.id}
                 className="admin-clickable-row"
                 onClick={() => navigate(`/admin/user/${u.id}`)}
               >
@@ -1023,7 +1108,34 @@ export default function AdminUsers() {
                 <td className="admin-cell-muted">{u.lastSignIn}</td>
                 <td className="admin-cell-muted">{u.location}</td>
                 <td>{u.saved}</td>
-                <td>{u.followings}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="admin-link-cell"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedFollows(prev => prev === `${u.id}:following` ? null : `${u.id}:following`);
+                    }}
+                    title="Click to see who they follow"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: u.followings > 0 ? '#0f172a' : '#94a3b8', fontWeight: u.followings > 0 ? 600 : 400, padding: 0, fontFamily: 'inherit' }}
+                  >
+                    {u.followings}
+                  </button>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="admin-link-cell"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedFollows(prev => prev === `${u.id}:followers` ? null : `${u.id}:followers`);
+                    }}
+                    title="Click to see who follows them"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: u.followers > 0 ? '#0f172a' : '#94a3b8', fontWeight: u.followers > 0 ? 600 : 400, padding: 0, fontFamily: 'inherit' }}
+                  >
+                    {u.followers}
+                  </button>
+                </td>
                 <td className="admin-cell-muted">{u.creator}</td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
@@ -1062,6 +1174,40 @@ export default function AdminUsers() {
                   </div>
                 </td>
               </tr>
+              {(expandedFollows === `${u.id}:following` || expandedFollows === `${u.id}:followers`) && (
+                <tr>
+                  <td colSpan={20} style={{ background: '#f8fafc', padding: '10px 18px', borderTop: 'none' }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, marginBottom: 6 }}>
+                      {expandedFollows === `${u.id}:following`
+                        ? `${u.name} follows ${u.followings} curator${u.followings === 1 ? '' : 's'}`
+                        : `${u.followers} shopper${u.followers === 1 ? '' : 's'} follow ${u.name}`}
+                    </div>
+                    {(() => {
+                      const list = followLists.get(expandedFollows);
+                      if (!list) return <div style={{ fontSize: 12, color: '#94a3b8' }}>Loading…</div>;
+                      if (list.length === 0) return <div style={{ fontSize: 12, color: '#94a3b8' }}>Empty.</div>;
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {list.map((label, i) => (
+                            <span key={`${label}-${i}`} style={{
+                              padding: '3px 10px',
+                              borderRadius: 999,
+                              background: '#fff',
+                              border: '1px solid #e2e8f0',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#0f172a',
+                            }}>
+                              {expandedFollows === `${u.id}:following` ? `@${label}` : label}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
