@@ -443,11 +443,18 @@ function fillToExact<T>(arr: T[], count: number): T[] {
  *  Same video URL, served from browser cache: zero extra network cost. */
 function padLooks(arr: Look[], count: number): Look[] {
   if (arr.length === 0) return [];
-  if (arr.length >= count) return arr.slice(0, count);
-  const out: Look[] = [...arr];
-  while (out.length < count) {
-    const src = arr[out.length % arr.length];
-    out.push({ ...src, id: -(out.length + 1) });
+  // Synthesize a unique negative id for EVERY tile — including the
+  // "real" first one — so the LookTile's trailId never collides with
+  // a feed-level tile for the same look. Earlier the first tile kept
+  // its positive id, which competed with the parent feed for the
+  // same trailId slot in TrailVideoHost and lost the race, so the
+  // top-left tile rendered as a black square while the duplicate
+  // tiles below (already synthesized) loaded fine.
+  const out: Look[] = [];
+  const n = Math.max(arr.length, count);
+  for (let i = 0; i < Math.min(count, n); i++) {
+    const src = arr[i % arr.length];
+    out.push({ ...src, id: -(1_000_000 + i) });
   }
   return out;
 }
