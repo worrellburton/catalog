@@ -11,6 +11,10 @@ interface FollowedCreator {
   handle: string;
   displayName: string | null;
   avatarUrl: string | null;
+  /** ms-since-epoch of this creator's most recent live look. Used
+   *  to sort the rail "most recent post first" so the creators
+   *  currently shipping content surface at the top of the stack. */
+  lastPostAt: number;
 }
 
 /**
@@ -43,24 +47,36 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
         return;
       }
       if (!supabase) {
-        setCreators(handles.map(h => ({ handle: h, displayName: null, avatarUrl: null })));
+        setCreators(handles.map(h => ({ handle: h, displayName: null, avatarUrl: null, lastPostAt: 0 })));
         return;
       }
       // Pull creators table (handle keyed) + look up user_ids via
       // looks for fallback profile-based avatar. Single fetch per
-      // table — cheap.
+      // table — cheap. Also pull created_at so we can sort the rail
+      // by "most recent post first".
       const [creatorRows, lookRows] = await Promise.all([
         supabase.from('creators').select('handle, display_name, avatar_url').in('handle', handles),
-        supabase.from('looks').select('creator_handle, user_id').in('creator_handle', handles).not('user_id', 'is', null).limit(handles.length * 3),
+        supabase.from('looks')
+          .select('creator_handle, user_id, created_at')
+          .in('creator_handle', handles)
+          .order('created_at', { ascending: false })
+          .limit(handles.length * 6),
       ]);
       type CRow = { handle: string; display_name: string | null; avatar_url: string | null };
-      type LRow = { creator_handle: string; user_id: string };
+      type LRow = { creator_handle: string; user_id: string | null; created_at: string | null };
       const creatorByHandle = new Map<string, CRow>(
         ((creatorRows.data || []) as CRow[]).map(r => [r.handle, r]),
       );
       const userIdByHandle = new Map<string, string>();
+      const lastPostByHandle = new Map<string, number>();
       for (const l of (lookRows.data || []) as LRow[]) {
-        if (!userIdByHandle.has(l.creator_handle)) userIdByHandle.set(l.creator_handle, l.user_id);
+        if (l.user_id && !userIdByHandle.has(l.creator_handle)) {
+          userIdByHandle.set(l.creator_handle, l.user_id);
+        }
+        if (l.created_at && !lastPostByHandle.has(l.creator_handle)) {
+          const ts = Date.parse(l.created_at);
+          if (Number.isFinite(ts)) lastPostByHandle.set(l.creator_handle, ts);
+        }
       }
       // Profile lookups for handles that lacked a creators-table avatar.
       const profileNeeded = Array.from(new Set(
@@ -80,7 +96,7 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
         }
       }
       if (cancelled) return;
-      setCreators(handles.map(h => {
+      const resolved: FollowedCreator[] = handles.map(h => {
         const cr = creatorByHandle.get(h);
         const uid = userIdByHandle.get(h);
         const prof = uid ? profileByUserId.get(uid) : undefined;
@@ -88,8 +104,15 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
           handle: h,
           displayName: cr?.display_name || prof?.full_name || null,
           avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
+          lastPostAt: lastPostByHandle.get(h) ?? 0,
         };
-      }));
+      });
+      // Most recent post first. Creators with zero posts sort to the
+      // bottom (lastPostAt=0). Stable for equal timestamps via the
+      // handle-order tiebreak — handles came from getMyFollowing()
+      // which is already follow-date desc.
+      resolved.sort((a, b) => b.lastPostAt - a.lastPostAt);
+      setCreators(resolved);
     })();
     return () => { cancelled = true; };
   }, [refreshKey]);
@@ -105,9 +128,12 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
 
   if (creators === null || creators.length === 0) return null;
 
-  // The button shows a tiny stack of up to 3 avatars (or +N if more)
-  // so the rail reads as "your following" at a glance.
-  const visible = creators.slice(0, 3);
+  // Up to 12 stacked avatars in the rail; anything beyond gets a
+  // "+N" pill so the row stays a fixed width regardless of how many
+  // creators you follow. Click the rail to open the full popover.
+  const MAX_VISIBLE = 12;
+  const visible = creators.slice(0, MAX_VISIBLE);
+  const overflow = Math.max(0, creators.length - MAX_VISIBLE);
   return (
     <div
       ref={wrapperRef}
@@ -158,6 +184,28 @@ export default function FollowingRail({ onOpenCreator }: FollowingRailProps) {
                 : (c.displayName || c.handle).charAt(0).toUpperCase()}
             </span>
           ))}
+          {overflow > 0 && (
+            <span
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                border: '2px solid #fff',
+                background: '#0f172a',
+                color: '#fff',
+                overflow: 'hidden',
+                marginLeft: -10,
+                zIndex: 10 - visible.length,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.3px',
+              }}
+              title={`+${overflow} more`}
+            >
+              +{overflow}
+            </span>
+          )}
         </span>
       </button>
 

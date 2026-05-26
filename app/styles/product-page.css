@@ -331,6 +331,68 @@
   aspect-ratio: 3 / 4;
 }
 
+/* Pairs-well tile lives in the same side rail as "More from <brand>" —
+   mirrors the brand tile geometry so both sections read as a coherent
+   2-column grid in the info column. */
+.pd-info-brand-tile {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+  text-align: left;
+}
+.pd-info-brand-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.pd-info-brand-tile-img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #0f0f10;
+  display: block;
+}
+.pd-info-brand-tile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px 10px;
+  min-width: 0;
+}
+.pd-info-brand-tile-brand {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pd-info-brand-tile-name {
+  font-size: 12px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
+}
+.pd-info-brand-tile-price {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 @media (min-width: 960px) {
   .pd-info-brand-rail {
     display: block;

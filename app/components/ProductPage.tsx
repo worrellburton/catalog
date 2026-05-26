@@ -1030,6 +1030,46 @@ export default function ProductPage({
                 </div>
               </section>
             )}
+            {graphPairs && graphPairs.length > 0 && (
+              <section className="pd-info-brand-rail" aria-label="Pairs well with">
+                <h2 className="pd-info-brand-rail-title">Pairs well with</h2>
+                <div className="pd-info-brand-rail-grid">
+                  {graphPairs.slice(0, 6).map(pair => (
+                    <button
+                      key={pair.product_id}
+                      type="button"
+                      className="pd-info-brand-tile"
+                      onClick={() => {
+                        if (pair.url && onOpenBrowser) {
+                          onOpenBrowser(pair.url, pair.name || pair.brand || 'Product', {
+                            name: pair.name || '',
+                            brand: pair.brand || '',
+                            price: pair.price || '',
+                            url: pair.url,
+                            image: pair.image_url || undefined,
+                          });
+                        }
+                      }}
+                      aria-label={[pair.brand, pair.name].filter(Boolean).join(' — ')}
+                    >
+                      {pair.image_url && (
+                        <img
+                          src={pair.image_url}
+                          alt={pair.name || ''}
+                          className="pd-info-brand-tile-img"
+                          loading="lazy"
+                        />
+                      )}
+                      <div className="pd-info-brand-tile-meta">
+                        {pair.brand && <span className="pd-info-brand-tile-brand">{pair.brand}</span>}
+                        {pair.name && <span className="pd-info-brand-tile-name">{pair.name}</span>}
+                        {pair.price && <span className="pd-info-brand-tile-price">{pair.price}</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </section>
         </div>
@@ -1078,46 +1118,6 @@ export default function ProductPage({
                   network cost. */}
               {padLooks(lookCreatives, 8).map((l, i) => (
                 <LookTile key={`fl-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} onOpenCreator={onOpenCreator} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {graphPairs && graphPairs.length > 0 && (
-          <section className="pd-graph-pairs" aria-label="Pairs well with">
-            <h2 className="pd-feed-title">Pairs well with</h2>
-            <div className="pd-graph-pairs-rail">
-              {graphPairs.map(pair => (
-                <button
-                  key={pair.product_id}
-                  className="pd-graph-pair-tile"
-                  onClick={() => {
-                    if (pair.url && onOpenBrowser) {
-                      onOpenBrowser(pair.url, pair.name || pair.brand || 'Product', {
-                        name: pair.name || '',
-                        brand: pair.brand || '',
-                        price: pair.price || '',
-                        url: pair.url,
-                        image: pair.image_url || undefined,
-                      });
-                    }
-                  }}
-                  aria-label={[pair.brand, pair.name].filter(Boolean).join(' — ')}
-                >
-                  {pair.image_url && (
-                    <img
-                      src={pair.image_url}
-                      alt={pair.name || ''}
-                      className="pd-graph-pair-img"
-                      loading="lazy"
-                    />
-                  )}
-                  <div className="pd-graph-pair-meta">
-                    {pair.brand && <span className="pd-graph-pair-brand">{pair.brand}</span>}
-                    {pair.name && <span className="pd-graph-pair-name">{pair.name}</span>}
-                    {pair.price && <span className="pd-graph-pair-price">{pair.price}</span>}
-                  </div>
-                </button>
               ))}
             </div>
           </section>
