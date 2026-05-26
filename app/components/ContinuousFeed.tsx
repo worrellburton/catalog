@@ -228,9 +228,19 @@ export default function ContinuousFeed({
     // Gender filter: 'men' includes 'unisex' looks too (and vice-versa)
     // so catalog-wide staples surface for everyone regardless of the
     // shopper's profile gender.
-    const base = activeFilter === 'all'
+    //
+    // When the explicit catalog filter is 'all', fall back to the
+    // signed-in shopper's profile gender — this is the same rule the
+    // product feed already applies via passesGenderFilter, so a male
+    // shopper doesn't see women's looks just because the catalog
+    // chip is set to "all". 'unknown' still shows everything.
+    const profileGenderFilter: 'men' | 'women' | null =
+      profileGender === 'male' ? 'men' : profileGender === 'female' ? 'women' : null;
+    const effectiveFilter: 'all' | 'men' | 'women' =
+      activeFilter !== 'all' ? activeFilter : (profileGenderFilter ?? 'all');
+    const base = effectiveFilter === 'all'
       ? allLooks
-      : allLooks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
+      : allLooks.filter(l => l.gender === effectiveFilter || l.gender === 'unisex');
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
       // For searches >= 3 chars (semantic-eligible), suppress looks UNLESS
