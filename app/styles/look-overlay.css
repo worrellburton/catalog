@@ -682,8 +682,10 @@ body:has(.look-overlay.look-overlay--in) {
     padding: 24px 12px 32px;
   }
 
+  /* Mobile edge-to-edge to mirror the home feed grid. */
   .look-feed-grid {
-    gap: 8px;
+    gap: 2px;
+    padding: 0;
   }
 
   /* Legacy product-item / product-thumb selectors (used in some looks) */
@@ -704,19 +706,25 @@ body:has(.look-overlay.look-overlay--in) {
 /* ── Feed sections below the hero (stack like ProductPage) ── */
 .look-feed-section {
   width: 100%;
-  max-width: 1280px;
+  max-width: none;
   margin: 0 auto;
   padding: 32px 24px 0;
   background: #0a0a0a;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 @media (max-width: 600px) {
+  /* Mobile mirrors the main feed: edge-to-edge 2-col with a 2px gap
+     and #111 backdrop so any flex gap reads as the card background
+     rather than a black hole. Title hangs off the left edge so it
+     still reads against the dark page. */
   .look-feed-section {
-    padding: 20px 12px 0;
+    padding: 16px 0 0;
+    background: #111;
   }
   .look-feed-heading {
     font-size: 16px;
-    margin: 0 0 16px;
+    margin: 0 0 12px;
+    padding-left: 16px;
   }
 }
 
