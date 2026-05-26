@@ -916,7 +916,7 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted'>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
@@ -1876,6 +1876,25 @@ export default function AdminData() {
           if (prev.some(x => x.id === p.id)) return prev;
           return [{ ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct, ...prev];
         });
+        // Re-add resurfacing: a fresh INSERT means the admin added
+        // this product again. If its brand+name is in the soft-
+        // delete set, drop it — they explicitly re-added.
+        if (p.brand && p.name) {
+          const key = `${p.brand}-${p.name}`;
+          setDeletedProductKeys(prev => {
+            if (!prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.delete(key);
+            writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+            return next;
+          });
+          if (supabase) {
+            void supabase.from('admin_hidden_products')
+              .delete()
+              .eq('brand', p.brand)
+              .eq('name', p.name);
+          }
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
         const p = payload.new as CrawledProduct;
@@ -2071,16 +2090,25 @@ export default function AdminData() {
 
   const filteredProductsList = useMemo(
     () => allProducts.filter(p => {
+      const key = `${p.brand}-${p.name}`;
+      // Soft-delete view: ONLY products in the soft-delete set.
+      // Other filters off (admins want to see every soft-deleted
+      // row regardless of active/creative/tag state).
+      if (productFilter === 'soft-deleted') {
+        if (!deletedProductKeys.has(key)) return false;
+        if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
+        if (adminQuery) {
+          const hay = `${p.brand} ${p.name}`.toLowerCase();
+          if (!hay.includes(adminQuery)) return false;
+        }
+        return true;
+      }
       if (productFilter === 'no-creative' && p.hasCreative) return false;
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
-      // "Untagged" surfaces products missing a gender tag - these leak into
-      // every shopper's feed because passesGenderFilter lets nulls through.
-      // Use this view to triage and tag them so the gender scope holds.
       if (productFilter === 'untagged' && p.gender != null) return false;
-      const key = `${p.brand}-${p.name}`;
+      // Hide soft-deleted from every other view.
       if (deletedProductKeys.has(key)) return false;
-      // Brand drill-down from Analytics → Brands "View products".
       if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
       if (adminQuery) {
         const hay = `${p.brand} ${p.name}`.toLowerCase();
@@ -3454,6 +3482,17 @@ export default function AdminData() {
               Untagged
               <span className="admin-tab-badge">{allProducts.filter(p => p.gender == null).length}</span>
             </button>
+            <button
+              className={`admin-tab ${productFilter === 'soft-deleted' ? 'active' : ''}`}
+              onClick={() => setProductFilter('soft-deleted')}
+              title="Products you removed from the feed via the trash icon — still in the DB. Click a row's Hard delete to remove permanently."
+              style={productFilter === 'soft-deleted' ? { color: '#b91c1c' } : undefined}
+            >
+              Soft delete
+              <span className="admin-tab-badge">
+                {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+              </span>
+            </button>
           </div>
         {selectedProductKeys.size > 0 && (
           <div className="admin-bulk-bar" style={{
@@ -4194,25 +4233,80 @@ export default function AdminData() {
                     })()}
                   </td>
                   <td>
+                    {productFilter === 'soft-deleted' ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="admin-btn admin-btn-secondary"
+                          style={{ fontSize: 11, padding: '4px 8px', color: '#0f172a' }}
+                          title="Bring this product back to the active list"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const key = `${p.brand}-${p.name}`;
+                            setDeletedProductKeys(prev => {
+                              const next = new Set(prev);
+                              next.delete(key);
+                              writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+                              return next;
+                            });
+                            if (supabase) {
+                              await supabase.from('admin_hidden_products').delete().eq('brand', p.brand).eq('name', p.name);
+                            }
+                            showToast('Restored — visible in Show all again.');
+                          }}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          className="admin-btn"
+                          style={{
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            color: '#fff',
+                            background: '#b91c1c',
+                            border: '1px solid #b91c1c',
+                          }}
+                          title="Permanently delete this product from the database. Cannot be undone."
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm(`HARD DELETE "${p.name}" by ${p.brand}? This permanently removes the row from the database and any generated ads. Cannot be undone.`)) return;
+                            const key = `${p.brand}-${p.name}`;
+                            if (p.id && supabase) {
+                              await supabase.from('product_creative').delete().eq('product_id', p.id);
+                              const { error } = await supabase.from('products').delete().eq('id', p.id);
+                              if (error) { showToast(`Hard delete failed: ${error.message}`); return; }
+                              setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
+                            }
+                            // Also clear the soft-delete record so the row
+                            // disappears cleanly from this tab.
+                            setDeletedProductKeys(prev => {
+                              const next = new Set(prev);
+                              next.delete(key);
+                              writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+                              return next;
+                            });
+                            if (supabase) {
+                              await supabase.from('admin_hidden_products').delete().eq('brand', p.brand).eq('name', p.name);
+                            }
+                            showToast('Hard deleted.');
+                          }}
+                        >
+                          Hard delete
+                        </button>
+                      </div>
+                    ) : (
                     <button
                       className="admin-btn admin-btn-secondary"
                       style={{ fontSize: 11, padding: '4px 8px', color: '#dc2626' }}
-                      title={p.id ? 'Delete product' : 'Hide from list'}
+                      title="Soft delete — hides from the feed + this list. Restore from the Soft delete tab. Re-adding the same URL via Add Products resurfaces it automatically."
                       onClick={async (e) => {
                         e.stopPropagation();
-                        if (!window.confirm(`Delete "${p.name}" by ${p.brand}?${p.id ? ' This will also remove any generated ads.' : ''}`)) return;
+                        if (!window.confirm(`Soft delete "${p.name}" by ${p.brand}? You can restore it from the Soft delete tab.`)) return;
                         const key = `${p.brand}-${p.name}`;
-                        if (p.id) {
-                          if (!supabase) return;
-                          await supabase.from('product_creative').delete().eq('product_id', p.id);
-                          const { error } = await supabase.from('products').delete().eq('id', p.id);
-                          if (error) {
-                            showToast(`Delete failed: ${error.message}`);
-                            return;
-                          }
-                          setCrawledProducts(prev => prev.filter(r => r.id !== p.id));
-                        }
-                        // Optimistic hide + durable local persist.
+                        // SOFT delete only — keeps the row in the DB
+                        // so re-adding the same URL resurfaces it
+                        // (via the realtime INSERT handler) without
+                        // a fresh scrape. Hard delete lives in the
+                        // Soft delete tab.
                         setDeletedProductKeys(prev => {
                           const next = new Set(prev);
                           next.add(key);
@@ -4241,7 +4335,7 @@ export default function AdminData() {
                             }
                           }
                         }
-                        showToast(`Deleted ${p.name}`);
+                        showToast(`Soft deleted "${p.name}" — restore from the Soft delete tab.`);
                       }}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -4251,6 +4345,7 @@ export default function AdminData() {
                         <path d="M14 11v6" />
                       </svg>
                     </button>
+                    )}
                   </td>
                 </tr>
                 {creativeOpen && (
