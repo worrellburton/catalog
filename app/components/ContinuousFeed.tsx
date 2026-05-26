@@ -11,7 +11,8 @@ import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
-import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
+import { useHiddenLooks, useHiddenProductKeys, hideLookId } from '~/hooks/useHiddenLooks';
+import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { useSearch } from '~/hooks/useSearch';
 import { director } from '~/services/video-playback-director';
@@ -791,6 +792,27 @@ export default function ContinuousFeed({
     }
   }, [liveCreatives]);
 
+  // Hard delete a look. Mirrors handleDeleteCreative: optimistic
+  // local pull, then the DB-side delete via the manage-looks edge
+  // function. Falls back to a soft-hide (admin_hidden_looks +
+  // localStorage) when the look has no backend uuid — those are
+  // legacy seed entries with no row to delete.
+  const handleDeleteLook = useCallback(async (look: Look) => {
+    setDbLooks(prev => prev.filter(l => l.id !== look.id));
+    if (look.uuid) {
+      try {
+        await deleteLookService(look.uuid);
+      } catch (err) {
+        console.error('[ContinuousFeed] deleteLook failed:', err);
+        alert(`Could not delete look: ${err instanceof Error ? err.message : 'unknown'}`);
+        getLooks().then(setDbLooks).catch(() => {});
+      }
+      return;
+    }
+    // Seed look — soft hide locally so the admin still gets feedback.
+    try { await hideLookId(look.id); } catch { /* localStorage write */ }
+  }, []);
+
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
     if (onOpenCreative) {
       onOpenCreative(creative);
@@ -946,6 +968,7 @@ export default function ContinuousFeed({
                 creativesLoading={segment.isInitial ? creativesLoading : false}
                 canDeleteCreative={canDeleteCreative}
                 onDeleteCreative={handleDeleteCreative}
+                onDeleteLook={canDeleteCreative ? handleDeleteLook : undefined}
                 title={segment.title}
                 batchSize={segment.isInitial ? undefined : 8}
                 isInitial={segment.isInitial}

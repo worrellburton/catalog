@@ -14,6 +14,7 @@ interface FeedSectionProps {
   creativesLoading?: boolean;
   canDeleteCreative?: boolean;
   onDeleteCreative?: (id: string) => void;
+  onDeleteLook?: (look: Look) => void;
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
@@ -75,6 +76,7 @@ function FeedSection({
   creativesLoading = false,
   canDeleteCreative = false,
   onDeleteCreative,
+  onDeleteLook,
   title,
   batchSize,
   isInitial = false,
@@ -316,6 +318,8 @@ function FeedSection({
               className={getCardClass(idx)}
               onOpenLook={onOpenLook}
               onOpenCreator={onOpenCreator}
+              canDelete={canDeleteCreative}
+              onDeleteLook={onDeleteLook}
               priority={idx < 6}
             />
           );
