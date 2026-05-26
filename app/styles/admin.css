@@ -4699,3 +4699,34 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 }
 .admin-dark tr:hover .admin-stats-col { background: rgba(129, 140, 248, 0.14); }
 
+
+/* Primary-image star overlay on each photo in the product row's
+   photo gallery. Stays hidden until the photo cell is hovered (so it
+   doesn't clutter the gallery) UNLESS the star already marks the
+   current primary — then it stays visible at full opacity. */
+.admin-product-photo .admin-product-photo-primary-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.admin-product-photo:hover .admin-product-photo-primary-btn {
+  opacity: 1;
+}
+.admin-product-photo .admin-product-photo-primary-btn[data-active='true'] {
+  background: #16a34a;
+  opacity: 1;
+  cursor: default;
+}

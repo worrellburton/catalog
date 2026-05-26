@@ -4666,20 +4666,67 @@ export default function AdminData() {
                               <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No product photos.</div>
                             ) : (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 8 }}>
-                                {rowImages.map((src, ii) => (
-                                  <img
-                                    key={ii}
-                                    src={src}
-                                    alt={p.name}
-                                    style={{ width: '100%', aspectRatio: '1 / 1', borderRadius: 6, objectFit: 'cover', border: '1px solid #e5e7eb', cursor: 'zoom-in' }}
-                                    onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                                    onMouseEnter={(ev) => {
-                                      const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                                      setHoverPreview({ url: src, x: r.right + 8, y: r.top });
-                                    }}
-                                    onMouseLeave={() => setHoverPreview(null)}
-                                  />
-                                ))}
+                                {rowImages.map((src, ii) => {
+                                  const isPrimary = (p as { primary_image_url?: string | null }).primary_image_url === src;
+                                  return (
+                                    <div
+                                      key={ii}
+                                      className="admin-product-photo"
+                                      style={{ position: 'relative' }}
+                                      onMouseEnter={(ev) => {
+                                        const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                                        setHoverPreview({ url: src, x: r.right + 8, y: r.top });
+                                      }}
+                                      onMouseLeave={() => setHoverPreview(null)}
+                                    >
+                                      <img
+                                        src={src}
+                                        alt={p.name}
+                                        style={{
+                                          width: '100%',
+                                          aspectRatio: '1 / 1',
+                                          borderRadius: 6,
+                                          objectFit: 'cover',
+                                          border: isPrimary ? '2px solid #16a34a' : '1px solid #e5e7eb',
+                                          cursor: 'zoom-in',
+                                          boxShadow: isPrimary ? '0 0 0 1px #16a34a' : undefined,
+                                          display: 'block',
+                                        }}
+                                        onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="admin-product-photo-primary-btn"
+                                        data-active={isPrimary ? 'true' : 'false'}
+                                        title={isPrimary ? 'Current primary image' : 'Set as primary image'}
+                                        aria-pressed={isPrimary}
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          if (!supabase || !p.id || isPrimary) return;
+                                          setCrawledProducts(prev => prev.map(pp =>
+                                            pp.id === p.id ? { ...pp, primary_image_url: src } as CrawledProduct : pp
+                                          ));
+                                          const { error } = await supabase
+                                            .from('products')
+                                            .update({
+                                              primary_image_url: src,
+                                              primary_image_index: ii,
+                                              primary_image_score: null,
+                                              primary_image_picked_at: new Date().toISOString(),
+                                              primary_image_picked_by: 'admin',
+                                            })
+                                            .eq('id', p.id);
+                                          if (error) showToast(`Failed: ${error.message}`);
+                                          else        showToast('Primary image updated');
+                                        }}
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill={isPrimary ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>

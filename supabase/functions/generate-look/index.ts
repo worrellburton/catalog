@@ -465,18 +465,24 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Gather product image URLs ──────────────────────────────────────────────
+  // Prefer products.primary_image_url (the vision-picked solo shot)
+  // so the image-to-video pipeline conditions on a clean packshot
+  // instead of an on-model frame that would composite two humans
+  // together. Falls back to the legacy image_url when no primary
+  // pick has run yet.
   const { data: productLinks } = await admin
     .from('user_generation_products')
-    .select('role_tag, sort_order, products(name, brand, image_url)')
+    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url)')
     .eq('generation_id', generationId)
     .order('sort_order');
 
   const productEntries = (productLinks || [])
     .map(r => {
-      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null } | null;
-      if (!p?.image_url) return null;
-      const label = [p.brand, p.name].filter(Boolean).join(' ').trim() || 'product';
-      return { role: r.role_tag || 'item', label, image_url: p.image_url, brand: p.brand };
+      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null } | null;
+      const chosen = p?.primary_image_url || p?.image_url;
+      if (!chosen) return null;
+      const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
+      return { role: r.role_tag || 'item', label, image_url: chosen, brand: p?.brand ?? null };
     })
     .filter((x): x is { role: string; label: string; image_url: string; brand: string | null } => !!x);
 
