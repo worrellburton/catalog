@@ -4609,21 +4609,68 @@ export default function AdminData() {
                   <tr className="admin-product-creative-row">
                     <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
+                          {/* Primary preview pinned to the far left so
+                              the admin can see the current pick without
+                              hunting through the photo grid. Clicking
+                              opens the full-size image in a new tab —
+                              mirrors the .admin-product-photo behaviour
+                              for consistency. */}
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                              <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Videos <span style={{ color: '#7c3aed', fontWeight: 700 }}>{p.video_urls.length}</span>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                              Primary
+                            </div>
+                            {(p as { primary_image_url?: string | null }).primary_image_url ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const url = (p as { primary_image_url?: string | null }).primary_image_url;
+                                  if (typeof window !== 'undefined' && url) window.open(url, '_blank', 'noopener,noreferrer');
+                                }}
+                                title="Open primary image full-size"
+                                style={{
+                                  width: '100%',
+                                  aspectRatio: '1 / 1',
+                                  borderRadius: 8,
+                                  border: '2px solid #16a34a',
+                                  boxShadow: '0 0 0 1px #16a34a, 0 4px 14px rgba(22,163,74,0.18)',
+                                  padding: 0,
+                                  background: '#fff',
+                                  cursor: 'zoom-in',
+                                  overflow: 'hidden',
+                                  display: 'block',
+                                }}
+                              >
+                                <img
+                                  src={(p as { primary_image_url?: string | null }).primary_image_url ?? ''}
+                                  alt={`${p.brand} ${p.name} primary`}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
+                                />
+                              </button>
+                            ) : (
+                              <div style={{
+                                width: '100%',
+                                aspectRatio: '1 / 1',
+                                borderRadius: 8,
+                                border: '1px dashed #cbd5e1',
+                                background: '#f8fafc',
+                                color: '#94a3b8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 11,
+                                lineHeight: 1.3,
+                                textAlign: 'center',
+                                padding: 8,
+                              }}>
+                                No primary picked. Click a photo's star to set one.
                               </div>
-                              {p.id && (
-                                <button
-                                  className="admin-btn admin-btn-primary"
-                                  style={{ fontSize: 11, padding: '3px 10px' }}
-                                  onClick={(e) => { e.stopPropagation(); setGeneratePicker({ productId: p.id!, productName: p.name }); }}
-                                >
-                                  + Generate
-                                </button>
-                              )}
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                              Videos <span style={{ color: '#7c3aed', fontWeight: 700 }}>{p.video_urls.length}</span>
                             </div>
                             {p.video_urls.length === 0 ? (
                               <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No videos generated yet.</div>
@@ -4766,6 +4813,17 @@ export default function AdminData() {
                                 })}
                               </div>
                             )}
+                            {p.id && (
+                              <div style={{ marginTop: 12 }}>
+                                <button
+                                  className="admin-btn admin-btn-primary"
+                                  style={{ fontSize: 11, padding: '5px 12px' }}
+                                  onClick={(e) => { e.stopPropagation(); setGeneratePicker({ productId: p.id!, productName: p.name }); }}
+                                >
+                                  + Generate
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
@@ -4802,14 +4860,22 @@ export default function AdminData() {
                                     <div
                                       key={ii}
                                       className="admin-product-photo"
-                                      style={{ position: 'relative', cursor: isPrimary ? 'default' : 'pointer' }}
-                                      title={isPrimary ? 'Current primary image' : 'Click to set as primary image'}
+                                      style={{ position: 'relative', cursor: 'zoom-in' }}
+                                      title="Click to open full size · star icon to set as primary"
                                       onMouseEnter={(ev) => {
                                         const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
                                         setHoverPreview({ url: src, x: r.right + 8, y: r.top });
                                       }}
                                       onMouseLeave={() => setHoverPreview(null)}
-                                      onClick={(e) => { e.stopPropagation(); void setAsPrimary(); }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Open the full-resolution image in a new tab. Tile
+                                        // primary-pick now lives on the star icon only — the
+                                        // image itself is a "view at full size" affordance.
+                                        if (typeof window !== 'undefined') {
+                                          window.open(src, '_blank', 'noopener,noreferrer');
+                                        }
+                                      }}
                                     >
                                       <img
                                         src={src}
