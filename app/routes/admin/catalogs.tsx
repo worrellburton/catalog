@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from '@remix-run/react';
+import { Link, useSearchParams } from '@remix-run/react';
 import { searchSuggestions } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import {
@@ -392,6 +392,21 @@ export default function AdminCatalogs() {
   }, []);
 
   useEffect(() => { loadCatalogs(); }, [loadCatalogs]);
+
+  // Pre-open the Add Catalog modal when /admin/search links here with ?new=<term>.
+  // Lets admins jump straight from a zero-result search to creating that catalog.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const term = searchParams.get('new');
+    if (term && term.trim()) {
+      setNewName(term.trim());
+      setShowAdd(true);
+      // Strip the param so a refresh / back-nav doesn't re-open the modal.
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Drag-reorder handlers. Declared HERE — after loadCatalogs and
   // showToast — so the useCallback deps don't TDZ. Moving these
@@ -1624,6 +1639,7 @@ export default function AdminCatalogs() {
               <th>Gender</th>
               <th>Products</th>
               <th>Searches</th>
+              <th title="Quick toggles: filter to viewer's gender, age cohort, or boost top-converting products to the front">Toggles</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
@@ -1653,6 +1669,7 @@ export default function AdminCatalogs() {
                     data-catalog-name={homeCatalog.name.toLowerCase()}
                     style={{
                       background: pulseRowId === homeCatalog.id ? '#dcfce7' : '#fffbeb',
+                      boxShadow: 'inset 3px 0 0 #f59e0b',
                       transition: 'background-color 600ms ease',
                     }}
                   >
@@ -1673,8 +1690,28 @@ export default function AdminCatalogs() {
                             <polyline points="9 18 15 12 9 6" />
                           </svg>
                         </button>
-                        <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fef08a', color: '#713f12', marginRight: 2 }}>HOME</span>
-                        <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>{homeCatalog.name}</Link>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              title="This catalog is what shoppers see when they open the app"
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: '#f59e0b',
+                                color: '#fff',
+                                letterSpacing: '0.4px',
+                              }}
+                            >
+                              ★ LANDING SCREEN
+                            </span>
+                            <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>{homeCatalog.name}</Link>
+                          </div>
+                          <span style={{ fontSize: 10, color: '#92400e', fontWeight: 400 }}>
+                            This is what users see first.
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td>
@@ -1703,6 +1740,21 @@ export default function AdminCatalogs() {
                       )}
                     </td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
+                    <td>
+                      <TogglePills
+                        filterGender={homeCatalog.filterGender}
+                        filterAge={homeCatalog.filterAge}
+                        boostTopConverting={homeCatalog.boostTopConverting}
+                        onToggle={async (field, value) => {
+                          setHomeCatalog(prev => prev ? { ...prev, [field]: value } : prev);
+                          const ok = await updateCatalogToggles(homeCatalog.slug, { [field]: value });
+                          if (!ok) {
+                            setHomeCatalog(prev => prev ? { ...prev, [field]: !value } : prev);
+                            showToast('Could not save toggle');
+                          }
+                        }}
+                      />
+                    </td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
@@ -1714,7 +1766,7 @@ export default function AdminCatalogs() {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={10} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
@@ -1854,6 +1906,25 @@ export default function AdminCatalogs() {
                   )}
                 </td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
+                <td>
+                  {c.id === 'synthetic-all' || !c.slug ? (
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                  ) : (
+                    <TogglePills
+                      filterGender={c.filterGender}
+                      filterAge={c.filterAge}
+                      boostTopConverting={c.boostTopConverting}
+                      onToggle={async (field, value) => {
+                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: value } : x));
+                        const ok = await updateCatalogToggles(c.slug!, { [field]: value });
+                        if (!ok) {
+                          setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: !value } : x));
+                          showToast('Could not save toggle');
+                        }
+                      }}
+                    />
+                  )}
+                </td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
                 </td>
@@ -1907,7 +1978,7 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={10} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
@@ -2989,19 +3060,21 @@ function ImpressionsPill({ counts }: { counts?: { curr: number; prev: number } }
 }
 
 // ── Toggle pills ────────────────────────────────────────────────────────────
-type ToggleField = 'filterAge' | 'boostTopConverting';
+type ToggleField = 'filterGender' | 'filterAge' | 'boostTopConverting';
 interface TogglePillsProps {
   gender?: CatalogGenderUI;
+  filterGender?: boolean;
   filterAge?: boolean;
   boostTopConverting?: boolean;
   onToggle: (field: ToggleField, value: boolean) => void;
   onGender?: (value: CatalogGenderUI) => void;
 }
 
-function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender }: TogglePillsProps) {
-  const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean }[] = [
+function TogglePills({ gender, filterGender, filterAge, boostTopConverting, onToggle, onGender }: TogglePillsProps) {
+  const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean; title?: string }[] = [
+    { key: 'filterGender',        label: 'Gender',  value: filterGender ?? false, title: 'Filter to viewer’s declared gender' },
     { key: 'filterAge',           label: 'Age',     value: filterAge ?? false, disabled: true },
-    { key: 'boostTopConverting',  label: 'Top ↑',   value: boostTopConverting ?? false },
+    { key: 'boostTopConverting',  label: 'Top ↑', value: boostTopConverting ?? false, title: 'Boost top-converting products to the front' },
   ];
   const currentGender: CatalogGenderUI = gender ?? 'all';
   const genderActive = currentGender !== 'all';
@@ -3043,7 +3116,7 @@ function TogglePills({ gender, filterAge, boostTopConverting, onToggle, onGender
           title={
             p.disabled
               ? 'Run scripts/tag-product-age-groups.mjs first to enable age filtering'
-              : `${p.label}: ${p.value ? 'ON — click to disable' : 'OFF — click to enable'}`
+              : `${p.title ?? p.label}: ${p.value ? 'ON — click to disable' : 'OFF — click to enable'}`
           }
           style={{
             padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600,
