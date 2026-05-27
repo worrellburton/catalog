@@ -15,6 +15,7 @@ import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram'
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
+import { usePageSections, isSectionEnabled } from '~/hooks/usePageSections';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import {
   pickVideoUrl,
@@ -485,6 +486,12 @@ export default function ProductPage({
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
+  // Admin-editable section config from /admin/pages. Each section's
+  // enabled flag gates whether that block renders below.
+  const productSections = usePageSections('product');
+  const similarEnabled  = isSectionEnabled(productSections, 'similar');
+  const popularEnabled  = isSectionEnabled(productSections, 'popular');
+  const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
 
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
@@ -1090,7 +1097,7 @@ export default function ProductPage({
             card so the next-best matches always appear first. The
             infinite "You might also like" feed lives at the bottom
             for open-ended exploration. */}
-        {moreLikeThis.length > 0 && (
+        {similarEnabled && moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
@@ -1108,7 +1115,7 @@ export default function ProductPage({
           </section>
         )}
 
-        {popularItems.length > 0 && (
+        {popularEnabled && popularItems.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">Popular</h2>
             <div className="pd-similar-grid">
@@ -1143,6 +1150,7 @@ export default function ProductPage({
             of the page so scrolling never dead-ends. Same
             ContinuousFeed component the home page uses, scoped to
             the current product via slotPrefix. */}
+        {ymalEnabled && (
         <section className="pd-similar-feed">
           <h2 className="pd-feed-title">You might also like</h2>
           <ContinuousFeed
@@ -1162,6 +1170,7 @@ export default function ProductPage({
             slotPrefix={`product:${product.brand}:${product.name}`}
           />
         </section>
+        )}
       </div>
     </div>
   );

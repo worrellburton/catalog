@@ -60,6 +60,65 @@ export default function CreatorWallet({ onProfileChange }: Props) {
     return () => { cancelled = true; };
   }, []);
 
+  // Live-tick the Analytics cards. Subscribes to user_events INSERT
+  // on rows whose target is one of my looks, then nudges the matching
+  // counter up. The same RLS policy that powers ActivityRealtimeToasts
+  // gates which events get delivered — we just don't toast them here,
+  // we mutate the engagement summary in place.
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    type Channel = ReturnType<NonNullable<typeof supabase>['channel']>;
+    let channel: Channel | null = null;
+    let myLookIds = new Set<string>();
+    let myUserId: string | null = null;
+
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled || !user) return;
+      myUserId = user.id;
+      const { data: looksRes } = await supabase
+        .from('looks').select('id').eq('user_id', user.id);
+      myLookIds = new Set(((looksRes ?? []) as { id: string }[]).map(r => r.id));
+      if (myLookIds.size === 0) return;
+
+      channel = supabase
+        .channel(`wallet-analytics-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'user_events' },
+          (payload) => {
+            const row = payload.new as {
+              user_id?: string | null;
+              event_type?: string | null;
+              target_type?: string | null;
+              target_uuid?: string | null;
+            };
+            if (!row) return;
+            if (row.user_id === myUserId) return;
+            if (row.target_type !== 'look') return;
+            if (!row.target_uuid || !myLookIds.has(row.target_uuid)) return;
+            const ev = row.event_type;
+            if (ev !== 'impression' && ev !== 'click' && ev !== 'clickout') return;
+            setEngagement(prev => {
+              if (!prev) return prev;
+              const next = { ...prev };
+              if (ev === 'impression') { next.total_impressions += 1; next.week_impressions += 1; }
+              if (ev === 'click')      { next.total_clicks      += 1; next.week_clicks      += 1; }
+              if (ev === 'clickout')   { next.total_clickouts   += 1; next.week_clickouts   += 1; }
+              return next;
+            });
+          },
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
+  }, []);
+
   // The login toast and the legacy 'open-wallet-analytics' event both
   // expect the analytics block to scroll into view — opening Insights
   // and scrolling to it preserves that behaviour.
