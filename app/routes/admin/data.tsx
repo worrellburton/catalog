@@ -2319,6 +2319,18 @@ export default function AdminData() {
   // In-flight generate-primary-video calls, keyed by product id. Drives
   // the spinner overlay on the Generate CTA in the detail row.
   const [generatingPrimaryVideoIds, setGeneratingPrimaryVideoIds] = useState<Set<string>>(new Set());
+  // Start timestamps (ms-since-epoch) for each in-flight generation —
+  // drives the progress bar's elapsed time. Cleared on completion.
+  const [primaryVideoStartedAt, setPrimaryVideoStartedAt] = useState<Map<string, number>>(new Map());
+  // Re-renders 250ms while any generation is in flight so the progress
+  // bar fills smoothly without each row owning its own interval.
+  const [primaryVideoTick, setPrimaryVideoTick] = useState(0);
+  // Learned ETA: rolling average of past primary_video_duration_ms.
+  // Fetched once on mount via the avg_primary_video_duration_ms RPC;
+  // falls back to 30s before any data has accumulated.
+  const [avgPrimaryVideoDurationMs, setAvgPrimaryVideoDurationMs] = useState<number>(30_000);
+  // Product whose node-graph modal is currently open.
+  const [primaryVideoGraphProductId, setPrimaryVideoGraphProductId] = useState<string | null>(null);
 
   const polishPrimaryImage = useCallback(async (productId: string) => {
     if (!supabase) return;
@@ -2370,6 +2382,11 @@ export default function AdminData() {
       next.add(productId);
       return next;
     });
+    setPrimaryVideoStartedAt(prev => {
+      const next = new Map(prev);
+      next.set(productId, Date.now());
+      return next;
+    });
     try {
       const { data, error } = await supabase.functions.invoke('generate-primary-video', {
         body: { product_id: productId },
@@ -2386,6 +2403,13 @@ export default function AdminData() {
             : pp,
         ));
       }
+      // Roll the freshly-observed duration into the running estimate
+      // so the next bar fills against current reality. EMA with
+      // alpha=0.4 — recent runs weigh more without thrashing.
+      const observedMs = (data as { duration_ms?: number })?.duration_ms;
+      if (typeof observedMs === 'number' && observedMs > 0) {
+        setAvgPrimaryVideoDurationMs(prev => Math.round(prev * 0.6 + observedMs * 0.4));
+      }
       showToast('Primary video generated');
     } catch (err) {
       showToast(`Primary video generation failed: ${(err as Error).message || 'unknown'}`);
@@ -2395,8 +2419,40 @@ export default function AdminData() {
         next.delete(productId);
         return next;
       });
+      setPrimaryVideoStartedAt(prev => {
+        const next = new Map(prev);
+        next.delete(productId);
+        return next;
+      });
     }
   }, [showToast]);
+
+  // Fetch the rolling-average ETA once. Empty pool → keep the 30s
+  // default; a single past run is already meaningful so n=1 is fine.
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc('avg_primary_video_duration_ms');
+      if (cancelled) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      const avgMs = Number(row?.avg_ms ?? 0);
+      if (avgMs > 0) setAvgPrimaryVideoDurationMs(Math.round(avgMs));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Tick the progress bar at 250ms while any generation is running.
+  // Single setInterval at the parent — cells read elapsed time off
+  // primaryVideoStartedAt + Date.now() on every render.
+  useEffect(() => {
+    if (generatingPrimaryVideoIds.size === 0) return;
+    const handle = window.setInterval(() => setPrimaryVideoTick(t => t + 1), 250);
+    return () => window.clearInterval(handle);
+  }, [generatingPrimaryVideoIds]);
+  // Reference the tick so the hook isn't flagged unused — its job is
+  // purely to trigger re-renders, the value itself is meaningless.
+  void primaryVideoTick;
 
   // Delete a single creative (one product_creative row) by id. Used by
   // the X overlay on each video tile in the Products-row expanded view.
@@ -4754,7 +4810,7 @@ export default function AdminData() {
                   <tr className="admin-product-creative-row">
                     <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
                           {/* Primary preview pinned to the far left so
                               the admin can see the current pick without
                               hunting through the photo grid. Clicking
@@ -4868,12 +4924,16 @@ export default function AdminData() {
                                 No primary picked. Click a photo's star to set one.
                               </div>
                             )}
-                            {/* Primary Video — short cinematic-motion clip
-                                generated from the primary image via
-                                seedance i2v. Empty rows get a Generate CTA
-                                (mirrors the polish-wand affordance) so the
-                                admin can kick one off from the row. */}
-                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 14, marginBottom: 8 }}>
+                          </div>
+                          {/* Primary Video column — sits immediately to the
+                              right of the Primary Image column so an
+                              admin can compare the source still against
+                              the generated motion at a glance. Empty
+                              rows get a Generate CTA + learned-ETA
+                              progress bar; populated rows show the
+                              clip with a node-graph icon. */}
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                               Primary Video
                             </div>
                             {(() => {
@@ -4896,11 +4956,48 @@ export default function AdminData() {
                                         borderRadius: 8,
                                         border: '2px solid #7c3aed',
                                         boxShadow: '0 0 0 1px #7c3aed, 0 4px 14px rgba(124,58,237,0.18)',
-                                        objectFit: 'cover',
+                                        objectFit: 'contain',
                                         display: 'block',
                                         background: '#0f172a',
                                       }}
                                     />
+                                    {/* Node-graph button — opens a modal that
+                                        renders the generation pipeline as a
+                                        DAG (input image → model → video). */}
+                                    {p.id && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPrimaryVideoGraphProductId(p.id ?? null);
+                                        }}
+                                        title="View generation node graph"
+                                        style={{
+                                          position: 'absolute',
+                                          top: 8,
+                                          left: 8,
+                                          width: 28,
+                                          height: 28,
+                                          borderRadius: 999,
+                                          border: '1px solid rgba(255,255,255,0.4)',
+                                          background: 'rgba(15,23,42,0.7)',
+                                          color: '#fff',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          backdropFilter: 'blur(6px)',
+                                        }}
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                          <circle cx="5" cy="6" r="2.4" />
+                                          <circle cx="19" cy="6" r="2.4" />
+                                          <circle cx="12" cy="18" r="2.4" />
+                                          <line x1="6.5" y1="7.5" x2="11" y2="16" />
+                                          <line x1="17.5" y1="7.5" x2="13" y2="16" />
+                                        </svg>
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -4934,6 +5031,16 @@ export default function AdminData() {
                                   </div>
                                 );
                               }
+                              // Empty card. While generating we swap the
+                              // text + button for a progress bar that
+                              // fills against the learned ETA — bar
+                              // stays at 95% if the real run runs long.
+                              const startedAt = p.id ? primaryVideoStartedAt.get(p.id) : undefined;
+                              const elapsedMs = startedAt ? Math.max(0, Date.now() - startedAt) : 0;
+                              const eta = avgPrimaryVideoDurationMs;
+                              const pct = isGenerating && eta > 0
+                                ? Math.min(95, (elapsedMs / eta) * 100)
+                                : 0;
                               return (
                                 <div style={{
                                   position: 'relative',
@@ -4946,55 +5053,76 @@ export default function AdminData() {
                                   flexDirection: 'column',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  gap: 8,
-                                  padding: 8,
+                                  gap: 10,
+                                  padding: 12,
                                 }}>
-                                  <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>
-                                    {hasPrimaryImage
-                                      ? 'No primary video yet.'
-                                      : 'Pick a primary image first.'}
-                                  </div>
-                                  {hasPrimaryImage && p.id && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (!isGenerating && p.id) generatePrimaryVideo(p.id);
-                                      }}
-                                      disabled={isGenerating}
-                                      title={isGenerating ? 'Generating primary video…' : 'Generate primary video from primary image'}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        padding: '7px 14px',
+                                  {isGenerating ? (
+                                    <>
+                                      <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                        Generating
+                                      </div>
+                                      <div style={{
+                                        width: '88%',
+                                        height: 6,
+                                        background: '#e2e8f0',
                                         borderRadius: 999,
-                                        border: 'none',
-                                        background: isGenerating ? '#a78bfa' : '#7c3aed',
-                                        color: '#fff',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        letterSpacing: '0.04em',
-                                        textTransform: 'uppercase',
-                                        cursor: isGenerating ? 'wait' : 'pointer',
-                                        boxShadow: '0 4px 12px rgba(124,58,237,0.25)',
-                                      }}
-                                    >
-                                      {isGenerating ? (
-                                        <span style={{
-                                          width: 11, height: 11,
-                                          border: '1.5px solid rgba(255,255,255,0.45)',
-                                          borderTopColor: '#fff',
-                                          borderRadius: '50%',
-                                          animation: 'wallet-spin 0.7s linear infinite',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                      }}>
+                                        <div style={{
+                                          width: `${pct}%`,
+                                          height: '100%',
+                                          background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                                          transition: 'width 240ms linear',
                                         }} />
-                                      ) : (
-                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                          <polygon points="6 4 20 12 6 20 6 4" />
-                                        </svg>
+                                      </div>
+                                      <div style={{
+                                        fontSize: 10,
+                                        color: '#64748b',
+                                        fontVariantNumeric: 'tabular-nums',
+                                      }}>
+                                        {`${Math.round(elapsedMs / 1000)}s / ~${Math.round(eta / 1000)}s`}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>
+                                        {hasPrimaryImage
+                                          ? 'No primary video yet.'
+                                          : 'Pick a primary image first.'}
+                                      </div>
+                                      {hasPrimaryImage && p.id && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (p.id) generatePrimaryVideo(p.id);
+                                          }}
+                                          title="Generate primary video from primary image"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            padding: '7px 14px',
+                                            borderRadius: 999,
+                                            border: 'none',
+                                            background: '#7c3aed',
+                                            color: '#fff',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            letterSpacing: '0.04em',
+                                            textTransform: 'uppercase',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 12px rgba(124,58,237,0.25)',
+                                          }}
+                                        >
+                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                            <polygon points="6 4 20 12 6 20 6 4" />
+                                          </svg>
+                                          <span>Generate</span>
+                                        </button>
                                       )}
-                                      <span>{isGenerating ? 'Generating' : 'Generate'}</span>
-                                    </button>
+                                    </>
                                   )}
                                 </div>
                               );
@@ -5605,6 +5733,124 @@ export default function AdminData() {
           </div>
         </div>
       )}
+
+      {primaryVideoGraphProductId && (() => {
+        const product = crawledProducts.find(c => c.id === primaryVideoGraphProductId);
+        if (!product) return null;
+        // Three-node DAG: source image → seedance i2v model → output
+        // video. Each node is clickable; image/video open in a new
+        // tab, the model node copies the slug. Edges are pure CSS
+        // arrows so we don't pull in a graph library for one screen.
+        const sourceUrl = (product as { primary_video_source_image_url?: string | null }).primary_video_source_image_url
+          || (product as { primary_image_url?: string | null }).primary_image_url
+          || null;
+        const videoUrl = (product as { primary_video_url?: string | null }).primary_video_url || null;
+        return (
+          <div
+            className="admin-modal-overlay"
+            onClick={() => setPrimaryVideoGraphProductId(null)}
+          >
+            <div
+              className="admin-modal"
+              style={{ width: 880, maxWidth: '94vw', padding: 28 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+                  Generation graph — <span style={{ color: '#7c3aed' }}>{product.brand} {product.name}</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setPrimaryVideoGraphProductId(null)}
+                  className="admin-btn admin-btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: 12 }}
+                >
+                  Close
+                </button>
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr auto 1fr',
+                gap: 12,
+                alignItems: 'center',
+              }}>
+                {/* Input node */}
+                <button
+                  type="button"
+                  onClick={() => sourceUrl && window.open(sourceUrl, '_blank', 'noopener,noreferrer')}
+                  disabled={!sourceUrl}
+                  style={{
+                    border: '1px solid #cbd5e1', borderRadius: 12, padding: 12,
+                    background: '#fff', cursor: sourceUrl ? 'zoom-in' : 'default',
+                    display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left',
+                  }}
+                >
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Input · Primary Image
+                  </div>
+                  {sourceUrl ? (
+                    <img
+                      src={sourceUrl}
+                      alt="Source"
+                      style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>(no source image)</div>
+                  )}
+                </button>
+                {/* arrow */}
+                <div style={{ fontSize: 28, color: '#cbd5e1', textAlign: 'center', lineHeight: 1 }}>→</div>
+                {/* Model node */}
+                <div style={{
+                  border: '1px solid #ddd6fe', borderRadius: 12, padding: 12,
+                  background: '#faf5ff', display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  <div style={{ fontSize: 10, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Model · Image → Video
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    fal-ai/bytedance/seedance/v1/lite/image-to-video
+                  </div>
+                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
+                    Static shot, show subtle cinematic motion of the product. Make it 4:5
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
+                    <span>aspect: 9:16</span>
+                    <span>res: 720p</span>
+                    <span>dur: 5s</span>
+                  </div>
+                </div>
+                {/* arrow */}
+                <div style={{ fontSize: 28, color: '#cbd5e1', textAlign: 'center', lineHeight: 1 }}>→</div>
+                {/* Output node */}
+                <button
+                  type="button"
+                  onClick={() => videoUrl && window.open(videoUrl, '_blank', 'noopener,noreferrer')}
+                  disabled={!videoUrl}
+                  style={{
+                    border: '1px solid #cbd5e1', borderRadius: 12, padding: 12,
+                    background: '#fff', cursor: videoUrl ? 'zoom-in' : 'default',
+                    display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left',
+                  }}
+                >
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Output · Primary Video
+                  </div>
+                  {videoUrl ? (
+                    <video
+                      src={videoUrl}
+                      autoPlay muted loop playsInline preload="metadata"
+                      style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#0f172a', borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>(no video yet)</div>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {generatePicker && (
         <div

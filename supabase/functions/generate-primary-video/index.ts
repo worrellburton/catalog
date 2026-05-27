@@ -133,13 +133,16 @@ Deno.serve(async (req: Request) => {
   }
 
   const sourceUrl = product.primary_image_url;
+  const t0 = Date.now();
   const result = await callSeedance(PRIMARY_VIDEO_PROMPT, sourceUrl, falKey);
+  const durationMs = Date.now() - t0;
   if (!result.url) return json({ success: false, error: result.error || 'video generation failed' });
 
   const { error: updateErr } = await admin.from('products').update({
     primary_video_url:               result.url,
     primary_video_generated_at:      new Date().toISOString(),
     primary_video_source_image_url:  sourceUrl,
+    primary_video_duration_ms:       durationMs,
   }).eq('id', productId);
   if (updateErr) return json({ success: false, error: updateErr.message });
 
@@ -147,5 +150,6 @@ Deno.serve(async (req: Request) => {
     success: true,
     video_url: result.url,
     source_image_url: sourceUrl,
+    duration_ms: durationMs,
   });
 });
