@@ -28,12 +28,26 @@ export interface SemanticCreative {
   score: number;
 }
 
+export interface SemanticLook {
+  id: string;
+  legacy_id: number | null;
+  title: string | null;
+  creator_handle: string | null;
+  description: string | null;
+  gender: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  mobile_video_url: string | null;
+  score: number;
+}
+
 interface RawSearchHit extends Omit<SemanticCreative, 'entity_type'> {}
 
 export interface SearchResponse {
   ok:       boolean;
   query:    string;
   results:  SemanticCreative[];
+  looks:    SemanticLook[];
   count:    number;
   took_ms:  number;
   error?:   string;
@@ -54,7 +68,7 @@ export async function search(
   const trimmed = query.trim();
 
   if (!trimmed) {
-    return { ok: true, query: '', results: [], count: 0, took_ms: 0 };
+    return { ok: true, query: '', results: [], looks: [], count: 0, took_ms: 0 };
   }
 
   let res: Response;
@@ -71,23 +85,31 @@ export async function search(
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err;
-    return { ok: false, query: trimmed, results: [], count: 0, took_ms: 0, error: 'Network error' };
+    return { ok: false, query: trimmed, results: [], looks: [], count: 0, took_ms: 0, error: 'Network error' };
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => `HTTP ${res.status}`);
-    return { ok: false, query: trimmed, results: [], count: 0, took_ms: 0, error: text.slice(0, 300) };
+    return { ok: false, query: trimmed, results: [], looks: [], count: 0, took_ms: 0, error: text.slice(0, 300) };
   }
 
-  const payload = await res.json() as { query: string; results: RawSearchHit[]; count: number; took_ms: number; error?: string };
+  const payload = await res.json() as {
+    query: string;
+    results: RawSearchHit[];
+    looks?: SemanticLook[];
+    count: number;
+    took_ms: number;
+    error?: string;
+  };
   if (payload.error) {
-    return { ok: false, query: payload.query, results: [], count: 0, took_ms: payload.took_ms ?? 0, error: payload.error };
+    return { ok: false, query: payload.query, results: [], looks: [], count: 0, took_ms: payload.took_ms ?? 0, error: payload.error };
   }
 
   return {
     ok:       true,
     query:    payload.query,
     results:  payload.results.map(r => ({ ...r, entity_type: 'creative' as const })),
+    looks:    payload.looks ?? [],
     count:    payload.count,
     took_ms:  payload.took_ms,
   };

@@ -271,22 +271,11 @@ export default function ContinuousFeed({
     }
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
-      // For searches >= 3 chars (semantic-eligible), suppress looks UNLESS
-      // the query is a material keyword (denim, leather, wool, …).  For
-      // material queries we want look cards too: a look that CONTAINS a
-      // denim product should surface as a look card, while the individual
-      // denim product creative shows up in the product lane separately.
-      // For type-only or abstract semantic queries the product creative lane
-      // already returns the right results, so looks stay suppressed there.
-      if (q.length >= 3) {
-        const materialKws = resolveMaterialKeywords(q);
-        if (!materialKws) return [];
-        return base.filter(l =>
-          l.products.some(p =>
-            materialKws.some(kw => p.name.toLowerCase().includes(kw))
-          )
-        );
-      }
+      // For queries >= 3 chars, the semantic search pipeline handles look
+      // ranking (search_looks RPC). Return base unfiltered — the
+      // searchMatchedLooks useMemo (declared after the semantic hook)
+      // will narrow to relevant looks by UUID match.
+      if (q.length >= 3) return base;
       return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
@@ -351,10 +340,32 @@ export default function ContinuousFeed({
   // Clean up spinner on unmount
   useEffect(() => () => onSearchLoadingChange?.(false), [onSearchLoadingChange]);
 
-  // Reorder filteredLooks: with creative-first search, look ordering is no
-  // longer driven by semantic results (creatives are inserted into the feed
-  // separately). Pass filteredLooks through unchanged.
-  const semanticallyOrderedLooks = useMemo(() => filteredLooks, [filteredLooks]);
+  // Map semantic look hits (UUIDs) to full Look objects from allLooks.
+  // This avoids a second hydration fetch — we reuse the already-loaded
+  // look data with full product info, creator avatars, etc.
+  const searchMatchedLooks = useMemo<Look[]>(() => {
+    if (!semantic.looks.length) return [];
+    const looksByUuid = new Map<string, Look>();
+    for (const l of filteredLooks) {
+      if (l.uuid) looksByUuid.set(l.uuid, l);
+    }
+    const matched: Look[] = [];
+    for (const hit of semantic.looks) {
+      const look = looksByUuid.get(hit.id);
+      if (look) matched.push(look);
+    }
+    return matched;
+  }, [semantic.looks, filteredLooks]);
+
+  // When a semantic search returned look hits, use those (relevance-ranked).
+  // Otherwise fall back to the locally-filtered looks (for short queries
+  // or when the edge function returned no look results).
+  const semanticallyOrderedLooks = useMemo(() => {
+    const q = committedQuery.trim();
+    if (q.length >= 3 && searchMatchedLooks.length > 0) return searchMatchedLooks;
+    if (q.length >= 3) return [];
+    return filteredLooks;
+  }, [filteredLooks, searchMatchedLooks, committedQuery]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],

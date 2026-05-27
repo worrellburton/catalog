@@ -1,10 +1,9 @@
-// search — V3 search edge function.
+// search — V3 search edge function (products + looks).
 //
 // Pipeline:
 //   1. Embed the user's query with Supabase.ai gte-small (384-dim).
-//   2. Call search_products RPC: dense + BM25 + RRF over products,
-//      hydrated with the best live creative per product.
-//   3. Return rows in the same shape the consumer feed expects.
+//   2. Call search_products AND search_looks RPCs in parallel.
+//   3. Return both result sets so the consumer feed can interleave them.
 //
 // No external APIs, no Claude, no OpenAI, no TwelveLabs in the search path.
 // Latency budget: ~150 ms cold, ~60 ms warm.
@@ -60,6 +59,19 @@ interface SearchHit {
   score: number;
 }
 
+interface LookHit {
+  id: string;
+  legacy_id: number | null;
+  title: string | null;
+  creator_handle: string | null;
+  description: string | null;
+  gender: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  mobile_video_url: string | null;
+  score: number;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
@@ -79,7 +91,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const query = (body.query ?? '').trim();
-  if (!query) return json({ results: [], query, took_ms: 0 });
+  if (!query) return json({ results: [], looks: [], query, took_ms: 0 });
 
   const k = Math.min(Math.max(body.k ?? 24, 1), 60);
   const gender = body.gender && ['male', 'female', 'unisex'].includes(body.gender)
@@ -100,30 +112,43 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'unexpected embedding shape' }, 500);
   }
 
-  // 2. Hybrid retrieval RPC.
+  // 2. Hybrid retrieval — products + looks in parallel.
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { persistSession: false } }
   );
 
-  const { data, error } = await supabase.rpc('search_products', {
-    query_embedding: queryEmbedding as unknown as string,
-    query_text:      query,
-    k,
-    filter_gender:   gender,
-    exclude_ids:     excludeIds,
-  });
+  const embeddingStr = queryEmbedding as unknown as string;
+  const genderForLooks = gender === 'male' ? 'men' : gender === 'female' ? 'women' : null;
 
-  if (error) {
-    return json({ error: 'search failed', detail: error.message }, 500);
+  const [productsResult, looksResult] = await Promise.all([
+    supabase.rpc('search_products', {
+      query_embedding: embeddingStr,
+      query_text:      query,
+      k,
+      filter_gender:   gender,
+      exclude_ids:     excludeIds,
+    }),
+    supabase.rpc('search_looks', {
+      query_embedding: embeddingStr,
+      query_text:      query,
+      k:               Math.min(k, 12),
+      filter_gender:   genderForLooks,
+    }),
+  ]);
+
+  if (productsResult.error) {
+    return json({ error: 'search failed', detail: productsResult.error.message }, 500);
   }
 
-  const results = (data ?? []) as SearchHit[];
+  const results = (productsResult.data ?? []) as SearchHit[];
+  const looks = (looksResult.data ?? []) as LookHit[];
 
   return json({
     query,
     results,
+    looks,
     count:   results.length,
     took_ms: Date.now() - startedAt,
   });
