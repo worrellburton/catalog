@@ -8,7 +8,6 @@ import {
 import { type EngagementSummary, getEngagementSummary } from '~/services/creator-engagement';
 import { supabase } from '~/utils/supabase';
 import DotsSignupModal from './DotsSignupModal';
-import WalletBackground from './WalletBackground';
 
 interface PayoutProfile {
   id: string;
@@ -147,8 +146,6 @@ export default function CreatorWallet({ onProfileChange }: Props) {
 
   return (
     <div className="wallet-root">
-      <WalletBackground />
-
       <div className="wallet-content">
         {profileLoading && (
           <div className="wallet-loading">

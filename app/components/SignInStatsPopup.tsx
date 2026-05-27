@@ -68,7 +68,7 @@ export default function SignInStatsPopup() {
   return (
     <div className="signin-stats-popup" role="status" aria-live="polite">
       <div className="signin-stats-head">
-        <span className="signin-stats-title">While you were away</span>
+        <span className="signin-stats-title">Activity</span>
         <span className="signin-stats-since">since {timeAgo(stats.since)}</span>
         <button
           type="button"

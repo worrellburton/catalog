@@ -12,6 +12,14 @@ import {
   setProductsImageOnly,
   subscribeProductsImageOnly,
   DEFAULT_PRODUCTS_IMAGE_ONLY,
+  getProductSimilarityThreshold,
+  setProductSimilarityThreshold,
+  subscribeProductSimilarityThreshold,
+  DEFAULT_PRODUCT_SIMILARITY,
+  getLookSimilarityThreshold,
+  setLookSimilarityThreshold,
+  subscribeLookSimilarityThreshold,
+  DEFAULT_LOOK_SIMILARITY,
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -176,6 +184,86 @@ export default function AdminDials() {
           if (inflightProductsImageOnly.current === next) inflightProductsImageOnly.current = null;
         }, 1500);
       });
+  };
+
+  // ── Product similarity threshold ────────────────────────────────────
+  const [productSimilarity, setProductSimilarityState] = useState(DEFAULT_PRODUCT_SIMILARITY);
+  const [productSimilarityLoaded, setProductSimilarityLoaded] = useState(false);
+  const [productSimilaritySaving, setProductSimilaritySaving] = useState(false);
+  const [productSimilarityError, setProductSimilarityError] = useState<string | null>(null);
+  const inflightProductSimilarity = useRef<number | null>(null);
+  const productSimilarityTimer = useRef<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getProductSimilarityThreshold().then(v => {
+      if (cancelled) return;
+      setProductSimilarityState(v);
+      setProductSimilarityLoaded(true);
+    });
+    const unsub = subscribeProductSimilarityThreshold(v => {
+      if (cancelled) return;
+      if (inflightProductSimilarity.current === v) return;
+      setProductSimilarityState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onSlideProductSimilarity = (next: number) => {
+    setProductSimilarityState(next);
+    setProductSimilarityError(null);
+    if (productSimilarityTimer.current != null) window.clearTimeout(productSimilarityTimer.current);
+    productSimilarityTimer.current = window.setTimeout(() => {
+      productSimilarityTimer.current = null;
+      inflightProductSimilarity.current = next;
+      setProductSimilaritySaving(true);
+      setProductSimilarityThreshold(next)
+        .catch(err => setProductSimilarityError(err.message || 'Save failed'))
+        .finally(() => {
+          setProductSimilaritySaving(false);
+          window.setTimeout(() => {
+            if (inflightProductSimilarity.current === next) inflightProductSimilarity.current = null;
+          }, 1500);
+        });
+    }, 180);
+  };
+
+  // ── Look similarity threshold ────────────────────────────────────────
+  const [lookSimilarity, setLookSimilarityState] = useState(DEFAULT_LOOK_SIMILARITY);
+  const [lookSimilarityLoaded, setLookSimilarityLoaded] = useState(false);
+  const [lookSimilaritySaving, setLookSimilaritySaving] = useState(false);
+  const [lookSimilarityError, setLookSimilarityError] = useState<string | null>(null);
+  const inflightLookSimilarity = useRef<number | null>(null);
+  const lookSimilarityTimer = useRef<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getLookSimilarityThreshold().then(v => {
+      if (cancelled) return;
+      setLookSimilarityState(v);
+      setLookSimilarityLoaded(true);
+    });
+    const unsub = subscribeLookSimilarityThreshold(v => {
+      if (cancelled) return;
+      if (inflightLookSimilarity.current === v) return;
+      setLookSimilarityState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onSlideLookSimilarity = (next: number) => {
+    setLookSimilarityState(next);
+    setLookSimilarityError(null);
+    if (lookSimilarityTimer.current != null) window.clearTimeout(lookSimilarityTimer.current);
+    lookSimilarityTimer.current = window.setTimeout(() => {
+      lookSimilarityTimer.current = null;
+      inflightLookSimilarity.current = next;
+      setLookSimilaritySaving(true);
+      setLookSimilarityThreshold(next)
+        .catch(err => setLookSimilarityError(err.message || 'Save failed'))
+        .finally(() => {
+          setLookSimilaritySaving(false);
+          window.setTimeout(() => {
+            if (inflightLookSimilarity.current === next) inflightLookSimilarity.current = null;
+          }, 1500);
+        });
+    }, 180);
   };
 
   return (
@@ -508,6 +596,130 @@ export default function AdminDials() {
               </div>
             )}
           </div>
+        </div>
+        <div className="admin-detail-card">
+          <h3>Product "More like this" similarity</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How closely related products must be to appear in the "More
+            like this" rail on the product page. Powered by TwelveLabs
+            Marengo visual embeddings (cosine similarity). At 0% all
+            nearest neighbours from the AI are shown. At 60% the rail
+            shows reasonably similar items. At 90% only near-identical
+            products pass — the rail may shrink when nothing qualifies.
+          </p>
+          {!productSimilarityLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={productSimilarity}
+                  onChange={e => onSlideProductSimilarity(parseInt(e.target.value, 10))}
+                  style={{ flex: 1 }}
+                  aria-label="Product similarity threshold percent"
+                />
+                <div style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {productSimilarity === 0 ? 'Off' : `${productSimilarity}%`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {[0, 50, 60, 70, 80, 90].map(point => (
+                  <button
+                    key={point}
+                    type="button"
+                    onClick={() => onSlideProductSimilarity(point)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums',
+                      borderRadius: 999,
+                      border: `1px solid ${productSimilarity === point ? '#1a1a1a' : '#e5e5e5'}`,
+                      background: productSimilarity === point ? '#1a1a1a' : '#fff',
+                      color: productSimilarity === point ? '#fff' : '#444',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {point === 0 ? 'Off' : `${point}%`}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#999' }}>
+                <span>0% — no filter (show all)</span>
+                <span>{productSimilaritySaving ? 'Saving…' : 'Saved'}</span>
+                <span>100% — near-identical only</span>
+              </div>
+              {productSimilarityError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626' }}>{productSimilarityError}</div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Look "More like this" similarity</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How many of the seed look's products a candidate look must
+            share to appear in "More like this". At 0% one shared
+            product name is enough (current behaviour). At 60% with a
+            3-product look, 2 must match. At 100% every product in the
+            seed must appear in the candidate — very strict.
+          </p>
+          {!lookSimilarityLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={lookSimilarity}
+                  onChange={e => onSlideLookSimilarity(parseInt(e.target.value, 10))}
+                  style={{ flex: 1 }}
+                  aria-label="Look similarity threshold percent"
+                />
+                <div style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {lookSimilarity === 0 ? 'Off' : `${lookSimilarity}%`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {[0, 25, 50, 75, 100].map(point => (
+                  <button
+                    key={point}
+                    type="button"
+                    onClick={() => onSlideLookSimilarity(point)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums',
+                      borderRadius: 999,
+                      border: `1px solid ${lookSimilarity === point ? '#1a1a1a' : '#e5e5e5'}`,
+                      background: lookSimilarity === point ? '#1a1a1a' : '#fff',
+                      color: lookSimilarity === point ? '#fff' : '#444',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {point === 0 ? 'Off' : `${point}%`}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#999' }}>
+                <span>0% — any 1 match (default)</span>
+                <span>{lookSimilaritySaving ? 'Saving…' : 'Saved'}</span>
+                <span>100% — all products must match</span>
+              </div>
+              {lookSimilarityError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626' }}>{lookSimilarityError}</div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

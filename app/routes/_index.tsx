@@ -31,6 +31,7 @@ import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
 import SignInStatsPopup from '~/components/SignInStatsPopup';
+import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -165,6 +166,7 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState<string>('all');
+  const [mySizeOnly, setMySizeOnly] = useState(false);
 
   // Native shell bridge: Flutter wrapper dispatches CustomEvents on
   // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
@@ -847,6 +849,10 @@ export default function Home() {
               clickouts / new followers). Hidden when nothing happened
               or when previously shown this session. */}
           <SignInStatsPopup />
+          {/* Activity — live engagement toasts that pop in via
+              Supabase realtime whenever someone clicks / clicks-out
+              one of the signed-in creator's looks, or follows them. */}
+          <ActivityRealtimeToasts />
 
           <ContinuousFeed
             activeFilter={activeFilter}
@@ -864,6 +870,7 @@ export default function Home() {
             onSearchLoadingChange={handleSearchLoadingChange}
             searchTrigger={searchTrigger}
             followedHandles={followingCatalog}
+            mySizeOnly={mySizeOnly}
           />
 
           <BottomBar
@@ -875,6 +882,8 @@ export default function Home() {
             onOpenCreators={handleOpenLilyCreator}
             catalogName={catalogName}
             searchLoading={searchLoading}
+            mySizeOnly={mySizeOnly}
+            onMySizeChange={setMySizeOnly}
           />
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">

@@ -1,11 +1,11 @@
 // useSearch — debounced V3 search hook.
 //
 // Calls the `search` edge function after a short debounce (or immediately on
-// Enter when `trigger` increments). Returns ranked results plus loading /
-// error / pagination state. Replaces useSemanticSearch.
+// Enter when `trigger` increments). Returns ranked product creatives + look
+// hits plus loading / error / pagination state.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { search, SemanticCreative } from '~/services/search';
+import { search, SemanticCreative, SemanticLook } from '~/services/search';
 
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS      = 200;
@@ -14,9 +14,11 @@ const PAGE_SIZE        = 24;
 export interface SearchHookState {
   /** Ranked creatives + product placeholders. The feed renders these. */
   creatives: SemanticCreative[];
+  /** Ranked look hits from hybrid search. */
+  looks: SemanticLook[];
   /** True while the edge function is in flight (initial fetch or loadMore). */
   loading: boolean;
-  /** True when the last successful query returned zero results. */
+  /** True when the last successful query returned zero results (both lanes). */
   coldMiss: boolean;
   /** Non-null when the last request failed. */
   error: string | null;
@@ -33,6 +35,7 @@ export function useSearch(
   const { gender = null, trigger = 0, enabled = true } = options;
 
   const [creatives, setCreatives] = useState<SemanticCreative[]>([]);
+  const [looks,     setLooks]     = useState<SemanticLook[]>([]);
   const [loading,   setLoading]   = useState(false);
   const [coldMiss,  setColdMiss]  = useState(false);
   const [error,     setError]     = useState<string | null>(null);
@@ -71,13 +74,6 @@ export function useSearch(
       setCreatives(prev => {
         const next = append ? [...prev] : [];
         const seenIds       = new Set(next.map(c => c.id));
-        // Track current entry per product_id so we can UPGRADE a
-        // placeholder to a real video creative when a later result
-        // for the same product carries video_url. Without this, the
-        // edge function's first result wins — so search for "jeans"
-        // would render a still product image even when a video
-        // creative for the exact same SKU was further down the
-        // hybrid-rank list.
         const indexByProduct = new Map<string, number>();
         for (let i = 0; i < next.length; i++) {
           indexByProduct.set(next[i].product_id, i);
@@ -87,9 +83,6 @@ export function useSearch(
           const existing = indexByProduct.get(c.product_id);
           if (existing !== undefined) {
             const cur = next[existing];
-            // Replace a placeholder with a real video creative for
-            // the same product. Skip otherwise so we don't double-
-            // surface the SKU.
             if (!cur.video_url && c.video_url) {
               seenIds.delete(cur.id);
               seenIds.add(c.id);
@@ -102,12 +95,6 @@ export function useSearch(
           next.push(c);
         }
         seenProductsRef.current = new Set(indexByProduct.keys());
-        // Final pass: float every video-bearing creative to the top
-        // of the list, preserving relative order. Product-only
-        // placeholders (no video_url) sink to the bottom. This
-        // matches the user's expectation that "search shows video
-        // creatives" — a placeholder still surfaces when no creative
-        // exists for the SKU, but only after the videos.
         next.sort((a, b) => {
           const av = a.video_url ? 0 : 1;
           const bv = b.video_url ? 0 : 1;
@@ -116,7 +103,12 @@ export function useSearch(
         return next;
       });
 
-      setColdMiss(!append && resp.results.length === 0);
+      // Looks: replace on fresh search, ignore on append (looks don't paginate).
+      if (!append) {
+        setLooks(resp.looks);
+      }
+
+      setColdMiss(!append && resp.results.length === 0 && resp.looks.length === 0);
       setHasMore(resp.results.length >= PAGE_SIZE);
       setLoading(false);
     } catch (err) {
@@ -133,6 +125,7 @@ export function useSearch(
     if (!enabled || query.trim().length < MIN_QUERY_LENGTH) {
       abortRef.current?.abort();
       setCreatives([]);
+      setLooks([]);
       setLoading(false);
       setColdMiss(false);
       setError(null);
@@ -146,6 +139,7 @@ export function useSearch(
     committedRef.current = q;
     seenProductsRef.current = new Set();
     setCreatives([]);
+    setLooks([]);
 
     const immediate = trigger !== triggerRef.current;
     triggerRef.current = trigger;
@@ -164,5 +158,5 @@ export function useSearch(
   // Abort on unmount.
   useEffect(() => () => { abortRef.current?.abort(); }, []);
 
-  return { creatives, loading, coldMiss, error, hasMore, loadMore };
+  return { creatives, looks, loading, coldMiss, error, hasMore, loadMore };
 }

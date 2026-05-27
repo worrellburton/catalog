@@ -1623,8 +1623,6 @@ export default function AdminCatalogs() {
               <th>Featured</th>
               <th>Gender</th>
               <th>Products</th>
-              <th>Impressions</th>
-              <th>14d</th>
               <th>Searches</th>
               <th>Created</th>
               <th>Actions</th>
@@ -1704,8 +1702,6 @@ export default function AdminCatalogs() {
                         <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                       )}
                     </td>
-                    <td><ImpressionsPill counts={catalogImpressions.get(homeCatalog.name.toLowerCase())} /></td>
-                    <td><MiniSparkline series={catalogDaily.get(homeCatalog.name.toLowerCase())} /></td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                     <td>
@@ -1718,7 +1714,7 @@ export default function AdminCatalogs() {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
@@ -1857,8 +1853,6 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
-                <td><ImpressionsPill counts={catalogImpressions.get(c.name.toLowerCase())} /></td>
-                <td><MiniSparkline series={catalogDaily.get(c.name.toLowerCase())} /></td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
@@ -1913,7 +1907,7 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={9} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}

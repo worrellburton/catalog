@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getMyFollowing } from '~/services/follows';
+import { getMyFollowing, getMyFollowers, type FollowerInfo } from '~/services/follows';
 import { subscribeFollowingChanges } from '~/hooks/useFollowState';
 import { supabase } from '~/utils/supabase';
 
@@ -11,53 +11,75 @@ interface FollowingRailProps {
   onCreateFollowingCatalog?: (handles: string[]) => void;
 }
 
-interface FollowedCreator {
+interface RailEntry {
   handle: string;
   displayName: string | null;
   avatarUrl: string | null;
-  /** ms-since-epoch of this creator's most recent live look. Used
-   *  to sort the rail "most recent post first" so the creators
-   *  currently shipping content surface at the top of the stack. */
-  lastPostAt: number;
+  /** ms-since-epoch ts powering the per-entry tooltip + new-pop
+   *  animation. For Following rows we pass the look's last-post ts;
+   *  for Followers rows we pass the follow's created_at. */
+  ts: number;
+}
+
+/** Up to 25 stacked avatars in each rail; anything beyond gets a
+ *  "+N" pill so the row stays a fixed width. */
+const MAX_VISIBLE = 25;
+
+/** A freshly-detected follower keeps its pop-in animation class for
+ *  this many ms before reverting to a normal avatar. */
+const NEW_FOLLOWER_PULSE_MS = 5000;
+
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return 'just now';
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7)  return `${d}d ago`;
+  const w = Math.floor(d / 7);
+  if (w < 5)  return `${w}w ago`;
+  return new Date(ms).toLocaleDateString();
 }
 
 /**
- * Small circle in the header that, when clicked, opens a popover
- * showing every creator the signed-in shopper follows. Hidden when
- * the shopper follows nobody yet (so the header doesn't carry a
- * permanently-empty UI element). Resolves each handle against both
- * profiles + creators tables for the avatar/name — same merge
- * logic the CreatorPage hero uses.
+ * Header rails for "creators I follow" + "people who follow me".
+ * Each row is a stack of overlapping avatar circles capped at 25
+ * with a "+N" overflow pill. Click a row to open a popover listing
+ * everyone in that bucket; click an avatar inside the popover to
+ * open that creator's page.
+ *
+ * Followers row gets two extras the Following row doesn't:
+ *   - "Followed Xm ago" tooltip per avatar.
+ *   - Pop-in CSS animation when a new follower appears (compared
+ *     to the previous fetch). The animation persists for a few
+ *     seconds so the user catches it even if they were tabbed out.
+ *
+ * Hidden when both rails are empty.
  */
-export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog }: FollowingRailProps) {
-  const [creators, setCreators] = useState<FollowedCreator[] | null>(null);
-  const [open, setOpen] = useState(false);
+export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+  const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
+  const [followerEntries, setFollowerEntries] = useState<FollowerInfo[] | null>(null);
+  const [newFollowerHandles, setNewFollowerHandles] = useState<Set<string>>(new Set());
+  const [openPopover, setOpenPopover] = useState<'following' | 'followers' | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const prevFollowerHandlesRef = useRef<Set<string> | null>(null);
 
-  // Refetch the rail whenever any follow toggles elsewhere (in-feed
-  // icon, CreatorPage CTA, etc.). Without this the rail froze on its
-  // first-mount snapshot and you'd have to reload the tab to see a
-  // newly-followed creator appear at the top of the screen.
   useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
 
+  // Following list: handle → display name + avatar + last-post ts.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const handles = await getMyFollowing();
       if (cancelled) return;
-      if (handles.length === 0) {
-        setCreators([]);
-        return;
-      }
+      if (handles.length === 0) { setFollowingEntries([]); return; }
       if (!supabase) {
-        setCreators(handles.map(h => ({ handle: h, displayName: null, avatarUrl: null, lastPostAt: 0 })));
+        setFollowingEntries(handles.map(h => ({ handle: h, displayName: null, avatarUrl: null, ts: 0 })));
         return;
       }
-      // Pull creators table (handle keyed) + look up user_ids via
-      // looks for fallback profile-based avatar. Single fetch per
-      // table — cheap. Also pull created_at so we can sort the rail
-      // by "most recent post first".
       const [creatorRows, lookRows] = await Promise.all([
         supabase.from('creators').select('handle, display_name, avatar_url').in('handle', handles),
         supabase.from('looks')
@@ -82,7 +104,6 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
           if (Number.isFinite(ts)) lastPostByHandle.set(l.creator_handle, ts);
         }
       }
-      // Profile lookups for handles that lacked a creators-table avatar.
       const profileNeeded = Array.from(new Set(
         handles
           .filter(h => !creatorByHandle.get(h)?.avatar_url)
@@ -92,15 +113,13 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
       const profileByUserId = new Map<string, { full_name: string | null; avatar_url: string | null }>();
       if (profileNeeded.length > 0) {
         const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .in('id', profileNeeded);
+          .from('profiles').select('id, full_name, avatar_url').in('id', profileNeeded);
         for (const p of (profs || []) as { id: string; full_name: string | null; avatar_url: string | null }[]) {
           profileByUserId.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url });
         }
       }
       if (cancelled) return;
-      const resolved: FollowedCreator[] = handles.map(h => {
+      const resolved: RailEntry[] = handles.map(h => {
         const cr = creatorByHandle.get(h);
         const uid = userIdByHandle.get(h);
         const prof = uid ? profileByUserId.get(uid) : undefined;
@@ -108,86 +127,178 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
           handle: h,
           displayName: cr?.display_name || prof?.full_name || null,
           avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
-          lastPostAt: lastPostByHandle.get(h) ?? 0,
+          ts: lastPostByHandle.get(h) ?? 0,
         };
       });
-      // Most recent post first. Creators with zero posts sort to the
-      // bottom (lastPostAt=0). Stable for equal timestamps via the
-      // handle-order tiebreak — handles came from getMyFollowing()
-      // which is already follow-date desc.
-      resolved.sort((a, b) => b.lastPostAt - a.lastPostAt);
-      setCreators(resolved);
+      resolved.sort((a, b) => b.ts - a.ts);
+      setFollowingEntries(resolved);
     })();
     return () => { cancelled = true; };
   }, [refreshKey]);
 
+  // Followers list. On every refresh we diff against the previous
+  // snapshot — any handle that wasn't in the prior set is "new" and
+  // gets the pop-in animation. After NEW_FOLLOWER_PULSE_MS the new
+  // class is dropped so the row settles.
   useEffect(() => {
-    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const fresh = await getMyFollowers();
+      if (cancelled) return;
+      const prevSet = prevFollowerHandlesRef.current;
+      const currentSet = new Set(fresh.map(f => f.handle));
+      let nextNew: Set<string> = new Set();
+      if (prevSet) {
+        for (const f of fresh) {
+          if (!prevSet.has(f.handle)) nextNew.add(f.handle);
+        }
+      }
+      prevFollowerHandlesRef.current = currentSet;
+      setFollowerEntries(fresh);
+      if (nextNew.size > 0) {
+        setNewFollowerHandles(nextNew);
+        setTimeout(() => {
+          if (cancelled) return;
+          setNewFollowerHandles(new Set());
+        }, NEW_FOLLOWER_PULSE_MS);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  // Click-outside collapses whichever popover is open.
+  useEffect(() => {
+    if (!openPopover) return;
     const onDoc = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpenPopover(null);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  }, [openPopover]);
 
-  if (creators === null || creators.length === 0) return null;
+  const followingReady = followingEntries !== null;
+  const followersReady = followerEntries !== null;
+  if (!followingReady && !followersReady) return null;
+  const hasFollowing = (followingEntries?.length ?? 0) > 0;
+  const hasFollowers = (followerEntries?.length ?? 0) > 0;
+  if (!hasFollowing && !hasFollowers) return null;
 
-  // Up to 12 stacked avatars in the rail; anything beyond gets a
-  // "+N" pill so the row stays a fixed width regardless of how many
-  // creators you follow. Click the rail to open the full popover.
-  const MAX_VISIBLE = 12;
-  const visible = creators.slice(0, MAX_VISIBLE);
-  const overflow = Math.max(0, creators.length - MAX_VISIBLE);
+  const followerRailEntries: RailEntry[] = (followerEntries ?? []).map(f => ({
+    handle: f.handle,
+    displayName: f.displayName,
+    avatarUrl: f.avatarUrl,
+    ts: f.followedAt,
+  }));
+
   return (
     <div
       ref={wrapperRef}
-      className="follow-rail"
+      className="follow-rail-wrap"
       style={{
         position: 'relative',
         display: 'inline-flex',
+        flexDirection: 'column',
         alignItems: 'center',
+        gap: 6,
       }}
     >
+      {hasFollowing && (
+        <AvatarRow
+          ariaLabel="Following"
+          titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
+          entries={followingEntries!}
+          newSet={null}
+          isOpen={openPopover === 'following'}
+          onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+          onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+          popoverTitle={`Following · ${followingEntries!.length}`}
+          tooltipPrefix={null}
+        />
+      )}
+      {hasFollowers && (
+        <AvatarRow
+          ariaLabel="Followers"
+          titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
+          entries={followerRailEntries}
+          newSet={newFollowerHandles}
+          isOpen={openPopover === 'followers'}
+          onToggle={() => setOpenPopover(v => v === 'followers' ? null : 'followers')}
+          onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+          popoverTitle={`Followers · ${followerEntries!.length}`}
+          tooltipPrefix="Followed"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── internal AvatarRow ─────────────────────────────────────────────
+
+interface AvatarRowProps {
+  ariaLabel: string;
+  titleText: string;
+  entries: RailEntry[];
+  /** Handles that should pop-in with the new-follower animation.
+   *  null for rows that don't animate (Following). */
+  newSet: Set<string> | null;
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (handle: string) => void;
+  popoverTitle: string;
+  /** When set, the per-avatar tooltip reads `${tooltipPrefix} ${timeAgo}`. */
+  tooltipPrefix: string | null;
+}
+
+function AvatarRow({
+  ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix,
+}: AvatarRowProps) {
+  const visible = entries.slice(0, MAX_VISIBLE);
+  const overflow = Math.max(0, entries.length - MAX_VISIBLE);
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }} className="follow-rail">
       <button
         type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-label="Following"
-        title={`Following ${creators.length} creator${creators.length === 1 ? '' : 's'}`}
+        onClick={onToggle}
+        aria-label={ariaLabel}
+        title={titleText}
         className="follow-rail-trigger"
         style={{
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
+          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center',
         }}
       >
         <span className="follow-rail-stack" style={{ position: 'relative', display: 'inline-flex', height: 28 }}>
-          {visible.map((c, i) => (
-            <span
-              key={c.handle}
-              className="follow-rail-avatar"
-              style={{
-                width: 28, height: 28, borderRadius: '50%',
-                border: '2px solid #fff',
-                background: '#e2e8f0',
-                overflow: 'hidden',
-                marginLeft: i === 0 ? 0 : -10,
-                zIndex: 10 - i,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#475569',
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              {c.avatarUrl
-                ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : (c.displayName || c.handle).charAt(0).toUpperCase()}
-            </span>
-          ))}
+          {visible.map((c, i) => {
+            const isNew = !!newSet?.has(c.handle);
+            const tip = tooltipPrefix && c.ts
+              ? `${c.displayName || c.handle} · ${tooltipPrefix} ${timeAgo(c.ts)}`
+              : (c.displayName || c.handle);
+            return (
+              <span
+                key={c.handle}
+                className={`follow-rail-avatar${isNew ? ' follow-rail-avatar--new' : ''}`}
+                title={tip}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  border: '2px solid #fff',
+                  background: '#e2e8f0',
+                  overflow: 'hidden',
+                  marginLeft: i === 0 ? 0 : -10,
+                  zIndex: 50 - i,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#475569',
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {c.avatarUrl
+                  ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : (c.displayName || c.handle).charAt(0).toUpperCase()}
+              </span>
+            );
+          })}
           {overflow > 0 && (
             <span
               className="follow-rail-avatar follow-rail-overflow"
@@ -198,7 +309,7 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
                 color: '#fff',
                 overflow: 'hidden',
                 marginLeft: -10,
-                zIndex: 10 - visible.length,
+                zIndex: 50 - visible.length,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -214,7 +325,7 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
         </span>
       </button>
 
-      {open && (
+      {isOpen && (
         <div className="follow-rail-popover" style={{
           position: 'absolute',
           top: 'calc(100% + 8px)',
@@ -231,14 +342,14 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
           zIndex: 100,
         }}>
           <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, padding: '4px 6px 6px' }}>
-            Following · {creators.length}
+            {popoverTitle}
           </div>
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {creators.map(c => (
+            {entries.map(c => (
               <button
                 key={c.handle}
                 type="button"
-                onClick={() => { setOpen(false); onOpenCreator(c.handle); }}
+                onClick={() => onSelect(c.handle)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -265,11 +376,15 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog 
                     ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : (c.displayName || c.handle).charAt(0).toUpperCase()}
                 </span>
-                <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.displayName || c.handle}
                   </span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>@{c.handle}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>
+                    {tooltipPrefix && c.ts
+                      ? `${tooltipPrefix} ${timeAgo(c.ts)}`
+                      : `@${c.handle}`}
+                  </span>
                 </span>
               </button>
             ))}

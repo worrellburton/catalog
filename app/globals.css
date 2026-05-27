@@ -114,3 +114,57 @@
     padding: 10px 14px 12px;
   }
 }
+
+/* Activity — realtime engagement toasts. Fixed top-right stack that
+   pops in one-by-one as the realtime subscription delivers events
+   on the signed-in creator's looks / new follower rows. Sits above
+   most of the UI without competing with the SignInStatsPopup at
+   top-center. */
+.activity-toasts {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: min(320px, 90vw);
+}
+.activity-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  animation: activity-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.activity-toast--click    { background: rgba(124, 58, 237, 0.95); }
+.activity-toast--clickout { background: rgba(22, 163, 74, 0.95); }
+.activity-toast--follow   { background: rgba(37, 99, 235, 0.95); }
+.activity-toast-icon {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.activity-toast-message {
+  flex: 1;
+  line-height: 1.25;
+}
+@keyframes activity-toast-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@media (max-width: 640px) {
+  .activity-toasts { top: 64px; right: 8px; }
+  .activity-toast  { font-size: 12px; padding: 9px 12px; }
+}

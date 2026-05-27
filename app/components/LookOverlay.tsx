@@ -17,91 +17,10 @@ import {
   isMobileViewport,
   isSlowConnection,
 } from '~/services/video-loading';
-
-// ─── Look similarity helpers (module-level, stable references) ──────────────
-
-/** Canonical product-type groups. A product name that contains any keyword
- *  in a group is classified as that group's canonical type.
- *  Order matters: more specific patterns must come before general ones. */
-const PRODUCT_TYPE_GROUPS: readonly [canonical: string, keywords: readonly string[]][] = [
-  ['jeans',       ['jeans', 'denim pant', 'denim trouser']],
-  ['shorts',      ['shorts', 'short pant', 'breezy short', 'board short', 'swim short']],
-  ['pants',       ['pants', 'trousers', 'chinos', 'slacks', 'leggings', 'joggers', 'sweatpants']],
-  ['skirt',       ['skirt', 'mini skirt', 'midi skirt', 'maxi skirt']],
-  ['dress',       ['dress', 'gown', 'jumpsuit', 'romper']],
-  ['top',         ['blouse', 'crop top', 'tank top', 'tube top', 'cami', 'bodysuit']],
-  ['tshirt',      ['t-shirt', 'tshirt', 'crew neck', 'crewneck', 'graphic tee', 'tee ']],
-  ['shirt',       ['shirt', 'button down', 'button-down', 'oxford', 'flannel shirt']],
-  ['sweater',     ['sweater', 'pullover', 'knitwear', 'knit top', 'cardigan']],
-  ['hoodie',      ['hoodie', 'sweatshirt', 'hooded']],
-  ['jacket',      ['jacket', 'blazer', 'bomber', 'windbreaker', 'parka', 'anorak']],
-  ['coat',        ['coat', 'overcoat', 'trench', 'puffer']],
-  ['vest',        ['vest', 'waistcoat']],
-  ['sneakers',    ['sneaker', 'trainer', 'running shoe', 'athletic shoe']],
-  ['shoes',       ['shoe', 'oxford shoe', 'derby', 'loafer', 'mule', 'flat shoe']],
-  ['boots',       ['boot', 'ankle boot', 'knee-high', 'chelsea']],
-  ['sandals',     ['sandal', 'slide', 'flip flop', 'flip-flop']],
-  ['heels',       ['heel', 'pump', 'stiletto', 'wedge']],
-  ['bag',         ['bag', 'purse', 'tote', 'backpack', 'clutch', 'handbag', 'shoulder bag', 'crossbody', 'satchel', 'wallet']],
-  ['cap',         ['cap', 'hat', 'beanie', 'beret', 'bucket hat', 'snapback', 'baseball']],
-  ['sunglasses',  ['sunglasses', 'sunglass', 'shades', 'cat eye', 'aviator']],
-  ['glasses',     ['glasses', 'eyewear', 'spectacles']],
-  ['watch',       ['watch', 'smartwatch']],
-  ['jewelry',     ['necklace', 'bracelet', 'earring', 'ring ', 'pendant', 'anklet', 'jewelry', 'jewellery']],
-  ['belt',        ['belt']],
-  ['scarf',       ['scarf', 'wrap']],
-  ['socks',       ['socks', 'sock ']],
-  ['underwear',   ['underwear', 'bra ', 'boxers', 'briefs', 'lingerie']],
-  ['swimwear',    ['swimsuit', 'bikini', 'swim', 'wetsuit']],
-  ['activewear',  ['sports bra', 'sports top', 'gym wear', 'workout', 'activewear', 'athletic wear']],
-];
-
-function getProductTypes(products: Product[]): Set<string> {
-  const types = new Set<string>();
-  for (const p of products) {
-    const name = p.name.toLowerCase();
-    for (const [canonical, keywords] of PRODUCT_TYPE_GROUPS) {
-      if (keywords.some(kw => name.includes(kw))) {
-        types.add(canonical);
-        break;
-      }
-    }
-  }
-  return types;
-}
-
-function getBrands(products: Product[]): Set<string> {
-  const out = new Set<string>();
-  for (const p of products) {
-    const b = p.brand?.toLowerCase().trim();
-    if (b) out.add(b);
-  }
-  return out;
-}
-
-/**
- * Score similarity between two looks.
- * Returns 0 immediately when genders are incompatible.
- * Each shared product type   = +1 pt
- * Each shared brand          = +3 pts
- * Threshold for "similar"    = ≥ 2 pts
- */
-function lookSimilarityScore(seed: Look, candidate: Look): number {
-  // Gender filter: men looks should only surface in men sections, etc.
-  const sg = seed.gender;
-  const cg = candidate.gender;
-  if (sg !== 'unisex' && cg !== 'unisex' && sg !== cg) return 0;
-
-  const seedTypes  = getProductTypes(seed.products);
-  const candTypes  = getProductTypes(candidate.products);
-  const seedBrands = getBrands(seed.products);
-  const candBrands = getBrands(candidate.products);
-
-  let score = 0;
-  for (const t of seedTypes)  if (candTypes.has(t))  score += 1;
-  for (const b of seedBrands) if (candBrands.has(b)) score += 3;
-  return score;
-}
+import { useAuth } from '~/hooks/useAuth';
+import { useShopperBody } from '~/hooks/useShopperBody';
+import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
+import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 
 /**
  * Pads `arr` to exactly `count` items by cycling duplicates (with synthetic
@@ -165,6 +84,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const [translateY, setTranslateY] = useState(0);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
+
+  const { user } = useAuth();
+  const shopperBody = useShopperBody(user?.id);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -235,10 +157,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => { trailMgr?.resumeFeed(); };
   }, [trailMgr, trailId]);
 
-  // Resolves to the shopper's active gender preference ('all'|'men'|'women').  
+  // Resolves to the shopper's active gender preference ('all'|'men'|'women').
   // Declared before feedSections so it can be used as a tiebreaker when the
   // seed look is tagged 'unisex' (e.g. because a product says "Unisex T-Shirt").
   const ymalGenderFilter = useActiveGenderFilter();
+
+  // Admin dial: minimum fraction of seed products a candidate look must share.
+  // 0 = any 1 match (default/current). Loaded once on overlay open.
+  const [lookSimilarityThreshold, setLookSimilarityThresholdState] = useState(DEFAULT_LOOK_SIMILARITY);
+  useEffect(() => {
+    getLookSimilarityThreshold().then(setLookSimilarityThresholdState);
+  }, []);
 
   // Feed sections below the hero:
   //   1. "More like this" — shared product types + compatible gender
@@ -272,13 +201,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         ? ymalGenderFilter
         : seedGender;
 
+    // minMatches = how many seed products must appear in the candidate.
+    // threshold 0 → 1 match (current behaviour). threshold 60 with 3
+    // seed products → ceil(3×0.6)=2 must match. threshold 100 → all must match.
+    const minMatches = Math.max(1, Math.ceil(seedProductNames.size * lookSimilarityThreshold / 100));
     const looksLikeThis: Look[] = seedProductNames.size > 0
       ? source.filter(l => {
           const cg = l.gender;
           if (effectiveSeedGender !== 'unisex' && cg !== 'unisex' && effectiveSeedGender !== cg) return false;
-          return (l.products || []).some(p =>
+          const matchCount = (l.products || []).filter(p =>
             seedProductNames.has(p.name.toLowerCase().trim())
-          );
+          ).length;
+          return matchCount >= minMatches;
         })
       : [];
 
@@ -316,7 +250,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       popular:         fillLooks(b, 8),
       moreFromCreator: fillLooks(c, 8),
     };
-  }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter]);
+  }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter, lookSimilarityThreshold]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
@@ -658,6 +592,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             <div className="look-tab-content">
               {activeTab === 'products' && (
                 <div className="look-products-list">
+                  {shopperBody.heightCm && (
+                    <SizeMatchSummary products={look.products} body={shopperBody} />
+                  )}
                   {sortByGarmentRole(look.products).map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
@@ -670,6 +607,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                         {p.brand && <span className="product-brand">{p.brand}</span>}
                         <span className="product-card-name">{p.name}</span>
                         <span className="product-card-price">{p.price}</span>
+                        {shopperBody.heightCm && <SizeMatchBadge product={p} body={shopperBody} />}
                       </div>
                       <button
                         className={`product-bookmark-btn${productBookmarks[pi] ? ' active' : ''}`}
@@ -765,7 +703,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
         {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">Similar</h3>
+            <h3 className="look-feed-heading">More like this</h3>
             <div className="look-feed-grid">
               {feedSections.looksLikeThis.map(fl => (
                 <LookCard
