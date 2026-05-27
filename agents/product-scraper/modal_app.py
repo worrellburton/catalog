@@ -868,3 +868,220 @@ def backfill_size_fit(
 
     print(f"\nSpawned {len(candidates)} scrape job(s).")
     return {"found": len(candidates), "queued": len(candidates), "dry_run": False}
+
+
+# ─── Backfill: re-scrape products missing variant / size-chart data ────
+
+@app.function(
+    image=scraper_image,
+    secrets=secrets,
+    timeout=120,
+)
+def backfill_size_data(
+    limit: int = 50,
+    dry_run: bool = True,
+    only_brand: str | None = None,
+):
+    """
+    Re-scrape products where variants (size options) are missing.
+
+    These rows were scraped before get_variants / get_size_chart were wired
+    into the pipeline. A full re-scrape via scrape_and_update picks up:
+      • variants   – all sizes/colors with availability
+      • size_chart – garment measurements keyed by size label
+      • materials_structured – parsed fiber/pct composition
+      • product_taxonomy, styling_metadata, fit_intelligence, confidence_scores
+
+    Only targets scrape_status='done' rows so it doesn't interfere with the
+    regular pending/failed cron.
+
+    Concurrency is capped by scrape_and_update.max_containers (3), so a large
+    batch just queues rather than spiking Anthropic usage.
+
+    Usage:
+        # Dry-run: see the first 50 candidates without spending compute
+        modal run modal_app.py::backfill_size_data
+
+        # Actually process 100 products
+        modal run modal_app.py::backfill_size_data --limit 100 --no-dry-run
+
+        # Pilot on one brand first
+        modal run modal_app.py::backfill_size_data --only-brand "Levi's" --no-dry-run
+    """
+    import os
+    from supabase import create_client
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+
+    q = (
+        supabase.table("products")
+        .select("id, brand, name, url")
+        .is_("variants", "null")
+        .not_.is_("url", "null")
+        .eq("scrape_status", "done")
+    )
+    if only_brand:
+        q = q.eq("brand", only_brand)
+
+    rows = q.order("created_at", desc=True).limit(limit).execute()
+    candidates = rows.data or []
+
+    if not candidates:
+        print("No backfill candidates found — all products already have variant data.")
+        return {"found": 0, "queued": 0, "dry_run": dry_run}
+
+    print(
+        f"Found {len(candidates)} product(s) missing variants "
+        f"(limit={limit}, dry_run={dry_run}"
+        + (f", only_brand={only_brand!r}" if only_brand else "")
+        + "):"
+    )
+    for r in candidates:
+        print(f"  • [{r['id']}] {(r.get('brand') or '?')} — {(r.get('name') or '?')[:60]}")
+
+    if dry_run:
+        print("\nDry run — no scrapes spawned. Re-run with --no-dry-run.")
+        return {"found": len(candidates), "queued": 0, "dry_run": True}
+
+    for r in candidates:
+        scrape_and_update.spawn(r["id"], r["url"])
+
+    print(f"\nSpawned {len(candidates)} re-scrape job(s).")
+    return {"found": len(candidates), "queued": len(candidates), "dry_run": False}
+
+
+# ─── Backfill: AI-only enrichment for products that already have base data ─
+
+@app.function(
+    image=scraper_image,
+    secrets=secrets,
+    timeout=600,
+    max_containers=5,
+)
+def backfill_fit_intelligence(
+    limit: int = 100,
+    dry_run: bool = True,
+    only_brand: str | None = None,
+):
+    """
+    Run the AI enrichment pipeline on products that already have variant /
+    size data but are missing fit_intelligence, product_taxonomy, and
+    styling_metadata.
+
+    Unlike backfill_size_data this does NOT re-visit any product page with
+    Playwright — it only runs the three AI calls (fit_intelligence,
+    taxonomy+styling, confidence_scores) using data already in the DB row.
+    Much cheaper per product: one Modal container can process ~100 rows.
+
+    Targets: scrape_status='done', variants IS NOT NULL, fit_intelligence IS NULL
+
+    Usage:
+        # Dry-run — see candidates
+        modal run modal_app.py::backfill_fit_intelligence
+
+        # Process up to 200 products
+        modal run modal_app.py::backfill_fit_intelligence --limit 200 --no-dry-run
+
+        # Pilot one brand
+        modal run modal_app.py::backfill_fit_intelligence \\
+            --only-brand "Nike" --no-dry-run
+    """
+    import os
+    import json
+    from supabase import create_client
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+
+    q = (
+        supabase.table("products")
+        .select("id, brand, name, type, gender, price, size_fit, materials_care, variants, size_chart, description")
+        .not_.is_("variants", "null")
+        .is_("fit_intelligence", "null")
+        .eq("scrape_status", "done")
+    )
+    if only_brand:
+        q = q.eq("brand", only_brand)
+
+    rows = q.order("created_at", desc=True).limit(limit).execute()
+    candidates = rows.data or []
+
+    if not candidates:
+        print("No enrichment candidates found — all products with variants already have fit_intelligence.")
+        return {"found": 0, "enriched": 0, "failed": 0, "dry_run": dry_run}
+
+    print(
+        f"Found {len(candidates)} product(s) needing AI enrichment "
+        f"(limit={limit}, dry_run={dry_run}"
+        + (f", only_brand={only_brand!r}" if only_brand else "")
+        + "):"
+    )
+    for r in candidates:
+        print(f"  • [{r['id']}] {(r.get('brand') or '?')} — {(r.get('name') or '?')[:60]}")
+
+    if dry_run:
+        print("\nDry run — no AI calls made. Re-run with --no-dry-run.")
+        return {"found": len(candidates), "enriched": 0, "failed": 0, "dry_run": True}
+
+    enriched = 0
+    failed = 0
+
+    for r in candidates:
+        product_id = r["id"]
+        product_data = {
+            "name": r.get("name"),
+            "brand": r.get("brand"),
+            "type": r.get("type"),
+            "gender": r.get("gender"),
+            "price": r.get("price"),
+            "size_fit": r.get("size_fit"),
+            "materials_care": r.get("materials_care"),
+            "description": r.get("description"),
+            "variants": r.get("variants"),
+            "size_chart": r.get("size_chart"),
+        }
+
+        try:
+            enrichment_update: dict = {}
+
+            # Fit intelligence
+            fit_intel = enrich_fit_intelligence(product_data)
+            if fit_intel:
+                enrichment_update["fit_intelligence"] = fit_intel
+                product_data["fit_intelligence"] = fit_intel
+                print(f"  ✅ [{product_id}] fit_intelligence: {fit_intel.get('fit_type', '?')} / {fit_intel.get('true_to_size', '?')}")
+
+            # Taxonomy & styling
+            taxonomy, styling = generate_taxonomy_and_styling(product_data)
+            if taxonomy:
+                enrichment_update["product_taxonomy"] = taxonomy
+            if styling:
+                enrichment_update["styling_metadata"] = styling
+
+            # Confidence scores
+            enrichment_update["confidence_scores"] = compute_confidence_scores(product_data)
+            enrichment_update["enrichment_version"] = 1
+
+            supabase.table("products").update(enrichment_update).eq("id", product_id).execute()
+
+            # Update brand fit profile
+            brand = product_data.get("brand")
+            if brand and fit_intel:
+                try:
+                    update_brand_profile(brand, fit_intel, supabase)
+                except Exception as e:
+                    print(f"  ⚠️  [{product_id}] brand profile error: {e}")
+
+            enriched += 1
+
+        except Exception as e:
+            print(f"  ❌ [{product_id}] {e}")
+            failed += 1
+
+    print(f"\nDone: {enriched} enriched, {failed} failed.")
+    return {"found": len(candidates), "enriched": enriched, "failed": failed, "dry_run": False}
