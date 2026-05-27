@@ -17,6 +17,9 @@ import {
   isMobileViewport,
   isSlowConnection,
 } from '~/services/video-loading';
+import { useAuth } from '~/hooks/useAuth';
+import { useShopperBody } from '~/hooks/useShopperBody';
+import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -165,6 +168,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const [translateY, setTranslateY] = useState(0);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
+
+  const { user } = useAuth();
+  const shopperBody = useShopperBody(user?.id);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -658,6 +664,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             <div className="look-tab-content">
               {activeTab === 'products' && (
                 <div className="look-products-list">
+                  {shopperBody.heightCm && (
+                    <SizeMatchSummary products={look.products} body={shopperBody} />
+                  )}
                   {sortByGarmentRole(look.products).map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
@@ -670,6 +679,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                         {p.brand && <span className="product-brand">{p.brand}</span>}
                         <span className="product-card-name">{p.name}</span>
                         <span className="product-card-price">{p.price}</span>
+                        {shopperBody.heightCm && <SizeMatchBadge product={p} body={shopperBody} />}
                       </div>
                       <button
                         className={`product-bookmark-btn${productBookmarks[pi] ? ' active' : ''}`}

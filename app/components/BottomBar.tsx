@@ -2,6 +2,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import { searchSuggestions } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
+import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 
@@ -15,13 +16,17 @@ interface BottomBarProps {
   catalogName?: string;
   /** True while nl-search is resolving - shows a spinner in the input. */
   searchLoading?: boolean;
+  mySizeOnly?: boolean;
+  onMySizeChange?: (v: boolean) => void;
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false,
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const shopperBody = useShopperBody(user?.id);
+  const hasSizeData = !!shopperBody.heightCm;
   const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -256,6 +261,20 @@ function BottomBar({
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
           </button>
+          {hasSizeData && onMySizeChange && (
+            <button
+              className={`my-size-chip${mySizeOnly ? ' active' : ''}`}
+              onClick={() => onMySizeChange(!mySizeOnly)}
+              aria-pressed={mySizeOnly}
+              aria-label="Filter to my size"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7" />
+                <path d="M16 3l-4 4-4-4" />
+              </svg>
+              My Size
+            </button>
+          )}
           <input
             ref={searchInputRef}
             type="search"

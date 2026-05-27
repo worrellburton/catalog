@@ -11,6 +11,8 @@ import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
+import { useShopperBody } from '~/hooks/useShopperBody';
+import { lookFitScore } from '~/services/size-match';
 import { useHiddenLooks, useHiddenProductKeys, hideLookId } from '~/hooks/useHiddenLooks';
 import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
@@ -46,6 +48,10 @@ interface ContinuousFeedProps {
    *  "Make a catalog of who I follow" CTA. null disables the
    *  filter. */
   followedHandles?: string[] | null;
+  /** When true, only show looks where at least one product is available
+   *  in the shopper's predicted size. Toggled by the "My Size" chip in
+   *  BottomBar. */
+  mySizeOnly?: boolean;
   /**
    * When true the feed is rendered nested inside another scroll surface
    * (e.g. ProductPage or LookOverlay's "You might also like" slot). Omits
@@ -138,10 +144,16 @@ export default function ContinuousFeed({
   onSearchLoadingChange,
   searchTrigger = 0,
   followedHandles,
+  mySizeOnly = false,
   nested = false,
   scrollRoot = null,
   slotPrefix,
 }: ContinuousFeedProps) {
+  // Declared early so fitRankedLooks (below) can reference shopperBody.
+  // The same `user` is reused by the search-log telemetry block further down.
+  const { user } = useAuth();
+  const shopperBody = useShopperBody(user?.id);
+
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
   // at the last resolved value so the grid doesn't jump on every keystroke.
@@ -360,12 +372,35 @@ export default function ContinuousFeed({
   // When a semantic search returned look hits, use those (relevance-ranked).
   // Otherwise fall back to the locally-filtered looks (for short queries
   // or when the edge function returned no look results).
+  // Soft-rank looks by fit score: looks with products that match the
+  // shopper's body float toward the top of the feed without completely
+  // reordering. Only applied on the home feed (no search active) and
+  // only when the shopper has height data.
+  // When mySizeOnly is true, hard-filter to looks where at least one
+  // product has the shopper's predicted size available.
+  const fitRankedLooks = useMemo(() => {
+    if (!shopperBody.heightCm || committedQuery.trim().length >= 3) {
+      return mySizeOnly ? [] : filteredLooks;
+    }
+    let pool = filteredLooks;
+    if (mySizeOnly) {
+      pool = pool.filter(l => lookFitScore(l.products, shopperBody) > 0);
+    }
+    const scored = pool.map(l => ({
+      look: l,
+      fit: lookFitScore(l.products, shopperBody),
+    }));
+    if (scored.every(s => s.fit === 0)) return pool;
+    scored.sort((a, b) => b.fit - a.fit);
+    return scored.map(s => s.look);
+  }, [filteredLooks, shopperBody, committedQuery, mySizeOnly]);
+
   const semanticallyOrderedLooks = useMemo(() => {
     const q = committedQuery.trim();
     if (q.length >= 3 && searchMatchedLooks.length > 0) return searchMatchedLooks;
     if (q.length >= 3) return [];
-    return filteredLooks;
-  }, [filteredLooks, searchMatchedLooks, committedQuery]);
+    return fitRankedLooks;
+  }, [fitRankedLooks, searchMatchedLooks, committedQuery]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],
@@ -730,7 +765,6 @@ export default function ContinuousFeed({
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
   // the queue itself flushes every 5 s or on tab close, so a user's
   // session of pauses lands as one POST.
-  const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
     const q = committedQuery.trim().toLowerCase();

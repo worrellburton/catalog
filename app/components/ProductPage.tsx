@@ -13,6 +13,9 @@ import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/servic
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
+import { useAuth } from '~/hooks/useAuth';
+import { useShopperBody } from '~/hooks/useShopperBody';
+import SizeMatchBadge from '~/components/SizeMatchBadge';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -480,6 +483,8 @@ export default function ProductPage({
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const { user } = useAuth();
+  const shopperBody = useShopperBody(user?.id);
 
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
@@ -882,6 +887,7 @@ export default function ProductPage({
             )}
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
+            {shopperBody.heightCm && <SizeMatchBadge product={product} body={shopperBody} />}
 
             {/* Saved-by social-proof row. Dummy data today - wired to
                 bookmark-based save counts when the product_saves table ships. */}

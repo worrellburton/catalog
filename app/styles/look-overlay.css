@@ -1202,3 +1202,116 @@ body:has(.look-overlay.look-overlay--in) {
   color: #1a1a1a;
 }
 
+/* ── Size match badges ───────────────────────────────────────────── */
+
+.size-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.size-badge--high {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.size-badge--medium {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.size-badge--low {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.size-badge--oos {
+  opacity: 0.6;
+}
+
+.size-badge--oos .size-badge-size {
+  text-decoration: line-through;
+}
+
+.size-badge-oos {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 100, 100, 0.8);
+}
+
+.size-badge-note {
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.size-badge--inline {
+  padding: 0;
+  background: none;
+}
+
+.size-match-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 0 0 4px;
+  background: rgba(34, 197, 94, 0.08);
+  border-radius: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.15);
+}
+
+.size-match-icon {
+  flex-shrink: 0;
+  color: #4ade80;
+}
+
+.size-match-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.light-mode .size-badge--high {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+
+.light-mode .size-badge--medium {
+  background: rgba(234, 179, 8, 0.12);
+  color: #a16207;
+}
+
+.light-mode .size-badge--low {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .size-badge-note {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .size-badge-oos {
+  color: rgba(220, 50, 50, 0.8);
+}
+
+.light-mode .size-match-summary {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.12);
+}
+
+.light-mode .size-match-icon {
+  color: #16a34a;
+}
+
+.light-mode .size-match-text {
+  color: rgba(0, 0, 0, 0.6);
+}
+

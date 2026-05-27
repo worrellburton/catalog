@@ -165,6 +165,7 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState<string>('all');
+  const [mySizeOnly, setMySizeOnly] = useState(false);
 
   // Native shell bridge: Flutter wrapper dispatches CustomEvents on
   // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
@@ -864,6 +865,7 @@ export default function Home() {
             onSearchLoadingChange={handleSearchLoadingChange}
             searchTrigger={searchTrigger}
             followedHandles={followingCatalog}
+            mySizeOnly={mySizeOnly}
           />
 
           <BottomBar
@@ -875,6 +877,8 @@ export default function Home() {
             onOpenCreators={handleOpenLilyCreator}
             catalogName={catalogName}
             searchLoading={searchLoading}
+            mySizeOnly={mySizeOnly}
+            onMySizeChange={setMySizeOnly}
           />
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
