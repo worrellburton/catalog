@@ -26,3 +26,91 @@
  *   admin.css         – Admin panel
  *   feed.css          – Continuous feed
  */
+
+/* Sign-in analytics toast — top-center pill that surfaces engagement
+   deltas since the creator's previous sign-in. Self-dismisses after
+   12s or on tap. Once per browser session via sessionStorage. */
+.signin-stats-popup {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  min-width: 280px;
+  max-width: 92vw;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-family: inherit;
+  animation: signin-stats-in 360ms cubic-bezier(.32,.72,0,1) both;
+}
+@keyframes signin-stats-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.signin-stats-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.signin-stats-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.signin-stats-since {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  flex: 1;
+}
+.signin-stats-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.signin-stats-close:hover { color: #fff; }
+.signin-stats-row {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+}
+.signin-stats-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.signin-stats-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #16a34a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+.signin-stats-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .signin-stats-popup {
+    top: 64px;
+    min-width: 0;
+    width: calc(100vw - 24px);
+    padding: 10px 14px 12px;
+  }
+}

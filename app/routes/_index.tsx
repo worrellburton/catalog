@@ -30,6 +30,7 @@ import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
+import SignInStatsPopup from '~/components/SignInStatsPopup';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -840,6 +841,12 @@ export default function Home() {
               />
             </div>
           </header>
+
+          {/* Top-center toast surfacing engagement deltas since the
+              creator's previous sign-in (impressions / clicks /
+              clickouts / new followers). Hidden when nothing happened
+              or when previously shown this session. */}
+          <SignInStatsPopup />
 
           <ContinuousFeed
             activeFilter={activeFilter}
