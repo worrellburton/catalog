@@ -1092,7 +1092,7 @@ export default function ProductPage({
             for open-ended exploration. */}
         {moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">Similar</h2>
+            <h2 className="pd-feed-title">More like this</h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}

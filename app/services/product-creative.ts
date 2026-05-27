@@ -1239,6 +1239,10 @@ export async function getSimilarCreatives(seedId: string, k = 12, productType?: 
     }
   }
   const maxDistance = hasThreshold ? 1 - similarityThreshold / 100 : Infinity;
+  // The RPC returns distance=1.0 as a sentinel for cold-start items (no
+  // embedding). Those should bypass the threshold — it only makes sense
+  // to gate items where we have a real vector measurement (distance < 1).
+  const COLDSTART_DISTANCE = 1.0;
   const mapped = (data as Array<{
     id: string;
     product_id: string;
@@ -1247,7 +1251,7 @@ export async function getSimilarCreatives(seedId: string, k = 12, productType?: 
     product_name: string | null;
     product_brand: string | null;
     distance: number;
-  }>).filter(row => row.distance <= maxDistance).map(row => ({
+  }>).filter(row => row.distance <= maxDistance || row.distance >= COLDSTART_DISTANCE).map(row => ({
     id: row.id,
     product_id: row.product_id,
     look_id: null,

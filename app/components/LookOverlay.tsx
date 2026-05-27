@@ -22,91 +22,6 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 
-// ─── Look similarity helpers (module-level, stable references) ──────────────
-
-/** Canonical product-type groups. A product name that contains any keyword
- *  in a group is classified as that group's canonical type.
- *  Order matters: more specific patterns must come before general ones. */
-const PRODUCT_TYPE_GROUPS: readonly [canonical: string, keywords: readonly string[]][] = [
-  ['jeans',       ['jeans', 'denim pant', 'denim trouser']],
-  ['shorts',      ['shorts', 'short pant', 'breezy short', 'board short', 'swim short']],
-  ['pants',       ['pants', 'trousers', 'chinos', 'slacks', 'leggings', 'joggers', 'sweatpants']],
-  ['skirt',       ['skirt', 'mini skirt', 'midi skirt', 'maxi skirt']],
-  ['dress',       ['dress', 'gown', 'jumpsuit', 'romper']],
-  ['top',         ['blouse', 'crop top', 'tank top', 'tube top', 'cami', 'bodysuit']],
-  ['tshirt',      ['t-shirt', 'tshirt', 'crew neck', 'crewneck', 'graphic tee', 'tee ']],
-  ['shirt',       ['shirt', 'button down', 'button-down', 'oxford', 'flannel shirt']],
-  ['sweater',     ['sweater', 'pullover', 'knitwear', 'knit top', 'cardigan']],
-  ['hoodie',      ['hoodie', 'sweatshirt', 'hooded']],
-  ['jacket',      ['jacket', 'blazer', 'bomber', 'windbreaker', 'parka', 'anorak']],
-  ['coat',        ['coat', 'overcoat', 'trench', 'puffer']],
-  ['vest',        ['vest', 'waistcoat']],
-  ['sneakers',    ['sneaker', 'trainer', 'running shoe', 'athletic shoe']],
-  ['shoes',       ['shoe', 'oxford shoe', 'derby', 'loafer', 'mule', 'flat shoe']],
-  ['boots',       ['boot', 'ankle boot', 'knee-high', 'chelsea']],
-  ['sandals',     ['sandal', 'slide', 'flip flop', 'flip-flop']],
-  ['heels',       ['heel', 'pump', 'stiletto', 'wedge']],
-  ['bag',         ['bag', 'purse', 'tote', 'backpack', 'clutch', 'handbag', 'shoulder bag', 'crossbody', 'satchel', 'wallet']],
-  ['cap',         ['cap', 'hat', 'beanie', 'beret', 'bucket hat', 'snapback', 'baseball']],
-  ['sunglasses',  ['sunglasses', 'sunglass', 'shades', 'cat eye', 'aviator']],
-  ['glasses',     ['glasses', 'eyewear', 'spectacles']],
-  ['watch',       ['watch', 'smartwatch']],
-  ['jewelry',     ['necklace', 'bracelet', 'earring', 'ring ', 'pendant', 'anklet', 'jewelry', 'jewellery']],
-  ['belt',        ['belt']],
-  ['scarf',       ['scarf', 'wrap']],
-  ['socks',       ['socks', 'sock ']],
-  ['underwear',   ['underwear', 'bra ', 'boxers', 'briefs', 'lingerie']],
-  ['swimwear',    ['swimsuit', 'bikini', 'swim', 'wetsuit']],
-  ['activewear',  ['sports bra', 'sports top', 'gym wear', 'workout', 'activewear', 'athletic wear']],
-];
-
-function getProductTypes(products: Product[]): Set<string> {
-  const types = new Set<string>();
-  for (const p of products) {
-    const name = p.name.toLowerCase();
-    for (const [canonical, keywords] of PRODUCT_TYPE_GROUPS) {
-      if (keywords.some(kw => name.includes(kw))) {
-        types.add(canonical);
-        break;
-      }
-    }
-  }
-  return types;
-}
-
-function getBrands(products: Product[]): Set<string> {
-  const out = new Set<string>();
-  for (const p of products) {
-    const b = p.brand?.toLowerCase().trim();
-    if (b) out.add(b);
-  }
-  return out;
-}
-
-/**
- * Score similarity between two looks.
- * Returns 0 immediately when genders are incompatible.
- * Each shared product type   = +1 pt
- * Each shared brand          = +3 pts
- * Threshold for "similar"    = ≥ 2 pts
- */
-function lookSimilarityScore(seed: Look, candidate: Look): number {
-  // Gender filter: men looks should only surface in men sections, etc.
-  const sg = seed.gender;
-  const cg = candidate.gender;
-  if (sg !== 'unisex' && cg !== 'unisex' && sg !== cg) return 0;
-
-  const seedTypes  = getProductTypes(seed.products);
-  const candTypes  = getProductTypes(candidate.products);
-  const seedBrands = getBrands(seed.products);
-  const candBrands = getBrands(candidate.products);
-
-  let score = 0;
-  for (const t of seedTypes)  if (candTypes.has(t))  score += 1;
-  for (const b of seedBrands) if (candBrands.has(b)) score += 3;
-  return score;
-}
-
 /**
  * Pads `arr` to exactly `count` items by cycling duplicates (with synthetic
  * negative IDs so TrailVideoHost creates a separate <video> per slot), or
@@ -788,7 +703,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
         {feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">Similar</h3>
+            <h3 className="look-feed-heading">More like this</h3>
             <div className="look-feed-grid">
               {feedSections.looksLikeThis.map(fl => (
                 <LookCard
