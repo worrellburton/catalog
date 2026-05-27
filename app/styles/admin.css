@@ -1720,6 +1720,17 @@ html.admin-on-dark-canvas .admin-topbar,
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  /* The toggle is a leaf — make sure stray text from any wrapper
+     can't leak into the same flex slot and clip beside the pill.
+     Also pin the size so the column width doesn't expand when a
+     long label sneaks in next door. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+  font-size: 0;
+  line-height: 0;
 }
 .admin-toggle-btn .admin-toggle-track {
   display: flex;
