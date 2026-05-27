@@ -168,5 +168,44 @@ Deno.serve(async (req: Request) => {
     return errorRes(`Failed to patch profile: ${updateErr.message}`);
   }
 
-  return jsonRes({ success: true, user_id: newUserId });
+  // ── Provision a creators row so the persona is follow-able ──────
+  // Without this the consumer feed surfaces look.creator as
+  // `user:<uuid>` (no handle), which suppresses the FollowIconButton.
+  // Handle is slugified from full_name; on collision we append a
+  // numeric suffix until we find an open slot. Skipping this step
+  // would require running the backfill migration after every AI
+  // user creation, which is exactly the toil this avoids.
+  const baseHandle = fullName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '') || `user-${newUserId.slice(0, 8)}`;
+  let handle = baseHandle;
+  let suffix = 1;
+  // Worst-case collision: try up to 50 suffixes then bail.
+  while (suffix < 50) {
+    const { data: existing } = await admin
+      .from('creators')
+      .select('handle')
+      .eq('handle', handle)
+      .maybeSingle();
+    if (!existing) break;
+    suffix += 1;
+    handle = `${baseHandle}-${suffix}`;
+  }
+  const { error: creatorErr } = await admin.from('creators').insert({
+    id: newUserId,
+    handle,
+    display_name: fullName,
+    is_ai: true,
+  });
+  if (creatorErr) {
+    // Don't roll back here — the profile exists and is usable; the
+    // missing creators row will be backfilled by the next run of
+    // _backfill_creators_for_profiles or by an admin tool. Log the
+    // failure so it's discoverable.
+    console.warn(`[create-ai-user] creators insert failed for ${newUserId}: ${creatorErr.message}`);
+  }
+
+  return jsonRes({ success: true, user_id: newUserId, handle: creatorErr ? null : handle });
 });

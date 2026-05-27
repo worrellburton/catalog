@@ -556,10 +556,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               />
             </div>
 
-            {/* Look title */}
-            {look.title && (
-              <h2 className="look-detail-title">{look.title}</h2>
-            )}
+            {/* Look title removed — the creator chip + avatar already
+                identify ownership; the named title (e.g. "Robert
+                Burton's beach look") read as redundant chrome. */}
 
             {/* Save count */}
             {look.uuid && saveCount !== null && saveCount > 0 && (
@@ -623,6 +622,29 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                       </svg>
                     </div>
                   ))}
+                  {/* More from this creator — sits at the bottom of the
+                      products list so the shopper can keep scrolling
+                      into more of the same creator's work without
+                      hopping to the About tab. */}
+                  {aboutCreatorStrip.length > 0 && (
+                    <div className="look-creator-more-section" style={{ marginTop: 24 }}>
+                      <h3 className="look-feed-heading">More from this creator</h3>
+                      <div className="look-creator-more-scroll-wrap">
+                        <div className="look-creator-more-scroll">
+                          {aboutCreatorStrip.map(fl => (
+                            <LookCard
+                              key={`products-more-creator-${fl.id}`}
+                              look={fl}
+                              className="look-card"
+                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
+                              onOpenCreator={onOpenCreator}
+                              onCreateCatalog={onCreateCatalog}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

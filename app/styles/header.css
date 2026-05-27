@@ -525,10 +525,12 @@ header > * {
   }
   /* Two-row wrap (Following on top, Followers below) lays out as a
      column on desktop. On mobile the fixed-left rail is already a
-     column per row, so flow the two rows side-by-side instead of
-     stacking them to keep the rail compact. */
+     column per row, so flow the two rows side-by-side. row-reverse
+     so Followers (rendered second in source order) lands on the
+     LEFT and Following lands on the RIGHT — matches the mobile
+     spatial expectation: who's-following-me first, then who-I-follow. */
   .follow-rail-wrap {
-    flex-direction: row !important;
+    flex-direction: row-reverse !important;
     gap: 10px !important;
   }
 
