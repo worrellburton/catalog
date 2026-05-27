@@ -18,31 +18,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Wallet variant: dark green base so the animated canvas paints over it
-   and edges still feel intentional if the canvas hasn't drawn yet. */
+/* Wallet variant: clean white surface. Only the earnings $ amount
+   stays green — every other element is black / neutral grey so the
+   number reads as the single anchor on the page. */
 .my-looks-overlay--wallet {
-  background: #031910;
+  background: #fff;
 }
-.my-looks-overlay--wallet .my-looks-title { color: #ecfdf5; }
-.my-looks-overlay--wallet .my-looks-back { color: rgba(187, 247, 208, 0.7); }
+.my-looks-overlay--wallet .my-looks-title { color: #0a0a0a; }
+.my-looks-overlay--wallet .my-looks-back { color: rgba(0, 0, 0, 0.6); }
 .my-looks-overlay--wallet .my-looks-back:hover {
-  color: #fff;
-  background: rgba(74, 222, 128, 0.12);
-}
-.my-looks-overlay--wallet .my-looks-container {
-  position: relative;
-  z-index: 1;
-}
-
-/* The wallet's animated canvas inside CreatorWallet uses
-   position:fixed inset:0 + isolation:isolate, so its stacking context
-   paints over the static .my-looks-header above it (the canvas takes
-   the full viewport including the area the back button sits in). Pin
-   the header above the canvas so the Back arrow + "Wallet" title
-   stay visible. */
-.my-looks-overlay--wallet .my-looks-header {
-  position: relative;
-  z-index: 2;
+  color: #000;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .my-looks-container {
@@ -863,15 +849,6 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 /* Canvas covers the full viewport behind the wallet overlay so the
    green animation is visible regardless of scroll position. */
-.wallet-bg-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 0;
-  pointer-events: none;
-}
-
 .wallet-content {
   position: relative;
   z-index: 1;
@@ -891,8 +868,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(255,255,255,0.18);
-  border-top-color: #4ade80;
+  border: 2px solid rgba(0,0,0,0.12);
+  border-top-color: #16a34a;
   border-radius: 50%;
   animation: wallet-spin 0.7s linear infinite;
   display: inline-block;
@@ -908,16 +885,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   to { transform: rotate(360deg); }
 }
 
-/* Setup banner — translucent glass over green bg */
+/* Setup banner — neutral card on white */
 .wallet-setup-banner {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 16px 18px;
-  background: rgba(15, 90, 58, 0.32);
-  border: 1px solid rgba(74, 222, 128, 0.22);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
   flex-wrap: wrap;
 }
@@ -925,12 +900,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-setup-icon {
   width: 40px;
   height: 40px;
-  background: rgba(74, 222, 128, 0.14);
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #86efac;
+  color: #0a0a0a;
   flex-shrink: 0;
 }
 
@@ -942,13 +917,13 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-setup-title {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #0a0a0a;
   margin-bottom: 2px;
 }
 
 .wallet-setup-sub {
   font-size: 12px;
-  color: rgba(220, 252, 231, 0.7);
+  color: rgba(0, 0, 0, 0.55);
 }
 
 .wallet-setup-btn {
@@ -956,8 +931,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   align-items: center;
   gap: 6px;
   padding: 9px 16px;
-  background: #fff;
-  color: #064a30;
+  background: #0a0a0a;
+  color: #fff;
   border: none;
   border-radius: 9px;
   font-size: 13px;
@@ -968,7 +943,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   flex-shrink: 0;
 }
 
-.wallet-setup-btn:hover { background: #d1fae5; transform: translateY(-1px); }
+.wallet-setup-btn:hover { background: #222; transform: translateY(-1px); }
 
 /* Hero — Total Earned centerpiece */
 .wallet-hero {
@@ -995,7 +970,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(187, 247, 208, 0.7);
+  color: rgba(0, 0, 0, 0.5);
   margin-bottom: 14px;
 }
 
@@ -1007,25 +982,21 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #4ade80;
-  text-shadow:
-    0 0 20px rgba(74, 222, 128, 0.45),
-    0 0 60px rgba(34, 197, 94, 0.25);
+  color: #16a34a;
   font-variant-numeric: tabular-nums;
 }
 
-/* Withdraw CTA right under the hero amount. Solid green, white text,
-   in keeping with the wallet's green-mode palette. Disabled style
-   keeps the pill visible so the action stays discoverable when the
-   balance is $0. */
+/* Withdraw CTA right under the hero amount. Black pill, white text —
+   sits cleanly against the white background so only the earnings $
+   number is green. */
 .wallet-hero-withdraw {
   position: relative;
   z-index: 1;
   margin-top: 20px;
   padding: 14px 28px;
   border-radius: 999px;
-  border: 1px solid #4ade80;
-  background: #22c55e;
+  border: 1px solid #0a0a0a;
+  background: #0a0a0a;
   color: #fff;
   font-family: inherit;
   font-size: 15px;
@@ -1033,44 +1004,25 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  box-shadow:
-    0 0 28px rgba(34, 197, 94, 0.35),
-    0 6px 18px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 .wallet-hero-withdraw:hover:not(:disabled) {
-  background: #16a34a;
+  background: #222;
   transform: translateY(-1px);
-  box-shadow:
-    0 0 36px rgba(34, 197, 94, 0.45),
-    0 8px 22px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
 }
 .wallet-hero-withdraw:active:not(:disabled) { transform: translateY(0); }
 .wallet-hero-withdraw--disabled,
 .wallet-hero-withdraw:disabled {
-  opacity: 0.55;
+  opacity: 0.4;
   cursor: default;
-  background: rgba(34, 197, 94, 0.35);
-  border-color: rgba(74, 222, 128, 0.35);
+  background: #0a0a0a;
+  border-color: #0a0a0a;
 }
 
-.wallet-hero-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 360px;
-  height: 360px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(74, 222, 128, 0.28) 0%, rgba(74, 222, 128, 0) 65%);
-  filter: blur(20px);
-  pointer-events: none;
-  animation: wallet-hero-pulse 4.5s ease-in-out infinite;
-}
-
-@keyframes wallet-hero-pulse {
-  0%, 100% { opacity: 0.65; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
-}
+/* Hero glow removed — white surface, no green halo. */
+.wallet-hero-glow { display: none; }
 
 /* Secondary cards row */
 .wallet-cards {
@@ -1084,15 +1036,13 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 20px 20px 18px;
   border-radius: 16px;
   min-width: 0;
-  background: rgba(6, 42, 28, 0.42);
-  border: 1px solid rgba(74, 222, 128, 0.14);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .wallet-card--main {
-  background: rgba(6, 42, 28, 0.55);
-  border-color: rgba(74, 222, 128, 0.22);
+  background: #f5f5f5;
+  border-color: rgba(0, 0, 0, 0.12);
 }
 
 .wallet-card-label {
@@ -1100,14 +1050,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: rgba(187, 247, 208, 0.55);
+  color: rgba(0, 0, 0, 0.5);
   margin-bottom: 8px;
 }
 
 .wallet-card-amount {
   font-size: 30px;
   font-weight: 700;
-  color: #fff;
+  color: #0a0a0a;
   line-height: 1;
   font-family: 'DM Sans', sans-serif;
   font-variant-numeric: tabular-nums;
@@ -1115,7 +1065,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 .wallet-card-sub {
   font-size: 11px;
-  color: rgba(220, 252, 231, 0.5);
+  color: rgba(0, 0, 0, 0.45);
   margin-top: 6px;
 }
 
@@ -1126,30 +1076,30 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   gap: 6px;
   margin-top: 16px;
   padding: 9px 20px;
-  background: #4ade80;
-  color: #052e1c;
+  background: #0a0a0a;
+  color: #fff;
   border: none;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-  box-shadow: 0 8px 24px rgba(74, 222, 128, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .wallet-withdraw-btn:hover {
-  background: #86efac;
+  background: #222;
   transform: translateY(-1px);
-  box-shadow: 0 10px 28px rgba(74, 222, 128, 0.32);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
 }
 
 .wallet-withdraw-btn--disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: default;
   box-shadow: none;
 }
 .wallet-withdraw-btn--disabled:hover {
-  background: #4ade80;
+  background: #0a0a0a;
   transform: none;
   box-shadow: none;
 }
@@ -1191,10 +1141,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 /* Error */
 .wallet-error {
   padding: 10px 14px;
-  background: rgba(220,38,38,0.14);
-  border: 1px solid rgba(220,38,38,0.32);
+  background: rgba(220,38,38,0.08);
+  border: 1px solid rgba(220,38,38,0.22);
   border-radius: 10px;
-  color: #fca5a5;
+  color: #b91c1c;
   font-size: 13px;
 }
 
@@ -1203,16 +1153,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: rgba(6, 42, 28, 0.4);
-  border: 1px solid rgba(74, 222, 128, 0.16);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
-/* Show-insights pill — small circular button centred under the
-   hero. Pressing it expands the analytics panel and scrolls it
-   into view. */
+/* Show-insights pill — neutral chip on white. */
 .wallet-insights-toggle {
   display: inline-flex;
   align-items: center;
@@ -1221,16 +1167,16 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   margin: 0 auto;
   padding: 10px 18px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.14);
   cursor: pointer;
-  color: #bbf7d0;
+  color: #0a0a0a;
   font-family: inherit;
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 .wallet-insights-toggle:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(74, 222, 128, 0.55);
+  background: #f5f5f5;
+  border-color: rgba(0, 0, 0, 0.25);
   transform: translateY(-1px);
 }
 
@@ -1239,11 +1185,11 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #bbf7d0;
+  color: #0a0a0a;
 }
 
 .wallet-insights-chevron {
-  color: #86efac;
+  color: rgba(0, 0, 0, 0.55);
   transition: transform 0.32s ease;
 }
 .wallet-insights--open .wallet-insights-chevron {
@@ -1299,7 +1245,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(187, 247, 208, 0.6);
+  color: rgba(0, 0, 0, 0.55);
 }
 .wallet-analytics-cards {
   display: grid;
@@ -1312,32 +1258,32 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   gap: 4px;
   padding: 14px 16px;
   border-radius: 12px;
-  background: rgba(3, 25, 16, 0.45);
-  border: 1px solid rgba(74, 222, 128, 0.14);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   transition: border-color 0.18s, background 0.18s;
 }
 .wallet-analytics-card:hover {
-  border-color: rgba(74, 222, 128, 0.32);
-  background: rgba(3, 25, 16, 0.6);
+  border-color: rgba(0, 0, 0, 0.2);
+  background: #fafafa;
 }
 .wallet-analytics-card-label {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(187, 247, 208, 0.5);
+  color: rgba(0, 0, 0, 0.5);
 }
 .wallet-analytics-card-amount {
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: #0a0a0a;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 .wallet-analytics-card-sub {
   font-size: 11.5px;
-  color: #86efac;
+  color: rgba(0, 0, 0, 0.55);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1345,17 +1291,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 /* Transaction history */
 .wallet-history {
   border-radius: 12px;
-  border: 1px solid rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   overflow: hidden;
-  background: rgba(3, 25, 16, 0.45);
+  background: #fff;
 }
 
 .wallet-history-header {
   padding: 13px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: rgba(187, 247, 208, 0.6);
-  border-bottom: 1px solid rgba(74, 222, 128, 0.1);
+  color: rgba(0, 0, 0, 0.55);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1363,7 +1309,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-history-empty {
   padding: 36px;
   text-align: center;
-  color: rgba(187, 247, 208, 0.4);
+  color: rgba(0, 0, 0, 0.4);
   font-size: 14px;
 }
 
@@ -1372,11 +1318,11 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   align-items: center;
   gap: 12px;
   padding: 13px 16px;
-  border-bottom: 1px solid rgba(74, 222, 128, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: background 0.1s;
 }
 .wallet-entry:last-child { border-bottom: none; }
-.wallet-entry:hover { background: rgba(74, 222, 128, 0.04); }
+.wallet-entry:hover { background: rgba(0, 0, 0, 0.03); }
 
 .wallet-entry-icon {
   width: 34px;
@@ -1387,16 +1333,16 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   justify-content: center;
   flex-shrink: 0;
 }
-.wallet-entry-icon--credit { background: rgba(34,197,94,0.16); color: #4ade80; }
-.wallet-entry-icon--debit  { background: rgba(248,113,113,0.14); color: #f87171; }
-.wallet-entry-icon--on_hold { background: rgba(251,191,36,0.14); color: #fbbf24; }
+.wallet-entry-icon--credit { background: rgba(22,163,74,0.12); color: #16a34a; }
+.wallet-entry-icon--debit  { background: rgba(0,0,0,0.06); color: #0a0a0a; }
+.wallet-entry-icon--on_hold { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.6); }
 
 .wallet-entry-info { flex: 1; min-width: 0; }
 
 .wallet-entry-label {
   font-size: 13px;
   font-weight: 500;
-  color: #ecfdf5;
+  color: #0a0a0a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1404,7 +1350,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 .wallet-entry-date {
   font-size: 11px;
-  color: rgba(187, 247, 208, 0.45);
+  color: rgba(0, 0, 0, 0.45);
   margin-top: 2px;
 }
 
@@ -1415,13 +1361,13 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.wallet-entry-amount--credit  { color: #4ade80; }
-.wallet-entry-amount--debit   { color: #f87171; }
-.wallet-entry-amount--on_hold { color: #fbbf24; }
+.wallet-entry-amount--credit  { color: #16a34a; }
+.wallet-entry-amount--debit   { color: #0a0a0a; }
+.wallet-entry-amount--on_hold { color: rgba(0, 0, 0, 0.55); }
 
 .wallet-entry-bal {
   font-size: 11px;
-  color: rgba(187, 247, 208, 0.45);
+  color: rgba(0, 0, 0, 0.45);
   margin-top: 2px;
 }
 
@@ -1431,12 +1377,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: rgba(34,197,94,0.1);
-  border: 1px solid rgba(34,197,94,0.22);
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;
   gap: 10px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .wallet-status-left {
@@ -1448,24 +1392,24 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .wallet-status-dot {
   width: 7px;
   height: 7px;
-  background: #4ade80;
+  background: #16a34a;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.5);
 }
 
 .wallet-status-label {
   font-size: 13px;
   font-weight: 500;
-  color: #bbf7d0;
+  color: #0a0a0a;
 }
 
 .wallet-status-badge {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #4ade80;
-  background: rgba(34,197,94,0.18);
+  color: #0a0a0a;
+  background: rgba(0, 0, 0, 0.06);
   padding: 2px 7px;
   border-radius: 5px;
 }
@@ -1474,14 +1418,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   background: none;
   border: none;
   cursor: pointer;
-  color: rgba(187, 247, 208, 0.5);
+  color: rgba(0, 0, 0, 0.5);
   font-size: 12px;
   font-weight: 500;
   padding: 4px 8px;
   border-radius: 6px;
   transition: color 0.15s, background 0.15s;
 }
-.wallet-status-disconnect:hover { color: #fca5a5; background: rgba(248,113,113,0.12); }
+.wallet-status-disconnect:hover { color: #b91c1c; background: rgba(220, 38, 38, 0.08); }
 .wallet-status-disconnect:disabled { opacity: 0.5; cursor: default; }
 
 @media (max-width: 640px) {
