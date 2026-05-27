@@ -31,6 +31,7 @@ import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
 import SignInStatsPopup from '~/components/SignInStatsPopup';
+import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -848,6 +849,10 @@ export default function Home() {
               clickouts / new followers). Hidden when nothing happened
               or when previously shown this session. */}
           <SignInStatsPopup />
+          {/* Activity — live engagement toasts that pop in via
+              Supabase realtime whenever someone clicks / clicks-out
+              one of the signed-in creator's looks, or follows them. */}
+          <ActivityRealtimeToasts />
 
           <ContinuousFeed
             activeFilter={activeFilter}
