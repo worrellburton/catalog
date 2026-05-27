@@ -20,6 +20,7 @@ import {
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
+import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 
 // ─── Look similarity helpers (module-level, stable references) ──────────────
 
@@ -241,10 +242,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => { trailMgr?.resumeFeed(); };
   }, [trailMgr, trailId]);
 
-  // Resolves to the shopper's active gender preference ('all'|'men'|'women').  
+  // Resolves to the shopper's active gender preference ('all'|'men'|'women').
   // Declared before feedSections so it can be used as a tiebreaker when the
   // seed look is tagged 'unisex' (e.g. because a product says "Unisex T-Shirt").
   const ymalGenderFilter = useActiveGenderFilter();
+
+  // Admin dial: minimum fraction of seed products a candidate look must share.
+  // 0 = any 1 match (default/current). Loaded once on overlay open.
+  const [lookSimilarityThreshold, setLookSimilarityThresholdState] = useState(DEFAULT_LOOK_SIMILARITY);
+  useEffect(() => {
+    getLookSimilarityThreshold().then(setLookSimilarityThresholdState);
+  }, []);
 
   // Feed sections below the hero:
   //   1. "More like this" — shared product types + compatible gender
@@ -278,13 +286,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         ? ymalGenderFilter
         : seedGender;
 
+    // minMatches = how many seed products must appear in the candidate.
+    // threshold 0 → 1 match (current behaviour). threshold 60 with 3
+    // seed products → ceil(3×0.6)=2 must match. threshold 100 → all must match.
+    const minMatches = Math.max(1, Math.ceil(seedProductNames.size * lookSimilarityThreshold / 100));
     const looksLikeThis: Look[] = seedProductNames.size > 0
       ? source.filter(l => {
           const cg = l.gender;
           if (effectiveSeedGender !== 'unisex' && cg !== 'unisex' && effectiveSeedGender !== cg) return false;
-          return (l.products || []).some(p =>
+          const matchCount = (l.products || []).filter(p =>
             seedProductNames.has(p.name.toLowerCase().trim())
-          );
+          ).length;
+          return matchCount >= minMatches;
         })
       : [];
 
@@ -322,7 +335,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       popular:         fillLooks(b, 8),
       moreFromCreator: fillLooks(c, 8),
     };
-  }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter]);
+  }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter, lookSimilarityThreshold]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always

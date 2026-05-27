@@ -1,4 +1,9 @@
 import { supabase } from '~/utils/supabase';
+import {
+  getProductSimilarityThreshold,
+  subscribeProductSimilarityThreshold,
+  DEFAULT_PRODUCT_SIMILARITY,
+} from '~/services/dials';
 
 // Module-level shopper gender. Consumer routes call setShopperGender
 // once after auth resolves so every product-creative query (brand
@@ -37,6 +42,20 @@ export function setShopperGender(g: ShopperGender) {
   for (const cb of genderListeners) {
     try { cb(g); } catch { /* ignore */ }
   }
+}
+
+// Product similarity threshold — loaded once on first call, subscribed
+// for live admin updates. 0 = no filter (all K neighbours shown).
+// >0 = only items where (1 − cosine_distance) ≥ threshold/100 pass.
+let _productSimilarityThreshold = DEFAULT_PRODUCT_SIMILARITY;
+let _productSimilarityThresholdReady = false;
+
+async function ensureProductSimilarityThreshold(): Promise<number> {
+  if (_productSimilarityThresholdReady) return _productSimilarityThreshold;
+  _productSimilarityThreshold = await getProductSimilarityThreshold();
+  _productSimilarityThresholdReady = true;
+  subscribeProductSimilarityThreshold(v => { _productSimilarityThreshold = v; });
+  return _productSimilarityThreshold;
 }
 
 // Gender-scoped suffix for the localStorage live-ads cache key. Without
@@ -1193,8 +1212,13 @@ export function prefetchSimilarCreatives(seedId: string, k = 12, productType?: s
 // productType scopes results to the same product category (e.g. 'Top', 'Shorts').
 export async function getSimilarCreatives(seedId: string, k = 12, productType?: string | null): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Pull a margin so the gender post-filter doesn't leave the rail short.
-  const fetchK = shopperGender === 'unknown' ? k : Math.min(k * 2, 48);
+  // Pull extra results to absorb both the gender post-filter and the
+  // similarity threshold post-filter without leaving the rail short.
+  const similarityThreshold = await ensureProductSimilarityThreshold();
+  const hasThreshold = similarityThreshold > 0;
+  const fetchK = hasThreshold
+    ? Math.min(k * 4, 96)
+    : (shopperGender === 'unknown' ? k : Math.min(k * 2, 48));
   const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK, seed_type: productType ?? null });
   if (error || !data) {
     if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
@@ -1214,6 +1238,7 @@ export async function getSimilarCreatives(seedId: string, k = 12, productType?: 
       genderById = new Map((prods || []).map((p: { id: string; gender: string | null }) => [p.id, p.gender]));
     }
   }
+  const maxDistance = hasThreshold ? 1 - similarityThreshold / 100 : Infinity;
   const mapped = (data as Array<{
     id: string;
     product_id: string;
@@ -1222,7 +1247,7 @@ export async function getSimilarCreatives(seedId: string, k = 12, productType?: 
     product_name: string | null;
     product_brand: string | null;
     distance: number;
-  }>).map(row => ({
+  }>).filter(row => row.distance <= maxDistance).map(row => ({
     id: row.id,
     product_id: row.product_id,
     look_id: null,

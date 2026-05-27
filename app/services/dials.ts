@@ -193,3 +193,104 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Product similarity threshold (0–100).
+// Controls the minimum cosine similarity for "More like this" products.
+// 0 (default) = no filter, all K nearest neighbours from the RPC are
+// shown. 60 = only include items where (1 − cosine_distance) ≥ 0.60.
+// 90 = near-identical items only; the rail will show fewer results.
+// ────────────────────────────────────────────────────────────────────
+
+export const PRODUCT_SIMILARITY_KEY = 'product_similarity_threshold';
+export const DEFAULT_PRODUCT_SIMILARITY = 0;
+
+export async function getProductSimilarityThreshold(): Promise<number> {
+  if (!supabase) return DEFAULT_PRODUCT_SIMILARITY;
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', PRODUCT_SIMILARITY_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn('[dials] product_similarity_threshold read failed:', error.message);
+    return DEFAULT_PRODUCT_SIMILARITY;
+  }
+  return parseRatio((data?.value as string | undefined) ?? null);
+}
+
+export async function setProductSimilarityThreshold(value: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const clamped = Math.max(0, Math.min(100, Math.round(value)));
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: PRODUCT_SIMILARITY_KEY, value: String(clamped) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeProductSimilarityThreshold(onChange: (value: number) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${PRODUCT_SIMILARITY_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${PRODUCT_SIMILARITY_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseRatio(next ?? null));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Look similarity threshold (0–100).
+// Controls the minimum fraction of the seed look's products that a
+// candidate look must share to appear in "More like this".
+// 0 (default) = any 1 shared product name qualifies (current behaviour).
+// 60 = ceil(seedCount × 0.60) products must match.
+// 100 = every seed product must appear in the candidate.
+// ────────────────────────────────────────────────────────────────────
+
+export const LOOK_SIMILARITY_KEY = 'look_similarity_threshold';
+export const DEFAULT_LOOK_SIMILARITY = 0;
+
+export async function getLookSimilarityThreshold(): Promise<number> {
+  if (!supabase) return DEFAULT_LOOK_SIMILARITY;
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', LOOK_SIMILARITY_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn('[dials] look_similarity_threshold read failed:', error.message);
+    return DEFAULT_LOOK_SIMILARITY;
+  }
+  return parseRatio((data?.value as string | undefined) ?? null);
+}
+
+export async function setLookSimilarityThreshold(value: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const clamped = Math.max(0, Math.min(100, Math.round(value)));
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: LOOK_SIMILARITY_KEY, value: String(clamped) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeLookSimilarityThreshold(onChange: (value: number) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${LOOK_SIMILARITY_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${LOOK_SIMILARITY_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseRatio(next ?? null));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
