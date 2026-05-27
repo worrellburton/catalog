@@ -1359,13 +1359,13 @@ export default function AdminData() {
   // Which row's inline Tags dropdown is open (keyed by `${brand}-${name}`).
   const [openTagsRow, setOpenTagsRow] = useState<string | null>(null);
   // Which row's inline Creative+Photos dropdown is open.
-  const [openCreativeRow, setOpenCreativeRow] = useState<string | null>(null);
+  const [openDetailRow, setOpenCreativeRow] = useState<string | null>(null);
   useEffect(() => {
-    if (!openCreativeRow) return;
+    if (!openDetailRow) return;
     const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenCreativeRow(null); };
     document.addEventListener('keydown', keyHandler);
     return () => document.removeEventListener('keydown', keyHandler);
-  }, [openCreativeRow]);
+  }, [openDetailRow]);
 
   // Tags is now an inline expanded row like Links - close only via the button
   // or Escape.
@@ -4222,7 +4222,7 @@ export default function AdminData() {
                 };
                 const linksOpen = openLinksRow === rowKey;
                 const tagsOpen = openTagsRow === rowKey;
-                const creativeOpen = openCreativeRow === rowKey;
+                const detailOpen = openDetailRow === rowKey;
                 const affiliates = linksOpen ? getAffiliatesFor(p.brand) : [];
                 const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
                 const rowImages: string[] = (p.images && p.images.length > 0)
@@ -4274,7 +4274,7 @@ export default function AdminData() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenCreativeRow(creativeOpen ? null : rowKey);
+                                setOpenCreativeRow(detailOpen ? null : rowKey);
                               }}
                               title="Primary image — click to expand the photo gallery and override"
                               style={{
@@ -4335,7 +4335,7 @@ export default function AdminData() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenCreativeRow(creativeOpen ? null : rowKey);
+                            setOpenCreativeRow(detailOpen ? null : rowKey);
                           }}
                           title="No primary picked yet — open the gallery to set one"
                           style={{
@@ -4401,13 +4401,13 @@ export default function AdminData() {
                               setGeneratePicker({ productId: p.id, productName: p.name });
                               return;
                             }
-                            setOpenCreativeRow(creativeOpen ? null : rowKey);
+                            setOpenCreativeRow(detailOpen ? null : rowKey);
                           }}
                           title={videoCount === 0 && photoCount === 0 ? 'Generate creative' : 'View all creative'}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 8,
-                            padding: 4, border: `1px solid ${creativeOpen ? '#3b82f6' : '#e5e7eb'}`,
-                            background: creativeOpen ? '#eef4ff' : '#fff',
+                            padding: 4, border: `1px solid ${detailOpen ? '#3b82f6' : '#e5e7eb'}`,
+                            background: detailOpen ? '#eef4ff' : '#fff',
                             borderRadius: 8, cursor: 'pointer',
                           }}
                         >
@@ -4806,8 +4806,8 @@ export default function AdminData() {
                     )}
                   </td>
                 </tr>
-                {creativeOpen && (
-                  <tr className="admin-product-creative-row">
+                {detailOpen && (
+                  <tr className="admin-product-detail-row">
                     <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>

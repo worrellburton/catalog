@@ -19,6 +19,7 @@ import {
 } from '~/services/video-loading';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
+import { usePageSections, isSectionEnabled } from '~/hooks/usePageSections';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 
@@ -87,6 +88,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
+  // Admin-editable section config from /admin/pages. null until loaded;
+  // isSectionEnabled treats null as "enabled" so first paint isn't blank.
+  const pageSections = usePageSections('looks');
+  const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -626,7 +631,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                       products list so the shopper can keep scrolling
                       into more of the same creator's work without
                       hopping to the About tab. */}
-                  {aboutCreatorStrip.length > 0 && (
+                  {moreFromCreatorEnabled && aboutCreatorStrip.length > 0 && (
                     <div className="look-creator-more-section" style={{ marginTop: 24 }}>
                       <h3 className="look-feed-heading">More from this creator</h3>
                       <div className="look-creator-more-scroll-wrap">
