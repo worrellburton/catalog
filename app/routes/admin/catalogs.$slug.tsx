@@ -108,7 +108,7 @@ export default function AdminCatalogDetail() {
   if (!catalog) {
     return (
       <div className="admin-page">
-        <h1>Catalog not found</h1>
+        <h1>Empty catalog</h1>
         <Link to="/admin/catalogs" className="admin-btn admin-btn-secondary">← Back to catalogs</Link>
       </div>
     );

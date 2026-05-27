@@ -129,6 +129,18 @@ export function useOverlayRouter({
     }
   }, [brandFilter]);
 
+  // Pop /l/ when the look overlay closes. Without this the URL stayed
+  // pinned on /l/<slug> after the user backed out of a look, so a tab
+  // refresh re-opened the same look every time and the address bar
+  // stopped reflecting the actual surface.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedLook) return;
+    if (window.location.pathname.startsWith('/l/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [selectedLook]);
+
   // Fresh-load consumer: on mount, read the route param Remix gave us
   // and open the matching modal once. After this, in-app navigation
   // drives state and the URL syncs back via the push effects above.
