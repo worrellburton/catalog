@@ -76,3 +76,62 @@ export async function getMyFollowing(): Promise<string[]> {
     .order('created_at', { ascending: false });
   return ((data || []) as { followee_handle: string }[]).map(r => r.followee_handle);
 }
+
+/** People who follow the signed-in shopper — most recent first.
+ *  Returns the follower's display name, avatar, and the ms-timestamp
+ *  of when they followed (so the rail can render a "followed Xs ago"
+ *  tooltip and animate brand-new followers).
+ *
+ *  Requires the signed-in user to have a `creators.handle` row —
+ *  nobody can follow a handle-less account, so we'd return an empty
+ *  list either way. */
+export interface FollowerInfo {
+  handle: string;
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  followedAt: number;
+}
+
+export async function getMyFollowers(): Promise<FollowerInfo[]> {
+  if (!supabase) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: meCreator } = await supabase
+    .from('creators').select('handle').eq('id', user.id).maybeSingle();
+  const myHandle = meCreator?.handle;
+  if (!myHandle) return [];
+
+  const { data: followRows } = await supabase
+    .from('creator_follows')
+    .select('follower_id, created_at')
+    .eq('followee_handle', myHandle)
+    .order('created_at', { ascending: false });
+  if (!followRows?.length) return [];
+
+  const followerIds = (followRows as { follower_id: string }[]).map(r => r.follower_id);
+
+  const [{ data: profs }, { data: crows }] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, avatar_url').in('id', followerIds),
+    supabase.from('creators').select('id, handle, display_name, avatar_url').in('id', followerIds),
+  ]);
+  const profById = new Map<string, { full_name: string | null; avatar_url: string | null }>(
+    ((profs || []) as { id: string; full_name: string | null; avatar_url: string | null }[]).map(p => [p.id, p]),
+  );
+  const creatorById = new Map<string, { handle: string; display_name: string | null; avatar_url: string | null }>(
+    ((crows || []) as { id: string; handle: string; display_name: string | null; avatar_url: string | null }[]).map(c => [c.id, c]),
+  );
+
+  return (followRows as { follower_id: string; created_at: string }[]).map(r => {
+    const c = creatorById.get(r.follower_id);
+    const p = profById.get(r.follower_id);
+    return {
+      handle: c?.handle || `user:${r.follower_id}`,
+      userId: r.follower_id,
+      displayName: c?.display_name || p?.full_name || null,
+      avatarUrl: c?.avatar_url || p?.avatar_url || null,
+      followedAt: Date.parse(r.created_at) || Date.now(),
+    };
+  });
+}
