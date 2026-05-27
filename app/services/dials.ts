@@ -202,6 +202,14 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
 // 90 = near-identical items only; the rail will show fewer results.
 // ────────────────────────────────────────────────────────────────────
 
+// Shared parser for 0-default dials (similarity thresholds).
+// parseRatio() can't be reused here — its fallback is 100 (video ratio default).
+function parseSimilarity(raw: string | null | undefined): number {
+  if (raw == null) return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+}
+
 export const PRODUCT_SIMILARITY_KEY = 'product_similarity_threshold';
 export const DEFAULT_PRODUCT_SIMILARITY = 0;
 
@@ -216,7 +224,7 @@ export async function getProductSimilarityThreshold(): Promise<number> {
     console.warn('[dials] product_similarity_threshold read failed:', error.message);
     return DEFAULT_PRODUCT_SIMILARITY;
   }
-  return parseRatio((data?.value as string | undefined) ?? null);
+  return parseSimilarity((data?.value as string | undefined) ?? null);
 }
 
 export async function setProductSimilarityThreshold(value: number): Promise<void> {
@@ -237,7 +245,7 @@ export function subscribeProductSimilarityThreshold(onChange: (value: number) =>
       { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${PRODUCT_SIMILARITY_KEY}` },
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
-        onChange(parseRatio(next ?? null));
+        onChange(parseSimilarity(next ?? null));
       },
     )
     .subscribe();
@@ -267,7 +275,7 @@ export async function getLookSimilarityThreshold(): Promise<number> {
     console.warn('[dials] look_similarity_threshold read failed:', error.message);
     return DEFAULT_LOOK_SIMILARITY;
   }
-  return parseRatio((data?.value as string | undefined) ?? null);
+  return parseSimilarity((data?.value as string | undefined) ?? null);
 }
 
 export async function setLookSimilarityThreshold(value: number): Promise<void> {
@@ -288,7 +296,7 @@ export function subscribeLookSimilarityThreshold(onChange: (value: number) => vo
       { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${LOOK_SIMILARITY_KEY}` },
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
-        onChange(parseRatio(next ?? null));
+        onChange(parseSimilarity(next ?? null));
       },
     )
     .subscribe();
