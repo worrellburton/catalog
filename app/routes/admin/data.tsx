@@ -35,6 +35,10 @@ interface CrawledProduct {
    *  admin Primary column — unpolished primaries get a tappable wand
    *  icon overlay, polished ones don't. */
   primary_image_polished?: boolean | null;
+  /** Short cinematic-motion video of the product, generated from
+   *  primary_image_url via generate-primary-video. Rendered in the
+   *  detail-row "Primary Video" tile; null rows get a Generate CTA. */
+  primary_video_url?: string | null;
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
@@ -680,7 +684,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1560,7 +1564,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1913,7 +1917,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2017,7 +2021,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2039,6 +2043,7 @@ export default function AdminData() {
       const active = cp.is_active !== false; // default true for legacy rows
       const primaryUrl = (cp as { primary_image_url?: string | null }).primary_image_url ?? null;
       const polishedFlag = (cp as { primary_image_polished?: boolean | null }).primary_image_polished ?? false;
+      const primaryVideoUrl = (cp as { primary_video_url?: string | null }).primary_video_url ?? null;
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
@@ -2046,6 +2051,7 @@ export default function AdminData() {
         entry.images = images;
         entry.primary_image_url = primaryUrl;
         entry.primary_image_polished = polishedFlag;
+        entry.primary_video_url = primaryVideoUrl;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
@@ -2076,6 +2082,7 @@ export default function AdminData() {
           images,
           primary_image_url: primaryUrl,
           primary_image_polished: polishedFlag,
+          primary_video_url: primaryVideoUrl,
           video_urls: adVideoMap.get(cp.id) || [],
           looks: new Set(),
           creators: new Set(),
@@ -2309,6 +2316,9 @@ export default function AdminData() {
   // In-flight polish-primary-image calls, keyed by product id. Drives
   // the spinner overlay on the polish-wand affordance.
   const [polishingIds, setPolishingIds] = useState<Set<string>>(new Set());
+  // In-flight generate-primary-video calls, keyed by product id. Drives
+  // the spinner overlay on the Generate CTA in the detail row.
+  const [generatingPrimaryVideoIds, setGeneratingPrimaryVideoIds] = useState<Set<string>>(new Set());
 
   const polishPrimaryImage = useCallback(async (productId: string) => {
     if (!supabase) return;
@@ -2345,6 +2355,42 @@ export default function AdminData() {
       showToast(`Polish failed: ${(err as Error).message || 'unknown'}`);
     } finally {
       setPolishingIds(prev => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  }, [showToast]);
+
+  const generatePrimaryVideo = useCallback(async (productId: string) => {
+    if (!supabase) return;
+    if (!productId) return;
+    setGeneratingPrimaryVideoIds(prev => {
+      const next = new Set(prev);
+      next.add(productId);
+      return next;
+    });
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-primary-video', {
+        body: { product_id: productId },
+      });
+      if (error || !data?.success) {
+        showToast(`Primary video generation failed: ${data?.error || error?.message || 'unknown'}`);
+        return;
+      }
+      const videoUrl = data.video_url as string | undefined;
+      if (videoUrl) {
+        setCrawledProducts(prev => prev.map(pp =>
+          pp.id === productId
+            ? ({ ...pp, primary_video_url: videoUrl } as CrawledProduct)
+            : pp,
+        ));
+      }
+      showToast('Primary video generated');
+    } catch (err) {
+      showToast(`Primary video generation failed: ${(err as Error).message || 'unknown'}`);
+    } finally {
+      setGeneratingPrimaryVideoIds(prev => {
         const next = new Set(prev);
         next.delete(productId);
         return next;
@@ -2810,7 +2856,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2841,7 +2887,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -4822,6 +4868,137 @@ export default function AdminData() {
                                 No primary picked. Click a photo's star to set one.
                               </div>
                             )}
+                            {/* Primary Video — short cinematic-motion clip
+                                generated from the primary image via
+                                seedance i2v. Empty rows get a Generate CTA
+                                (mirrors the polish-wand affordance) so the
+                                admin can kick one off from the row. */}
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 14, marginBottom: 8 }}>
+                              Primary Video
+                            </div>
+                            {(() => {
+                              const primaryVideoUrl = (p as { primary_video_url?: string | null }).primary_video_url;
+                              const hasPrimaryImage = !!(p as { primary_image_url?: string | null }).primary_image_url;
+                              const isGenerating = p.id ? generatingPrimaryVideoIds.has(p.id) : false;
+                              if (primaryVideoUrl) {
+                                return (
+                                  <div style={{ position: 'relative' }}>
+                                    <video
+                                      src={primaryVideoUrl}
+                                      autoPlay
+                                      muted
+                                      loop
+                                      playsInline
+                                      preload="metadata"
+                                      style={{
+                                        width: '100%',
+                                        aspectRatio: '4 / 5',
+                                        borderRadius: 8,
+                                        border: '2px solid #7c3aed',
+                                        boxShadow: '0 0 0 1px #7c3aed, 0 4px 14px rgba(124,58,237,0.18)',
+                                        objectFit: 'cover',
+                                        display: 'block',
+                                        background: '#0f172a',
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isGenerating && p.id) generatePrimaryVideo(p.id);
+                                      }}
+                                      disabled={isGenerating}
+                                      title={isGenerating ? 'Regenerating primary video…' : 'Regenerate primary video'}
+                                      style={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '5px 9px',
+                                        borderRadius: 999,
+                                        border: '1px solid rgba(255,255,255,0.4)',
+                                        background: isGenerating ? 'rgba(124,58,237,0.85)' : 'rgba(15,23,42,0.7)',
+                                        color: '#fff',
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        letterSpacing: '0.04em',
+                                        textTransform: 'uppercase',
+                                        cursor: isGenerating ? 'wait' : 'pointer',
+                                        backdropFilter: 'blur(6px)',
+                                      }}
+                                    >
+                                      {isGenerating ? 'Generating' : 'Regen'}
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div style={{
+                                  position: 'relative',
+                                  width: '100%',
+                                  aspectRatio: '4 / 5',
+                                  borderRadius: 8,
+                                  border: '1px dashed #cbd5e1',
+                                  background: '#f8fafc',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: 8,
+                                  padding: 8,
+                                }}>
+                                  <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>
+                                    {hasPrimaryImage
+                                      ? 'No primary video yet.'
+                                      : 'Pick a primary image first.'}
+                                  </div>
+                                  {hasPrimaryImage && p.id && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isGenerating && p.id) generatePrimaryVideo(p.id);
+                                      }}
+                                      disabled={isGenerating}
+                                      title={isGenerating ? 'Generating primary video…' : 'Generate primary video from primary image'}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '7px 14px',
+                                        borderRadius: 999,
+                                        border: 'none',
+                                        background: isGenerating ? '#a78bfa' : '#7c3aed',
+                                        color: '#fff',
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        letterSpacing: '0.04em',
+                                        textTransform: 'uppercase',
+                                        cursor: isGenerating ? 'wait' : 'pointer',
+                                        boxShadow: '0 4px 12px rgba(124,58,237,0.25)',
+                                      }}
+                                    >
+                                      {isGenerating ? (
+                                        <span style={{
+                                          width: 11, height: 11,
+                                          border: '1.5px solid rgba(255,255,255,0.45)',
+                                          borderTopColor: '#fff',
+                                          borderRadius: '50%',
+                                          animation: 'wallet-spin 0.7s linear infinite',
+                                        }} />
+                                      ) : (
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                          <polygon points="6 4 20 12 6 20 6 4" />
+                                        </svg>
+                                      )}
+                                      <span>{isGenerating ? 'Generating' : 'Generate'}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div>
                             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
