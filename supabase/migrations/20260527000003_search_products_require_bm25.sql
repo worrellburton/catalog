@@ -1,23 +1,28 @@
--- Fix search_products: eliminate dense-only noise for unrelated queries.
+-- Fix search_products: eliminate dense-only noise for unrelated queries while
+-- preserving semantic search for fashion-context queries.
 --
 -- Problem: queries with zero text relevance (e.g. "skincare" in a fashion
 -- catalog) return pure dense-neighbor noise. The FULL OUTER JOIN surfaces
 -- every nearest-neighbor even when no product name/brand/type/description
--- contains any query term. Dense-only scores (~0.0164) clear the 0.015
--- semantic fallback threshold, so random products appear.
+-- contains any query term.
 --
--- Fix: gate dense-only results on category_intent. The FULL OUTER JOIN is
--- kept so that queries like "black shirts" (where BM25 fails because the
--- catalog uses "Top" not "Shirt") can still surface dense results — but
--- ONLY when a clear product-category keyword is detected in the query.
+-- Fix: gate dense-only results on TWO signals:
 --
---   "skincare"     → no category intent, no BM25 → 0 results       ✓
---   "black shirts" → category intent = Top, no BM25 → dense Tops   ✓
---   "alo yoga"     → no category intent, has BM25 → brand results  ✓
---   "shoes"        → category intent = Shoes, has BM25 → footwear  ✓
+--   1. category_intent — specific product-type keyword detected
+--      ("shirts" → Top, "shoes" → Shoes). Dense results filtered to type.
 --
--- Dense-only rows without category intent are pure nearest-neighbor noise
--- and get filtered out in the rrf CTE's WHERE clause.
+--   2. fashion_context — general fashion/occasion keyword detected
+--      ("party wear", "beach", "streetwear", "date night"). Dense results
+--      allowed with no type filter — embeddings handle relevance ranking.
+--
+-- When NEITHER signal fires, dense-only rows are blocked (nearest-neighbor
+-- noise for queries completely outside the catalog).
+--
+--   "skincare"     → no intent, no context  → 0 results           ✓
+--   "party wear"   → no intent, context ✓   → dense fashion items ✓
+--   "black shirts" → intent = Top           → dense Tops           ✓
+--   "alo yoga"     → BM25 matches           → brand results        ✓
+--   "beach"        → no intent, context ✓   → dense beach items    ✓
 
 drop function if exists public.search_products(vector, text, int, text, uuid[]);
 
@@ -99,9 +104,8 @@ as $$
       ) @@ bm25_q.q
     limit k * 4
   ),
-  -- Category intent: detect product-category keywords in query_text and
-  -- map them to catalog type values. Computed before rrf so dense-only
-  -- rows can be gated on whether a category was detected.
+  -- Product-type intent: maps specific category keywords to catalog types.
+  -- Used for both the rrf gate AND the final type post-filter.
   category_intent as (
     select case
       when lower(query_text) ~* '\m(shirt|shirts|tee|tees|blouse|blouses|polo|polos|henley|henleys|button-up|button-down)\M'
@@ -125,9 +129,36 @@ as $$
       else null::text[]
     end as allowed_types
   ),
+  -- Fashion context: detects occasion, style, and general fashion keywords.
+  -- When detected, dense-only results are meaningful (embeddings understand
+  -- "party wear" ≈ dresses/heels even without exact text match).
+  -- Does NOT filter by product type — all categories are valid.
+  fashion_context as (
+    select lower(query_text) ~* (
+      '\m('
+      -- Occasions & events
+      || 'party|cocktail|formal|evening|gala|prom|wedding|bridal'
+      || '|night\s+out|going\s+out|club|date|romantic|brunch|dinner'
+      -- Lifestyle / setting
+      || '|beach|pool|resort|vacation|tropical|outdoor|travel'
+      || '|office|work|professional|business|corporate'
+      || '|workout|gym|athletic|yoga|running|training|sport|fitness'
+      || '|lounge|cozy|relaxed|laid-back'
+      -- Seasons & weather
+      || '|summer|spring|winter|fall|autumn|cold|warm'
+      -- Style descriptors
+      || '|streetwear|street\s+style|urban|bohemian|boho|vintage|retro'
+      || '|classic|timeless|minimalist|modern|trendy|chic|elegant|edgy|preppy'
+      || '|luxury|designer|premium|high-end|couture'
+      -- General fashion terms
+      || '|fashion|style|outfit|wear|look|attire|apparel|clothing|wardrobe|ensemble'
+      || '|activewear|athleisure|sportswear|formalwear|swimwear|loungewear|workwear'
+      || ')\M'
+    ) as detected
+  ),
   -- FULL OUTER JOIN: keep both lanes, but gate dense-only rows.
-  -- Dense-only rows (b.id IS NULL) are only kept when category_intent
-  -- detected a product type — otherwise they are nearest-neighbor noise.
+  -- Dense-only rows (b.id IS NULL) are only kept when a fashion signal
+  -- is detected — either a specific product type or a general context.
   rrf as (
     select
       coalesce(d.id, b.id) as id,
@@ -137,6 +168,7 @@ as $$
     full outer join bm25 b on b.id = d.id
     where b.id is not null
        or (select allowed_types from category_intent) is not null
+       or (select detected from fashion_context)
   ),
   ranked as (
     select id, rrf_score as score
@@ -202,6 +234,6 @@ as $$
 $$;
 
 comment on function public.search_products(vector, text, int, text, uuid[]) is
-  'Search V6: dense + BM25 + RRF fusion + category intent. Dense-only rows gated on category intent (no noise for unrelated queries like "skincare"). Adaptive threshold (max text_score ≥ 0.1 → 0.020, else 0.015). Category intent post-filter. Graph connectivity bonus.';
+  'Search V6: dense + BM25 + RRF + category intent + fashion context gate. Dense-only rows require either a product-type keyword (category_intent) or a fashion/occasion keyword (fashion_context). Unrelated queries (skincare, electronics) return empty. Adaptive threshold. Graph connectivity bonus.';
 
 grant execute on function public.search_products(vector, text, int, text, uuid[]) to anon, authenticated, service_role;
