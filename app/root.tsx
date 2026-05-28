@@ -38,6 +38,7 @@ import "./styles/user-menu.css";
 import "./styles/in-app-browser.css";
 import "./styles/light-mode.css";
 import "./styles/responsive.css";
+import "./styles/activity.css";
 import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";

@@ -1,35 +1,10 @@
-/*
- * This file has been split into modular CSS files.
- * See app/styles/ for all styles.
- *
- * Imports are in app/root.tsx.
- *
- * Files:
- *   base.css          – Reset, variables, body
- *   password-gate.css – Password gate & auth
- *   deck-selector.css – Deck selector & flywheel
- *   deck-v6.css       – Deck V6 styles
- *   splash-screen.css – Splash screen
- *   deck-view.css     – Deck slides & stats
- *   header.css        – Main header & toggles
- *   bottom-bar.css    – Bottom bar, filters, search
- *   bookmarks.css     – Bookmarks & search backdrop
- *   grid-view.css     – Grid, cards, shimmer
- *   look-overlay.css  – Look detail overlay
- *   product-page.css  – Product detail page
- *   creator-page.css  – Creator catalog page
- *   user-menu.css     – User menu
- *   in-app-browser.css – In-app browser
- *   light-mode.css    – Light mode overrides
- *   responsive.css    – Responsive breakpoints
- *   landing-page.css  – Landing page
- *   admin.css         – Admin panel
- *   feed.css          – Continuous feed
- */
+/* Activity — both the missed-activity catch-up popup (SignInStatsPopup)
+   and the realtime engagement toasts (ActivityRealtimeToasts).
+   Imported via app/root.tsx. */
 
-/* Sign-in analytics toast — top-center pill that surfaces engagement
-   deltas since the creator's previous sign-in. Self-dismisses after
-   12s or on tap. Once per browser session via sessionStorage. */
+/* Catch-up popup. Top-center pill that surfaces engagement deltas
+   since the creator's previous sign-in. Self-dismisses after 12s or
+   on tap. Once per browser session via sessionStorage. */
 .signin-stats-popup {
   position: fixed;
   top: 80px;
@@ -64,7 +39,9 @@
 .signin-stats-title {
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: -0.005em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
 }
 .signin-stats-since {
   font-size: 11px;
@@ -85,16 +62,18 @@
   display: flex;
   align-items: stretch;
   gap: 14px;
+  flex-wrap: nowrap;
 }
 .signin-stats-stat {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 .signin-stats-value {
   font-size: 18px;
   font-weight: 700;
-  color: #16a34a;
+  color: #4ade80;
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
 }
@@ -102,10 +81,9 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 600;
 }
-
 @media (max-width: 768px) {
   .signin-stats-popup {
     top: 64px;
@@ -113,12 +91,14 @@
     width: calc(100vw - 24px);
     padding: 10px 14px 12px;
   }
+  .signin-stats-value { font-size: 16px; }
+  .signin-stats-row   { gap: 10px; }
 }
 
-/* Activity — realtime engagement toasts. Fixed top-right stack that
-   pops in one-by-one as the realtime subscription delivers events
-   on the signed-in creator's looks / new follower rows. Sits above
-   most of the UI without competing with the SignInStatsPopup at
+/* Realtime engagement toasts. Fixed top-right stack that pops in
+   one-by-one as the realtime subscription delivers events on the
+   signed-in creator's looks / new follower rows. Sits above most
+   of the UI without competing with the SignInStatsPopup at
    top-center. */
 .activity-toasts {
   position: fixed;
