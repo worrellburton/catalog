@@ -98,12 +98,38 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
 
   const [showSplash, setShowSplash] = useState(false);
 
-  // Branded auth splash. Show whenever we're in the 'locked' view AND
-  // either auth is still resolving OR auth resolved with a user but the
-  // auto-route effect below hasn't yet flipped view to 'app' or
-  // 'waitlisted'. Keeps the password gate from flashing for users who
-  // are about to be signed in.
-  const showAuthSplash = view === 'locked' && (authLoading || !!user);
+  // First-paint signal from the feed. ContinuousFeed dispatches
+  // `catalog:feed-ready` on the window after its first non-empty
+  // commit (one rAF after data lands). The auth splash listens for
+  // it so we never fade away to a blank dark frame before the cards
+  // actually paint underneath. Ceiling timer guarantees it flips
+  // true within 2.5s even if the network is dead, so the splash
+  // can't hang forever.
+  const [feedReady, setFeedReady] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (feedReady) return;
+    const onReady = () => setFeedReady(true);
+    window.addEventListener('catalog:feed-ready', onReady);
+    const ceiling = window.setTimeout(() => setFeedReady(true), 2500);
+    return () => {
+      window.removeEventListener('catalog:feed-ready', onReady);
+      window.clearTimeout(ceiling);
+    };
+  }, [feedReady]);
+
+  // Branded auth splash. Shown whenever:
+  //  - we're still in 'locked' AND auth is resolving (or already has
+  //    a user and the auto-route effect below hasn't flipped view
+  //    yet) — keeps the password gate from flashing for signed-in
+  //    users; OR
+  //  - the user has resolved and we've entered 'app' but the feed
+  //    hasn't painted its first batch yet — keeps the cards-mount
+  //    blank window covered so the fade reveals real content, not
+  //    a dark void.
+  const showAuthSplash =
+    (view === 'locked' && (authLoading || !!user)) ||
+    (view === 'app' && !!user && !feedReady);
   const [authSplashLeaving, setAuthSplashLeaving] = useState(false);
   const [authSplashMounted, setAuthSplashMounted] = useState(showAuthSplash);
   useEffect(() => {

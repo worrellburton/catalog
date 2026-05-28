@@ -452,6 +452,22 @@ export default function ContinuousFeed({
     };
   }, [initialCached]);
 
+  // First-paint signal. Tell useAppView the feed has something real
+  // to draw, so the auth splash can crossfade over actual cards
+  // instead of a blank dark frame. Fires exactly once per mount,
+  // one rAF after the first non-empty data commit, so the splash
+  // doesn't lift until the next paint actually has tiles in it.
+  const feedReadyFiredRef = useRef(false);
+  useEffect(() => {
+    if (feedReadyFiredRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (liveCreatives.length === 0 && dbLooks.length === 0) return;
+    feedReadyFiredRef.current = true;
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('catalog:feed-ready'));
+    });
+  }, [liveCreatives.length, dbLooks.length]);
+
   // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
   // When the user types a query that matches an existing catalog (e.g.
   // "shoes", "chairs"), render those results synchronously and commit the
