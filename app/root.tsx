@@ -150,6 +150,55 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 })();
           `}}
         />
+        {/* Above-the-fold image preload from the previous visit's cache.
+            Runs during HTML parse — before the JS bundle even downloads —
+            so the browser starts fetching the first few feed thumbnails
+            in parallel with the rest of bootstrap. By the time
+            ContinuousFeed mounts and reads the same localStorage cache,
+            its top tiles are already painted from a hot HTTP cache.
+            Keys mirror product-creative.ts (HOME_FEED_LS_KEY + gender
+            suffix); read all three and pick the freshest. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: `
+(function(){
+  try{
+    if(typeof localStorage==='undefined'||typeof document==='undefined')return;
+    var ks=['catalog:home-feed-cache:v7','catalog:home-feed-cache:v7:male','catalog:home-feed-cache:v7:female'];
+    var best=null;
+    for(var i=0;i<ks.length;i++){
+      var raw=localStorage.getItem(ks[i]);
+      if(!raw)continue;
+      try{
+        var p=JSON.parse(raw);
+        if(p&&typeof p.savedAt==='number'&&Array.isArray(p.rows)){
+          if(!best||p.savedAt>best.savedAt)best=p;
+        }
+      }catch(_){}
+    }
+    if(!best)return;
+    // 7-day TTL — match readHomeFeedFromStorage.
+    if(Date.now()-best.savedAt>6.048e8)return;
+    var seen={},urls=[];
+    for(var j=0;j<best.rows.length&&urls.length<4;j++){
+      var r=best.rows[j];
+      if(!r)continue;
+      var u=r.thumbnail_url||(r.product&&(r.product.image_url||(r.product.images&&r.product.images[0])));
+      if(u&&!seen[u]){seen[u]=1;urls.push(u);}
+    }
+    for(var k=0;k<urls.length;k++){
+      var l=document.createElement('link');
+      l.rel='preload';
+      l.as='image';
+      l.href=urls[k];
+      // fetchpriority=high tells the browser these are above-the-fold
+      // and should jump ahead of other preloads in the queue.
+      l.setAttribute('fetchpriority','high');
+      document.head.appendChild(l);
+    }
+  }catch(_){}
+})();
+          `}}
+        />
         {/* Inter (admin chrome) and DM Sans (MyLooks) are the only
             two families actually referenced in the stylesheets. The other
             eight families this request used to pull (Plus Jakarta, Outfit,
