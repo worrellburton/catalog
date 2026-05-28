@@ -26,6 +26,8 @@ interface SectionRow {
   description: string | null;
   sort_order: number;
   enabled: boolean;
+  item_limit: number | null;
+  infinite: boolean;
 }
 
 export default function AdminPages() {
@@ -42,7 +44,7 @@ export default function AdminPages() {
     setLoading(true);
     const { data } = await supabase
       .from('page_sections')
-      .select('page, section_key, label, description, sort_order, enabled')
+      .select('page, section_key, label, description, sort_order, enabled, item_limit, infinite')
       .eq('page', tab)
       .order('sort_order', { ascending: true });
     setSections((data ?? []) as SectionRow[]);
@@ -67,6 +69,8 @@ export default function AdminPages() {
       description: r.description,
       sort_order: i,
       enabled: r.enabled,
+      item_limit: r.item_limit,
+      infinite: r.infinite,
       updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase
@@ -119,6 +123,20 @@ export default function AdminPages() {
 
   const toggleEnabled = (i: number) => {
     const next = sections.map((r, idx) => idx === i ? { ...r, enabled: !r.enabled } : r);
+    setSections(next);
+    void persist(next);
+  };
+
+  const toggleInfinite = (i: number) => {
+    const next = sections.map((r, idx) => idx === i ? { ...r, infinite: !r.infinite } : r);
+    setSections(next);
+    void persist(next);
+  };
+
+  const setItemLimit = (i: number, raw: string) => {
+    const parsed = raw.trim() === '' ? null : Math.max(0, Math.floor(Number(raw)));
+    const value  = parsed != null && Number.isFinite(parsed) ? parsed : null;
+    const next = sections.map((r, idx) => idx === i ? { ...r, item_limit: value } : r);
     setSections(next);
     void persist(next);
   };
@@ -199,6 +217,46 @@ export default function AdminPages() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{s.label}</div>
                   <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{s.description}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+                    {/* Per-section item count. Blank ↦ "use the
+                        renderer's hard-coded default". Click stops
+                        propagation so the input doesn't trigger
+                        the row's draggable behaviour. */}
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569' }}
+                           onClick={(e) => e.stopPropagation()}>
+                      <span>Show #</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={s.item_limit ?? ''}
+                        placeholder="default"
+                        onClick={(e) => e.stopPropagation()}
+                        onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onChange={(e) => setItemLimit(i, e.target.value)}
+                        style={{
+                          width: 70,
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          border: '1px solid #e5e7eb',
+                          fontSize: 12,
+                          fontVariantNumeric: 'tabular-nums',
+                          background: '#fff',
+                        }}
+                      />
+                    </label>
+                    {/* Infinite checkbox — flips the section into an
+                        infinite-scroll feed. */}
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}
+                           onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={s.infinite}
+                        onChange={() => toggleInfinite(i)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span>Infinite</span>
+                    </label>
+                  </div>
                 </div>
                 <button
                   type="button"

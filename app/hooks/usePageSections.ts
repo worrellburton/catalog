@@ -22,6 +22,13 @@ export interface PageSection {
   section_key: string;
   sort_order: number;
   enabled: boolean;
+  /** null = section uses its hard-coded default count; positive int
+   *  caps the rendered item count. Ignored when infinite=true (the
+   *  feed paginates beyond this on its own). */
+  item_limit: number | null;
+  /** Flips the section from a bounded grid into an infinite scroll.
+   *  Renderers should switch to a paginated feed component. */
+  infinite: boolean;
 }
 
 type Page = 'product' | 'looks';
@@ -44,7 +51,7 @@ async function load(page: Page): Promise<PageSection[]> {
       if (!supabase) return [];
       const { data } = await supabase
         .from('page_sections')
-        .select('section_key, sort_order, enabled')
+        .select('section_key, sort_order, enabled, item_limit, infinite')
         .eq('page', page)
         .order('sort_order', { ascending: true });
       const rows = (data ?? []) as PageSection[];
@@ -91,4 +98,21 @@ export function isSectionEnabled(sections: PageSection[] | null, key: string): b
   // ones before the migration is run.
   if (!row) return true;
   return row.enabled !== false;
+}
+
+/** Per-section render limit. Returns `fallback` for unknown sections
+ *  and for sections with a null item_limit so renderers stay
+ *  predictable while the editor is empty / not yet migrated. */
+export function getSectionLimit(sections: PageSection[] | null, key: string, fallback: number): number {
+  if (!sections) return fallback;
+  const row = sections.find(s => s.section_key === key);
+  if (!row || row.item_limit == null || row.item_limit <= 0) return fallback;
+  return row.item_limit;
+}
+
+/** Is the named section configured as an infinite scroll? */
+export function isSectionInfinite(sections: PageSection[] | null, key: string): boolean {
+  if (!sections) return false;
+  const row = sections.find(s => s.section_key === key);
+  return row?.infinite === true;
 }
