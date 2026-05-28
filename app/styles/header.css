@@ -90,12 +90,32 @@ header > * {
 }
 
 .header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Thin vertical separator between following and followers groups */
+.follow-rail-separator {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+.light-mode .follow-rail-separator {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* Pending look pill — sits below the header row, centered */
+header > .pending-look-pill {
   position: absolute;
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-top: -28px;
 }
 
 /* "Your <style> look is rendering" pill — appears in the header
@@ -481,44 +501,57 @@ header > * {
     display: flex;
   }
 
-  /* Mobile: rails live in their respective header-left /
-     header-right slots. Each one becomes a vertical column of
-     overlapping avatars so the rail sits compactly under the
-     logo (left) or the wallet pill (right). */
-  .follow-rail-wrap {
-    flex-direction: column !important;
-    gap: 6px !important;
+  /* Collapse center slot on mobile — its children are fixed-positioned
+     at the bottom so it shouldn't consume header flex space. */
+  .header-center {
+    flex: 0 !important;
+    min-width: 0 !important;
   }
-  .follow-rail-trigger {
-    flex-direction: column !important;
+
+  /* Mobile: rails move to fixed positions at screen edges,
+     just above the bottom search bar. */
+  .follow-rail-wrap--center {
+    position: fixed !important;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
+    z-index: 99;
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 0;
+    pointer-events: none;
   }
-  .follow-rail-stack {
+  .follow-rail-wrap--center > * {
+    pointer-events: auto;
+  }
+  .follow-rail-wrap--center .follow-rail-separator {
+    display: none;
+  }
+  .follow-rail-wrap--center .follow-rail-stack {
     flex-direction: column !important;
     height: auto !important;
     width: 28px;
   }
-  .follow-rail-avatar {
+  .follow-rail-wrap--center .follow-rail-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 10px !important;
     margin-left: 0 !important;
-    margin-top: -10px !important;
+    margin-top: -8px;
   }
-  .follow-rail-stack > .follow-rail-avatar:first-child {
+  .follow-rail-wrap--center .follow-rail-stack > .follow-rail-avatar:first-child {
     margin-top: 0 !important;
   }
-  /* Popover for the LEFT rail opens to the right of the avatars
-     so it doesn't slide off the left edge of the viewport. */
-  .header-left .follow-rail .follow-rail-popover {
-    top: 0 !important;
-    left: calc(100% + 10px) !important;
-    right: auto !important;
+  .follow-rail-popover {
+    position: fixed !important;
+    bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
     transform: none !important;
-  }
-  /* Popover for the RIGHT rail opens to the LEFT of the avatars
-     so it doesn't overflow the right edge. */
-  .header-right .follow-rail .follow-rail-popover {
-    top: 0 !important;
-    right: calc(100% + 10px) !important;
-    left: auto !important;
-    transform: none !important;
+    max-width: none !important;
+    min-width: 0 !important;
   }
 
   header {

@@ -27,9 +27,9 @@ interface RailEntry {
   ts: number;
 }
 
-/** Up to 25 stacked avatars in each rail; anything beyond gets a
+/** Up to 5 stacked avatars in the rail; anything beyond gets a
  *  "+N" pill so the row stays a fixed width. */
-const MAX_VISIBLE = 25;
+const MAX_VISIBLE = 5;
 
 /** A freshly-detected follower keeps its pop-in animation class for
  *  this many ms before reverting to a normal avatar. */
@@ -189,8 +189,6 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
   if (!followingReady && !followersReady) return null;
   const hasFollowing = (followingEntries?.length ?? 0) > 0;
   const hasFollowers = (followerEntries?.length ?? 0) > 0;
-  // If this mount is scoped to one side and that side is empty, render
-  // nothing — the other side is handled by its own mount elsewhere.
   if (mode === 'following' && !hasFollowing) return null;
   if (mode === 'followers' && !hasFollowers) return null;
   if (mode === 'both' && !hasFollowing && !hasFollowers) return null;
@@ -201,6 +199,51 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
     avatarUrl: f.avatarUrl,
     ts: f.followedAt,
   }));
+
+  if (mode === 'both') {
+    return (
+      <div
+        ref={wrapperRef}
+        className="follow-rail-wrap follow-rail-wrap--center"
+        style={{
+          position: 'relative',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0,
+        }}
+      >
+        {hasFollowing && (
+          <AvatarRow
+            ariaLabel="Following"
+            titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
+            entries={followingEntries!}
+            newSet={null}
+            isOpen={openPopover === 'following'}
+            onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+            onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+            popoverTitle={`Following · ${followingEntries!.length}`}
+            tooltipPrefix={null}
+          />
+        )}
+        {hasFollowing && hasFollowers && (
+          <span className="follow-rail-separator" />
+        )}
+        {hasFollowers && (
+          <AvatarRow
+            ariaLabel="Followers"
+            titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
+            entries={followerRailEntries}
+            newSet={newFollowerHandles}
+            isOpen={openPopover === 'followers'}
+            onToggle={() => setOpenPopover(v => v === 'followers' ? null : 'followers')}
+            onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+            popoverTitle={`Followers · ${followerEntries!.length}`}
+            tooltipPrefix="Followed"
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -214,9 +257,6 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
         gap: 6,
       }}
     >
-      {/* Followers rendered first → on top on desktop (column),
-          on the LEFT on mobile (row). Following rendered second →
-          below on desktop, on the RIGHT on mobile. */}
       {showFollowers && hasFollowers && (
         <AvatarRow
           ariaLabel="Followers"
