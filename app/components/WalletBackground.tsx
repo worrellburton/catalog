@@ -52,6 +52,26 @@ interface Pulse {
   color: 'green' | 'gold';
 }
 
+/** Free-flying particle spawned by the Withdraw-burst event. Not
+ *  tied to any node — fans outward from an origin until its life
+ *  expires. */
+interface BurstParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** 0..1, drops to 0 over time. Drives alpha + radius. */
+  life: number;
+  color: 'green' | 'gold';
+}
+
+/** Gold horizontal sweep that paints along the bottom of the
+ *  viewport whenever a payout posts. One active at a time —
+ *  re-triggering restarts the timer. */
+interface PayoutRibbon {
+  startedAt: number;
+}
+
 const NODE_COUNT_DESKTOP = 110;
 const NODE_COUNT_MOBILE = 55;
 const CONNECTION_BASE_PX = 130;
@@ -104,6 +124,8 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
     const state = {
       nodes: [] as Node[],
       pulses: [] as Pulse[],
+      bursts: [] as BurstParticle[],
+      ribbon: null as PayoutRibbon | null,
       width: 0,
       height: 0,
       dpr: 1,
@@ -116,6 +138,37 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
       // independent of frame timing.
       pulseSpawnAccumulator: 0,
     };
+
+    // ── Event bus ─────────────────────────────────────────────────────
+    // Listen for window-scoped events so any surface (CreatorWallet
+    // CTA, future earnings ledger ping, etc.) can trigger visual
+    // celebrations without holding a ref to this canvas.
+    function spawnBurst(originX: number, originY: number) {
+      const count = reduceMotion ? 12 : 36;
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+        const speed = 1.8 + Math.random() * 3.6;
+        state.bursts.push({
+          x: originX,
+          y: originY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color: Math.random() < 0.7 ? 'green' : 'gold',
+        });
+      }
+    }
+    function onBurst(e: Event) {
+      const detail = (e as CustomEvent).detail as { x?: number; y?: number } | undefined;
+      const x = detail?.x ?? state.width / 2;
+      const y = detail?.y ?? state.height / 2;
+      spawnBurst(x, y);
+    }
+    function onPayout() {
+      state.ribbon = { startedAt: performance.now() };
+    }
+    window.addEventListener('wallet:burst',  onBurst);
+    window.addEventListener('wallet:payout', onPayout);
 
     function resize() {
       state.dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -321,6 +374,78 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
         ctx.fill();
       }
 
+      // ── Burst particles (Withdraw CTA fanout) ────────────────────
+      // Free-flying particles, not tied to any node. Decay via life
+      // so the burst feels like an explosion that diffuses into the
+      // ambient network rather than a hard cut.
+      for (let i = state.bursts.length - 1; i >= 0; i--) {
+        const p = state.bursts[i];
+        p.x += p.vx * dtFrames;
+        p.y += p.vy * dtFrames;
+        // Slight drag so particles slow as they expand.
+        p.vx *= Math.pow(0.96, dtFrames);
+        p.vy *= Math.pow(0.96, dtFrames);
+        p.life -= 0.018 * dtFrames;
+        if (p.life <= 0) { state.bursts.splice(i, 1); continue; }
+        const rgb = p.color === 'green' ? '74, 222, 128' : '253, 224, 71';
+        const lifeAlpha = p.life;
+        const glowR = 14 * lifeAlpha + 4;
+        const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+        halo.addColorStop(0,    `rgba(${rgb}, ${0.85 * lifeAlpha})`);
+        halo.addColorStop(0.45, `rgba(${rgb}, ${0.3  * lifeAlpha})`);
+        halo.addColorStop(1,    `rgba(${rgb}, 0)`);
+        ctx.fillStyle = halo;
+        ctx.fillRect(p.x - glowR, p.y - glowR, glowR * 2, glowR * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * lifeAlpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2 * lifeAlpha + 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // ── Payout ribbon ────────────────────────────────────────────
+      // A 3-second horizontal gold sweep along the bottom edge that
+      // marks a posted payout. Drawn last so it floats above the
+      // network. Fades in/out via a sine envelope.
+      if (state.ribbon) {
+        const elapsed = now - state.ribbon.startedAt;
+        const duration = 3200;
+        if (elapsed >= duration) {
+          state.ribbon = null;
+        } else {
+          const t = elapsed / duration;
+          // Envelope: ease in over 12%, hold, ease out over last 22%.
+          const env = t < 0.12
+            ? t / 0.12
+            : t > 0.78
+              ? Math.max(0, (1 - t) / 0.22)
+              : 1;
+          const ribbonY = H - 36;
+          const ribbonH = 28;
+          // The "comet head" travels left → right; the trail behind
+          // it lingers so the eye reads "money landed".
+          const headX = -160 + (W + 320) * easeInOut(t);
+          // Base bar.
+          const baseAlpha = 0.18 * env;
+          ctx.fillStyle = `rgba(253, 224, 71, ${baseAlpha})`;
+          ctx.fillRect(0, ribbonY, W, ribbonH);
+          // Sheen sweep.
+          const sheenGrad = ctx.createLinearGradient(headX - 240, 0, headX + 80, 0);
+          sheenGrad.addColorStop(0,    'rgba(253, 224, 71, 0)');
+          sheenGrad.addColorStop(0.55, `rgba(253, 224, 71, ${0.55 * env})`);
+          sheenGrad.addColorStop(0.85, `rgba(255, 247, 200, ${0.95 * env})`);
+          sheenGrad.addColorStop(1,    `rgba(253, 224, 71, 0)`);
+          ctx.fillStyle = sheenGrad;
+          ctx.fillRect(headX - 240, ribbonY - 6, 320, ribbonH + 12);
+          // Soft top edge — implies the ribbon is a stream of light,
+          // not a flat block.
+          const edgeGrad = ctx.createLinearGradient(0, ribbonY - 14, 0, ribbonY + ribbonH);
+          edgeGrad.addColorStop(0, 'rgba(253, 224, 71, 0)');
+          edgeGrad.addColorStop(1, `rgba(253, 224, 71, ${0.22 * env})`);
+          ctx.fillStyle = edgeGrad;
+          ctx.fillRect(0, ribbonY - 14, W, ribbonH + 14);
+        }
+      }
+
       rafRef.current = requestAnimationFrame(draw);
     }
 
@@ -328,6 +453,8 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('wallet:burst', onBurst);
+      window.removeEventListener('wallet:payout', onPayout);
       if (scrollEl) scrollEl.removeEventListener('scroll', updateScroll);
     };
   }, [scrollEl]);

@@ -170,20 +170,40 @@ export default function CreatorWallet({ onProfileChange }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleWithdraw() {
+  // Dispatch a burst-of-pulses celebration centered on the CTA the
+  // user just tapped. WalletBackground listens for this event and
+  // spawns ~36 free-flying particles fanning outward from the
+  // origin, so the network visually "reacts" to the action.
+  function emitWithdrawBurst(origin?: { x: number; y: number }) {
+    if (typeof window === 'undefined') return;
+    const detail = origin ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    window.dispatchEvent(new CustomEvent('wallet:burst', { detail }));
+  }
+
+  async function handleWithdraw(e?: React.MouseEvent<HTMLButtonElement>) {
     if (!profile?.is_payout_active) {
       setShowSignup(true);
       return;
     }
+    // Burst centered on the clicked button so the celebration looks
+    // intentional, not arbitrary.
+    const target = e?.currentTarget;
+    const rect = target?.getBoundingClientRect();
+    emitWithdrawBurst(rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : undefined);
     setWithdrawing(true);
     setWithdrawError('');
     try {
       const res = await initiateWithdrawal();
       setWithdrawLink(res.withdraw_link);
+      // Gold ribbon along the bottom — marks the payout having
+      // posted. Fires once on the successful response.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('wallet:payout'));
+      }
       window.open(res.withdraw_link, '_blank', 'noopener,noreferrer');
       await load();
-    } catch (e: unknown) {
-      setWithdrawError((e as Error).message ?? 'Failed to initiate withdrawal');
+    } catch (err: unknown) {
+      setWithdrawError((err as Error).message ?? 'Failed to initiate withdrawal');
     } finally {
       setWithdrawing(false);
     }
