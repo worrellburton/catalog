@@ -214,19 +214,9 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
         gap: 6,
       }}
     >
-      {showFollowing && hasFollowing && (
-        <AvatarRow
-          ariaLabel="Following"
-          titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
-          entries={followingEntries!}
-          newSet={null}
-          isOpen={openPopover === 'following'}
-          onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
-          onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
-          popoverTitle={`Following · ${followingEntries!.length}`}
-          tooltipPrefix={null}
-        />
-      )}
+      {/* Followers rendered first → on top on desktop (column),
+          on the LEFT on mobile (row). Following rendered second →
+          below on desktop, on the RIGHT on mobile. */}
       {showFollowers && hasFollowers && (
         <AvatarRow
           ariaLabel="Followers"
@@ -238,6 +228,19 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
           onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
           popoverTitle={`Followers · ${followerEntries!.length}`}
           tooltipPrefix="Followed"
+        />
+      )}
+      {showFollowing && hasFollowing && (
+        <AvatarRow
+          ariaLabel="Following"
+          titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
+          entries={followingEntries!}
+          newSet={null}
+          isOpen={openPopover === 'following'}
+          onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+          onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+          popoverTitle={`Following · ${followingEntries!.length}`}
+          tooltipPrefix={null}
         />
       )}
     </div>

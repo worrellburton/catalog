@@ -26,13 +26,24 @@ const CORS = {
 };
 
 const FAL_BASE_SYNC = 'https://fal.run';
-const SEEDANCE_SLUG = 'fal-ai/bytedance/seedance/v1/lite/image-to-video';
+// Seedance 2 Pro i2v — higher fidelity than the v1 lite endpoint we
+// shipped with originally. Maps to fal.ai's `bytedance/seedance-2.0`
+// pro tier; the i2v endpoint uses the supplied image_url as the
+// first frame by default.
+const SEEDANCE_SLUG = 'fal-ai/bytedance/seedance/v2/pro/image-to-video';
 const FAL_CALL_TIMEOUT_MS = 60_000;
 
-// Fixed prompt per the product spec — subtle cinematic motion on the
-// product itself, no scene changes or camera movement beyond a slow
-// drift / parallax.
-const PRIMARY_VIDEO_PROMPT = 'Static shot, show subtle cinematic motion of the product. Make it 4:5';
+// Always anchor the result to the supplied image (first frame) +
+// keep the product centred with subtle cinematic motion. The
+// "no talking" clause is a hard constraint — image-to-video models
+// otherwise love to lip-sync any face in the frame, which is the
+// wrong vibe for a product packshot.
+const PRIMARY_VIDEO_PROMPT = [
+  'Use this exact image as the first frame.',
+  'Static shot, show subtle cinematic motion of the product.',
+  'If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips.',
+  'Make it 4:5.',
+].join(' ');
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -55,10 +66,11 @@ async function callSeedance(prompt: string, imageUrl: string, falKey: string): P
       body: JSON.stringify({
         prompt,
         image_url: imageUrl,
-        aspect_ratio: '9:16',
-        // seedance lite's i2v param surface — these are best-effort:
-        // unknown keys are ignored upstream so leaving extras in is
-        // safe but we keep the body minimal.
+        // Closest portrait ratio fal supports; 4:5 isn't a documented
+        // enum value, 3:4 is. Renders well in the admin 4:5 tile via
+        // objectFit: contain. The prompt also asks for 4:5 so the
+        // composition leans towards it.
+        aspect_ratio: '3:4',
         resolution: '720p',
         duration: '5',
       }),

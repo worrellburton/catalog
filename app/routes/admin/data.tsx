@@ -35,6 +35,9 @@ interface CrawledProduct {
    *  admin Primary column — unpolished primaries get a tappable wand
    *  icon overlay, polished ones don't. */
   primary_image_polished?: boolean | null;
+  /** Original primary_image_url before the polish step. Kept so the
+   *  polish node-graph modal can render input → model → output. */
+  primary_image_pre_polish_url?: string | null;
   /** Short cinematic-motion video of the product, generated from
    *  primary_image_url via generate-primary-video. Rendered in the
    *  detail-row "Primary Video" tile; null rows get a Generate CTA. */
@@ -684,7 +687,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1564,7 +1567,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1917,7 +1920,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2329,8 +2332,12 @@ export default function AdminData() {
   // Fetched once on mount via the avg_primary_video_duration_ms RPC;
   // falls back to 30s before any data has accumulated.
   const [avgPrimaryVideoDurationMs, setAvgPrimaryVideoDurationMs] = useState<number>(30_000);
-  // Product whose node-graph modal is currently open.
+  // Product whose primary-VIDEO node-graph modal is currently open.
   const [primaryVideoGraphProductId, setPrimaryVideoGraphProductId] = useState<string | null>(null);
+  // Product whose primary-IMAGE polish node-graph modal is currently open.
+  const [primaryImageGraphProductId, setPrimaryImageGraphProductId] = useState<string | null>(null);
+  // Product whose primary-video modal popup is currently open (click-to-zoom).
+  const [primaryVideoModalProductId, setPrimaryVideoModalProductId] = useState<string | null>(null);
 
   const polishPrimaryImage = useCallback(async (productId: string) => {
     if (!supabase) return;
@@ -2912,7 +2919,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -2943,7 +2950,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -4833,7 +4840,7 @@ export default function AdminData() {
                                   title="Open primary image full-size"
                                   style={{
                                     width: '100%',
-                                    aspectRatio: '1 / 1',
+                                    aspectRatio: '4 / 5',
                                     borderRadius: 8,
                                     border: '2px solid #16a34a',
                                     boxShadow: '0 0 0 1px #16a34a, 0 4px 14px rgba(22,163,74,0.18)',
@@ -4853,10 +4860,53 @@ export default function AdminData() {
                                 {/* Polish CTA — only show on un-polished primaries.
                                     The wand kicks off polish-primary-image which
                                     reframes the source into a uniform 5:4 shot. */}
-                                {(p as { primary_image_polished?: boolean | null }).primary_image_polished !== true && p.id && (
-                                  (() => {
-                                    const isPolishing = p.id ? polishingIds.has(p.id) : false;
-                                    return (
+                                {p.id && (() => {
+                                  const isPolishing = p.id ? polishingIds.has(p.id) : false;
+                                  const polished = (p as { primary_image_polished?: boolean | null }).primary_image_polished === true;
+                                  return (
+                                    <>
+                                      {/* Node-graph icon — visible whether the
+                                          primary image has been polished or not.
+                                          Opens the polish modal showing the
+                                          pre-polish source → nano-banana →
+                                          current primary image. */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPrimaryImageGraphProductId(p.id ?? null);
+                                        }}
+                                        title="View polish node graph"
+                                        style={{
+                                          position: 'absolute',
+                                          top: 8,
+                                          left: 8,
+                                          width: 28,
+                                          height: 28,
+                                          borderRadius: 999,
+                                          border: '1px solid rgba(255,255,255,0.4)',
+                                          background: 'rgba(15,23,42,0.7)',
+                                          color: '#fff',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          backdropFilter: 'blur(6px)',
+                                        }}
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                          <circle cx="5" cy="6" r="2.4" />
+                                          <circle cx="19" cy="6" r="2.4" />
+                                          <circle cx="12" cy="18" r="2.4" />
+                                          <line x1="6.5" y1="7.5" x2="11" y2="16" />
+                                          <line x1="17.5" y1="7.5" x2="13" y2="16" />
+                                        </svg>
+                                      </button>
+                                      {/* Polish / Re-polish pill in the top-right.
+                                          Same button is "Polish" on unpolished
+                                          rows and "Re-polish" on polished rows —
+                                          callsite is identical, just labelled
+                                          differently. */}
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -4864,7 +4914,11 @@ export default function AdminData() {
                                           if (!isPolishing && p.id) polishPrimaryImage(p.id);
                                         }}
                                         disabled={isPolishing}
-                                        title={isPolishing ? 'Polishing primary image…' : 'Polish — reframe into uniform 5:4 packshot'}
+                                        title={isPolishing
+                                          ? 'Polishing primary image…'
+                                          : (polished
+                                              ? 'Re-polish — reframe again'
+                                              : 'Polish — reframe into uniform 5:4 packshot')}
                                         style={{
                                           position: 'absolute',
                                           top: 8,
@@ -4875,14 +4929,17 @@ export default function AdminData() {
                                           padding: '6px 10px',
                                           borderRadius: 999,
                                           border: '1px solid rgba(255,255,255,0.4)',
-                                          background: isPolishing ? 'rgba(124,58,237,0.85)' : '#7c3aed',
+                                          background: isPolishing
+                                            ? 'rgba(124,58,237,0.85)'
+                                            : (polished ? 'rgba(15,23,42,0.7)' : '#7c3aed'),
                                           color: '#fff',
-                                          fontSize: 11,
+                                          fontSize: 10,
                                           fontWeight: 700,
                                           letterSpacing: '0.04em',
                                           textTransform: 'uppercase',
                                           cursor: isPolishing ? 'wait' : 'pointer',
-                                          boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                                          boxShadow: polished ? 'none' : '0 4px 12px rgba(0,0,0,0.25)',
+                                          backdropFilter: polished ? 'blur(6px)' : 'none',
                                         }}
                                       >
                                         {isPolishing ? (
@@ -4899,16 +4956,16 @@ export default function AdminData() {
                                             <path d="M12 5l1.5 3 3 1.5-3 1.5L12 14l-1.5-3-3-1.5 3-1.5L12 5z" />
                                           </svg>
                                         )}
-                                        <span>{isPolishing ? 'Polishing' : 'Polish'}</span>
+                                        <span>{isPolishing ? 'Polishing' : (polished ? 'Re-polish' : 'Polish')}</span>
                                       </button>
-                                    );
-                                  })()
-                                )}
+                                    </>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div style={{
                                 width: '100%',
-                                aspectRatio: '1 / 1',
+                                aspectRatio: '4 / 5',
                                 borderRadius: 8,
                                 border: '1px dashed #cbd5e1',
                                 background: '#f8fafc',
@@ -4950,6 +5007,11 @@ export default function AdminData() {
                                       loop
                                       playsInline
                                       preload="metadata"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPrimaryVideoModalProductId(p.id ?? null);
+                                      }}
+                                      title="Click to enlarge"
                                       style={{
                                         width: '100%',
                                         aspectRatio: '4 / 5',
@@ -4959,6 +5021,7 @@ export default function AdminData() {
                                         objectFit: 'contain',
                                         display: 'block',
                                         background: '#0f172a',
+                                        cursor: 'zoom-in',
                                       }}
                                     />
                                     {/* Node-graph button — opens a modal that
@@ -5130,7 +5193,7 @@ export default function AdminData() {
                           </div>
                           <div>
                             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
-                              Videos <span style={{ color: '#7c3aed', fontWeight: 700 }}>{p.video_urls.length}</span>
+                              Creatives <span style={{ color: '#7c3aed', fontWeight: 700 }}>{p.video_urls.length}</span>
                             </div>
                             {p.video_urls.length === 0 ? (
                               <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No videos generated yet.</div>
@@ -5734,6 +5797,80 @@ export default function AdminData() {
         </div>
       )}
 
+      {primaryImageGraphProductId && (() => {
+        const product = crawledProducts.find(c => c.id === primaryImageGraphProductId);
+        if (!product) return null;
+        const prePolishUrl = (product as { primary_image_pre_polish_url?: string | null }).primary_image_pre_polish_url || null;
+        const currentUrl   = (product as { primary_image_url?: string | null }).primary_image_url || null;
+        const wasPolished  = (product as { primary_image_polished?: boolean | null }).primary_image_polished === true;
+        return (
+          <div className="admin-modal-overlay" onClick={() => setPrimaryImageGraphProductId(null)}>
+            <div className="admin-modal" style={{ width: 880, maxWidth: '94vw', padding: 28 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+                  Polish graph — <span style={{ color: '#7c3aed' }}>{product.brand} {product.name}</span>
+                </h2>
+                <button type="button" onClick={() => setPrimaryImageGraphProductId(null)} className="admin-btn admin-btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }}>Close</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', gap: 12, alignItems: 'center' }}>
+                <button type="button" onClick={() => prePolishUrl && window.open(prePolishUrl, '_blank', 'noopener,noreferrer')} disabled={!prePolishUrl}
+                  style={{ border: '1px solid #cbd5e1', borderRadius: 12, padding: 12, background: '#fff', cursor: prePolishUrl ? 'zoom-in' : 'default', display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Input · {wasPolished ? 'Pre-polish image' : 'Current image (unpolished)'}
+                  </div>
+                  {(prePolishUrl || currentUrl) ? (
+                    <img src={(prePolishUrl || currentUrl) ?? ''} alt="Pre-polish source" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>(no source image)</div>
+                  )}
+                </button>
+                <div style={{ fontSize: 28, color: '#cbd5e1', textAlign: 'center', lineHeight: 1 }}>→</div>
+                <div style={{ border: '1px solid #ddd6fe', borderRadius: 12, padding: 12, background: '#faf5ff', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 10, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Model · Polish (Image → Image)
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    fal-ai/nano-banana/edit
+                  </div>
+                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
+                    Reframe this product image into a standardized 5:4 e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
+                    <span>output: 5:4</span>
+                    <span>preserves: background</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 28, color: '#cbd5e1', textAlign: 'center', lineHeight: 1 }}>→</div>
+                <button type="button" onClick={() => currentUrl && window.open(currentUrl, '_blank', 'noopener,noreferrer')} disabled={!currentUrl}
+                  style={{ border: '1px solid #cbd5e1', borderRadius: 12, padding: 12, background: '#fff', cursor: currentUrl ? 'zoom-in' : 'default', display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    Output · {wasPolished ? 'Polished image' : 'Awaiting polish'}
+                  </div>
+                  {wasPolished && currentUrl ? (
+                    <img src={currentUrl} alt="Polished" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>(no polished image yet)</div>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {primaryVideoModalProductId && (() => {
+        const product = crawledProducts.find(c => c.id === primaryVideoModalProductId);
+        const videoUrl = (product as { primary_video_url?: string | null } | undefined)?.primary_video_url || null;
+        if (!product || !videoUrl) return null;
+        return (
+          <div className="admin-modal-overlay" onClick={() => setPrimaryVideoModalProductId(null)}>
+            <div className="admin-modal" style={{ padding: 0, background: '#0f172a', maxWidth: '92vw', maxHeight: '92vh', borderRadius: 16, overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+              <video src={videoUrl} autoPlay controls loop playsInline style={{ display: 'block', maxWidth: '92vw', maxHeight: '92vh', objectFit: 'contain', background: '#0f172a' }} />
+            </div>
+          </div>
+        );
+      })()}
+
       {primaryVideoGraphProductId && (() => {
         const product = crawledProducts.find(c => c.id === primaryVideoGraphProductId);
         if (!product) return null;
@@ -5809,13 +5946,13 @@ export default function AdminData() {
                     Model · Image → Video
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    fal-ai/bytedance/seedance/v1/lite/image-to-video
+                    fal-ai/bytedance/seedance/v2/pro/image-to-video
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Static shot, show subtle cinematic motion of the product. Make it 4:5
+                    Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Make it 4:5.
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
-                    <span>aspect: 9:16</span>
+                    <span>aspect: 3:4</span>
                     <span>res: 720p</span>
                     <span>dur: 5s</span>
                   </div>
