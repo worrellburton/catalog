@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { getLiveCatalogs } from '~/services/catalogs';
+import { slugify } from './catalogs';
 
 interface LiveEntry {
   id: string;
@@ -38,8 +39,8 @@ function useTermLink() {
   }, []);
   return {
     termLink: (term: string): string => {
-      const slug = map.get(term.toLowerCase());
-      return slug ? `/admin/catalogs/${slug}` : `/admin/catalogs?new=${encodeURIComponent(term)}`;
+      const slug = map.get(term.toLowerCase()) ?? slugify(term);
+      return `/admin/catalogs/${slug}`;
     },
     hasCatalog: (term: string): boolean => map.has(term.toLowerCase()),
   };
