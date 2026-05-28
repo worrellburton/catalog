@@ -600,7 +600,7 @@
    info card when the seed has a TwelveLabs Marengo embedding. Reuses the main
    feed's two-column card grid so it visually blends with the home page. */
 .pd-similar-feed {
-  padding: 32px 24px 16px;
+  padding: 32px 0 16px;
   max-width: none;
   margin: 0 auto;
   /* Make absolutely sure the rail is reachable on mobile - the
@@ -613,37 +613,20 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    /* Match the home feed's edge-to-edge treatment on mobile:
-       no horizontal padding, 2-col grid with a 2px gap, dark
-       backdrop so any flex/grid gaps read as background instead
-       of pure-black holes. */
     padding: 16px 0 8px;
-  }
-  .pd-similar-grid {
-    gap: 2px;
-    background: #111;
   }
   .pd-feed-title {
     font-size: 14px;
     letter-spacing: 0.06em;
     padding-left: 16px;
   }
-  .pd-look-feed {
-    padding: 16px 0 32px;
-  }
-  .pd-look-feed .pd-feed-title {
-    padding-left: 16px;
-  }
-  .pd-look-grid {
-    gap: 2px;
-    background: #111;
-  }
 }
 
 .pd-similar-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 2px;
+  background: #111;
 }
 
 /* Trail rail entry - each card rises and fades in, staggered by ~40ms,
@@ -688,7 +671,6 @@
 @media (min-width: 768px) {
   .pd-similar-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
   }
 }
 
@@ -857,27 +839,28 @@
 
 /* "Featured in Looks" — editorial look creatives in a real grid. */
 .pd-look-feed {
-  padding: 32px 24px 56px;
+  padding: 32px 0 56px;
   max-width: none;
   margin: 0 auto;
 }
 
 @media (max-width: 600px) {
   .pd-look-feed {
-    padding: 20px 12px 40px;
+    padding: 16px 0 32px;
   }
-  .pd-look-grid {
-    gap: 8px;
+  .pd-look-feed .pd-feed-title {
+    padding-left: 16px;
   }
 }
 
 .pd-look-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 2px;
+  background: #111;
 }
 @media (min-width: 768px) {
-  .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (min-width: 1024px) {
   .pd-look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -891,18 +874,16 @@
 
 .pd-look-tile {
   position: relative;
-  aspect-ratio: 4 / 5;
-  border-radius: 14px;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
   overflow: hidden;
-  background: #1a1a1a;
+  background: #111;
   border: 0;
   padding: 0;
   cursor: pointer;
   display: block;
   width: 100%;
-  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-.pd-look-tile:hover { transform: translateY(-2px); }
 
 /* Creator name beside the avatar inside the chip. White text on a
    soft gradient (added in .pd-look-tile-meta) so it reads against
@@ -1247,6 +1228,7 @@
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.35);
   margin: 0 0 18px;
+  padding-left: 16px;
 }
 
 .pd-feed-grid {
