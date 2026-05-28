@@ -5,6 +5,12 @@ import { supabase } from '~/utils/supabase';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
+  /** Which rail this mount shows.
+   *    'following' = creators I follow (left-aligned in the header)
+   *    'followers' = people who follow me (right-aligned in the header)
+   *    'both'      = legacy stacked layout (unused but kept for callers
+   *                  that haven't been split yet) */
+  mode?: 'following' | 'followers' | 'both';
   /** Optional click handler for the "Make a catalog of who I follow"
    *  button at the top of the popover. Receives the full list of
    *  followed handles so the parent can scope the feed to them. */
@@ -58,7 +64,9 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+  const showFollowing = mode === 'following' || mode === 'both';
+  const showFollowers = mode === 'followers' || mode === 'both';
   const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
   const [followerEntries, setFollowerEntries] = useState<FollowerInfo[] | null>(null);
   const [newFollowerHandles, setNewFollowerHandles] = useState<Set<string>>(new Set());
@@ -181,7 +189,11 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog:
   if (!followingReady && !followersReady) return null;
   const hasFollowing = (followingEntries?.length ?? 0) > 0;
   const hasFollowers = (followerEntries?.length ?? 0) > 0;
-  if (!hasFollowing && !hasFollowers) return null;
+  // If this mount is scoped to one side and that side is empty, render
+  // nothing — the other side is handled by its own mount elsewhere.
+  if (mode === 'following' && !hasFollowing) return null;
+  if (mode === 'followers' && !hasFollowers) return null;
+  if (mode === 'both' && !hasFollowing && !hasFollowers) return null;
 
   const followerRailEntries: RailEntry[] = (followerEntries ?? []).map(f => ({
     handle: f.handle,
@@ -202,7 +214,7 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog:
         gap: 6,
       }}
     >
-      {hasFollowing && (
+      {showFollowing && hasFollowing && (
         <AvatarRow
           ariaLabel="Following"
           titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
@@ -215,7 +227,7 @@ export default function FollowingRail({ onOpenCreator, onCreateFollowingCatalog:
           tooltipPrefix={null}
         />
       )}
-      {hasFollowers && (
+      {showFollowers && hasFollowers && (
         <AvatarRow
           ariaLabel="Followers"
           titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}

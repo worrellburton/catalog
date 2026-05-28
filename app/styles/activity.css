@@ -1,99 +1,6 @@
-/* Activity — both the missed-activity catch-up popup (SignInStatsPopup)
-   and the realtime engagement toasts (ActivityRealtimeToasts).
-   Imported via app/root.tsx. */
-
-/* Catch-up popup. Top-center pill that surfaces engagement deltas
-   since the creator's previous sign-in. Self-dismisses after 12s or
-   on tap. Once per browser session via sessionStorage. */
-.signin-stats-popup {
-  position: fixed;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 950;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px 14px;
-  min-width: 280px;
-  max-width: 92vw;
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font-family: inherit;
-  animation: signin-stats-in 360ms cubic-bezier(.32,.72,0,1) both;
-}
-@keyframes signin-stats-in {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-.signin-stats-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.signin-stats-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #fff;
-}
-.signin-stats-since {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  flex: 1;
-}
-.signin-stats-close {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
-}
-.signin-stats-close:hover { color: #fff; }
-.signin-stats-row {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-  flex-wrap: nowrap;
-}
-.signin-stats-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.signin-stats-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #4ade80;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
-}
-.signin-stats-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-}
-@media (max-width: 768px) {
-  .signin-stats-popup {
-    top: 64px;
-    min-width: 0;
-    width: calc(100vw - 24px);
-    padding: 10px 14px 12px;
-  }
-  .signin-stats-value { font-size: 16px; }
-  .signin-stats-row   { gap: 10px; }
-}
+/* Activity — realtime engagement toasts + catch-up summary toasts
+   on mount / tab return. One pipeline, one stack. Imported via
+   app/root.tsx. */
 
 /* Realtime engagement toasts. Fixed top-right stack that pops in
    one-by-one as the realtime subscription delivers events on the
@@ -128,6 +35,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
+.activity-toast--impression { background: rgba(15, 23, 42, 0.92); }
 .activity-toast--click    { background: rgba(124, 58, 237, 0.95); }
 .activity-toast--clickout { background: rgba(22, 163, 74, 0.95); }
 .activity-toast--follow   { background: rgba(37, 99, 235, 0.95); }

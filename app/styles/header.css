@@ -481,57 +481,13 @@ header > * {
     display: flex;
   }
 
-  /* On mobile we re-purpose header-center as a fixed-left wrapper
-     for the FollowingRail — see the .follow-rail overrides below.
-     Earlier this was display:none which hid the rail entirely on
-     phones; the rail still earns its place there, just stacked
-     vertically along the left edge instead of horizontally at the
-     top. */
-  .header-center {
-    display: block;
-    position: fixed;
-    /* Vertically center on the left edge — the screen feels less
-       crowded with the rail sitting at the visual midpoint instead
-       of pinned under the header chrome. */
-    top: 50%;
-    left: 10px;
-    transform: translateY(-50%);
-    z-index: 90;
-    pointer-events: auto;
-  }
-  /* Flip the avatar stack to a column with vertical overlap, and
-     let the trigger button own its own (vertical) flex flow so the
-     "+N" pill sits beneath the stack rather than next to it. */
-  .follow-rail-trigger {
-    flex-direction: column !important;
-  }
-  .follow-rail-stack {
-    flex-direction: column !important;
-    height: auto !important;
-    width: 28px;
-  }
-  .follow-rail-avatar {
-    margin-left: 0 !important;
-    margin-top: -10px !important;
-  }
-  .follow-rail-stack > .follow-rail-avatar:first-child {
-    margin-top: 0 !important;
-  }
-  /* Popover opens to the right of the rail instead of below it. */
-  .follow-rail .follow-rail-popover {
-    top: 0 !important;
-    left: calc(100% + 10px) !important;
+  /* Followers rail in header-right needs its popover to open to
+     the LEFT of the trigger on mobile so it doesn't overflow the
+     viewport off the right edge. */
+  .header-right .follow-rail .follow-rail-popover {
+    left: auto !important;
+    right: 0 !important;
     transform: none !important;
-  }
-  /* Two-row wrap (Following on top, Followers below) lays out as a
-     column on desktop. On mobile the fixed-left rail is already a
-     column per row, so flow the two rows side-by-side. row-reverse
-     so Followers (rendered second in source order) lands on the
-     LEFT and Following lands on the RIGHT — matches the mobile
-     spatial expectation: who's-following-me first, then who-I-follow. */
-  .follow-rail-wrap {
-    flex-direction: row-reverse !important;
-    gap: 10px !important;
   }
 
   header {

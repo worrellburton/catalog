@@ -30,7 +30,6 @@ import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
-import SignInStatsPopup from '~/components/SignInStatsPopup';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
@@ -346,7 +345,22 @@ export default function Home() {
 
   const handleOpenBrowser = useCallback((url: string, title: string, product?: Product) => {
     if (!url) return;
-    setBrowserState({ url, title, product });
+    // Desktop: pop a real new tab so the merchant lives in its own
+    // window and the user can hop back to the catalog without the
+    // in-app browser overlay covering the feed. Mobile / native shell
+    // still use the in-app browser overlay so the trail of cards is
+    // never lost. The shell guard mirrors the data-shell check the
+    // rest of the app uses to gate native-only flows.
+    const inNativeShell = typeof document !== 'undefined'
+      && document.documentElement.dataset.shell === 'catalog-app';
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(min-width: 769px)').matches
+      : false;
+    if (isDesktop && !inNativeShell) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      setBrowserState({ url, title, product });
+    }
     // Every product clickout flows through this handler — feed tile,
     // look-overlay product chips, bookmarks page, ProductPage offers.
     // Centralising the trackProductClickout call here means a single
@@ -803,14 +817,14 @@ export default function Home() {
                   <span className="logo-catalog-name">{catalogName}</span>
                 )}
               </button>
-            </div>
-            <div className="header-center">
-              <PendingLookPill onOpen={() => navigate('/generate')} />
+              {/* Creators I follow — anchored next to the logo on the
+                  LEFT edge so the spatial mapping reads as "this is
+                  what I'M doing" out → "this is what others are
+                  doing to me" (Followers, on the RIGHT). */}
               <FollowingRail
+                mode="following"
                 onOpenCreator={handleOpenCreator}
                 onCreateFollowingCatalog={(handles) => {
-                  // Lower-case + dedupe for safe matching against
-                  // looks.creator_handle / look.creator in the feed.
                   const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
                   setFollowingCatalog(norm);
                   setCatalogName('Following');
@@ -819,7 +833,15 @@ export default function Home() {
                 }}
               />
             </div>
+            <div className="header-center">
+              <PendingLookPill onOpen={() => navigate('/generate')} />
+            </div>
             <div className="header-right">
+              {/* People who follow me — RIGHT side of the header. */}
+              <FollowingRail
+                mode="followers"
+                onOpenCreator={handleOpenCreator}
+              />
               <HeaderWalletPill onOpenWallet={openWallet} />
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -844,14 +866,9 @@ export default function Home() {
             </div>
           </header>
 
-          {/* Top-center toast surfacing engagement deltas since the
-              creator's previous sign-in (impressions / clicks /
-              clickouts / new followers). Hidden when nothing happened
-              or when previously shown this session. */}
-          <SignInStatsPopup />
-          {/* Activity — live engagement toasts that pop in via
-              Supabase realtime whenever someone clicks / clicks-out
-              one of the signed-in creator's looks, or follows them. */}
+          {/* Activity — unified notification pipeline. Drives both
+              the realtime engagement toasts AND the catch-up
+              summary toasts (mount-time + tab-return). */}
           <ActivityRealtimeToasts />
 
           <ContinuousFeed
