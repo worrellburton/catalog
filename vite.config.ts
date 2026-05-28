@@ -137,6 +137,7 @@ export default defineConfig({
             route("publish/:id", "routes/admin/publish.$id.tsx");
             route("moderation", "routes/admin/moderation.tsx");
             route("musics", "routes/admin/musics.tsx");
+            route("pages", "routes/admin/pages.tsx");
             route("places", "routes/admin/places.tsx");
             route("products", "routes/admin/products.tsx");
             route("prompts", "routes/admin/prompts.tsx");
