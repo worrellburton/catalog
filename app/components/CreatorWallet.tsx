@@ -8,6 +8,7 @@ import {
 import { type EngagementSummary, getEngagementSummary } from '~/services/creator-engagement';
 import { supabase } from '~/utils/supabase';
 import DotsSignupModal from './DotsSignupModal';
+import WalletBackground from './WalletBackground';
 
 interface PayoutProfile {
   id: string;
@@ -203,8 +204,25 @@ export default function CreatorWallet({ onProfileChange }: Props) {
 
   const isConnected = profile?.is_payout_active && profile?.dots_user_id;
 
+  // Scrolling happens on the .my-looks-overlay--wallet ancestor that
+  // wraps the wallet route — walk up from the root once on mount to
+  // find it so the canvas can subscribe to its scrollTop.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    let node: HTMLElement | null = rootRef.current;
+    while (node && node !== document.body) {
+      if (node.classList.contains('my-looks-overlay')) {
+        setScrollEl(node);
+        return;
+      }
+      node = node.parentElement;
+    }
+  }, []);
+
   return (
-    <div className="wallet-root">
+    <div className="wallet-root" ref={rootRef}>
+      <WalletBackground scrollEl={scrollEl} />
       <div className="wallet-content">
         {profileLoading && (
           <div className="wallet-loading">
