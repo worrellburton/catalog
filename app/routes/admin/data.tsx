@@ -4854,7 +4854,7 @@ export default function AdminData() {
                                   <img
                                     src={(p as { primary_image_url?: string | null }).primary_image_url ?? ''}
                                     alt={`${p.brand} ${p.name} primary`}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                                   />
                                 </button>
                                 {/* Polish CTA — only show on un-polished primaries.
