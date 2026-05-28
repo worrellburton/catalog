@@ -24,7 +24,7 @@ import {
 
 type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 
-interface Catalog {
+export interface Catalog {
   id: string;
   name: string;
   source: 'featured' | 'custom';
@@ -41,7 +41,7 @@ interface Catalog {
 
 // Slugify a human-typed catalog name the same way ensure_catalog() does in
 // migration 021: lowercase, non-alphanum → hyphens, trim hyphens from ends.
-function slugify(name: string): string {
+export function slugify(name: string): string {
   return name
     .trim()
     .toLowerCase()
@@ -98,7 +98,7 @@ function exportCatalogsCSV(
   URL.revokeObjectURL(url);
 }
 
-interface ProductRow {
+export interface ProductRow {
   id: string;
   name: string | null;
   brand: string | null;
@@ -108,7 +108,7 @@ interface ProductRow {
   metrics?: ItemMetrics;
 }
 
-interface LookRow {
+export interface LookRow {
   id: string;
   legacyId: number | null;
   title: string | null;
@@ -117,7 +117,7 @@ interface LookRow {
   catalog_tags: string[];
 }
 
-interface CatalogLookRow {
+export interface CatalogLookRow {
   id: string;
   legacyId: number | null;
   title: string;
@@ -130,7 +130,7 @@ interface CatalogLookRow {
   metrics?: ItemMetrics;
 }
 
-interface CatalogCreativeVideo {
+export interface CatalogCreativeVideo {
   id: string;
   productId: string;
   videoUrl: string;
@@ -143,7 +143,7 @@ interface CatalogCreativeVideo {
   metrics?: ItemMetrics;
 }
 
-interface CatalogCreativePayload {
+export interface CatalogCreativePayload {
   looks: CatalogLookRow[];
   products: ProductRow[];
   creatives: CatalogCreativeVideo[];
@@ -156,7 +156,7 @@ const ALL_ORDER_KEY = 'catalog_admin_all_order';
 
 type CatalogSection = 'looks' | 'creatives' | 'products';
 
-function isAllCatalog(name: string) {
+export function isAllCatalog(name: string) {
   return name.trim().toLowerCase() === ALL_CATALOG_NAME;
 }
 
@@ -169,7 +169,7 @@ function isHomeCatalog(name: string) {
 // name. Both `all` (admin meta-catalog) and `home` (consumer landing
 // feed) qualify — the consumer home feed is unfiltered, so admins
 // should see the same universe of candidates when triaging.
-function isUniverseCatalog(name: string) {
+export function isUniverseCatalog(name: string) {
   return isAllCatalog(name) || isHomeCatalog(name);
 }
 
@@ -235,6 +235,212 @@ function reorderArray<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   const [moved] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moved);
   return next;
+}
+
+// Build the creative payload (looks / products / creatives / feed search
+// results) for a single catalog. This is the shared loader behind both
+// the inline expandable dropdown on the catalogs table AND the dedicated
+// catalog detail page, so both surfaces show identical content.
+//
+// Data model: looks/products are matched by their `catalog_tags` array
+// (universe catalogs — `all` / `home` — pull every live row instead),
+// NOT the catalog_looks/catalog_products junction tables. Pass
+// `allProducts` to filter an in-memory product list (table view), or
+// omit it to have the loader query products itself (detail page).
+export async function loadCatalogCreativePayload(
+  catalog: { id: string; name: string },
+  opts: {
+    allProducts?: ProductRow[];
+    metricFor?: (targetType: 'look' | 'product', primary: string, secondary?: string | number | null) => ItemMetrics | undefined;
+    applyAllOrdering?: boolean;
+  } = {},
+): Promise<CatalogCreativePayload> {
+  const empty: CatalogCreativePayload = { looks: [], products: [], creatives: [], feedResults: [] };
+  if (!supabase) return empty;
+
+  const metricFor = opts.metricFor ?? (() => undefined);
+  const isAll = isAllCatalog(catalog.name);
+  const isUniverse = isUniverseCatalog(catalog.name);
+
+  // Looks: universe catalogs (all / home) pull every live look so admins
+  // can browse the entire active set; other catalogs filter by catalog_tags.
+  let looksQuery = supabase
+    .from('looks')
+    .select(`
+      id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at,
+      creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
+      looks_creative!inner ( video_url, is_primary ),
+      look_products ( product_id )
+    `)
+    .eq('status', 'live')
+    .eq('enabled', true)
+    .is('archived_at', null)
+    .eq('looks_creative.is_primary', true)
+    .order('created_at', { ascending: false });
+  if (!isUniverse) {
+    looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
+  }
+  const { data: lookRows } = await looksQuery;
+
+  type LookPayload = {
+    id: string;
+    legacy_id: number | null;
+    title: string;
+    creator_handle: string | null;
+    created_at: string | null;
+    creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
+    looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
+    look_products: { product_id: string }[] | null;
+  };
+  const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => {
+    const creator = Array.isArray(r.creator) ? r.creator[0] : r.creator;
+    return {
+      id: r.id,
+      legacyId: r.legacy_id,
+      title: r.title,
+      videoPath: r.looks_creative?.[0]?.video_url ?? null,
+      creatorHandle: r.creator_handle,
+      creatorName: creator?.full_name ?? null,
+      creatorAvatarUrl: creator?.avatar_url ?? null,
+      productCount: (r.look_products || []).length,
+      createdAt: r.created_at,
+      metrics: metricFor('look', r.id, r.legacy_id),
+    };
+  });
+
+  // Universe view collapses dupes by primary creative video; named
+  // catalogs keep every row.
+  const looks = isUniverse
+    ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
+    : mappedLooks;
+
+  // Products: universe catalogs use the whole product set; others filter
+  // by catalog_tags. Use the supplied in-memory list when present,
+  // otherwise query directly so the loader is self-contained.
+  let catalogProductsBase: ProductRow[];
+  if (opts.allProducts) {
+    catalogProductsBase = isUniverse
+      ? opts.allProducts
+      : opts.allProducts.filter(p => (p.catalog_tags || []).includes(catalog.name));
+  } else {
+    let productsQuery = supabase
+      .from('products')
+      .select('id, name, brand, image_url, catalog_tags');
+    if (!isUniverse) {
+      productsQuery = productsQuery.contains('catalog_tags', [catalog.name]);
+    }
+    const { data: productRows } = await productsQuery;
+    catalogProductsBase = (productRows as ProductRow[] | null) || [];
+  }
+  const catalogProducts = catalogProductsBase.map(p => ({
+    ...p,
+    metrics: metricFor('product', p.id),
+  }));
+
+  // Creative videos (product_creative). Universe catalogs pull every
+  // rendered ad; named catalogs filter to ads whose product is tagged.
+  const catalogProductIds = new Set(catalogProducts.map(p => p.id));
+  let adsQuery = supabase
+    .from('product_creative')
+    .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand, image_url)')
+    .not('video_url', 'is', null)
+    .in('status', ['done', 'live'])
+    .order('created_at', { ascending: false });
+  if (!isUniverse) {
+    adsQuery = adsQuery.in(
+      'product_id',
+      catalogProducts.length > 0 ? catalogProducts.map(p => p.id) : ['00000000-0000-0000-0000-000000000000'],
+    );
+  }
+  const { data: adRows } = await adsQuery;
+
+  type AdPayload = {
+    id: string;
+    product_id: string;
+    title: string | null;
+    video_url: string;
+    thumbnail_url: string | null;
+    status: string;
+    products: { id: string; name: string | null; brand: string | null; image_url: string | null } | null;
+  };
+  const creatives: CatalogCreativeVideo[] = ((adRows as unknown as AdPayload[] | null) || [])
+    .filter(r => isAll || catalogProductIds.has(r.product_id))
+    .map(r => ({
+      id: r.id,
+      productId: r.product_id,
+      videoUrl: r.video_url,
+      thumbnailUrl: r.thumbnail_url,
+      productImageUrl: r.products?.image_url ?? null,
+      metrics: metricFor('product', r.product_id),
+      title: r.title,
+      productName: r.products?.name ?? null,
+      productBrand: r.products?.brand ?? null,
+      status: r.status,
+    }));
+
+  // Feed search results — same pipeline the consumer feed runs when a
+  // user types this catalog name in the search bar. Skipped for the
+  // synthetic `all` row and on failure.
+  let feedResults: CatalogCreativeVideo[] = [];
+  if (!isAll) {
+    try {
+      const feedAds = await getFeedSearchResults(catalog.name);
+      feedResults = feedAds
+        .filter(a => !!a.video_url)
+        .map(a => ({
+          id: a.id,
+          productId: a.product_id,
+          videoUrl: a.video_url as string,
+          thumbnailUrl: a.thumbnail_url,
+          title: a.title,
+          productName: a.product?.name ?? null,
+          productBrand: a.product?.brand ?? null,
+          productImageUrl: a.product?.image_url ?? null,
+          status: a.status,
+        }));
+    } catch (err) {
+      console.warn('[loadCatalogCreativePayload] feed search failed:', err);
+    }
+  }
+
+  // Merge products surfaced by feed search so catalogs whose items don't
+  // yet have catalog_tags still populate the Products section.
+  let displayProducts: ProductRow[] = catalogProducts;
+  if (!isAll && feedResults.length > 0) {
+    const existingIds = new Set(catalogProducts.map(p => p.id));
+    const feedProductIds = [...new Set(feedResults.map(f => f.productId).filter(Boolean))]
+      .filter(id => !existingIds.has(id));
+    if (feedProductIds.length > 0) {
+      let feedOnlyProducts: ProductRow[];
+      if (opts.allProducts) {
+        feedOnlyProducts = opts.allProducts.filter(p => feedProductIds.includes(p.id));
+      } else {
+        const { data: feedProductRows } = await supabase
+          .from('products')
+          .select('id, name, brand, image_url, catalog_tags')
+          .in('id', feedProductIds);
+        feedOnlyProducts = (feedProductRows as ProductRow[] | null) || [];
+      }
+      if (feedOnlyProducts.length > 0) {
+        displayProducts = [
+          ...catalogProducts,
+          ...feedOnlyProducts.map(p => ({ ...p, metrics: metricFor('product', p.id) })),
+        ];
+      }
+    }
+  }
+
+  if (isAll && opts.applyAllOrdering) {
+    const order = loadAllOrder();
+    return {
+      looks: applyOrder(looks, l => l.id, order.looks),
+      creatives: applyOrder(creatives, c => c.id, order.creatives),
+      products: applyOrder(catalogProducts, p => p.id, order.products),
+      feedResults,
+    };
+  }
+
+  return { looks, products: displayProducts, creatives, feedResults };
 }
 
 export default function AdminCatalogs() {
@@ -656,179 +862,12 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     setCreativeLoading(prev => new Set(prev).add(catalog.id));
     try {
-      const isAll = isAllCatalog(catalog.name);
-      // Phase 2: Home shares the "show every live row" semantics with
-      // All — the consumer home feed isn't tag-filtered, so admins
-      // should see the same universe of candidates.
-      const isUniverse = isUniverseCatalog(catalog.name);
-
-      // Looks: universe catalogs (all / home) pull every live look so
-      // admins can browse the entire active set; other catalogs filter
-      // by catalog_tags.
-      let looksQuery = supabase
-        .from('looks')
-        .select(`
-          id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at,
-          creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
-          looks_creative!inner ( video_url, is_primary ),
-          look_products ( product_id )
-        `)
-        .eq('status', 'live')
-        .eq('enabled', true)
-        .is('archived_at', null)
-        .eq('looks_creative.is_primary', true)
-        .order('created_at', { ascending: false });
-      if (!isUniverse) {
-        looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
-      }
-      const { data: lookRows } = await looksQuery;
-
-      type LookPayload = {
-        id: string;
-        legacy_id: number | null;
-        title: string;
-        creator_handle: string | null;
-        created_at: string | null;
-        creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
-        looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
-        look_products: { product_id: string }[] | null;
-      };
-      const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => {
-        // PostgREST sometimes returns the embedded profile as an array
-        // (one-to-many style) and sometimes as a single object; normalise.
-        const creator = Array.isArray(r.creator) ? r.creator[0] : r.creator;
-        return {
-          id: r.id,
-          legacyId: r.legacy_id,
-          title: r.title,
-          videoPath: r.looks_creative?.[0]?.video_url ?? null,
-          creatorHandle: r.creator_handle,
-          creatorName: creator?.full_name ?? null,
-          creatorAvatarUrl: creator?.avatar_url ?? null,
-          productCount: (r.look_products || []).length,
-          createdAt: r.created_at,
-          metrics: metricFor('look', r.id, r.legacy_id),
-        };
+      const payload = await loadCatalogCreativePayload(catalog, {
+        allProducts: products,
+        metricFor,
+        applyAllOrdering: true,
       });
-
-      // Universe view collapses dupes - if multiple looks share the
-      // same primary creative video they'd render as visual dupes, so
-      // we keep the first occurrence per video. Named catalogs keep
-      // every row.
-      const looks = isUniverse
-        ? Array.from(new Map(mappedLooks.map(l => [l.videoPath ?? l.id, l])).values())
-        : mappedLooks;
-
-      // Products: universe catalogs use every live product currently
-      // loaded; others filter by catalog_tags. Both paths dedupe so
-      // nothing repeats. Hydrate metrics in either case.
-      const catalogProductsBase = isUniverse
-        ? products
-        : products.filter(p => (p.catalog_tags || []).includes(catalog.name));
-      const catalogProducts = catalogProductsBase.map(p => ({
-        ...p,
-        metrics: metricFor('product', p.id),
-      }));
-
-      // Creative videos (product_creative). Universe catalogs pull every
-      // rendered ad so admins see the full library in one place; named
-      // catalogs filter to ads whose underlying product is tagged.
-      const catalogProductIds = new Set(catalogProducts.map(p => p.id));
-      let adsQuery = supabase
-        .from('product_creative')
-        .select('id, product_id, title, video_url, thumbnail_url, status, products!inner(id, name, brand, image_url)')
-        .not('video_url', 'is', null)
-        .in('status', ['done', 'live'])
-        .order('created_at', { ascending: false });
-      if (!isUniverse) {
-        adsQuery = adsQuery.in(
-          'product_id',
-          catalogProducts.length > 0 ? catalogProducts.map(p => p.id) : ['00000000-0000-0000-0000-000000000000'],
-        );
-      }
-      const { data: adRows } = await adsQuery;
-
-      type AdPayload = {
-        id: string;
-        product_id: string;
-        title: string | null;
-        video_url: string;
-        thumbnail_url: string | null;
-        status: string;
-        products: { id: string; name: string | null; brand: string | null; image_url: string | null } | null;
-      };
-      const creatives: CatalogCreativeVideo[] = ((adRows as unknown as AdPayload[] | null) || [])
-        .filter(r => isAll || catalogProductIds.has(r.product_id))
-        .map(r => ({
-          id: r.id,
-          productId: r.product_id,
-          videoUrl: r.video_url,
-          thumbnailUrl: r.thumbnail_url,
-          productImageUrl: r.products?.image_url ?? null,
-          // Creatives don't have their own metrics row — they
-          // inherit the underlying product's impressions/CTR so the
-          // list view can rank them by performance.
-          metrics: metricFor('product', r.product_id),
-          title: r.title,
-          productName: r.products?.name ?? null,
-          productBrand: r.products?.brand ?? null,
-          status: r.status,
-        }));
-
-      // Feed search results - same pipeline the consumer feed runs when a user
-      // types this catalog name in the search bar. Skipped for the synthetic
-      // `all` row (no meaningful query) and on failure (network/edge errors).
-      let feedResults: CatalogCreativeVideo[] = [];
-      if (!isAll) {
-        try {
-          const feedAds = await getFeedSearchResults(catalog.name);
-          feedResults = feedAds
-            .filter(a => !!a.video_url)
-            .map(a => ({
-              id: a.id,
-              productId: a.product_id,
-              videoUrl: a.video_url as string,
-              thumbnailUrl: a.thumbnail_url,
-              title: a.title,
-              productName: a.product?.name ?? null,
-              productBrand: a.product?.brand ?? null,
-              productImageUrl: a.product?.image_url ?? null,
-              status: a.status,
-            }));
-        } catch (err) {
-          console.warn('[loadCreative] feed search failed:', err);
-        }
-      }
-
-      // Merge products from feed search results so catalogs whose items don't
-      // yet have catalog_tags still populate the Products section. Deduped by id.
-      let displayProducts: ProductRow[] = catalogProducts as ProductRow[];
-      if (!isAll && feedResults.length > 0) {
-        const existingIds = new Set(catalogProducts.map(p => p.id));
-        const feedProductIds = new Set(feedResults.map(f => f.productId).filter(Boolean));
-        const feedOnlyProducts = products.filter(
-          p => feedProductIds.has(p.id) && !existingIds.has(p.id),
-        );
-        if (feedOnlyProducts.length > 0) {
-          displayProducts = [...catalogProducts, ...feedOnlyProducts];
-        }
-      }
-
-      if (isAll) {
-        const order = loadAllOrder();
-        const orderedLooks = applyOrder(looks, l => l.id, order.looks);
-        const orderedCreatives = applyOrder(creatives, c => c.id, order.creatives);
-        const orderedProducts = applyOrder(catalogProducts, p => p.id, order.products);
-        setCreativeByCatalog(prev => ({
-          ...prev,
-          [catalog.id]: { looks: orderedLooks, products: orderedProducts, creatives: orderedCreatives, feedResults },
-        }));
-      } else {
-        setCreativeByCatalog(prev => ({
-          ...prev,
-          [catalog.id]: { looks, products: displayProducts, creatives, feedResults },
-        }));
-      }
+      setCreativeByCatalog(prev => ({ ...prev, [catalog.id]: payload }));
     } finally {
       setCreativeLoading(prev => {
         const next = new Set(prev);
@@ -1215,39 +1254,59 @@ export default function AdminCatalogs() {
     setAddAutoProgress({ done: 0, total: candidates.length });
     try {
       const BATCH = 30;
+      const CONCURRENCY = 6;
+      const batches: ProductRow[][] = [];
+      for (let i = 0; i < candidates.length; i += BATCH) batches.push(candidates.slice(i, i + BATCH));
+
       const picked = new Set<string>();
-      for (let i = 0; i < candidates.length; i += BATCH) {
-        const batch = candidates.slice(i, i + BATCH);
-        const { data, error } = await supabase.functions.invoke('catalog-auto-tag', {
-          body: {
-            products: batch.map(p => ({
-              id: p.id,
-              name: p.name || '',
-              brand: p.brand || '',
-              image_url: p.image_url,
-            })),
-            catalogs: [name],
-          },
-        });
-        if (error) {
-          console.error('Auto-pick batch failed:', error);
-          showToast(`Auto-pick failed: ${error.message}`);
-          break;
-        }
-        if (data?.success && data.results) {
-          const results = data.results as Record<string, string[]>;
-          for (const [id, tags] of Object.entries(results)) {
-            if (tags.includes(name)) picked.add(id);
+      let firstError: string | null = null;
+      let completed = 0;
+      let nextBatch = 0;
+
+      // Worker pool: run up to CONCURRENCY batches in parallel rather than
+      // awaiting each sequentially, so wall time scales with numBatches /
+      // CONCURRENCY instead of numBatches. Stop scheduling once one errors.
+      const worker = async () => {
+        while (nextBatch < batches.length && !firstError) {
+          const batch = batches[nextBatch++];
+          const { data, error } = await supabase!.functions.invoke('catalog-auto-tag', {
+            body: {
+              products: batch.map(p => ({
+                id: p.id,
+                name: p.name || '',
+                brand: p.brand || '',
+                image_url: p.image_url,
+              })),
+              catalogs: [name],
+            },
+          });
+          if (error) {
+            console.error('Auto-pick batch failed:', error);
+            if (!firstError) firstError = error.message;
+            break;
           }
+          if (data?.success && data.results) {
+            const results = data.results as Record<string, string[]>;
+            for (const [id, tags] of Object.entries(results)) {
+              if (tags.includes(name)) picked.add(id);
+            }
+          }
+          completed += batch.length;
+          setAddAutoProgress({ done: Math.min(completed, candidates.length), total: candidates.length });
         }
-        setAddAutoProgress({ done: Math.min(i + BATCH, candidates.length), total: candidates.length });
-      }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, worker));
+
       setAddSelected(prev => {
         const next = new Set(prev);
         picked.forEach(id => next.add(id));
         return next;
       });
-      showToast(`Picked ${picked.size} relevant product${picked.size === 1 ? '' : 's'}. Review and click Add to commit.`);
+      if (firstError) {
+        showToast(`Auto-pick partially failed: ${firstError}. Picked ${picked.size} so far.`);
+      } else {
+        showToast(`Picked ${picked.size} relevant product${picked.size === 1 ? '' : 's'}. Review and click Add to commit.`);
+      }
     } catch (err) {
       showToast(`Auto-pick failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -3148,7 +3207,7 @@ type DrawerSubject =
   | { kind: 'creative'; creative: CatalogCreativeVideo }
   | null;
 
-function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
+export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
   const [drawer, setDrawer] = useState<DrawerSubject>(null);
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
@@ -5045,7 +5104,7 @@ interface AddProductsModalProps {
   onCommit: () => void;
 }
 
-function AddProductsModal({
+export function AddProductsModal({
   catalog,
   products,
   search,
@@ -5205,7 +5264,7 @@ interface AddLooksModalProps {
   onCommit: () => void;
 }
 
-function AddLooksModal({
+export function AddLooksModal({
   catalog,
   looks,
   search,
@@ -5444,5 +5503,618 @@ function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange:
       <option value="men">Male</option>
       <option value="unisex">Unisex</option>
     </select>
+  );
+}
+
+// ── Suggest Products modal (self-contained) ─────────────────────────
+// Claude brainstorms product ideas for the catalog vibe, searches Google
+// Shopping for each, and the admin picks which to ingest into `products`
+// (auto-tagged with the catalog name). Owns all of its own state so it
+// can be dropped into both the catalogs table and the detail page.
+export function SuggestProductsModal({
+  catalog,
+  onClose,
+  onIngested,
+  showToast,
+}: {
+  catalog: Catalog;
+  onClose: () => void;
+  onIngested: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const [researchQuery, setResearchQuery] = useState(catalog.name);
+  const [researchGender, setResearchGender] = useState<ProductGender | 'all'>('all');
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchResults, setResearchResults] = useState<BrainstormedProduct[]>([]);
+  const [previewImg, setPreviewImg] = useState<{ url: string; x: number; y: number } | null>(null);
+  const [researchSelected, setResearchSelected] = useState<Set<number>>(new Set());
+  const [researchSource, setResearchSource] = useState<'live' | 'seed' | null>(null);
+  const [researchError, setResearchError] = useState<string | null>(null);
+  const [ingesting, setIngesting] = useState(false);
+  const [brainstormPhase, setBrainstormPhase] = useState<'idle' | 'brainstorming' | 'searching' | 'done'>('idle');
+  const [brainstormQueries, setBrainstormQueries] = useState<string[]>([]);
+  const [brainstormProgress, setBrainstormProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const close = useCallback(() => { if (!ingesting) onClose(); }, [ingesting, onClose]);
+
+  const runResearch = useCallback(async () => {
+    if (!researchQuery.trim()) return;
+    setResearchLoading(true);
+    setResearchSelected(new Set());
+    setResearchError(null);
+    setResearchResults([]);
+    setBrainstormQueries([]);
+    setBrainstormPhase('brainstorming');
+    setBrainstormProgress(null);
+
+    const { queries, products, error, source } = await brainstormCatalogProducts(researchQuery, {
+      count: 8,
+      onProgress: (p) => {
+        setBrainstormPhase(p.phase);
+        if (p.queries) setBrainstormQueries(p.queries);
+        if (p.completedQueries !== undefined && p.queries) {
+          setBrainstormProgress({ done: p.completedQueries, total: p.queries.length });
+        }
+        if (p.products) setResearchResults(p.products);
+      },
+    });
+
+    setBrainstormQueries(queries);
+    setResearchResults(products);
+    setResearchSource(source);
+    setResearchError(error);
+    setResearchLoading(false);
+    setBrainstormPhase('done');
+  }, [researchQuery]);
+
+  const ingestSelectedProducts = useCallback(async () => {
+    if (!supabase || researchSelected.size === 0) return;
+    setIngesting(true);
+    const nowIso = new Date().toISOString();
+    const rows = Array.from(researchSelected).map(i => {
+      const p = researchResults[i];
+      return {
+        name: p.name,
+        brand: p.brand,
+        price: p.price,
+        url: p.url,
+        image_url: p.image_url,
+        images: p.image_urls || [p.image_url].filter(Boolean),
+        scrape_status: 'done',
+        scraped_at: nowIso,
+        catalog_tags: [catalog.name],
+      };
+    });
+    const { error } = await supabase.from('products').insert(rows).select('id');
+    setIngesting(false);
+    if (!error) {
+      showToast(`Added ${rows.length} product${rows.length === 1 ? '' : 's'} from "${catalog.name}"`);
+      onIngested();
+      onClose();
+    } else {
+      showToast(`Ingest failed: ${error.message}`);
+    }
+  }, [researchSelected, researchResults, catalog.name, onIngested, onClose, showToast]);
+
+  const visibleResearchResults = useMemo(() =>
+    researchResults.filter(
+      p => researchGender === 'all' || p.gender === researchGender || p.gender === 'unisex',
+    ),
+  [researchResults, researchGender]);
+
+  return (
+    <div className="admin-modal-overlay" onClick={close}>
+      {previewImg && (
+        <div
+          style={{
+            position: 'fixed',
+            left: Math.min(previewImg.x, (typeof window !== 'undefined' ? window.innerWidth : 1600) - 280),
+            top: Math.max(10, previewImg.y),
+            width: 260,
+            height: 340,
+            borderRadius: 10,
+            overflow: 'hidden',
+            background: '#111',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
+            zIndex: 10000,
+            pointerEvents: 'none',
+          }}
+        >
+          <img
+            src={previewImg.url}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        </div>
+      )}
+      <div
+        className="admin-modal"
+        style={{ width: 720, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '20px 24px 12px' }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>
+            Suggest Products for "{catalog.name}"
+          </h2>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
+            Claude brainstorms specific product ideas for this vibe, then searches Google Shopping for each.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              autoFocus
+              placeholder='e.g. "brunch outfit", "quiet luxury", "make me hot"'
+              value={researchQuery}
+              onChange={e => setResearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runResearch(); }}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
+            />
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={runResearch}
+              disabled={researchLoading || !researchQuery.trim()}
+            >
+              {brainstormPhase === 'brainstorming'
+                ? 'Brainstorming…'
+                : brainstormPhase === 'searching' && brainstormProgress
+                  ? `Searching ${brainstormProgress.done}/${brainstormProgress.total}…`
+                  : researchLoading
+                    ? 'Searching…'
+                    : 'Suggest'}
+            </button>
+          </div>
+          {brainstormQueries.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', alignSelf: 'center' }}>Claude searched:</span>
+              {brainstormQueries.map((q, i) => (
+                <span key={i} style={{
+                  padding: '3px 10px',
+                  borderRadius: 999,
+                  background: '#f1f5f9',
+                  border: '1px solid #e2e8f0',
+                  fontSize: 11,
+                  color: '#475569',
+                  fontWeight: 500,
+                }}>
+                  {q}
+                </span>
+              ))}
+            </div>
+          )}
+          {researchError && (
+            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+              <strong>Search failed:</strong> {researchError}
+            </div>
+          )}
+          {researchResults.length > 0 && researchSource && (
+            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 999, background: researchSource === 'live' ? '#ecfdf5' : '#fffbeb', border: '1px solid', borderColor: researchSource === 'live' ? '#a7f3d0' : '#fde68a', fontSize: 11, fontWeight: 600, color: researchSource === 'live' ? '#047857' : '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: researchSource === 'live' ? '#10b981' : '#f59e0b' }} />
+              {researchSource === 'live' ? 'Live Google Shopping' : 'Seed (offline)'}
+            </div>
+          )}
+          {researchResults.length > 0 && (
+            <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{researchResults.length}</span>
+                  <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Products</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>
+                    {researchResults.reduce((sum, p) => sum + (p.image_urls?.length || 1), 0)}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Thumbnails pulled</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>For</span>
+                {(['all', 'men', 'women', 'unisex'] as const).map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setResearchGender(g)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                      border: '1px solid',
+                      borderColor: researchGender === g ? '#111' : '#e2e8f0',
+                      background: researchGender === g ? '#111' : '#fff',
+                      color: researchGender === g ? '#fff' : '#111',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 24px' }}>
+          {researchLoading && researchResults.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              {brainstormPhase === 'brainstorming'
+                ? 'Asking Claude for product ideas…'
+                : brainstormPhase === 'searching' && brainstormProgress
+                  ? `Searching Google Shopping for each query (${brainstormProgress.done}/${brainstormProgress.total})…`
+                  : 'Searching…'}
+            </div>
+          ) : researchResults.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              Press Suggest to have Claude brainstorm products for this catalog.
+            </div>
+          ) : visibleResearchResults.length === 0 ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: '#999', fontSize: 13 }}>
+              No results for that gender.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {visibleResearchResults.map(p => {
+                const idx = researchResults.indexOf(p);
+                const isSelected = researchSelected.has(idx);
+                const scoreColor = p.thumbnailScore >= 85 ? '#16a34a' : p.thumbnailScore >= 70 ? '#ca8a04' : '#dc2626';
+                const scoreLabel = p.thumbnailScore >= 90 ? 'Excellent' : p.thumbnailScore >= 75 ? 'Good' : p.thumbnailScore >= 60 ? 'Fair' : 'Poor';
+                return (
+                  <div
+                    key={`${p.brand}-${p.name}-${idx}`}
+                    onClick={() => {
+                      setResearchSelected(prev => {
+                        const next = new Set(prev);
+                        if (next.has(idx)) next.delete(idx); else next.add(idx);
+                        return next;
+                      });
+                    }}
+                    onMouseEnter={e => {
+                      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setPreviewImg({ url: p.image_url, x: r.right + 12, y: r.top });
+                    }}
+                    onMouseMove={e => {
+                      setPreviewImg(prev => prev ? { ...prev, x: e.clientX + 16, y: e.clientY - 80 } : prev);
+                    }}
+                    onMouseLeave={() => setPreviewImg(null)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px',
+                      borderRadius: 8, cursor: 'pointer',
+                      background: isSelected ? '#f0f7ff' : 'transparent',
+                      border: `1px solid ${isSelected ? '#3b82f6' : '#eee'}`,
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 4,
+                      border: `2px solid ${isSelected ? '#3b82f6' : '#ccc'}`,
+                      background: isSelected ? '#3b82f6' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                      {(p.image_urls || [p.image_url]).slice(0, 4).map((u, ui) => (
+                        <img
+                          key={ui}
+                          src={u}
+                          alt=""
+                          onError={e => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
+                          style={{
+                            width: ui === 0 ? 48 : 28,
+                            height: 48,
+                            borderRadius: 6,
+                            objectFit: 'cover',
+                            background: '#f5f5f5',
+                            border: '1px solid #e5e7eb',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>
+                        {p.brand} · {p.price} · <span style={{ textTransform: 'capitalize' }}>{p.gender}</span>
+                      </div>
+                      {p.sourceQuery && (
+                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                          </svg>
+                          <span>{p.sourceQuery}</span>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
+                        {(p.image_urls || [p.image_url]).length} thumbnail{((p.image_urls || [p.image_url]).length === 1) ? '' : 's'} pulled
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: '#888' }}>Thumbnail</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor }}>{p.thumbnailScore}</span>
+                        <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: `${scoreColor}18`, color: scoreColor, fontWeight: 600 }}>{scoreLabel}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#999' }}>{p.reason}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#888' }}>
+            {researchSelected.size > 0 ? `${researchSelected.size} selected` : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="admin-btn admin-btn-secondary" onClick={close} disabled={ingesting}>
+              Cancel
+            </button>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={ingestSelectedProducts}
+              disabled={ingesting || researchSelected.size === 0}
+            >
+              {ingesting ? 'Adding…' : `Add ${researchSelected.size || ''} to Products`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Assemble Look modal (self-contained) ────────────────────────────
+// Claude curates ~5 catalog-tagged products into a look concept + video
+// prompt, then saves it as a pending look with a queued Veo render.
+export function AssembleLookModal({
+  catalog,
+  products,
+  onClose,
+  onSaved,
+  showToast,
+}: {
+  catalog: Catalog;
+  products: ProductRow[];
+  onClose: () => void;
+  onSaved: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const [assembling, setAssembling] = useState(false);
+  const [assembleResult, setAssembleResult] = useState<{
+    title: string;
+    description: string;
+    style: string;
+    prompt: string;
+    productIds: string[];
+  } | null>(null);
+  const [savingLook, setSavingLook] = useState(false);
+  const [assembleError, setAssembleError] = useState<string | null>(null);
+
+  const runAssemble = useCallback(async () => {
+    if (!supabase) return;
+    const tagged = products.filter(p => (p.catalog_tags || []).includes(catalog.name));
+    if (tagged.length < 3) {
+      setAssembleError(`Not enough products tagged with "${catalog.name}" - need at least 3.`);
+      return;
+    }
+    setAssembling(true);
+    setAssembleError(null);
+    setAssembleResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('catalog-assemble-look', {
+        body: {
+          catalog: catalog.name,
+          products: tagged.map(p => ({
+            id: p.id,
+            name: p.name || '',
+            brand: p.brand || '',
+            image_url: p.image_url,
+          })),
+          count: 5,
+        },
+      });
+      if (error) {
+        setAssembleError(error.message);
+      } else if (!data?.success) {
+        setAssembleError(data?.error || 'Assembly failed');
+      } else {
+        setAssembleResult({
+          title: data.title,
+          description: data.description,
+          style: data.style,
+          prompt: data.prompt,
+          productIds: data.productIds,
+        });
+      }
+    } catch (err) {
+      setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAssembling(false);
+    }
+  }, [catalog.name, products]);
+
+  const saveAssembledLook = useCallback(async () => {
+    if (!assembleResult || !supabase) return;
+    setSavingLook(true);
+    try {
+      const { data: lookRow, error: insertErr } = await supabase
+        .from('looks')
+        .insert({
+          title: assembleResult.title,
+          description: assembleResult.description,
+          catalog_tags: [catalog.name],
+          status: 'pending',
+          enabled: false,
+        })
+        .select('id')
+        .single();
+      if (insertErr || !lookRow) {
+        setAssembleError(insertErr?.message || 'Failed to save look');
+        setSavingLook(false);
+        return;
+      }
+      if (assembleResult.productIds.length > 0) {
+        await supabase.from('look_products').insert(
+          assembleResult.productIds.map((product_id, sort_order) => ({
+            look_id: lookRow.id,
+            product_id,
+            sort_order,
+          }))
+        );
+      }
+
+      const heroProductId = assembleResult.productIds[0];
+      if (heroProductId) {
+        const styleSlug = assembleResult.style.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        await supabase.from('generated_videos').insert({
+          product_id: heroProductId,
+          look_id: lookRow.id,
+          style: styleSlug || 'lifestyle_context',
+          prompt: assembleResult.prompt,
+          status: 'pending',
+          aspect_ratio: '9:16',
+        });
+      }
+
+      showToast(`Look "${assembleResult.title}" saved - video queued for generation`);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingLook(false);
+    }
+  }, [assembleResult, catalog.name, onSaved, onClose, showToast]);
+
+  const taggedCount = products.filter(p => (p.catalog_tags || []).includes(catalog.name)).length;
+
+  return (
+    <div className="admin-modal-overlay" onClick={() => !assembling && !savingLook && onClose()}>
+      <div
+        className="admin-modal"
+        style={{ width: 640, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid #f0f0f0' }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>
+            ✨ Assemble Look for "{catalog.name}"
+          </h2>
+          <p style={{ margin: 0, fontSize: 13, color: '#888' }}>
+            Claude picks 5 products tagged with this catalog and writes a look concept ready for video generation.
+          </p>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+          {!assembleResult && !assembling && !assembleError && (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <button
+                className="admin-btn admin-btn-primary"
+                onClick={runAssemble}
+              >
+                Let Claude assemble this look
+              </button>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#888' }}>
+                {taggedCount} products tagged
+              </div>
+            </div>
+          )}
+
+          {assembling && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#888', fontSize: 13 }}>
+              Assembling… Claude is curating the outfit and writing a video concept.
+            </div>
+          )}
+
+          {assembleError && (
+            <div style={{ padding: '10px 14px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+              {assembleError}
+            </div>
+          )}
+
+          {assembleResult && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Title</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#111' }}>{assembleResult.title}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 14, color: '#333' }}>{assembleResult.description}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Style</div>
+                <span style={{ padding: '3px 10px', borderRadius: 999, background: '#eff6ff', color: '#1d4ed8', fontSize: 12, fontWeight: 600 }}>
+                  {assembleResult.style}
+                </span>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Products ({assembleResult.productIds.length})</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                  {assembleResult.productIds.map(id => {
+                    const p = products.find(x => x.id === id);
+                    if (!p) return null;
+                    return (
+                      <div key={id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
+                        {p.image_url && (
+                          <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                        )}
+                        <div style={{ padding: 6 }}>
+                          <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand}</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Video Prompt</div>
+                <div style={{ fontSize: 12, color: '#444', padding: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {assembleResult.prompt}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {assembleResult && (
+              <button
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 12 }}
+                onClick={runAssemble}
+                disabled={assembling || savingLook}
+              >
+                Try another
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={onClose}
+              disabled={assembling || savingLook}
+            >
+              Cancel
+            </button>
+            {assembleResult && (
+              <button
+                className="admin-btn admin-btn-primary"
+                onClick={saveAssembledLook}
+                disabled={savingLook}
+              >
+                {savingLook ? 'Saving…' : 'Save as look'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
