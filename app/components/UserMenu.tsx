@@ -20,6 +20,7 @@ interface UserMenuProps {
   onOpenBookmarks: () => void;
   onOpenMyLooks?: () => void;
   onOpenWallet?: () => void;
+  onOpenProfile?: () => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
@@ -62,6 +63,7 @@ function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
   onOpenWallet,
+  onOpenProfile,
   bookmarkCount,
   user,
   onLogout,
@@ -166,7 +168,14 @@ function UserMenu({
           <div className="user-menu-popout user-menu-popout--graphical">
             {user && (
               <>
-                <div className="user-menu-header">
+                <div
+                  className={`user-menu-header${onOpenProfile ? ' user-menu-header--clickable' : ''}`}
+                  onClick={onOpenProfile ? runItem(onOpenProfile) : undefined}
+                  role={onOpenProfile ? 'button' : undefined}
+                  tabIndex={onOpenProfile ? 0 : undefined}
+                  onKeyDown={onOpenProfile ? (e) => { if (e.key === 'Enter' || e.key === ' ') runItem(onOpenProfile)(e as unknown as React.MouseEvent); } : undefined}
+                  title={onOpenProfile ? 'Edit profile' : undefined}
+                >
                   <div className="user-menu-avatar-wrap" key={renderedAvatarUrl || 'placeholder'}>
                     <AvatarUpload
                       userId={user.id}
@@ -181,7 +190,7 @@ function UserMenu({
                     {user.role && <span className={`user-menu-role user-menu-role-${user.role}`}>{USER_ROLE_LABELS[user.role]}</span>}
                     {dotsConnected && walletBalance !== null && walletBalance > 0 && onOpenWallet && (
                       <button
-                        onClick={runItem(onOpenWallet)}
+                        onClick={(e) => { e.stopPropagation(); runItem(onOpenWallet)(e); }}
                         style={{
                           marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4,
                           padding: '4px 10px', background: '#dcfce7', color: '#15803d',
@@ -196,6 +205,11 @@ function UserMenu({
                       </button>
                     )}
                   </div>
+                  {onOpenProfile && (
+                    <svg className="user-menu-header-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  )}
                 </div>
                 <div className="user-menu-divider" />
               </>

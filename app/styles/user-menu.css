@@ -50,6 +50,26 @@
   padding: 12px 14px;
 }
 
+.user-menu-header--clickable {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s;
+  margin: 2px 4px 0;
+  padding: 10px 10px;
+}
+.user-menu-header--clickable:hover {
+  background: rgba(255,255,255,0.06);
+}
+.user-menu-header--clickable:active {
+  background: rgba(255,255,255,0.1);
+}
+
+.user-menu-header-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: rgba(255,255,255,0.3);
+}
+
 .user-menu-avatar {
   width: 36px;
   height: 36px;
