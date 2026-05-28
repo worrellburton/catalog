@@ -481,12 +481,27 @@ header > * {
     display: flex;
   }
 
-  /* Followers rail in header-right needs its popover to open to
-     the LEFT of the trigger on mobile so it doesn't overflow the
-     viewport off the right edge. */
-  .header-right .follow-rail .follow-rail-popover {
-    left: auto !important;
-    right: 0 !important;
+  /* Mobile: pin the FollowingRail wrap to the left edge of the
+     viewport as a horizontal row. Followers (rendered first) lands
+     on the LEFT, Following (rendered second) lands on the RIGHT —
+     matches the desktop top-vs-bottom convention. */
+  .header-center {
+    position: fixed;
+    top: 50%;
+    left: 10px;
+    transform: translateY(-50%);
+    z-index: 90;
+    pointer-events: auto;
+  }
+  .follow-rail-wrap {
+    flex-direction: row !important;
+    gap: 10px !important;
+  }
+  /* Popovers open downward from the rail on mobile rather than to
+     the side — viewport is too narrow for side-open. */
+  .follow-rail .follow-rail-popover {
+    top: calc(100% + 8px) !important;
+    left: 0 !important;
     transform: none !important;
   }
 
