@@ -15,7 +15,7 @@ import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram'
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
-import { usePageSections, isSectionEnabled } from '~/hooks/usePageSections';
+import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import {
   pickVideoUrl,
@@ -492,6 +492,14 @@ export default function ProductPage({
   const similarEnabled  = isSectionEnabled(productSections, 'similar');
   const popularEnabled  = isSectionEnabled(productSections, 'popular');
   const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
+  // Per-section caps. Default 8 keeps the historic bounded-grid feel
+  // until an admin tunes them in /admin/pages.
+  const similarLimit  = getSectionLimit(productSections, 'similar', 8);
+  const popularLimit  = getSectionLimit(productSections, 'popular', 8);
+  const ymalLimit     = getSectionLimit(productSections, 'you-might-also-like', 16);
+  // YMAL defaults to infinite (seeded in the migration); the toggle
+  // lets an admin flip it back to a bounded grid using popularFallback.
+  const ymalInfinite  = isSectionInfinite(productSections, 'you-might-also-like');
 
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
@@ -1103,7 +1111,7 @@ export default function ProductPage({
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
-              {fillToExact(moreLikeThis, 8).map((c, i) => (
+              {fillToExact(moreLikeThis, similarLimit).map((c, i) => (
                 <CreativeCard
                   key={`mlt-${c.id}-${i}`}
                   creative={c}
@@ -1119,7 +1127,7 @@ export default function ProductPage({
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">Popular</h2>
             <div className="pd-similar-grid">
-              {fillToExact(popularItems, 8).map((c, i) => (
+              {fillToExact(popularItems, popularLimit).map((c, i) => (
                 <CreativeCard
                   key={`pop-${c.id}-${i}`}
                   creative={c}
@@ -1146,30 +1154,47 @@ export default function ProductPage({
           </section>
         )}
 
-        {/* Infinite "You might also like" feed — anchors the bottom
-            of the page so scrolling never dead-ends. Same
-            ContinuousFeed component the home page uses, scoped to
-            the current product via slotPrefix. */}
+        {/* "You might also like" — defaults to an infinite
+            ContinuousFeed (anchors the bottom so scrolling never
+            dead-ends). The /admin/pages editor can flip it to a
+            bounded grid via the Infinite checkbox, in which case
+            we render popularFallback capped by item_limit. */}
         {ymalEnabled && (
-        <section className="pd-similar-feed">
-          <h2 className="pd-feed-title">You might also like</h2>
-          <ContinuousFeed
-            nested
-            scrollRoot={scrollerEl}
-            activeFilter={activeFilter}
-            searchQuery=""
-            shuffleKey={0}
-            layoutMode={0}
-            onOpenLook={onOpenLook}
-            onOpenCreator={onOpenCreator || (() => {})}
-            onOpenBrowser={onOpenBrowser}
-            onOpenProduct={onOpenProduct}
-            onOpenCreative={onOpenCreative}
-            onOpenBrand={onOpenBrand}
-            bookmarks={bookmarks}
-            slotPrefix={`product:${product.brand}:${product.name}`}
-          />
-        </section>
+          ymalInfinite ? (
+            <section className="pd-similar-feed">
+              <h2 className="pd-feed-title">You might also like</h2>
+              <ContinuousFeed
+                nested
+                scrollRoot={scrollerEl}
+                activeFilter={activeFilter}
+                searchQuery=""
+                shuffleKey={0}
+                layoutMode={0}
+                onOpenLook={onOpenLook}
+                onOpenCreator={onOpenCreator || (() => {})}
+                onOpenBrowser={onOpenBrowser}
+                onOpenProduct={onOpenProduct}
+                onOpenCreative={onOpenCreative}
+                onOpenBrand={onOpenBrand}
+                bookmarks={bookmarks}
+                slotPrefix={`product:${product.brand}:${product.name}`}
+              />
+            </section>
+          ) : (popularFallback && popularFallback.length > 0) ? (
+            <section className="pd-similar-feed">
+              <h2 className="pd-feed-title">You might also like</h2>
+              <div className="pd-similar-grid">
+                {fillToExact(popularFallback, ymalLimit).map((c, i) => (
+                  <CreativeCard
+                    key={`ymal-${c.id}-${i}`}
+                    creative={c}
+                    className="look-card"
+                    onOpenProduct={onOpenCreative}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null
         )}
       </div>
     </div>

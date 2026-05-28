@@ -19,7 +19,7 @@ import {
 } from '~/services/video-loading';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
-import { usePageSections, isSectionEnabled } from '~/hooks/usePageSections';
+import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/usePageSections';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 
@@ -92,6 +92,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
   const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
+  const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 8);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -276,13 +277,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ? all.filter(l => sameCreator(l) && l.id !== look.id)
       : [];
     const source = byCreator;
-    return source.slice(0, 8).map((l, i) => ({
+    return source.slice(0, Math.max(1, moreFromCreatorLimit)).map((l, i) => ({
       ...l,
       // Use a unique synthetic ID so TrailVideoHost creates a separate
       // <video> element for the about strip vs the feed section cards.
       id: -(Math.abs(l.id) * 1000 + i + 1),
     }));
-  }, [look.id, look.creator, look.creatorDisplayName, allLooks]);
+  }, [look.id, look.creator, look.creatorDisplayName, allLooks, moreFromCreatorLimit]);
 
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
