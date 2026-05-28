@@ -512,15 +512,18 @@ header > .pending-look-pill {
      just above the bottom search bar. */
   .follow-rail-wrap--center {
     position: fixed !important;
-    bottom: calc(150px + env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
+    top: 50%;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    transform: translateY(-50%) !important;
     z-index: 99;
     display: flex !important;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
     gap: 0;
     pointer-events: none;
+    padding: 0 12px;
   }
   .follow-rail-wrap--center > * {
     pointer-events: auto;
