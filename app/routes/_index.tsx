@@ -817,15 +817,12 @@ export default function Home() {
                   <span className="logo-catalog-name">{catalogName}</span>
                 )}
               </button>
-            </div>
-            <div className="header-center">
-              <PendingLookPill onOpen={() => navigate('/generate')} />
-              {/* Followers (top) + Following (below). On desktop both
-                  rails stack vertically in the header-center column;
-                  on mobile they flow as a row pinned to the left
-                  edge — see .follow-rail-wrap rules in header.css. */}
+              {/* Creators I follow — LEFT side of the header on both
+                  desktop and mobile. On mobile the avatar stack
+                  flips to a vertical column so the rail sits
+                  compactly under the logo. */}
               <FollowingRail
-                mode="both"
+                mode="following"
                 onOpenCreator={handleOpenCreator}
                 onCreateFollowingCatalog={(handles) => {
                   const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
@@ -836,7 +833,15 @@ export default function Home() {
                 }}
               />
             </div>
+            <div className="header-center">
+              <PendingLookPill onOpen={() => navigate('/generate')} />
+            </div>
             <div className="header-right">
+              {/* People who follow me — RIGHT side of the header. */}
+              <FollowingRail
+                mode="followers"
+                onOpenCreator={handleOpenCreator}
+              />
               <HeaderWalletPill onOpenWallet={openWallet} />
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
