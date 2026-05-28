@@ -49,6 +49,7 @@ const importLookOverlay = () => import('~/components/LookOverlay');
 const importInAppBrowser = () => import('~/components/InAppBrowser');
 const importMyLooks = () => import('~/components/MyLooks');
 const importCreatorWallet = () => import('~/components/CreatorWallet');
+const importProfilePage = () => import('~/components/ProfilePage');
 
 const LandingPage = lazy(importLandingPage);
 const CreatorPage = lazy(importCreatorPage);
@@ -59,6 +60,7 @@ const LookOverlay = lazy(importLookOverlay);
 const InAppBrowser = lazy(importInAppBrowser);
 const MyLooks = lazy(importMyLooks);
 const CreatorWallet = lazy(importCreatorWallet);
+const ProfilePage = lazy(importProfilePage);
 
 // Order chosen by likelihood the user will open the surface in the next
 // minute: looks/products dominate, browser is the most-visited tail action,
@@ -120,6 +122,7 @@ export default function Home() {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
@@ -677,6 +680,7 @@ export default function Home() {
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
   const openMyLooks = useCallback(() => setShowMyLooks(true), []);
   const openWallet = useCallback(() => setShowWallet(true), []);
+  const openProfile = useCallback(() => setShowProfile(true), []);
   const closeBookmarks = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -688,6 +692,10 @@ export default function Home() {
   const closeWallet = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowWallet(false);
+  }, []);
+  const closeProfile = useCallback(() => {
+    history.replaceState({}, '', '/#app');
+    setShowProfile(false);
   }, []);
   const handleLogout = useCallback(async () => {
     await logout();
@@ -851,6 +859,7 @@ export default function Home() {
                 onOpenBookmarks={openBookmarks}
                 onOpenMyLooks={user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin' ? openMyLooks : undefined}
                 onOpenWallet={user?.role === 'creator' ? openWallet : undefined}
+                onOpenProfile={user ? openProfile : undefined}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={handleLogout}
@@ -968,6 +977,12 @@ export default function Home() {
           {showMyLooks && (
             <Suspense fallback={null}>
               <MyLooks onClose={closeMyLooks} />
+            </Suspense>
+          )}
+
+          {showProfile && user && (
+            <Suspense fallback={null}>
+              <ProfilePage user={user} onClose={closeProfile} />
             </Suspense>
           )}
 

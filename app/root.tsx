@@ -48,6 +48,7 @@ import "./styles/import.css";
 import "./styles/share-page.css";
 import "./styles/confirm-modal.css";
 import "./styles/avatar-modal.css";
+import "./styles/profile-page.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

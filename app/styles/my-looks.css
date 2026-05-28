@@ -24,13 +24,21 @@ html[data-shell="catalog-app"] .my-looks-overlay {
    green — every other element is black / neutral grey so the
    number reads as the single anchor on the page. */
 .my-looks-overlay--wallet {
-  background: transparent;
+  background: #0a0e1a;
 }
-.my-looks-overlay--wallet .my-looks-title { color: #0a0a0a; }
-.my-looks-overlay--wallet .my-looks-back { color: rgba(0, 0, 0, 0.6); }
+/* The wave canvas paints the dark surface; pin the header + content
+   above it so the Back arrow / "Wallet" title / cards never get
+   covered. */
+.my-looks-overlay--wallet .my-looks-container,
+.my-looks-overlay--wallet .my-looks-header {
+  position: relative;
+  z-index: 2;
+}
+.my-looks-overlay--wallet .my-looks-title { color: #f8fafc; }
+.my-looks-overlay--wallet .my-looks-back  { color: rgba(248, 250, 252, 0.78); }
 .my-looks-overlay--wallet .my-looks-back:hover {
-  color: #000;
-  background: rgba(0, 0, 0, 0.06);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .my-looks-container {
@@ -983,7 +991,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(248, 250, 252, 0.55);
   margin-bottom: 14px;
 }
 
@@ -1054,17 +1062,16 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 20px 20px 18px;
   border-radius: 16px;
   min-width: 0;
-  /* Frosted glass over the animated network so the particles read
-     faintly through the card edges. */
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* Dark frosted glass over the animated wave mesh. */
+  background: rgba(15, 22, 41, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .wallet-card--main {
-  background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(15, 22, 41, 0.82);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .wallet-card-label {
@@ -1072,14 +1079,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(248, 250, 252, 0.55);
   margin-bottom: 8px;
 }
 
 .wallet-card-amount {
   font-size: 30px;
   font-weight: 700;
-  color: #0a0a0a;
+  color: #f8fafc;
   line-height: 1;
   font-family: 'DM Sans', sans-serif;
   font-variant-numeric: tabular-nums;
@@ -1087,7 +1094,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 .wallet-card-sub {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(248, 250, 252, 0.5);
   margin-top: 6px;
 }
 
@@ -1191,16 +1198,18 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   margin: 0 auto;
   padding: 10px 18px;
   border-radius: 999px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(15, 22, 41, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   cursor: pointer;
-  color: #0a0a0a;
+  color: #f8fafc;
   font-family: inherit;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 .wallet-insights-toggle:hover {
-  background: #f5f5f5;
-  border-color: rgba(0, 0, 0, 0.25);
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
 }
 
@@ -1209,7 +1218,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #0a0a0a;
+  color: #f8fafc;
 }
 
 .wallet-insights-chevron {
