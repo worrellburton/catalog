@@ -31,6 +31,16 @@ interface ActivityToast {
   id: string;
   kind: ActivityKind;
   message: string;
+  /** Avatar of the actor whose event triggered this toast. Null for
+   *  catch-up summary toasts (no single actor). */
+  avatarUrl?: string | null;
+  /** Thumbnail of the look the actor engaged with. Same null rule
+   *  as avatarUrl. */
+  thumbnailUrl?: string | null;
+  /** Short label rendered under the message (e.g. "viewed your
+   *  beach look") so the avatar+thumb pair carries context without
+   *  needing a wall of text. */
+  fallbackInitial?: string;
 }
 
 const MAX_VISIBLE = 5;
@@ -92,36 +102,46 @@ export default function ActivityRealtimeToasts() {
 
     // Per-event lookups: actor display name + look title. Cache so
     // the same actor doesn't trigger a profile fetch on every toast.
-    const lookTitleById = new Map<string, string>();
-    const actorNameCache = new Map<string, string>();
+    interface LookInfo { title: string; thumbnailUrl: string | null }
+    interface ActorInfo { name: string; avatarUrl: string | null }
+    const lookInfoById = new Map<string, LookInfo>();
+    const actorInfoCache = new Map<string, ActorInfo>();
 
-    async function resolveActorName(actorId: string): Promise<string> {
-      if (actorNameCache.has(actorId)) return actorNameCache.get(actorId)!;
+    async function resolveActorInfo(actorId: string): Promise<ActorInfo> {
+      const cached = actorInfoCache.get(actorId);
+      if (cached) return cached;
       let name = 'Someone';
+      let avatarUrl: string | null = null;
       if (supabase) {
+        // Prefer the creators row (display_name + custom avatar) for
+        // anyone who has one; fall back to the profile for everyone
+        // else. The avatar_url from either source is fine — both write
+        // to the same supabase storage in practice.
         const [profRes, creatorRes] = await Promise.all([
-          supabase.from('profiles').select('full_name').eq('id', actorId).maybeSingle(),
-          supabase.from('creators').select('display_name, handle').eq('id', actorId).maybeSingle(),
+          supabase.from('profiles').select('full_name, avatar_url').eq('id', actorId).maybeSingle(),
+          supabase.from('creators').select('display_name, handle, avatar_url').eq('id', actorId).maybeSingle(),
         ]);
         const fromCreator = creatorRes.data?.display_name || creatorRes.data?.handle;
         const fromProfile = profRes.data?.full_name;
         name = (fromCreator || fromProfile || 'Someone').toString().trim() || 'Someone';
+        avatarUrl = (creatorRes.data?.avatar_url || profRes.data?.avatar_url || null);
       }
-      actorNameCache.set(actorId, name);
-      return name;
+      const info: ActorInfo = { name, avatarUrl };
+      actorInfoCache.set(actorId, info);
+      return info;
     }
 
     (async () => {
       // 1. Find my looks + their titles + my handle.
       const [looksRes, creatorRes] = await Promise.all([
-        supabase.from('looks').select('id, title').eq('user_id', userId),
+        supabase.from('looks').select('id, title, thumbnail_url').eq('user_id', userId),
         supabase.from('creators').select('handle').eq('id', userId).maybeSingle(),
       ]);
       if (cancelled) return;
-      for (const r of ((looksRes.data ?? []) as { id: string; title: string | null }[])) {
-        lookTitleById.set(r.id, r.title || 'your look');
+      for (const r of ((looksRes.data ?? []) as { id: string; title: string | null; thumbnail_url: string | null }[])) {
+        lookInfoById.set(r.id, { title: r.title || 'your look', thumbnailUrl: r.thumbnail_url || null });
       }
-      const lookIds = new Set(lookTitleById.keys());
+      const lookIds = new Set(lookInfoById.keys());
       const myHandle = creatorRes.data?.handle ?? null;
 
       // 2. Catch-up helper. Pushes one SUMMARY toast per kind.
@@ -213,22 +233,33 @@ export default function ActivityRealtimeToasts() {
               const k = row.event_type;
               if (k !== 'impression' && k !== 'click' && k !== 'clickout') return;
               const kind: ActivityKind = k;
-              const title = lookTitleById.get(row.target_uuid) || 'your look';
+              const lookInfo = lookInfoById.get(row.target_uuid) ?? { title: 'your look', thumbnailUrl: null };
               const verb  = actionVerb(kind);
-              // Push immediately with a placeholder name, then upgrade.
-              const initial = `Someone ${verb} ${title}`;
+              const initial = `Someone ${verb} ${lookInfo.title}`;
               const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               setToasts(prev => {
-                const merged: ActivityToast[] = [...prev, { id, kind, message: initial }];
+                const merged: ActivityToast[] = [...prev, {
+                  id, kind, message: initial,
+                  avatarUrl: null,
+                  thumbnailUrl: lookInfo.thumbnailUrl,
+                  fallbackInitial: '?',
+                }];
                 return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
               });
               window.setTimeout(() => {
                 setToasts(prev => prev.filter(t => t.id !== id));
               }, TOAST_LIFESPAN_MS);
               if (row.user_id) {
-                void resolveActorName(row.user_id).then(name => {
+                void resolveActorInfo(row.user_id).then(info => {
                   setToasts(prev => prev.map(t =>
-                    t.id === id ? { ...t, message: `${name} ${verb} ${title}` } : t,
+                    t.id === id
+                      ? {
+                          ...t,
+                          message: `${info.name} ${verb} ${lookInfo.title}`,
+                          avatarUrl: info.avatarUrl,
+                          fallbackInitial: info.name.charAt(0).toUpperCase() || '?',
+                        }
+                      : t,
                   ));
                 });
               }
@@ -254,16 +285,30 @@ export default function ActivityRealtimeToasts() {
               if (row.follower_id === userId) return;
               const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               setToasts(prev => {
-                const merged = [...prev, { id, kind: 'follow' as ActivityKind, message: 'Someone followed you' }];
+                const merged: ActivityToast[] = [...prev, {
+                  id,
+                  kind: 'follow',
+                  message: 'Someone followed you',
+                  avatarUrl: null,
+                  thumbnailUrl: null,
+                  fallbackInitial: '?',
+                }];
                 return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
               });
               window.setTimeout(() => {
                 setToasts(prev => prev.filter(t => t.id !== id));
               }, TOAST_LIFESPAN_MS);
               if (row.follower_id) {
-                void resolveActorName(row.follower_id).then(name => {
+                void resolveActorInfo(row.follower_id).then(info => {
                   setToasts(prev => prev.map(t =>
-                    t.id === id ? { ...t, message: `${name} followed you` } : t,
+                    t.id === id
+                      ? {
+                          ...t,
+                          message: `${info.name} followed you`,
+                          avatarUrl: info.avatarUrl,
+                          fallbackInitial: info.name.charAt(0).toUpperCase() || '?',
+                        }
+                      : t,
                   ));
                 });
               }
@@ -285,12 +330,27 @@ export default function ActivityRealtimeToasts() {
   if (toasts.length === 0) return null;
   return (
     <div className="activity-toasts" role="status" aria-live="polite">
-      {toasts.map(t => (
-        <div key={t.id} className={`activity-toast activity-toast--${t.kind}`}>
-          <span className="activity-toast-icon" aria-hidden>{KIND_ICON[t.kind]}</span>
-          <span className="activity-toast-message">{t.message}</span>
-        </div>
-      ))}
+      {toasts.map(t => {
+        // Per-event toasts render avatar (left) + thumb (right); the
+        // catch-up summaries (no per-actor context) fall back to the
+        // emoji puck so the visual language still differs.
+        const hasPerEvent = t.avatarUrl !== undefined || t.thumbnailUrl !== undefined;
+        return (
+          <div key={t.id} className={`activity-toast activity-toast--${t.kind}${hasPerEvent ? ' activity-toast--rich' : ''}`}>
+            {hasPerEvent ? (
+              t.avatarUrl
+                ? <img className="activity-toast-avatar" src={t.avatarUrl} alt="" />
+                : <span className="activity-toast-avatar activity-toast-avatar--initial" aria-hidden>{t.fallbackInitial || '?'}</span>
+            ) : (
+              <span className="activity-toast-icon" aria-hidden>{KIND_ICON[t.kind]}</span>
+            )}
+            <span className="activity-toast-message">{t.message}</span>
+            {hasPerEvent && t.thumbnailUrl && (
+              <img className="activity-toast-thumb" src={t.thumbnailUrl} alt="" />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

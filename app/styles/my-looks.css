@@ -24,7 +24,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
    green — every other element is black / neutral grey so the
    number reads as the single anchor on the page. */
 .my-looks-overlay--wallet {
-  background: #0a0e1a;
+  background: #0a0a0a;
 }
 /* The wave canvas paints the dark surface; pin the header + content
    above it so the Back arrow / "Wallet" title / cards never get
@@ -1003,12 +1003,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #16a34a;
+  color: #f8fafc;
   font-variant-numeric: tabular-nums;
-  /* Soft green halo so the hero figure reads as the gravitational
-     centre of the particle network behind it. */
+  /* Soft green halo behind the white figure so the wallet still
+     reads as "earnings" without painting the number itself green. */
   text-shadow:
-    0 0 28px rgba(34, 197, 94, 0.18),
+    0 0 28px rgba(34, 197, 94, 0.22),
     0 0 60px rgba(34, 197, 94, 0.12);
 }
 
@@ -1021,8 +1021,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   margin-top: 20px;
   padding: 14px 28px;
   border-radius: 999px;
-  border: 1px solid #0a0a0a;
-  background: #0a0a0a;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  background: #16a34a;
   color: #fff;
   font-family: inherit;
   font-size: 15px;
@@ -1030,21 +1030,23 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.32);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 .wallet-hero-withdraw:hover:not(:disabled) {
-  background: #222;
+  background: #22c55e;
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 10px 28px rgba(22, 163, 74, 0.42);
 }
 .wallet-hero-withdraw:active:not(:disabled) { transform: translateY(0); }
 .wallet-hero-withdraw--disabled,
 .wallet-hero-withdraw:disabled {
-  opacity: 0.4;
+  opacity: 1;
   cursor: default;
-  background: #0a0a0a;
-  border-color: #0a0a0a;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* Hero glow removed — white surface, no green halo. */
