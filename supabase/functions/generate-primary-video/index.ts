@@ -1,10 +1,11 @@
 // generate-primary-video
 //
 // Generates a short cinematic-motion product video from a product's
-// primary_image_url. Uses fal.ai seedance-lite image-to-video, which
-// is fast + cheap and ideal for "static shot with subtle motion" of
-// a single SKU. Aspect ratio is forced to 4:5 to match the admin
-// detail-row video tile shape.
+// primary_image_url. Uses fal.ai Seedance 2.0 (standard/pro tier)
+// image-to-video, which is high-fidelity and ideal for "static shot
+// with subtle motion" of a single SKU. Aspect ratio is forced to 3:4
+// (closest portrait enum to 4:5) to match the admin detail-row video
+// tile shape.
 //
 // POST { product_id: string }
 // → 200 { success: true, video_url, source_image_url }
@@ -26,12 +27,17 @@ const CORS = {
 };
 
 const FAL_BASE_SYNC = 'https://fal.run';
-// Seedance 2 Pro i2v — higher fidelity than the v1 lite endpoint we
-// shipped with originally. Maps to fal.ai's `bytedance/seedance-2.0`
-// pro tier; the i2v endpoint uses the supplied image_url as the
-// first frame by default.
-const SEEDANCE_SLUG = 'fal-ai/bytedance/seedance/v2/pro/image-to-video';
-const FAL_CALL_TIMEOUT_MS = 60_000;
+// Seedance 2.0 i2v, standard tier — fal's registry slug for the
+// high-fidelity ("pro") image-to-video model. The standard tier IS
+// the high-quality one (it's the only tier with 1080p); `/fast/` is
+// the cheaper, lower-latency variant. There is no `/pro/` segment —
+// an earlier `fal-ai/bytedance/seedance/v2/pro/image-to-video` slug
+// 404'd because that path doesn't exist in fal's registry. The i2v
+// endpoint uses the supplied image_url as the first frame by default.
+const SEEDANCE_SLUG = 'bytedance/seedance-2.0/image-to-video';
+// Sync gateway holds the connection until the clip renders; Seedance
+// 2.0 at 720p/5s routinely needs 60–100s, so give it real headroom.
+const FAL_CALL_TIMEOUT_MS = 120_000;
 
 // Always anchor the result to the supplied image (first frame) +
 // keep the product centred with subtle cinematic motion. The
@@ -73,6 +79,11 @@ async function callSeedance(prompt: string, imageUrl: string, falKey: string): P
         aspect_ratio: '3:4',
         resolution: '720p',
         duration: '5',
+        // Seedance 2.0 defaults generate_audio to true and will happily
+        // lip-sync / add speech to any person in frame. A product packshot
+        // wants silent, subtle motion, so disable audio outright — this
+        // enforces the prompt's "no talking" constraint at the API level.
+        generate_audio: false,
       }),
       signal: ctrl.signal,
     });

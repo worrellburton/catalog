@@ -5946,7 +5946,7 @@ export default function AdminData() {
                     Model · Image → Video
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    fal-ai/bytedance/seedance/v2/pro/image-to-video
+                    bytedance/seedance-2.0/image-to-video
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
                     Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Make it 4:5.
@@ -5955,6 +5955,7 @@ export default function AdminData() {
                     <span>aspect: 3:4</span>
                     <span>res: 720p</span>
                     <span>dur: 5s</span>
+                    <span>audio: off</span>
                   </div>
                 </div>
                 {/* arrow */}
