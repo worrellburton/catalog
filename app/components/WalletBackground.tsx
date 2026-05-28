@@ -171,17 +171,19 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
       const { width: W, height: H, highlights } = state;
       const t = now / 1000;
 
-      // Dark background base.
-      ctx.fillStyle = '#0a0e1a';
+      // Dark base — matches the catalog brand backdrop everywhere
+      // else in the app (--bg #0a0a0a) so the wallet doesn't read
+      // as its own off-brand island.
+      ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, W, H);
       // Subtle vignette glow — slight cyan haze top, green haze bottom.
       const v1 = ctx.createRadialGradient(W * 0.3, H * 0.2, 0, W * 0.3, H * 0.2, Math.max(W, H) * 0.6);
-      v1.addColorStop(0, 'rgba(56, 189, 248, 0.08)');
+      v1.addColorStop(0, 'rgba(56, 189, 248, 0.06)');
       v1.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = v1;
       ctx.fillRect(0, 0, W, H);
       const v2 = ctx.createRadialGradient(W * 0.7, H * 0.85, 0, W * 0.7, H * 0.85, Math.max(W, H) * 0.65);
-      v2.addColorStop(0, 'rgba(34, 197, 94, 0.09)');
+      v2.addColorStop(0, 'rgba(34, 197, 94, 0.10)');
       v2.addColorStop(1, 'rgba(34, 197, 94, 0)');
       ctx.fillStyle = v2;
       ctx.fillRect(0, 0, W, H);

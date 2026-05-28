@@ -35,6 +35,40 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
+/* Rich variant — per-event toasts that carry an actor avatar + look
+   thumbnail. Slightly more contrasty background so the thumbnail
+   sits cleanly against it. */
+.activity-toast--rich {
+  background: rgba(15, 23, 42, 0.96);
+  padding: 8px 10px;
+}
+.activity-toast-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.activity-toast-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.activity-toast-thumb {
+  width: 28px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
 .activity-toast--impression { background: rgba(15, 23, 42, 0.92); }
 .activity-toast--click    { background: rgba(124, 58, 237, 0.95); }
 .activity-toast--clickout { background: rgba(22, 163, 74, 0.95); }
