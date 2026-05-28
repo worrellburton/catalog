@@ -207,10 +207,13 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
 
       // Ease the scroll progress toward its target — smooths out
       // momentum-scroll fits and gives the depth shift a sense of
-      // weight.
+      // weight. We then compress the scroll range: the Wallet screen
+      // is short enough that most users barely scroll, so map the
+      // first 25% of scroll to the full story arc — past that the
+      // network is already saturated.
       state.scroll += (state.scrollTarget - state.scroll) * Math.min(0.18, 0.08 * dtFrames);
-      const scroll = state.scroll;
-      const eased  = easeInOut(scroll);
+      const compressed = Math.min(1, state.scroll / 0.25);
+      const eased     = easeInOut(compressed);
 
       const { width: W, height: H, nodes, pulses } = state;
 
@@ -240,11 +243,13 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
         if (n.y > H + 25) n.y = -25;
       }
 
-      // Connections. The threshold grows + the alpha brightens as
-      // the scroll story advances — phase transition around 0.35.
-      const threshold = CONNECTION_BASE_PX * (0.7 + 0.55 * eased);
+      // Connections. Baseline already feels rich at scroll=0 (the
+      // short Wallet page rarely scrolls far); the scroll ramp adds
+      // a top-end intensity rather than waking the network up from
+      // sleep.
+      const threshold = CONNECTION_BASE_PX * (1.05 + 0.25 * eased);
       const thresholdSq = threshold * threshold;
-      const connBaseAlpha = 0.045 + 0.22 * eased;
+      const connBaseAlpha = 0.18 + 0.12 * eased;
       ctx.lineWidth = 1;
       ctx.lineCap = 'round';
       for (let i = 0; i < nodes.length; i++) {
@@ -282,7 +287,7 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
         const r = n.radius * breathing;
         const isGreen = n.hue === 'green';
         const rgb = isGreen ? '22, 163, 74' : '100, 116, 139';
-        const promScroll = isGreen ? (0.45 + 0.55 * eased) : 1;
+        const promScroll = isGreen ? (0.85 + 0.25 * eased) : 1;
         const baseAlpha = (0.22 + 0.42 * n.depth) * promScroll;
 
         const glowR = r * (isGreen ? 7 : 3.5);
@@ -298,10 +303,10 @@ const WalletBackground = memo(function WalletBackground({ scrollEl }: WalletBack
         ctx.fill();
       }
 
-      // Spawn pulses. Rate ramps with scroll — almost none at the
-      // top (quiet potential), saturating near the bottom (network
-      // alive). Frame-rate independent via the accumulator.
-      const ratePerSec = PULSE_TARGET_PER_SEC * (0.05 + 1.4 * eased);
+      // Spawn pulses. Healthy baseline so the network reads as
+      // "transactions are flowing" from the first frame; the scroll
+      // ramp pushes it toward saturation as the user descends.
+      const ratePerSec = PULSE_TARGET_PER_SEC * (0.85 + 0.65 * eased);
       state.pulseSpawnAccumulator += (ratePerSec * dt) / 1000;
       while (state.pulseSpawnAccumulator >= 1 && pulses.length < 60) {
         state.pulseSpawnAccumulator -= 1;
