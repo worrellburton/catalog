@@ -1,8 +1,12 @@
-/* Creator catalog page */
+/* Creator catalog page.
+   Dark consumer theme by default (black gradient surface) so it reads
+   as a continuation of the feed; light-mode overrides at the bottom
+   restore the editorial white look. */
 .creator-page {
   position: fixed;
   inset: 0;
-  background: #fff;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 58%, #050505 100%);
+  color: #fff;
   z-index: 150;
   overflow-y: auto;
   padding: var(--header-height) 28px 28px;
@@ -29,21 +33,21 @@
   height: 168px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid rgba(0, 0, 0, 0.08);
+  border: 4px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 20px;
 }
 
 .creator-hero-curated {
   font-size: 15px;
   font-style: italic;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.45);
   font-family: Georgia, 'Times New Roman', serif;
 }
 
 .creator-hero-name {
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
-  color: #111;
+  color: #fff;
   margin: 4px 0 20px;
   letter-spacing: -0.02em;
 }
@@ -54,8 +58,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #fff;
-  background: #111;
+  color: #111;
+  background: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -69,14 +73,14 @@
 
 .creator-hero-trust {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.4);
   margin-bottom: 12px;
 }
 
 .creator-hero-socials {
   display: flex;
   gap: 16px;
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .creator-hero-socials svg {
@@ -85,7 +89,7 @@
 }
 
 .creator-hero-socials svg:hover {
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* Creator Navigation */
@@ -93,7 +97,7 @@
   display: flex;
   justify-content: center;
   gap: 32px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 24px;
 }
 
@@ -101,7 +105,7 @@
   padding: 14px 8px;
   font-size: 15px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.45);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -111,12 +115,12 @@
 }
 
 .creator-nav-tab:hover {
-  color: rgba(0, 0, 0, 0.7);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .creator-nav-tab.active {
-  color: #111;
-  border-bottom-color: #111;
+  color: #fff;
+  border-bottom-color: #fff;
 }
 
 /* Brand filter chips */
@@ -136,9 +140,9 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.5);
   background: none;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
@@ -147,14 +151,14 @@
 }
 
 .creator-brand-chip:hover {
-  border-color: rgba(0, 0, 0, 0.3);
-  color: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .creator-brand-chip.active {
-  background: #111;
-  color: #fff;
-  border-color: #111;
+  background: #fff;
+  color: #111;
+  border-color: #fff;
 }
 
 .creator-products-grid {
@@ -164,7 +168,7 @@
 }
 
 .creator-product-card {
-  background: #f7f7f7;
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -172,7 +176,7 @@
 }
 
 .creator-product-card:hover {
-  background: #efefef;
+  background: rgba(255, 255, 255, 0.1);
   transform: translateY(-2px);
 }
 
@@ -190,7 +194,7 @@
 .creator-product-placeholder {
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .creator-product-info {
@@ -202,14 +206,14 @@
 
 .creator-product-brand {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .creator-product-name {
   font-size: 13px;
-  color: #222;
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 500;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -220,7 +224,7 @@
 .creator-product-price {
   font-size: 14px;
   font-weight: 600;
-  color: #111;
+  color: #fff;
   margin-top: 4px;
 }
 
@@ -231,7 +235,7 @@
   justify-content: center;
   gap: 16px;
   padding: 80px 0;
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 14px;
 }
 
@@ -240,7 +244,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   text-decoration: none;
   margin-bottom: 20px;
   cursor: pointer;
@@ -250,7 +254,7 @@
 }
 
 .creator-back:hover {
-  color: #111;
+  color: #fff;
 }
 
 .creator-grid {
@@ -303,14 +307,14 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: #111;
-  color: #fff;
+  background: #fff;
+  color: #111;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #fff;
+  border: 2px solid #111;
   pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Count badges next to tab labels ───────────────────────────────── */
@@ -322,15 +326,15 @@
   padding: 0 6px;
   margin-left: 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .creator-nav-tab.active .creator-nav-count {
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
+  background: #fff;
+  color: #111;
 }
 
 /* ── Skeleton grid (loading) ───────────────────────────────────────── */
@@ -343,7 +347,7 @@
   width: 100%;
   aspect-ratio: 3 / 4;
   border-radius: 12px;
-  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 100%);
   background-size: 200% 100%;
   animation: creator-skeleton-shimmer 1.4s ease-in-out infinite;
 }
@@ -361,14 +365,14 @@
   gap: 12px;
   padding: 64px 24px;
   text-align: center;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.55);
 }
-.creator-empty svg { color: rgba(0, 0, 0, 0.25); }
+.creator-empty svg { color: rgba(255, 255, 255, 0.25); }
 .creator-empty h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.9);
 }
 .creator-empty p {
   margin: 0;
@@ -377,3 +381,53 @@
   line-height: 1.55;
 }
 
+/* ── Light-mode overrides ──────────────────────────────────────────────
+   Restore the editorial white look when the app is in light mode. (The
+   page background + back-button colors are also set in light-mode.css,
+   which loads later; these element-level rules cover everything else.) */
+.light-mode .creator-page {
+  background: #fff;
+  color: #111;
+}
+.light-mode .creator-hero-avatar { border-color: rgba(0, 0, 0, 0.08); }
+.light-mode .creator-hero-curated { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-hero-name { color: #111; }
+.light-mode .creator-follow-btn { color: #fff; background: #111; }
+.light-mode .creator-hero-trust { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-hero-socials { color: rgba(0, 0, 0, 0.3); }
+.light-mode .creator-hero-socials svg:hover { color: rgba(0, 0, 0, 0.6); }
+.light-mode .creator-nav { border-bottom-color: rgba(0, 0, 0, 0.08); }
+.light-mode .creator-nav-tab { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-nav-tab:hover { color: rgba(0, 0, 0, 0.7); }
+.light-mode .creator-nav-tab.active { color: #111; border-bottom-color: #111; }
+.light-mode .creator-brand-chip {
+  color: rgba(0, 0, 0, 0.45);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light-mode .creator-brand-chip:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+  color: rgba(0, 0, 0, 0.7);
+}
+.light-mode .creator-brand-chip.active { background: #111; color: #fff; border-color: #111; }
+.light-mode .creator-product-card { background: #f7f7f7; }
+.light-mode .creator-product-card:hover { background: #efefef; }
+.light-mode .creator-product-placeholder { background: rgba(0, 0, 0, 0.04); }
+.light-mode .creator-product-brand { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-product-name { color: #222; }
+.light-mode .creator-product-price { color: #111; }
+.light-mode .creator-empty-state { color: rgba(0, 0, 0, 0.3); }
+.light-mode .creator-hero-avatar-edit-hint {
+  background: #111;
+  color: #fff;
+  border-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.light-mode .creator-nav-count { background: rgba(0, 0, 0, 0.08); color: rgba(0, 0, 0, 0.7); }
+.light-mode .creator-nav-tab.active .creator-nav-count { background: rgba(0, 0, 0, 0.85); color: #fff; }
+.light-mode .creator-skeleton-tile {
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+}
+.light-mode .creator-empty { color: rgba(0, 0, 0, 0.55); }
+.light-mode .creator-empty svg { color: rgba(0, 0, 0, 0.25); }
+.light-mode .creator-empty h2 { color: rgba(0, 0, 0, 0.85); }
