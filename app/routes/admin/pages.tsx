@@ -11,10 +11,12 @@ import { supabase } from '~/utils/supabase';
  *   - Product: ProductPage rail order
  *   - Looks:   LookOverlay panel order
  *
- * Consumer renderers don't read this table yet — the next phase will
- * wire ProductPage / LookOverlay to honour the persisted order +
- * enabled flags. For now this is the source of truth that the
- * editor + future consumer code agree on.
+ * Consumer renderers honour the enabled flags via usePageSections:
+ * ProductPage gates hero / similar / popular / you-might-also-like,
+ * and LookOverlay gates video / creator-chip / tabs / products /
+ * more-from-creator. Toggling a section off here hides that block on
+ * the consumer surface. (Drag order is persisted but not yet honoured
+ * by the renderers — they render in source order.)
  */
 
 type Tab = 'product' | 'looks';
