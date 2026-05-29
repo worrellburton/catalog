@@ -697,7 +697,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1592,7 +1592,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1945,7 +1945,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2981,7 +2981,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -3012,7 +3012,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -5311,6 +5311,56 @@ export default function AdminData() {
                                       }}>
                                         {`${Math.round(elapsedMs / 1000)}s / ~${Math.round(eta / 1000)}s`}
                                       </div>
+                                    </>
+                                  ) : (p as { primary_video_status?: string | null }).primary_video_status === 'pending' ? (
+                                    <>
+                                      {/* Async-submitted to fal queue; webhook
+                                          will write primary_video_url here when
+                                          Seedance finishes (~60-120s). The row
+                                          stays in this state until then. */}
+                                      <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                        Rendering · background
+                                      </div>
+                                      <div style={{
+                                        width: '88%', height: 6,
+                                        background: '#e2e8f0',
+                                        borderRadius: 999,
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                      }}>
+                                        <div style={{
+                                          position: 'absolute', inset: 0,
+                                          background: 'linear-gradient(90deg, transparent, #a78bfa, transparent)',
+                                          animation: 'admin-primary-video-shimmer 1.6s linear infinite',
+                                        }} />
+                                      </div>
+                                      <style>{`@keyframes admin-primary-video-shimmer {
+                                        0% { transform: translateX(-100%); }
+                                        100% { transform: translateX(100%); }
+                                      }`}</style>
+                                      <div style={{ fontSize: 10, color: '#64748b', textAlign: 'center', lineHeight: 1.35 }}>
+                                        Submitted to Seedance.<br />Webhook updates this tile when ready.
+                                      </div>
+                                    </>
+                                  ) : (p as { primary_video_status?: string | null }).primary_video_status === 'failed' ? (
+                                    <>
+                                      <div style={{ fontSize: 11, color: '#dc2626', textAlign: 'center', lineHeight: 1.3, fontWeight: 600 }}>
+                                        Last generation failed
+                                      </div>
+                                      {hasPrimaryImage && p.id && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); if (p.id) generatePrimaryVideo(p.id); }}
+                                          style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                                            padding: '7px 14px', borderRadius: 999, border: 'none',
+                                            background: '#7c3aed', color: '#fff', fontSize: 11,
+                                            fontWeight: 700, cursor: 'pointer',
+                                          }}
+                                        >
+                                          Retry
+                                        </button>
+                                      )}
                                     </>
                                   ) : (
                                     <>
