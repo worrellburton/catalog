@@ -1,13 +1,11 @@
 // generate-primary-video
 //
 // Generates a short cinematic-motion product video from a product's
-// primary_image_url using Google Veo 3.1 (fast tier) image-to-video
-// via fal.ai. The polished primary image is the first frame; Veo
-// extends it with subtle motion.
-//
-// Veo on fal supports aspect_ratio: 'auto' | '9:16' | '16:9' only.
-// We send 'auto' so Veo matches the source shape as closely as it can
-// (portrait sources land at 9:16). 3:4 isn't an option for this model.
+// primary_image_url using fal.ai Seedance 2.0 image-to-video. The
+// polished primary image is the first frame; Seedance extends it
+// with subtle motion at 3:4 portrait — the same aspect the Gemini
+// polish step outputs, so source and video shape align (no crop,
+// no letterbox).
 //
 // POST { product_id: string }
 // → 200 { success: true, video_url, source_image_url, duration_ms }
@@ -25,7 +23,12 @@ const CORS = {
 };
 
 const FAL_BASE_SYNC = 'https://fal.run';
-const VEO_SLUG = 'fal-ai/veo3.1/fast/image-to-video';
+// Seedance 2.0 i2v, standard tier — fal's registry slug for the
+// high-fidelity ("pro") image-to-video model. /fast/ is the cheaper,
+// lower-latency variant.
+const SEEDANCE_SLUG = 'bytedance/seedance-2.0/image-to-video';
+// Sync gateway holds the connection until the clip renders. Seedance 2.0
+// at 720p/5s routinely needs 60–100s; 180s gives headroom.
 const FAL_CALL_TIMEOUT_MS = 180_000;
 
 const PRIMARY_VIDEO_PROMPT_KEY = 'prompt_primary_video';
@@ -40,27 +43,27 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-async function callVeo(prompt: string, imageUrl: string, falKey: string): Promise<{ url: string | null; error: string | null }> {
+async function callSeedance(prompt: string, imageUrl: string, falKey: string): Promise<{ url: string | null; error: string | null }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FAL_CALL_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${FAL_BASE_SYNC}/${VEO_SLUG}`, {
+    res = await fetch(`${FAL_BASE_SYNC}/${SEEDANCE_SLUG}`, {
       method: 'POST',
       headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt,
-        // First frame. Veo i2v uses this image as frame 1, then
-        // synthesises motion from there.
+        // First frame. Seedance i2v uses this image as frame 1.
         image_url: imageUrl,
-        // Veo on fal accepts 'auto' | '9:16' | '16:9' only — 3:4 is
-        // not a documented option. 'auto' tracks the source shape so
-        // portrait sources land at 9:16.
-        aspect_ratio: 'auto',
-        // Veo 3.1 accepts '4s' | '6s' | '8s' as duration values.
-        duration: '8s',
+        // Seedance enum: auto | 21:9 | 16:9 | 4:3 | 1:1 | 3:4 | 9:16.
+        // 3:4 matches the polished primary image — source and output
+        // shape align so the video doesn't need to crop or extend.
+        aspect_ratio: '3:4',
         resolution: '720p',
-        // Mute the output and stop Veo adding speech to faces.
+        duration: '5',
+        // Seedance defaults generate_audio to true and will happily
+        // lip-sync any person in frame. A product packshot wants silent,
+        // subtle motion — disable audio outright.
         generate_audio: false,
       }),
       signal: ctrl.signal,
@@ -139,7 +142,7 @@ Deno.serve(async (req: Request) => {
   } catch { /* keep default */ }
 
   const t0 = Date.now();
-  const result = await callVeo(videoPrompt, sourceUrl, falKey);
+  const result = await callSeedance(videoPrompt, sourceUrl, falKey);
   const durationMs = Date.now() - t0;
   if (!result.url) return json({ success: false, error: result.error || 'video generation failed' });
 
