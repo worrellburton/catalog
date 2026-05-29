@@ -4524,15 +4524,15 @@ export default function AdminData() {
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {(() => {
-                      const allImages: string[] = (p.images && p.images.length > 0)
-                        ? p.images
-                        : (p.image_url ? [p.image_url] : []);
-                      const videoCount = p.video_urls.length;
-                      const photoCount = allImages.length;
-                      const firstThumb = videoCount > 0 ? p.video_urls[0] : (allImages[0] || null);
-                      const isGenerating = p.id && genJobs.has(p.id);
-                      // Progress bar takes over the cell while a generation job
-                      // is in flight so the admin sees live progress.
+                      const primaryVideoUrl   = (p as { primary_video_url?: string | null }).primary_video_url ?? null;
+                      const primaryImageUrl   = (p as { primary_image_url?: string | null }).primary_image_url ?? null;
+                      const primaryStatus     = (p as { primary_video_status?: string | null }).primary_video_status ?? null;
+                      const isGenerating      = p.id && genJobs.has(p.id);
+                      const isPending         = primaryStatus === 'pending';
+                      const hasFailed         = primaryStatus === 'failed';
+                      // Active inline progress bar from a bulk job in the
+                      // legacy creative pipeline — keep showing it so admins
+                      // can track those runs alongside primary-video runs.
                       if (isGenerating) {
                         const job = genJobs.get(p.id!)!;
                         const pct = Math.max(5, Math.round((job.done / job.total) * 100));
@@ -4553,8 +4553,8 @@ export default function AdminData() {
                           </div>
                         );
                       }
-                      // Nothing to preview + no cloud id → show the brand logo placeholder
-                      if (videoCount === 0 && photoCount === 0 && !p.id) {
+                      // No primary, no cloud id → brand logo placeholder.
+                      if (!primaryVideoUrl && !primaryImageUrl && !p.id) {
                         return (
                           <img
                             src={getBrandLogo(p.brand) || ''}
@@ -4564,18 +4564,31 @@ export default function AdminData() {
                           />
                         );
                       }
+                      // Status dot — green=done, amber pulse=pending, red=failed,
+                      // grey=not started. Pinned bottom-right of the thumb.
+                      const statusDot = primaryVideoUrl
+                        ? { color: '#22c55e', title: 'Primary video ready', pulse: false }
+                        : isPending
+                          ? { color: '#f59e0b', title: 'Rendering in background…', pulse: true }
+                          : hasFailed
+                            ? { color: '#ef4444', title: 'Last generation failed', pulse: false }
+                            : { color: '#cbd5e1', title: 'No primary video yet', pulse: false };
                       return (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // No video and no photo yet but we do have a cloud id → act as the Generate entry point.
-                            if (videoCount === 0 && photoCount === 0 && p.id) {
-                              setGeneratePicker({ productId: p.id, productName: p.name });
+                            // No primary content yet → if we have a cloud id,
+                            // act as the Generate entry point. Otherwise open
+                            // the detail row.
+                            if (!primaryVideoUrl && !primaryImageUrl && p.id) {
+                              if (p.id) generatePrimaryVideo(p.id);
                               return;
                             }
                             setOpenCreativeRow(detailOpen ? null : rowKey);
                           }}
-                          title={videoCount === 0 && photoCount === 0 ? 'Generate creative' : 'View all creative'}
+                          title={primaryVideoUrl
+                            ? 'Primary video — click to expand'
+                            : (isPending ? 'Rendering in background — webhook updates this when ready' : (hasFailed ? 'Last generation failed — click to expand and retry' : 'No primary video yet — click to generate'))}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 8,
                             padding: 4, border: `1px solid ${detailOpen ? '#3b82f6' : '#e5e7eb'}`,
@@ -4583,42 +4596,48 @@ export default function AdminData() {
                             borderRadius: 8, cursor: 'pointer',
                           }}
                         >
-                          <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', flexShrink: 0 }}>
-                            {firstThumb ? (
-                              videoCount > 0 ? (
-                                <video src={firstThumb} autoPlay muted loop playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : (
-                                <img src={firstThumb} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                              )
+                          <div style={{ position: 'relative', width: 30, height: 40, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', flexShrink: 0 }}>
+                            {primaryVideoUrl ? (
+                              <video
+                                src={primaryVideoUrl}
+                                poster={primaryImageUrl || undefined}
+                                autoPlay muted loop playsInline preload="metadata"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : primaryImageUrl ? (
+                              <img
+                                src={primaryImageUrl}
+                                alt={p.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isPending ? 'saturate(0.7) brightness(0.9)' : undefined }}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
                             ) : (
-                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
-                                {videoCount === 0 && photoCount === 0 ? '+' : ''}
-                              </div>
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#94a3b8', fontWeight: 600 }}>+</div>
                             )}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {isPending && (
+                              // Shimmering overlay while the webhook is pending.
+                              <div style={{
+                                position: 'absolute', inset: 0, pointerEvents: 'none',
+                                background: 'linear-gradient(90deg, transparent, rgba(245,158,11,0.32), transparent)',
+                                animation: 'admin-shimmer 1.4s infinite',
+                              }} />
+                            )}
                             <span
-                              title={`${videoCount} video${videoCount === 1 ? '' : 's'}`}
+                              aria-hidden="true"
+                              title={statusDot.title}
                               style={{
-                                minWidth: 22, padding: '1px 7px', height: 18,
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
-                                background: videoCount > 0 ? '#7c3aed' : '#cbd5e1',
+                                position: 'absolute', right: 2, bottom: 2,
+                                width: 8, height: 8, borderRadius: '50%',
+                                background: statusDot.color,
+                                border: '1.5px solid #fff',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                                animation: statusDot.pulse ? 'admin-status-dot-pulse 1.4s ease-in-out infinite' : undefined,
                               }}
-                            >
-                              {videoCount}
-                            </span>
-                            <span
-                              title={`${photoCount} photo${photoCount === 1 ? '' : 's'}`}
-                              style={{
-                                minWidth: 22, padding: '1px 7px', height: 18,
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                borderRadius: 999, fontSize: 10, fontWeight: 700, color: '#fff',
-                                background: photoCount > 0 ? '#059669' : '#cbd5e1',
-                              }}
-                            >
-                              {photoCount}
-                            </span>
+                            />
+                            <style>{`@keyframes admin-status-dot-pulse {
+                              0%, 100% { opacity: 1; transform: scale(1); }
+                              50%      { opacity: 0.55; transform: scale(0.85); }
+                            }`}</style>
                           </div>
                         </button>
                       );
