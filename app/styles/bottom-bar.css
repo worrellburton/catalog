@@ -58,61 +58,6 @@
   animation: none;
 }
 
-.bottom-search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
-  flex-shrink: 0;
-}
-.bottom-search-clear:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
-/* In-app submit button. Sits to the right of the clear button when
-   the input has content. Solid white pill so it reads as the
-   primary action - mirrors the keyboard's "Search" key without
-   making users reach for it. */
-.bottom-search-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  margin-left: 4px;
-  background: #fff;
-  color: #111;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-  flex-shrink: 0;
-}
-
-.bottom-search-submit:hover {
-  transform: translateY(-1px);
-}
-
-.bottom-search-submit:active {
-  transform: translateY(0);
-  opacity: 0.85;
-}
-
-.light-mode .bottom-search-submit {
-  background: #111;
-  color: #fff;
-}
-
 /* Spinner shown while nl-search is resolving */
 @keyframes search-spin {
   to { transform: rotate(360deg); }
@@ -768,17 +713,109 @@
 /* The input now lives inside .bottom-bar-inner.search-inline at all times,
    so we no longer hide/swap blocks when search opens. The bar just lifts +
    widens slightly to read as "actively in use" while suggestions are up. */
+/* When the search sheet is open the .bottom-bar becomes a transparent layout
+   shell (column): a grab-handle indicator on top, then a row holding the
+   search pill + a close button beside it (Apple-Maps style). The pill surface
+   moves onto .bottom-bar-inner so the close button reads as a separate
+   control rather than living inside the field. */
 .bottom-bar.search-open {
-  /* Sit above the suggestions track (z-index: 101) so scrolling text
-     never renders on top of the bar. Solid background blocks any
-     content that bleeds through from behind. */
   z-index: 102;
-  background: rgba(22, 22, 22, 0.96);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   bottom: 40px;
   width: 90%;
-  max-width: 520px;
-  border-radius: 20px;
+  max-width: 540px;
+  border-radius: 0;
   overflow: visible;
+  padding: 0;
+  gap: 8px;
+}
+
+/* Row wrapper: invisible to layout at rest (display:contents → single child
+   behaves as a direct child of .bottom-bar), a flex row [pill][close] when
+   the search sheet is open. */
+.bottom-bar-row { display: contents; }
+.bottom-bar.search-open .bottom-bar-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 10px;
+}
+
+/* The search pill — frosted glass pill matching the native iOS form-assistant
+   bar: semi-transparent dark fill, backdrop blur, fully pill-rounded, no border. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  background: rgba(36, 36, 38, 0.78);
+  border: none;
+  border-radius: 100px;
+  padding: 6px 10px;
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  box-shadow: none;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline {
+  background: rgba(220, 220, 225, 0.78);
+}
+
+/* Circular close button — same frosted glass treatment as the pill. */
+.bottom-search-close {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(36, 36, 38, 0.78);
+  color: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, transform 0.1s ease;
+}
+.bottom-search-close:active { background: rgba(58, 58, 62, 0.88); transform: scale(0.92); }
+.light-mode .bottom-search-close {
+  background: rgba(220, 220, 225, 0.78);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Grab-handle indicator on the search sheet — Apple-Maps-style pull tab,
+   centered above the pill. The drag-to-dismiss gesture itself lives on the
+   dimmed backdrop (BottomBar onSheetDrag*), so this is purely a visual cue. */
+.search-drag-handle { display: none; }
+html:not([data-shell="catalog-app"]) .bottom-bar.search-open .search-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 2px 0 4px;
+}
+.search-drag-handle-bar {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.5);
+}
+.light-mode .search-drag-handle-bar { background: rgba(0, 0, 0, 0.25); }
+
+/* Hide the home feed header (logo / following rail / avatar) while the
+   search sheet is open, so it doesn't bleed through behind the top-docked
+   bar. Fades rather than display:none to avoid a reflow flash. */
+html:has(.bottom-bar.search-open) header {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
 }
 
 .bottom-search-tagline {
@@ -1048,6 +1085,37 @@ body:has(.bottom-bar.search-open) {
   .bottom-bar.filters-open {
     top: 0;
     bottom: 0;
+  }
+
+  /* Outside the Flutter shell, the search input docks to the TOP while
+     active so it never collides with the on-screen keyboard — the keyboard
+     only ever eats the bottom of the screen, so a top-anchored bar sidesteps
+     the whole "lift above the keyboard" problem and the gap it left behind.
+     The suggestion column then cascades downward beneath it toward the
+     keyboard. Inside the shell the native header owns the top zone, so the
+     bar stays bottom-anchored (the rule above). */
+  html:not([data-shell="catalog-app"]) .bottom-bar.search-open {
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    bottom: auto;
+  }
+
+  html:not([data-shell="catalog-app"]) .search-suggestions {
+    /* Bind to the visible viewport so the column ends at the keyboard's top
+       edge instead of running behind it. On interactive-widget=resizes-content
+       browsers inset:0 already collapses to this; --vv-height (set live from
+       window.visualViewport in BottomBar) is the iOS-Safari fallback. */
+    bottom: auto;
+    height: var(--vv-height, 100%);
+    /* Reserve space for the top-docked bar instead of for a bottom bar:
+       safe-area + ~12px offset + ~52px bar height + ~20px grab handle +
+       breathing room. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
+    padding-bottom: 16px;
+    /* Fade in beneath the bar (top) and out at the keyboard (bottom). The
+       150px solid-start clears the bar + handle on notched devices so items
+       dissolve as they scroll up under it. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 150px, black 88%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, black 150px, black 88%, transparent 100%);
   }
 
   /* Auto-scroll (rAF) is now active on mobile too — no touch-scroll
