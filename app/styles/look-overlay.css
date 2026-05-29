@@ -446,7 +446,10 @@
 
 .look-creator-more-scroll {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 3-up mosaic of smaller look thumbnails in the right info column —
+     denser than the old 2-up so "more from this creator" reads as a
+     compact gallery beside the look rather than big cards. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
   background: #111;
 }

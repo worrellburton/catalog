@@ -92,7 +92,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
   const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
-  const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 8);
+  // Default 9 → a clean 3×3 mosaic in the right column (admin can override).
+  const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 9);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
