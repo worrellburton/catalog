@@ -1,21 +1,19 @@
 // generate-primary-video
 //
 // Generates a short cinematic-motion product video from a product's
-// primary_image_url. Uses fal.ai Seedance 2.0 (standard/pro tier)
-// image-to-video, which is high-fidelity and ideal for "static shot
-// with subtle motion" of a single SKU. Aspect ratio is forced to 3:4
-// (closest portrait enum to 4:5) to match the admin detail-row video
-// tile shape.
+// primary_image_url using Google Veo 3.1 (fast tier) image-to-video
+// via fal.ai. The polished primary image is the first frame; Veo
+// extends it with subtle motion.
+//
+// Veo on fal supports aspect_ratio: 'auto' | '9:16' | '16:9' only.
+// We send 'auto' so Veo matches the source shape as closely as it can
+// (portrait sources land at 9:16). 3:4 isn't an option for this model.
 //
 // POST { product_id: string }
-// → 200 { success: true, video_url, source_image_url }
+// → 200 { success: true, video_url, source_image_url, duration_ms }
 //   or { success: false, error }
 //
-// Auth: admin JWT or service-role JWT (same pattern as
-// pick-primary-image / polish-primary-image — role claim decoded
-// out of the JWT payload so trigger-driven service-role calls
-// can't be denied by a byte-equality mismatch against the function's
-// env var).
+// Auth: admin JWT or service-role JWT (role claim decoded from JWT).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -27,84 +25,55 @@ const CORS = {
 };
 
 const FAL_BASE_SYNC = 'https://fal.run';
-// Seedance 2.0 i2v, standard tier — fal's registry slug for the
-// high-fidelity ("pro") image-to-video model. The standard tier IS
-// the high-quality one (it's the only tier with 1080p); `/fast/` is
-// the cheaper, lower-latency variant. There is no `/pro/` segment —
-// an earlier `fal-ai/bytedance/seedance/v2/pro/image-to-video` slug
-// 404'd because that path doesn't exist in fal's registry. The i2v
-// endpoint uses the supplied image_url as the first frame by default.
-const SEEDANCE_SLUG = 'bytedance/seedance-2.0/image-to-video';
-// Sync gateway holds the connection until the clip renders; Seedance
-// 2.0 at 720p/5s routinely needs 60–100s, so give it real headroom.
-const FAL_CALL_TIMEOUT_MS = 120_000;
+const VEO_SLUG = 'fal-ai/veo3.1/fast/image-to-video';
+const FAL_CALL_TIMEOUT_MS = 180_000;
 
-// Always anchor the result to the supplied image (first frame) +
-// keep the product centred with subtle cinematic motion. The
-// "no talking" clause is a hard constraint — image-to-video models
-// otherwise love to lip-sync any face in the frame, which is the
-// wrong vibe for a product packshot.
-//
-// Admin-editable via the Data → Settings modal, stored in app_settings
-// under PRIMARY_VIDEO_PROMPT_KEY; this inline string is the fallback.
-// Keep in sync with app/constants/ai-prompts.ts
-// (DEFAULT_PRIMARY_VIDEO_PROMPT).
 const PRIMARY_VIDEO_PROMPT_KEY = 'prompt_primary_video';
 const DEFAULT_PRIMARY_VIDEO_PROMPT = [
   'Use this exact image as the first frame.',
   'Static shot, show subtle cinematic motion of the product.',
   'If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips.',
-  'Make it 4:5.',
+  'Portrait composition.',
 ].join(' ');
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-async function callSeedance(prompt: string, imageUrl: string, falKey: string): Promise<{ url: string | null; error: string | null }> {
+async function callVeo(prompt: string, imageUrl: string, falKey: string): Promise<{ url: string | null; error: string | null }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FAL_CALL_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${FAL_BASE_SYNC}/${SEEDANCE_SLUG}`, {
+    res = await fetch(`${FAL_BASE_SYNC}/${VEO_SLUG}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Key ${falKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt,
+        // First frame. Veo i2v uses this image as frame 1, then
+        // synthesises motion from there.
         image_url: imageUrl,
-        // Closest portrait ratio fal supports; 4:5 isn't a documented
-        // enum value, 3:4 is. Renders well in the admin 4:5 tile via
-        // objectFit: contain. The prompt also asks for 4:5 so the
-        // composition leans towards it.
-        aspect_ratio: '3:4',
+        // Veo on fal accepts 'auto' | '9:16' | '16:9' only — 3:4 is
+        // not a documented option. 'auto' tracks the source shape so
+        // portrait sources land at 9:16.
+        aspect_ratio: 'auto',
+        // Veo 3.1 accepts '4s' | '6s' | '8s' as duration values.
+        duration: '8s',
         resolution: '720p',
-        duration: '5',
-        // Seedance 2.0 defaults generate_audio to true and will happily
-        // lip-sync / add speech to any person in frame. A product packshot
-        // wants silent, subtle motion, so disable audio outright — this
-        // enforces the prompt's "no talking" constraint at the API level.
+        // Mute the output and stop Veo adding speech to faces.
         generate_audio: false,
       }),
       signal: ctrl.signal,
     });
   } catch (err) {
     clearTimeout(timer);
-    if ((err as { name?: string })?.name === 'AbortError') {
-      return { url: null, error: `timeout_${FAL_CALL_TIMEOUT_MS}ms` };
-    }
+    if ((err as { name?: string })?.name === 'AbortError') return { url: null, error: `timeout_${FAL_CALL_TIMEOUT_MS}ms` };
     return { url: null, error: `network_error:${String(err).slice(0, 200)}` };
   }
   clearTimeout(timer);
   const text = await res.text().catch(() => '');
-  if (!res.ok) {
-    return { url: null, error: `fal_${res.status}:${text.slice(0, 300)}` };
-  }
+  if (!res.ok) return { url: null, error: `fal_${res.status}:${text.slice(0, 300)}` };
+
   let parsed: { video?: { url?: string } };
   try { parsed = JSON.parse(text) as typeof parsed; } catch { return { url: null, error: 'fal_bad_json' }; }
   const url = parsed.video?.url;
@@ -144,9 +113,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let body: { product_id?: string };
-  try { body = await req.json(); }
-  catch { return json({ success: false, error: 'JSON body required' }); }
-
+  try { body = await req.json(); } catch { return json({ success: false, error: 'JSON body required' }); }
   const productId = body.product_id;
   if (!productId) return json({ success: false, error: 'product_id required' });
 
@@ -163,8 +130,6 @@ Deno.serve(async (req: Request) => {
 
   const sourceUrl = product.primary_image_url;
 
-  // Admin-editable prompt override (Data → Settings). Falls back to the
-  // inline default when the app_settings row is missing or blank.
   let videoPrompt = DEFAULT_PRIMARY_VIDEO_PROMPT;
   try {
     const { data: setting } = await admin
@@ -174,7 +139,7 @@ Deno.serve(async (req: Request) => {
   } catch { /* keep default */ }
 
   const t0 = Date.now();
-  const result = await callSeedance(videoPrompt, sourceUrl, falKey);
+  const result = await callVeo(videoPrompt, sourceUrl, falKey);
   const durationMs = Date.now() - t0;
   if (!result.url) return json({ success: false, error: result.error || 'video generation failed' });
 
@@ -186,10 +151,5 @@ Deno.serve(async (req: Request) => {
   }).eq('id', productId);
   if (updateErr) return json({ success: false, error: updateErr.message });
 
-  return json({
-    success: true,
-    video_url: result.url,
-    source_image_url: sourceUrl,
-    duration_ms: durationMs,
-  });
+  return json({ success: true, video_url: result.url, source_image_url: sourceUrl, duration_ms: durationMs });
 });
