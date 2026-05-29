@@ -2427,7 +2427,7 @@ export default function AdminData() {
       kind: 'primary-video',
       label,
       context: ctxStr,
-      model: 'veo-3.1-fast',
+      model: 'seedance-2.0',
       thumbnailUrl: product?.primary_image_url || product?.image_url || null,
     });
     try {
