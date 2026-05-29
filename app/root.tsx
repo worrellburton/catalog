@@ -172,7 +172,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 (function(){
   try{
     if(typeof localStorage==='undefined'||typeof document==='undefined')return;
-    var ks=['catalog:home-feed-cache:v7','catalog:home-feed-cache:v7:male','catalog:home-feed-cache:v7:female'];
+    var ks=['catalog:home-feed-cache:v8','catalog:home-feed-cache:v8:male','catalog:home-feed-cache:v8:female'];
     var best=null;
     for(var i=0;i<ks.length;i++){
       var raw=localStorage.getItem(ks[i]);
