@@ -115,9 +115,44 @@ Deno.serve(async (req: Request) => {
 
   if (lookupErr) return jsonRes({ error: lookupErr.message }, 500);
   if (!gen) {
-    // Either the row was deleted or we never recorded the request_id.
-    // 200 to stop Fal retries — there's nothing for us to do.
-    return jsonRes({ acknowledged: true, matched: false });
+    // Not a user_generation row — try products.primary_video_request_id
+    // (async primary-video pipeline: generate-primary-video submits to
+    // queue.fal.run, fal posts back here when the clip is ready).
+    const { data: productRow } = await admin
+      .from('products')
+      .select('id, primary_video_status, primary_video_source_image_url')
+      .eq('primary_video_request_id', requestId)
+      .maybeSingle();
+    if (!productRow) {
+      // Neither table claims this request_id — 200 to stop Fal retries.
+      return jsonRes({ acknowledged: true, matched: false });
+    }
+    if (productRow.primary_video_status === 'done' || productRow.primary_video_status === 'failed') {
+      return jsonRes({ acknowledged: true, already: productRow.primary_video_status });
+    }
+    const okP = body.status === 'OK';
+    const videoUrlP = body.payload?.video?.url || body.payload?.videos?.[0]?.url || null;
+    let prodUpdate: Record<string, unknown>;
+    if (okP && videoUrlP) {
+      prodUpdate = {
+        primary_video_url:           videoUrlP,
+        primary_video_status:        'done',
+        primary_video_generated_at:  new Date().toISOString(),
+        // Re-affirm the source so a UI-side viewer knows which image
+        // animated; safe if it was already set.
+        primary_video_source_image_url: productRow.primary_video_source_image_url,
+      };
+    } else {
+      prodUpdate = {
+        primary_video_status: 'failed',
+      };
+      try {
+        console.error('[fal-webhook] primary-video failed request_id=', requestId, extractError(body));
+      } catch { /* noop */ }
+    }
+    const { error: prodErr } = await admin.from('products').update(prodUpdate).eq('id', productRow.id);
+    if (prodErr) return jsonRes({ error: prodErr.message }, 500);
+    return jsonRes({ acknowledged: true, product_id: productRow.id, status: prodUpdate.primary_video_status });
   }
 
   // Idempotency: a Fal retry can land after we've already written the

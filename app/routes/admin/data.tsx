@@ -45,6 +45,13 @@ interface CrawledProduct {
    *  primary_image_url via generate-primary-video. Rendered in the
    *  detail-row "Primary Video" tile; null rows get a Generate CTA. */
   primary_video_url?: string | null;
+  /** Async pipeline state: 'pending' (submitted to fal queue, waiting
+   *  on webhook), 'done' (webhook landed with primary_video_url),
+   *  'failed' (webhook landed with error). Null = never started. */
+  primary_video_status?: 'pending' | 'done' | 'failed' | null;
+  /** Fal request id used by fal-webhook to match the inbound callback
+   *  back to this product row. */
+  primary_video_request_id?: string | null;
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
@@ -2449,23 +2456,25 @@ export default function AdminData() {
         showToast(`Primary video generation failed: ${msg}`);
         return;
       }
-      const videoUrl = data.video_url as string | undefined;
-      if (videoUrl) {
-        setCrawledProducts(prev => prev.map(pp =>
-          pp.id === productId
-            ? ({ ...pp, primary_video_url: videoUrl } as CrawledProduct)
-            : pp,
-        ));
-      }
-      // Roll the freshly-observed duration into the legacy local EMA
-      // (still used by the inline tile progress bar) AND into the
-      // global queue's per-kind average.
-      const observedMs = (data as { duration_ms?: number })?.duration_ms;
-      if (typeof observedMs === 'number' && observedMs > 0) {
-        setAvgPrimaryVideoDurationMs(prev => Math.round(prev * 0.6 + observedMs * 0.4));
-      }
-      queueJob.finish(observedMs, 'Generated');
-      showToast('Primary video generated');
+      // Async pipeline: the edge fn returns in <2s with status='pending'
+      // and a request_id. Fal posts the finished clip to fal-webhook,
+      // which writes primary_video_url to the product row. The realtime
+      // subscription on products (see useEffect below) picks that up
+      // and updates the local crawledProducts state — no polling here.
+      // We finish the queue job as "Submitted" so the panel clears it
+      // promptly while the upstream render continues in the background.
+      const requestId = (data as { request_id?: string })?.request_id;
+      setCrawledProducts(prev => prev.map(pp =>
+        pp.id === productId
+          ? ({
+              ...pp,
+              primary_video_status: 'pending',
+              primary_video_request_id: requestId ?? null,
+            } as CrawledProduct)
+          : pp,
+      ));
+      queueJob.finish(undefined, 'Submitted · running in background');
+      showToast('Primary video submitted — renders in background (~60–120s)');
     } catch (err) {
       const msg = (err as Error).message || 'unknown';
       queueJob.fail(msg);
