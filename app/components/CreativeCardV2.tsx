@@ -136,8 +136,16 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // that ISN'T backed by a look (creative.look_id is null/undefined)
   // renders as the still product image. Looks keep video playback.
   const productsImageOnly = useProductsImageOnly();
-  const forceStillForProduct = !isLook && !!productsImageOnly && !!creative && !creative.look_id && !!stillImageUrl;
-  const renderAsStill = forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl);
+  // Product cards backed by a polished primary video AUTOPLAY — they
+  // override the still-vs-video dials. The primary image is the video's
+  // first frame, so the poster→video swap is invisible (no jump). Other
+  // product cards (looks with no primary video, no playableUrl) still
+  // honour the dials.
+  const hasPrimaryVideo = !isLook && !!creative?.product?.primary_video_url;
+  const forceStillForProduct = !hasPrimaryVideo && !isLook && !!productsImageOnly && !!creative && !creative.look_id && !!stillImageUrl;
+  const renderAsStill = hasPrimaryVideo
+    ? false
+    : (forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl));
 
   // Hover-to-play: when in still mode, a mouseenter activates video for
   // this card. Stays active for the session — no revert on mouseleave.

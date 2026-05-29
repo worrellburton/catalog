@@ -291,8 +291,28 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // product feed is short.
   while (li < looksAds.length) merged.push(looksAds[li++]);
 
-  if (opts.ignoreGender) return merged;
-  return merged.filter(ad =>
+  // Final dedup pass — never show the same look (or same product)
+  // twice in a single feed catalog. Same look_id collapses to the
+  // first occurrence regardless of whether a look-tile and a product-
+  // tile both reference it; same product_id collapses to the first
+  // occurrence. Keeps order stable (first-wins).
+  const seenLook = new Set<string>();
+  const seenProd = new Set<string>();
+  const uniqMerged: ProductAd[] = [];
+  for (const ad of merged) {
+    if (ad.look_id) {
+      if (seenLook.has(ad.look_id)) continue;
+      seenLook.add(ad.look_id);
+    }
+    if (ad.product_id) {
+      if (seenProd.has(ad.product_id)) continue;
+      seenProd.add(ad.product_id);
+    }
+    uniqMerged.push(ad);
+  }
+
+  if (opts.ignoreGender) return uniqMerged;
+  return uniqMerged.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );
 }
