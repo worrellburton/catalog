@@ -38,11 +38,17 @@ const SEEDANCE_SLUG = 'bytedance/seedance-2.0/image-to-video';
 const FAL_SUBMIT_TIMEOUT_MS = 15_000;
 
 const PRIMARY_VIDEO_PROMPT_KEY = 'prompt_primary_video';
+// Camera-lock language is explicit — without it Seedance interprets
+// "subtle cinematic motion" as a slow zoom-in, and the later frames of
+// the loop crop into the subject's face / chest, breaking the catalog
+// tile. Keep the framing identical from frame 1 to frame N.
 const DEFAULT_PRIMARY_VIDEO_PROMPT = [
-  'Use this exact image as the first frame.',
-  'Static shot, show subtle cinematic motion of the product.',
+  'Use this exact image as the first frame, do not change the framing.',
+  'Locked-off camera — no zoom, no pan, no tilt, no dolly, no rotation, no parallax.',
+  'The camera stays perfectly still. Only the product itself moves: gentle fabric drape, soft breeze in the fabric, the subject breathes naturally.',
+  'Keep the product the same size in every frame.',
   'If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips.',
-  'Portrait composition.',
+  'Portrait 3:4 composition.',
 ].join(' ');
 
 function json(body: unknown, status = 200): Response {
