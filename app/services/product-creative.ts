@@ -181,63 +181,94 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promise<ProductAd[]> {
   if (!supabase) return [];
-  // Visibility contract:
-  //   1. status='live' on the creative + a real video_url (must have
-  //      something to play - the consumer feed is a video grid).
-  //   2. The product's Home toggle is on (products.is_active=true).
-  //   3. The shopper-gender filter (post-fetch).
+  // Visibility contract (product tiles):
+  //   1. products.is_active = true   (the admin's "Home" toggle)
+  //   2. products.primary_video_url IS NOT NULL  (the polished i2v clip
+  //      we generate per-SKU — the consumer feed renders products as
+  //      that video; no primary video → no tile, no fallback)
+  //   3. shopper-gender filter (post-fetch)
   //
-  // Note: we do NOT gate on product.type. The Home toggle is the
-  // admin's explicit "yes, show this" - if a product is flipped on,
-  // we trust them, even when the type column hasn't been audited.
-  // The risk is occasionally surfacing non-fashion items (the Dune
-  // book, a houseplant) that sneaked through the scrape, but admins
-  // can untoggle anything that doesn't belong.
+  // Note: the legacy product_creative table is no longer consulted on
+  // the consumer path. It still exists for the admin /admin/data
+  // Creatives column, but ads in there are no longer rendered to
+  // shoppers. One product = one tile.
   //
-  // is_elite sorts after boost so admin-flagged "really nice"
-  // creatives lead the grid without being a hard gate.
+  // is_elite leads so admin-flagged "really nice" SKUs surface first;
+  // within each tier, newest primary_video first so the freshest
+  // content lands on top of the grid.
   const { data, error } = await supabase
-    .from('product_creative')
-    .select(`
-      *,
-      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, images, url, type, catalog_tags, is_active, is_elite, gender)
-    `)
-    .eq('status', 'live')
-    .eq('product.is_active', true)
-    .not('video_url', 'is', null)
-    .order('boosted_until', { ascending: false, nullsFirst: false })
-    .order('is_elite',      { ascending: false, nullsFirst: false })
-    .order('created_at',    { ascending: false });
+    .from('products')
+    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at')
+    .eq('is_active', true)
+    .not('primary_video_url', 'is', null)
+    .order('is_elite',                  { ascending: false, nullsFirst: false })
+    .order('primary_video_generated_at',{ ascending: false, nullsFirst: false })
+    .order('created_at',                { ascending: false });
   if (error) {
     console.error('[getHomeFeed] query error:', error.message);
     return [];
   }
-  const rows = (data || []) as ProductAd[];
-  // Hard rule: product creatives (look_id null) must have a
-  // product.primary_video_url to appear on the feed. The feed renders
-  // products as the polished primary video — no primary video → no
-  // tile. Look creatives (look_id non-null) are unaffected; they still
-  // surface via their own video.
-  const filtered = rows.filter(ad => {
-    if (ad.look_id) return true;
-    return !!ad.product?.primary_video_url;
-  });
-  // Dedupe by product_id so the same product never appears twice in
-  // the same pass. Multiple status='live' creatives per product
-  // (admins iterating on copy / generation params) used to render as
-  // separate tiles, so a feed of 3 products with 2 live creatives
-  // each looked like a 6-tile grid with the same plant repeated.
-  // The query is already sorted by boost > elite > newest, so the
-  // first row per product is the strongest creative; we keep that
-  // and drop the rest.
-  const seen = new Set<string>();
-  const deduped: ProductAd[] = [];
-  for (const ad of filtered) {
-    const key = ad.product_id || ad.id;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(ad);
-  }
+  type ProductRow = {
+    id: string;
+    name: string | null; brand: string | null; price: string | null;
+    image_url: string | null; primary_image_url: string | null;
+    primary_video_url: string | null;
+    primary_video_generated_at: string | null;
+    images: string[] | null; url: string | null;
+    type: string | null; catalog_tags: string[] | null;
+    is_active: boolean; is_elite: boolean | null;
+    gender: string | null; created_at: string;
+  };
+  const products = (data || []) as ProductRow[];
+  // Synthesize ProductAd rows so the renderer doesn't need to know we
+  // changed source tables. Each product becomes one tile: id = product
+  // id (so dedup-by-id continues to work), video_url + thumbnail_url
+  // point at the primary video + image, the joined product object
+  // carries the same field set the renderer already reads.
+  const deduped: ProductAd[] = products.map((p): ProductAd => ({
+    id:                p.id,
+    product_id:        p.id,
+    look_id:           null,
+    title:             p.name,
+    description:       null,
+    video_url:         p.primary_video_url,
+    mobile_video_url:  null,
+    storage_path:      null,
+    thumbnail_url:     p.primary_image_url,
+    affiliate_url:     null,
+    prompt:            null,
+    prompt_extra:      null,
+    style:             '',
+    model:             null,
+    status:            'live',
+    duration_seconds:  null,
+    aspect_ratio:      '3:4',
+    resolution:        null,
+    cost_usd:          null,
+    impressions:       0,
+    clicks:            0,
+    error:             null,
+    enabled:           true,
+    is_elite:          p.is_elite ?? undefined,
+    created_at:        p.primary_video_generated_at ?? p.created_at,
+    completed_at:      p.primary_video_generated_at,
+    updated_at:        null,
+    product: {
+      id:                p.id,
+      name:              p.name,
+      brand:             p.brand,
+      price:             p.price,
+      image_url:         p.image_url,
+      primary_image_url: p.primary_image_url,
+      primary_video_url: p.primary_video_url,
+      images:            p.images,
+      url:               p.url,
+      type:              p.type,
+      catalog_tags:      p.catalog_tags,
+      gender:            p.gender,
+      is_elite:          p.is_elite ?? undefined,
+    },
+  }));
   // Looks that admin tagged with catalog_tags=['home'] should also
   // render in the home feed — they're a separate content type, but
   // the consumer grid is a video grid, so we fabricate ProductAd
@@ -362,7 +393,10 @@ const HOME_FEED_TTL_MS = 60_000;
 // whenever the feed-shape contract changes or whenever stale caches
 // start surfacing content that should have been pulled (e.g. after a
 // mass admin Home-toggle flip).
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v7';
+// v8: feed now sourced from products table directly (one product = one
+// tile via primary_video_url), not product_creative. Old v7 cache rows
+// keyed on creative ids, so bump the version to evict them cleanly.
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v8';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
