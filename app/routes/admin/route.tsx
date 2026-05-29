@@ -11,7 +11,6 @@ import { AdminConfirmProvider } from '~/components/AdminConfirm';
 // imported from the global root.tsx where every consumer page paid the
 // 2.8k-line CSS cost.
 import '~/styles/admin.css';
-import '~/styles/admin-mobile.css';
 
 interface NavItem {
   to: string;
@@ -141,38 +140,6 @@ interface GenNotification {
 const ESTIMATED_GEN_SECONDS = 150;
 const STUCK_THRESHOLD_SECONDS = 300;
 const ESTIMATED_COST_USD = 0.06;
-
-/* Bottom tab bar — five most-used admin routes pinned at the bottom of
-   the viewport on mobile. Plain NavLinks so prefetch + active styling
-   come free. Drawer stays accessible via the hamburger for everything
-   else (settings, admin tools, deck, etc.). */
-function AdminMobileTabBar() {
-  const tabs = [
-    { to: '/admin/data',      label: 'Data',      d: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10' },
-    { to: '/admin/catalogs',  label: 'Catalogs',  d: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z' },
-    { to: '/admin/analytics', label: 'Insights',  d: 'M3 3v18h18M7 14l4-4 4 4 5-7' },
-    { to: '/admin/activities',label: 'Activity',  d: 'M22 12h-4l-3 9L9 3l-3 9H2' },
-    { to: '/admin',           label: 'More',      d: 'M5 12h.01M12 12h.01M19 12h.01' },
-  ];
-  return (
-    <nav className="admin-mobile-tabbar" role="tablist" aria-label="Admin sections">
-      {tabs.map(t => (
-        <NavLink
-          key={t.to}
-          to={t.to}
-          end={t.to === '/admin'}
-          prefetch="intent"
-          className={({ isActive }) => `admin-mobile-tab${isActive ? ' is-active' : ''}`}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d={t.d} />
-          </svg>
-          <span>{t.label}</span>
-        </NavLink>
-      ))}
-    </nav>
-  );
-}
 
 function formatElapsed(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -964,10 +931,6 @@ export default function AdminLayout() {
         </div>
         <Outlet />
       </main>
-      {/* Mobile-only bottom tab bar. Shows the five most-used admin
-          routes — a real app-shell affordance so the drawer isn't the
-          only way to navigate on a phone. Hidden ≥ 769 px via CSS. */}
-      <AdminMobileTabBar />
     </div>
     </AdminConfirmProvider>
   );
