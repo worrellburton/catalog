@@ -17,6 +17,7 @@ import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
 import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
+import { startGenerationJob } from '~/services/generation-queue';
 import { useAdminConfirm } from '~/components/AdminConfirm';
 import { generateAndStorePoster } from '~/utils/video-poster';
 
@@ -2355,12 +2356,25 @@ export default function AdminData() {
       next.add(productId);
       return next;
     });
+    // Publish to the global Generation Queue so the floating panel
+    // shows the progress bar regardless of which page is on screen.
+    const product = crawledProducts.find(pp => pp.id === productId);
+    const label = product?.name ? `Polish · ${product.name.slice(0, 40)}` : 'Polish primary image';
+    const ctxStr = [product?.brand, product?.type].filter(Boolean).join(' · ') || undefined;
+    const queueJob = startGenerationJob({
+      kind: 'polish',
+      label,
+      context: ctxStr,
+      thumbnailUrl: product?.primary_image_url || product?.image_url || null,
+    });
     try {
       const { data, error } = await supabase.functions.invoke('polish-primary-image', {
         body: { product_id: productId },
       });
       if (error || !data?.success) {
-        showToast(`Polish failed: ${data?.error || error?.message || 'unknown'}`);
+        const msg = data?.error || error?.message || 'unknown';
+        queueJob.fail(msg);
+        showToast(`Polish failed: ${msg}`);
         return;
       }
       // Reflect the new primary URL + polished flag locally so the UI
@@ -2377,9 +2391,12 @@ export default function AdminData() {
             : pp,
         ));
       }
+      queueJob.finish((data as { duration_ms?: number })?.duration_ms, 'Polished');
       showToast('Primary image polished');
     } catch (err) {
-      showToast(`Polish failed: ${(err as Error).message || 'unknown'}`);
+      const msg = (err as Error).message || 'unknown';
+      queueJob.fail(msg);
+      showToast(`Polish failed: ${msg}`);
     } finally {
       setPolishingIds(prev => {
         const next = new Set(prev);
@@ -2387,7 +2404,7 @@ export default function AdminData() {
         return next;
       });
     }
-  }, [showToast]);
+  }, [showToast, crawledProducts]);
 
   const generatePrimaryVideo = useCallback(async (productId: string) => {
     if (!supabase) return;
@@ -2402,12 +2419,23 @@ export default function AdminData() {
       next.set(productId, Date.now());
       return next;
     });
+    const product = crawledProducts.find(pp => pp.id === productId);
+    const label = product?.name ? `Primary video · ${product.name.slice(0, 40)}` : 'Generate primary video';
+    const ctxStr = [product?.brand, product?.type].filter(Boolean).join(' · ') || undefined;
+    const queueJob = startGenerationJob({
+      kind: 'primary-video',
+      label,
+      context: ctxStr,
+      thumbnailUrl: product?.primary_image_url || product?.image_url || null,
+    });
     try {
       const { data, error } = await supabase.functions.invoke('generate-primary-video', {
         body: { product_id: productId },
       });
       if (error || !data?.success) {
-        showToast(`Primary video generation failed: ${data?.error || error?.message || 'unknown'}`);
+        const msg = data?.error || error?.message || 'unknown';
+        queueJob.fail(msg);
+        showToast(`Primary video generation failed: ${msg}`);
         return;
       }
       const videoUrl = data.video_url as string | undefined;
@@ -2418,16 +2446,19 @@ export default function AdminData() {
             : pp,
         ));
       }
-      // Roll the freshly-observed duration into the running estimate
-      // so the next bar fills against current reality. EMA with
-      // alpha=0.4 — recent runs weigh more without thrashing.
+      // Roll the freshly-observed duration into the legacy local EMA
+      // (still used by the inline tile progress bar) AND into the
+      // global queue's per-kind average.
       const observedMs = (data as { duration_ms?: number })?.duration_ms;
       if (typeof observedMs === 'number' && observedMs > 0) {
         setAvgPrimaryVideoDurationMs(prev => Math.round(prev * 0.6 + observedMs * 0.4));
       }
+      queueJob.finish(observedMs, 'Generated');
       showToast('Primary video generated');
     } catch (err) {
-      showToast(`Primary video generation failed: ${(err as Error).message || 'unknown'}`);
+      const msg = (err as Error).message || 'unknown';
+      queueJob.fail(msg);
+      showToast(`Primary video generation failed: ${msg}`);
     } finally {
       setGeneratingPrimaryVideoIds(prev => {
         const next = new Set(prev);
@@ -2440,7 +2471,7 @@ export default function AdminData() {
         return next;
       });
     }
-  }, [showToast]);
+  }, [showToast, crawledProducts]);
 
   // Fetch the rolling-average ETA once. Empty pool → keep the 30s
   // default; a single past run is already meaningful so n=1 is fine.
