@@ -62,7 +62,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             covers the standard pinch-zoom path; the touch-action +
             JS guard below catches Safari's iOS-10+ override that
             ignores user-scalable. */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        {/* interactive-widget=resizes-content: when the on-screen keyboard
+            opens, shrink the LAYOUT viewport (not just the visual one) so
+            position:fixed inset:0 overlays, vh/% units, and env(safe-area)
+            collapse to the visible area above the keyboard. Removes most of
+            the visual-viewport gap/shrink hacks on supporting browsers;
+            iOS Safari still falls back to the visualViewport JS in BottomBar. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
         <title>catalog</title>
         <meta
           name="description"

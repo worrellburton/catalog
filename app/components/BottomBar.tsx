@@ -32,6 +32,21 @@ function BottomBar({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
+  // Drag-to-close: the top-docked search sheet can be pulled UP to dismiss,
+  // with a grab-handle indicator (Apple-Maps-style sheet feel). dragOffset
+  // tracks the live finger delta; dragging disables the snap transition so
+  // the sheet follows the finger 1:1.
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartY = useRef<number | null>(null);
+  // Mirror of the live drag offset. touchend must read the latest value, but
+  // a state-closure can be stale (React batches updates across the gesture),
+  // so the ref is the source of truth for the close decision.
+  const dragOffsetRef = useRef(0);
+  // Set true by the dismiss paths (drag, backdrop, Escape, submit) so the
+  // input's onBlur doesn't fire an unintended search when the sheet is
+  // closing rather than the user pressing the keyboard's Done/tick.
+  const dismissingRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
@@ -55,6 +70,11 @@ function BottomBar({
     const update = () => {
       const offset = window.innerHeight - vv.height - vv.offsetTop;
       root.style.setProperty('--ios-bottom-chrome', `${Math.max(offset, 0)}px`);
+      // Visible viewport height (full screen minus keyboard + browser
+      // chrome). On iOS Safari, where interactive-widget isn't honored,
+      // the search overlay binds its height to this so the suggestion
+      // column ends at the keyboard's top edge instead of running behind it.
+      root.style.setProperty('--vv-height', `${Math.round(vv.height)}px`);
     };
     update();
     vv.addEventListener('resize', update);
@@ -129,14 +149,67 @@ function BottomBar({
   const openSearch = useCallback(() => {
     setSearchOpen(true);
     setFiltersOpen(false);
+    dismissingRef.current = false;
     setTimeout(() => searchInputRef.current?.focus(), 100);
   }, []);
 
   const closeSearch = useCallback(() => {
+    dismissingRef.current = true;
     setSearchOpen(false);
+    setDragOffset(0);
     if (!searchQuery) setLocalSearch('');
     searchInputRef.current?.blur();
   }, [searchQuery]);
+
+  // Keep the layout scrolled to the top while the search sheet is open. On
+  // iOS Safari, focusing the input (originally at the bottom of the feed)
+  // makes Safari scroll the field into view there; the bar then docks to the
+  // TOP, but the viewport stays scrolled, pushing the docked bar off-screen
+  // on the first open. Resetting scroll on every visualViewport change keeps
+  // the top-docked bar visible. The body is already overflow:locked, so this
+  // only undoes the keyboard's focus-scroll — there's nothing else to scroll.
+  useEffect(() => {
+    if (!searchOpen || typeof window === 'undefined') return;
+    const reset = () => window.scrollTo(0, 0);
+    reset();
+    const vv = window.visualViewport;
+    vv?.addEventListener('scroll', reset);
+    vv?.addEventListener('resize', reset);
+    const t1 = window.setTimeout(reset, 100);
+    const t2 = window.setTimeout(reset, 300);
+    return () => {
+      vv?.removeEventListener('scroll', reset);
+      vv?.removeEventListener('resize', reset);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [searchOpen]);
+
+  // Swipe-to-dismiss on the dimmed backdrop (the area behind the suggestion
+  // column), not on the bar itself. Dragging DOWN past a threshold closes the
+  // sheet; an upward pull is rubber-banded. The whole top sheet (handle + pill
+  // + close button) translates with the finger for feedback, while the dim and
+  // the auto-scrolling suggestions stay put.
+  const onSheetDragStart = useCallback((e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0]?.clientY ?? null;
+    dragOffsetRef.current = 0;
+    setDragging(true);
+  }, []);
+  const onSheetDragMove = useCallback((e: React.TouchEvent) => {
+    if (dragStartY.current == null) return;
+    const dy = (e.touches[0]?.clientY ?? dragStartY.current) - dragStartY.current;
+    const offset = dy > 0 ? dy : dy * 0.25;
+    dragOffsetRef.current = offset;
+    setDragOffset(offset);
+  }, []);
+  const onSheetDragEnd = useCallback(() => {
+    setDragging(false);
+    const shouldClose = dragOffsetRef.current > 56;
+    dragStartY.current = null;
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
+    if (shouldClose) closeSearch();
+  }, [closeSearch]);
 
   const openFilters = useCallback(() => {
     setFiltersOpen(true);
@@ -185,6 +258,7 @@ function BottomBar({
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
+    dismissingRef.current = true;
     btn.classList.add('tapped');
     setTimeout(() => {
       setLocalSearch(query);
@@ -218,7 +292,13 @@ function BottomBar({
   return (
     <>
       {(searchOpen || filtersOpen) && (
-        <div className="search-backdrop visible" onClick={handleBackdropClick} />
+        <div
+          className="search-backdrop visible"
+          onClick={handleBackdropClick}
+          onTouchStart={searchOpen ? onSheetDragStart : undefined}
+          onTouchMove={searchOpen ? onSheetDragMove : undefined}
+          onTouchEnd={searchOpen ? onSheetDragEnd : undefined}
+        />
       )}
 
       {searchOpen && (
@@ -247,15 +327,26 @@ function BottomBar({
         </div>
       )}
 
-      <div className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`} id="bottom-bar">
+      <div
+        className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`}
+        id="bottom-bar"
+        style={searchOpen ? { transform: `translateX(-50%) translateY(${dragOffset}px)`, transition: dragging ? 'none' : undefined } : undefined}
+      >
+        {searchOpen && (
+          <div className="search-drag-handle" aria-hidden="true">
+            <span className="search-drag-handle-bar" />
+          </div>
+        )}
         {/* The bottom centered control is always an input - no more
             click-to-open. Default empty state shows the placeholder, which
             doubles as a CTA inviting shoppers to coin a brand-new catalog.
             The home feed (featured creatives) is what shows when the input
             is empty, so there's no separate "all" pill to manage. */}
+        <div className="bottom-bar-row">
         <div className="bottom-bar-inner search-inline">
           <button
             className={`filter-btn inline ${hasActiveFilters(activeFilters) ? 'has-filters' : ''}`}
+            onMouseDown={(e) => e.preventDefault() /* keep input focus; iOS otherwise eats the first tap on blur */}
             onClick={(e) => { e.stopPropagation(); filtersOpen ? closeFilters() : openFilters(); }}
             aria-label="Filters"
           >
@@ -297,6 +388,13 @@ function BottomBar({
             value={localSearch}
             onChange={handleSearchInput}
             onFocus={openSearch}
+            onBlur={() => {
+              // The iOS keyboard's "Done"/tick blurs the field with the sheet
+              // still open — treat that as "run the search". Dismiss paths set
+              // dismissingRef first so closing never triggers a search.
+              if (dismissingRef.current) { dismissingRef.current = false; return; }
+              if (localSearch.trim()) submitSearch();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -307,46 +405,35 @@ function BottomBar({
               }
             }}
           />
-          {localSearch && (
-            searchLoading ? (
-              // Spinner while nl-search is resolving
-              <span className="bottom-search-spinner" aria-label="Searching" aria-live="polite">
-                <svg
-                  width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                  style={{ animation: 'search-spin 0.7s linear infinite', display: 'block' }}
-                >
-                  <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
-                  <path d="M12 3a9 9 0 0 1 9 9" />
-                </svg>
-              </span>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="bottom-search-clear"
-                  onClick={() => { setLocalSearch(''); emitSearch(''); searchInputRef.current?.focus(); }}
-                  aria-label="Clear search"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-                {/* In-app submit. iOS keyboards expose a "Search" key
-                    when enterKeyHint="search" but most users don't
-                    realize that's the submit affordance, especially
-                    if they typed via voice or pasted. An explicit
-                    button removes the ambiguity. */}
-                <button
-                  type="button"
-                  className="bottom-search-submit"
-                  onMouseDown={(e) => e.preventDefault() /* don't blur the input before we read its value */}
-                  onClick={submitSearch}
-                  aria-label="Search"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                </button>
-              </>
-            )
+          {/* No submit/clear/close buttons in the field. Submitting is done
+              via the keyboard's return key or its Done/tick (input onBlur);
+              dismissing is done via the drag handle or the dimmed backdrop.
+              Only the loading spinner remains while nl-search resolves. */}
+          {localSearch && searchLoading && (
+            <span className="bottom-search-spinner" aria-label="Searching" aria-live="polite">
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                style={{ animation: 'search-spin 0.7s linear infinite', display: 'block' }}
+              >
+                <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
+                <path d="M12 3a9 9 0 0 1 9 9" />
+              </svg>
+            </span>
           )}
+        </div>
+        {/* Apple-Maps-style close button, beside the search pill (outside it). */}
+        {searchOpen && (
+          <button
+            type="button"
+            className="bottom-search-close"
+            onMouseDown={(e) => e.preventDefault() /* keep focus so the tap isn't eaten by blur */}
+            onClick={closeSearch}
+            aria-label="Close search"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        )}
         </div>
 
       </div>
