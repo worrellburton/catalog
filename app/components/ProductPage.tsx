@@ -772,7 +772,14 @@ export default function ProductPage({
     if (url && w.__feedTapPosters) delete w.__feedTapPosters[creative.id];
     return url || '';
   })();
-  const heroPoster = tapHandoffPoster || creative?.thumbnailUrl || '';
+  // Poster fallback chain — the primary image (creative.thumbnailUrl is
+  // sourced from products.primary_image_url for product-feed tiles) is
+  // the canonical first frame. When that's missing (or the trail-tap
+  // poster from the feed card hasn't been stashed), fall back to the
+  // product.image (which itself is primary_image_url → image_url →
+  // first photo) so the hero never paints as a black void while waiting
+  // for the trail-video host to attach.
+  const heroPoster = tapHandoffPoster || creative?.thumbnailUrl || product.image || '';
 
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
