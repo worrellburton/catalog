@@ -5853,13 +5853,13 @@ export default function AdminData() {
                     Model · Polish (Image → Image)
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    fal-ai/nano-banana/edit
+                    gemini-2.5-flash-image (nano-banana)
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Reframe this product image into a standardized 5:4 e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
+                    Reframe this product image into a standardized 4:5 (portrait) e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
-                    <span>output: 5:4</span>
+                    <span>output: 4:5</span>
                     <span>preserves: background</span>
                   </div>
                 </div>
