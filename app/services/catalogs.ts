@@ -394,3 +394,76 @@ export async function getCatalogSearchCounts(catalogNames: string[]): Promise<Ca
     countTotal: r.count_total ?? 0,
   }));
 }
+
+// ── Popular-catalog pills (search bar) ──────────────────────────────────────
+// Powers the animated pill cloud above the desktop search bar. We rank the
+// live, admin-curated catalogs by real search volume so "On fire" (last 24h)
+// and "Most popular" (all-time) reflect actual demand, then fill the rest
+// with the next most-searched catalogs. Falls back to a curated vibe list
+// when no catalogs are configured yet, so the cloud is never empty.
+
+export type CatalogPillKind = 'fire' | 'popular' | 'featured' | 'catalog';
+
+export interface CatalogPill {
+  name: string;
+  kind: CatalogPillKind;
+  count24h: number;
+  countTotal: number;
+}
+
+const CURATED_FALLBACK_PILLS = [
+  'Quiet luxury', 'Gorpcore', 'Date night', 'Old money', 'Coastal',
+  'Office siren', 'Streetwear', 'Cozy season', 'Going out', 'Athleisure',
+];
+
+const MAX_PILLS = 12;
+
+let popularPillsPromise: Promise<CatalogPill[]> | null = null;
+let popularPillsAt = 0;
+const POPULAR_PILLS_TTL_MS = 5 * 60_000; // 5 min — search demand drifts slowly.
+
+export function getPopularCatalogPills(): Promise<CatalogPill[]> {
+  const now = Date.now();
+  if (popularPillsPromise && now - popularPillsAt < POPULAR_PILLS_TTL_MS) {
+    return popularPillsPromise;
+  }
+  popularPillsAt = now;
+  popularPillsPromise = (async () => {
+    const catalogs = (await getLiveCatalogs()).filter(c => !c.isHome);
+    if (catalogs.length === 0) {
+      return CURATED_FALLBACK_PILLS.map<CatalogPill>(name => ({
+        name, kind: 'catalog', count24h: 0, countTotal: 0,
+      }));
+    }
+    const counts = await getCatalogSearchCounts(catalogs.map(c => c.name));
+    const byName = new Map(counts.map(c => [c.catalogName, c]));
+    const enriched = catalogs.map(c => ({
+      name: c.name,
+      isFeatured: c.isFeatured,
+      count24h: byName.get(c.name)?.count24h ?? 0,
+      countTotal: byName.get(c.name)?.countTotal ?? 0,
+    }));
+
+    const byTotal = [...enriched].sort((a, b) => b.countTotal - a.countTotal);
+    const by24h = [...enriched].sort((a, b) => b.count24h - a.count24h);
+
+    const pills: CatalogPill[] = [];
+    const used = new Set<string>();
+    const push = (e: typeof enriched[number] | undefined, kind: CatalogPillKind) => {
+      if (!e || used.has(e.name)) return;
+      used.add(e.name);
+      pills.push({ name: e.name, kind, count24h: e.count24h, countTotal: e.countTotal });
+    };
+
+    push(by24h.find(e => e.count24h > 0), 'fire');        // 🔥 trending now
+    push(byTotal.find(e => e.countTotal > 0), 'popular');  // ⭐ all-time
+    push(enriched.find(e => e.isFeatured && !used.has(e.name)), 'featured'); // ✨ editor pick
+    for (const e of byTotal) {                             // fill by demand
+      if (pills.length >= MAX_PILLS) break;
+      push(e, 'catalog');
+    }
+    return pills;
+  })();
+  popularPillsPromise.catch(() => { popularPillsPromise = null; });
+  return popularPillsPromise;
+}

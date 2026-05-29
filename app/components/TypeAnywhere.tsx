@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from '@remix-run/react';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
+import PopularCatalogPills from './PopularCatalogPills';
 
 /* Desktop-only AI-style search bar.
  *
@@ -50,6 +51,7 @@ export default function TypeAnywhere() {
   const location = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Rotating placeholder. Picks a different hint every ~3s while
@@ -98,6 +100,18 @@ export default function TypeAnywhere() {
     navigate(`/?q=${encodeURIComponent(trimmed)}#app`);
     setText('');
     inputRef.current?.blur();
+  }, [navigate]);
+
+  // "Following" pill → build a catalog of the creators the user follows.
+  // The home route owns that state, so we land on /#app and hand the
+  // resolved handles to _index via a CustomEvent (slight delay so the
+  // home view is mounted to receive it when coming from another route).
+  const handleFollowingCatalog = useCallback((handles: string[]) => {
+    navigate('/#app');
+    inputRef.current?.blur();
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('catalog:following-catalog', { detail: { handles } }));
+    }, 60);
   }, [navigate]);
 
   // Type-anywhere passthrough: keystrokes outside any form field
@@ -154,6 +168,13 @@ export default function TypeAnywhere() {
   return (
     <>
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
+        {/* Popular-catalog cloud — springs up above the bar when it's
+            focused with an empty query, and gives way the moment the
+            user starts typing. onMouseDown-preventDefault inside keeps
+            the input focused through the click. */}
+        {focused && !text && !filtersOpen && (
+          <PopularCatalogPills onPick={submit} onFollowingCatalog={handleFollowingCatalog} />
+        )}
         {!hintDismissed && (
           <div className="ai-bar-hint" aria-hidden="true">Just start typing</div>
         )}
@@ -183,6 +204,11 @@ export default function TypeAnywhere() {
             className="ai-bar-input"
             placeholder={text ? '' : rotatingHint}
             value={text}
+            onFocus={() => setFocused(true)}
+            // Delay so a pill click (which blurs the input) still lands
+            // before the cloud unmounts; the pill row's onMouseDown also
+            // guards focus, this is the belt-and-suspenders fallback.
+            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
             onChange={(e) => setText(e.target.value.slice(0, 80))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
