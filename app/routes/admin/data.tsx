@@ -4249,7 +4249,7 @@ export default function AdminData() {
                   />
                 </th>
                 <th style={{ textAlign: 'left', minWidth: 56 }} title="Vision-picked solo-product image. Click any photo in the expanded row to override.">Primary</th>
-                <th style={{ textAlign: 'left' }}>Creative</th>
+                <th style={{ textAlign: 'left' }}>Primary Video</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
