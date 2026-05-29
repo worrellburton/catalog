@@ -25,11 +25,16 @@ export const DEFAULT_POLISH_PRIMARY_PROMPT = [
 ].join(' ');
 
 // Seedance 2.0 image-to-video subtle-motion prompt (generate-primary-video).
+// Camera-lock language is explicit — without it Seedance interprets "subtle
+// cinematic motion" as a slow zoom-in, and the later frames of the loop
+// crop into the subject's face / chest, breaking the catalog tile.
 export const DEFAULT_PRIMARY_VIDEO_PROMPT = [
-  'Use this exact image as the first frame.',
-  'Static shot, show subtle cinematic motion of the product.',
+  'Use this exact image as the first frame, do not change the framing.',
+  'Locked-off camera — no zoom, no pan, no tilt, no dolly, no rotation, no parallax.',
+  'The camera stays perfectly still. Only the product itself moves: gentle fabric drape, soft breeze in the fabric, the subject breathes naturally.',
+  'Keep the product the same size in every frame.',
   'If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips.',
-  'Make it 4:5.',
+  'Portrait 3:4 composition.',
 ].join(' ');
 
 export interface PromptSetting {
