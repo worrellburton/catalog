@@ -489,6 +489,7 @@ export default function ProductPage({
   // Admin-editable section config from /admin/pages. Each section's
   // enabled flag gates whether that block renders below.
   const productSections = usePageSections('product');
+  const heroEnabled     = isSectionEnabled(productSections, 'hero');
   const similarEnabled  = isSectionEnabled(productSections, 'similar');
   const popularEnabled  = isSectionEnabled(productSections, 'popular');
   const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
@@ -847,6 +848,7 @@ export default function ProductPage({
           </svg>
         </button>
 
+        {heroEnabled && (
         <div className="pd-split">
           <section className={heroClassName}>
             {creative ? (
@@ -1099,6 +1101,7 @@ export default function ProductPage({
           </div>
         </section>
         </div>
+        )}
 
         {/* "Similar" — bounded rail of brand/tag-matched products
             (was "More like this"). Sits directly below the product

@@ -91,6 +91,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Admin-editable section config from /admin/pages. null until loaded;
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
+  const videoEnabled       = isSectionEnabled(pageSections, 'video');
+  const creatorChipEnabled = isSectionEnabled(pageSections, 'creator-chip');
+  const tabsEnabled        = isSectionEnabled(pageSections, 'tabs');
+  const productsEnabled    = isSectionEnabled(pageSections, 'products');
   const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
   // Default 9 → a clean 3×3 mosaic in the right column (admin can override).
   const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 9);
@@ -417,6 +421,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             </div>
 
             {/* Centered video with overlays */}
+            {videoEnabled && (
             <div className="look-media-centered">
               <div className="look-media">
                 {/* Phase 9 instant poster: paints synchronously on mount
@@ -479,6 +484,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* ── RIGHT: Info panel (40%) ── */}
@@ -519,6 +525,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 (creatorAvatar + creatorDisplayName). Without these
                 fallbacks user-published looks render as a blank avatar
                 + literal "Creator" placeholder. */}
+            {creatorChipEnabled && (
             <div
               className="look-creator-row"
               onClick={() => { handleClose(); onOpenCreator(look.creator); }}
@@ -562,6 +569,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 }}
               />
             </div>
+            )}
 
             {/* Look title removed — the creator chip + avatar already
                 identify ownership; the named title (e.g. "Robert
@@ -578,6 +586,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             )}
 
             {/* Tabs */}
+            {tabsEnabled && (
             <div className="look-tabs">
               <button
                 className={`look-tab${activeTab === 'products' ? ' active' : ''}`}
@@ -593,15 +602,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 About
               </button>
             </div>
+            )}
 
             {/* Tab content */}
             <div className="look-tab-content">
               {activeTab === 'products' && (
                 <div className="look-products-list">
-                  {shopperBody.heightCm && (
+                  {productsEnabled && shopperBody.heightCm && (
                     <SizeMatchSummary products={look.products} body={shopperBody} />
                   )}
-                  {sortByGarmentRole(look.products).map((p, pi) => (
+                  {productsEnabled && sortByGarmentRole(look.products).map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
                         {p.image
