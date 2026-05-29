@@ -213,6 +213,15 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     return [];
   }
   const rows = (data || []) as ProductAd[];
+  // Hard rule: product creatives (look_id null) must have a
+  // product.primary_video_url to appear on the feed. The feed renders
+  // products as the polished primary video — no primary video → no
+  // tile. Look creatives (look_id non-null) are unaffected; they still
+  // surface via their own video.
+  const filtered = rows.filter(ad => {
+    if (ad.look_id) return true;
+    return !!ad.product?.primary_video_url;
+  });
   // Dedupe by product_id so the same product never appears twice in
   // the same pass. Multiple status='live' creatives per product
   // (admins iterating on copy / generation params) used to render as
@@ -223,7 +232,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // and drop the rest.
   const seen = new Set<string>();
   const deduped: ProductAd[] = [];
-  for (const ad of rows) {
+  for (const ad of filtered) {
     const key = ad.product_id || ad.id;
     if (seen.has(key)) continue;
     seen.add(key);
