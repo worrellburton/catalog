@@ -29,7 +29,9 @@ const CORS = {
 
 // Gemini 2.5 Flash Image (nano-banana), called directly on the Gemini API.
 const GEMINI_MODEL = 'gemini-2.5-flash-image';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
+// NB: image output + responseModalities live on the v1beta surface; the
+// stable v1 endpoint rejects responseModalities with a 400.
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const GEMINI_TIMEOUT_MS = 60_000;
 const POLISH_BUCKET = 'scraped-products';
 
