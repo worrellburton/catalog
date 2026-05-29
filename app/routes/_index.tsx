@@ -709,7 +709,16 @@ export default function Home() {
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
   const openMyLooks = useCallback(() => setShowMyLooks(true), []);
-  const openWallet = useCallback(() => setShowWallet(true), []);
+  // Opening the wallet pushes a real history entry at /earnings so it's
+  // deep-linkable AND browser-back returns to the catalog screen the
+  // user was on (the navigation push, not an external referrer). Skip
+  // the push if we're already at /earnings (e.g. fresh page load).
+  const openWallet = useCallback(() => {
+    setShowWallet(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/earnings') {
+      window.history.pushState({}, '', '/earnings');
+    }
+  }, []);
   const openProfile = useCallback(() => setShowProfile(true), []);
   const closeBookmarks = useCallback(() => {
     history.replaceState({}, '', '/#app');
@@ -720,8 +729,35 @@ export default function Home() {
     setShowMyLooks(false);
   }, []);
   const closeWallet = useCallback(() => {
-    history.replaceState({}, '', '/#app');
+    // If we arrived at /earnings via in-app navigation (pushState), pop
+    // the history entry so browser-back semantics stay consistent —
+    // tapping back closes the wallet, doesn't bounce to a prior site.
+    // If the user hit /earnings cold (no history to pop), replace into
+    // /#app instead.
+    if (typeof window !== 'undefined' && window.location.pathname === '/earnings') {
+      if (window.history.length > 1) {
+        window.history.back();
+        // setShowWallet(false) will fire via the popstate listener below.
+        return;
+      }
+      window.history.replaceState({}, '', '/#app');
+    } else {
+      history.replaceState({}, '', '/#app');
+    }
     setShowWallet(false);
+  }, []);
+
+  // Open the wallet on cold load at /earnings, and sync open/close to
+  // forward/back navigation so the URL is the source of truth.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => {
+      const onEarnings = window.location.pathname === '/earnings';
+      setShowWallet(onEarnings);
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
   }, []);
   const closeProfile = useCallback(() => {
     history.replaceState({}, '', '/#app');
