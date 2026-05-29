@@ -1,0 +1,168 @@
+/* Global generation-queue panel. Floating glass card bottom-right
+   showing every in-flight AI job with a live progress bar driven by
+   the kind's rolling-average duration. Catalog branding (dark glass,
+   green accent), respects the iOS bottom chrome + Flutter shell. */
+
+.gen-queue {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  right: 16px;
+  z-index: 9000;
+  width: min(360px, calc(100vw - 24px));
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  color: #f8fafc;
+  font-family: inherit;
+  animation: gen-queue-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  overflow: hidden;
+}
+
+.gen-queue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.gen-queue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.7);
+  animation: gen-queue-pulse 1.6s ease-in-out infinite;
+}
+.gen-queue-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  flex: 1;
+}
+.gen-queue-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.gen-queue-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px 6px 8px;
+}
+
+.gen-queue-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  transition: background 160ms ease, opacity 220ms ease;
+}
+.gen-queue-row + .gen-queue-row { margin-top: 2px; }
+.gen-queue-row--done   { opacity: 0.75; }
+.gen-queue-row--failed { opacity: 0.9; }
+
+.gen-queue-thumb {
+  width: 34px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.gen-queue-row-body { flex: 1; min-width: 0; }
+.gen-queue-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.gen-queue-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gen-queue-remaining {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.gen-queue-context {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen-queue-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.gen-queue-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #34d399, #22c55e);
+  border-radius: 999px;
+  transition: width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+}
+.gen-queue-bar-fill.is-over {
+  /* Past the estimate — switch to a softer cyan so the bar still
+     visibly progresses but doesn't lie that we're "done". */
+  background: linear-gradient(90deg, #38bdf8, #22d3ee);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+.gen-queue-row--done   .gen-queue-bar-fill { background: #22c55e; box-shadow: none; }
+.gen-queue-row--failed .gen-queue-bar-fill { background: #ef4444; box-shadow: none; }
+
+.gen-queue-result {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+.gen-queue-result.is-err { color: #fda4af; }
+
+@keyframes gen-queue-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes gen-queue-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.86); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-queue, .gen-queue-dot, .gen-queue-bar-fill { animation: none; transition: none; }
+}
+
+/* Flutter shell — the native header overlaps the top zone but the
+   bottom is clear, so just respect the safe area which we already do. */
+
+/* Light mode */
+.light-mode .gen-queue {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.15);
+}
+.light-mode .gen-queue-head { border-bottom-color: rgba(0, 0, 0, 0.06); }
+.light-mode .gen-queue-count,
+.light-mode .gen-queue-remaining,
+.light-mode .gen-queue-context { color: rgba(15, 23, 42, 0.55); }
+.light-mode .gen-queue-bar { background: rgba(0, 0, 0, 0.08); }
+.light-mode .gen-queue-result { color: rgba(15, 23, 42, 0.55); }

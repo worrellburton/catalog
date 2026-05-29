@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
+import GenerationQueueHost from "~/components/GenerationQueueHost";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
@@ -40,6 +41,7 @@ import "./styles/in-app-browser.css";
 import "./styles/light-mode.css";
 import "./styles/responsive.css";
 import "./styles/activity.css";
+import "./styles/generation-queue.css";
 import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
@@ -243,6 +245,10 @@ export default function App() {
       {/* Joins the realtime presence channel so the user shows online to
           others (powers the FollowingRail's green online ring). */}
       <PresenceHost />
+      {/* Global generation queue — any AI job anywhere in the app
+          reports here via startGenerationJob(). Renders only when at
+          least one job is running. */}
+      <GenerationQueueHost />
       {/* Once-per-session creator engagement toast. Shows "since
           your last visit, your looks earned X impressions / Y
           clicks" when there's something to report; otherwise stays
