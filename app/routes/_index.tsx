@@ -288,6 +288,18 @@ export default function Home() {
     return () => window.removeEventListener('catalog:following-catalog', onFollowingCatalog);
   }, [setView]);
 
+  // Stable callback for the FollowingRail "make a catalog of who I
+  // follow" CTA. Defined once (useCallback) so the memoized FollowingRail
+  // isn't re-rendered by a fresh arrow identity every parent render.
+  const handleCreateFollowingCatalog = useCallback((handles: string[]) => {
+    const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+    if (norm.length === 0) return;
+    setFollowingCatalog(norm);
+    setCatalogName('Following');
+    setCreatorFilter(null);
+    setBrandFilter(null);
+  }, []);
+
   const handleLandingToApp = useCallback(() => {
     setShowSplash(true);
     setView('splash');
@@ -848,13 +860,7 @@ export default function Home() {
               <FollowingRail
                 mode="both"
                 onOpenCreator={handleOpenCreator}
-                onCreateFollowingCatalog={(handles) => {
-                  const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
-                  setFollowingCatalog(norm);
-                  setCatalogName('Following');
-                  setCreatorFilter(null);
-                  setBrandFilter(null);
-                }}
+                onCreateFollowingCatalog={handleCreateFollowingCatalog}
               />
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />

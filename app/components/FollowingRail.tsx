@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { getMyFollowing, getMyFollowers, type FollowerInfo } from '~/services/follows';
 import { subscribeFollowingChanges } from '~/hooks/useFollowState';
 import { subscribeOnline } from '~/services/presence';
@@ -65,7 +65,7 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
   const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
@@ -296,6 +296,11 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
     </div>
   );
 }
+
+// Memoized — lives in the always-mounted header, so it used to re-render
+// on every keystroke even though its data only changes on follow events
+// / presence ticks.
+export default memo(FollowingRail);
 
 // ─── internal AvatarRow ─────────────────────────────────────────────
 

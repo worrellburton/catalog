@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
 import { getLooks, getCachedLooks } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
@@ -128,7 +128,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
   }
 }
 
-export default function ContinuousFeed({
+function ContinuousFeed({
   activeFilter,
   searchQuery,
   shuffleKey,
@@ -1095,3 +1095,9 @@ export default function ContinuousFeed({
     </div>
   );
 }
+
+// Memoized — the feed lives in the always-mounted shell, so without this
+// it re-rendered (and re-ran its derived-list useMemos) on every parent
+// render, e.g. each keystroke in search. Props are now referentially
+// stable (bookmarks is useMemo'd; callbacks are useCallback'd).
+export default memo(ContinuousFeed);
