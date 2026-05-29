@@ -37,6 +37,7 @@ import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
 import { useTrailVideoManager } from '~/components/TrailVideoHost';
+import { withTransform } from '~/utils/supabase-image';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
@@ -105,13 +106,24 @@ const CreativeCardV2 = memo(function CreativeCardV2({
       })
     : pickVideoUrl(creative!);
 
-  const posterUrl = isLook
+  // Raw poster / still URLs from the data layer. These point at the
+  // FULL-RES asset in storage (the polished primary image, the look
+  // thumbnail, etc.) so server-side consumers — Seedance i2v, sharing,
+  // export — get the highest fidelity available.
+  const rawPosterUrl = isLook
     ? (look!.thumbnail_url || look!.cover || '')
     : pickPosterUrl(creative!);
-
-  const stillImageUrl = isLook
-    ? (look!.products?.find(p => !!p.image)?.image || posterUrl || '')
+  const rawStillImageUrl = isLook
+    ? (look!.products?.find(p => !!p.image)?.image || rawPosterUrl || '')
     : pickStillImageUrl(creative!);
+
+  // Compressed render variants for ON-SCREEN display. Routed through
+  // Supabase's storage image-transform endpoint so the feed ships
+  // ~20 KB WebPs instead of full-res 1-3 MB PNGs. No-op for non-
+  // Supabase URLs (external CDNs, etc.) — safe to apply blindly.
+  // Width 540px covers a 2-up mobile column at 2× DPR cleanly.
+  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72 }) || rawPosterUrl;
+  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72 }) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
