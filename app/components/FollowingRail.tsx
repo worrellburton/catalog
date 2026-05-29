@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getMyFollowing, getMyFollowers, type FollowerInfo } from '~/services/follows';
 import { subscribeFollowingChanges } from '~/hooks/useFollowState';
+import { subscribeOnline } from '~/services/presence';
 import { supabase } from '~/utils/supabase';
 
 interface FollowingRailProps {
@@ -72,10 +73,15 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
   const [newFollowerHandles, setNewFollowerHandles] = useState<Set<string>>(new Set());
   const [openPopover, setOpenPopover] = useState<'following' | 'followers' | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Lower-cased handles of users currently online (Supabase presence).
+  const [onlineHandles, setOnlineHandles] = useState<Set<string>>(new Set());
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const prevFollowerHandlesRef = useRef<Set<string> | null>(null);
 
   useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
+
+  // Live online presence — drives the glowing green ring on avatars.
+  useEffect(() => subscribeOnline((s) => setOnlineHandles(s.handles)), []);
 
   // Following list: handle → display name + avatar + last-post ts.
   useEffect(() => {
@@ -223,6 +229,7 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
             onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
             popoverTitle={`Following · ${followingEntries!.length}`}
             tooltipPrefix={null}
+            onlineHandles={onlineHandles}
           />
         )}
         {hasFollowing && hasFollowers && (
@@ -239,6 +246,7 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
             onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
             popoverTitle={`Followers · ${followerEntries!.length}`}
             tooltipPrefix="Followed"
+            onlineHandles={onlineHandles}
           />
         )}
       </div>
@@ -268,6 +276,7 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
           onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
           popoverTitle={`Followers · ${followerEntries!.length}`}
           tooltipPrefix="Followed"
+          onlineHandles={onlineHandles}
         />
       )}
       {showFollowing && hasFollowing && (
@@ -281,6 +290,7 @@ export default function FollowingRail({ onOpenCreator, mode = 'both', onCreateFo
           onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
           popoverTitle={`Following · ${followingEntries!.length}`}
           tooltipPrefix={null}
+          onlineHandles={onlineHandles}
         />
       )}
     </div>
@@ -302,10 +312,12 @@ interface AvatarRowProps {
   popoverTitle: string;
   /** When set, the per-avatar tooltip reads `${tooltipPrefix} ${timeAgo}`. */
   tooltipPrefix: string | null;
+  /** Lower-cased handles currently online — get a glowing green ring. */
+  onlineHandles: Set<string>;
 }
 
 function AvatarRow({
-  ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix,
+  ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix, onlineHandles,
 }: AvatarRowProps) {
   const visible = entries.slice(0, MAX_VISIBLE);
   const overflow = Math.max(0, entries.length - MAX_VISIBLE);
@@ -325,13 +337,14 @@ function AvatarRow({
         <span className="follow-rail-stack" style={{ position: 'relative', display: 'inline-flex', height: 28 }}>
           {visible.map((c, i) => {
             const isNew = !!newSet?.has(c.handle);
+            const isOnline = onlineHandles.has(c.handle.toLowerCase());
             const tip = tooltipPrefix && c.ts
-              ? `${c.displayName || c.handle} · ${tooltipPrefix} ${timeAgo(c.ts)}`
-              : (c.displayName || c.handle);
+              ? `${c.displayName || c.handle} · ${tooltipPrefix} ${timeAgo(c.ts)}${isOnline ? ' · online' : ''}`
+              : `${c.displayName || c.handle}${isOnline ? ' · online' : ''}`;
             return (
               <span
                 key={c.handle}
-                className={`follow-rail-avatar${isNew ? ' follow-rail-avatar--new' : ''}`}
+                className={`follow-rail-avatar${isNew ? ' follow-rail-avatar--new' : ''}${isOnline ? ' follow-rail-avatar--online' : ''}`}
                 title={tip}
                 style={{
                   width: 28, height: 28, borderRadius: '50%',
@@ -339,7 +352,9 @@ function AvatarRow({
                   background: '#e2e8f0',
                   overflow: 'hidden',
                   marginLeft: i === 0 ? 0 : -10,
-                  zIndex: 50 - i,
+                  // Online avatars ride above neighbours so their glow
+                  // isn't clipped by the next overlapping circle.
+                  zIndex: isOnline ? 55 : 50 - i,
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -400,7 +415,9 @@ function AvatarRow({
             {popoverTitle}
           </div>
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {entries.map(c => (
+            {entries.map(c => {
+              const rowOnline = onlineHandles.has(c.handle.toLowerCase());
+              return (
               <button
                 key={c.handle}
                 type="button"
@@ -421,15 +438,31 @@ function AvatarRow({
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
               >
-                <span style={{
-                  width: 30, height: 30, borderRadius: '50%',
-                  background: '#e2e8f0', overflow: 'hidden',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#475569', fontSize: 12, fontWeight: 700, flexShrink: 0,
-                }}>
-                  {c.avatarUrl
-                    ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : (c.displayName || c.handle).charAt(0).toUpperCase()}
+                <span style={{ position: 'relative', flexShrink: 0, display: 'inline-flex' }}>
+                  <span
+                    className={rowOnline ? 'follow-rail-avatar--online' : undefined}
+                    style={{
+                      width: 30, height: 30, borderRadius: '50%',
+                      background: '#e2e8f0', overflow: 'hidden',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#475569', fontSize: 12, fontWeight: 700,
+                    }}
+                  >
+                    {c.avatarUrl
+                      ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : (c.displayName || c.handle).charAt(0).toUpperCase()}
+                  </span>
+                  {rowOnline && (
+                    <span
+                      aria-hidden="true"
+                      title="Online now"
+                      style={{
+                        position: 'absolute', right: -1, bottom: -1,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: '#22c55e', border: '2px solid #fff',
+                      }}
+                    />
+                  )}
                 </span>
                 <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -442,7 +475,8 @@ function AvatarRow({
                   </span>
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

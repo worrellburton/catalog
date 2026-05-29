@@ -11,6 +11,7 @@ import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
+import PresenceHost from "~/components/PresenceHost";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
@@ -239,6 +240,9 @@ export default function App() {
       {/* Per-user session + event tracker for /admin/analytics. No-op
           for unauthenticated visitors; starts/stops with the auth user. */}
       <SessionTrackerHost />
+      {/* Joins the realtime presence channel so the user shows online to
+          others (powers the FollowingRail's green online ring). */}
+      <PresenceHost />
       {/* Once-per-session creator engagement toast. Shows "since
           your last visit, your looks earned X impressions / Y
           clicks" when there's something to report; otherwise stays
