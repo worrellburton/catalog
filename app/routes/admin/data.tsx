@@ -17,6 +17,7 @@ import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
 import { useAdminConfirm } from '~/components/AdminConfirm';
+import { generateAndStorePoster } from '~/utils/video-poster';
 
 interface CrawledProduct {
   id: string;
@@ -1275,8 +1276,13 @@ export default function AdminData() {
         followUps.push(Promise.resolve(supabase
           .from('looks_creative')
           .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
-          .then(({ error }: { error: { message: string } | null }) => {
+          .select('id')
+          .single()
+          .then(({ data: creativeData, error }: { data: { id: string } | null; error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
+            if (creativeData?.id) {
+              void generateAndStorePoster(look.id, creativeData.id, g.video_url!);
+            }
           })));
       }
       if (supabase) {

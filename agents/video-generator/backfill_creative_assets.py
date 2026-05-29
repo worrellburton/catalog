@@ -51,21 +51,25 @@ POSTER_SUFFIX = ".poster.jpg"
 MOBILE_SUFFIX = ".mobile.mp4"
 
 
-def storage_paths_for(video_url: str, storage_path: str | None) -> tuple[str, str]:
+def storage_paths_for(video_url: str, storage_path: str | None, row_id: str | None = None) -> tuple[str, str]:
     """Derive the poster + mobile storage keys from the source video.
 
     Prefers the explicit `storage_path` column when present; falls back
     to deriving from the public URL (the bucket prefix in the URL is
-    stable). Returns (poster_key, mobile_key)."""
+    stable). For external URLs (e.g. fal.media CDN), uses the row ID
+    as the storage key prefix. Returns (poster_key, mobile_key)."""
     if storage_path:
         base = storage_path
     else:
         # public URL pattern: /storage/v1/object/public/<bucket>/<key>
         marker = f"/object/public/{BUCKET}/"
         i = video_url.find(marker)
-        if i < 0:
+        if i >= 0:
+            base = video_url[i + len(marker):]
+        elif row_id:
+            base = f"looks/{row_id}/creative"
+        else:
             raise ValueError(f"Cannot derive storage path from URL: {video_url}")
-        base = video_url[i + len(marker):]
     # Strip the `.mp4` so we don't end up with `foo.mp4.poster.jpg` -
     # cleaner: `foo.poster.jpg` and `foo.mobile.mp4`.
     if base.endswith(".mp4"):
@@ -89,7 +93,7 @@ def process_row(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """Encodes + uploads + writes back. Returns (row_id, ok, message)."""
-    poster_key, mobile_key = storage_paths_for(video_url, storage_path)
+    poster_key, mobile_key = storage_paths_for(video_url, storage_path, row_id)
     if dry_run:
         wanted = []
         if needs_poster: wanted.append(f"poster={poster_key}")
@@ -135,7 +139,9 @@ def fetch_rows(supabase, table: str, limit: int | None) -> list[dict]:
     # is missing. supabase-py's .or_ is a string DSL.
     q = q.or_("thumbnail_url.is.null,mobile_video_url.is.null")
     # Live-only on product_creative so we don't waste compute on draft /
-    # paused rows.
+    # paused rows. looks_creative is NOT filtered by status — the
+    # consumer feed joins on is_primary without checking the creative's
+    # status, so pending rows need posters too.
     if table == "product_creative":
         q = q.eq("status", "live")
     if limit:
@@ -209,14 +215,14 @@ def run(table: str, limit: int | None, dry_run: bool, concurrency: int) -> int:
 
 def main(argv: Iterable[str] | None = None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--table", choices=["product_creative", "generated_videos", "both"], default="both")
+    p.add_argument("--table", choices=["product_creative", "generated_videos", "looks_creative", "all", "both"], default="all")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--concurrency", type=int, default=2,
                    help="Parallel encodes. Each worker uses ~1 ffmpeg invocation + a few hundred MB of memory.")
     args = p.parse_args(argv)
 
-    tables = ["product_creative", "generated_videos"] if args.table == "both" else [args.table]
+    tables = ["product_creative", "generated_videos", "looks_creative"] if args.table in ("both", "all") else [args.table]
     rc = 0
     for t in tables:
         rc |= run(t, args.limit, args.dry_run, args.concurrency)

@@ -4,6 +4,7 @@ import { supabase } from '~/utils/supabase';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
 import { setGenerationPublished } from '~/services/user-generations';
+import { generateAndStorePoster } from '~/utils/video-poster';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
@@ -156,10 +157,15 @@ export default function AdminPublishScreen() {
       // follow-ups the published look is silently dropped from the
       // Published tab.
       if (supabase && draft.videoUrl) {
-        const { error: creativeErr } = await supabase
+        const { data: creativeData, error: creativeErr } = await supabase
           .from('looks_creative')
-          .insert({ look_id: look.id, video_url: draft.videoUrl, is_primary: true });
+          .insert({ look_id: look.id, video_url: draft.videoUrl, is_primary: true })
+          .select('id')
+          .single();
         if (creativeErr) console.warn('[publish] looks_creative insert failed:', creativeErr.message);
+        if (creativeData?.id) {
+          void generateAndStorePoster(look.id, creativeData.id, draft.videoUrl);
+        }
       }
       if (supabase) {
         // Move ownership to the persona who generated the source video
