@@ -16,6 +16,7 @@ import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
+import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
 import { useAdminConfirm } from '~/components/AdminConfirm';
 import { generateAndStorePoster } from '~/utils/video-poster';
 
@@ -1404,6 +1405,7 @@ export default function AdminData() {
   // Shopping → existing research modal, Amazon → Rainforest lookup,
   // Brand Website → URL paste).
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [showPromptSettings, setShowPromptSettings] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -3058,6 +3060,21 @@ export default function AdminData() {
                 <line x1="18" y1="9" x2="18" y2="13"/>
               </svg>
               {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
+            </button>
+            {/* Global settings — editable AI prompts (Polish Primary,
+                Primary Video). Persists to app_settings; edge functions
+                read it on their next run. */}
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={() => setShowPromptSettings(true)}
+              title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              Settings
             </button>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
@@ -6237,6 +6254,11 @@ export default function AdminData() {
         </div>
       )}
 
+      <PromptSettingsModal
+        open={showPromptSettings}
+        onClose={() => setShowPromptSettings(false)}
+        onSaved={showToast}
+      />
       {showAmazonLookup && (
         <AmazonLookupModal
           onClose={() => setShowAmazonLookup(false)}

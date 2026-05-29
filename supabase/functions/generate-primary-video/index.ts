@@ -44,7 +44,13 @@ const FAL_CALL_TIMEOUT_MS = 120_000;
 // "no talking" clause is a hard constraint — image-to-video models
 // otherwise love to lip-sync any face in the frame, which is the
 // wrong vibe for a product packshot.
-const PRIMARY_VIDEO_PROMPT = [
+//
+// Admin-editable via the Data → Settings modal, stored in app_settings
+// under PRIMARY_VIDEO_PROMPT_KEY; this inline string is the fallback.
+// Keep in sync with app/constants/ai-prompts.ts
+// (DEFAULT_PRIMARY_VIDEO_PROMPT).
+const PRIMARY_VIDEO_PROMPT_KEY = 'prompt_primary_video';
+const DEFAULT_PRIMARY_VIDEO_PROMPT = [
   'Use this exact image as the first frame.',
   'Static shot, show subtle cinematic motion of the product.',
   'If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips.',
@@ -156,8 +162,19 @@ Deno.serve(async (req: Request) => {
   }
 
   const sourceUrl = product.primary_image_url;
+
+  // Admin-editable prompt override (Data → Settings). Falls back to the
+  // inline default when the app_settings row is missing or blank.
+  let videoPrompt = DEFAULT_PRIMARY_VIDEO_PROMPT;
+  try {
+    const { data: setting } = await admin
+      .from('app_settings').select('value').eq('key', PRIMARY_VIDEO_PROMPT_KEY).maybeSingle();
+    const v = (setting?.value as string | null)?.trim();
+    if (v) videoPrompt = v;
+  } catch { /* keep default */ }
+
   const t0 = Date.now();
-  const result = await callSeedance(PRIMARY_VIDEO_PROMPT, sourceUrl, falKey);
+  const result = await callSeedance(videoPrompt, sourceUrl, falKey);
   const durationMs = Date.now() - t0;
   if (!result.url) return json({ success: false, error: result.error || 'video generation failed' });
 

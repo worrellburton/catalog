@@ -27,10 +27,12 @@ const FAL_BASE_SYNC = 'https://fal.run';
 const NANO_BANANA_SLUG = 'fal-ai/nano-banana/edit';
 const FAL_CALL_TIMEOUT_MS = 55_000;
 
-// Polish prompt — fixed string per the product spec. Reframes the
-// existing primary image into a uniform 5:4 product-grid shot without
-// touching the product itself.
-const POLISH_PROMPT = [
+// Polish prompt — admin-editable via the Data → Settings modal, stored
+// in app_settings under POLISH_PROMPT_KEY. This inline string is the
+// fallback used when no row exists yet. Keep in sync with
+// app/constants/ai-prompts.ts (DEFAULT_POLISH_PRIMARY_PROMPT).
+const POLISH_PROMPT_KEY = 'prompt_polish_primary';
+const DEFAULT_POLISH_PROMPT = [
   "Reframe this product image into a standardized e-commerce shot with a 5:4 aspect ratio (landscape, e.g. 2000x1600px).",
   "Keep the product's existing background exactly as-is — do not remove, replace, or alter it.",
   "Center the product both horizontally and vertically so it occupies approximately 60% of the frame, with equal padding (~15% of the canvas) on all four sides, extending the existing background naturally to fill any added space.",
@@ -138,7 +140,17 @@ Deno.serve(async (req: Request) => {
   const sourceUrl    = product.primary_image_url;
   const prePolishUrl = product.primary_image_pre_polish_url ?? sourceUrl;
 
-  const result = await callNanoBanana(POLISH_PROMPT, sourceUrl, falKey);
+  // Admin-editable prompt override (Data → Settings). Falls back to the
+  // inline default when the app_settings row is missing or blank.
+  let polishPrompt = DEFAULT_POLISH_PROMPT;
+  try {
+    const { data: setting } = await admin
+      .from('app_settings').select('value').eq('key', POLISH_PROMPT_KEY).maybeSingle();
+    const v = (setting?.value as string | null)?.trim();
+    if (v) polishPrompt = v;
+  } catch { /* keep default */ }
+
+  const result = await callNanoBanana(polishPrompt, sourceUrl, falKey);
   if (!result.url) return json({ success: false, error: result.error || 'polish failed' });
 
   const { error: updateErr } = await admin.from('products').update({
