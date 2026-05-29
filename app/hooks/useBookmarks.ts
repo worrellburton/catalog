@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Product } from '~/data/looks';
 
 const LOOKS_KEY = 'catalog_bookmarked_looks';
@@ -109,7 +109,12 @@ export function useBookmarks(): UseBookmarks {
 
   const totalCount = bookmarkedLooks.length + bookmarkedProducts.length + followedCreators.length;
 
-  return {
+  // Memoize the returned object so its identity is stable across renders.
+  // The callbacks are already useCallback'd; only the data arrays change.
+  // Without this, every consumer that takes `bookmarks` as a prop (the
+  // feed, overlays, header) re-rendered on every parent render even when
+  // bookmarks were untouched — defeating their React.memo.
+  return useMemo<UseBookmarks>(() => ({
     bookmarkedLooks,
     bookmarkedProducts,
     followedCreators,
@@ -120,5 +125,16 @@ export function useBookmarks(): UseBookmarks {
     isCreatorFollowed,
     toggleCreatorFollow,
     totalCount,
-  };
+  }), [
+    bookmarkedLooks,
+    bookmarkedProducts,
+    followedCreators,
+    isLookBookmarked,
+    toggleLookBookmark,
+    isProductBookmarked,
+    toggleProductBookmark,
+    isCreatorFollowed,
+    toggleCreatorFollow,
+    totalCount,
+  ]);
 }

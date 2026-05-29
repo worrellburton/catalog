@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { setShopperGender } from '~/services/product-creative';
+import { setShopperGender, getShopperGender } from '~/services/product-creative';
 import { getUserGender } from '~/services/genders';
 import type { useAuth } from '~/hooks/useAuth';
 
@@ -42,7 +42,12 @@ interface UseShopperGenderResult {
 // re-scoped the looks (small portion of the feed) - the much larger
 // creative grid kept rendering whatever the profile's signup gender was.
 export function useShopperGender({ user, authLoading }: UseShopperGenderArgs): UseShopperGenderResult {
-  const [activeFilter, setActiveFilter] = useState<GenderFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<GenderFilter>(() => {
+    const cached = getShopperGender();
+    if (cached === 'male') return 'men';
+    if (cached === 'female') return 'women';
+    return 'all';
+  });
   const filterUserOverride = useRef(false);
 
   const changeFilter = useCallback((next: GenderFilter) => {

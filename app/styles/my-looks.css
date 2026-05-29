@@ -1582,32 +1582,6 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   letter-spacing: -0.02em;
 }
 
-/* Creator Mode toggle - sits where CreatorPage shows the Follow
-   button. Same dark pill, with an "is-on" green tint when active. */
-.my-cat-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 22px;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #fff;
-  background: #111;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-bottom: 16px;
-  transition: opacity 0.2s, background 0.2s;
-  font-family: inherit;
-}
-.my-cat-mode-toggle:hover { opacity: 0.85; }
-.my-cat-mode-toggle.is-on {
-  background: #16a34a;
-}
-.my-cat-mode-toggle svg { display: block; }
-
 .my-cat-hero-stats {
   font-size: 13px;
   color: rgba(0, 0, 0, 0.4);
@@ -1773,6 +1747,26 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 4px;
   border-radius: 999px;
   backdrop-filter: blur(4px);
+  /* Hidden until the tile is hovered (desktop). Fades + lifts in. */
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.my-cat-tile:hover .my-cat-tile-actions,
+.my-cat-tile:focus-within .my-cat-tile-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* Touch devices have no hover — the bottom tool tray covers actions
+   there, so the inline bar is suppressed to avoid a dead, always-on
+   overlay competing with the tap-to-open-tray gesture. */
+@media (hover: none) {
+  .my-cat-tile-actions { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-tile-actions { transition: none; }
 }
 .my-cat-tile-action {
   width: 28px;
@@ -1796,32 +1790,152 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: #fbb;
 }
 
-/* Delete confirmation - covers the tile's center so the choice is
-   unambiguous. */
-.my-cat-delete-confirm {
-  position: absolute;
+/* ── Mobile tool tray ───────────────────────────────────────────────
+   Tapping a tile on touch devices slides this up from the bottom with
+   the look's thumbnail + status and the Edit / Share / Archive / Delete
+   actions. */
+.my-cat-tray-backdrop {
+  position: fixed;
   inset: 0;
-  z-index: 6;
-  background: rgba(17, 17, 17, 0.86);
-  color: #fff;
-  border-radius: 12px;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  animation: my-cat-fade-in 0.18s ease both;
+  backdrop-filter: blur(2px);
+}
+.my-cat-tray {
+  width: 100%;
+  max-width: 520px;
+  background: #1a1a1a;
+  border-radius: 20px 20px 0 0;
+  padding: 8px 14px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  animation: my-cat-tray-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.my-cat-tray-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  margin: 6px auto 12px;
+}
+.my-cat-tray-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-tray-thumb {
+  width: 46px;
+  height: 58px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.my-cat-tray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.my-cat-tray-head-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.my-cat-tray-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-tray-status { font-size: 12px; font-weight: 600; }
+.my-cat-tray-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 8px;
+  background: transparent;
+  border: none;
+  color: #f4f4f5;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px;
+  text-align: left;
+  transition: background 0.14s ease;
+}
+.my-cat-tray-action:active { background: rgba(255, 255, 255, 0.08); }
+.my-cat-tray-action svg { flex-shrink: 0; color: rgba(255, 255, 255, 0.7); }
+.my-cat-tray-action--danger { color: #f87171; }
+.my-cat-tray-action--danger svg { color: #f87171; }
+.my-cat-tray-cancel {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 12px;
+  color: #d4d4d8;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── Delete confirmation (centered, desktop + touch) ────────────────── */
+.my-cat-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 16px;
+  padding: 24px;
+  animation: my-cat-fade-in 0.16s ease both;
+  backdrop-filter: blur(3px);
+}
+.my-cat-confirm {
+  width: 100%;
+  max-width: 380px;
+  background: #1c1c1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px;
   text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: my-cat-pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-.my-cat-delete-confirm p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
+.my-cat-confirm h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #fff; }
+.my-cat-confirm p { margin: 0 0 18px; font-size: 13.5px; line-height: 1.5; color: #a1a1aa; }
+.my-cat-confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.my-cat-confirm-actions .my-cat-btn-cancel,
+.my-cat-confirm-actions .my-cat-btn-danger { flex: 1; padding: 11px; }
+
+/* Action-feedback toast (link copied, etc.). */
+.my-cat-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 1400;
+  background: rgba(23, 23, 23, 0.96);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  animation: my-cat-toast-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  pointer-events: none;
 }
-.my-cat-delete-actions {
-  display: flex;
-  gap: 8px;
+
+@keyframes my-cat-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes my-cat-tray-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes my-cat-pop-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes my-cat-toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-tray-backdrop, .my-cat-tray, .my-cat-confirm-backdrop, .my-cat-confirm, .my-cat-toast { animation: none; }
 }
+
 .my-cat-btn-danger {
   padding: 8px 16px;
   font-size: 13px;

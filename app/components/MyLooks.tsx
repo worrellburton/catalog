@@ -6,6 +6,7 @@ import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
 import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
+import { lookSlug } from '~/utils/slug';
 import AutoplayVideo from '~/components/AutoplayVideo';
 
 interface MyLooksProps {
@@ -80,11 +81,13 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  // "Creator Mode" toggle. When ON the tiles overlay edit / archive /
-  // delete actions on top of the standard LookCard so the curator can
-  // manage their catalog without leaving the grid. OFF renders the
-  // identical layout consumers see on the CreatorPage.
-  const [creatorMode, setCreatorMode] = useState(false);
+  // Per-look actions surface two ways:
+  //   • Desktop (hover-capable): an action bar fades in on tile hover.
+  //   • Touch: tapping a tile opens a bottom tool tray. trayLook holds
+  //     the look whose tray is open (null = closed).
+  const [trayLook, setTrayLook] = useState<ManagedLook | null>(null);
+  // Ephemeral confirmation toast ("Link copied", etc.).
+  const [toast, setToast] = useState<string | null>(null);
 
   const fetchLooks = useCallback(async () => {
     setLoading(true);
@@ -145,6 +148,46 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       setError(err instanceof Error ? err.message : 'Archive failed');
     }
   }, []);
+
+  // Ephemeral toast for action feedback (link copied, etc.).
+  const showToastMsg = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(curr => (curr === msg ? null : curr)), 2400);
+  }, []);
+
+  // Share a look's public URL. Native share sheet when available
+  // (mobile / supported desktop), otherwise copy to clipboard.
+  const handleShare = useCallback(async (look: ManagedLook) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const slug = lookSlug({
+      id: look.id,
+      title: look.title,
+      creator: user?.id ? `user:${user.id}` : '',
+      creatorDisplayName: user?.displayName || null,
+    });
+    const url = `${origin}/l/${slug}`;
+    try {
+      const nav = navigator as Navigator & { share?: (d: { title?: string; url?: string }) => Promise<void> };
+      if (nav.share) {
+        await nav.share({ title: look.title || 'Check out this look', url });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        showToastMsg('Link copied');
+      }
+    } catch {
+      // User dismissed the share sheet, or clipboard denied — no-op.
+    }
+  }, [user?.id, user?.displayName, showToastMsg]);
+
+  // Tile click routing: touch devices open the bottom tool tray;
+  // hover-capable devices open the editor directly (the hover action
+  // bar covers share/delete there).
+  const handleTileClick = useCallback((look: ManagedLook) => {
+    const touch = typeof window !== 'undefined'
+      && window.matchMedia('(hover: none)').matches;
+    if (touch) setTrayLook(look);
+    else handleEdit(look);
+  }, [handleEdit]);
 
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
@@ -307,20 +350,6 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <span className="my-cat-hero-curated">Curated by</span>
         <h1 className="my-cat-hero-name">{displayName}</h1>
 
-        {/* Creator Mode toggle. Sits where CreatorPage shows the Follow
-            button — only the curator themselves sees this surface. */}
-        <button
-          className={`my-cat-mode-toggle${creatorMode ? ' is-on' : ''}`}
-          onClick={() => setCreatorMode(m => !m)}
-          aria-pressed={creatorMode}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          {creatorMode ? 'Creator Mode On' : 'Creator Mode'}
-        </button>
-
         <p className="my-cat-hero-stats">
           {counts.all === 0
             ? 'Your catalog is empty — tap + to publish your first look.'
@@ -370,8 +399,8 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             {tiles.map(({ managed, preview }) => (
               <div
                 key={managed.id}
-                className={`my-cat-tile${creatorMode ? ' my-cat-tile--editing' : ''}`}
-                onClick={() => handleEdit(managed)}
+                className="my-cat-tile"
+                onClick={() => handleTileClick(managed)}
                 role="button"
                 tabIndex={0}
               >
@@ -429,58 +458,40 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                   {STATUS_LABELS[managed.status]}
                 </span>
 
-                {/* Edit/Archive/Delete actions — shown only in Creator
-                    Mode. stopPropagation on the action wrapper so taps
-                    don't bubble to the LookCard click handler. */}
-                {creatorMode && (
-                  <div
-                    className="my-cat-tile-actions"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
+                {/* Desktop hover actions — edit / share / delete. Fades
+                    in on tile hover (CSS); hidden on touch devices, which
+                    use the bottom tool tray instead. stopPropagation so a
+                    click on an icon doesn't also trigger the tile. */}
+                <div
+                  className="my-cat-tile-actions"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className="my-cat-tile-action"
+                    onClick={() => handleEdit(managed)}
+                    title="Edit"
+                    aria-label="Edit"
                   >
-                    <button
-                      className="my-cat-tile-action"
-                      onClick={() => handleEdit(managed)}
-                      title="Edit"
-                      aria-label="Edit"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    </button>
-                    <button
-                      className="my-cat-tile-action"
-                      onClick={() => handleArchive(managed.id)}
-                      title={managed.status === 'archived' ? 'Unarchive' : 'Archive'}
-                      aria-label={managed.status === 'archived' ? 'Unarchive' : 'Archive'}
-                    >
-                      {managed.status === 'archived' ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
-                      )}
-                    </button>
-                    <button
-                      className="my-cat-tile-action my-cat-tile-action--danger"
-                      onClick={() => setDeleteConfirm(managed.id)}
-                      title="Delete"
-                      aria-label="Delete"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                    </button>
-                  </div>
-                )}
-
-                {/* Inline delete confirmation. Sits over the tile so the
-                    confirm-flow stays scoped to the card the user
-                    targeted. */}
-                {deleteConfirm === managed.id && (
-                  <div className="my-cat-delete-confirm" onClick={(e) => e.stopPropagation()}>
-                    <p>Delete this look?</p>
-                    <div className="my-cat-delete-actions">
-                      <button className="my-cat-btn-danger" onClick={() => handleDelete(managed.id)}>Delete</button>
-                      <button className="my-cat-btn-cancel" onClick={() => setDeleteConfirm(null)}>Cancel</button>
-                    </div>
-                  </div>
-                )}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                  </button>
+                  <button
+                    className="my-cat-tile-action"
+                    onClick={() => handleShare(managed)}
+                    title="Share"
+                    aria-label="Share"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+                  </button>
+                  <button
+                    className="my-cat-tile-action my-cat-tile-action--danger"
+                    onClick={() => setDeleteConfirm(managed.id)}
+                    title="Delete"
+                    aria-label="Delete"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -502,6 +513,70 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           )}
         </>
       )}
+
+      {/* Mobile tool tray — slides up when a tile is tapped on touch
+          devices. Edit / Share / Archive / Delete, with the look's
+          thumbnail + title as the header so it's clear which look is
+          being acted on. */}
+      {trayLook && (() => {
+        const tp = previewFor(trayLook);
+        const isArchived = trayLook.status === 'archived';
+        return (
+          <div className="my-cat-tray-backdrop" onClick={() => setTrayLook(null)}>
+            <div className="my-cat-tray" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Look actions">
+              <div className="my-cat-tray-grip" />
+              <div className="my-cat-tray-head">
+                <div className="my-cat-tray-thumb" style={{ backgroundColor: trayLook.color || '#222' }}>
+                  {tp?.poster && <img src={withTransform(tp.poster, { width: 120, quality: 70 })} alt="" />}
+                </div>
+                <div className="my-cat-tray-head-text">
+                  <span className="my-cat-tray-title">{trayLook.title || 'Untitled look'}</span>
+                  <span className="my-cat-tray-status" style={{ color: STATUS_COLORS[trayLook.status] }}>
+                    {STATUS_LABELS[trayLook.status]}
+                  </span>
+                </div>
+              </div>
+              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); handleEdit(l); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                <span>Edit</span>
+              </button>
+              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleShare(l); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+                <span>Share</span>
+              </button>
+              <button className="my-cat-tray-action" onClick={() => { const id = trayLook.id; setTrayLook(null); void handleArchive(id); }}>
+                {isArchived ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
+                )}
+                <span>{isArchived ? 'Unarchive' : 'Archive'}</span>
+              </button>
+              <button className="my-cat-tray-action my-cat-tray-action--danger" onClick={() => { const id = trayLook.id; setTrayLook(null); setDeleteConfirm(id); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                <span>Delete</span>
+              </button>
+              <button className="my-cat-tray-cancel" onClick={() => setTrayLook(null)}>Cancel</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Delete confirmation — centered modal, works on desktop + touch. */}
+      {deleteConfirm && (
+        <div className="my-cat-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
+          <div className="my-cat-confirm" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-label="Delete look">
+            <h3>Delete this look?</h3>
+            <p>This permanently removes “{looks.find(l => l.id === deleteConfirm)?.title || 'this look'}” from your catalog. This can’t be undone.</p>
+            <div className="my-cat-confirm-actions">
+              <button className="my-cat-btn-cancel" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="my-cat-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="my-cat-toast" role="status">{toast}</div>}
     </div>
   );
 }

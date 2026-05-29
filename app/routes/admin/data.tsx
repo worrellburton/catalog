@@ -16,7 +16,9 @@ import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
 import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
+import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
 import { useAdminConfirm } from '~/components/AdminConfirm';
+import { generateAndStorePoster } from '~/utils/video-poster';
 
 interface CrawledProduct {
   id: string;
@@ -1275,8 +1277,13 @@ export default function AdminData() {
         followUps.push(Promise.resolve(supabase
           .from('looks_creative')
           .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
-          .then(({ error }: { error: { message: string } | null }) => {
+          .select('id')
+          .single()
+          .then(({ data: creativeData, error }: { data: { id: string } | null; error: { message: string } | null }) => {
             if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
+            if (creativeData?.id) {
+              void generateAndStorePoster(look.id, creativeData.id, g.video_url!);
+            }
           })));
       }
       if (supabase) {
@@ -1398,6 +1405,7 @@ export default function AdminData() {
   // Shopping → existing research modal, Amazon → Rainforest lookup,
   // Brand Website → URL paste).
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [showPromptSettings, setShowPromptSettings] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -3052,6 +3060,21 @@ export default function AdminData() {
                 <line x1="18" y1="9" x2="18" y2="13"/>
               </svg>
               {ingestingSpecs ? 'Queuing…' : 'Ingest measurements & fabrics'}
+            </button>
+            {/* Global settings — editable AI prompts (Polish Primary,
+                Primary Video). Persists to app_settings; edge functions
+                read it on their next run. */}
+            <button
+              className="admin-btn admin-btn-secondary"
+              onClick={() => setShowPromptSettings(true)}
+              title="Settings — edit the AI prompts used for Polish Primary and Primary Video"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              Settings
             </button>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
@@ -4854,7 +4877,7 @@ export default function AdminData() {
                                   <img
                                     src={(p as { primary_image_url?: string | null }).primary_image_url ?? ''}
                                     alt={`${p.brand} ${p.name} primary`}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                                   />
                                 </button>
                                 {/* Polish CTA — only show on un-polished primaries.
@@ -5830,13 +5853,13 @@ export default function AdminData() {
                     Model · Polish (Image → Image)
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    fal-ai/nano-banana/edit
+                    gemini-2.5-flash-image (nano-banana)
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Reframe this product image into a standardized 5:4 e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
+                    Reframe this product image into a standardized 4:5 (portrait) e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
-                    <span>output: 5:4</span>
+                    <span>output: 4:5</span>
                     <span>preserves: background</span>
                   </div>
                 </div>
@@ -5946,7 +5969,7 @@ export default function AdminData() {
                     Model · Image → Video
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    fal-ai/bytedance/seedance/v2/pro/image-to-video
+                    bytedance/seedance-2.0/image-to-video
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
                     Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Make it 4:5.
@@ -5955,6 +5978,7 @@ export default function AdminData() {
                     <span>aspect: 3:4</span>
                     <span>res: 720p</span>
                     <span>dur: 5s</span>
+                    <span>audio: off</span>
                   </div>
                 </div>
                 {/* arrow */}
@@ -6230,6 +6254,11 @@ export default function AdminData() {
         </div>
       )}
 
+      <PromptSettingsModal
+        open={showPromptSettings}
+        onClose={() => setShowPromptSettings(false)}
+        onSaved={showToast}
+      />
       {showAmazonLookup && (
         <AmazonLookupModal
           onClose={() => setShowAmazonLookup(false)}

@@ -270,6 +270,36 @@ export default function Home() {
     }
   }, [navigate]);
 
+  // "Following" catalog pill (desktop search cloud, via TypeAnywhere)
+  // hands us the resolved follow handles through a CustomEvent. Scope
+  // the feed to them, same as the FollowingRail's CTA.
+  useEffect(() => {
+    const onFollowingCatalog = (e: Event) => {
+      const handles = (e as CustomEvent<{ handles?: string[] }>).detail?.handles ?? [];
+      const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+      if (norm.length === 0) return;
+      setFollowingCatalog(norm);
+      setCatalogName('Following');
+      setCreatorFilter(null);
+      setBrandFilter(null);
+      setView('app');
+    };
+    window.addEventListener('catalog:following-catalog', onFollowingCatalog);
+    return () => window.removeEventListener('catalog:following-catalog', onFollowingCatalog);
+  }, [setView]);
+
+  // Stable callback for the FollowingRail "make a catalog of who I
+  // follow" CTA. Defined once (useCallback) so the memoized FollowingRail
+  // isn't re-rendered by a fresh arrow identity every parent render.
+  const handleCreateFollowingCatalog = useCallback((handles: string[]) => {
+    const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+    if (norm.length === 0) return;
+    setFollowingCatalog(norm);
+    setCatalogName('Following');
+    setCreatorFilter(null);
+    setBrandFilter(null);
+  }, []);
+
   const handleLandingToApp = useCallback(() => {
     setShowSplash(true);
     setView('splash');
@@ -830,13 +860,7 @@ export default function Home() {
               <FollowingRail
                 mode="both"
                 onOpenCreator={handleOpenCreator}
-                onCreateFollowingCatalog={(handles) => {
-                  const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
-                  setFollowingCatalog(norm);
-                  setCatalogName('Following');
-                  setCreatorFilter(null);
-                  setBrandFilter(null);
-                }}
+                onCreateFollowingCatalog={handleCreateFollowingCatalog}
               />
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />

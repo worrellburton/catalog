@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
 import { getLooks, getCachedLooks } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
@@ -128,7 +128,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
   }
 }
 
-export default function ContinuousFeed({
+function ContinuousFeed({
   activeFilter,
   searchQuery,
   shuffleKey,
@@ -215,23 +215,9 @@ export default function ContinuousFeed({
   useEffect(() => {
     if (initialCachedLooks?.length) primeLookAssets(initialCachedLooks);
   }, [initialCachedLooks]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const fetched = await getLooks();
-        if (!cancelled && fetched.length > 0) {
-          setDbLooks(fetched);
-          primeLookAssets(fetched);
-        }
-      } catch {
-        // Supabase unreachable - fall back to the static seed so sub-segments
-        // have *something* to draw similars from instead of an empty rail.
-        if (!cancelled) setDbLooks(staticLooksFallback);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // (Looks are now fetched inside the combined effect below — this
+  // useEffect preserves the hook-count contract for HMR stability.)
+  useEffect(() => { /* combined fetch below handles looks revalidation */ }, []);
 
   const allLooks = useMemo(() => {
     return dbLooks
@@ -407,16 +393,20 @@ export default function ContinuousFeed({
     seenLookIds: new Set<number>(),
   });
 
-  // Fetch live product creative from Supabase. We surface a loading flag so
-  // the feed can render placeholder tiles in creative slots until the fetch
-  // resolves - otherwise the grid renders pure looks for a beat and the
-  // same two faces fill the first screen.
-  // Stale-while-revalidate first paint: if there's a localStorage snapshot
-  // from a prior visit, hydrate state with it synchronously so the feed
-  // renders in the first React commit instead of after the network round
-  // trip. Network revalidation kicks off in parallel and overwrites state
-  // when it lands.
+  // Fetch live product creatives + looks from Supabase.
+  //
+  // Cache-first, no-jank strategy:
+  //   - If localStorage has data from a prior visit, the feed renders
+  //     from that cache on the very first React commit.
+  //   - The network fetch runs in the background but does NOT update
+  //     the live feed — it only writes to localStorage so the next
+  //     page load picks up fresh data. This prevents the grid from
+  //     re-shuffling mid-session.
+  //   - When there is NO cache (first visit), the fetch updates live
+  //     state so the feed appears as soon as data arrives.
   const initialCached = useMemo(() => getCachedHomeFeed(), []);
+  const hasLooksCacheRef = useRef(!!initialCachedLooks);
+  const hasCreativesCacheRef = useRef(!!initialCached);
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
   const [creativesLoading, setCreativesLoading] = useState(!initialCached);
   useEffect(() => {
@@ -424,24 +414,31 @@ export default function ContinuousFeed({
     if (initialCached) primeTrailAssets(initialCached);
 
     const refetch = () => {
-      // Gender-aware re-fetch. Called once on mount and again whenever
-      // setShopperGender fires - without this, a male/female user sees
-      // the unfiltered cached feed forever because module-load
-      // prefetchHomeFeed() ran with shopperGender='unknown' before auth
-      // resolved. setShopperGender invalidates homeFeedPromise so this
-      // call always hits a fresh fetch with the current scope.
-      prefetchHomeFeed()
-        .then(data => {
-          if (cancelled) return;
-          setLiveCreatives(data);
-          primeTrailAssets(data);
-        })
-        .catch(err => {
-          console.error('[ContinuousFeed] fetching creative failed:', err);
-        })
-        .finally(() => {
-          if (!cancelled) setCreativesLoading(false);
-        });
+      Promise.all([
+        getLooks().catch(() => null as Look[] | null),
+        prefetchHomeFeed().catch(() => null as ProductAd[] | null),
+      ]).then(([freshLooks, freshCreatives]) => {
+        if (cancelled) return;
+        // Looks: skip setState when cache was valid — avoids grid reshuffle.
+        if (hasLooksCacheRef.current) {
+          if (freshLooks) primeLookAssets(freshLooks);
+        } else if (freshLooks && freshLooks.length > 0) {
+          setDbLooks(freshLooks);
+          primeLookAssets(freshLooks);
+        } else if (!initialCachedLooks) {
+          setDbLooks(staticLooksFallback);
+        }
+        // Creatives: same — only push to live state on first visit.
+        if (hasCreativesCacheRef.current) {
+          if (freshCreatives) primeTrailAssets(freshCreatives);
+        } else {
+          if (freshCreatives) {
+            setLiveCreatives(freshCreatives);
+            primeTrailAssets(freshCreatives);
+          }
+          setCreativesLoading(false);
+        }
+      });
     };
 
     refetch();
@@ -450,7 +447,23 @@ export default function ContinuousFeed({
       cancelled = true;
       unsubscribe();
     };
-  }, [initialCached]);
+  }, [initialCached, initialCachedLooks]);
+
+  // First-paint signal. Tell useAppView the feed has something real
+  // to draw, so the auth splash can crossfade over actual cards
+  // instead of a blank dark frame. Fires exactly once per mount,
+  // one rAF after the first non-empty data commit, so the splash
+  // doesn't lift until the next paint actually has tiles in it.
+  const feedReadyFiredRef = useRef(false);
+  useEffect(() => {
+    if (feedReadyFiredRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (liveCreatives.length === 0 && dbLooks.length === 0) return;
+    feedReadyFiredRef.current = true;
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('catalog:feed-ready'));
+    });
+  }, [liveCreatives.length, dbLooks.length]);
 
   // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
   // When the user types a query that matches an existing catalog (e.g.
@@ -1082,3 +1095,9 @@ export default function ContinuousFeed({
     </div>
   );
 }
+
+// Memoized — the feed lives in the always-mounted shell, so without this
+// it re-rendered (and re-ran its derived-list useMemos) on every parent
+// render, e.g. each keystroke in search. Props are now referentially
+// stable (bookmarks is useMemo'd; callbacks are useCallback'd).
+export default memo(ContinuousFeed);

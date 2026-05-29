@@ -12,7 +12,18 @@ import {
 // 'unknown' (the default) disables filtering - we never hide the
 // catalog from someone we can't tag.
 type ShopperGender = 'male' | 'female' | 'unknown';
-let shopperGender: ShopperGender = 'unknown';
+const GENDER_LS_KEY = 'catalog:shopper-gender';
+
+function readGenderFromStorage(): ShopperGender {
+  if (typeof window === 'undefined') return 'unknown';
+  try {
+    const v = window.localStorage.getItem(GENDER_LS_KEY);
+    if (v === 'male' || v === 'female') return v;
+  } catch { /* ignore */ }
+  return 'unknown';
+}
+
+let shopperGender: ShopperGender = readGenderFromStorage();
 
 // Pub/sub for gender changes. Consumers (ContinuousFeed, etc.) need to
 // re-fetch when the gender resolves AFTER they've already pulled a
@@ -33,6 +44,7 @@ export function getShopperGender(): ShopperGender {
 export function setShopperGender(g: ShopperGender) {
   if (g === shopperGender) return;
   shopperGender = g;
+  try { window.localStorage.setItem(GENDER_LS_KEY, g); } catch { /* ignore */ }
   // Drop caches so the next callers re-fetch with the new scope.
   homeFeedPromise = null;
   brandCache.clear();

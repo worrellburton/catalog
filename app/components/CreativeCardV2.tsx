@@ -135,9 +135,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // Passing null keeps the card unregistered (still-only path).
   const activeVideoUrl = (!renderAsStill || hoverPlaying) ? playableUrl : null;
 
-  // Poster-first: if we have a still image, skip the shimmer entirely.
-  // The shimmer is only useful as a loading skeleton when there is nothing
-  // to show yet — with a poster we already have pixels to display.
+  // Poster-first: if we have a poster/still image, skip the shimmer
+  // entirely — the <img> paints immediately. Same logic for looks and
+  // products: both use an <img> tag for the poster so the browser's
+  // resource scheduler handles priority and decoding.
   const [loaded, setLoaded] = useState(() => !!posterUrl);
   const impressionTracked = useRef(false);
   const trailMgr = useTrailVideoManager();
@@ -355,10 +356,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
 
-        {/* Static poster — visible behind the video while the director
-            hasn't yet assigned a pool element (status='idle'/'paused').
-            In still mode, shows the retail product image (stillImageUrl)
-            instead of the video thumbnail for better merchandising quality. */}
+        {/* Poster <img> — identical path for looks and products. The
+            browser's preparser discovers <img> tags and schedules fetches
+            with proper priority, decoding, and lazy-loading — CSS
+            backgroundImage gets none of that. */}
         {(renderAsStill ? stillImageUrl : posterUrl) && (
           <img
             className="card-poster"
@@ -366,7 +367,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             alt=""
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
-            {...(priority ? { fetchpriority: 'high' as const } : {})}
+            fetchPriority={priority ? 'high' : undefined}
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
