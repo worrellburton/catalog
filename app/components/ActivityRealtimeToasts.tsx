@@ -131,6 +131,22 @@ export default function ActivityRealtimeToasts() {
       return info;
     }
 
+    // Resolve a look's title + thumbnail, cache-first. Lets a realtime
+    // event for a look created AFTER mount still render an accurate
+    // message instead of a generic "your look".
+    async function resolveLookInfo(lookId: string): Promise<LookInfo> {
+      const cached = lookInfoById.get(lookId);
+      if (cached) return cached;
+      let info: LookInfo = { title: 'your look', thumbnailUrl: null };
+      if (supabase) {
+        const { data } = await supabase
+          .from('looks').select('title, thumbnail_url').eq('id', lookId).maybeSingle();
+        if (data) info = { title: data.title || 'your look', thumbnailUrl: data.thumbnail_url || null };
+      }
+      lookInfoById.set(lookId, info);
+      return info;
+    }
+
     (async () => {
       // 1. Find my looks + their titles + my handle.
       const [looksRes, creatorRes] = await Promise.all([
@@ -141,23 +157,21 @@ export default function ActivityRealtimeToasts() {
       for (const r of ((looksRes.data ?? []) as { id: string; title: string | null; thumbnail_url: string | null }[])) {
         lookInfoById.set(r.id, { title: r.title || 'your look', thumbnailUrl: r.thumbnail_url || null });
       }
-      const lookIds = new Set(lookInfoById.keys());
       const myHandle = creatorRes.data?.handle ?? null;
 
       // 2. Catch-up helper. Pushes one SUMMARY toast per kind.
+      //    Scoped by target_owner_id (the denormalized look owner) so it
+      //    covers every look I own — including ones created after mount —
+      //    and doesn't depend on the lookIds snapshot.
       async function pushCatchupSince(sinceIso: string) {
         if (!supabase) return;
-        if (lookIds.size === 0 && !myHandle) return;
         const [{ data: events }, { data: follows }] = await Promise.all([
-          lookIds.size > 0
-            ? supabase
-                .from('user_events')
-                .select('event_type, target_uuid')
-                .gt('created_at', sinceIso)
-                .neq('user_id', userId)
-                .eq('target_type', 'look')
-                .in('target_uuid', Array.from(lookIds))
-            : Promise.resolve({ data: [] as Array<{ event_type: string; target_uuid: string }> }),
+          supabase
+            .from('user_events')
+            .select('event_type')
+            .gt('created_at', sinceIso)
+            .neq('user_id', userId)
+            .eq('target_owner_id', userId),
           myHandle
             ? supabase
                 .from('creator_follows')
@@ -213,12 +227,23 @@ export default function ActivityRealtimeToasts() {
       //    "Someone tapped your X" to "John tapped your X" after
       //    the profile fetch lands — but the toast renders
       //    immediately rather than waiting on the lookup.
-      if (lookIds.size > 0) {
+      // Server-side filter on the denormalized owner column means
+      // Realtime only sends events that target MY looks — no platform-
+      // wide firehose, and it authorizes cleanly via the simple
+      // `auth.uid() = target_owner_id` policy (a cross-table-subquery
+      // policy isn't reliably evaluated by Realtime, which is what
+      // silently broke this toast before).
+      {
         eventChannel = supabase
           .channel(`activity-events-${userId}`)
           .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'user_events' },
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'user_events',
+              filter: `target_owner_id=eq.${userId}`,
+            },
             (payload) => {
               const row = payload.new as {
                 user_id?: string | null;
@@ -227,21 +252,21 @@ export default function ActivityRealtimeToasts() {
                 target_uuid?: string | null;
               };
               if (!row) return;
-              if (row.user_id === userId) return;
-              if (row.target_type !== 'look') return;
-              if (!row.target_uuid || !lookIds.has(row.target_uuid)) return;
+              if (row.user_id === userId) return;       // skip my own views
+              if (row.target_type !== 'look' || !row.target_uuid) return;
               const k = row.event_type;
               if (k !== 'impression' && k !== 'click' && k !== 'clickout') return;
               const kind: ActivityKind = k;
-              const lookInfo = lookInfoById.get(row.target_uuid) ?? { title: 'your look', thumbnailUrl: null };
+              const lookId = row.target_uuid;
               const verb  = actionVerb(kind);
-              const initial = `Someone ${verb} ${lookInfo.title}`;
+              const cachedLook = lookInfoById.get(lookId);
               const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               setToasts(prev => {
                 const merged: ActivityToast[] = [...prev, {
-                  id, kind, message: initial,
+                  id, kind,
+                  message: `Someone ${verb} ${cachedLook?.title ?? 'your look'}`,
                   avatarUrl: null,
-                  thumbnailUrl: lookInfo.thumbnailUrl,
+                  thumbnailUrl: cachedLook?.thumbnailUrl ?? null,
                   fallbackInitial: '?',
                 }];
                 return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
@@ -249,20 +274,24 @@ export default function ActivityRealtimeToasts() {
               window.setTimeout(() => {
                 setToasts(prev => prev.filter(t => t.id !== id));
               }, TOAST_LIFESPAN_MS);
-              if (row.user_id) {
-                void resolveActorInfo(row.user_id).then(info => {
-                  setToasts(prev => prev.map(t =>
-                    t.id === id
-                      ? {
-                          ...t,
-                          message: `${info.name} ${verb} ${lookInfo.title}`,
-                          avatarUrl: info.avatarUrl,
-                          fallbackInitial: info.name.charAt(0).toUpperCase() || '?',
-                        }
-                      : t,
-                  ));
-                });
-              }
+              // Resolve actor (name + avatar) and look (title + thumb) and
+              // upgrade the toast in place once both land.
+              void Promise.all([
+                row.user_id ? resolveActorInfo(row.user_id) : Promise.resolve<ActorInfo>({ name: 'Someone', avatarUrl: null }),
+                resolveLookInfo(lookId),
+              ]).then(([actor, look]) => {
+                setToasts(prev => prev.map(t =>
+                  t.id === id
+                    ? {
+                        ...t,
+                        message: `${actor.name} ${verb} ${look.title}`,
+                        avatarUrl: actor.avatarUrl,
+                        thumbnailUrl: look.thumbnailUrl,
+                        fallbackInitial: actor.name.charAt(0).toUpperCase() || '?',
+                      }
+                    : t,
+                ));
+              });
               try { localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString()); } catch { /* */ }
             },
           )
