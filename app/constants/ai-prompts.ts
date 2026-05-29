@@ -11,11 +11,13 @@
 export const PROMPT_POLISH_PRIMARY_KEY = 'prompt_polish_primary';
 export const PROMPT_PRIMARY_VIDEO_KEY = 'prompt_primary_video';
 
-// Gemini 2.5 Flash Image (nano-banana) reframe-to-4:5 packshot prompt
-// (polish-primary-image). Portrait to match the 4:5 detail-row tiles +
-// the 4:5 primary video.
+// Gemini 2.5 Flash Image (nano-banana) reframe packshot prompt
+// (polish-primary-image). Portrait to match the detail-row tiles + the
+// primary video. NB: Gemini's supported aspect-ratio enum is { 1:1,
+// 9:16, 16:9, 3:4, 4:3 } — 4:5 returns a 400, so we use 3:4 (~7%
+// wider than 4:5 but visually near-identical in the tile).
 export const DEFAULT_POLISH_PRIMARY_PROMPT = [
-  'Reframe this product image into a standardized e-commerce shot with a 4:5 aspect ratio (portrait, e.g. 1600x2000px).',
+  'Reframe this product image into a standardized e-commerce shot with a 3:4 aspect ratio (portrait, e.g. 1500x2000px).',
   "Keep the product's existing background exactly as-is — do not remove, replace, or alter it.",
   'Center the product both horizontally and vertically so it occupies approximately 60% of the frame, with equal padding (~15% of the canvas) on all four sides, extending the existing background naturally to fill any added space.',
   "Preserve the product's original colors, texture, lighting, proportions, and details exactly — do not alter, recolor, or restyle the product itself.",
