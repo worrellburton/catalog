@@ -1070,7 +1070,19 @@ export default function Home() {
                 onOpenBrand={handleOpenBrand}
                 creative={
                   selectedCreative?.video_url
-                    ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
+                    ? {
+                        id: selectedCreative.id,
+                        videoUrl: selectedCreative.video_url,
+                        // Prefer the polished primary image so the hero
+                        // poster matches the catalog tile exactly — same
+                        // first frame the video animates from. Falls back
+                        // to thumbnail/image when polish hasn't run.
+                        thumbnailUrl:
+                          selectedCreative.product?.primary_image_url
+                          || selectedCreative.thumbnail_url
+                          || selectedCreative.product?.image_url
+                          || null,
+                      }
                     : undefined
                 }
                 similarCreatives={similarCreatives ?? undefined}
