@@ -2735,8 +2735,11 @@ export default function AdminData() {
             position: 'fixed',
             left: hoverPreview.x,
             top: hoverPreview.y,
-            width: 220,
-            height: 290,
+            // True 3:4 portrait — matches the polished primary image's
+            // aspect ratio so the floating preview shows the product at
+            // the same shape as the generated video, no stretching.
+            width: 300,
+            height: 400,
             borderRadius: 8,
             overflow: 'hidden',
             background: '#fff',
