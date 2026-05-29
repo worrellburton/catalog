@@ -2365,6 +2365,7 @@ export default function AdminData() {
       kind: 'polish',
       label,
       context: ctxStr,
+      model: 'gemini-2.5-flash-image',
       thumbnailUrl: product?.primary_image_url || product?.image_url || null,
     });
     try {
@@ -2426,6 +2427,7 @@ export default function AdminData() {
       kind: 'primary-video',
       label,
       context: ctxStr,
+      model: 'seedance-2.0-pro',
       thumbnailUrl: product?.primary_image_url || product?.image_url || null,
     });
     try {

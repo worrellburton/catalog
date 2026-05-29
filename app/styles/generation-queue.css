@@ -100,12 +100,36 @@
   flex-shrink: 0;
 }
 .gen-queue-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
   margin-bottom: 6px;
+  min-width: 0;
+}
+.gen-queue-context-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.gen-queue-model {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gen-queue-bar {
@@ -164,5 +188,10 @@
 .light-mode .gen-queue-count,
 .light-mode .gen-queue-remaining,
 .light-mode .gen-queue-context { color: rgba(15, 23, 42, 0.55); }
+.light-mode .gen-queue-model {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border-color: rgba(34, 197, 94, 0.3);
+}
 .light-mode .gen-queue-bar { background: rgba(0, 0, 0, 0.08); }
 .light-mode .gen-queue-result { color: rgba(15, 23, 42, 0.55); }

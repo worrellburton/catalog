@@ -62,7 +62,12 @@ function GenerationRow({ job, now }: { job: GenerationJob; now: number }) {
           <span className="gen-queue-label">{job.label}</span>
           <span className="gen-queue-remaining">{remaining}</span>
         </div>
-        {job.context && <div className="gen-queue-context">{job.context}</div>}
+        {(job.context || job.model) && (
+          <div className="gen-queue-context">
+            {job.context && <span className="gen-queue-context-text">{job.context}</span>}
+            {job.model && <span className="gen-queue-model" title="AI model">{job.model}</span>}
+          </div>
+        )}
         <div className="gen-queue-bar" aria-hidden>
           <div className={`gen-queue-bar-fill${overEstimate ? ' is-over' : ''}`} style={{ width: `${pct}%` }} />
         </div>

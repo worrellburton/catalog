@@ -21,6 +21,9 @@ export interface GenerationJob {
   label: string;        // human title ("Polish — James Perse sweater")
   /** Optional sub-text ("Lululemon · Pants"). */
   context?: string;
+  /** Human model label rendered as a chip next to context
+   *  ("Gemini 2.5 Flash · nano-banana", "Seedance 2 Pro"). */
+  model?: string;
   /** Optional thumbnail URL — when present, rendered alongside the bar. */
   thumbnailUrl?: string | null;
   startedAt: number;    // ms
@@ -85,6 +88,7 @@ export function startGenerationJob(input: {
   kind: GenerationKind;
   label: string;
   context?: string;
+  model?: string;
   thumbnailUrl?: string | null;
   /** Optional explicit override — otherwise the rolling avg is used. */
   estimatedMs?: number;
@@ -99,6 +103,7 @@ export function startGenerationJob(input: {
     kind: input.kind,
     label: input.label,
     context: input.context,
+    model: input.model,
     thumbnailUrl: input.thumbnailUrl ?? null,
     startedAt: Date.now(),
     estimatedMs: input.estimatedMs ?? getAverageDurationMs(input.kind),
