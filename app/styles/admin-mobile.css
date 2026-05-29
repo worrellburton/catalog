@@ -1,0 +1,527 @@
+/* ──────────────────────────────────────────────────────────────────────
+   Admin · Mobile App Experience
+   ──────────────────────────────────────────────────────────────────────
+   One stylesheet, ten coherent passes. Loaded after admin.css so its
+   mobile rules override anything desktop in the cascade. Triggers only
+   at ≤ 768 px; desktop is untouched. Goal: make the admin feel like a
+   native app on a phone — drawer nav + bottom tab bar shell, real touch
+   targets, sheet modals, tables-as-cards, momentum scroll, safe-area-
+   aware layout, no hover-on-touch UX. */
+
+/* ───── shared tokens ───── */
+:root {
+  --m-safe-top:    env(safe-area-inset-top, 0px);
+  --m-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --m-safe-left:   env(safe-area-inset-left, 0px);
+  --m-safe-right:  env(safe-area-inset-right, 0px);
+  --m-topbar-h:    56px;
+  --m-tabbar-h:    62px;
+  --m-tap:         44px;        /* iOS minimum touch target */
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 1 — Mobile App Shell
+   Sticky topbar + bottom tab bar. The sidebar drawer slides in from the
+   left with a real overlay + spring transition. Main scroll area sits
+   between the bars, hugs the safe areas.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  html, body { overscroll-behavior: none; }
+  .admin-layout {
+    /* The whole admin shell becomes a fixed app: topbar + scrolling main
+       + bottom tab bar. No horizontal scrolling, no page jumps. */
+    display: block;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+  .admin-main {
+    margin-left: 0;
+    padding-top: calc(var(--m-topbar-h) + var(--m-safe-top));
+    padding-bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom));
+    padding-left: var(--m-safe-left);
+    padding-right: var(--m-safe-right);
+    min-height: 100dvh;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: calc(var(--m-topbar-h) + var(--m-safe-top));
+    padding-top: var(--m-safe-top);
+    padding-left: max(12px, var(--m-safe-left));
+    padding-right: max(12px, var(--m-safe-right));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .admin-dark .admin-topbar {
+    background: rgba(15, 15, 17, 0.92);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  .admin-sidebar-toggle {
+    width: var(--m-tap);
+    height: var(--m-tap);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    flex-shrink: 0;
+  }
+  .admin-sidebar-toggle:active { background: rgba(0, 0, 0, 0.06); }
+  .admin-dark .admin-sidebar-toggle:active { background: rgba(255, 255, 255, 0.10); }
+
+  /* Drawer — slides in from the left, full-height, spring curve. */
+  .admin-sidebar {
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    width: min(86vw, 320px);
+    transform: translateX(-100%);
+    transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 200;
+    padding-top: calc(var(--m-safe-top) + 8px);
+    padding-bottom: calc(var(--m-safe-bottom) + 8px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.18);
+  }
+  .admin-sidebar-open .admin-sidebar { transform: translateX(0); }
+  .admin-sidebar-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+    z-index: 150;
+  }
+  .admin-sidebar-open .admin-sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Drawer nav items get the same large-tap treatment. */
+  .admin-nav-item {
+    min-height: var(--m-tap);
+    padding: 12px 16px;
+    font-size: 15px;
+    border-radius: 12px;
+    margin: 2px 8px;
+  }
+  .admin-nav-item:active { transform: scale(0.98); }
+
+  /* Search collapses to an icon on mobile — the topbar is too narrow
+     for a real input. Tapping the icon expands inline. (For now the
+     existing search input still works on focus; just trim its width.) */
+  .admin-search-wrap {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    border-radius: 12px;
+  }
+  .admin-search-input { font-size: 16px; /* prevent iOS zoom */ }
+  .admin-search-shortcut { display: none; }
+
+  /* ───── Bottom Tab Bar ───── */
+  .admin-mobile-tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding-bottom: var(--m-safe-bottom);
+    height: calc(var(--m-tabbar-h) + var(--m-safe-bottom));
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    z-index: 100;
+  }
+  .admin-dark .admin-mobile-tabbar {
+    background: rgba(15, 15, 17, 0.94);
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+  .admin-mobile-tab {
+    flex: 1;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 6px 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 140ms ease;
+  }
+  .admin-mobile-tab svg { color: inherit; transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .admin-mobile-tab:active svg { transform: scale(0.85); }
+  .admin-mobile-tab.is-active { color: #0f172a; }
+  .admin-dark .admin-mobile-tab.is-active { color: #f1f5f9; }
+  .admin-mobile-tab.is-active svg { transform: scale(1.05); }
+  /* Hide on desktop — the sidebar handles nav there. */
+}
+@media (min-width: 769px) {
+  .admin-mobile-tabbar { display: none !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 2 — Touch Targets ≥ 44 px
+   Every interactive element gets real finger space. Inputs prevent iOS
+   auto-zoom (font-size ≥ 16 px). Buttons get an active scale for tactile
+   feedback.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-btn,
+  .admin-btn-primary,
+  .admin-btn-secondary,
+  .admin-btn-danger,
+  button.admin-link,
+  .admin-tab {
+    min-height: var(--m-tap);
+    padding: 11px 16px;
+    font-size: 14px;
+    border-radius: 12px;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 120ms ease, background 160ms ease;
+  }
+  .admin-btn:active,
+  .admin-btn-primary:active,
+  .admin-btn-secondary:active,
+  .admin-btn-danger:active { transform: scale(0.97); }
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px;
+    min-height: var(--m-tap);
+    border-radius: 12px;
+  }
+  /* Compact icon buttons (close, etc.) keep their look but get a
+     transparent hit-pad so the tap area is still 44 px. */
+  button[aria-label] { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 3 — Tables → Cards
+   Every .admin-table on mobile collapses into a stack of cards. Each row
+   becomes a card; each td displays its label via data-label (when set
+   in JSX) or the table's column header (via CSS counters fallback). For
+   un-labelled tables this gracefully degrades to a horizontal scroll
+   container so nothing ever spills off-screen.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -12px;
+    padding: 0 12px;
+    border-radius: 0;
+  }
+  /* Card-mode opt-in: tables tagged .admin-table--cards (or having
+     data-label='X' on every td) render each row as a glass card. */
+  .admin-table.admin-table--cards,
+  .admin-table[data-mobile-cards] {
+    display: block;
+  }
+  .admin-table.admin-table--cards thead,
+  .admin-table[data-mobile-cards] thead { display: none; }
+  .admin-table.admin-table--cards tbody,
+  .admin-table[data-mobile-cards] tbody { display: block; }
+  .admin-table.admin-table--cards tr,
+  .admin-table[data-mobile-cards] tr {
+    display: block;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  .admin-dark .admin-table.admin-table--cards tr,
+  .admin-dark .admin-table[data-mobile-cards] tr {
+    background: #1c1c1e;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .admin-table.admin-table--cards td,
+  .admin-table[data-mobile-cards] td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    font-size: 13.5px;
+  }
+  .admin-table.admin-table--cards td::before,
+  .admin-table[data-mobile-cards] td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-right: 12px;
+  }
+  .admin-table.admin-table--cards td:last-child,
+  .admin-table[data-mobile-cards] td:last-child { border-bottom: none; }
+  /* Standard tables (most of admin) get smooth horizontal scrolling so
+     nothing breaks even without the cards opt-in. */
+  .admin-table { font-size: 12.5px; }
+  .admin-table th, .admin-table td { padding: 8px 10px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 4 — Modals → Bottom Sheets
+   On mobile every .admin-modal-overlay shows its child as a bottom
+   sheet: hugs the bottom edge, rounded top corners, drag handle,
+   slides up with a spring. Backdrop is darker + full-screen.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .admin-modal-overlay > .admin-modal,
+  .admin-modal-overlay > div[role="dialog"],
+  .admin-modal-overlay > div[onclick] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 92vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 18px !important;
+    padding-bottom: calc(18px + var(--m-safe-bottom)) !important;
+    animation: admin-sheet-up 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  /* Drag-handle pill at the top of every sheet. */
+  .admin-modal-overlay > .admin-modal::before,
+  .admin-modal-overlay > div[role="dialog"]::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.18);
+    margin: -4px auto 12px;
+  }
+  .admin-dark .admin-modal-overlay > .admin-modal::before,
+  .admin-dark .admin-modal-overlay > div[role="dialog"]::before {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+@keyframes admin-sheet-up {
+  from { transform: translateY(100%); opacity: 0.4; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 5 — Form / Editor UX
+   Bigger labels, larger gaps, sticky bottom save bars feel natural on
+   touch. Number inputs get inputMode-friendly height. Long forms
+   inside sheets scroll smoothly.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  label { font-size: 13px; }
+  .admin-form-row, .admin-form-group { gap: 10px; }
+  .admin-fab,
+  .admin-sticky-save {
+    position: sticky;
+    bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom) + 8px);
+    z-index: 50;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 6 — Page Headers Stack Cleanly
+   The classic Title + subtitle + 4 toolbar buttons row breaks on phones.
+   Stack on mobile, scroll the toolbar horizontally if it's long.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .admin-page-header h1 { font-size: 22px; line-height: 1.15; }
+  .admin-page-header > div {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    padding-bottom: 4px;
+    margin: 0 -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    scrollbar-width: none;
+  }
+  .admin-page-header > div::-webkit-scrollbar { display: none; }
+  .admin-page-header .admin-btn { flex-shrink: 0; }
+  .admin-page-subtitle { font-size: 13px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 7 — Tabs scroll horizontally on mobile
+   Big admin pages have tabs ("Looks · Products · Musics · Places · …")
+   that overflow. Make them swipe-scrollable with snap.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    flex-wrap: nowrap;
+    margin: 0 -12px;
+    padding: 0 12px;
+    scrollbar-width: none;
+  }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tab {
+    scroll-snap-align: center;
+    flex-shrink: 0;
+    font-size: 13.5px;
+    padding: 10px 14px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 8 — Bulk Action Bar + Generation Queue + Toasts
+   Keep them above the bottom tab bar; respect safe-area; full-width on
+   narrow phones with proper insets.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-bulk-bar {
+    bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom) + 10px) !important;
+    left: max(8px, var(--m-safe-left)) !important;
+    right: max(8px, var(--m-safe-right)) !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+  .gen-queue {
+    bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom) + 10px) !important;
+    right: max(8px, var(--m-safe-right)) !important;
+    left: max(8px, var(--m-safe-left)) !important;
+    width: auto !important;
+  }
+  .admin-toast {
+    bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom) + 16px) !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 9 — Disable Hover Styles on Touch
+   Hover-only feedback is a desktop affordance. On touch devices, only
+   the :active state should change the UI. This kills the "stuck hover"
+   look on iOS after a tap.
+   ───────────────────────────────────────────────────────────────────── */
+@media (hover: none) {
+  .admin-btn:hover,
+  .admin-btn-primary:hover,
+  .admin-btn-secondary:hover,
+  .admin-nav-item:hover,
+  .admin-table tr:hover td,
+  .admin-tab:hover,
+  .admin-search-result:hover {
+    background: inherit !important;
+    color: inherit !important;
+    transform: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PASS 10 — Polish · momentum scroll · transitions · gestures
+   Every overflow:auto gets touch momentum. Cards have an active-scale
+   tap. Lists get spring transitions. The whole admin disables the
+   iOS bounce-overscroll for a stable app feel.
+   ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-layout,
+  .admin-main,
+  .admin-sidebar,
+  .admin-table-wrap,
+  .admin-modal-overlay > .admin-modal,
+  .admin-modal-overlay > div[role="dialog"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  /* Smaller bigger-feel rows: dense data lists get touch padding */
+  .admin-row, .admin-list-row, .admin-product-row {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  /* Active feedback on every tappable thing — gives the UI tactile life. */
+  a, button, .admin-card {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a:active, button:active {
+    transition: transform 80ms ease;
+  }
+  /* Improve scroll perf on long admin pages. */
+  .admin-main, .admin-content, .admin-page {
+    will-change: scroll-position;
+    contain: layout style;
+  }
+  /* Visually-elevated active route in the drawer. */
+  .admin-nav-item.active {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(99, 102, 241, 0.08));
+    color: #7c3aed;
+    font-weight: 700;
+  }
+  .admin-dark .admin-nav-item.active {
+    background: linear-gradient(135deg, rgba(167, 139, 250, 0.20), rgba(99, 102, 241, 0.12));
+    color: #c4b5fd;
+  }
+  /* Light-mode card backgrounds visible against the bg */
+  .admin-card,
+  .admin-stat-card,
+  .admin-section {
+    border-radius: 14px;
+  }
+  /* Hide the desktop sidebar shortcut hint */
+  .admin-search-shortcut { display: none; }
+  /* Tighten subtle dividers on phones */
+  hr { border-color: rgba(0, 0, 0, 0.08); }
+  .admin-dark hr { border-color: rgba(255, 255, 255, 0.08); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Reduced motion — disable all spring transitions for users who
+   prefer reduced motion (system setting).
+   ────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar { transition: none !important; }
+  .admin-modal-overlay > .admin-modal,
+  .admin-modal-overlay > div[role="dialog"] { animation: none !important; }
+  .admin-mobile-tab svg,
+  .admin-btn,
+  .admin-btn-primary,
+  .admin-btn-secondary { transition: none !important; }
+}
