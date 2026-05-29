@@ -12,16 +12,18 @@ export const PROMPT_POLISH_PRIMARY_KEY = 'prompt_polish_primary';
 export const PROMPT_PRIMARY_VIDEO_KEY = 'prompt_primary_video';
 
 // Gemini 2.5 Flash Image (nano-banana) reframe packshot prompt
-// (polish-primary-image). Portrait to match the detail-row tiles + the
-// primary video. NB: Gemini's supported aspect-ratio enum is { 1:1,
-// 9:16, 16:9, 3:4, 4:3 } — 4:5 returns a 400, so we use 3:4 (~7%
-// wider than 4:5 but visually near-identical in the tile).
+// (polish-primary-image). "Add padding" framing is much stricter than
+// "occupies 60%" — Gemini was reading the latter as "make the product
+// bigger" and producing zoomed crops. Explicit DO NOT ZOOM language +
+// concrete pixel padding numbers fix this.
 export const DEFAULT_POLISH_PRIMARY_PROMPT = [
-  'Reframe this product image into a standardized e-commerce shot with a 3:4 aspect ratio (portrait, e.g. 1500x2000px).',
-  "Keep the product's existing background exactly as-is — do not remove, replace, or alter it.",
-  'Center the product both horizontally and vertically so it occupies approximately 60% of the frame, with equal padding (~15% of the canvas) on all four sides, extending the existing background naturally to fill any added space.',
-  "Preserve the product's original colors, texture, lighting, proportions, and details exactly — do not alter, recolor, or restyle the product itself.",
-  'Output a crisp image suitable for a uniform product catalog grid.',
+  'Take the supplied product image and convert it to a 3:4 portrait aspect ratio.',
+  'DO NOT zoom in. DO NOT crop the product or change its size. The product must appear at the SAME SCALE as in the source image — never larger.',
+  'Add neutral padding (extend the existing background) above, below, and on the sides as needed to reach a 3:4 canvas.',
+  'The product should occupy about 60–70% of the canvas HEIGHT, with clear empty space (background) above and below it. Generous breathing room.',
+  "Keep the product's existing background exactly as-is — do not remove, replace, or recolor it. Extend it naturally into the new padding area.",
+  "Preserve the product's original colors, texture, lighting, proportions, and every detail exactly. Do not restyle the product.",
+  'Output a crisp packshot with comfortable margin around the product.',
 ].join(' ');
 
 // Seedance 2.0 image-to-video subtle-motion prompt (generate-primary-video).
