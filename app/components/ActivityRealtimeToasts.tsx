@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { useCountUp } from '~/utils/useCountUp';
 
 /**
  * Activity — single notification pipeline for engagement events.
@@ -30,30 +32,38 @@ type ActivityKind = 'impression' | 'click' | 'clickout' | 'follow';
 interface ActivityToast {
   id: string;
   kind: ActivityKind;
-  message: string;
-  /** Avatar of the actor whose event triggered this toast. Null for
-   *  catch-up summary toasts (no single actor). */
+  /** For per-event toasts: free-form message ("John tapped your look").
+   *  For summary toasts: undefined — the toast renders {count} + label. */
+  message?: string;
+  /** Avatar of the actor whose event triggered this toast. */
   avatarUrl?: string | null;
-  /** Thumbnail of the look the actor engaged with. Same null rule
-   *  as avatarUrl. */
+  /** Thumbnail of the look the actor engaged with. */
   thumbnailUrl?: string | null;
-  /** Short label rendered under the message (e.g. "viewed your
-   *  beach look") so the avatar+thumb pair carries context without
-   *  needing a wall of text. */
   fallbackInitial?: string;
+  /** Summary-toast number (animated count-up). Undefined for per-event. */
+  count?: number;
 }
 
-const MAX_VISIBLE = 5;
+const MAX_VISIBLE = 4;
 const TOAST_LIFESPAN_MS = 6000;
 const SUMMARY_TOAST_LIFESPAN_MS = 9000;
 const LAST_SEEN_KEY = 'activity:last-seen-at';
 
-const KIND_ICON: Record<ActivityKind, string> = {
-  impression: '👁',
-  click:      '👆',
-  clickout:   '🛒',
-  follow:     '＋',
-};
+// SVG icon per kind. Rendered inside the toast's accent disc.
+function KindIcon({ kind }: { kind: ActivityKind }) {
+  const common = { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (kind === 'impression') {
+    return (<svg {...common}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>);
+  }
+  if (kind === 'click') {
+    return (<svg {...common}><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v6.74" /><path d="M14 13.5V9.5a2.5 2.5 0 0 1 5 0v6c0 3.5-2.5 6-6 6h-1.5a4 4 0 0 1-3.6-2.2L4.6 14a2 2 0 0 1 3.4-2.1L9 13" /></svg>);
+  }
+  if (kind === 'clickout') {
+    return (<svg {...common}><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>);
+  }
+  // follow
+  return (<svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>);
+}
 
 function actionVerb(kind: Exclude<ActivityKind, 'follow'>): string {
   if (kind === 'impression') return 'viewed';
@@ -66,6 +76,23 @@ function summaryNoun(kind: ActivityKind, n: number): string {
   if (kind === 'click')      return n === 1 ? 'new tap'     : 'new taps';
   if (kind === 'clickout')   return n === 1 ? 'new checkout': 'new checkouts';
   return n === 1 ? 'new follower' : 'new followers';
+}
+
+// Push a summary toast with an animated count (used by catch-up).
+function pushSummary(
+  setToasts: React.Dispatch<React.SetStateAction<ActivityToast[]>>,
+  kind: ActivityKind,
+  count: number,
+) {
+  if (count <= 0) return;
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  setToasts(prev => {
+    const merged: ActivityToast[] = [...prev, { id, kind, count }];
+    return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
+  });
+  window.setTimeout(() => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, SUMMARY_TOAST_LIFESPAN_MS);
 }
 
 export default function ActivityRealtimeToasts() {
@@ -188,10 +215,10 @@ export default function ActivityRealtimeToasts() {
           if (e.event_type === 'clickout')   clickouts += 1;
         }
         const followers = (follows ?? []).length;
-        if (clickouts > 0) pushRef.current('clickout',   `+${clickouts.toLocaleString()} ${summaryNoun('clickout', clickouts)}`, SUMMARY_TOAST_LIFESPAN_MS);
-        if (clicks    > 0) pushRef.current('click',      `+${clicks.toLocaleString()} ${summaryNoun('click',    clicks)}`,      SUMMARY_TOAST_LIFESPAN_MS);
-        if (followers > 0) pushRef.current('follow',     `+${followers.toLocaleString()} ${summaryNoun('follow', followers)}`,  SUMMARY_TOAST_LIFESPAN_MS);
-        if (imps      > 0) pushRef.current('impression', `+${imps.toLocaleString()} ${summaryNoun('impression', imps)}`,        SUMMARY_TOAST_LIFESPAN_MS);
+        if (clickouts > 0) pushSummary(setToasts, 'clickout',   clickouts);
+        if (clicks    > 0) pushSummary(setToasts, 'click',      clicks);
+        if (followers > 0) pushSummary(setToasts, 'follow',     followers);
+        if (imps      > 0) pushSummary(setToasts, 'impression', imps);
       }
 
       // 3. Mount-time catch-up.
@@ -356,30 +383,54 @@ export default function ActivityRealtimeToasts() {
     };
   }, [user, loading]);
 
+  const navigate = useNavigate();
+  const openInsights = useCallback(() => {
+    // Deep-linkable URL — _index detects /earnings and opens the wallet
+    // (insights + earnings). useNavigate pushes a history entry, so
+    // browser-back returns to whatever in-app screen the user was on.
+    navigate('/earnings');
+  }, [navigate]);
+
   if (toasts.length === 0) return null;
   return (
     <div className="activity-toasts" role="status" aria-live="polite">
-      {toasts.map(t => {
-        // Per-event toasts render avatar (left) + thumb (right); the
-        // catch-up summaries (no per-actor context) fall back to the
-        // emoji puck so the visual language still differs.
-        const hasPerEvent = t.avatarUrl !== undefined || t.thumbnailUrl !== undefined;
-        return (
-          <div key={t.id} className={`activity-toast activity-toast--${t.kind}${hasPerEvent ? ' activity-toast--rich' : ''}`}>
-            {hasPerEvent ? (
-              t.avatarUrl
-                ? <img className="activity-toast-avatar" src={t.avatarUrl} alt="" />
-                : <span className="activity-toast-avatar activity-toast-avatar--initial" aria-hidden>{t.fallbackInitial || '?'}</span>
-            ) : (
-              <span className="activity-toast-icon" aria-hidden>{KIND_ICON[t.kind]}</span>
-            )}
-            <span className="activity-toast-message">{t.message}</span>
-            {hasPerEvent && t.thumbnailUrl && (
-              <img className="activity-toast-thumb" src={t.thumbnailUrl} alt="" />
-            )}
-          </div>
-        );
-      })}
+      {toasts.map(t => <ActivityToastRow key={t.id} toast={t} onClick={openInsights} />)}
     </div>
+  );
+}
+
+// Single toast row. Centered glass pill in catalog branding; SVG icon
+// on the left, animated count on summary toasts, click anywhere to
+// jump into Insights/Earnings.
+function ActivityToastRow({ toast, onClick }: { toast: ActivityToast; onClick: () => void }) {
+  const isSummary = typeof toast.count === 'number';
+  const animated = useCountUp(toast.count ?? 0, 900);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`activity-toast activity-toast--${toast.kind}${isSummary ? ' activity-toast--summary' : ' activity-toast--rich'}`}
+      aria-label="Open insights"
+    >
+      <span className="activity-toast-icon-disc" aria-hidden>
+        <KindIcon kind={toast.kind} />
+      </span>
+      {isSummary ? (
+        <span className="activity-toast-summary">
+          <span className="activity-toast-count">+{animated.toLocaleString()}</span>
+          <span className="activity-toast-summary-label">{summaryNoun(toast.kind, toast.count ?? 0)}</span>
+        </span>
+      ) : (
+        <>
+          {toast.avatarUrl ? (
+            <img className="activity-toast-avatar" src={toast.avatarUrl} alt="" />
+          ) : (
+            <span className="activity-toast-avatar activity-toast-avatar--initial" aria-hidden>{toast.fallbackInitial || '?'}</span>
+          )}
+          <span className="activity-toast-message">{toast.message}</span>
+          {toast.thumbnailUrl && <img className="activity-toast-thumb" src={toast.thumbnailUrl} alt="" />}
+        </>
+      )}
+    </button>
   );
 }

@@ -85,6 +85,11 @@ export default defineConfig({
           route("p/:slug", "routes/p.$slug.tsx");
           route("l/:slug", "routes/l.$slug.tsx");
           route("b/:slug", "routes/b.$slug.tsx");
+          // Insights / earnings deep-link. Re-exports _index so the
+          // home feed mounts; _index detects /earnings and opens the
+          // wallet overlay. Real history entry → browser back returns
+          // to the user's prior in-app screen, not an external page.
+          route("earnings", "routes/earnings.tsx");
 
           // Admin routes
           route("admin", "routes/admin/route.tsx", () => {
