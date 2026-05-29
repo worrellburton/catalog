@@ -34,7 +34,7 @@ interface CrawledProduct {
    *  pick-primary-image edge function or the admin star-click. */
   primary_image_url?: string | null;
   /** True once polish-primary-image has reframed the primary into a
-   *  uniform 5:4 packshot. Drives the "polish wand" affordance in the
+   *  uniform 3:4 packshot. Drives the "polish wand" affordance in the
    *  admin Primary column — unpolished primaries get a tappable wand
    *  icon overlay, polished ones don't. */
   primary_image_polished?: boolean | null;
@@ -4357,7 +4357,7 @@ export default function AdminData() {
                                   if (!polishing && p.id) polishPrimaryImage(p.id);
                                 }}
                                 disabled={polishing}
-                                title={polishing ? 'Polishing primary image…' : 'Polish — reframe into uniform 5:4 packshot'}
+                                title={polishing ? 'Polishing primary image…' : 'Polish — reframe into uniform 3:4 packshot'}
                                 style={{
                                   position: 'absolute',
                                   bottom: -4,
@@ -4896,7 +4896,7 @@ export default function AdminData() {
                                   title="Open primary image full-size"
                                   style={{
                                     width: '100%',
-                                    aspectRatio: '4 / 5',
+                                    aspectRatio: '3 / 4',
                                     borderRadius: 8,
                                     border: '2px solid #16a34a',
                                     boxShadow: '0 0 0 1px #16a34a, 0 4px 14px rgba(22,163,74,0.18)',
@@ -4915,7 +4915,7 @@ export default function AdminData() {
                                 </button>
                                 {/* Polish CTA — only show on un-polished primaries.
                                     The wand kicks off polish-primary-image which
-                                    reframes the source into a uniform 5:4 shot. */}
+                                    reframes the source into a uniform 3:4 shot. */}
                                 {p.id && (() => {
                                   const isPolishing = p.id ? polishingIds.has(p.id) : false;
                                   const polished = (p as { primary_image_polished?: boolean | null }).primary_image_polished === true;
@@ -4974,7 +4974,7 @@ export default function AdminData() {
                                           ? 'Polishing primary image…'
                                           : (polished
                                               ? 'Re-polish — reframe again'
-                                              : 'Polish — reframe into uniform 5:4 packshot')}
+                                              : 'Polish — reframe into uniform 3:4 packshot')}
                                         style={{
                                           position: 'absolute',
                                           top: 8,
@@ -5021,7 +5021,7 @@ export default function AdminData() {
                             ) : (
                               <div style={{
                                 width: '100%',
-                                aspectRatio: '4 / 5',
+                                aspectRatio: '3 / 4',
                                 borderRadius: 8,
                                 border: '1px dashed #cbd5e1',
                                 background: '#f8fafc',
@@ -5070,7 +5070,7 @@ export default function AdminData() {
                                       title="Click to enlarge"
                                       style={{
                                         width: '100%',
-                                        aspectRatio: '4 / 5',
+                                        aspectRatio: '3 / 4',
                                         borderRadius: 8,
                                         border: '2px solid #7c3aed',
                                         boxShadow: '0 0 0 1px #7c3aed, 0 4px 14px rgba(124,58,237,0.18)',
@@ -5164,7 +5164,7 @@ export default function AdminData() {
                                 <div style={{
                                   position: 'relative',
                                   width: '100%',
-                                  aspectRatio: '4 / 5',
+                                  aspectRatio: '3 / 4',
                                   borderRadius: 8,
                                   border: '1px dashed #cbd5e1',
                                   background: '#f8fafc',
@@ -5893,7 +5893,7 @@ export default function AdminData() {
                     Input · {wasPolished ? 'Pre-polish image' : 'Current image (unpolished)'}
                   </div>
                   {(prePolishUrl || currentUrl) ? (
-                    <img src={(prePolishUrl || currentUrl) ?? ''} alt="Pre-polish source" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
+                    <img src={(prePolishUrl || currentUrl) ?? ''} alt="Pre-polish source" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
                   ) : (
                     <div style={{ fontSize: 12, color: '#94a3b8' }}>(no source image)</div>
                   )}
@@ -5907,10 +5907,10 @@ export default function AdminData() {
                     gemini-2.5-flash-image (nano-banana)
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Reframe this product image into a standardized 4:5 (portrait) e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
+                    Reframe this product image into a standardized 3:4 (portrait) e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
-                    <span>output: 4:5</span>
+                    <span>output: 3:4</span>
                     <span>preserves: background</span>
                   </div>
                 </div>
@@ -5921,7 +5921,7 @@ export default function AdminData() {
                     Output · {wasPolished ? 'Polished image' : 'Awaiting polish'}
                   </div>
                   {wasPolished && currentUrl ? (
-                    <img src={currentUrl} alt="Polished" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
+                    <img src={currentUrl} alt="Polished" style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'contain', background: '#f1f5f9', borderRadius: 8 }} />
                   ) : (
                     <div style={{ fontSize: 12, color: '#94a3b8' }}>(no polished image yet)</div>
                   )}
@@ -6023,7 +6023,7 @@ export default function AdminData() {
                     bytedance/seedance-2.0/image-to-video
                   </div>
                   <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Make it 4:5.
+                    Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Portrait composition.
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
                     <span>aspect: 3:4</span>
@@ -6052,7 +6052,7 @@ export default function AdminData() {
                     <video
                       src={videoUrl}
                       autoPlay muted loop playsInline preload="metadata"
-                      style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'contain', background: '#0f172a', borderRadius: 8 }}
+                      style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'contain', background: '#0f172a', borderRadius: 8 }}
                     />
                   ) : (
                     <div style={{ fontSize: 12, color: '#94a3b8' }}>(no video yet)</div>
