@@ -3399,16 +3399,16 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
             onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
           />
-          <CreativesListTable title="Creative Videos" creatives={creatives} />
-          {!isUniverse && (
-            <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
-          )}
           <ProductsListTable
             products={sortedProducts}
             selectedIds={selectedProductIds}
             onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
             onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
           />
+          <CreativesListTable title="Creative Videos" creatives={creatives} />
+          {!isUniverse && (
+            <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
+          )}
         </>
       ) : (
         <>
@@ -3427,6 +3427,25 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
                 selected={selectedLookIds.has(l.id)}
                 onSelect={(ext) => toggleSelection('look', l.id, idx, sortedLooks, ext)}
                 onOpenDetail={() => setDrawer({ kind: 'look', look: l })}
+              />
+            ))}
+          </DraggableSection>
+
+          <DraggableSection
+            title="Products"
+            count={sortedProducts.length}
+            emptyMessage="No products match the current filter."
+            minColumnPx={140}
+            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+            onReorder={(from, to) => onReorder('products', from, to)}
+          >
+            {sortedProducts.map((p, idx) => (
+              <ProductMetricTile
+                key={p.id}
+                product={p}
+                selected={selectedProductIds.has(p.id)}
+                onSelect={(ext) => toggleSelection('product', p.id, idx, sortedProducts, ext)}
+                onOpenDetail={() => setDrawer({ kind: 'product', product: p })}
               />
             ))}
           </DraggableSection>
@@ -3458,25 +3477,6 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               ))}
             </DraggableSection>
           )}
-
-          <DraggableSection
-            title="Products"
-            count={sortedProducts.length}
-            emptyMessage="No products match the current filter."
-            minColumnPx={140}
-            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
-            onReorder={(from, to) => onReorder('products', from, to)}
-          >
-            {sortedProducts.map((p, idx) => (
-              <ProductMetricTile
-                key={p.id}
-                product={p}
-                selected={selectedProductIds.has(p.id)}
-                onSelect={(ext) => toggleSelection('product', p.id, idx, sortedProducts, ext)}
-                onOpenDetail={() => setDrawer({ kind: 'product', product: p })}
-              />
-            ))}
-          </DraggableSection>
         </>
       )}
 
