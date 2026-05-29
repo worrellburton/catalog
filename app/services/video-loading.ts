@@ -38,26 +38,44 @@ export function isSlowConnection(): boolean {
 /** Picks `mobile_video_url` when we're on a mobile viewport / slow
  *  connection AND the variant exists; otherwise falls back to the
  *  full-res `video_url`. Never returns an empty string - the caller
- *  is responsible for the null case (no playable variant at all). */
-export function pickVideoUrl(creative: Pick<ProductAd, 'video_url' | 'mobile_video_url'>): string | null {
+ *  is responsible for the null case (no playable variant at all).
+ *
+ *  Product preference: when the joined product carries a
+ *  `primary_video_url` (the polished i2v Seedance clip we generate
+ *  per-SKU), we prefer it over the creative's legacy `video_url` —
+ *  product cards in the feed should surface the canonical product
+ *  video, not whatever ad clip was minted earlier. Look cards still
+ *  use the creative's own video. */
+export function pickVideoUrl(creative: {
+  video_url?: string | null;
+  mobile_video_url?: string | null;
+  product?: { primary_video_url?: string | null } | null;
+}): string | null {
+  const primary = creative.product?.primary_video_url;
+  if (primary) return primary;
   const wantMobile = isMobileViewport() || isSlowConnection();
   if (wantMobile && creative.mobile_video_url) return creative.mobile_video_url;
   return creative.video_url ?? creative.mobile_video_url ?? null;
 }
 
 /** Picks the best poster image. Order:
- *    1. Creative thumbnail (a frame extracted at upload time)
- *    2. Vision-picked primary product image (solo shot, no human)
+ *    1. Vision-picked + polished primary product image (clean packshot)
+ *    2. Creative thumbnail (a frame extracted at upload time)
  *    3. Legacy product image_url
  *    4. First product image
  *    5. Empty string - caller renders nothing.
  *  Used as the <video poster=> attribute so the browser paints a
- *  real image on first paint, before the MP4 has decoded a frame. */
+ *  real image on first paint, before the MP4 has decoded a frame.
+ *
+ *  primary_image_url is preferred so that, when paired with a product's
+ *  primary_video_url (above), the poster→video swap is from the exact
+ *  same canonical asset family — same shape, same crop, no jump. */
 export function pickPosterUrl(creative: {
   thumbnail_url?: string | null;
   product?: { image_url?: string | null; primary_image_url?: string | null; images?: string[] | null } | null;
 }): string {
-  return creative.thumbnail_url
+  return creative.product?.primary_image_url
+    || creative.thumbnail_url
     || creative.product?.image_url
     || (creative.product?.images && creative.product.images[0])
     || '';
