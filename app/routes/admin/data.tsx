@@ -1467,6 +1467,15 @@ export default function AdminData() {
   // image; the highest "solo product" shot becomes products.primary_image_url.
   const [pickingPrimary, setPickingPrimary] = useState(false);
   const [primaryProgress, setPrimaryProgress] = useState<{ done: number; total: number; failed: number } | null>(null);
+  // Bulk Polish / Generate primary video — separate counters from the
+  // per-tile progress so the bulk-bar can show its own batch state
+  // while individual rows keep their inline spinners. The global
+  // Generation Queue panel handles per-product progress bars; these
+  // counters just drive the bulk-pill label text.
+  const [bulkPolishing, setBulkPolishing] = useState(false);
+  const [bulkPolishProgress, setBulkPolishProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkVideoGenerating, setBulkVideoGenerating] = useState(false);
+  const [bulkVideoProgress, setBulkVideoProgress] = useState<{ done: number; total: number } | null>(null);
 
   // runPickPrimaryImages is defined further down — after showToast — to
   // avoid the TDZ on the useCallback deps array. The button binds to
@@ -4013,6 +4022,94 @@ export default function AdminData() {
               {pickingPrimary && primaryProgress
                 ? `Picking ${primaryProgress.done}/${primaryProgress.total}…`
                 : 'Pick primary'}
+            </button>
+            {/* Bulk Polish — reframes each selected product's primary
+                image into a 3:4 packshot via Gemini nano-banana.
+                Sequenced 3-at-a-time so we don't burst the API. The
+                global Generation Queue (bottom-right panel) shows
+                per-product progress with rolling-avg ETAs. */}
+            <button
+              className="bulk-pill"
+              title="Reframe each selected product's primary image into a uniform 3:4 packshot."
+              disabled={bulkPolishing}
+              onClick={async () => {
+                // Polish needs an existing primary_image_url — pick
+                // does that step first, so skip any product that
+                // hasn't been pick'd yet (or just hasn't loaded).
+                const ids: string[] = [];
+                for (const k of selectedProductKeys) {
+                  const match = crawledProducts.find(cp => `${cp.brand}-${cp.name}` === k);
+                  if (match?.id && (match as { primary_image_url?: string | null }).primary_image_url) ids.push(match.id);
+                }
+                if (ids.length === 0) {
+                  showToast('No selected products have a primary image yet — run Pick primary first.');
+                  return;
+                }
+                setBulkPolishing(true);
+                let i = 0;
+                let done = 0;
+                const CONCURRENCY = 3;
+                const next = async () => {
+                  while (true) {
+                    const myIdx = i++;
+                    if (myIdx >= ids.length) return;
+                    try { await polishPrimaryImage(ids[myIdx]); } catch { /* per-call toast handles it */ }
+                    done += 1;
+                    setBulkPolishProgress({ done, total: ids.length });
+                  }
+                };
+                setBulkPolishProgress({ done: 0, total: ids.length });
+                await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, next));
+                setBulkPolishing(false);
+                setBulkPolishProgress(null);
+                showToast(`Polished ${done}/${ids.length} primary image${ids.length === 1 ? '' : 's'}`);
+              }}
+            >
+              {bulkPolishing && bulkPolishProgress
+                ? `Polishing ${bulkPolishProgress.done}/${bulkPolishProgress.total}…`
+                : 'Polish primary'}
+            </button>
+            {/* Bulk Primary Video — Seedance i2v on each selected
+                product's polished primary image. 90s/clip × concurrency
+                3 = ~8 min for 16 selected. Queue shows per-product
+                progress + ETAs. */}
+            <button
+              className="bulk-pill"
+              title="Generate a primary video (Seedance i2v) for each selected product. Requires a primary image."
+              disabled={bulkVideoGenerating}
+              onClick={async () => {
+                const ids: string[] = [];
+                for (const k of selectedProductKeys) {
+                  const match = crawledProducts.find(cp => `${cp.brand}-${cp.name}` === k);
+                  if (match?.id && (match as { primary_image_url?: string | null }).primary_image_url) ids.push(match.id);
+                }
+                if (ids.length === 0) {
+                  showToast('No selected products have a primary image yet — run Pick primary (and Polish primary) first.');
+                  return;
+                }
+                setBulkVideoGenerating(true);
+                let i = 0;
+                let done = 0;
+                const CONCURRENCY = 3;
+                const next = async () => {
+                  while (true) {
+                    const myIdx = i++;
+                    if (myIdx >= ids.length) return;
+                    try { await generatePrimaryVideo(ids[myIdx]); } catch { /* per-call toast handles it */ }
+                    done += 1;
+                    setBulkVideoProgress({ done, total: ids.length });
+                  }
+                };
+                setBulkVideoProgress({ done: 0, total: ids.length });
+                await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, next));
+                setBulkVideoGenerating(false);
+                setBulkVideoProgress(null);
+                showToast(`Generated ${done}/${ids.length} primary video${ids.length === 1 ? '' : 's'}`);
+              }}
+            >
+              {bulkVideoGenerating && bulkVideoProgress
+                ? `Generating ${bulkVideoProgress.done}/${bulkVideoProgress.total}…`
+                : 'Generate primary video'}
             </button>
             <button
               className="bulk-pill bulk-pill--danger"
