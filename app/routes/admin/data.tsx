@@ -5645,8 +5645,26 @@ export default function AdminData() {
               })}
               {hasMore && (
                 <tr ref={sentinelRef}>
-                  <td colSpan={20} style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
-                    Loading more products...
+                  <td colSpan={20} style={{ padding: '16px 12px' }}>
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#94a3b8', fontSize: 12 }}
+                    >
+                      <style>{`@keyframes admin-products-spin { to { transform: rotate(360deg); } }`}</style>
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          border: '2px solid #e5e7eb',
+                          borderTopColor: '#0f172a',
+                          animation: 'admin-products-spin 0.9s linear infinite',
+                        }}
+                      />
+                      Loading more products… ({visibleCount} of {productTable.sortedData.length})
+                    </div>
                   </td>
                 </tr>
               )}
