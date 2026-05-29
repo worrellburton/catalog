@@ -109,14 +109,14 @@ async function callGeminiNanoBanana(
         }],
         generationConfig: {
           responseModalities: ['TEXT', 'IMAGE'],
-          // Lock the output aspect ratio via API. Gemini 2.5 Flash Image
-          // largely ignores text aspect requests and defaults to 1:1.
-          // Its supported enum is { 1:1, 9:16, 16:9, 3:4, 4:3 } — 4:5 is
-          // rejected with a 400. 3:4 is the closest portrait (visually
-          // ~7% wider than 4:5, near-identical in the catalog tile).
-          // Dropped imageSize — the documented "1K" value was rejected
-          // and the model returns ~1024×1280 by default.
-          responseFormat: { image: { aspectRatio: '3:4' } },
+          // Lock the output aspect ratio via the API — Gemini 2.5 Flash
+          // Image ignores prompt-based aspect requests. Per Google's
+          // production announcement the field is generationConfig.
+          // imageConfig.aspectRatio (NOT responseFormat — that path
+          // exists too but its AspectRatio enum rejects '3:4'/'4:5'
+          // with a 400). Supported here: 21:9, 16:9, 4:3, 3:2, 1:1,
+          // 9:16, 3:4, 2:3, 5:4, 4:5.
+          imageConfig: { aspectRatio: '3:4' },
         },
       }),
       signal: ctrl.signal,
