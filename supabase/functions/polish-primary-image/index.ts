@@ -1,22 +1,15 @@
 // polish-primary-image
 //
-// Reframes a product's existing primary image into a standardized 4:5
-// (portrait) e-commerce packshot using Google's Gemini 2.5 Flash Image model
-// ("nano-banana") via the Gemini API directly (not fal.ai). Preserves
-// the source background and product appearance — only adds uniform
+// Reframes a product's existing primary image into a standardized 3:4
+// (portrait) e-commerce packshot using Google's Gemini 2.5 Flash Image
+// model ("nano-banana") via the Gemini API directly (not fal.ai).
+// Preserves the source background and product appearance — only adds
 // padding so every primary image in the catalog grid lines up.
 //
-// Gemini returns the edited image as base64, so we decode it and upload
-// to the public `scraped-products` storage bucket, then store that URL
-// on the product.
-//
-// POST { product_id: string }
-// → 200 { success: true, polished_url, pre_polish_url }
-//   or { success: false, error }
-//
-// Auth: admin JWT or service-role JWT (role claim decoded out of the
-// JWT payload so a service-role call from a trigger can't be denied by
-// a byte-equality mismatch against the function's env var).
+// Source-URL choice on re-polish: always start from the pre-polish URL
+// when one exists. Otherwise re-polishing the already-polished image
+// compounds zoom-on-zoom — each subsequent run reads a polished input
+// as "the product" and crops in further.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -27,60 +20,42 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Gemini 2.5 Flash Image (nano-banana), called directly on the Gemini API.
 const GEMINI_MODEL = 'gemini-2.5-flash-image';
-// NB: image output + responseModalities live on the v1beta surface; the
-// stable v1 endpoint rejects responseModalities with a 400.
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const GEMINI_TIMEOUT_MS = 60_000;
 const POLISH_BUCKET = 'scraped-products';
 
-// Polish prompt — admin-editable via the Data → Settings modal, stored
-// in app_settings under POLISH_PROMPT_KEY. This inline string is the
-// fallback used when no row exists yet. Keep in sync with
-// app/constants/ai-prompts.ts (DEFAULT_POLISH_PRIMARY_PROMPT).
 const POLISH_PROMPT_KEY = 'prompt_polish_primary';
+// "Add padding" framing is much stricter than "occupies 60%" — Gemini
+// was reading the latter as "make the product bigger" and producing
+// zoomed crops. Explicit DO NOT ZOOM language fixes this.
 const DEFAULT_POLISH_PROMPT = [
-  "Reframe this product image into a standardized e-commerce shot with a 4:5 aspect ratio (portrait, e.g. 1600x2000px).",
-  "Keep the product's existing background exactly as-is — do not remove, replace, or alter it.",
-  "Center the product both horizontally and vertically so it occupies approximately 60% of the frame, with equal padding (~15% of the canvas) on all four sides, extending the existing background naturally to fill any added space.",
-  "Preserve the product's original colors, texture, lighting, proportions, and details exactly — do not alter, recolor, or restyle the product itself.",
-  "Output a crisp image suitable for a uniform product catalog grid.",
+  'Take the supplied product image and convert it to a 3:4 portrait aspect ratio.',
+  'DO NOT zoom in. DO NOT crop the product or change its size. The product must appear at the SAME SCALE as in the source image — never larger.',
+  'Add neutral padding (extend the existing background) above, below, and on the sides as needed to reach a 3:4 canvas.',
+  'The product should occupy about 60–70% of the canvas HEIGHT, with clear empty space (background) above and below it. Generous breathing room.',
+  "Keep the product's existing background exactly as-is — do not remove, replace, or recolor it. Extend it naturally into the new padding area.",
+  "Preserve the product's original colors, texture, lighting, proportions, and every detail exactly. Do not restyle the product.",
+  'Output a crisp packshot with comfortable margin around the product.',
 ].join(' ');
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
-
-// Base64 helpers — chunked so large images don't blow the call stack.
 function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
+  let binary = ''; const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   return btoa(binary);
 }
 function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
+  const bin = atob(b64); const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
 
 interface GeminiPart { text?: string; inline_data?: { mime_type?: string; data?: string }; inlineData?: { mimeType?: string; data?: string } }
 
-// Call Gemini with the source image + prompt; returns the edited image
-// as { data: base64, mime }. Reads the source from its URL first.
-async function callGeminiNanoBanana(
-  prompt: string,
-  sourceUrl: string,
-  apiKey: string,
-): Promise<{ data: string | null; mime: string; error: string | null }> {
-  // 1. Pull the source image bytes + mime.
+async function callGeminiNanoBanana(prompt: string, sourceUrl: string, apiKey: string): Promise<{ data: string | null; mime: string; error: string | null }> {
   let srcBytes: Uint8Array;
   let srcMime = 'image/jpeg';
   try {
@@ -92,7 +67,6 @@ async function callGeminiNanoBanana(
     return { data: null, mime: '', error: `source_fetch_error:${String(err).slice(0, 160)}` };
   }
 
-  // 2. Ask Gemini to reframe it.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS);
   let res: Response;
@@ -101,21 +75,12 @@ async function callGeminiNanoBanana(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: srcMime, data: bytesToBase64(srcBytes) } },
-          ],
-        }],
+        contents: [{ parts: [
+          { text: prompt },
+          { inline_data: { mime_type: srcMime, data: bytesToBase64(srcBytes) } },
+        ] }],
         generationConfig: {
           responseModalities: ['TEXT', 'IMAGE'],
-          // Lock the output aspect ratio via the API — Gemini 2.5 Flash
-          // Image ignores prompt-based aspect requests. Per Google's
-          // production announcement the field is generationConfig.
-          // imageConfig.aspectRatio (NOT responseFormat — that path
-          // exists too but its AspectRatio enum rejects '3:4'/'4:5'
-          // with a 400). Supported here: 21:9, 16:9, 4:3, 3:2, 1:1,
-          // 9:16, 3:4, 2:3, 5:4, 4:5.
           imageConfig: { aspectRatio: '3:4' },
         },
       }),
@@ -123,13 +88,10 @@ async function callGeminiNanoBanana(
     });
   } catch (err) {
     clearTimeout(timer);
-    if ((err as { name?: string })?.name === 'AbortError') {
-      return { data: null, mime: '', error: `timeout_${GEMINI_TIMEOUT_MS}ms` };
-    }
+    if ((err as { name?: string })?.name === 'AbortError') return { data: null, mime: '', error: `timeout_${GEMINI_TIMEOUT_MS}ms` };
     return { data: null, mime: '', error: `network_error:${String(err).slice(0, 160)}` };
   }
   clearTimeout(timer);
-
   const text = await res.text().catch(() => '');
   if (!res.ok) return { data: null, mime: '', error: `gemini_${res.status}:${text.slice(0, 300)}` };
 
@@ -162,9 +124,6 @@ Deno.serve(async (req: Request) => {
   const token = authHeader.replace('Bearer ', '');
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-  // Decode the JWT role claim to allow service-role callers (triggers)
-  // to bypass the admin gate. Byte-equality against the env var fails
-  // when the vault holds a different (still valid) service-role JWT.
   let isServiceRole = false;
   try {
     const parts = token.split('.');
@@ -182,9 +141,7 @@ Deno.serve(async (req: Request) => {
   }
 
   let body: { product_id?: string };
-  try { body = await req.json(); }
-  catch { return json({ success: false, error: 'JSON body required' }); }
-
+  try { body = await req.json(); } catch { return json({ success: false, error: 'JSON body required' }); }
   const productId = body.product_id;
   if (!productId) return json({ success: false, error: 'product_id required' });
 
@@ -197,14 +154,13 @@ Deno.serve(async (req: Request) => {
   if (!product) return json({ success: false, error: 'product not found' }, 404);
   if (!product.primary_image_url) return json({ success: false, error: 'product has no primary_image_url to polish' });
 
-  // The current primary URL becomes the "source" for the polish call.
-  // If a prior pre-polish URL is stored, keep that — the original
-  // pre-polish source is preserved across multiple polish runs.
-  const sourceUrl    = product.primary_image_url;
-  const prePolishUrl = product.primary_image_pre_polish_url ?? sourceUrl;
+  // Always polish FROM the original raw image when one is on file.
+  // Re-polishing the already-polished output compounds zoom-on-zoom
+  // (each pass treats the previously-cropped output as the new "product"
+  // and shrinks the background further).
+  const sourceUrl    = product.primary_image_pre_polish_url ?? product.primary_image_url;
+  const prePolishUrl = product.primary_image_pre_polish_url ?? product.primary_image_url;
 
-  // Admin-editable prompt override (Data → Settings). Falls back to the
-  // inline default when the app_settings row is missing or blank.
   let polishPrompt = DEFAULT_POLISH_PROMPT;
   try {
     const { data: setting } = await admin
@@ -213,10 +169,11 @@ Deno.serve(async (req: Request) => {
     if (v) polishPrompt = v;
   } catch { /* keep default */ }
 
+  const t0 = Date.now();
   const result = await callGeminiNanoBanana(polishPrompt, sourceUrl, googleKey);
+  const durationMs = Date.now() - t0;
   if (!result.data) return json({ success: false, error: result.error || 'polish failed' });
 
-  // Gemini hands back base64 — decode + upload to public storage.
   const ext = result.mime.includes('png') ? 'png' : result.mime.includes('webp') ? 'webp' : 'jpg';
   const path = `polished/${productId}-${Date.now()}.${ext}`;
   const { error: upErr } = await admin.storage
@@ -232,12 +189,9 @@ Deno.serve(async (req: Request) => {
     primary_image_polished:      true,
     primary_image_polished_at:   new Date().toISOString(),
     primary_image_pre_polish_url: prePolishUrl,
+    primary_image_polish_duration_ms: durationMs,
   }).eq('id', productId);
   if (updateErr) return json({ success: false, error: updateErr.message });
 
-  return json({
-    success: true,
-    polished_url: polishedUrl,
-    pre_polish_url: prePolishUrl,
-  });
+  return json({ success: true, polished_url: polishedUrl, pre_polish_url: prePolishUrl, duration_ms: durationMs });
 });
