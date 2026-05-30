@@ -130,6 +130,7 @@ export interface CatalogLookRow {
   creatorAvatarUrl: string | null;
   productCount: number;
   createdAt?: string | null;
+  gender?: string | null;
   metrics?: ItemMetrics;
 }
 
@@ -270,7 +271,7 @@ export async function loadCatalogCreativePayload(
   let looksQuery = supabase
     .from('looks')
     .select(`
-      id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at,
+      id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at, gender,
       creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
       looks_creative!inner ( video_url, is_primary ),
       look_products ( product_id )
@@ -291,6 +292,7 @@ export async function loadCatalogCreativePayload(
     title: string;
     creator_handle: string | null;
     created_at: string | null;
+    gender: string | null;
     creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
     looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
     look_products: { product_id: string }[] | null;
@@ -307,6 +309,7 @@ export async function loadCatalogCreativePayload(
       creatorAvatarUrl: creator?.avatar_url ?? null,
       productCount: (r.look_products || []).length,
       createdAt: r.created_at,
+      gender: r.gender,
       metrics: metricFor('look', r.id, r.legacy_id),
     };
   });
@@ -1815,26 +1818,11 @@ export default function AdminCatalogs() {
                           catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
                           onReorder={(section, from, to) => reorderAllSection(homeCatalog.id, section, from, to)}
                           headerControls={(
-                            <>
-                              <TogglePills
-                                filterGender={homeCatalog.filterGender}
-                                filterAge={homeCatalog.filterAge}
-                                boostTopConverting={homeCatalog.boostTopConverting}
-                                onToggle={async (field, value) => {
-                                  setHomeCatalog(prev => prev ? { ...prev, [field]: value } : prev);
-                                  const ok = await updateCatalogToggles(homeCatalog.slug, { [field]: value });
-                                  if (!ok) {
-                                    setHomeCatalog(prev => prev ? { ...prev, [field]: !value } : prev);
-                                    showToast('Could not save toggle');
-                                  }
-                                }}
-                              />
-                              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                                <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
-                                <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
-                                <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
-                              </div>
-                            </>
+                            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
+                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
+                              <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
+                            </div>
                           )}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
@@ -1983,32 +1971,15 @@ export default function AdminCatalogs() {
                       catalogNames={all.filter(x => x.name !== c.name && !isAllCatalog(x.name)).map(x => x.name)}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
                       headerControls={(
-                        <>
-                          {c.id !== 'synthetic-all' && c.slug && (
-                            <TogglePills
-                              filterGender={c.filterGender}
-                              filterAge={c.filterAge}
-                              boostTopConverting={c.boostTopConverting}
-                              onToggle={async (field, value) => {
-                                setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: value } : x));
-                                const ok = await updateCatalogToggles(c.slug!, { [field]: value });
-                                if (!ok) {
-                                  setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: !value } : x));
-                                  showToast('Could not save toggle');
-                                }
-                              }}
-                            />
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                          <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(c)} disabled={products.length === 0} title="Pick existing products from the library and tag them to this catalog">+ Add Products</button>
+                          <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(c)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
+                          <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(c)}>Suggest Products</button>
+                          <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAssemble(c)} disabled={productCount < 3} title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}>✨ Assemble Look</button>
+                          {c.source === 'custom' && c.id !== 'synthetic-all' && (
+                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }} onClick={() => removeCustom(c.id)}>✕ Remove catalog</button>
                           )}
-                          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(c)} disabled={products.length === 0} title="Pick existing products from the library and tag them to this catalog">+ Add Products</button>
-                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(c)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
-                            <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(c)}>Suggest Products</button>
-                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAssemble(c)} disabled={productCount < 3} title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}>✨ Assemble Look</button>
-                            {c.source === 'custom' && c.id !== 'synthetic-all' && (
-                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }} onClick={() => removeCustom(c.id)}>✕ Remove catalog</button>
-                            )}
-                          </div>
-                        </>
+                        </div>
                       )}
                       onAfterBulkMutation={() => {
                         // Drop the cached creative payload + refetch
@@ -3153,7 +3124,11 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
   const [sort, setSort] = useState<MetricSort>('most-viewed');
-  const [filter, setFilter] = useState<MetricFilter>('all');
+  const [filter] = useState<MetricFilter>('all');
+  // Per-catalog text search across looks (title/creator) and products
+  // (name/brand). Lives inside the dropdown so each open catalog has
+  // its own query.
+  const [catalogSearch, setCatalogSearch] = useState('');
   // Phase 6: bulk selection. Two parallel sets so admins can pick
   // looks and products independently. Cleared on filter/sort/view
   // change to keep mental model sane.
@@ -3323,23 +3298,41 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     );
   }
 
-  // Apply Phase 5 filter then sort to BOTH looks and products.
-  const sortedLooks = sortAndFilterItems(looks, sort, filter);
   // "View as" — when the admin picks Men or Women in the control bar
   // the global shopperGender flips. Mirror the consumer feed's
   // visibility rule here so the preview matches what a real shopper
   // of that gender would actually see (own gender + unisex; untagged
-  // hidden so the admin can spot products that need a gender backfill).
+  // hidden so the admin can spot rows that need a gender backfill).
+  // Applied to BOTH looks and products — without this, "View as: Men"
+  // emptied the Looks section even though men's looks existed.
   const viewAsGender = getShopperGender();
-  const visibleProducts = viewAsGender === 'unknown'
-    ? products
-    : products.filter(p => {
-        const g = (p.gender || '').toLowerCase();
-        if (!g) return false;
-        if (g === 'unisex') return true;
-        return g === viewAsGender;
-      });
-  const sortedProducts = sortAndFilterItems(visibleProducts, sort, filter);
+  const genderMatches = (g: string | null | undefined): boolean => {
+    if (viewAsGender === 'unknown') return true;
+    const x = (g || '').toLowerCase();
+    if (!x) return false;
+    if (x === 'unisex') return true;
+    return x === viewAsGender;
+  };
+  const visibleLooks    = viewAsGender === 'unknown' ? looks    : looks.filter(l => genderMatches(l.gender));
+  const visibleProducts = viewAsGender === 'unknown' ? products : products.filter(p => genderMatches(p.gender));
+  // Per-catalog text search applied before sort/filter — matches against
+  // look title/creator and product name/brand. Whitespace-tolerant
+  // substring match, case-insensitive.
+  const q = catalogSearch.trim().toLowerCase();
+  const searchedLooks = q
+    ? visibleLooks.filter(l => {
+        const hay = `${l.title ?? ''} ${l.creatorName ?? ''} ${l.creatorHandle ?? ''}`.toLowerCase();
+        return hay.includes(q);
+      })
+    : visibleLooks;
+  const searchedProducts = q
+    ? visibleProducts.filter(p => {
+        const hay = `${p.name ?? ''} ${p.brand ?? ''}`.toLowerCase();
+        return hay.includes(q);
+      })
+    : visibleProducts;
+  const sortedLooks    = sortAndFilterItems(searchedLooks, sort, filter);
+  const sortedProducts = sortAndFilterItems(searchedProducts, sort, filter);
 
   // Phase 7-lite: KPI strip.
   const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
@@ -3362,9 +3355,41 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
 
       <KpiStrip kpi={kpi} metricsLoading={metricsLoading} />
 
+      {/* Per-catalog text search — narrows the looks + products lists
+          below to matching name/brand/creator. Cleared button is the
+          ✕ inside the input. */}
+      <div style={{ position: 'relative', maxWidth: 420 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          type="text"
+          value={catalogSearch}
+          onChange={e => setCatalogSearch(e.target.value)}
+          placeholder="Search this catalog — products + looks…"
+          style={{
+            width: '100%', padding: '7px 28px 7px 30px', borderRadius: 8,
+            border: '1px solid #e2e8f0', fontSize: 12, background: '#fff',
+            boxSizing: 'border-box',
+          }}
+        />
+        {catalogSearch && (
+          <button type="button" onClick={() => setCatalogSearch('')}
+            aria-label="Clear search"
+            style={{
+              position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+              width: 18, height: 18, borderRadius: 999, border: 'none',
+              background: '#e2e8f0', color: '#475569', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 11,
+            }}
+          >×</button>
+        )}
+      </div>
+
       <MetricControlBar
-        sort={sort} filter={filter} viewMode={viewMode}
-        onSort={setSort} onFilter={setFilter} onViewMode={setViewMode}
+        sort={sort} viewMode={viewMode}
+        onSort={setSort} onViewMode={setViewMode}
       />
 
       {viewMode === 'list' ? (
@@ -3373,12 +3398,41 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             looks={sortedLooks}
             selectedIds={selectedLookIds}
             onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
+            onSelectAll={(next) => {
+              setSelectedLookIds(prev => {
+                if (!next) {
+                  const out = new Set(prev);
+                  for (const l of sortedLooks) out.delete(l.id);
+                  return out;
+                }
+                const out = new Set(prev);
+                for (const l of sortedLooks) out.add(l.id);
+                return out;
+              });
+            }}
             onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
           />
           <ProductsListTable
             products={sortedProducts}
             selectedIds={selectedProductIds}
             onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+            onSelectAll={(next) => {
+              setSelectedProductIds(prev => {
+                if (!next) {
+                  const out = new Set(prev);
+                  for (const p of sortedProducts) out.delete(p.id);
+                  return out;
+                }
+                const out = new Set(prev);
+                for (const p of sortedProducts) out.add(p.id);
+                return out;
+              });
+            }}
+            // Drag-to-reorder for products in list view mirrors the grid
+            // affordance — same conditions (no active selection, default
+            // sort/filter, universe catalog so order can be persisted).
+            draggable={(isAll || isUniverse) && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+            onReorder={(from, to) => onReorder('products', from, to)}
             onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
           />
         </>
@@ -3821,22 +3875,39 @@ function BulkActionBar({ count, catalogName, catalogNames, looksCount, productsC
     const sorted = [...catalogNames].sort((a, b) => a.localeCompare(b));
     return q ? sorted.filter(n => n.toLowerCase().includes(q)) : sorted;
   }, [catalogNames, addToQuery]);
+  // Matches /admin/data's floating bulk bar — center-bottom, blurred
+  // glass background, pill buttons. Stays inside the catalog dropdown
+  // (`position: fixed` would float over other catalogs while scrolling).
   return (
-    <div style={{
-      position: 'sticky',
-      bottom: 14,
-      alignSelf: 'center',
+    <div className="admin-bulk-bar" style={{
+      position: 'fixed',
+      left: '50%',
+      bottom: 24,
+      transform: 'translateX(-50%)',
+      zIndex: 9999,
       display: 'inline-flex',
       alignItems: 'center',
       gap: 12,
-      padding: '8px 14px',
-      background: '#0f172a',
+      padding: '10px 16px',
+      background: 'rgba(18, 18, 20, 0.97)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
       color: '#fff',
+      border: '1px solid rgba(255, 255, 255, 0.10)',
       borderRadius: 999,
-      boxShadow: '0 16px 36px rgba(15,23,42,0.35)',
-      zIndex: 20,
+      boxShadow: '0 18px 50px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25)',
+      animation: 'admin-bulk-bar-slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both',
+      maxWidth: 'calc(100vw - 32px)',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
     }}>
-      <span style={{ fontSize: 12, fontWeight: 700 }}>
+      <style>{`
+        @keyframes admin-bulk-bar-slide-up {
+          from { transform: translate(-50%, 24px); opacity: 0; }
+          to   { transform: translate(-50%, 0);    opacity: 1; }
+        }
+      `}</style>
+      <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
         {count} selected
         {looksCount > 0 && productsCount > 0 ? ` · ${looksCount} look${looksCount === 1 ? '' : 's'}, ${productsCount} product${productsCount === 1 ? '' : 's'}` : ''}
       </span>
@@ -4082,11 +4153,13 @@ function LooksListTable({
   looks,
   selectedIds,
   onSelect,
+  onSelectAll,
   onOpenDetail,
 }: {
   looks: CatalogLookRow[];
   selectedIds?: Set<string>;
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  onSelectAll?: (next: boolean) => void;
   onOpenDetail?: (look: CatalogLookRow) => void;
 }) {
   if (looks.length === 0) return (
@@ -4097,13 +4170,30 @@ function LooksListTable({
       </div>
     </div>
   );
+  const allChecked = onSelect && selectedIds
+    ? looks.length > 0 && looks.every(l => selectedIds.has(l.id))
+    : false;
+  const someChecked = onSelect && selectedIds
+    ? !allChecked && looks.some(l => selectedIds.has(l.id))
+    : false;
   return (
     <div>
       <ListSectionHeader title="Looks" count={looks.length} />
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
-            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
+            {onSelect && (
+              <th style={{ ...listHeadCellStyle, width: 30 }}>
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  ref={el => { if (el) el.indeterminate = someChecked; }}
+                  onChange={() => onSelectAll?.(!allChecked)}
+                  onClick={e => e.stopPropagation()}
+                  title="Select all on this page"
+                />
+              </th>
+            )}
             <th style={{ ...listHeadCellStyle, width: 56 }}></th>
             <th style={listHeadCellStyle}>Title</th>
             <th style={listHeadCellStyle}>Creator</th>
@@ -4176,13 +4266,26 @@ function ProductsListTable({
   products,
   selectedIds,
   onSelect,
+  onSelectAll,
   onOpenDetail,
+  draggable,
+  onReorder,
 }: {
   products: ProductRow[];
   selectedIds?: Set<string>;
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  /** Toggle selection across every row currently in `products`. */
+  onSelectAll?: (next: boolean) => void;
   onOpenDetail?: (product: ProductRow) => void;
+  /** Enables row drag handle + drop targets when true. */
+  draggable?: boolean;
+  onReorder?: (from: number, to: number) => void;
 }) {
+  // Local drag-and-drop indices for the row-reorder handle. Kept in
+  // component state so the visual indicator can render the drop target.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+
   if (products.length === 0) return (
     <div>
       <ListSectionHeader title="Products" count={0} />
@@ -4191,13 +4294,35 @@ function ProductsListTable({
       </div>
     </div>
   );
+
+  // Select-all reflects "every visible row is selected". Determinate
+  // and indeterminate states are handled via ref.
+  const allChecked = onSelect && selectedIds
+    ? products.length > 0 && products.every(p => selectedIds.has(p.id))
+    : false;
+  const someChecked = onSelect && selectedIds
+    ? !allChecked && products.some(p => selectedIds.has(p.id))
+    : false;
+
   return (
     <div>
       <ListSectionHeader title="Products" count={products.length} />
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
-            {onSelect && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
+            {draggable && <th style={{ ...listHeadCellStyle, width: 22 }}></th>}
+            {onSelect && (
+              <th style={{ ...listHeadCellStyle, width: 30 }}>
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  ref={el => { if (el) el.indeterminate = someChecked; }}
+                  onChange={() => onSelectAll?.(!allChecked)}
+                  onClick={e => e.stopPropagation()}
+                  title="Select all on this page"
+                />
+              </th>
+            )}
             <th style={{ ...listHeadCellStyle, width: 56 }}></th>
             <th style={listHeadCellStyle}>Product</th>
             <th style={listHeadCellStyle}>Brand</th>
@@ -4210,19 +4335,48 @@ function ProductsListTable({
         <tbody>
           {products.map((p, idx) => {
             const checked = selectedIds?.has(p.id) ?? false;
+            const isDropTarget = dropIdx === idx && dragIdx !== null && dragIdx !== idx;
             return (
               <tr
                 key={p.id}
                 onClick={(e) => {
                   if (!onSelect) return;
                   if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+                  if ((e.target as HTMLElement).closest('[data-role="drag-handle"]')) return;
                   onSelect(p.id, idx, e.shiftKey);
                 }}
+                onDragOver={draggable ? (e) => { if (dragIdx !== null) { e.preventDefault(); setDropIdx(idx); } } : undefined}
+                onDrop={draggable ? (e) => {
+                  e.preventDefault();
+                  if (dragIdx !== null && dragIdx !== idx) onReorder?.(dragIdx, idx);
+                  setDragIdx(null); setDropIdx(null);
+                } : undefined}
                 style={{
                   cursor: onSelect ? 'pointer' : 'default',
                   background: checked ? '#eff6ff' : 'transparent',
+                  boxShadow: isDropTarget ? 'inset 0 2px 0 0 #3b82f6' : 'none',
                 }}
               >
+                {draggable && (
+                  <td style={{ ...listBodyCellStyle, padding: 0, textAlign: 'center' }}>
+                    <span
+                      data-role="drag-handle"
+                      draggable
+                      onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
+                      title="Drag to reorder"
+                      style={{
+                        display: 'inline-flex', cursor: 'grab', color: '#94a3b8',
+                        padding: '4px 2px', userSelect: 'none',
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="9" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/>
+                        <circle cx="15" cy="6" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+                      </svg>
+                    </span>
+                  </td>
+                )}
                 {onSelect && (
                   <td style={listBodyCellStyle}>
                     <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
@@ -4438,14 +4592,12 @@ function KpiStrip({ kpi, metricsLoading }: { kpi: KpiSnapshot; metricsLoading: b
 // ── Phase 5 control bar ─────────────────────────────────────────────
 interface MetricControlBarProps {
   sort: MetricSort;
-  filter: MetricFilter;
   viewMode: ViewMode;
   onSort: (s: MetricSort) => void;
-  onFilter: (f: MetricFilter) => void;
   onViewMode: (v: ViewMode) => void;
 }
 
-function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode }: MetricControlBarProps) {
+function MetricControlBar({ sort, viewMode, onSort, onViewMode }: MetricControlBarProps) {
   // "View as" — switches the catalog preview into a synthetic shopper
   // gender so admins can sanity-check what a male or female user would
   // actually see in the consumer feed without signing in/out. Wired
@@ -4462,13 +4614,6 @@ function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode
     { value: 'biggest-faller', label: 'Biggest faller' },
     { value: 'newest', label: 'Newest' },
     { value: 'never-viewed', label: 'Never viewed' },
-  ];
-  const filterChips: { value: MetricFilter; label: string; color?: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'rising', label: '↑ Rising', color: '#047857' },
-    { value: 'falling', label: '↓ Falling', color: '#b91c1c' },
-    { value: 'zombie', label: '⚠ Zombie', color: '#a16207' },
-    { value: 'never-viewed', label: 'Never viewed', color: '#6b7280' },
   ];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -4499,31 +4644,6 @@ function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode
           <option value="female">Women</option>
         </select>
       </label>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {filterChips.map(c => {
-          const active = filter === c.value;
-          return (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => onFilter(c.value)}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 600,
-                border: '1px solid',
-                cursor: 'pointer',
-                borderColor: active ? (c.color || '#111') : '#e2e8f0',
-                background: active ? (c.color || '#111') : '#fff',
-                color: active ? '#fff' : (c.color || '#475569'),
-              }}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-      </div>
       <div style={{ marginLeft: 'auto', display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
         <button
           type="button"
@@ -5449,71 +5569,39 @@ function FeaturedToggle({ slug, value, disabled, onChange, onError }: FeaturedTo
 // <select> — four glyph buttons (Any / Female ♀ / Male ♂ / Unisex ⚥),
 // the active one filled black. `onClick` stopPropagation so taps don't
 // toggle the row's expand state.
-const GENDER_ICONS: { value: CatalogGenderUI; label: string; icon: React.ReactNode }[] = [
-  {
-    value: 'all', label: 'Any',
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <circle cx="6" cy="6" r="2.2" /><circle cx="18" cy="6" r="2.2" />
-        <circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="18" r="2.2" /><circle cx="12" cy="12" r="2.2" />
-      </svg>
-    ),
-  },
-  {
-    value: 'women', label: 'Female',
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="5" /><line x1="12" y1="13" x2="12" y2="22" /><line x1="9" y1="19" x2="15" y2="19" />
-      </svg>
-    ),
-  },
-  {
-    value: 'men', label: 'Male',
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="9" cy="15" r="5" /><line x1="13" y1="11" x2="20" y2="4" /><polyline points="14 4 20 4 20 10" />
-      </svg>
-    ),
-  },
-  {
-    value: 'unisex', label: 'Unisex',
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="11" cy="13" r="4" />
-        <line x1="11" y1="17" x2="11" y2="22" /><line x1="8.5" y1="19.5" x2="13.5" y2="19.5" />
-        <line x1="13.8" y1="10.2" x2="19" y2="5" /><polyline points="15 5 19 5 19 9" />
-      </svg>
-    ),
-  },
-];
-
+// Compact dropdown for the catalog gender lens. The select chrome is
+// pill-shaped + colours active when the value is anything but "Any",
+// so the column reads at a glance which catalogs are gender-scoped.
 function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange: (v: CatalogGenderUI) => void }) {
+  const active = value !== 'all';
   return (
-    <div style={{ display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
-      {GENDER_ICONS.map(g => {
-        const active = g.value === value;
-        return (
-          <button
-            key={g.value}
-            type="button"
-            onClick={() => onChange(g.value)}
-            title={g.label}
-            aria-label={g.label}
-            aria-pressed={active}
-            style={{
-              width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 7, border: '1px solid',
-              borderColor: active ? '#111' : '#e2e8f0',
-              background: active ? '#111' : '#fff',
-              color: active ? '#fff' : '#94a3b8',
-              cursor: 'pointer', padding: 0, transition: 'all 0.1s',
-            }}
-          >
-            {g.icon}
-          </button>
-        );
-      })}
-    </div>
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as CatalogGenderUI)}
+      onClick={e => e.stopPropagation()}
+      title={`Gender: ${value === 'all' ? 'Any' : value === 'women' ? 'Female' : value === 'men' ? 'Male' : 'Unisex'}`}
+      style={{
+        padding: '4px 24px 4px 10px',
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 600,
+        border: '1px solid',
+        borderColor: active ? '#111' : '#e2e8f0',
+        background: active ? '#111' : '#fff',
+        color: active ? '#fff' : '#475569',
+        cursor: 'pointer',
+        appearance: 'none',
+        backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${active ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 7px center',
+        transition: 'all 0.1s',
+      }}
+    >
+      <option value="all">⚪ Any</option>
+      <option value="women">♀ Female</option>
+      <option value="men">♂ Male</option>
+      <option value="unisex">⚥ Unisex</option>
+    </select>
   );
 }
 
