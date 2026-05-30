@@ -15,14 +15,13 @@ import {
 export default function MerchantsTab() {
   const [q, setQ] = useState('');
   const [submittedQ, setSubmittedQ] = useState('');
-  const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
   const [drawer, setDrawer] = useState<AffiliateMerchant | null>(null);
   const perPage = 50;
 
   const { loading, result } = useAffiliateCall(
-    () => affiliateCom.listMerchants({ page, per_page: perPage, q: submittedQ || undefined, category: category || undefined }),
-    [page, submittedQ, category],
+    () => affiliateCom.listMerchants({ page, per_page: perPage, search: submittedQ || undefined }),
+    [page, submittedQ],
   );
 
   const rows = (result?.list?.items ?? []) as AffiliateMerchant[];

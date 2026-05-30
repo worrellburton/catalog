@@ -30,7 +30,7 @@ export default function ProductsTab() {
   const { loading, result } = useAffiliateCall(
     () => affiliateCom.searchProducts({ q: submittedQ || undefined, page, per_page: perPage }),
     [page, submittedQ],
-    { auto: false },
+    { auto: submittedQ !== '' },
   );
 
   const rows = (result?.list?.items ?? []) as AffiliateProduct[];

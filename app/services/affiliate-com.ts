@@ -67,29 +67,14 @@ export interface AffiliateProduct {
   [k: string]: unknown;
 }
 
-export interface AffiliateDeal {
+/** A network / network-group (the affiliate programs aggregated). */
+export interface AffiliateNetwork {
   id?: string | number;
-  title?: string;
-  code?: string | null;
-  description?: string | null;
-  merchant?: string | null;
-  merchant_id?: string | number | null;
-  discount?: string | null;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  url?: string | null;
-  [k: string]: unknown;
-}
-
-export interface AffiliateTransaction {
-  id?: string | number;
-  merchant?: string | null;
+  name?: string;
+  slug?: string;
+  group?: string | null;
   status?: string | null;
-  sale_amount?: string | number | null;
-  commission?: string | number | null;
-  currency?: string | null;
-  date?: string | null;
-  sub_id?: string | null;
+  merchant_count?: number | null;
   [k: string]: unknown;
 }
 
@@ -120,33 +105,31 @@ async function call<T = unknown>(action: string, args: Record<string, unknown> =
 // ── Public actions (one per edge-function capability) ───────────────
 
 export const affiliateCom = {
-  ping: () => call<{ ok: boolean; sample_count?: number; status: number }>('ping'),
+  ping: () => call<{ ok: boolean; sample_count?: number; total?: number | null; status: number }>('ping'),
   account: () => call<AffiliateAccount>('account'),
-  categories: () => call('categories'),
 
-  listMerchants: (args: { page?: number; per_page?: number; q?: string; category?: string; status?: string } = {}) =>
+  networks: (args: { page?: number; per_page?: number; search?: string } = {}) =>
+    call<unknown>('networks', args),
+  networkGroups: (args: { page?: number; per_page?: number } = {}) =>
+    call<unknown>('network_groups', args),
+
+  listMerchants: (args: { page?: number; per_page?: number; q?: string; search?: string; network_ids?: string; has_logo?: number; product_count_min?: number } = {}) =>
     call<unknown>('list_merchants', args),
   findMerchant: (key: { id?: string | number; slug?: string; name?: string }) =>
     call<AffiliateMerchant>('find_merchant', key),
 
+  // affiliate.com product search is a structured POST. `q` is the simple
+  // path (mapped server-side to a {field:'any', operator:'LIKE'} clause);
+  // pass `search` for advanced field/operator queries.
   searchProducts: (args: {
-    q?: string; page?: number; per_page?: number; merchant_id?: string | number;
-    category?: string; min_price?: number; max_price?: number; sort?: string;
+    q?: string; search?: unknown[]; page?: number; per_page?: number;
+    merchant_ids?: (string | number)[]; sort_by?: string; sort_order?: 'asc' | 'desc';
   }) => call<unknown>('search_products', args),
-  getProduct: (id: string | number) => call<AffiliateProduct>('get_product', { id }),
 
-  listDeals: (args: { page?: number; per_page?: number; merchant_id?: string | number } = {}) =>
-    call<unknown>('list_deals', args),
-
-  generateLink: (args: { url: string; merchant_id?: string | number; sub_id?: string }) =>
-    call<{ link?: string; url?: string; deep_link?: string }>('generate_link', args),
-
-  reportSummary: (args: { start?: string; end?: string } = {}) => call('report_summary', args),
-  reportTransactions: (args: { start?: string; end?: string; page?: number; per_page?: number; status?: string } = {}) =>
-    call<unknown>('report_transactions', args),
-  reportClicks: (args: { start?: string; end?: string; page?: number; per_page?: number } = {}) =>
-    call<unknown>('report_clicks', args),
-  listPayments: (args: { page?: number; per_page?: number } = {}) => call<unknown>('list_payments', args),
+  // Conversion tools: url-to-barcode, barcode-to-sku, sku-to-barcode,
+  // asin-to-barcode, barcode-to-asin.
+  convert: (args: { type: string; data?: unknown[]; value?: string; config?: unknown }) =>
+    call<unknown>('convert', args),
 
   /** Generic allowlisted passthrough — powers the API Explorer tab. */
   raw: (args: { path: string; method?: 'GET' | 'POST'; query?: Record<string, unknown>; body?: unknown }) =>

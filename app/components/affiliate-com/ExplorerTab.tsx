@@ -8,14 +8,11 @@ import { affiliateCom } from '~/services/affiliate-com';
 import { ConnectionPill, ErrorBanner, Spinner, GenericTable } from './shared';
 
 const PRESETS: { label: string; path: string }[] = [
-  { label: 'Account', path: '/account' },
-  { label: 'Merchants', path: '/merchants?per_page=10' },
-  { label: 'Categories', path: '/categories' },
-  { label: 'Product search', path: '/products/search?q=hoodie&per_page=10' },
-  { label: 'Deals', path: '/deals?per_page=10' },
-  { label: 'Summary', path: '/reports/summary' },
-  { label: 'Transactions', path: '/reports/transactions?per_page=10' },
-  { label: 'Payments', path: '/payments?per_page=10' },
+  { label: 'Account', path: '/v1/account' },
+  { label: 'Networks', path: '/v1/networks?per_page=10' },
+  { label: 'Network groups', path: '/v1/network-groups' },
+  { label: 'Merchants', path: '/v1/merchants?per_page=10' },
+  { label: 'Merchant search', path: '/v1/merchants?search=nike&per_page=10' },
 ];
 
 export default function ExplorerTab() {
@@ -46,7 +43,8 @@ export default function ExplorerTab() {
       </div>
 
       <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>
-        Sends an allowlisted <code>GET</code> through the <code>affiliate-com</code> edge function. The key stays server-side.
+        Sends an allowlisted <code>GET</code> against <code>api.affiliate.com</code> through the edge function — the key stays
+        server-side. Product search (<code>POST /v1/products</code>) and conversion live in their own tabs.
       </p>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>

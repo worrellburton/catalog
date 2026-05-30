@@ -1,31 +1,19 @@
 // affiliate-com
 //
-// Comprehensive server-side proxy for the affiliate.com REST API. Keeps
-// the bearer API key in the Supabase Edge Function Secret
-// AFFILIATE_COM_API_KEY so it never leaves the backend, and authenticates
-// the CALLER as a Supabase admin (or service-role JWT) before forwarding.
+// Server-side proxy for the affiliate.com REST API (https://api.affiliate.com).
+// Holds the bearer key in the Supabase Edge Function Secret
+// AFFILIATE_COM_API_KEY so it never reaches the browser, and gates the
+// caller to Supabase admins (or a service-role JWT).
 //
-// POST { action, ...args } → { success: true, data } | { success: false, error }
+// Endpoints mirror the real affiliate.com v1 surface:
+//   GET  /v1/account
+//   GET  /v1/networks            GET /v1/networks/{id}
+//   GET  /v1/network-groups
+//   GET  /v1/merchants           GET /v1/merchants/{id}
+//   POST /v1/products            (structured search body)
+//   POST /tools/convert/{type}   (url-to-barcode, barcode-to-asin, …)
 //
-// Capability map (mirrors the affiliate.com API surface):
-//   ping              -> GET /merchants?per_page=1                      (health)
-//   account           -> GET /account                                  (profile + balance)
-//   list_merchants    -> GET /merchants?page=&per_page=&q=&category=&status=
-//   find_merchant     -> GET /merchants/<id|slug>
-//   categories        -> GET /categories
-//   search_products   -> GET /products/search?q=&page=&per_page=&merchant_id=&category=&min_price=&max_price=&sort=
-//   get_product       -> GET /products/<id>
-//   list_deals        -> GET /deals?page=&per_page=&merchant_id=        (coupons / offers)
-//   generate_link     -> POST /links { url, merchant_id?, sub_id? }     (deep / tracking link)
-//   report_summary    -> GET /reports/summary?start=&end=
-//   report_transactions -> GET /reports/transactions?start=&end=&page=&per_page=&status=
-//   report_clicks     -> GET /reports/clicks?start=&end=&page=&per_page=
-//   list_payments     -> GET /payments?page=&per_page=
-//   raw               -> generic allowlisted passthrough { method?, path, query?, body? }
-//
-// The upstream's exact response shape is normalized client-side; this
-// function forwards the raw payload under `data` plus, for paginated
-// actions, a best-effort { items, page, per_page, total } envelope.
+// POST { action, ...args } → { success, data, list?, error }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -39,20 +27,22 @@ const CORS = {
 const AFFILIATE_BASE = 'https://api.affiliate.com';
 const UPSTREAM_TIMEOUT_MS = 30_000;
 
-// Allowlist for the generic `raw` passthrough — keeps the proxy from
-// becoming an open relay. Only GETs to these prefixes (plus POST /links)
-// are ever forwarded.
-const READ_PREFIXES = [
-  '/account', '/me', '/merchants', '/categories', '/products',
-  '/deals', '/coupons', '/offers', '/reports', '/payments', '/links',
+// Allowlist for the generic `raw` passthrough. GET on these prefixes;
+// POST only on /v1/products and /tools/convert.
+const ALLOW_PREFIXES = [
+  '/v1/account', '/v1/networks', '/v1/network-groups', '/v1/merchants',
+  '/v1/products', '/v1/product-lists', '/v1/watch', '/tools/convert', '/v1/omni',
 ];
+const CONVERT_TYPES = new Set([
+  'url-to-barcode', 'barcode-to-sku', 'sku-to-barcode', 'asin-to-barcode', 'barcode-to-asin',
+]);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-function isAllowedReadPath(path: string): boolean {
-  return READ_PREFIXES.some(p => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));
+function isAllowedPath(path: string): boolean {
+  return ALLOW_PREFIXES.some(p => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));
 }
 
 type Upstream = { ok: boolean; status: number; body: unknown; error: string | null };
@@ -74,7 +64,7 @@ async function callUpstream(
         Accept: 'application/json',
         ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: method === 'POST' && opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: method === 'POST' ? JSON.stringify(opts.body ?? {}) : undefined,
       signal: ctrl.signal,
     });
   } catch (err) {
@@ -95,8 +85,8 @@ async function callUpstream(
   return { ok: true, status: res.status, body: parsed, error: null };
 }
 
-// Best-effort extraction of a row array + pagination meta from whatever
-// envelope affiliate.com uses (data / results / items / merchants / etc.).
+// Extract a row array + pagination meta from affiliate.com's envelope
+// (results live under `data`; meta under `meta`/`pagination`).
 function normalizeList(body: unknown): { items: unknown[]; total: number | null; page: number | null; per_page: number | null } {
   const b = (body ?? {}) as Record<string, unknown>;
   const candidate =
@@ -104,10 +94,8 @@ function normalizeList(body: unknown): { items: unknown[]; total: number | null;
     (Array.isArray(b.results) && b.results) ||
     (Array.isArray(b.items) && b.items) ||
     (Array.isArray(b.merchants) && b.merchants) ||
+    (Array.isArray(b.networks) && b.networks) ||
     (Array.isArray(b.products) && b.products) ||
-    (Array.isArray(b.deals) && b.deals) ||
-    (Array.isArray(b.transactions) && b.transactions) ||
-    (Array.isArray(b.records) && b.records) ||
     (Array.isArray(body) ? (body as unknown[]) : null);
   const meta = (b.meta ?? b.pagination ?? b) as Record<string, unknown>;
   const num = (v: unknown): number | null => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)) ? Number(v) : null);
@@ -139,7 +127,6 @@ Deno.serve(async (req: Request) => {
   if (!supabaseUrl || !serviceRoleKey) return json({ success: false, error: 'edge function misconfigured' });
   if (!apiKey) return json({ success: false, error: 'AFFILIATE_COM_API_KEY not configured' });
 
-  // Auth: admin JWT or service-role JWT.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return json({ success: false, error: 'unauthorized' }, 401);
   const token = authHeader.replace('Bearer ', '');
@@ -170,9 +157,8 @@ Deno.serve(async (req: Request) => {
   const page    = Math.max(1, Number(body.page ?? 1) | 0);
   const perPage = Math.min(200, Math.max(1, Number(body.per_page ?? 50) | 0));
 
-  // Wrap a list-style upstream call: forwards raw body + normalized envelope.
-  const list = async (path: string) => {
-    const r = await callUpstream(path, apiKey);
+  const list = async (path: string, method: 'GET' | 'POST' = 'GET', upBody?: unknown) => {
+    const r = await callUpstream(path, apiKey, { method, body: upBody });
     if (!r.ok) return json({ success: false, error: r.error, status: r.status });
     return json({ success: true, data: r.body, list: normalizeList(r.body) });
   };
@@ -184,56 +170,63 @@ Deno.serve(async (req: Request) => {
 
   switch (action) {
     case 'ping': {
-      const r = await callUpstream('/merchants?per_page=1', apiKey);
+      const r = await callUpstream('/v1/merchants?per_page=1', apiKey);
       if (!r.ok) return json({ success: false, error: r.error, status: r.status });
       const n = normalizeList(r.body);
-      return json({ success: true, data: { ok: true, sample_count: n.items.length, status: r.status } });
+      return json({ success: true, data: { ok: true, sample_count: n.items.length, total: n.total, status: r.status } });
     }
     case 'account':
-      return one('/account');
-    case 'categories':
-      return list('/categories');
+      return one('/v1/account');
+    case 'networks':
+      return list(`/v1/networks${qs({ page, per_page: perPage, search: body.search ?? body.q })}`);
+    case 'network_groups':
+      return list(`/v1/network-groups${qs({ page, per_page: perPage })}`);
     case 'list_merchants':
-      return list(`/merchants${qs({ page, per_page: perPage, q: body.q, category: body.category, status: body.status })}`);
+      return list(`/v1/merchants${qs({
+        page, per_page: perPage, search: body.search ?? body.q,
+        network_ids: body.network_ids, has_logo: body.has_logo,
+        product_count_min: body.product_count_min,
+      })}`);
     case 'find_merchant': {
       const key = body.id ?? body.slug ?? body.name;
-      if (!key) return json({ success: false, error: 'id, slug, or name required' });
-      return one(`/merchants/${encodeURIComponent(String(key))}`);
+      if (!key) return json({ success: false, error: 'id required' });
+      return one(`/v1/merchants/${encodeURIComponent(String(key))}`);
     }
-    case 'search_products':
-      return list(`/products/search${qs({
-        q: body.q, page, per_page: perPage,
-        merchant_id: body.merchant_id, category: body.category,
-        min_price: body.min_price, max_price: body.max_price, sort: body.sort,
-      })}`);
-    case 'get_product': {
-      if (!body.id) return json({ success: false, error: 'id required' });
-      return one(`/products/${encodeURIComponent(String(body.id))}`);
+    case 'search_products': {
+      // affiliate.com product search is a POST with a structured query.
+      const q = (body.q ?? '').toString().trim();
+      const search = Array.isArray(body.search)
+        ? body.search
+        : (q ? [{ field: 'any', value: q, operator: 'LIKE' }] : []);
+      const payload: Record<string, unknown> = {
+        search,
+        page, per_page: perPage,
+        sort_by: body.sort_by ?? (q ? 'relevance' : undefined),
+        sort_order: body.sort_order,
+        merchant_ids: body.merchant_ids,
+        exclude_merchant_ids: body.exclude_merchant_ids,
+        networks: body.networks,
+      };
+      return list('/v1/products', 'POST', payload);
     }
-    case 'list_deals':
-      return list(`/deals${qs({ page, per_page: perPage, merchant_id: body.merchant_id })}`);
-    case 'generate_link': {
-      const url = (body.url ?? '').toString().trim();
-      if (!url) return json({ success: false, error: 'url required' });
-      return one('/links', 'POST', { url, merchant_id: body.merchant_id, sub_id: body.sub_id });
+    case 'convert': {
+      const type = (body.type ?? '').toString();
+      if (!CONVERT_TYPES.has(type)) return json({ success: false, error: `type must be one of: ${[...CONVERT_TYPES].join(', ')}` });
+      const data = Array.isArray(body.data) ? body.data : (body.value != null ? [body.value] : []);
+      if (data.length === 0) return json({ success: false, error: 'data (array) or value required' });
+      return one(`/tools/convert/${type}`, 'POST', { data, config: body.config });
     }
-    case 'report_summary':
-      return one(`/reports/summary${qs({ start: body.start, end: body.end })}`);
-    case 'report_transactions':
-      return list(`/reports/transactions${qs({ start: body.start, end: body.end, page, per_page: perPage, status: body.status })}`);
-    case 'report_clicks':
-      return list(`/reports/clicks${qs({ start: body.start, end: body.end, page, per_page: perPage })}`);
-    case 'list_payments':
-      return list(`/payments${qs({ page, per_page: perPage })}`);
     case 'raw': {
       const path = (body.path ?? '').toString();
       const method = (body.method ?? 'GET').toString().toUpperCase() as 'GET' | 'POST';
       if (!path.startsWith('/')) return json({ success: false, error: 'path must start with /' });
-      if (method === 'POST' && !path.startsWith('/links')) return json({ success: false, error: 'POST only allowed on /links' });
       if (method !== 'GET' && method !== 'POST') return json({ success: false, error: 'method must be GET or POST' });
+      if (method === 'POST' && !(path.startsWith('/v1/products') || path.startsWith('/tools/convert'))) {
+        return json({ success: false, error: 'POST only allowed on /v1/products and /tools/convert' });
+      }
       const query = (body.query && typeof body.query === 'object') ? body.query as Record<string, unknown> : {};
       const fullPath = `${path}${path.includes('?') ? '' : qs(query)}`;
-      if (!isAllowedReadPath(fullPath)) return json({ success: false, error: `path not allowlisted: ${path}` }, 403);
+      if (!isAllowedPath(fullPath)) return json({ success: false, error: `path not allowlisted: ${path}` }, 403);
       const r = await callUpstream(fullPath, apiKey, { method, body: body.body });
       if (!r.ok) return json({ success: false, error: r.error, status: r.status });
       return json({ success: true, data: r.body, list: normalizeList(r.body) });

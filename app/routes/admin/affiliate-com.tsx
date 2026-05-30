@@ -7,22 +7,20 @@
 
 import { useSearchParams } from '@remix-run/react';
 import OverviewTab from '~/components/affiliate-com/OverviewTab';
+import NetworksTab from '~/components/affiliate-com/NetworksTab';
 import MerchantsTab from '~/components/affiliate-com/MerchantsTab';
 import ProductsTab from '~/components/affiliate-com/ProductsTab';
-import DealsTab from '~/components/affiliate-com/DealsTab';
-import LinksTab from '~/components/affiliate-com/LinksTab';
-import ReportsTab from '~/components/affiliate-com/ReportsTab';
+import ConversionTab from '~/components/affiliate-com/ConversionTab';
 import ExplorerTab from '~/components/affiliate-com/ExplorerTab';
 
-type TabKey = 'overview' | 'merchants' | 'products' | 'deals' | 'links' | 'reports' | 'explorer';
+type TabKey = 'overview' | 'networks' | 'merchants' | 'products' | 'conversion' | 'explorer';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'networks', label: 'Networks' },
   { key: 'merchants', label: 'Merchants' },
   { key: 'products', label: 'Products' },
-  { key: 'deals', label: 'Deals & Coupons' },
-  { key: 'links', label: 'Link Generator' },
-  { key: 'reports', label: 'Reports' },
+  { key: 'conversion', label: 'Conversion' },
   { key: 'explorer', label: 'API Explorer' },
 ];
 
@@ -78,11 +76,10 @@ export default function AdminAffiliateCom() {
       </div>
 
       {active === 'overview' && <OverviewTab />}
+      {active === 'networks' && <NetworksTab />}
       {active === 'merchants' && <MerchantsTab />}
       {active === 'products' && <ProductsTab />}
-      {active === 'deals' && <DealsTab />}
-      {active === 'links' && <LinksTab />}
-      {active === 'reports' && <ReportsTab />}
+      {active === 'conversion' && <ConversionTab />}
       {active === 'explorer' && <ExplorerTab />}
     </div>
   );
