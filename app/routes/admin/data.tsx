@@ -1,4 +1,4 @@
-import { useState, Fragment, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, Fragment, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
@@ -380,6 +380,66 @@ function getProductAffiliateProviders(p: { brand: string | null; url: string | n
     }];
   }
   return [];
+}
+
+// Drag-and-drop (or click-to-pick) photo upload tile for the product
+// detail Photos panel. Square to match the photo thumbnails; highlights
+// green on dragover; shows a spinner while the parent uploads.
+function PhotoDropzone({ busy, onFiles }: { busy: boolean; onFiles: (files: File[]) => void }) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputId = useId();
+  return (
+    <label
+      htmlFor={inputId}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const files = Array.from(e.dataTransfer.files || []);
+        if (files.length) onFiles(files);
+      }}
+      title="Drag images here or click to upload"
+      style={{
+        aspectRatio: '1 / 1',
+        border: `2px dashed ${dragOver ? '#059669' : '#cbd5e1'}`,
+        borderRadius: 6,
+        background: dragOver ? '#ecfdf5' : '#f8fafc',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 4, cursor: busy ? 'wait' : 'pointer',
+        color: dragOver ? '#059669' : '#94a3b8', textAlign: 'center', padding: 4,
+        transition: 'all 0.12s',
+      }}
+    >
+      {busy ? (
+        <>
+          <style>{`@keyframes pdz-spin { to { transform: rotate(360deg); } }`}</style>
+          <span style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid #cbd5e1', borderTopColor: '#059669', animation: 'pdz-spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: 9 }}>Uploading…</span>
+        </>
+      ) : (
+        <>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1.2 }}>Drop / upload</span>
+        </>
+      )}
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: 'none' }}
+        disabled={busy}
+        onChange={(e) => {
+          const files = Array.from(e.target.files || []);
+          if (files.length) onFiles(files);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
 }
 
 function AdminToggle({ on, onChange }: { on: boolean; onChange: (val: boolean) => void }) {
@@ -2723,6 +2783,47 @@ export default function AdminData() {
   // local adVideoMap optimistically so the UI is instant, then persists
   // the new sort_order on each row in parallel. On error reloads the map
   // so the UI catches up with reality.
+  // Drag-and-drop / click upload of product photos into the
+  // scraped-products bucket. Appends public URLs to products.images
+  // (seeds image_url when empty) and optimistically reconciles local
+  // state. Only image/* files are accepted.
+  const [uploadingPhotosFor, setUploadingPhotosFor] = useState<string | null>(null);
+  const uploadProductPhotos = useCallback(async (productId: string, files: File[]) => {
+    if (!supabase || files.length === 0) return;
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) { showToast('Only image files are supported'); return; }
+    setUploadingPhotosFor(productId);
+    const uploadedUrls: string[] = [];
+    try {
+      for (const file of imageFiles) {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        const path = `uploads/${productId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('scraped-products')
+          .upload(path, file, { contentType: file.type, upsert: true });
+        if (upErr) { showToast(`Upload failed: ${upErr.message}`); continue; }
+        const { data: pub } = supabase.storage.from('scraped-products').getPublicUrl(path);
+        if (pub?.publicUrl) uploadedUrls.push(pub.publicUrl);
+      }
+      if (uploadedUrls.length === 0) return;
+      const current = crawledProducts.find(p => p.id === productId);
+      const existing = (current?.images && current.images.length > 0)
+        ? current.images
+        : (current?.image_url ? [current.image_url] : []);
+      const nextImages = [...existing, ...uploadedUrls];
+      const patch: Record<string, unknown> = { images: nextImages };
+      if (!current?.image_url) patch.image_url = uploadedUrls[0];
+      const { error: updErr } = await supabase.from('products').update(patch).eq('id', productId);
+      if (updErr) { showToast(`Saved files but DB update failed: ${updErr.message}`); return; }
+      setCrawledProducts(prev => prev.map(p => p.id === productId
+        ? { ...p, images: nextImages, image_url: p.image_url || uploadedUrls[0] } as CrawledProduct
+        : p));
+      showToast(`Added ${uploadedUrls.length} photo${uploadedUrls.length === 1 ? '' : 's'}`);
+    } finally {
+      setUploadingPhotosFor(null);
+    }
+  }, [crawledProducts, showToast]);
+
   const reorderCreatives = useCallback(async (productId: string, fromIndex: number, toIndex: number) => {
     if (!supabase) return;
     if (fromIndex === toIndex) return;
@@ -5752,9 +5853,12 @@ export default function AdminData() {
                               Photos <span style={{ color: '#059669', fontWeight: 700 }}>{rowImages.length}</span>
                             </div>
                             {rowImages.length === 0 ? (
-                              <div style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>No product photos.</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 8 }}>
+                                {p.id && <PhotoDropzone busy={uploadingPhotosFor === p.id} onFiles={(files) => uploadProductPhotos(p.id!, files)} />}
+                              </div>
                             ) : (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 8 }}>
+                                {p.id && <PhotoDropzone busy={uploadingPhotosFor === p.id} onFiles={(files) => uploadProductPhotos(p.id!, files)} />}
                                 {rowImages.map((src, ii) => {
                                   const isPrimary = (p as { primary_image_url?: string | null }).primary_image_url === src;
                                   const setAsPrimary = async () => {
