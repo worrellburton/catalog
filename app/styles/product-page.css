@@ -229,11 +229,12 @@
   .pd-split .pd-info {
     padding: 64px 48px 48px;
     align-self: stretch;
-    justify-content: flex-start;
+    justify-content: center;
   }
   .pd-split .pd-info-inner {
     max-width: 520px;
     gap: 12px;
+    margin-inline: auto;
   }
 
   /* On desktop the rail variant of the brand strip lives in the right

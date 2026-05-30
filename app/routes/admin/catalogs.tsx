@@ -11,6 +11,7 @@ import {
 } from '~/services/product-research';
 import { getFeedSearchResults } from '~/services/feed-search';
 import type { ProductAd } from '~/services/product-creative';
+import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
 import {
   getHomeCatalog,
   updateCatalogToggles,
@@ -103,6 +104,8 @@ export interface ProductRow {
   name: string | null;
   brand: string | null;
   image_url: string | null;
+  primary_image_url: string | null;
+  gender: string | null;
   catalog_tags: string[] | null;
   createdAt?: string | null;
   metrics?: ItemMetrics;
@@ -325,7 +328,7 @@ export async function loadCatalogCreativePayload(
   } else {
     let productsQuery = supabase
       .from('products')
-      .select('id, name, brand, image_url, catalog_tags');
+      .select('id, name, brand, image_url, primary_image_url, gender, catalog_tags');
     if (!isUniverse) {
       productsQuery = productsQuery.contains('catalog_tags', [catalog.name]);
     }
@@ -417,7 +420,7 @@ export async function loadCatalogCreativePayload(
       } else {
         const { data: feedProductRows } = await supabase
           .from('products')
-          .select('id, name, brand, image_url, catalog_tags')
+          .select('id, name, brand, image_url, primary_image_url, gender, catalog_tags')
           .in('id', feedProductIds);
         feedOnlyProducts = (feedProductRows as ProductRow[] | null) || [];
       }
@@ -430,12 +433,12 @@ export async function loadCatalogCreativePayload(
     }
   }
 
-  if (isAll && opts.applyAllOrdering) {
+  if (isUniverse && opts.applyAllOrdering) {
     const order = loadAllOrder();
     return {
       looks: applyOrder(looks, l => l.id, order.looks),
       creatives: applyOrder(creatives, c => c.id, order.creatives),
-      products: applyOrder(catalogProducts, p => p.id, order.products),
+      products: applyOrder(displayProducts, p => p.id, order.products),
       feedResults,
     };
   }
@@ -651,7 +654,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data } = await supabase
       .from('products')
-      .select('id, name, brand, image_url, catalog_tags');
+      .select('id, name, brand, image_url, primary_image_url, gender, catalog_tags');
     if (data) setProducts(data as ProductRow[]);
   }, []);
 
@@ -1834,7 +1837,7 @@ export default function AdminCatalogs() {
                           creative={creative}
                           metricsLoading={metricsLoading}
                           catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
-                          onReorder={() => {}}
+                          onReorder={(section, from, to) => reorderAllSection(homeCatalog.id, section, from, to)}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
                             loadLooks();
@@ -3209,6 +3212,13 @@ type DrawerSubject =
 
 export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
   const [drawer, setDrawer] = useState<DrawerSubject>(null);
+  // Re-render when the "View as" gender flips so the product list
+  // refilters live. The MetricControlBar mutates the singleton; we
+  // subscribe here purely to force a re-render of the dropdown body.
+  const [, setShopperGenderRev] = useState(0);
+  useEffect(() => {
+    return subscribeToShopperGender(() => setShopperGenderRev(r => r + 1));
+  }, []);
   // Phase 5: local sort/filter state. Per-dropdown so different
   // expanded catalogs can be sliced differently without interference.
   const [sort, setSort] = useState<MetricSort>('most-viewed');
@@ -3364,7 +3374,21 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
 
   // Apply Phase 5 filter then sort to BOTH looks and products.
   const sortedLooks = sortAndFilterItems(looks, sort, filter);
-  const sortedProducts = sortAndFilterItems(products, sort, filter);
+  // "View as" — when the admin picks Men or Women in the control bar
+  // the global shopperGender flips. Mirror the consumer feed's
+  // visibility rule here so the preview matches what a real shopper
+  // of that gender would actually see (own gender + unisex; untagged
+  // hidden so the admin can spot products that need a gender backfill).
+  const viewAsGender = getShopperGender();
+  const visibleProducts = viewAsGender === 'unknown'
+    ? products
+    : products.filter(p => {
+        const g = (p.gender || '').toLowerCase();
+        if (!g) return false;
+        if (g === 'unisex') return true;
+        return g === viewAsGender;
+      });
+  const sortedProducts = sortAndFilterItems(visibleProducts, sort, filter);
 
   // Phase 7-lite: KPI strip.
   const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
@@ -3405,10 +3429,6 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
             onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
           />
-          <CreativesListTable title="Creative Videos" creatives={creatives} />
-          {!isUniverse && (
-            <CreativesListTable title="Feed search results" creatives={feedResults ?? []} />
-          )}
         </>
       ) : (
         <>
@@ -3436,7 +3456,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             count={sortedProducts.length}
             emptyMessage="No products match the current filter."
             minColumnPx={140}
-            draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+            draggable={(isAll || isUniverse) && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
             onReorder={(from, to) => onReorder('products', from, to)}
           >
             {sortedProducts.map((p, idx) => (
@@ -3449,34 +3469,6 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               />
             ))}
           </DraggableSection>
-
-          <DraggableSection
-            title="Creative Videos"
-            count={creatives.length}
-            emptyMessage="No rendered product ads in this catalog yet."
-            minColumnPx={140}
-            draggable={isAll}
-            onReorder={(from, to) => onReorder('creatives', from, to)}
-          >
-            {creatives.map(c => (
-              <CreativeThumb key={c.id} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
-            ))}
-          </DraggableSection>
-
-          {!isUniverse && (
-            <DraggableSection
-              title="Feed search results"
-              count={feedResults?.length ?? 0}
-              emptyMessage="No creatives surface for this query in the consumer feed search."
-              minColumnPx={140}
-              draggable={false}
-              onReorder={() => {}}
-            >
-              {(feedResults ?? []).map(c => (
-                <CreativeThumb key={`feed-${c.id}`} creative={c} onOpenDetail={() => setDrawer({ kind: 'creative', creative: c })} />
-              ))}
-            </DraggableSection>
-          )}
         </>
       )}
 
@@ -3809,8 +3801,8 @@ function ProductDetailBody({ product }: { product: ProductRow }) {
   return (
     <>
       <div style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', maxHeight: 360 }}>
-        {product.image_url ? (
-          <img src={product.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {(product.primary_image_url || product.image_url) ? (
+          <img src={product.primary_image_url || product.image_url || ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', fontSize: 12 }}>No image</div>
         )}
@@ -4285,8 +4277,8 @@ function ProductsListTable({
                   </td>
                 )}
                 <td style={listBodyCellStyle}>
-                  {p.image_url ? (
-                    <img src={p.image_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                  {(p.primary_image_url || p.image_url) ? (
+                    <img src={p.primary_image_url || p.image_url || ''} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
                   ) : (
                     <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
                   )}
@@ -4502,6 +4494,15 @@ interface MetricControlBarProps {
 }
 
 function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode }: MetricControlBarProps) {
+  // "View as" — switches the catalog preview into a synthetic shopper
+  // gender so admins can sanity-check what a male or female user would
+  // actually see in the consumer feed without signing in/out. Wired
+  // through the same setShopperGender singleton that gates the home
+  // feed, so the underlying product lists re-rank live.
+  const [viewAs, setViewAs] = useState<'unknown' | 'male' | 'female'>(() => getShopperGender());
+  useEffect(() => {
+    return subscribeToShopperGender(g => setViewAs(g));
+  }, []);
   const sortOpts: { value: MetricSort; label: string }[] = [
     { value: 'most-viewed', label: 'Most viewed' },
     { value: 'highest-ctr', label: 'Highest CTR' },
@@ -4527,6 +4528,23 @@ function MetricControlBar({ sort, filter, viewMode, onSort, onFilter, onViewMode
           style={{ fontSize: 12, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff' }}
         >
           {sortOpts.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+        </select>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569' }}>
+        View as
+        <select
+          value={viewAs}
+          onChange={e => {
+            const next = e.target.value as 'unknown' | 'male' | 'female';
+            setViewAs(next);
+            setShopperGender(next);
+          }}
+          style={{ fontSize: 12, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff' }}
+          title="Preview the catalog as a shopper of this gender — re-ranks the feed live."
+        >
+          <option value="unknown">Anyone</option>
+          <option value="male">Men</option>
+          <option value="female">Women</option>
         </select>
       </label>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -4624,8 +4642,8 @@ function ProductMetricTile({ product, selected, onSelect, onOpenDetail }: { prod
         outlineOffset: -4,
       }}
     >
-      {product.image_url ? (
-        <img src={product.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+      {(product.primary_image_url || product.image_url) ? (
+        <img src={product.primary_image_url || product.image_url || ''} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
       ) : (
         <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
       )}
