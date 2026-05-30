@@ -3337,9 +3337,21 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // Applied to BOTH looks and products — without this, "View as: Men"
   // emptied the Looks section even though men's looks existed.
   const viewAsGender = getShopperGender();
+  // looks + products store gender as `women` / `men` / `unisex`, but
+  // the shopperGender singleton uses `male` / `female` / `unknown`.
+  // Normalize both sides to a shared {male|female|unisex} vocabulary so
+  // "View as: Men" actually surfaces the men's looks instead of zero.
+  const normalize = (g: string | null | undefined): 'male' | 'female' | 'unisex' | null => {
+    const x = (g || '').toLowerCase().trim();
+    if (!x) return null;
+    if (x === 'male' || x === 'men' || x === 'man' || x === 'm') return 'male';
+    if (x === 'female' || x === 'women' || x === 'woman' || x === 'w') return 'female';
+    if (x === 'unisex' || x === 'all' || x === 'u') return 'unisex';
+    return null;
+  };
   const genderMatches = (g: string | null | undefined): boolean => {
     if (viewAsGender === 'unknown') return true;
-    const x = (g || '').toLowerCase();
+    const x = normalize(g);
     if (!x) return false;
     if (x === 'unisex') return true;
     return x === viewAsGender;
