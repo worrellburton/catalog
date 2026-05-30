@@ -324,6 +324,16 @@ function BrandTableRow({ brand, expanded, onToggle }: { brand: BrandRow; expande
 function BrandDetailDropdown({ brand }: { brand: BrandRow }) {
   const [detail, setDetail] = useState<BrandDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Grid vs list for the products section inside this dropdown.
+  // Persisted in localStorage so it sticks across opens / brands.
+  const [productView, setProductView] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    try { return (window.localStorage.getItem(`${BRANDS_VIEW_LS_KEY}:dropdown-products`) as ViewMode) || 'grid'; }
+    catch { return 'grid'; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(`${BRANDS_VIEW_LS_KEY}:dropdown-products`, productView); } catch { /* private mode */ }
+  }, [productView]);
 
   useEffect(() => {
     let cancelled = false;
@@ -382,16 +392,38 @@ function BrandDetailDropdown({ brand }: { brand: BrandRow }) {
 
       {/* Sample products grid */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
             Products ({detail ? detail.products.length : '…'})
           </span>
+          <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setProductView('grid')} title="Grid view" aria-label="Grid view"
+              style={{
+                padding: '3px 8px', border: 'none', cursor: 'pointer',
+                background: productView === 'grid' ? '#111' : '#fff',
+                color: productView === 'grid' ? '#fff' : '#475569',
+                display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600,
+              }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Grid
+            </button>
+            <button type="button" onClick={() => setProductView('list')} title="List view" aria-label="List view"
+              style={{
+                padding: '3px 8px', border: 'none', borderLeft: '1px solid #e2e8f0', cursor: 'pointer',
+                background: productView === 'list' ? '#111' : '#fff',
+                color: productView === 'list' ? '#fff' : '#475569',
+                display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600,
+              }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              List
+            </button>
+          </div>
         </div>
         {!detail && <div style={{ padding: 16, color: '#94a3b8', fontSize: 12 }}>Loading products…</div>}
         {detail && detail.products.length === 0 && (
           <div style={{ padding: 12, color: '#94a3b8', fontSize: 12 }}>No active products for this brand.</div>
         )}
-        {detail && detail.products.length > 0 && (
+        {detail && detail.products.length > 0 && productView === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
             {detail.products.slice(0, 24).map(p => {
               const img = p.primaryImageUrl ?? p.imageUrl;
@@ -407,6 +439,45 @@ function BrandDetailDropdown({ brand }: { brand: BrandRow }) {
                 </div>
               );
             })}
+          </div>
+        )}
+        {detail && detail.products.length > 0 && productView === 'list' && (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}></th>
+                  <th style={{ textAlign: 'left' }}>Product</th>
+                  <th>Price</th>
+                  <th>Gender</th>
+                  <th title="Has primary video">Video</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.products.map(p => {
+                  const img = p.primaryImageUrl ?? p.imageUrl;
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        {img
+                          ? <img src={img} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} onError={e => { (e.target as HTMLImageElement).style.opacity = '0.2'; }} />
+                          : <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />}
+                      </td>
+                      <td style={{ textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#111' }}>{p.name ?? 'Untitled'}</td>
+                      <td style={{ fontSize: 12, color: '#475569' }}>{p.price ?? '—'}</td>
+                      <td style={{ fontSize: 11, color: '#64748b' }}>{p.gender ?? '—'}</td>
+                      <td style={{ fontSize: 14 }}>{p.primaryVideoUrl ? '🎬' : <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {p.url
+                          ? <a href={p.url} target="_blank" rel="noopener noreferrer" className="admin-btn admin-btn-secondary" style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>Open ↗</a>
+                          : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
