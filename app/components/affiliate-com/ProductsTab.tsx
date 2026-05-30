@@ -40,22 +40,35 @@ export default function ProductsTab() {
     if (!supabase) return;
     setImportState(s => ({ ...s, [k]: 'saving' }));
     const img = productImage(p);
-    // Use the safe text accessors — affiliate.com returns brand /
-    // merchant / currency as nested objects ({name, …} / {code, symbol}),
-    // and inserting raw objects into text columns would error.
+    // affiliate.com's real product schema uses snake_case + nested
+    // objects for everything: brand / merchant / currency as
+    // {name, …} / {code, symbol}, prices as final_price /
+    // regular_price (numbers), gender as a string, URLs nested under
+    // `urls.{affiliate,direct,outclick}`. Map each field through a
+    // safe accessor so the row is always valid for the products schema.
+    const raw = p as Record<string, unknown>;
+    const finalPrice = raw.final_price ?? p.sale_price ?? null;
+    const regularPrice = raw.regular_price ?? p.price ?? null;
+    const currencyText = typeof p.currency === 'string'
+      ? p.currency
+      : (typeof p.currency === 'object' && p.currency !== null
+          ? String((p.currency as Record<string, unknown>).code ?? (p.currency as Record<string, unknown>).symbol ?? '')
+          : null);
+    const genderText = typeof raw.gender === 'string' ? (raw.gender as string).toLowerCase() : null;
     const row = {
       name: productTitle(p),
       brand: productBrand(p) || null,
-      price: p.price != null ? String(p.price) : null,
-      discounted_price: p.sale_price != null ? String(p.sale_price) : null,
-      currency: (typeof p.currency === 'string' ? p.currency
-        : typeof p.currency === 'object' && p.currency !== null
-          ? String((p.currency as Record<string, unknown>).code ?? (p.currency as Record<string, unknown>).symbol ?? '')
-          : null) || null,
+      price: regularPrice != null ? String(regularPrice) : null,
+      discounted_price: finalPrice != null && finalPrice !== regularPrice ? String(finalPrice) : null,
+      currency: currencyText || null,
+      // The affiliate-tracked URL goes here — clickouts use this so
+      // commission flows on every conversion. (Falls back to the bare
+      // direct URL when no tracking link exists.)
       url: productLink(p),
       image_url: img,
       images: img ? [img] : [],
       description: typeof p.description === 'string' ? p.description : null,
+      gender: genderText === 'male' || genderText === 'female' || genderText === 'unisex' ? genderText : null,
       source: 'affiliate.com',
       is_active: false,
       scrape_status: 'done',

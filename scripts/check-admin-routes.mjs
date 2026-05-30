@@ -32,12 +32,27 @@ const files = readdirSync(adminDir, { withFileTypes: true })
   .map(d => d.name);
 
 const missing = [];
+const duplicated = [];
 for (const file of files) {
   // Match the literal string the registration uses. We don't try to
   // infer the URL — that's an admin choice (e.g. /admin/user/:name from
   // user.$name.tsx) — we just confirm the file is referenced.
   const literal = `routes/admin/${file}`;
-  if (!viteConfig.includes(literal)) missing.push(file);
+  // Count occurrences: 0 = unregistered (404s in prod), 2+ = duplicate
+  // route id (hard build failure on Vercel: "Unable to define routes
+  // with duplicate route id").
+  const count = viteConfig.split(literal).length - 1;
+  if (count === 0) missing.push(file);
+  else if (count > 1) duplicated.push({ file, count });
+}
+
+if (duplicated.length > 0) {
+  console.error(`\n[check-admin-routes] ✗ ${duplicated.length} admin route file(s) registered MORE THAN ONCE in vite.config.ts:\n`);
+  for (const { file, count } of duplicated) {
+    console.error(`  - routes/admin/${file} (appears ${count}×) — remove the duplicate route(...) line.`);
+  }
+  console.error('\nDuplicate route ids fail the Vercel build ("Unable to define routes with duplicate route id").\n');
+  process.exit(1);
 }
 
 if (missing.length === 0) {
