@@ -164,6 +164,7 @@ export default defineConfig({
             route("site-crawls", "routes/admin/site-crawls.tsx");
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
+            route("brand/:name", "routes/admin/brand.$name.tsx");
           });
         });
       },

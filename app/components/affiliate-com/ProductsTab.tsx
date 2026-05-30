@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { supabase } from '~/utils/supabase';
 import {
   affiliateCom, type AffiliateProduct,
-  productTitle, productImage, productLink, productPrice,
+  productTitle, productBrand, productImage, productLink, productPrice,
 } from '~/services/affiliate-com';
 import {
   useAffiliateCall, ErrorBanner, Spinner, EmptyState, Pagination, SearchBar, JsonDrawer,
@@ -40,16 +40,22 @@ export default function ProductsTab() {
     if (!supabase) return;
     setImportState(s => ({ ...s, [k]: 'saving' }));
     const img = productImage(p);
+    // Use the safe text accessors — affiliate.com returns brand /
+    // merchant / currency as nested objects ({name, …} / {code, symbol}),
+    // and inserting raw objects into text columns would error.
     const row = {
       name: productTitle(p),
-      brand: (p.brand ?? p.merchant ?? null) as string | null,
+      brand: productBrand(p) || null,
       price: p.price != null ? String(p.price) : null,
       discounted_price: p.sale_price != null ? String(p.sale_price) : null,
-      currency: (p.currency ?? null) as string | null,
+      currency: (typeof p.currency === 'string' ? p.currency
+        : typeof p.currency === 'object' && p.currency !== null
+          ? String((p.currency as Record<string, unknown>).code ?? (p.currency as Record<string, unknown>).symbol ?? '')
+          : null) || null,
       url: productLink(p),
       image_url: img,
       images: img ? [img] : [],
-      description: (p.description ?? null) as string | null,
+      description: typeof p.description === 'string' ? p.description : null,
       source: 'affiliate.com',
       is_active: false,
       scrape_status: 'done',
@@ -96,7 +102,7 @@ export default function ProductsTab() {
                       : <div style={{ width: '100%', aspectRatio: '1' }} />}
                   </button>
                   <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{p.brand ?? p.merchant ?? ''}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{productBrand(p)}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#111', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                       {productTitle(p)}
                     </div>

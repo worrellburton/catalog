@@ -138,28 +138,65 @@ export const affiliateCom = {
 
 // ── Defensive field accessors (shared by the UI tabs) ───────────────
 
+// ── Defensive field accessors (shared by the UI tabs) ───────────────
+//
+// affiliate.com nests several fields as OBJECTS (e.g. merchant =
+// {id, object_id, name, logo_url}, brand = {name, ...}, currency =
+// {code, symbol}). Rendering any of those directly inside JSX throws
+// React error #31 ("Objects are not valid as a React child"). Every
+// accessor below returns a plain string, normalising the common
+// nested shapes (`.name`, `.code`, `.symbol`, `.title`).
+
+/** Pull a usable display string from a value that might be a primitive
+ *  or a {name|title|code|symbol} object. Returns null when nothing
+ *  presentable is available. */
+function asText(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    for (const k of ['name', 'title', 'label', 'code', 'symbol']) {
+      const inner = o[k];
+      if (typeof inner === 'string') return inner;
+      if (typeof inner === 'number') return String(inner);
+    }
+    return null;
+  }
+  return null;
+}
+
 export function merchantName(m: AffiliateMerchant): string {
-  return String(m.name ?? m.slug ?? m.id ?? 'Untitled merchant');
+  return asText(m.name) ?? asText(m.slug) ?? asText(m.id) ?? 'Untitled merchant';
 }
 export function merchantCommission(m: AffiliateMerchant): string {
-  if (m.commission) return String(m.commission);
-  if (m.commission_rate != null) return typeof m.commission_rate === 'number' ? `${m.commission_rate}%` : String(m.commission_rate);
+  const c = asText(m.commission);
+  if (c) return c;
+  if (m.commission_rate != null) {
+    return typeof m.commission_rate === 'number' ? `${m.commission_rate}%` : (asText(m.commission_rate) ?? '—');
+  }
   return '—';
 }
 export function productTitle(p: AffiliateProduct): string {
-  return String(p.title ?? p.name ?? 'Untitled product');
+  return asText(p.title) ?? asText(p.name) ?? 'Untitled product';
+}
+export function productBrand(p: AffiliateProduct): string {
+  return asText(p.brand) ?? asText(p.merchant) ?? '';
 }
 export function productImage(p: AffiliateProduct): string | null {
-  return (p.image_url ?? p.image ?? null) as string | null;
+  // image / image_url can be strings OR objects ({url, width, ...}).
+  return asText(p.image_url) ?? asText(p.image);
 }
 export function productLink(p: AffiliateProduct): string | null {
-  return (p.affiliate_url ?? p.deep_link ?? p.url ?? null) as string | null;
+  return asText(p.affiliate_url) ?? asText(p.deep_link) ?? asText(p.url);
 }
 export function productPrice(p: AffiliateProduct): string {
   const raw = p.sale_price ?? p.price;
   if (raw == null) return '—';
-  const cur = p.currency ? `${p.currency} ` : '$';
-  return typeof raw === 'number' ? `${cur}${raw.toFixed(2)}` : String(raw);
+  const curText = asText(p.currency);
+  const cur = curText ? `${curText} ` : '$';
+  if (typeof raw === 'number') return `${cur}${raw.toFixed(2)}`;
+  return asText(raw) ?? '—';
 }
 
 /** Pull a friendly subset of keys for a generic row table when we don't
@@ -188,6 +225,7 @@ export function cellValue(row: unknown, key: string): string {
   if (!row || typeof row !== 'object') return '';
   const v = (row as Record<string, unknown>)[key];
   if (v == null) return '';
-  if (typeof v === 'object') return Array.isArray(v) ? v.join(', ') : JSON.stringify(v).slice(0, 80);
+  if (Array.isArray(v)) return v.map(x => asText(x) ?? '').filter(Boolean).join(', ');
+  if (typeof v === 'object') return asText(v) ?? JSON.stringify(v).slice(0, 80);
   return String(v);
 }
