@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { supabase } from '~/utils/supabase';
 
 type NetworkType =
@@ -914,7 +914,11 @@ const networks: AffiliateNetwork[] = [
     cookieDuration: '30 days',
     hasApi: true,
     fitRating: 90,
-    status: 'connected',
+    // Live connection state is determined by AffiliateComStatus (auto-pings
+    // the edge fn). Keep the static flag 'available' so the table / grid /
+    // "Connected" stat don't claim a connection the secret check hasn't
+    // confirmed — the expanded detail row shows the real status.
+    status: 'available',
     apiDocsUrl: 'https://docs.affiliate.com/api',
     connectionRequirements: {
       authType: 'Bearer Token',
@@ -974,43 +978,60 @@ function FitBadge({ rating }: { rating: number }) {
 }
 
 // Affiliate.com is the only network wired to a live backend right now
-// (edge fn `affiliate-com` proxies the key-bearing API). The Test
-// connection pill pings the upstream and reports back inline so the
-// admin can verify the AFFILIATE_COM_API_KEY secret is set + valid.
-function AffiliateComTestButton() {
+// (edge fn `affiliate-com` proxies the key-bearing API). This status
+// pill is the single source of truth for whether the integration is
+// actually live: it auto-pings the upstream on mount (and on manual
+// retest) and renders the real result. We DON'T trust the static
+// `status: 'connected'` flag here — the connection only exists if the
+// AFFILIATE_COM_API_KEY secret is set in Supabase and the upstream
+// accepts it, which only a live ping can confirm.
+function AffiliateComStatus() {
   const [state, setState] = useState<'idle' | 'testing' | 'ok' | 'err'>('idle');
   const [msg, setMsg] = useState<string | null>(null);
+
+  const ping = async () => {
+    if (!supabase) { setState('err'); setMsg('Supabase not configured'); return; }
+    setState('testing'); setMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('affiliate-com', { body: { action: 'ping' } });
+      if (error || !data?.success) {
+        setState('err');
+        setMsg(data?.error || error?.message || 'unknown');
+      } else {
+        setState('ok');
+        const c = (data.data as { sample_count?: number } | undefined)?.sample_count;
+        setMsg(typeof c === 'number' ? `${c} sample merchant${c === 1 ? '' : 's'}` : null);
+      }
+    } catch (err) {
+      setState('err');
+      setMsg((err as Error).message || 'unknown');
+    }
+  };
+
+  // Auto-check on first render so the badge reflects reality without a
+  // manual click.
+  useEffect(() => { ping(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  const badge =
+    state === 'ok'
+      ? <span className="admin-status admin-status-online">Connected{msg ? ` · ${msg}` : ''}</span>
+      : state === 'err'
+        ? <span className="admin-status" style={{ color: '#dc2626' }}>Not connected{msg ? ` · ${msg}` : ''}</span>
+        : <span className="admin-status" style={{ color: '#f59e0b' }}>Checking…</span>;
+
   return (
-    <button
-      type="button"
-      className="admin-btn admin-btn-secondary"
-      style={{ fontSize: 12 }}
-      disabled={state === 'testing'}
-      onClick={async (e) => {
-        e.stopPropagation();
-        if (!supabase) { setState('err'); setMsg('Supabase not configured'); return; }
-        setState('testing'); setMsg(null);
-        try {
-          const { data, error } = await supabase.functions.invoke('affiliate-com', { body: { action: 'ping' } });
-          if (error || !data?.success) {
-            setState('err');
-            setMsg(data?.error || error?.message || 'unknown');
-          } else {
-            setState('ok');
-            const c = (data.data as { sample_count?: number } | undefined)?.sample_count;
-            setMsg(typeof c === 'number' ? `Connected (${c} sample merchant${c === 1 ? '' : 's'} returned)` : 'Connected');
-          }
-        } catch (err) {
-          setState('err');
-          setMsg((err as Error).message || 'unknown');
-        }
-      }}
-    >
-      {state === 'testing' ? 'Testing…'
-        : state === 'ok'  ? `✓ ${msg}`
-        : state === 'err' ? `✕ ${msg}`
-        : 'Test connection'}
-    </button>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      {badge}
+      <button
+        type="button"
+        className="admin-btn admin-btn-secondary"
+        style={{ fontSize: 12 }}
+        disabled={state === 'testing'}
+        onClick={(e) => { e.stopPropagation(); ping(); }}
+      >
+        {state === 'testing' ? 'Testing…' : 'Retest'}
+      </button>
+    </span>
   );
 }
 
@@ -1063,7 +1084,14 @@ function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; o
             </div>
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {n.status === 'connected' ? (
+            {/* Affiliate.com is the only network with a live edge-fn
+                proxy today — its status pill auto-pings the upstream so
+                the badge reflects the REAL connection (key set + valid),
+                not the static flag. Every other network is still a
+                manual connect. */}
+            {n.name === 'Affiliate.com' ? (
+              <AffiliateComStatus />
+            ) : n.status === 'connected' ? (
               <span className="admin-status admin-status-online">Connected</span>
             ) : (
               <button
@@ -1074,10 +1102,6 @@ function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; o
                 Connect {n.name}
               </button>
             )}
-            {/* Affiliate.com is the only network with a live edge-fn
-                proxy today — expose a Test connection pill that pings
-                the upstream so the admin can verify the key. */}
-            {n.name === 'Affiliate.com' && <AffiliateComTestButton />}
             {n.apiDocsUrl && (
               <a
                 href={n.apiDocsUrl}

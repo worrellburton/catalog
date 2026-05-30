@@ -96,8 +96,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const tabsEnabled        = isSectionEnabled(pageSections, 'tabs');
   const productsEnabled    = isSectionEnabled(pageSections, 'products');
   const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
+  const similarEnabled         = isSectionEnabled(pageSections, 'similar');
   // Default 9 → a clean 3×3 mosaic in the right column (admin can override).
   const moreFromCreatorLimit   = getSectionLimit(pageSections, 'more-from-creator', 9);
+  const similarLimit           = getSectionLimit(pageSections, 'similar', 8);
   const [productBookmarks, setProductBookmarks] = useState<boolean[]>(
     look.products.map(p => bookmarks.isProductBookmarked(p))
   );
@@ -740,11 +742,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         </div>
 
         {/* ═══ FEED: ProductPage-style stacked sections below the hero ═══ */}
-        {feedSections.looksLikeThis.length > 0 && (
+        {/* "Similar looks" section — admin-controllable via /admin/pages
+            (page=looks, key=similar). Shows garment-matched looks, with a
+            Popular fallback when nothing matches. */}
+        {similarEnabled && feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
             <h3 className="look-feed-heading">More like this</h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.map(fl => (
+              {feedSections.looksLikeThis.slice(0, similarLimit).map(fl => (
                 <LookCard
                   key={`like-${fl.id}`}
                   look={fl}
@@ -758,11 +763,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         )}
 
-        {feedSections.popular.length > 0 && (
+        {similarEnabled && feedSections.popular.length > 0 && (
           <div className="look-feed-section">
             <h3 className="look-feed-heading">Popular</h3>
             <div className="look-feed-grid">
-              {feedSections.popular.map(fl => (
+              {feedSections.popular.slice(0, similarLimit).map(fl => (
                 <LookCard
                   key={`popular-${fl.id}`}
                   look={fl}
