@@ -188,7 +188,38 @@ export function productImage(p: AffiliateProduct): string | null {
   return asText(p.image_url) ?? asText(p.image);
 }
 export function productLink(p: AffiliateProduct): string | null {
-  return asText(p.affiliate_url) ?? asText(p.deep_link) ?? asText(p.url);
+  // affiliate.com nests links under `urls`: { affiliate, direct, outclick,
+  // shopnomix }. `affiliate` is the monetizable tracked URL (camref
+  // placeholders inside); `direct` is the bare merchant URL. Pick the
+  // tracked one first so clickouts actually pay out.
+  const urls = (p as Record<string, unknown>).urls as Record<string, unknown> | undefined;
+  if (urls) {
+    for (const k of ['affiliate', 'outclick', 'shopnomix', 'direct'] as const) {
+      const v = urls[k];
+      if (typeof v === 'string' && v.startsWith('http')) return v;
+    }
+  }
+  return asText((p as Record<string, unknown>).commission_url)
+    ?? asText((p as Record<string, unknown>).direct_url)
+    ?? asText(p.affiliate_url) ?? asText(p.deep_link) ?? asText(p.url);
+}
+
+/** Bare (non-tracked) merchant URL, separate from the affiliate link.
+ *  Used to surface the source merchant alongside the monetized link. */
+export function productDirectUrl(p: AffiliateProduct): string | null {
+  const urls = (p as Record<string, unknown>).urls as Record<string, unknown> | undefined;
+  if (urls && typeof urls.direct === 'string' && urls.direct.startsWith('http')) return urls.direct;
+  return asText((p as Record<string, unknown>).direct_url);
+}
+
+/** Merchant info on the affiliate.com product row. */
+export function productMerchant(p: AffiliateProduct): { name: string | null; logo: string | null } {
+  const m = (p as Record<string, unknown>).merchant as Record<string, unknown> | undefined;
+  if (!m || typeof m !== 'object') return { name: null, logo: null };
+  return {
+    name: asText(m.name),
+    logo: typeof m.logo_url === 'string' ? m.logo_url : null,
+  };
 }
 export function productPrice(p: AffiliateProduct): string {
   const raw = p.sale_price ?? p.price;

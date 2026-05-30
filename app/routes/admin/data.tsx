@@ -218,6 +218,13 @@ interface AffiliateProvider {
   rateNumeric: number;
   signupUrl: string;
   note?: string;
+  /** When present, this is the REAL outbound URL for THIS product (not
+   *  a generic sign-up). Renders as "Open ↗" instead of "Sign up ↗". */
+  outboundUrl?: string;
+  /** Marks the provider as already wired up (no sign-up CTA needed). */
+  connected?: boolean;
+  /** Sub-label (e.g. merchant name) shown under the network name. */
+  merchantName?: string;
 }
 
 const BRAND_AFFILIATES: Record<string, AffiliateProvider[]> = {
@@ -274,6 +281,105 @@ const DEFAULT_AFFILIATES: AffiliateProvider[] = [
 function getAffiliatesFor(brand: string): AffiliateProvider[] {
   const list = BRAND_AFFILIATES[brand] || DEFAULT_AFFILIATES;
   return [...list].sort((a, b) => b.rateNumeric - a.rateNumeric);
+}
+
+// Real retailer programs keyed by URL hostname. Used by
+// getProductAffiliateProviders to surface ONLY the network that
+// actually monetizes the product's destination, instead of dumping a
+// hardcoded grid of Amazon/ShareASale/Skimlinks/Impact on every row.
+const KNOWN_RETAILERS: Record<string, { name: string; network: string; rate: string; rateNumeric: number; signupUrl: string }> = {
+  'amazon.com':    { name: 'Amazon',    network: 'Amazon Associates',     rate: '3–10%', rateNumeric: 6.5, signupUrl: 'https://affiliate-program.amazon.com/' },
+  'amazon.co.uk':  { name: 'Amazon UK', network: 'Amazon Associates UK',  rate: '1–10%', rateNumeric: 5,   signupUrl: 'https://affiliate-program.amazon.co.uk/' },
+  'walmart.com':   { name: 'Walmart',   network: 'Walmart Affiliates',    rate: '1–4%',  rateNumeric: 2.5, signupUrl: 'https://affiliates.walmart.com/' },
+  'target.com':    { name: 'Target',    network: 'Target Partners',       rate: '1–8%',  rateNumeric: 4,   signupUrl: 'https://partners.target.com/' },
+  'nordstrom.com': { name: 'Nordstrom', network: 'Rakuten Advertising',   rate: '2–11%', rateNumeric: 6,   signupUrl: 'https://rakutenadvertising.com/' },
+  'shopify.com':   { name: 'Shopify',   network: 'Shopify Collabs',       rate: 'Varies', rateNumeric: 10, signupUrl: 'https://www.shopify.com/collabs' },
+  'etsy.com':      { name: 'Etsy',      network: 'Awin (Etsy)',           rate: '4–5%',  rateNumeric: 4.5, signupUrl: 'https://www.awin.com/' },
+  'ebay.com':      { name: 'eBay',      network: 'eBay Partner Network',  rate: '1–4%',  rateNumeric: 2.5, signupUrl: 'https://partnernetwork.ebay.com/' },
+  'theiconic.com.au': { name: 'THE ICONIC', network: 'Partnerize Australia', rate: '4–8%', rateNumeric: 6, signupUrl: 'https://www.partnerize.com/' },
+};
+
+function urlHost(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try { return new URL(url).hostname.replace(/^www\./i, ''); } catch { return null; }
+}
+
+/** Replaces the old getAffiliatesFor(brand) generic fallback. Picks the
+ *  affiliate provider(s) that ACTUALLY pertain to this product:
+ *    1. source='affiliate.com' rows → the real affiliate.com tracking
+ *       link (already monetized), plus the bare merchant URL.
+ *    2. product URL hostname matches a known retailer → just that one.
+ *    3. brand is in BRAND_AFFILIATES → the curated brand programs.
+ *    4. nothing relevant → only the brand site (no fake provider grid). */
+function getProductAffiliateProviders(p: { brand: string | null; url: string | null; source?: string | null; raw_data?: Record<string, unknown> | null }): AffiliateProvider[] {
+  // (1) affiliate.com source — surface the actual affiliate URL from raw_data.
+  const source = (p as unknown as { source?: string | null }).source ?? null;
+  if (source === 'affiliate.com') {
+    const raw = (p as unknown as { raw_data?: Record<string, unknown> }).raw_data ?? {};
+    const merchantObj = (raw.merchant ?? null) as { name?: string; logo_url?: string } | null;
+    const networkObj  = (raw.network  ?? null) as { name?: string } | null;
+    const urls = (raw.urls ?? null) as Record<string, string> | null;
+    const tracked = urls?.affiliate ?? urls?.outclick ?? urls?.shopnomix
+      ?? (raw.commission_url as string | undefined) ?? p.url ?? null;
+    const direct  = urls?.direct ?? (raw.direct_url as string | undefined) ?? null;
+    const out: AffiliateProvider[] = [];
+    if (tracked) {
+      out.push({
+        network: 'affiliate.com',
+        rate: 'Tracked',
+        rateNumeric: 99,
+        signupUrl: 'https://my.affiliate.com',
+        outboundUrl: tracked,
+        connected: true,
+        merchantName: merchantObj?.name ?? networkObj?.name ?? undefined,
+        note: networkObj?.name ? `via ${networkObj.name}` : 'monetized clickout',
+      });
+    }
+    if (direct && direct !== tracked) {
+      out.push({
+        network: merchantObj?.name ?? 'Merchant site',
+        rate: 'Direct',
+        rateNumeric: 0,
+        signupUrl: direct,
+        outboundUrl: direct,
+        note: 'no commission',
+      });
+    }
+    return out;
+  }
+  // (2) Known retailer by URL hostname.
+  const host = urlHost(p.url);
+  if (host) {
+    const key = Object.keys(KNOWN_RETAILERS).find(k => host === k || host.endsWith(`.${k}`));
+    const r = key ? KNOWN_RETAILERS[key] : null;
+    if (r) {
+      return [{
+        network: r.network,
+        rate: r.rate,
+        rateNumeric: r.rateNumeric,
+        signupUrl: r.signupUrl,
+        merchantName: r.name,
+        outboundUrl: p.url ?? undefined,
+      }];
+    }
+  }
+  // (3) Brand-specific curated list.
+  if (p.brand && BRAND_AFFILIATES[p.brand]) {
+    return [...BRAND_AFFILIATES[p.brand]].sort((a, b) => b.rateNumeric - a.rateNumeric);
+  }
+  // (4) Only the brand site if we have a URL — no generic provider noise.
+  if (p.url) {
+    return [{
+      network: p.brand ?? 'Brand site',
+      rate: 'Direct',
+      rateNumeric: 0,
+      signupUrl: p.url,
+      outboundUrl: p.url,
+      merchantName: host ?? undefined,
+      note: 'no affiliate program detected',
+    }];
+  }
+  return [];
 }
 
 function AdminToggle({ on, onChange }: { on: boolean; onChange: (val: boolean) => void }) {
@@ -4454,7 +4560,7 @@ export default function AdminData() {
                 const linksOpen = openLinksRow === rowKey;
                 const tagsOpen = openTagsRow === rowKey;
                 const detailOpen = openDetailRow === rowKey;
-                const affiliates = linksOpen ? getAffiliatesFor(p.brand) : [];
+                const affiliates = linksOpen ? getProductAffiliateProviders(p) : [];
                 const rowTags = tagsOpen ? deriveTags(p.name, p.brand) : [];
                 const rowImages: string[] = (p.images && p.images.length > 0)
                   ? p.images
@@ -5837,39 +5943,57 @@ export default function AdminData() {
                             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
                               Affiliate providers
                             </div>
+                            {affiliates.length === 0 && (
+                              <div style={{ fontSize: 11, color: '#94a3b8', padding: '6px 10px', border: '1px dashed #e5e7eb', borderRadius: 6 }}>
+                                No URL on file — add a destination link to enable monetization.
+                              </div>
+                            )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {affiliates.map((a, ai) => (
+                              {affiliates.map((a, ai) => {
+                                const isMonetized = a.connected || (a.outboundUrl && a.rateNumeric > 0);
+                                return (
                                 <div
-                                  key={a.network}
+                                  key={`${a.network}-${ai}`}
                                   style={{
                                     display: 'flex', alignItems: 'center', gap: 8,
                                     padding: '6px 10px',
-                                    background: ai === 0 ? '#f0f9f3' : '#fff',
-                                    border: `1px solid ${ai === 0 ? '#c6efd6' : '#eee'}`,
+                                    background: isMonetized ? '#f0f9f3' : '#fff',
+                                    border: `1px solid ${isMonetized ? '#c6efd6' : '#eee'}`,
                                     borderRadius: 6,
                                   }}
                                 >
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.network}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{a.network}</span>
+                                      {a.connected && (
+                                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#16a34a', color: '#fff', fontWeight: 700, letterSpacing: '0.4px' }}>
+                                          CONNECTED
+                                        </span>
+                                      )}
+                                    </div>
+                                    {a.merchantName && (
+                                      <div style={{ fontSize: 10, color: '#475569', marginTop: 1, fontWeight: 500 }}>{a.merchantName}</div>
+                                    )}
                                     {a.note && (
                                       <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>{a.note}</div>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: ai === 0 ? '#16a34a' : '#111' }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: isMonetized ? '#16a34a' : '#475569' }}>
                                     {a.rate}
                                   </div>
                                   <a
-                                    href={a.signupUrl}
+                                    href={a.outboundUrl ?? a.signupUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="admin-btn admin-btn-secondary"
                                     style={{ fontSize: 10, padding: '3px 8px', textDecoration: 'none' }}
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    Sign up ↗
+                                    {a.outboundUrl ? 'Open ↗' : 'Sign up ↗'}
                                   </a>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
