@@ -1701,9 +1701,7 @@ export default function AdminCatalogs() {
               <th>Gender</th>
               <th>Products</th>
               <th>Searches</th>
-              <th title="Quick toggles: filter to viewer's gender, age cohort, or boost top-converting products to the front">Toggles</th>
               <th>Created</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1802,33 +1800,11 @@ export default function AdminCatalogs() {
                       )}
                     </td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
-                    <td>
-                      <TogglePills
-                        filterGender={homeCatalog.filterGender}
-                        filterAge={homeCatalog.filterAge}
-                        boostTopConverting={homeCatalog.boostTopConverting}
-                        onToggle={async (field, value) => {
-                          setHomeCatalog(prev => prev ? { ...prev, [field]: value } : prev);
-                          const ok = await updateCatalogToggles(homeCatalog.slug, { [field]: value });
-                          if (!ok) {
-                            setHomeCatalog(prev => prev ? { ...prev, [field]: !value } : prev);
-                            showToast('Could not save toggle');
-                          }
-                        }}
-                      />
-                    </td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                        <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
-                        <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
-                        <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
-                      </div>
-                    </td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={10} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={6} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
@@ -1838,6 +1814,28 @@ export default function AdminCatalogs() {
                           metricsLoading={metricsLoading}
                           catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
                           onReorder={(section, from, to) => reorderAllSection(homeCatalog.id, section, from, to)}
+                          headerControls={(
+                            <>
+                              <TogglePills
+                                filterGender={homeCatalog.filterGender}
+                                filterAge={homeCatalog.filterAge}
+                                boostTopConverting={homeCatalog.boostTopConverting}
+                                onToggle={async (field, value) => {
+                                  setHomeCatalog(prev => prev ? { ...prev, [field]: value } : prev);
+                                  const ok = await updateCatalogToggles(homeCatalog.slug, { [field]: value });
+                                  if (!ok) {
+                                    setHomeCatalog(prev => prev ? { ...prev, [field]: !value } : prev);
+                                    showToast('Could not save toggle');
+                                  }
+                                }}
+                              />
+                              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                                <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
+                                <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
+                                <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
+                              </div>
+                            </>
+                          )}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
                             loadLooks();
@@ -1968,79 +1966,13 @@ export default function AdminCatalogs() {
                   )}
                 </td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
-                <td>
-                  {c.id === 'synthetic-all' || !c.slug ? (
-                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
-                  ) : (
-                    <TogglePills
-                      filterGender={c.filterGender}
-                      filterAge={c.filterAge}
-                      boostTopConverting={c.boostTopConverting}
-                      onToggle={async (field, value) => {
-                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: value } : x));
-                        const ok = await updateCatalogToggles(c.slug!, { [field]: value });
-                        if (!ok) {
-                          setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: !value } : x));
-                          showToast('Could not save toggle');
-                        }
-                      }}
-                    />
-                  )}
-                </td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px' }}
-                      onClick={() => openAdd(c)}
-                      disabled={products.length === 0}
-                      title="Pick existing products from the library and tag them to this catalog"
-                    >
-                      + Add Products
-                    </button>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px' }}
-                      onClick={() => openAddLooks(c)}
-                      disabled={looks.length === 0}
-                      title="Pick existing looks from the library and tag them to this catalog"
-                    >
-                      + Add Looks
-                    </button>
-                    <button
-                      className="admin-btn admin-btn-primary"
-                      style={{ fontSize: 11, padding: '4px 10px' }}
-                      onClick={() => openSuggest(c)}
-                    >
-                      Suggest Products
-                    </button>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px' }}
-                      onClick={() => openAssemble(c)}
-                      disabled={productCount < 3}
-                      title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}
-                    >
-                      ✨ Assemble Look
-                    </button>
-                    {c.source === 'custom' && c.id !== 'synthetic-all' && (
-                      <button
-                        className="admin-btn admin-btn-secondary"
-                        style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }}
-                        onClick={() => removeCustom(c.id)}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
                 </td>
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={10} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={6} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
@@ -2050,6 +1982,34 @@ export default function AdminCatalogs() {
                       metricsLoading={metricsLoading}
                       catalogNames={all.filter(x => x.name !== c.name && !isAllCatalog(x.name)).map(x => x.name)}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
+                      headerControls={(
+                        <>
+                          {c.id !== 'synthetic-all' && c.slug && (
+                            <TogglePills
+                              filterGender={c.filterGender}
+                              filterAge={c.filterAge}
+                              boostTopConverting={c.boostTopConverting}
+                              onToggle={async (field, value) => {
+                                setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: value } : x));
+                                const ok = await updateCatalogToggles(c.slug!, { [field]: value });
+                                if (!ok) {
+                                  setCustom(prev => prev.map(x => x.id === c.id ? { ...x, [field]: !value } : x));
+                                  showToast('Could not save toggle');
+                                }
+                              }}
+                            />
+                          )}
+                          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(c)} disabled={products.length === 0} title="Pick existing products from the library and tag them to this catalog">+ Add Products</button>
+                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(c)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
+                            <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(c)}>Suggest Products</button>
+                            <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAssemble(c)} disabled={productCount < 3} title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}>✨ Assemble Look</button>
+                            {c.source === 'custom' && c.id !== 'synthetic-all' && (
+                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }} onClick={() => removeCustom(c.id)}>✕ Remove catalog</button>
+                            )}
+                          </div>
+                        </>
+                      )}
                       onAfterBulkMutation={() => {
                         // Drop the cached creative payload + refetch
                         // looks/products so the dropdown reflects the
@@ -2561,6 +2521,9 @@ interface CatalogCreativeDropdownProps {
   catalogNames: string[];
   onReorder: (section: CatalogSection, fromIndex: number, toIndex: number) => void;
   onAfterBulkMutation: () => void;
+  /** Row-level controls (toggles + add/suggest/assemble actions) relocated
+   *  from the table columns into the expanded detail header. */
+  headerControls?: React.ReactNode;
 }
 
 // ── Phase 10: catalog health panel ────────────────────────────────────
@@ -3124,52 +3087,20 @@ function ImpressionsPill({ counts }: { counts?: { curr: number; prev: number } }
 // ── Toggle pills ────────────────────────────────────────────────────────────
 type ToggleField = 'filterGender' | 'filterAge' | 'boostTopConverting';
 interface TogglePillsProps {
-  gender?: CatalogGenderUI;
   filterGender?: boolean;
   filterAge?: boolean;
   boostTopConverting?: boolean;
   onToggle: (field: ToggleField, value: boolean) => void;
-  onGender?: (value: CatalogGenderUI) => void;
 }
 
-function TogglePills({ gender, filterGender, filterAge, boostTopConverting, onToggle, onGender }: TogglePillsProps) {
+function TogglePills({ filterGender, filterAge, boostTopConverting, onToggle }: TogglePillsProps) {
   const pills: { key: ToggleField; label: string; value: boolean; disabled?: boolean; title?: string }[] = [
     { key: 'filterGender',        label: 'Gender',  value: filterGender ?? false, title: 'Filter to viewer’s declared gender' },
     { key: 'filterAge',           label: 'Age',     value: filterAge ?? false, disabled: true },
     { key: 'boostTopConverting',  label: 'Top ↑', value: boostTopConverting ?? false, title: 'Boost top-converting products to the front' },
   ];
-  const currentGender: CatalogGenderUI = gender ?? 'all';
-  const genderActive = currentGender !== 'all';
-  const genderLabel: Record<CatalogGenderUI, string> = {
-    all: 'Any gender', women: 'Women', men: 'Men', unisex: 'Unisex',
-  };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <select
-        value={currentGender}
-        onChange={e => onGender?.(e.target.value as CatalogGenderUI)}
-        disabled={!onGender}
-        title={`Gender lens: ${genderLabel[currentGender]}`}
-        style={{
-          padding: '2px 6px', borderRadius: 999, fontSize: 10, fontWeight: 600,
-          border: '1px solid',
-          borderColor: genderActive ? '#111' : '#e2e8f0',
-          background: genderActive ? '#111' : '#fff',
-          color: genderActive ? '#fff' : '#64748b',
-          cursor: onGender ? 'pointer' : 'default',
-          appearance: 'none',
-          paddingRight: 18,
-          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${genderActive ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 5px center',
-          transition: 'all 0.1s',
-        }}
-      >
-        <option value="all">Any</option>
-        <option value="women">Women</option>
-        <option value="men">Men</option>
-        <option value="unisex">Unisex</option>
-      </select>
       {pills.map(p => (
         <button
           key={p.key}
@@ -3210,7 +3141,7 @@ type DrawerSubject =
   | { kind: 'creative'; creative: CatalogCreativeVideo }
   | null;
 
-export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation }: CatalogCreativeDropdownProps) {
+export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation, headerControls }: CatalogCreativeDropdownProps) {
   const [drawer, setDrawer] = useState<DrawerSubject>(null);
   // Re-render when the "View as" gender flips so the product list
   // refilters live. The MetricControlBar mutates the singleton; we
@@ -3354,20 +3285,40 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     }
   }, [selectedLookIds, selectedProductIds, catalogName, clearSelection, onAfterBulkMutation]);
 
+  // Row controls (toggles + add/suggest/assemble) relocated from the
+  // table columns into this detail header. Rendered in every state —
+  // including empty — since that's exactly when "Add products" matters.
+  const controlsBar = headerControls ? (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+      padding: '0 0 12px', marginBottom: 2, borderBottom: '1px solid #eef2f7',
+    }}>
+      {headerControls}
+    </div>
+  ) : null;
+
   // ── Early returns (now AFTER all hooks) ─────────────────────────────
   if (loading && !creative) {
     return (
-      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>Loading creative…</div>
+      <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {controlsBar}
+        <div style={{ color: '#888', fontSize: 12 }}>Loading creative…</div>
+      </div>
     );
   }
-  if (!creative) return null;
+  if (!creative) {
+    return controlsBar ? <div style={{ padding: '14px 24px 18px' }}>{controlsBar}</div> : null;
+  }
 
   const { looks, products, creatives, feedResults } = creative;
   const hasAny = looks.length > 0 || products.length > 0 || creatives.length > 0 || (feedResults?.length ?? 0) > 0;
   if (!hasAny) {
     return (
-      <div style={{ padding: '16px 24px', color: '#888', fontSize: 12 }}>
-        No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
+      <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {controlsBar}
+        <div style={{ color: '#888', fontSize: 12 }}>
+          No looks, products, or creative {isUniverse ? 'are currently active.' : 'tagged with this catalog yet.'}
+        </div>
       </div>
     );
   }
@@ -3397,6 +3348,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
 
   return (
     <div style={{ padding: '14px 24px 18px', display: 'flex', flexDirection: 'column', gap: 14, position: 'relative' }}>
+      {controlsBar}
       {isAll && (
         <div style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 10px' }}>
           The <strong>all</strong> catalog pulls every live look, rendered creative, and product - no duplicates, every entry shown in its entirety. Drag any tile to reorder.
@@ -5493,34 +5445,75 @@ function FeaturedToggle({ slug, value, disabled, onChange, onError }: FeaturedTo
 }
 
 // ── Gender dropdown cell ──────────────────────────────────────────────
+// Icon segmented-control for the catalog gender lens. Replaces the old
+// <select> — four glyph buttons (Any / Female ♀ / Male ♂ / Unisex ⚥),
+// the active one filled black. `onClick` stopPropagation so taps don't
+// toggle the row's expand state.
+const GENDER_ICONS: { value: CatalogGenderUI; label: string; icon: React.ReactNode }[] = [
+  {
+    value: 'all', label: 'Any',
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="6" cy="6" r="2.2" /><circle cx="18" cy="6" r="2.2" />
+        <circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="18" r="2.2" /><circle cx="12" cy="12" r="2.2" />
+      </svg>
+    ),
+  },
+  {
+    value: 'women', label: 'Female',
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="8" r="5" /><line x1="12" y1="13" x2="12" y2="22" /><line x1="9" y1="19" x2="15" y2="19" />
+      </svg>
+    ),
+  },
+  {
+    value: 'men', label: 'Male',
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="9" cy="15" r="5" /><line x1="13" y1="11" x2="20" y2="4" /><polyline points="14 4 20 4 20 10" />
+      </svg>
+    ),
+  },
+  {
+    value: 'unisex', label: 'Unisex',
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="11" cy="13" r="4" />
+        <line x1="11" y1="17" x2="11" y2="22" /><line x1="8.5" y1="19.5" x2="13.5" y2="19.5" />
+        <line x1="13.8" y1="10.2" x2="19" y2="5" /><polyline points="15 5 19 5 19 9" />
+      </svg>
+    ),
+  },
+];
+
 function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange: (v: CatalogGenderUI) => void }) {
-  const active = value !== 'all';
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value as CatalogGenderUI)}
-      onClick={e => e.stopPropagation()}
-      style={{
-        padding: '2px 22px 2px 8px',
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 600,
-        border: '1px solid',
-        borderColor: active ? '#111' : '#e2e8f0',
-        background: active ? '#111' : '#fff',
-        color: active ? '#fff' : '#64748b',
-        cursor: 'pointer',
-        appearance: 'none',
-        backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${active ? 'white' : '%2364748b'}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 6px center',
-      }}
-    >
-      <option value="all">Any</option>
-      <option value="women">Female</option>
-      <option value="men">Male</option>
-      <option value="unisex">Unisex</option>
-    </select>
+    <div style={{ display: 'inline-flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+      {GENDER_ICONS.map(g => {
+        const active = g.value === value;
+        return (
+          <button
+            key={g.value}
+            type="button"
+            onClick={() => onChange(g.value)}
+            title={g.label}
+            aria-label={g.label}
+            aria-pressed={active}
+            style={{
+              width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 7, border: '1px solid',
+              borderColor: active ? '#111' : '#e2e8f0',
+              background: active ? '#111' : '#fff',
+              color: active ? '#fff' : '#94a3b8',
+              cursor: 'pointer', padding: 0, transition: 'all 0.1s',
+            }}
+          >
+            {g.icon}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
