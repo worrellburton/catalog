@@ -138,6 +138,7 @@ export default defineConfig({
             route("incoming-looks", "routes/admin/incoming-looks.tsx");
             route("links", "routes/admin/links.tsx");
             route("affiliate", "routes/admin/affiliate.tsx");
+            route("affiliate-com", "routes/admin/affiliate-com.tsx");
             route("looks", "routes/admin/looks.tsx");
             route("publish/:id", "routes/admin/publish.$id.tsx");
             route("moderation", "routes/admin/moderation.tsx");
