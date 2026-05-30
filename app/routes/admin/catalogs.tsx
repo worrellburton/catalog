@@ -193,6 +193,15 @@ export interface ItemMetrics {
 type MetricSort = 'most-viewed' | 'highest-ctr' | 'biggest-riser' | 'biggest-faller' | 'newest' | 'never-viewed';
 type MetricFilter = 'all' | 'rising' | 'falling' | 'zombie' | 'never-viewed';
 
+// Drag-reorder of looks/products inside the All / Home catalogs is
+// stored locally — there's no canonical sort_order column for the
+// universe view since it's synthesized. We cap each section at a
+// reasonable count + budget the serialized blob so we never exceed
+// localStorage's ~5MB quota (which previously crashed the page on
+// catalogs that hit hundreds of products).
+const ALL_ORDER_MAX_PER_SECTION = 500;
+const ALL_ORDER_MAX_BLOB_BYTES = 256 * 1024; // 256 KB hard ceiling
+
 function loadAllOrder(): Record<CatalogSection, string[]> {
   if (typeof window === 'undefined') return { looks: [], creatives: [], products: [] };
   try {
@@ -211,7 +220,29 @@ function loadAllOrder(): Record<CatalogSection, string[]> {
 
 function saveAllOrder(order: Record<CatalogSection, string[]>) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(ALL_ORDER_KEY, JSON.stringify(order));
+  // Trim each section to the max and budget the total payload so we
+  // never hit QuotaExceededError. If even the trimmed blob exceeds the
+  // ceiling, drop the key entirely (the universe view falls back to
+  // its default sort instead of crashing the page).
+  const trim = (arr: string[]) => arr.slice(0, ALL_ORDER_MAX_PER_SECTION);
+  const trimmed: Record<CatalogSection, string[]> = {
+    looks:     trim(order.looks),
+    creatives: trim(order.creatives),
+    products:  trim(order.products),
+  };
+  try {
+    const blob = JSON.stringify(trimmed);
+    if (blob.length > ALL_ORDER_MAX_BLOB_BYTES) {
+      try { localStorage.removeItem(ALL_ORDER_KEY); } catch { /* ignore */ }
+      return;
+    }
+    localStorage.setItem(ALL_ORDER_KEY, blob);
+  } catch {
+    // Quota exceeded or storage disabled — drop the saved order so the
+    // page keeps working. Loses the custom ordering for this session
+    // but never takes the page down.
+    try { localStorage.removeItem(ALL_ORDER_KEY); } catch { /* ignore */ }
+  }
 }
 
 function applyOrder<T>(items: T[], idKey: (item: T) => string, savedIds: string[]): T[] {
