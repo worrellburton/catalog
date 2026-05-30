@@ -1,4 +1,5 @@
 import { useState, useMemo, Fragment } from 'react';
+import { supabase } from '~/utils/supabase';
 
 type NetworkType =
   | 'Network'           // multi-brand aggregator (Impact, CJ, Rakuten, ShareASale, Awin)
@@ -900,6 +901,38 @@ const networks: AffiliateNetwork[] = [
       ],
     },
   },
+  {
+    name: 'Affiliate.com',
+    logo: 'https://cdn.brandfetch.io/affiliate.com/w/80/h/80/fallback/lettermark',
+    type: 'Network',
+    merchants: '1,500+',
+    avgCommission: '5-20%',
+    categories: ['Fashion', 'DTC', 'Lifestyle', 'Beauty'],
+    partnerBrands: [],
+    paymentSchedule: 'Monthly',
+    minPayout: '$50',
+    cookieDuration: '30 days',
+    hasApi: true,
+    fitRating: 90,
+    status: 'connected',
+    apiDocsUrl: 'https://docs.affiliate.com/api',
+    connectionRequirements: {
+      authType: 'Bearer Token',
+      fields: [
+        { key: 'api_key', label: 'API Key', description: 'Bearer token from my.affiliate.com (stored in Supabase Edge Function Secret AFFILIATE_COM_API_KEY — never exposed client-side).', sensitive: true },
+      ],
+      prerequisites: [
+        'Active affiliate.com publisher account',
+        'API access enabled on your account',
+      ],
+      howToGet: [
+        'Log in to my.affiliate.com',
+        'Go to Account → API',
+        'Copy your bearer token',
+        'In Supabase: Project → Edge Functions → Secrets, add AFFILIATE_COM_API_KEY',
+      ],
+    },
+  },
 ];
 
 type ViewMode = 'table' | 'grid';
@@ -937,6 +970,47 @@ function FitBadge({ rating }: { rating: number }) {
     }}>
       {rating}%
     </span>
+  );
+}
+
+// Affiliate.com is the only network wired to a live backend right now
+// (edge fn `affiliate-com` proxies the key-bearing API). The Test
+// connection pill pings the upstream and reports back inline so the
+// admin can verify the AFFILIATE_COM_API_KEY secret is set + valid.
+function AffiliateComTestButton() {
+  const [state, setState] = useState<'idle' | 'testing' | 'ok' | 'err'>('idle');
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className="admin-btn admin-btn-secondary"
+      style={{ fontSize: 12 }}
+      disabled={state === 'testing'}
+      onClick={async (e) => {
+        e.stopPropagation();
+        if (!supabase) { setState('err'); setMsg('Supabase not configured'); return; }
+        setState('testing'); setMsg(null);
+        try {
+          const { data, error } = await supabase.functions.invoke('affiliate-com', { body: { action: 'ping' } });
+          if (error || !data?.success) {
+            setState('err');
+            setMsg(data?.error || error?.message || 'unknown');
+          } else {
+            setState('ok');
+            const c = (data.data as { sample_count?: number } | undefined)?.sample_count;
+            setMsg(typeof c === 'number' ? `Connected (${c} sample merchant${c === 1 ? '' : 's'} returned)` : 'Connected');
+          }
+        } catch (err) {
+          setState('err');
+          setMsg((err as Error).message || 'unknown');
+        }
+      }}
+    >
+      {state === 'testing' ? 'Testing…'
+        : state === 'ok'  ? `✓ ${msg}`
+        : state === 'err' ? `✕ ${msg}`
+        : 'Test connection'}
+    </button>
   );
 }
 
@@ -1000,6 +1074,10 @@ function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; o
                 Connect {n.name}
               </button>
             )}
+            {/* Affiliate.com is the only network with a live edge-fn
+                proxy today — expose a Test connection pill that pings
+                the upstream so the admin can verify the key. */}
+            {n.name === 'Affiliate.com' && <AffiliateComTestButton />}
             {n.apiDocsUrl && (
               <a
                 href={n.apiDocsUrl}
