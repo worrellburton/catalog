@@ -18,6 +18,9 @@ import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 
 type SortKey = 'products' | 'name' | 'polished' | 'video' | 'updated';
 type LogoFilter = 'all' | 'with-logo' | 'no-logo';
+type ViewMode = 'list' | 'grid';
+
+const BRANDS_VIEW_LS_KEY = 'admin-brands:view-mode';
 
 export default function AdminBrands() {
   const [rows, setRows] = useState<BrandRow[] | null>(null);
@@ -26,6 +29,15 @@ export default function AdminBrands() {
   const [sort, setSort] = useState<SortKey>('products');
   const [logoFilter, setLogoFilter] = useState<LogoFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Grid vs list view, persisted so it sticks across sessions.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'list';
+    try { return (window.localStorage.getItem(BRANDS_VIEW_LS_KEY) as ViewMode) || 'list'; }
+    catch { return 'list'; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(BRANDS_VIEW_LS_KEY, viewMode); } catch { /* private mode */ }
+  }, [viewMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,47 +147,134 @@ export default function AdminBrands() {
             </button>
           ))}
         </div>
+        <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+          <button type="button" onClick={() => setViewMode('grid')} title="Grid view" aria-label="Grid view"
+            style={{
+              padding: '5px 10px', border: 'none', cursor: 'pointer',
+              background: viewMode === 'grid' ? '#111' : '#fff',
+              color: viewMode === 'grid' ? '#fff' : '#475569',
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+            }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Grid
+          </button>
+          <button type="button" onClick={() => setViewMode('list')} title="List view" aria-label="List view"
+            style={{
+              padding: '5px 10px', border: 'none', borderLeft: '1px solid #e2e8f0', cursor: 'pointer',
+              background: viewMode === 'list' ? '#111' : '#fff',
+              color: viewMode === 'list' ? '#fff' : '#475569',
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+            }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            List
+          </button>
+        </div>
       </div>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: 22 }}></th>
-              <th style={{ textAlign: 'left' }}>Brand</th>
-              <th>Products</th>
-              <th title="Polished primary image / total products">Polished</th>
-              <th title="Has primary video / total products">Video</th>
-              <th>Gender mix</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!rows && (
-              <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</td></tr>
-            )}
-            {rows && filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No brands match that filter.</td></tr>
-            )}
-            {filtered.map(b => (
-              <Fragment key={b.name}>
-                <BrandTableRow
-                  brand={b}
-                  expanded={expanded === b.name}
-                  onToggle={() => setExpanded(expanded === b.name ? null : b.name)}
-                />
-                {expanded === b.name && (
-                  <tr>
-                    <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                      <BrandDetailDropdown brand={b} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+      {!rows && (
+        <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</div>
+      )}
+      {rows && filtered.length === 0 && (
+        <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No brands match that filter.</div>
+      )}
+
+      {rows && filtered.length > 0 && viewMode === 'list' && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: 22 }}></th>
+                <th style={{ textAlign: 'left' }}>Brand</th>
+                <th>Products</th>
+                <th title="Polished primary image / total products">Polished</th>
+                <th title="Has primary video / total products">Video</th>
+                <th>Gender mix</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(b => (
+                <Fragment key={b.name}>
+                  <BrandTableRow
+                    brand={b}
+                    expanded={expanded === b.name}
+                    onToggle={() => setExpanded(expanded === b.name ? null : b.name)}
+                  />
+                  {expanded === b.name && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                        <BrandDetailDropdown brand={b} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {rows && filtered.length > 0 && viewMode === 'grid' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          {filtered.map(b => (
+            <BrandGridCard
+              key={b.name}
+              brand={b}
+              expanded={expanded === b.name}
+              onToggle={() => setExpanded(expanded === b.name ? null : b.name)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Grid card ───────────────────────────────────────────────────────
+
+function BrandGridCard({ brand, expanded, onToggle }: { brand: BrandRow; expanded: boolean; onToggle: () => void }) {
+  const logo = useBrandLogo(brand.name);
+  const polishedPct = pct(brand.polishedCount, brand.productCount);
+  const videoPct = pct(brand.withPrimaryVideoCount, brand.productCount);
+  return (
+    <div style={{
+      border: `1px solid ${expanded ? '#111' : '#e5e7eb'}`, borderRadius: 12, background: '#fff',
+      overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: 14, border: 'none',
+          background: expanded ? '#fffbeb' : '#fff', cursor: 'pointer', textAlign: 'left', width: '100%',
+        }}
+      >
+        {logo
+          ? <img src={logo} alt={brand.name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'contain', background: '#fff', padding: 2, border: '1px solid #f1f5f9' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          : brand.sampleImageUrl
+            ? <img src={brand.sampleImageUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', background: '#f1f5f9' }} />
+            : <span style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'inline-block' }} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{brand.name}</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>{brand.productCount.toLocaleString()} product{brand.productCount === 1 ? '' : 's'}</div>
+        </div>
+      </button>
+      <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: '#94a3b8', width: 54 }}>Polished</span>
+          <CoverageBar pct={polishedPct} color="#0ea5e9" />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: '#94a3b8', width: 54 }}>Video</span>
+          <CoverageBar pct={videoPct} color="#10b981" />
+        </div>
+        <GenderMix m={brand.menCount} w={brand.womenCount} u={brand.unisexCount} x={brand.untaggedCount} total={brand.productCount} />
       </div>
+      {expanded && (
+        <div style={{ borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
+          <BrandDetailDropdown brand={brand} />
+        </div>
+      )}
     </div>
   );
 }
