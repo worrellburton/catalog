@@ -1483,6 +1483,13 @@ export default function AdminData() {
   const [bulkPolishProgress, setBulkPolishProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkVideoGenerating, setBulkVideoGenerating] = useState(false);
   const [bulkVideoProgress, setBulkVideoProgress] = useState<{ done: number; total: number } | null>(null);
+  // In-flight primary-video jobs keyed by product_id. The job stays in
+  // the Generation Queue (i.e. queueJob.finish() is NOT called on
+  // submit) until the background poll below detects status='done' or
+  // 'failed' on the products row. pendingVideoTick is bumped after each
+  // new submit so the poll re-binds and picks the new product up.
+  const pendingVideoJobsRef = useRef<Map<string, { job: { id: string; finish: (ms?: number, msg?: string) => void; fail: (msg?: string) => void }; startedAt: number }>>(new Map());
+  const [pendingVideoTick, setPendingVideoTick] = useState(0);
 
   // runPickPrimaryImages is defined further down — after showToast — to
   // avoid the TDZ on the useCallback deps array. The button binds to
@@ -2456,13 +2463,13 @@ export default function AdminData() {
         showToast(`Primary video generation failed: ${msg}`);
         return;
       }
-      // Async pipeline: the edge fn returns in <2s with status='pending'
-      // and a request_id. Fal posts the finished clip to fal-webhook,
-      // which writes primary_video_url to the product row. The realtime
-      // subscription on products (see useEffect below) picks that up
-      // and updates the local crawledProducts state — no polling here.
-      // We finish the queue job as "Submitted" so the panel clears it
-      // promptly while the upstream render continues in the background.
+      // Async pipeline. The edge fn returns in <2s with status='pending'
+      // and a request_id. The clip renders on fal's queue (60–120s) and
+      // the fal-webhook writes primary_video_url back when it lands.
+      // DO NOT finish() the queue job yet — keep it visible with its
+      // rolling-avg ETA so the admin sees real progress. A background
+      // poll (see pendingVideoJobsRef + useEffect below) watches the
+      // products row and finishes the job only when status flips.
       const requestId = (data as { request_id?: string })?.request_id;
       setCrawledProducts(prev => prev.map(pp =>
         pp.id === productId
@@ -2473,8 +2480,9 @@ export default function AdminData() {
             } as CrawledProduct)
           : pp,
       ));
-      queueJob.finish(undefined, 'Submitted · running in background');
-      showToast('Primary video submitted — renders in background (~60–120s)');
+      pendingVideoJobsRef.current.set(productId, { job: queueJob, startedAt: Date.now() });
+      // Wake the poll so it picks this product up on the next tick.
+      setPendingVideoTick(t => t + 1);
     } catch (err) {
       const msg = (err as Error).message || 'unknown';
       queueJob.fail(msg);
@@ -2519,6 +2527,57 @@ export default function AdminData() {
   // Reference the tick so the hook isn't flagged unused — its job is
   // purely to trigger re-renders, the value itself is meaningless.
   void primaryVideoTick;
+
+  // ── Pending primary-video poll ──────────────────────────────────────
+  // While any submitted-but-not-yet-completed primary-video job is in
+  // flight, poll the products table every 4s for status flips. When a
+  // row's primary_video_status flips to 'done' or 'failed', complete
+  // the matching queue job and update the local row. Stops itself
+  // when there's nothing pending.
+  useEffect(() => {
+    if (!supabase) return;
+    if (pendingVideoJobsRef.current.size === 0) return;
+    let cancelled = false;
+    const sb = supabase;
+    const tick = async () => {
+      if (cancelled) return;
+      const ids = Array.from(pendingVideoJobsRef.current.keys());
+      if (ids.length === 0) return;
+      const { data } = await sb
+        .from('products')
+        .select('id, primary_video_status, primary_video_url')
+        .in('id', ids);
+      if (cancelled) return;
+      for (const row of (data || []) as Array<{ id: string; primary_video_status: string | null; primary_video_url: string | null }>) {
+        const entry = pendingVideoJobsRef.current.get(row.id);
+        if (!entry) continue;
+        if (row.primary_video_status === 'done') {
+          const observed = Date.now() - entry.startedAt;
+          entry.job.finish(observed, 'Generated');
+          pendingVideoJobsRef.current.delete(row.id);
+          setCrawledProducts(prev => prev.map(pp =>
+            pp.id === row.id
+              ? ({ ...pp, primary_video_url: row.primary_video_url, primary_video_status: 'done' } as CrawledProduct)
+              : pp,
+          ));
+        } else if (row.primary_video_status === 'failed') {
+          entry.job.fail('Generation failed');
+          pendingVideoJobsRef.current.delete(row.id);
+          setCrawledProducts(prev => prev.map(pp =>
+            pp.id === row.id
+              ? ({ ...pp, primary_video_status: 'failed' } as CrawledProduct)
+              : pp,
+          ));
+        }
+      }
+      // If anything is still pending, queue the next tick. Otherwise
+      // the effect's dep on pendingVideoTick won't re-run, and that's
+      // fine — a future new submit bumps the tick and re-arms us.
+    };
+    void tick();
+    const interval = window.setInterval(tick, 4000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [pendingVideoTick]);
 
   // Delete a single creative (one product_creative row) by id. Used by
   // the X overlay on each video tile in the Products-row expanded view.
