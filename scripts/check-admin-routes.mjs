@@ -33,23 +33,28 @@ const files = readdirSync(adminDir, { withFileTypes: true })
 
 const missing = [];
 const duplicated = [];
+const viteLines = viteConfig.split('\n');
 for (const file of files) {
   // Match the literal string the registration uses. We don't try to
   // infer the URL — that's an admin choice (e.g. /admin/user/:name from
   // user.$name.tsx) — we just confirm the file is referenced.
   const literal = `routes/admin/${file}`;
-  // Count occurrences: 0 = unregistered (404s in prod), 2+ = duplicate
-  // route id (hard build failure on Vercel: "Unable to define routes
-  // with duplicate route id").
-  const count = viteConfig.split(literal).length - 1;
-  if (count === 0) missing.push(file);
-  else if (count > 1) duplicated.push({ file, count });
+  const refLines = viteLines.filter(l => l.includes(literal));
+  if (refLines.length === 0) { missing.push(file); continue; }
+  // A file can legitimately be registered more than once ONLY when each
+  // extra registration carries an explicit `{ id: "…" }` (Remix requires
+  // unique route ids; the default id is the file path). So a duplicate
+  // is a build error only when 2+ registrations LACK an explicit id —
+  // they'd collide on the same default id. (e.g. /admin/content + /data
+  // both point at data.tsx, but the alias sets id, so it's fine.)
+  const withoutExplicitId = refLines.filter(l => !/\bid:\s*['"]/.test(l)).length;
+  if (withoutExplicitId > 1) duplicated.push({ file, count: refLines.length });
 }
 
 if (duplicated.length > 0) {
-  console.error(`\n[check-admin-routes] ✗ ${duplicated.length} admin route file(s) registered MORE THAN ONCE in vite.config.ts:\n`);
+  console.error(`\n[check-admin-routes] ✗ ${duplicated.length} admin route file(s) registered MORE THAN ONCE without distinct ids:\n`);
   for (const { file, count } of duplicated) {
-    console.error(`  - routes/admin/${file} (appears ${count}×) — remove the duplicate route(...) line.`);
+    console.error(`  - routes/admin/${file} (appears ${count}×) — remove the duplicate route(...) line, or give one an explicit { id: "…" }.`);
   }
   console.error('\nDuplicate route ids fail the Vercel build ("Unable to define routes with duplicate route id").\n');
   process.exit(1);
