@@ -1209,6 +1209,7 @@ export default function GeneratePage() {
       heightLabel,
       weightLabel,
       ageLabel,
+      gender: userGender,
       style,
       occasion: occasionHint || undefined,
       durationSeconds: clipSeconds,
