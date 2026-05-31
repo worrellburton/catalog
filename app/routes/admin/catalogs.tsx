@@ -1476,12 +1476,17 @@ export default function AdminCatalogs() {
       if (succeeded > 0) {
         await loadLooks();
         // Drop the cached expanded-row payload for this catalog so the
-        // dropdown re-fetches with the new looks.
+        // dropdown re-fetches with the new looks. We also call
+        // loadCreative() immediately — without this, the dropdown is
+        // still expanded and would just render empty until the user
+        // collapses + re-opens (i.e. the visible bug: "added looks
+        // don't show up in the catalog").
         setCreativeByCatalog(prev => {
           const next = { ...prev };
           delete next[addLooksCatalog.id];
           return next;
         });
+        await loadCreative(addLooksCatalog);
         setAddLooksCatalog(null);
         setAddLooksSelected(new Set());
         setAddLooksSearch('');
@@ -1489,7 +1494,7 @@ export default function AdminCatalogs() {
     } finally {
       setAddLooksBusy(false);
     }
-  }, [addLooksCatalog, addLooksSelected, looks, loadLooks, showToast]);
+  }, [addLooksCatalog, addLooksSelected, looks, loadLooks, loadCreative, showToast]);
 
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
