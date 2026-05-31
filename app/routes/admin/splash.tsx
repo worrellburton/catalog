@@ -21,6 +21,10 @@ export default function AdminSplash() {
   const [saving, setSaving] = useState(false);
   const [replayKey, setReplayKey] = useState(1);
   const [feedCount, setFeedCount] = useState<number | null>(null);
+  // The preview does NOT auto-play on page load — opening /admin/splash
+  // should just show the page, not fire the animation. It plays only when
+  // the admin explicitly hits Play (and re-arms when they pick a card).
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     getSplashConfig().then(cfg => {
@@ -37,11 +41,15 @@ export default function AdminSplash() {
   const sel = selected ?? live;                  // what we're previewing
   const isDirty = sel !== live;                  // selection differs from live
 
-  // Select a card → preview only (no save).
+  // Select a card → preview only (no save). Picking a different concept
+  // resets the preview to its idle (not-playing) state so it doesn't
+  // auto-fire; the admin presses Play to watch it.
   const selectCard = (variant: SplashSelection) => {
     setSelected(variant);
+    setPlaying(false);
     setReplayKey(k => k + 1);
   };
+  const playPreview = () => { setPlaying(true); setReplayKey(k => k + 1); };
 
   // Commit the selected concept as the live splash.
   const makeMain = async () => {
@@ -126,12 +134,28 @@ export default function AdminSplash() {
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
             Splash disabled — the app boots straight to the feed.
           </div>
+        ) : playing ? (
+          <SplashHost key={`${sel}-${feedCount ?? 0}-${replayKey}`} variant={sel} durationMs={cfg.durationMs} preview replayKey={replayKey} />
         ) : (
-          <SplashHost key={`${sel}-${feedCount ?? 0}`} variant={sel} durationMs={cfg.durationMs} preview replayKey={replayKey} />
-        )}
-        {sel !== 'none' && (
+          // Idle state — no animation until the admin presses Play.
           <button
-            onClick={() => setReplayKey(k => k + 1)}
+            onClick={playPreview}
+            style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 10,
+              background: 'transparent', border: 'none', cursor: 'pointer', color: '#cbd5e1',
+            }}
+          >
+            <span style={{
+              width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', fontSize: 20, color: '#fff',
+            }}>▶</span>
+            <span style={{ fontSize: 13 }}>Play preview — {selLabel}</span>
+          </button>
+        )}
+        {sel !== 'none' && playing && (
+          <button
+            onClick={playPreview}
             style={{
               position: 'absolute', bottom: 12, right: 12, zIndex: 500,
               fontSize: 12, padding: '6px 12px', borderRadius: 999,
