@@ -5877,6 +5877,13 @@ export default function AdminData() {
                                         primary_image_score: null,
                                         primary_image_picked_at: new Date().toISOString(),
                                         primary_image_picked_by: 'admin',
+                                        // Clear the pre-polish anchor when the admin
+                                        // picks a new primary. polish-primary-image
+                                        // re-polishes from pre_polish_url when set,
+                                        // so a stale value would otherwise override
+                                        // the freshly-picked image on the next polish.
+                                        primary_image_pre_polish_url: null,
+                                        primary_image_polished: false,
                                       })
                                       .eq('id', p.id);
                                     if (error) showToast(`Failed: ${error.message}`);
