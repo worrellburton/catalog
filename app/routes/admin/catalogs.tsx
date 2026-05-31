@@ -3403,42 +3403,44 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
 
       <KpiStrip kpi={kpi} metricsLoading={metricsLoading} />
 
-      {/* Per-catalog text search — narrows the looks + products lists
-          below to matching name/brand/creator. Cleared button is the
-          ✕ inside the input. */}
-      <div style={{ position: 'relative', maxWidth: 420 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          type="text"
-          value={catalogSearch}
-          onChange={e => setCatalogSearch(e.target.value)}
-          placeholder="Search this catalog — products + looks…"
-          style={{
-            width: '100%', padding: '7px 28px 7px 30px', borderRadius: 8,
-            border: '1px solid #e2e8f0', fontSize: 12, background: '#fff',
-            boxSizing: 'border-box',
-          }}
-        />
-        {catalogSearch && (
-          <button type="button" onClick={() => setCatalogSearch('')}
-            aria-label="Clear search"
+      {/* Search + Sort + View as + Grid/List on one row. The search
+          input flexes to fill remaining width; the MetricControlBar
+          renders the sort dropdown, view-as dropdown, and grid/list
+          toggle (it already lays itself out as a flex row). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200, maxWidth: 420 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            value={catalogSearch}
+            onChange={e => setCatalogSearch(e.target.value)}
+            placeholder="Search this catalog — products + looks…"
             style={{
-              position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-              width: 18, height: 18, borderRadius: 999, border: 'none',
-              background: '#e2e8f0', color: '#475569', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 11,
+              width: '100%', padding: '7px 28px 7px 30px', borderRadius: 8,
+              border: '1px solid #e2e8f0', fontSize: 12, background: '#fff',
+              boxSizing: 'border-box',
             }}
-          >×</button>
-        )}
+          />
+          {catalogSearch && (
+            <button type="button" onClick={() => setCatalogSearch('')}
+              aria-label="Clear search"
+              style={{
+                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                width: 18, height: 18, borderRadius: 999, border: 'none',
+                background: '#e2e8f0', color: '#475569', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 11,
+              }}
+            >×</button>
+          )}
+        </div>
+        <MetricControlBar
+          sort={sort} viewMode={viewMode}
+          onSort={setSort} onViewMode={setViewMode}
+        />
       </div>
-
-      <MetricControlBar
-        sort={sort} viewMode={viewMode}
-        onSort={setSort} onViewMode={setViewMode}
-      />
 
       {viewMode === 'list' ? (
         <>
@@ -4761,19 +4763,19 @@ function ProductMetricTile({ product, selected, onSelect, onOpenDetail }: { prod
         outline: selected ? '2px solid #bfdbfe' : 'none',
         outlineOffset: -4,
       }}
+      title={[product.brand, product.name].filter(Boolean).join(' · ')}
     >
       {(product.primary_image_url || product.image_url) ? (
-        <img src={product.primary_image_url || product.image_url || ''} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
+        <img src={product.primary_image_url || product.image_url || ''} alt={product.name ?? ''} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
       ) : (
         <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
       )}
-      <MetricBadgeRow metrics={product.metrics} />
+      {/* Selection + expand-to-detail are interaction affordances and stay.
+          The metric badge row (impressions / CTR / NEW) and brand+name
+          caption were stripped per request — the grid is now image-only,
+          with hover tooltip carrying the metadata. */}
       {selected && <SelectionBadge />}
       {onOpenDetail && <ExpandTileButton onClick={onOpenDetail} />}
-      <div style={{ padding: 6 }}>
-        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.brand || ' - '}</div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name || ' - '}</div>
-      </div>
     </div>
   );
 }
