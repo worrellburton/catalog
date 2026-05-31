@@ -154,12 +154,17 @@ Deno.serve(async (req: Request) => {
   if (!product) return json({ success: false, error: 'product not found' }, 404);
   if (!product.primary_image_url) return json({ success: false, error: 'product has no primary_image_url to polish' });
 
-  // Always polish FROM the original raw image when one is on file.
-  // Re-polishing the already-polished output compounds zoom-on-zoom
-  // (each pass treats the previously-cropped output as the new "product"
-  // and shrinks the background further).
-  const sourceUrl    = product.primary_image_pre_polish_url ?? product.primary_image_url;
-  const prePolishUrl = product.primary_image_pre_polish_url ?? product.primary_image_url;
+  // Polish FROM the original raw image when one is on file AND the
+  // current primary is still the polished output of that original.
+  // If the admin has since *replaced* the primary (e.g. uploaded a new
+  // photo + starred it), primary_image_polished flips to false and we
+  // must polish the new primary directly — not silently re-polish the
+  // stale pre-polish anchor (the previous bug: a hand-picked primary
+  // got overwritten back to the old multi-pack image on re-polish).
+  const useAnchor = !!product.primary_image_pre_polish_url
+    && product.primary_image_polished === true;
+  const sourceUrl    = useAnchor ? product.primary_image_pre_polish_url! : product.primary_image_url;
+  const prePolishUrl = useAnchor ? product.primary_image_pre_polish_url! : product.primary_image_url;
 
   let polishPrompt = DEFAULT_POLISH_PROMPT;
   try {
