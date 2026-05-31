@@ -245,6 +245,30 @@ function saveAllOrder(order: Record<CatalogSection, string[]>) {
   }
 }
 
+// Interleaved FEED order — a single ordered list of `${type}:${id}` keys
+// so looks and products can be drag-reordered together (the unified Feed
+// section). Stored globally (the feed reorder is for the universe/home
+// view) with the same quota guards as saveAllOrder.
+const FEED_ORDER_KEY = 'catalog-admin:feed-order:v1';
+const FEED_ORDER_MAX = 800;
+function loadFeedOrder(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(FEED_ORDER_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
+function saveFeedOrder(keys: string[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    const blob = JSON.stringify(keys.slice(0, FEED_ORDER_MAX));
+    if (blob.length > ALL_ORDER_MAX_BLOB_BYTES) { try { localStorage.removeItem(FEED_ORDER_KEY); } catch { /* ignore */ } return; }
+    localStorage.setItem(FEED_ORDER_KEY, blob);
+  } catch { try { localStorage.removeItem(FEED_ORDER_KEY); } catch { /* ignore */ } }
+}
+
 function applyOrder<T>(items: T[], idKey: (item: T) => string, savedIds: string[]): T[] {
   if (savedIds.length === 0) return items;
   const byId = new Map(items.map(i => [idKey(i), i]));
@@ -3379,6 +3403,21 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
   }, [viewMode]);
 
+  // Unified FEED: which row types are shown, persisted so the admin's
+  // choice survives reloads. Both on by default.
+  const [showLooks, setShowLooks] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try { return window.localStorage.getItem('catalog-admin:feed-show-looks') !== '0'; } catch { return true; }
+  });
+  const [showProducts, setShowProducts] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try { return window.localStorage.getItem('catalog-admin:feed-show-products') !== '0'; } catch { return true; }
+  });
+  useEffect(() => { try { window.localStorage.setItem('catalog-admin:feed-show-looks', showLooks ? '1' : '0'); } catch { /* ignore */ } }, [showLooks]);
+  useEffect(() => { try { window.localStorage.setItem('catalog-admin:feed-show-products', showProducts ? '1' : '0'); } catch { /* ignore */ } }, [showProducts]);
+  // Interleaved feed drag-order (look:/product: keys).
+  const [feedOrder, setFeedOrder] = useState<string[]>(() => loadFeedOrder());
+
   // ── ALL HOOKS MUST RUN BEFORE EARLY RETURNS (React Rule of Hooks) ──
   // Previously: 3 early returns BEFORE the 5 useCallbacks below,
   // producing React error #310 ("Rendered more hooks than during the
@@ -3568,6 +3607,40 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   const sortedLooks    = sortAndFilterItems(searchedLooks, sort, filter);
   const sortedProducts = sortAndFilterItems(searchedProducts, sort, filter);
 
+  // ── Unified FEED ──────────────────────────────────────────────────
+  // Merge looks + products into one interleaved, metric-sorted list,
+  // gated by the show-looks / show-products toggles, then apply any
+  // saved drag order on top. feedRows powers the list-view FEED table.
+  const feedRows: FeedRow[] = useMemo(() => {
+    const base: FeedRow[] = [];
+    if (showLooks) {
+      for (const l of sortedLooks) base.push({ kind: 'look', id: l.id, key: `look:${l.id}`, metrics: l.metrics, createdAt: l.createdAt ?? null, look: l });
+    }
+    if (showProducts) {
+      for (const p of sortedProducts) base.push({ kind: 'product', id: p.id, key: `product:${p.id}`, metrics: p.metrics, createdAt: (p as { createdAt?: string | null }).createdAt ?? null, product: p });
+    }
+    // Re-sort the merged set by the active metric so looks + products
+    // interleave (each was only sorted within its own type above).
+    const merged = sortAndFilterItems(base, sort, filter);
+    if (feedOrder.length === 0) return merged;
+    const orderIdx = new Map(feedOrder.map((k, i) => [k, i]));
+    return [...merged].sort((a, b) => {
+      const ai = orderIdx.has(a.key) ? orderIdx.get(a.key)! : Number.MAX_SAFE_INTEGER;
+      const bi = orderIdx.has(b.key) ? orderIdx.get(b.key)! : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+  }, [sortedLooks, sortedProducts, showLooks, showProducts, sort, filter, feedOrder]);
+
+  // Persist a new interleaved order when a feed row is dragged.
+  const handleFeedReorder = useCallback((from: number, to: number) => {
+    if (from === to) return;
+    const keys = feedRows.map(r => r.key);
+    const [moved] = keys.splice(from, 1);
+    keys.splice(to, 0, moved);
+    setFeedOrder(keys);
+    saveFeedOrder(keys);
+  }, [feedRows]);
+
   // Phase 7-lite: KPI strip.
   const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
 
@@ -3629,55 +3702,75 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       </div>
 
       {viewMode === 'list' ? (
-        <>
-          <LooksListTable
-            looks={sortedLooks}
-            selectedIds={selectedLookIds}
-            onSelect={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
-            onSelectAll={(next) => {
-              setSelectedLookIds(prev => {
-                if (!next) {
+        <div>
+          {/* Unified FEED header: count + show-toggles + add/recommend. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+            <h4 style={{ margin: 0, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#475569', fontWeight: 700 }}>Feed</h4>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>{feedRows.length}</span>
+            {/* Show looks / products toggles */}
+            <div style={{ display: 'inline-flex', gap: 6, marginLeft: 6 }}>
+              <button
+                type="button"
+                onClick={() => setShowLooks(v => !v)}
+                className={`admin-btn ${showLooks ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
+                style={{ fontSize: 11, padding: '3px 10px', opacity: showLooks ? 1 : 0.6 }}
+                title="Show or hide looks in the feed"
+              >
+                {showLooks ? '✓ ' : ''}Looks ({sortedLooks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowProducts(v => !v)}
+                className={`admin-btn ${showProducts ? 'admin-btn-primary' : 'admin-btn-secondary'}`}
+                style={{ fontSize: 11, padding: '3px 10px', opacity: showProducts ? 1 : 0.6 }}
+                title="Show or hide products in the feed"
+              >
+                {showProducts ? '✓ ' : ''}Products ({sortedProducts.length})
+              </button>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+              {onOpenAddLooks && <button type="button" onClick={onOpenAddLooks} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Looks</button>}
+              {onOpenAddProducts && <button type="button" onClick={onOpenAddProducts} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Products</button>}
+              {onRecommendLooks && <button type="button" onClick={onRecommendLooks} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Looks</button>}
+              {onRecommendProducts && <button type="button" onClick={onRecommendProducts} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Products</button>}
+            </div>
+          </div>
+
+          {feedRows.length === 0 ? (
+            <div style={{ padding: '12px 14px', color: '#888', fontSize: 12, border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6 }}>
+              {(!showLooks && !showProducts) ? 'Both looks and products are hidden — toggle one on above.' : 'Nothing matches the current filter.'}
+            </div>
+          ) : (
+            <FeedListTable
+              rows={feedRows}
+              selectedLookIds={selectedLookIds}
+              selectedProductIds={selectedProductIds}
+              onSelectLook={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
+              onSelectProduct={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+              onSelectAll={(next) => {
+                setSelectedLookIds(prev => {
                   const out = new Set(prev);
-                  for (const l of sortedLooks) out.delete(l.id);
+                  for (const r of feedRows) if (r.kind === 'look') { if (next) out.add(r.id); else out.delete(r.id); }
                   return out;
-                }
-                const out = new Set(prev);
-                for (const l of sortedLooks) out.add(l.id);
-                return out;
-              });
-            }}
-            onAdd={onOpenAddLooks}
-            onRecommend={onRecommendLooks}
-            onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
-          />
-          <ProductsListTable
-            products={sortedProducts}
-            selectedIds={selectedProductIds}
-            onSelect={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
-            onSelectAll={(next) => {
-              setSelectedProductIds(prev => {
-                if (!next) {
+                });
+                setSelectedProductIds(prev => {
                   const out = new Set(prev);
-                  for (const p of sortedProducts) out.delete(p.id);
+                  for (const r of feedRows) if (r.kind === 'product') { if (next) out.add(r.id); else out.delete(r.id); }
                   return out;
-                }
-                const out = new Set(prev);
-                for (const p of sortedProducts) out.add(p.id);
-                return out;
-              });
-            }}
-            onAdd={onOpenAddProducts}
-            onRecommend={onRecommendProducts}
-            // Drag-to-reorder for products in list view mirrors the grid
-            // affordance — same conditions (no active selection, default
-            // sort/filter, universe catalog so order can be persisted).
-            draggable={(isAll || isUniverse) && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
-            onReorder={(from, to) => onReorder('products', from, to)}
-            onOpenDetail={(p) => setDrawer({ kind: 'product', product: p })}
-          />
-        </>
+                });
+              }}
+              // Interleaved reorder persists across types; same gating as
+              // the per-section reorder (universe view, default sort/filter,
+              // no active selection).
+              draggable={(isAll || isUniverse) && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
+              onReorder={handleFeedReorder}
+              onOpenDetail={(row) => setDrawer(row.kind === 'look' ? { kind: 'look', look: row.look } : { kind: 'product', product: row.product })}
+            />
+          )}
+        </div>
       ) : (
         <>
+          {showLooks && (
           <DraggableSection
             title="Looks"
             count={sortedLooks.length}
@@ -3700,7 +3793,9 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               />
             ))}
           </DraggableSection>
+          )}
 
+          {showProducts && (
           <DraggableSection
             title="Products"
             count={sortedProducts.length}
@@ -3723,6 +3818,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               />
             ))}
           </DraggableSection>
+          )}
         </>
       )}
 
@@ -4421,281 +4517,176 @@ function MetricCells({ metrics }: { metrics?: ItemMetrics }) {
   );
 }
 
-function LooksListTable({
-  looks,
-  selectedIds,
-  onSelect,
+// ── Unified FEED row + table ──────────────────────────────────────────
+// One row type spanning looks + products so the FEED renders both in a
+// single ordered, interleaved table with a type chip per row.
+export type FeedRow =
+  | { kind: 'look'; id: string; key: string; metrics?: ItemMetrics; createdAt: string | null; look: CatalogLookRow }
+  | { kind: 'product'; id: string; key: string; metrics?: ItemMetrics; createdAt: string | null; product: ProductRow };
+
+function FeedTypeChip({ kind }: { kind: 'look' | 'product' }) {
+  const isLook = kind === 'look';
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+      padding: '2px 7px', borderRadius: 999,
+      background: isLook ? '#f0fdf4' : '#eff6ff',
+      color: isLook ? '#15803d' : '#1d4ed8',
+    }}>{isLook ? 'Look' : 'Product'}</span>
+  );
+}
+
+function FeedListTable({
+  rows,
+  selectedLookIds,
+  selectedProductIds,
+  onSelectLook,
+  onSelectProduct,
   onSelectAll,
-  onAdd,
-  onRecommend,
+  draggable,
+  onReorder,
   onOpenDetail,
 }: {
-  looks: CatalogLookRow[];
-  selectedIds?: Set<string>;
-  onSelect?: (id: string, index: number, extendRange: boolean) => void;
+  rows: FeedRow[];
+  selectedLookIds?: Set<string>;
+  selectedProductIds?: Set<string>;
+  onSelectLook?: (id: string, index: number, extendRange: boolean) => void;
+  onSelectProduct?: (id: string, index: number, extendRange: boolean) => void;
   onSelectAll?: (next: boolean) => void;
-  onAdd?: () => void;
-  onRecommend?: () => void;
-  onOpenDetail?: (look: CatalogLookRow) => void;
+  draggable?: boolean;
+  onReorder?: (from: number, to: number) => void;
+  onOpenDetail?: (row: FeedRow) => void;
 }) {
-  if (looks.length === 0) return (
-    <div>
-      <ListSectionHeader title="Looks" count={0} onAdd={onAdd} addLabel="+ Add Looks" onRecommend={onRecommend} recommendLabel="Recommend Looks" />
-      <div style={{
-        padding: '12px 14px', color: '#888', fontSize: 12,
-        border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      }}>
-        <span>No looks match the current filter.</span>
-        {onAdd && (
-          <button type="button" onClick={onAdd} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}>
-            + Add Looks
-          </button>
-        )}
-      </div>
-    </div>
-  );
-  const allChecked = onSelect && selectedIds
-    ? looks.length > 0 && looks.every(l => selectedIds.has(l.id))
-    : false;
-  const someChecked = onSelect && selectedIds
-    ? !allChecked && looks.some(l => selectedIds.has(l.id))
-    : false;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+
+  const isSelected = (row: FeedRow) =>
+    row.kind === 'look' ? !!selectedLookIds?.has(row.id) : !!selectedProductIds?.has(row.id);
+  const selectable = !!(onSelectLook || onSelectProduct);
+  const allChecked = selectable && rows.length > 0 && rows.every(isSelected);
+  const someChecked = selectable && !allChecked && rows.some(isSelected);
+
   return (
-    <div>
-      <ListSectionHeader title="Looks" count={looks.length} onAdd={onAdd} addLabel="+ Add Looks" onRecommend={onRecommend} recommendLabel="Recommend Looks" />
-      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
-        <thead>
-          <tr>
-            {onSelect && (
-              <th style={{ ...listHeadCellStyle, width: 30 }}>
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  ref={el => { if (el) el.indeterminate = someChecked; }}
-                  onChange={() => onSelectAll?.(!allChecked)}
-                  onClick={e => e.stopPropagation()}
-                  title="Select all on this page"
-                />
-              </th>
-            )}
-            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
-            <th style={listHeadCellStyle}>Title</th>
-            <th style={listHeadCellStyle}>Creator</th>
-            <th style={listHeadCellStyle}>Products</th>
-            <th style={listHeadCellStyle}>Impressions</th>
-            <th style={listHeadCellStyle}>CTR</th>
-            <th style={listHeadCellStyle}>Clickouts</th>
-            <th style={listHeadCellStyle}>Trend</th>
-          </tr>
-        </thead>
-        <tbody>
-          {looks.map((l, idx) => {
-            const checked = selectedIds?.has(l.id) ?? false;
-            return (
-              <tr
-                key={l.id}
-                onClick={(e) => {
-                  if (!onSelect) return;
-                  // Same metric-pill guard as the grid tiles.
-                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
-                  onSelect(l.id, idx, e.shiftKey);
-                }}
-                style={{
-                  cursor: onSelect ? 'pointer' : 'default',
-                  background: checked ? '#eff6ff' : 'transparent',
-                }}
-              >
-                {onSelect && (
-                  <td style={listBodyCellStyle}>
-                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
-                  </td>
-                )}
+    <table style={{ ...listTableShellStyle, marginTop: 6 }}>
+      <thead>
+        <tr>
+          {draggable && <th style={{ ...listHeadCellStyle, width: 22 }}></th>}
+          {selectable && (
+            <th style={{ ...listHeadCellStyle, width: 30 }}>
+              <input
+                type="checkbox"
+                checked={allChecked}
+                ref={el => { if (el) el.indeterminate = someChecked; }}
+                onChange={() => onSelectAll?.(!allChecked)}
+                onClick={e => e.stopPropagation()}
+                title="Select all on this page"
+              />
+            </th>
+          )}
+          <th style={{ ...listHeadCellStyle, width: 56 }}></th>
+          <th style={listHeadCellStyle}>Title</th>
+          <th style={{ ...listHeadCellStyle, width: 70 }}>Type</th>
+          <th style={listHeadCellStyle}>Creator / Brand</th>
+          <th style={listHeadCellStyle}>Impressions</th>
+          <th style={listHeadCellStyle}>CTR</th>
+          <th style={listHeadCellStyle}>Clickouts</th>
+          <th style={listHeadCellStyle}>Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, idx) => {
+          const checked = isSelected(row);
+          const isDropTarget = dropIdx === idx && dragIdx !== null && dragIdx !== idx;
+          const dispatchSelect = (e: React.MouseEvent) => {
+            if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
+            if ((e.target as HTMLElement).closest('[data-role="drag-handle"]')) return;
+            if (row.kind === 'look') onSelectLook?.(row.id, idx, e.shiftKey);
+            else onSelectProduct?.(row.id, idx, e.shiftKey);
+          };
+          return (
+            <tr
+              key={row.key}
+              onClick={selectable ? dispatchSelect : undefined}
+              onDragOver={draggable ? (e) => { if (dragIdx !== null) { e.preventDefault(); setDropIdx(idx); } } : undefined}
+              onDrop={draggable ? (e) => {
+                e.preventDefault();
+                if (dragIdx !== null && dragIdx !== idx) onReorder?.(dragIdx, idx);
+                setDragIdx(null); setDropIdx(null);
+              } : undefined}
+              style={{
+                cursor: selectable ? 'pointer' : 'default',
+                background: checked ? '#eff6ff' : 'transparent',
+                boxShadow: isDropTarget ? 'inset 0 2px 0 0 #3b82f6' : 'none',
+              }}
+            >
+              {draggable && (
+                <td style={{ ...listBodyCellStyle, padding: 0, textAlign: 'center' }}>
+                  <span
+                    data-role="drag-handle"
+                    draggable
+                    onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
+                    title="Drag to reorder"
+                    style={{ display: 'inline-flex', cursor: 'grab', color: '#94a3b8', padding: '4px 2px', userSelect: 'none' }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="9" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/>
+                      <circle cx="15" cy="6" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+                    </svg>
+                  </span>
+                </td>
+              )}
+              {selectable && (
                 <td style={listBodyCellStyle}>
-                  <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-                    {l.videoPath && (
+                  <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                </td>
+              )}
+              <td style={listBodyCellStyle}>
+                {row.kind === 'look' ? (
+                  <div style={{ width: 36, height: 48, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                    {row.look.videoPath && (
                       <video
-                        src={l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`}
+                        src={row.look.videoPath.startsWith('http') ? row.look.videoPath : `${import.meta.env.BASE_URL}${row.look.videoPath.replace(/^\//, '')}`}
                         muted playsInline preload="metadata"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     )}
                   </div>
-                </td>
-                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
-                <td style={listBodyCellStyle}>
+                ) : (
+                  (row.product.primary_image_url || row.product.image_url) ? (
+                    <img src={row.product.primary_image_url || row.product.image_url || ''} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                  ) : (
+                    <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                  )
+                )}
+              </td>
+              <td
+                style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111', cursor: onOpenDetail ? 'pointer' : undefined }}
+                onClick={onOpenDetail ? (e) => { e.stopPropagation(); onOpenDetail(row); } : undefined}
+              >
+                {row.kind === 'look' ? (row.look.title || `Look #${row.look.legacyId ?? ''}`) : (row.product.name || '—')}
+              </td>
+              <td style={listBodyCellStyle}><FeedTypeChip kind={row.kind} /></td>
+              <td style={listBodyCellStyle}>
+                {row.kind === 'look' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {l.creatorAvatarUrl ? (
-                      <img src={l.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                    {row.look.creatorAvatarUrl ? (
+                      <img src={row.look.creatorAvatarUrl} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e2e8f0' }} />
                     )}
-                    <span style={{ color: '#111', fontWeight: 600 }}>{l.creatorName || l.creatorHandle || 'Unknown'}</span>
-                    {l.creatorHandle && l.creatorName && (
-                      <span style={{ color: '#94a3b8' }}>@{l.creatorHandle}</span>
-                    )}
+                    <span style={{ color: '#111', fontWeight: 600 }}>{row.look.creatorName || row.look.creatorHandle || 'Unknown'}</span>
                   </div>
-                </td>
-                <td style={{ ...listBodyCellStyle, fontVariantNumeric: 'tabular-nums' }}>{l.productCount}</td>
-                <MetricCells metrics={l.metrics} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ProductsListTable({
-  products,
-  selectedIds,
-  onSelect,
-  onSelectAll,
-  onAdd,
-  onRecommend,
-  onOpenDetail,
-  draggable,
-  onReorder,
-}: {
-  products: ProductRow[];
-  selectedIds?: Set<string>;
-  onSelect?: (id: string, index: number, extendRange: boolean) => void;
-  /** Toggle selection across every row currently in `products`. */
-  onSelectAll?: (next: boolean) => void;
-  onAdd?: () => void;
-  onRecommend?: () => void;
-  onOpenDetail?: (product: ProductRow) => void;
-  /** Enables row drag handle + drop targets when true. */
-  draggable?: boolean;
-  onReorder?: (from: number, to: number) => void;
-}) {
-  // Local drag-and-drop indices for the row-reorder handle. Kept in
-  // component state so the visual indicator can render the drop target.
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dropIdx, setDropIdx] = useState<number | null>(null);
-
-  if (products.length === 0) return (
-    <div>
-      <ListSectionHeader title="Products" count={0} onAdd={onAdd} addLabel="+ Add Products" onRecommend={onRecommend} recommendLabel="Recommend Products" />
-      <div style={{
-        padding: '12px 14px', color: '#888', fontSize: 12,
-        border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      }}>
-        <span>No products match the current filter.</span>
-        {onAdd && (
-          <button type="button" onClick={onAdd} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}>
-            + Add Products
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // Select-all reflects "every visible row is selected". Determinate
-  // and indeterminate states are handled via ref.
-  const allChecked = onSelect && selectedIds
-    ? products.length > 0 && products.every(p => selectedIds.has(p.id))
-    : false;
-  const someChecked = onSelect && selectedIds
-    ? !allChecked && products.some(p => selectedIds.has(p.id))
-    : false;
-
-  return (
-    <div>
-      <ListSectionHeader title="Products" count={products.length} onAdd={onAdd} addLabel="+ Add Products" onRecommend={onRecommend} recommendLabel="Recommend Products" />
-      <table style={{ ...listTableShellStyle, marginTop: 6 }}>
-        <thead>
-          <tr>
-            {draggable && <th style={{ ...listHeadCellStyle, width: 22 }}></th>}
-            {onSelect && (
-              <th style={{ ...listHeadCellStyle, width: 30 }}>
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  ref={el => { if (el) el.indeterminate = someChecked; }}
-                  onChange={() => onSelectAll?.(!allChecked)}
-                  onClick={e => e.stopPropagation()}
-                  title="Select all on this page"
-                />
-              </th>
-            )}
-            <th style={{ ...listHeadCellStyle, width: 56 }}></th>
-            <th style={listHeadCellStyle}>Product</th>
-            <th style={listHeadCellStyle}>Brand</th>
-            <th style={listHeadCellStyle}>Impressions</th>
-            <th style={listHeadCellStyle}>CTR</th>
-            <th style={listHeadCellStyle}>Clickouts</th>
-            <th style={listHeadCellStyle}>Trend</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p, idx) => {
-            const checked = selectedIds?.has(p.id) ?? false;
-            const isDropTarget = dropIdx === idx && dragIdx !== null && dragIdx !== idx;
-            return (
-              <tr
-                key={p.id}
-                onClick={(e) => {
-                  if (!onSelect) return;
-                  if ((e.target as HTMLElement).closest('[data-role="metric-pill"]')) return;
-                  if ((e.target as HTMLElement).closest('[data-role="drag-handle"]')) return;
-                  onSelect(p.id, idx, e.shiftKey);
-                }}
-                onDragOver={draggable ? (e) => { if (dragIdx !== null) { e.preventDefault(); setDropIdx(idx); } } : undefined}
-                onDrop={draggable ? (e) => {
-                  e.preventDefault();
-                  if (dragIdx !== null && dragIdx !== idx) onReorder?.(dragIdx, idx);
-                  setDragIdx(null); setDropIdx(null);
-                } : undefined}
-                style={{
-                  cursor: onSelect ? 'pointer' : 'default',
-                  background: checked ? '#eff6ff' : 'transparent',
-                  boxShadow: isDropTarget ? 'inset 0 2px 0 0 #3b82f6' : 'none',
-                }}
-              >
-                {draggable && (
-                  <td style={{ ...listBodyCellStyle, padding: 0, textAlign: 'center' }}>
-                    <span
-                      data-role="drag-handle"
-                      draggable
-                      onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
-                      onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
-                      title="Drag to reorder"
-                      style={{
-                        display: 'inline-flex', cursor: 'grab', color: '#94a3b8',
-                        padding: '4px 2px', userSelect: 'none',
-                      }}
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <circle cx="9" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/>
-                        <circle cx="15" cy="6" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
-                      </svg>
-                    </span>
-                  </td>
+                ) : (
+                  <span style={{ color: '#475569' }}>{row.product.brand || '—'}</span>
                 )}
-                {onSelect && (
-                  <td style={listBodyCellStyle}>
-                    <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
-                  </td>
-                )}
-                <td style={listBodyCellStyle}>
-                  {(p.primary_image_url || p.image_url) ? (
-                    <img src={p.primary_image_url || p.image_url || ''} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
-                  ) : (
-                    <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
-                  )}
-                </td>
-                <td style={{ ...listBodyCellStyle, fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
-                <td style={{ ...listBodyCellStyle, color: '#475569' }}>{p.brand || '—'}</td>
-                <MetricCells metrics={p.metrics} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+              </td>
+              <MetricCells metrics={row.metrics} />
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
