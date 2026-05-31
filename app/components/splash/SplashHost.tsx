@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import CatalogLogo from '../CatalogLogo';
-import { useSplashImages } from './useSplashImages';
+import { useSplashMedia } from './useSplashImages';
 import { getVariant } from './registry';
 import type { SplashPhase } from './types';
 import type { SplashVariantId } from '~/services/splash-config';
@@ -35,7 +35,7 @@ export default function SplashHost({
   preview = false,
   replayKey = 0,
 }: SplashHostProps) {
-  const images = useSplashImages();
+  const { images, videos } = useSplashMedia();
   const [phase, setPhase] = useState<SplashPhase>('assemble');
   const doneRef = useRef(false);
 
@@ -79,6 +79,7 @@ export default function SplashHost({
     >
       <VariantComponent
         images={images}
+        videos={videos}
         phase={phase}
         durationMs={durationMs}
         reduced={reduced}

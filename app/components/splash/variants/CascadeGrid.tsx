@@ -32,27 +32,51 @@ function place(urls: string[]): Placement[] {
   });
 }
 
-export default function CascadeGrid({ images, replayKey }: SplashVariantProps) {
+export default function CascadeGrid({ images, videos = [], replayKey }: SplashVariantProps) {
   const tiles = useMemo(() => place(images), [images]);
+  // Sprinkle a few real product clips across the grid (every Nth tile),
+  // each showing its poster image until the clip buffers — so on a cold
+  // open it always reads as the clean product, then comes alive.
+  const videoAt = useMemo(() => {
+    const map = new Map<number, (typeof videos)[number]>();
+    if (videos.length && tiles.length) {
+      const step = Math.max(1, Math.floor(tiles.length / videos.length));
+      videos.forEach((v, k) => { map.set((k * step) % tiles.length, v); });
+    }
+    return map;
+  }, [videos, tiles.length]);
+
   return (
     <div className="sv-cascade-stage">
-      {tiles.map((t, i) => (
-        <div
-          key={`${i}-${replayKey}`}
-          className="sv-cascade-tile"
-          style={{
-            ['--sx' as string]: `${t.sx}%`,
-            ['--sy' as string]: `${t.sy}%`,
-            ['--sz' as string]: `${t.sz}px`,
-            ['--srot' as string]: `${t.srot}deg`,
-            ['--gx' as string]: `${t.gx}%`,
-            ['--gy' as string]: `${t.gy}%`,
-            animationDelay: `${t.delay}ms`,
-          } as CSSProperties}
-        >
-          <img src={t.url} alt="" loading="eager" decoding="async" draggable={false} />
-        </div>
-      ))}
+      {tiles.map((t, i) => {
+        const vid = videoAt.get(i);
+        return (
+          <div
+            key={`${i}-${replayKey}`}
+            className="sv-cascade-tile"
+            style={{
+              ['--sx' as string]: `${t.sx}%`,
+              ['--sy' as string]: `${t.sy}%`,
+              ['--sz' as string]: `${t.sz}px`,
+              ['--srot' as string]: `${t.srot}deg`,
+              ['--gx' as string]: `${t.gx}%`,
+              ['--gy' as string]: `${t.gy}%`,
+              animationDelay: `${t.delay}ms`,
+            } as CSSProperties}
+          >
+            {vid ? (
+              <video
+                src={vid.src}
+                poster={vid.poster || t.url}
+                muted loop autoPlay playsInline preload="auto"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            ) : (
+              <img src={t.url} alt="" loading="eager" decoding="async" draggable={false} />
+            )}
+          </div>
+        );
+      })}
       <div className="sv-vignette" />
     </div>
   );
