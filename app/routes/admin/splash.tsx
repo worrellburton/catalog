@@ -1,9 +1,9 @@
 // /admin/splash — choose the cold-open splash concept and tune it.
 //
-// A row of selectable cards (one per concept + a "None" card to disable)
-// sits at the top; clicking a card makes it live and loads it into the
-// big preview, which plays the real component with the real downscaled
-// home-feed images. Duration is a single saved slider.
+// Two-step model: clicking a card SELECTS it (loads it into the live
+// preview) without changing production. "Make main" commits the selected
+// concept as the live splash (saved to app_settings). The card that's
+// currently live carries a "Main" badge. Duration is a saved slider.
 
 import { useEffect, useState } from 'react';
 import SplashHost from '~/components/splash/SplashHost';
@@ -16,24 +16,38 @@ import { getCachedHomeFeed, prefetchHomeFeed } from '~/services/product-creative
 
 export default function AdminSplash() {
   const [config, setConfig] = useState<SplashConfig | null>(null);
+  // What's currently being previewed (not necessarily what's live).
+  const [selected, setSelected] = useState<SplashSelection | null>(null);
   const [saving, setSaving] = useState(false);
   const [replayKey, setReplayKey] = useState(1);
   const [feedCount, setFeedCount] = useState<number | null>(null);
 
   useEffect(() => {
-    getSplashConfig().then(setConfig);
+    getSplashConfig().then(cfg => {
+      setConfig(cfg);
+      setSelected(prev => prev ?? cfg.variant); // preview the live one by default
+    });
     const cached = getCachedHomeFeed();
     if (cached && cached.length) setFeedCount(cached.length);
     else prefetchHomeFeed().then(rows => setFeedCount(rows.length)).catch(() => setFeedCount(0));
   }, []);
 
   const cfg = config ?? DEFAULT_SPLASH_CONFIG;
+  const live = cfg.variant;                      // what production uses
+  const sel = selected ?? live;                  // what we're previewing
+  const isDirty = sel !== live;                  // selection differs from live
 
-  const selectVariant = async (variant: SplashSelection) => {
-    setConfig(c => ({ ...(c ?? DEFAULT_SPLASH_CONFIG), variant, enabled: variant !== 'none' }));
+  // Select a card → preview only (no save).
+  const selectCard = (variant: SplashSelection) => {
+    setSelected(variant);
     setReplayKey(k => k + 1);
+  };
+
+  // Commit the selected concept as the live splash.
+  const makeMain = async () => {
     setSaving(true);
-    await setSplashVariant(variant);
+    await setSplashVariant(sel);
+    setConfig(c => ({ ...(c ?? DEFAULT_SPLASH_CONFIG), variant: sel, enabled: sel !== 'none' }));
     setSaving(false);
   };
 
@@ -45,7 +59,10 @@ export default function AdminSplash() {
     setSaving(false);
   };
 
-  const activeMeta = SPLASH_REGISTRY.find(v => v.id === cfg.variant);
+  const selMeta = SPLASH_REGISTRY.find(v => v.id === sel);
+  const liveMeta = SPLASH_REGISTRY.find(v => v.id === live);
+  const selLabel = sel === 'none' ? 'None' : (selMeta?.name ?? sel);
+  const liveLabel = live === 'none' ? 'None' : (liveMeta?.name ?? live);
 
   return (
     <div className="admin-page">
@@ -53,7 +70,7 @@ export default function AdminSplash() {
         <div>
           <h1>Splash</h1>
           <p className="admin-page-subtitle">
-            Pick the cinematic cold-open. Click a concept to make it live and preview it below.
+            Click a concept to preview it. When you’ve found the one, hit <strong>Make main</strong> to ship it.
           </p>
         </div>
       </div>
@@ -63,10 +80,11 @@ export default function AdminSplash() {
         {/* None disables the splash. */}
         <button
           type="button"
-          className={`splash-card is-none ${cfg.variant === 'none' ? 'is-active' : ''}`}
-          onClick={() => selectVariant('none')}
+          className={`splash-card is-none ${sel === 'none' ? 'is-active' : ''}`}
+          onClick={() => selectCard('none')}
         >
-          {cfg.variant === 'none' && <span className="splash-card-tick">✓</span>}
+          {live === 'none' && <span className="splash-card-badge">Main</span>}
+          {sel === 'none' && <span className="splash-card-tick">✓</span>}
           <div className="splash-card-poster">⦸</div>
           <div className="splash-card-body">
             <div className="splash-card-name">None</div>
@@ -78,10 +96,11 @@ export default function AdminSplash() {
           <button
             type="button"
             key={meta.id}
-            className={`splash-card ${cfg.variant === meta.id ? 'is-active' : ''}`}
-            onClick={() => selectVariant(meta.id)}
+            className={`splash-card ${sel === meta.id ? 'is-active' : ''}`}
+            onClick={() => selectCard(meta.id)}
           >
-            {cfg.variant === meta.id && <span className="splash-card-tick">✓</span>}
+            {live === meta.id && <span className="splash-card-badge">Main</span>}
+            {sel === meta.id && <span className="splash-card-tick">✓</span>}
             <div
               className="splash-card-poster"
               style={{ backgroundImage: `linear-gradient(135deg, ${meta.poster[0]}, ${meta.poster[1]})` }}
@@ -97,20 +116,20 @@ export default function AdminSplash() {
         ))}
       </div>
 
-      {/* Big live preview of the active concept. */}
+      {/* Big preview of the SELECTED concept + the commit action. */}
       <div style={{
         position: 'relative', borderRadius: 16, overflow: 'hidden',
         border: '1px solid #1f2937', background: '#000',
         aspectRatio: '16 / 9', maxWidth: 880, margin: '8px 0 12px',
       }}>
-        {cfg.variant === 'none' ? (
+        {sel === 'none' ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>
             Splash disabled — the app boots straight to the feed.
           </div>
         ) : (
-          <SplashHost key={feedCount ?? 0} variant={cfg.variant} durationMs={cfg.durationMs} preview replayKey={replayKey} />
+          <SplashHost key={`${sel}-${feedCount ?? 0}`} variant={sel} durationMs={cfg.durationMs} preview replayKey={replayKey} />
         )}
-        {cfg.variant !== 'none' && (
+        {sel !== 'none' && (
           <button
             onClick={() => setReplayKey(k => k + 1)}
             style={{
@@ -125,6 +144,33 @@ export default function AdminSplash() {
         )}
       </div>
 
+      {/* Commit bar — preview vs. live state + Make main. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 16, flexWrap: 'wrap', maxWidth: 880, margin: '0 0 18px',
+        padding: '12px 16px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff',
+      }}>
+        <div style={{ fontSize: 13, color: '#334155' }}>
+          <div>
+            Previewing <strong>{selLabel}</strong>
+            {isDirty
+              ? <span style={{ color: '#b45309' }}> · not yet live</span>
+              : <span style={{ color: '#16a34a' }}> · this is your main</span>}
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+            Main (what shoppers see on cold open): <strong>{liveLabel}</strong>
+          </div>
+        </div>
+        <button
+          className="admin-btn admin-btn-primary"
+          onClick={makeMain}
+          disabled={saving || !isDirty}
+          style={{ fontSize: 13, padding: '9px 18px', opacity: !isDirty ? 0.5 : 1 }}
+        >
+          {saving ? 'Saving…' : !isDirty ? '✓ Live' : `Make “${selLabel}” main`}
+        </button>
+      </div>
+
       {feedCount != null && (
         <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 18px' }}>
           {feedCount > 0
@@ -137,7 +183,7 @@ export default function AdminSplash() {
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff', maxWidth: 520 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>Duration</div>
         <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 12px' }}>
-          How long the splash plays before the feed is interactive.
+          How long the splash plays before the feed is interactive. Applies to the main splash.
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <input
@@ -152,10 +198,6 @@ export default function AdminSplash() {
             {(cfg.durationMs / 1000).toFixed(1)}s
           </span>
         </div>
-      </div>
-
-      <div style={{ marginTop: 14, fontSize: 12, color: saving ? '#16a34a' : '#94a3b8' }}>
-        {saving ? 'Saving…' : `${activeMeta ? activeMeta.name : 'None'} is live · changes save automatically.`}
       </div>
     </div>
   );
