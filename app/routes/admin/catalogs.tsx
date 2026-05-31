@@ -1853,13 +1853,15 @@ export default function AdminCatalogs() {
                           metricsLoading={metricsLoading}
                           catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
                           onReorder={(section, from, to) => reorderAllSection(homeCatalog.id, section, from, to)}
-                          headerControls={(
-                            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(homeAsLocal)} disabled={products.length === 0}>+ Add Products</button>
-                              <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(homeAsLocal)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
-                              <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(homeAsLocal)}>Suggest Products</button>
-                            </div>
-                          )}
+                          // Add/Recommend affordances live inside the
+                          // section headings now (LOOKS + PRODUCTS).
+                          onOpenAddLooks={looks.length === 0 ? undefined : () => openAddLooks(homeAsLocal)}
+                          onOpenAddProducts={products.length === 0 ? undefined : () => openAdd(homeAsLocal)}
+                          onRecommendProducts={() => openSuggest(homeAsLocal)}
+                          // Claude-recommend for looks is not wired up
+                          // yet — placeholder toast keeps the affordance
+                          // visible without faking a working endpoint.
+                          onRecommendLooks={() => showToast('Look recommendations coming soon.')}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
                             loadLooks();
@@ -2006,11 +2008,17 @@ export default function AdminCatalogs() {
                       metricsLoading={metricsLoading}
                       catalogNames={all.filter(x => x.name !== c.name && !isAllCatalog(x.name)).map(x => x.name)}
                       onReorder={(section, from, to) => reorderAllSection(c.id, section, from, to)}
+                      // Add/Recommend affordances live inside the LOOKS
+                      // and PRODUCTS section headings. Keep only the
+                      // catalog-level actions (assemble, remove) in the
+                      // top header bar — they don't fit naturally inside
+                      // a per-section heading.
+                      onOpenAddLooks={looks.length === 0 ? undefined : () => openAddLooks(c)}
+                      onOpenAddProducts={products.length === 0 ? undefined : () => openAdd(c)}
+                      onRecommendProducts={() => openSuggest(c)}
+                      onRecommendLooks={() => showToast('Look recommendations coming soon.')}
                       headerControls={(
                         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                          <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAdd(c)} disabled={products.length === 0} title="Pick existing products from the library and tag them to this catalog">+ Add Products</button>
-                          <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAddLooks(c)} disabled={looks.length === 0} title="Pick existing looks from the library and tag them to this catalog">+ Add Looks</button>
-                          <button className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openSuggest(c)}>Suggest Products</button>
                           <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAssemble(c)} disabled={productCount < 3} title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}>✨ Assemble Look</button>
                           {c.source === 'custom' && c.id !== 'synthetic-all' && (
                             <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: '#dc2626' }} onClick={() => removeCustom(c.id)}>✕ Remove catalog</button>
@@ -2531,6 +2539,13 @@ interface CatalogCreativeDropdownProps {
   /** Row-level controls (toggles + add/suggest/assemble actions) relocated
    *  from the table columns into the expanded detail header. */
   headerControls?: React.ReactNode;
+  /** Per-section "+ Add Looks" / "+ Add Products" + "✨ Recommend"
+   *  affordances, surfaced inside the LOOKS and PRODUCTS section
+   *  headings (replacing the top headerControls bar). */
+  onOpenAddLooks?: () => void;
+  onOpenAddProducts?: () => void;
+  onRecommendLooks?: () => void;
+  onRecommendProducts?: () => void;
 }
 
 // ── Phase 10: catalog health panel ────────────────────────────────────
@@ -3148,7 +3163,7 @@ type DrawerSubject =
   | { kind: 'creative'; creative: CatalogCreativeVideo }
   | null;
 
-export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation, headerControls }: CatalogCreativeDropdownProps) {
+export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loading, creative, metricsLoading, catalogNames, onReorder, onAfterBulkMutation, headerControls, onOpenAddLooks, onOpenAddProducts, onRecommendLooks, onRecommendProducts }: CatalogCreativeDropdownProps) {
   const [drawer, setDrawer] = useState<DrawerSubject>(null);
   // Re-render when the "View as" gender flips so the product list
   // refilters live. The MetricControlBar mutates the singleton; we
@@ -3460,6 +3475,8 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
                 return out;
               });
             }}
+            onAdd={onOpenAddLooks}
+            onRecommend={onRecommendLooks}
             onOpenDetail={(l) => setDrawer({ kind: 'look', look: l })}
           />
           <ProductsListTable
@@ -3478,6 +3495,8 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
                 return out;
               });
             }}
+            onAdd={onOpenAddProducts}
+            onRecommend={onRecommendProducts}
             // Drag-to-reorder for products in list view mirrors the grid
             // affordance — same conditions (no active selection, default
             // sort/filter, universe catalog so order can be persisted).
@@ -3495,6 +3514,10 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             minColumnPx={140}
             draggable={isAll && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
             onReorder={(from, to) => onReorder('looks', from, to)}
+            onAdd={onOpenAddLooks}
+            addLabel="+ Add Looks"
+            onRecommend={onRecommendLooks}
+            recommendLabel="Recommend Looks"
           >
             {sortedLooks.map((l, idx) => (
               <LookThumb
@@ -3514,6 +3537,10 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             minColumnPx={140}
             draggable={(isAll || isUniverse) && filter === 'all' && sort === 'most-viewed' && selectionCount === 0}
             onReorder={(from, to) => onReorder('products', from, to)}
+            onAdd={onOpenAddProducts}
+            addLabel="+ Add Products"
+            onRecommend={onRecommendProducts}
+            recommendLabel="Recommend Products"
           >
             {sortedProducts.map((p, idx) => (
               <ProductMetricTile
@@ -4162,11 +4189,35 @@ const listBodyCellStyle: React.CSSProperties = {
   verticalAlign: 'middle',
 };
 
-function ListSectionHeader({ title, count }: { title: string; count: number }) {
+function ListSectionHeader({ title, count, onAdd, addLabel, onRecommend, recommendLabel }: {
+  title: string;
+  count: number;
+  onAdd?: () => void;
+  addLabel?: string;
+  onRecommend?: () => void;
+  recommendLabel?: string;
+}) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
       <h4 style={{ margin: 0, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#475569', fontWeight: 700 }}>{title}</h4>
       <span style={{ fontSize: 11, color: '#94a3b8' }}>{count}</span>
+      <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+        {onAdd && (
+          <button type="button" onClick={onAdd}
+            className="admin-btn admin-btn-secondary"
+            style={{ fontSize: 11, padding: '3px 10px' }}>
+            {addLabel ?? '+ Add'}
+          </button>
+        )}
+        {onRecommend && (
+          <button type="button" onClick={onRecommend}
+            className="admin-btn admin-btn-primary"
+            style={{ fontSize: 11, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 12, lineHeight: 1 }}>✨</span>
+            {recommendLabel ?? 'Recommend'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -4204,19 +4255,32 @@ function LooksListTable({
   selectedIds,
   onSelect,
   onSelectAll,
+  onAdd,
+  onRecommend,
   onOpenDetail,
 }: {
   looks: CatalogLookRow[];
   selectedIds?: Set<string>;
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
   onSelectAll?: (next: boolean) => void;
+  onAdd?: () => void;
+  onRecommend?: () => void;
   onOpenDetail?: (look: CatalogLookRow) => void;
 }) {
   if (looks.length === 0) return (
     <div>
-      <ListSectionHeader title="Looks" count={0} />
-      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
-        No looks match the current filter.
+      <ListSectionHeader title="Looks" count={0} onAdd={onAdd} addLabel="+ Add Looks" onRecommend={onRecommend} recommendLabel="Recommend Looks" />
+      <div style={{
+        padding: '12px 14px', color: '#888', fontSize: 12,
+        border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      }}>
+        <span>No looks match the current filter.</span>
+        {onAdd && (
+          <button type="button" onClick={onAdd} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}>
+            + Add Looks
+          </button>
+        )}
       </div>
     </div>
   );
@@ -4228,7 +4292,7 @@ function LooksListTable({
     : false;
   return (
     <div>
-      <ListSectionHeader title="Looks" count={looks.length} />
+      <ListSectionHeader title="Looks" count={looks.length} onAdd={onAdd} addLabel="+ Add Looks" onRecommend={onRecommend} recommendLabel="Recommend Looks" />
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
@@ -4317,6 +4381,8 @@ function ProductsListTable({
   selectedIds,
   onSelect,
   onSelectAll,
+  onAdd,
+  onRecommend,
   onOpenDetail,
   draggable,
   onReorder,
@@ -4326,6 +4392,8 @@ function ProductsListTable({
   onSelect?: (id: string, index: number, extendRange: boolean) => void;
   /** Toggle selection across every row currently in `products`. */
   onSelectAll?: (next: boolean) => void;
+  onAdd?: () => void;
+  onRecommend?: () => void;
   onOpenDetail?: (product: ProductRow) => void;
   /** Enables row drag handle + drop targets when true. */
   draggable?: boolean;
@@ -4338,9 +4406,18 @@ function ProductsListTable({
 
   if (products.length === 0) return (
     <div>
-      <ListSectionHeader title="Products" count={0} />
-      <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6 }}>
-        No products match the current filter.
+      <ListSectionHeader title="Products" count={0} onAdd={onAdd} addLabel="+ Add Products" onRecommend={onRecommend} recommendLabel="Recommend Products" />
+      <div style={{
+        padding: '12px 14px', color: '#888', fontSize: 12,
+        border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      }}>
+        <span>No products match the current filter.</span>
+        {onAdd && (
+          <button type="button" onClick={onAdd} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}>
+            + Add Products
+          </button>
+        )}
       </div>
     </div>
   );
@@ -4356,7 +4433,7 @@ function ProductsListTable({
 
   return (
     <div>
-      <ListSectionHeader title="Products" count={products.length} />
+      <ListSectionHeader title="Products" count={products.length} onAdd={onAdd} addLabel="+ Add Products" onRecommend={onRecommend} recommendLabel="Recommend Products" />
       <table style={{ ...listTableShellStyle, marginTop: 6 }}>
         <thead>
           <tr>
@@ -4992,10 +5069,15 @@ interface DraggableSectionProps {
   minColumnPx: number;
   draggable: boolean;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  /** Inline "+ Add" + "✨ Recommend" CTAs next to the section title. */
+  onAdd?: () => void;
+  addLabel?: string;
+  onRecommend?: () => void;
+  recommendLabel?: string;
   children: React.ReactNode;
 }
 
-function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, onReorder, children }: DraggableSectionProps) {
+function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, onReorder, onAdd, addLabel, onRecommend, recommendLabel, children }: DraggableSectionProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
@@ -5028,11 +5110,28 @@ function DraggableSection({ title, count, emptyMessage, minColumnPx, draggable, 
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {title}
         </h3>
         <span style={{ fontSize: 11, color: '#888' }}>{count}</span>
+        <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+          {onAdd && (
+            <button type="button" onClick={onAdd}
+              className="admin-btn admin-btn-secondary"
+              style={{ fontSize: 11, padding: '3px 10px' }}>
+              {addLabel ?? '+ Add'}
+            </button>
+          )}
+          {onRecommend && (
+            <button type="button" onClick={onRecommend}
+              className="admin-btn admin-btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 12, lineHeight: 1 }}>✨</span>
+              {recommendLabel ?? 'Recommend'}
+            </button>
+          )}
+        </div>
       </div>
       {items.length === 0 ? (
         <div style={{ fontSize: 12, color: '#888' }}>{emptyMessage}</div>
