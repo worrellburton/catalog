@@ -46,128 +46,219 @@
   fill: currentColor;
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   CinematicSplash — 3D cascade-to-grid cold open.
-   GPU-only (CSS transforms on ≤24 tiny images inside a preserve-3d
-   stage). Tiles fly in from scattered 3D space, settle onto a grid
-   that echoes the feed, while CATALOG resolves crisp in front; the
-   whole thing cross-fades out to reveal the live feed underneath.
-   ───────────────────────────────────────────────────────────────────── */
-.cinematic-splash {
+/* ═══════════════════════════════════════════════════════════════════════
+   SPLASH HOST + VARIANTS
+   Premium cold-open animations. Every variant is GPU-only: CSS transforms
+   on a small image set, or a single Canvas2D / WebGL surface. The host
+   provides the shared dark stage, the CATALOG wordmark overlay, and the
+   exit cross-fade.
+   ═══════════════════════════════════════════════════════════════════════ */
+.splash-host {
   position: fixed;
   inset: 0;
   z-index: 450;
-  background: radial-gradient(120% 120% at 50% 42%, #14141a 0%, #000 70%);
   overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 42%, #14141a 0%, #000 72%);
   opacity: 1;
-  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1);
-  perspective: 1100px;
-  perspective-origin: 50% 44%;
+  transition: opacity 440ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.cinematic-splash.cs-exit {
-  opacity: 0;
-  pointer-events: none;
-}
+.splash-host.sh-exit { opacity: 0; pointer-events: none; }
 
-.cs-stage {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-/* Each tile starts scattered + pushed back in Z, then eases onto its
-   landing grid cell (centered, flat). The custom props are set inline
-   per tile. */
-.cs-tile {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: clamp(56px, 13vw, 128px);
-  aspect-ratio: 3 / 4;
-  margin-left: calc(clamp(56px, 13vw, 128px) / -2);
-  margin-top: calc(clamp(56px, 13vw, 128px) * 4 / 3 / -2);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  will-change: transform, opacity;
-  transform-style: preserve-3d;
-  animation: cs-cascade 1500ms cubic-bezier(0.18, 0.9, 0.22, 1) both;
-}
-.cs-tile img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-@keyframes cs-cascade {
-  0% {
-    left: var(--sx);
-    top: var(--sy);
-    transform: translateZ(var(--sz)) rotateX(calc(var(--srot) * 0.4)) rotateY(var(--srot)) scale(0.7);
-    opacity: 0;
-  }
-  18% { opacity: 1; }
-  62% {
-    /* brief swirl pass: overshoot slightly past center before settling */
-    left: calc((var(--gx) + 50%) / 2);
-    top: calc((var(--gy) + 50%) / 2);
-    transform: translateZ(120px) rotateY(calc(var(--srot) * 0.25)) scale(1.06);
-    opacity: 1;
-  }
-  100% {
-    left: var(--gx);
-    top: var(--gy);
-    transform: translateZ(0) rotateX(0) rotateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-/* CATALOG wordmark — sits in front of the swirl, resolves crisp as the
-   tiles settle, lifts slightly on reveal. */
-.cs-logo-wrap {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  opacity: 0;
-  transform: translateY(8px) scale(0.96);
-  transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1), transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-}
-.cs-logo-wrap.cs-logo-in {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-.cinematic-splash .cs-logo {
-  height: clamp(34px, 7vw, 64px);
-  width: auto;
-  color: #fff;
-  filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.6));
-}
-.cinematic-splash .cs-logo path { fill: currentColor; }
-
-/* Soft vignette to focus the eye on center where the logo lands. */
-.cs-vignette {
+/* Shared vignette every variant drops in to focus the center wordmark. */
+.sv-vignette {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: radial-gradient(75% 75% at 50% 44%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(75% 75% at 50% 44%, transparent 38%, rgba(0,0,0,0.6) 100%);
 }
 
-/* Reduced-motion / cold-cache fallback: just the logo, gentle fade. */
-.cinematic-splash.cs-simple {
+/* CATALOG wordmark overlay (host-owned, shared by all variants). */
+.sh-logo-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: none;
-}
-.cinematic-splash.cs-simple .cs-logo {
   opacity: 0;
-  animation: splashIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  transform: translateY(10px) scale(0.96);
+  transition: opacity 560ms cubic-bezier(0.16,1,0.3,1), transform 640ms cubic-bezier(0.16,1,0.3,1);
+  pointer-events: none;
+}
+.sh-logo-wrap.sh-logo-in { opacity: 1; transform: translateY(0) scale(1); }
+.splash-host .sh-logo {
+  height: clamp(34px, 7vw, 64px);
+  width: auto;
+  color: #fff;
+  filter: drop-shadow(0 4px 26px rgba(0,0,0,0.7));
+}
+.splash-host .sh-logo path { fill: currentColor; }
+
+/* Reduced-motion / cold-cache fallback. */
+.splash-host.splash-simple {
+  display: flex; align-items: center; justify-content: center;
+}
+.splash-host.splash-simple .sh-logo {
+  opacity: 0; animation: splashIn 1s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
 }
 
+/* ── Variant: Cascade to Grid ──────────────────────────────────────────── */
+.splash-host[data-variant="cascade"] { perspective: 1100px; perspective-origin: 50% 44%; }
+.sv-cascade-stage { position: absolute; inset: 0; transform-style: preserve-3d; }
+.sv-cascade-tile {
+  position: absolute; top: 0; left: 0;
+  width: clamp(56px, 13vw, 128px); aspect-ratio: 3 / 4;
+  margin-left: calc(clamp(56px, 13vw, 128px) / -2);
+  margin-top: calc(clamp(56px, 13vw, 128px) * 4 / 3 / -2);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05);
+  will-change: transform, opacity; transform-style: preserve-3d;
+  animation: cascade 1500ms cubic-bezier(0.18,0.9,0.22,1) both;
+}
+.sv-cascade-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes cascade {
+  0%   { left: var(--sx); top: var(--sy); transform: translateZ(var(--sz)) rotateX(calc(var(--srot)*0.4)) rotateY(var(--srot)) scale(0.7); opacity: 0; }
+  18%  { opacity: 1; }
+  62%  { left: calc((var(--gx) + 50%)/2); top: calc((var(--gy) + 50%)/2); transform: translateZ(120px) rotateY(calc(var(--srot)*0.25)) scale(1.06); opacity: 1; }
+  100% { left: var(--gx); top: var(--gy); transform: translateZ(0) rotateX(0) rotateY(0) scale(1); opacity: 1; }
+}
+
+/* ── Variant: Sphere Swarm ─────────────────────────────────────────────── */
+.splash-host[data-variant="sphere"] { perspective: 1400px; perspective-origin: 50% 46%; }
+.sv-sphere-scene {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  animation: sphere-bloom 2600ms cubic-bezier(0.5,0,0.1,1) both;
+}
+.sv-sphere-stage {
+  position: relative; width: 1px; height: 1px;
+  transform-style: preserve-3d;
+  animation: sphere-spin var(--spin, 9s) linear infinite;
+}
+.sv-sphere-tile {
+  position: absolute; top: 0; left: 0;
+  width: clamp(44px, 9vw, 92px); aspect-ratio: 3/4;
+  margin-left: calc(clamp(44px, 9vw, 92px) / -2);
+  margin-top: calc(clamp(44px, 9vw, 92px) * 4 / 3 / -2);
+  border-radius: 9px; overflow: hidden; backface-visibility: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  transform: rotateY(var(--ry)) rotateX(var(--rx)) translateZ(240px);
+  opacity: 0; animation: sphere-fade 700ms ease-out both;
+}
+.sv-sphere-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes sphere-spin { to { transform: rotateY(360deg); } }
+@keyframes sphere-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sphere-bloom {
+  0%   { transform: scale(0.18); }
+  55%  { transform: scale(1); }
+  100% { transform: scale(1.42); }
+}
+
+/* ── Variant: Spiral Vortex ────────────────────────────────────────────── */
+.splash-host[data-variant="vortex"] { perspective: 1000px; perspective-origin: 50% 48%; }
+.sv-vortex-scene { position: absolute; inset: 0; transform-style: preserve-3d; }
+.sv-vortex-tile {
+  position: absolute; top: 0; left: 0;
+  width: clamp(46px, 10vw, 104px); aspect-ratio: 3/4;
+  margin-left: calc(clamp(46px, 10vw, 104px) / -2);
+  margin-top: calc(clamp(46px, 10vw, 104px) * 4 / 3 / -2);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+  transform-origin: center; will-change: transform, opacity;
+  animation: vortex 1700ms cubic-bezier(0.3,0.7,0.2,1) both;
+}
+.sv-vortex-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes vortex {
+  0%   { left: var(--sx); top: var(--sy); transform: translateZ(var(--sz)) rotate(0deg) scale(1); opacity: 0; }
+  16%  { opacity: 1; }
+  100% { left: 50%; top: 50%; transform: translateZ(60px) rotate(var(--spin)) scale(0.12); opacity: 0; }
+}
+.sv-vortex-core {
+  position: absolute; top: 50%; left: 50%; width: 3px; height: 3px;
+  border-radius: 50%; transform: translate(-50%,-50%);
+  box-shadow: 0 0 60px 30px rgba(255,255,255,0.12), 0 0 140px 70px rgba(120,120,255,0.08);
+  z-index: 1;
+}
+
+/* ── Variant: Constellation (Canvas2D) ─────────────────────────────────── */
+.sv-constellation-scene, .sv-liquid-scene { position: absolute; inset: 0; }
+.sv-constellation-canvas, .sv-liquid-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+}
+
+/* ── Variant: Liquid Chrome (WebGL) ────────────────────────────────────── */
+.sv-liquid-fallback {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(115deg, #0b0d10 0%, #3a3f47 38%, #e8ecf2 50%, #3a3f47 62%, #0b0d10 100%);
+  background-size: 300% 300%;
+  animation: liquid-fallback 6s ease-in-out infinite;
+}
+@keyframes liquid-fallback { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+/* ── Variant: Mosaic Reveal ────────────────────────────────────────────── */
+.sv-mosaic-scene { position: absolute; inset: 0; perspective: 1200px; }
+.sv-mosaic-grid {
+  position: absolute; inset: -2%;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: 2px;
+  transform-style: preserve-3d;
+  transition: transform 900ms cubic-bezier(0.6,0,0.2,1), opacity 900ms ease;
+}
+.sv-mosaic-open .sv-mosaic-grid { transform: scale(1.6) translateZ(220px); opacity: 0; }
+.sv-mosaic-cell {
+  position: relative; overflow: hidden; background: #0a0a0a;
+  transform: rotateY(90deg); backface-visibility: hidden;
+  animation: mosaic-flip 620ms cubic-bezier(0.2,0.8,0.2,1) both;
+}
+.sv-mosaic-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes mosaic-flip {
+  0%   { transform: rotateY(90deg); opacity: 0; }
+  100% { transform: rotateY(0deg); opacity: 1; }
+}
+.sv-mosaic-center {
+  position: absolute; top: 50%; left: 50%; width: 40%; height: 40%;
+  transform: translate(-50%,-50%);
+  background: radial-gradient(circle, rgba(0,0,0,0.55) 0%, transparent 70%);
+  z-index: 1; pointer-events: none;
+}
+
+/* ── Admin picker cards ────────────────────────────────────────────────── */
+.splash-card-row {
+  display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 12px;
+  scroll-snap-type: x proximity;
+}
+.splash-card {
+  position: relative; flex: 0 0 168px; scroll-snap-align: start;
+  border-radius: 14px; overflow: hidden; cursor: pointer;
+  border: 2px solid transparent; background: #0b0d10;
+  text-align: left; padding: 0; color: #fff;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.splash-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.18); }
+.splash-card.is-active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.18); }
+.splash-card-poster {
+  height: 96px; position: relative; overflow: hidden;
+  background-size: 200% 200%; animation: card-drift 7s ease-in-out infinite;
+}
+@keyframes card-drift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+.splash-card-body { padding: 9px 11px 11px; background: #fff; color: #111; }
+.splash-card-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.splash-card-tagline { font-size: 11px; color: #64748b; margin-top: 3px; line-height: 1.35; }
+.splash-card-chip {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 2px 6px; border-radius: 999px; background: #eef2ff; color: #4338ca;
+}
+.splash-card-tick {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.splash-card.is-none .splash-card-poster {
+  display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(45deg, #1e293b 0 10px, #0f172a 10px 20px);
+  animation: none; color: #64748b; font-size: 24px;
+}

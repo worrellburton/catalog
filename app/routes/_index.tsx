@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
-import CinematicSplash from '~/components/CinematicSplash';
+import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
 import BottomBar from '~/components/BottomBar';
@@ -901,8 +901,9 @@ export default function Home() {
       {/* Cinematic cold-open takes precedence over the basic first-visit
           splash. When it's active, the legacy SplashScreen is suppressed
           so the two don't stack. */}
-      {cinematic.active ? (
-        <CinematicSplash
+      {cinematic.active && cinematic.config.variant !== 'none' ? (
+        <SplashHost
+          variant={cinematic.config.variant}
           durationMs={cinematic.config.durationMs}
           onDone={() => setCinematic(c => ({ ...c, active: false }))}
         />
