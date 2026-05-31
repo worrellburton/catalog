@@ -299,11 +299,16 @@ export async function loadCatalogCreativePayload(
 
   // Looks: universe catalogs (all / home) pull every live look so admins
   // can browse the entire active set; other catalogs filter by catalog_tags.
+  //
+  // NOTE: `looks` has NO foreign key to `profiles`, so the creator profile
+  // CANNOT be embedded via PostgREST. A `profiles!looks_user_id_fkey`
+  // embed 400s the entire request — which silently returned zero looks
+  // for every universe catalog ("Looks 0" even though looks existed). We
+  // fetch the creator profiles in a second query and merge by user_id.
   let looksQuery = supabase
     .from('looks')
     .select(`
       id, legacy_id, title, creator_handle, user_id, status, enabled, archived_at, created_at, gender,
-      creator:profiles!looks_user_id_fkey ( id, full_name, avatar_url ),
       looks_creative!inner ( video_url, is_primary ),
       look_products ( product_id )
     `)
@@ -315,29 +320,47 @@ export async function loadCatalogCreativePayload(
   if (!isUniverse) {
     looksQuery = looksQuery.contains('catalog_tags', [catalog.name]);
   }
-  const { data: lookRows } = await looksQuery;
+  const { data: lookRows, error: looksError } = await looksQuery;
+  if (looksError) console.error('[loadCatalogCreativePayload] looks query error:', looksError.message);
+
+  // Resolve creator names/avatars separately (no FK → no embed).
+  const lookUserIds = Array.from(new Set(
+    ((lookRows as { user_id: string | null }[] | null) || [])
+      .map(r => r.user_id)
+      .filter((x): x is string => !!x),
+  ));
+  const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+  if (lookUserIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', lookUserIds);
+    for (const p of (profs as { id: string; full_name: string | null; avatar_url: string | null }[] | null) || []) {
+      profilesById.set(p.id, { full_name: p.full_name ?? null, avatar_url: p.avatar_url ?? null });
+    }
+  }
 
   type LookPayload = {
     id: string;
     legacy_id: number | null;
     title: string;
     creator_handle: string | null;
+    user_id: string | null;
     created_at: string | null;
     gender: string | null;
-    creator: { id: string; full_name: string | null; avatar_url: string | null } | { id: string; full_name: string | null; avatar_url: string | null }[] | null;
     looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
     look_products: { product_id: string }[] | null;
   };
   const mappedLooks: CatalogLookRow[] = ((lookRows as LookPayload[] | null) || []).map(r => {
-    const creator = Array.isArray(r.creator) ? r.creator[0] : r.creator;
+    const prof = r.user_id ? profilesById.get(r.user_id) : undefined;
     return {
       id: r.id,
       legacyId: r.legacy_id,
       title: r.title,
       videoPath: r.looks_creative?.[0]?.video_url ?? null,
       creatorHandle: r.creator_handle,
-      creatorName: creator?.full_name ?? null,
-      creatorAvatarUrl: creator?.avatar_url ?? null,
+      creatorName: prof?.full_name ?? null,
+      creatorAvatarUrl: prof?.avatar_url ?? null,
       productCount: (r.look_products || []).length,
       createdAt: r.created_at,
       gender: r.gender,
