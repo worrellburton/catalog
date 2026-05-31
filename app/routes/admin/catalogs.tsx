@@ -1496,6 +1496,85 @@ export default function AdminCatalogs() {
     }
   }, [addLooksCatalog, addLooksSelected, looks, loadLooks, loadCreative, showToast]);
 
+  // ── Recommend Looks (Claude curates the library) ──────────────────
+  // Asks catalog-recommend-looks to rank which existing library looks
+  // best fit this catalog, then opens a review modal where the admin
+  // ticks the ones to attach (catalog_tags write, same as Add Looks).
+  const [recommendLooksCatalog, setRecommendLooksCatalog] = useState<Catalog | null>(null);
+  const [recommendLooksBusy, setRecommendLooksBusy] = useState(false);
+  const [recommendLooksError, setRecommendLooksError] = useState<string | null>(null);
+  const [recommendLooksResults, setRecommendLooksResults] = useState<{ id: string; reason: string }[]>([]);
+  const [recommendLooksSelected, setRecommendLooksSelected] = useState<Set<string>>(new Set());
+  const [recommendLooksSaving, setRecommendLooksSaving] = useState(false);
+
+  const openRecommendLooks = useCallback(async (catalog: Catalog) => {
+    if (!supabase) return;
+    setRecommendLooksCatalog(catalog);
+    setRecommendLooksResults([]);
+    setRecommendLooksSelected(new Set());
+    setRecommendLooksError(null);
+    setRecommendLooksBusy(true);
+    try {
+      // Only recommend looks NOT already in this catalog.
+      const candidates = looks.filter(l => !l.catalog_tags.includes(catalog.name));
+      if (candidates.length === 0) {
+        setRecommendLooksError('Every live look is already in this catalog.');
+        setRecommendLooksBusy(false);
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('catalog-recommend-looks', {
+        body: {
+          catalog: catalog.name,
+          count: 8,
+          looks: candidates.map(l => ({
+            id: l.id,
+            title: l.title,
+            creator: l.creatorHandle,
+          })),
+        },
+      });
+      if (error) { setRecommendLooksError(error.message); return; }
+      if (!data?.success) { setRecommendLooksError(data?.error || 'Recommendation failed'); return; }
+      const recs = (data.recommendations || []) as { id: string; reason: string }[];
+      setRecommendLooksResults(recs);
+      // Pre-select all recommendations so the admin can one-click add.
+      setRecommendLooksSelected(new Set(recs.map(r => r.id)));
+      if (recs.length === 0) setRecommendLooksError('Claude found no strong matches for this catalog.');
+    } catch (err) {
+      setRecommendLooksError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRecommendLooksBusy(false);
+    }
+  }, [looks]);
+
+  const commitRecommendLooks = useCallback(async () => {
+    if (!supabase || !recommendLooksCatalog || recommendLooksSelected.size === 0) return;
+    setRecommendLooksSaving(true);
+    try {
+      const name = recommendLooksCatalog.name;
+      const updates = Array.from(recommendLooksSelected).map(id => {
+        const l = looks.find(x => x.id === id);
+        const tags = new Set([...(l?.catalog_tags || []), name]);
+        return supabase!.from('looks').update({ catalog_tags: Array.from(tags) }).eq('id', id).select('id');
+      });
+      const results = await Promise.all(updates);
+      const succeeded = results.filter(r => !r.error && r.data && r.data.length > 0).length;
+      if (succeeded === 0) {
+        showToast('No looks were written — check RLS on public.looks.');
+      } else {
+        showToast(`Added ${succeeded} recommended look${succeeded === 1 ? '' : 's'} to ${name}.`);
+        await loadLooks();
+        setCreativeByCatalog(prev => { const next = { ...prev }; delete next[recommendLooksCatalog.id]; return next; });
+        await loadCreative(recommendLooksCatalog);
+        setRecommendLooksCatalog(null);
+        setRecommendLooksResults([]);
+        setRecommendLooksSelected(new Set());
+      }
+    } finally {
+      setRecommendLooksSaving(false);
+    }
+  }, [recommendLooksCatalog, recommendLooksSelected, looks, loadLooks, loadCreative, showToast]);
+
   const closeSuggest = useCallback(() => {
     if (ingesting) return;
     setSuggestCatalog(null);
@@ -1861,7 +1940,7 @@ export default function AdminCatalogs() {
                           // Claude-recommend for looks is not wired up
                           // yet — placeholder toast keeps the affordance
                           // visible without faking a working endpoint.
-                          onRecommendLooks={() => showToast('Look recommendations coming soon.')}
+                          onRecommendLooks={() => openRecommendLooks(homeAsLocal)}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
                             loadLooks();
@@ -2016,7 +2095,7 @@ export default function AdminCatalogs() {
                       onOpenAddLooks={looks.length === 0 ? undefined : () => openAddLooks(c)}
                       onOpenAddProducts={products.length === 0 ? undefined : () => openAdd(c)}
                       onRecommendProducts={() => openSuggest(c)}
-                      onRecommendLooks={() => showToast('Look recommendations coming soon.')}
+                      onRecommendLooks={() => openRecommendLooks(c)}
                       headerControls={(
                         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
                           <button className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openAssemble(c)} disabled={productCount < 3} title={productCount < 3 ? 'Tag at least 3 products with this catalog first' : 'Claude assembles a look from tagged products'}>✨ Assemble Look</button>
@@ -2117,6 +2196,25 @@ export default function AdminCatalogs() {
           busy={addLooksBusy}
           onClose={closeAddLooks}
           onCommit={commitAddLooks}
+        />
+      )}
+
+      {recommendLooksCatalog && (
+        <RecommendLooksModal
+          catalog={recommendLooksCatalog}
+          looks={looks}
+          loading={recommendLooksBusy}
+          error={recommendLooksError}
+          results={recommendLooksResults}
+          selected={recommendLooksSelected}
+          saving={recommendLooksSaving}
+          onToggle={(id) => setRecommendLooksSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+          })}
+          onClose={() => { if (!recommendLooksSaving) setRecommendLooksCatalog(null); }}
+          onCommit={commitRecommendLooks}
         />
       )}
 
@@ -5668,6 +5766,109 @@ export function AddLooksModal({
               style={{ fontSize: 12, padding: '6px 14px' }}
             >
               {busy ? 'Adding…' : `Add ${selected.size} look${selected.size === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Recommend Looks modal ─────────────────────────────────────────────
+// Reviews Claude's catalog-recommend-looks output: a ranked list of
+// existing library looks with a one-line reason each, pre-ticked so the
+// admin can one-click attach the batch (catalog_tags write).
+function RecommendLooksModal({
+  catalog,
+  looks,
+  loading,
+  error,
+  results,
+  selected,
+  saving,
+  onToggle,
+  onClose,
+  onCommit,
+}: {
+  catalog: Catalog;
+  looks: LookRow[];
+  loading: boolean;
+  error: string | null;
+  results: { id: string; reason: string }[];
+  selected: Set<string>;
+  saving: boolean;
+  onToggle: (id: string) => void;
+  onClose: () => void;
+  onCommit: () => void;
+}) {
+  const byId = useMemo(() => new Map(looks.map(l => [l.id, l])), [looks]);
+  return (
+    <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(720px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee' }}>
+          <h2 style={{ margin: 0, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>✨</span> Recommended looks for “{catalog.name}”
+          </h2>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
+            Claude ranked the best-fitting looks from your library. Untick any you don’t want, then add.
+          </p>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {loading && (
+            <div style={{ textAlign: 'center', color: '#64748b', padding: 40, fontSize: 13 }}>
+              ✨ Asking Claude to curate looks for “{catalog.name}”…
+            </div>
+          )}
+          {!loading && error && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#b91c1c', fontSize: 13 }}>
+              {error}
+            </div>
+          )}
+          {!loading && !error && results.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {results.map((r, i) => {
+                const l = byId.get(r.id);
+                const isSel = selected.has(r.id);
+                const src = l?.videoPath
+                  ? (l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`)
+                  : null;
+                return (
+                  <div
+                    key={r.id}
+                    onClick={() => onToggle(r.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px',
+                      border: `1px solid ${isSel ? '#2563eb' : '#e5e7eb'}`, borderRadius: 8,
+                      background: isSel ? '#eff6ff' : '#fff', cursor: 'pointer',
+                    }}
+                  >
+                    <input type="checkbox" checked={isSel} onChange={() => onToggle(r.id)} onClick={e => e.stopPropagation()} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', width: 18 }}>{i + 1}</span>
+                    <div style={{ width: 34, height: 46, borderRadius: 4, overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                      {src && <video src={src} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {l?.title || `Look #${l?.legacyId ?? ''}`}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#475569' }}>{r.reason}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: '#666' }}>{selected.size} selected</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="admin-btn admin-btn-secondary" onClick={onClose} disabled={saving} style={{ fontSize: 12, padding: '6px 14px' }}>
+              Cancel
+            </button>
+            <button className="admin-btn admin-btn-primary" onClick={onCommit} disabled={saving || selected.size === 0} style={{ fontSize: 12, padding: '6px 14px' }}>
+              {saving ? 'Adding…' : `Add ${selected.size} look${selected.size === 1 ? '' : 's'}`}
             </button>
           </div>
         </div>
