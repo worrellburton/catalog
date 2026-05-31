@@ -947,11 +947,19 @@ export async function pauseAd(id: string): Promise<{ error: string | null }> {
 
 export async function deleteProductAd(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase not configured' };
-  const { error } = await supabase
+  // `.select()` returns the rows actually deleted. An RLS denial removes
+  // zero rows WITHOUT raising an error, so we treat an empty result as a
+  // failure — otherwise the tile vanishes optimistically then comes back
+  // on refresh with no signal to the admin.
+  const { data, error } = await supabase
     .from('product_creative')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: 'Nothing was deleted — you may not have permission (RLS).' };
+  }
   return { error: null };
 }
 
@@ -965,11 +973,19 @@ export async function deleteProduct(id: string): Promise<{ error: string | null 
   // this product so we never end up with orphan rows even if the FK
   // cascade isn't set up on a given env.
   await supabase.from('product_creative').delete().eq('product_id', id);
-  const { error } = await supabase
+  // Hard-delete the product row and confirm it actually went. An RLS
+  // denial (e.g. a missing DELETE policy) deletes zero rows and returns
+  // no error, which previously looked like success but reappeared on
+  // refresh — surface that as an explicit failure instead.
+  const { data, error } = await supabase
     .from('products')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
   if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: 'Product was not deleted — check your super-admin permissions.' };
+  }
   return { error: null };
 }
 
