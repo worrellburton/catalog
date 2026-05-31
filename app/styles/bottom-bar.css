@@ -1369,3 +1369,109 @@ body:has(.bottom-bar.search-open) {
     animation: bb-beam-rotate-fallback 5s linear infinite;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Mobile Gemini-style search bar.
+   On ≤640px, transform the dark glass catalog search into a white pill
+   reminiscent of Google's Gemini composer: large rounded radius, generous
+   padding, big '+' glyph on the left, faint shadow, gray placeholder.
+   Desktop look is untouched. We don't change the React markup — the
+   existing filter button gets its hamburger replaced via CSS so all the
+   focus/iOS/keyboard logic in BottomBar.tsx keeps working.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* The outer bar becomes a pure white pill with a soft shadow. */
+  .bottom-bar {
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 6px 22px rgba(0, 0, 0, 0.08);
+  }
+
+  /* The inner row: tighter vertical, breathing horizontal. */
+  .bottom-bar-inner.search-inline {
+    width: min(560px, calc(100vw - 24px));
+    padding: 8px 14px;
+    gap: 10px;
+  }
+
+  /* Replace the dark inline input with a transparent slot inside the pill. */
+  .bottom-bar-inner.search-inline .bottom-search-input,
+  .bottom-bar-inner.search-inline .bottom-search-input:focus {
+    background: transparent;
+    border: none;
+    color: #111;
+    padding: 14px 4px;
+    font-size: 18px;
+    font-weight: 400;
+    animation: none;
+    box-shadow: none;
+  }
+  .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+    color: #9aa0a6; /* Google neutral-500 — matches Gemini hint color */
+    font-weight: 400;
+  }
+
+  /* The filter button (leftmost) becomes a borderless '+' glyph. We hide
+     its inline SVG and draw the plus with CSS so the existing button —
+     and every event handler attached to it — stays intact. The button
+     itself still opens the filters sheet on tap. */
+  .bottom-bar-inner.search-inline > .filter-btn.inline {
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #5f6368;
+    box-shadow: none;
+    position: relative;
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline > svg { display: none; }
+  .bottom-bar-inner.search-inline > .filter-btn.inline::before,
+  .bottom-bar-inner.search-inline > .filter-btn.inline::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    background: currentColor;
+    border-radius: 1.5px;
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline::before {
+    width: 18px; height: 2px;
+    transform: translate(-50%, -50%);
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline::after {
+    width: 2px; height: 18px;
+    transform: translate(-50%, -50%);
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline:hover,
+  .bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {
+    background: rgba(0, 0, 0, 0.06);
+    color: #202124;
+  }
+
+  /* My-size chip recolors to match the light surface. */
+  .bottom-bar-inner.search-inline > .my-size-chip {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #5f6368;
+  }
+  .bottom-bar-inner.search-inline > .my-size-chip.active {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #15803d;
+  }
+
+  /* The right-side spinner sits in a soft gray circle, echoing Gemini's
+     idle 'stop' chip. (Only renders while a search is in flight.) */
+  .bottom-bar-inner.search-inline .bottom-search-spinner {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.06);
+    color: #5f6368;
+  }
+}

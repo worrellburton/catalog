@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
+import SplashHost from '~/components/splash/SplashHost';
+import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
 import BottomBar from '~/components/BottomBar';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
@@ -110,6 +112,32 @@ export default function Home() {
     authSplashMounted,
     authSplashLeaving,
   } = useAppView({ user, authLoading });
+
+  // Cinematic cold-open splash. Plays once per fresh app boot (cold
+  // open), gated by the /admin/splash config. Distinct from the
+  // one-time first-visit SplashScreen — this fires every cold open.
+  // Skipped inside the Flutter shell (it draws its own launch screen)
+  // and when sessionStorage already marked this tab as opened.
+  const [cinematic, setCinematic] = useState<{ active: boolean; config: SplashConfig }>(() => {
+    if (typeof window === 'undefined') return { active: false, config: DEFAULT_SPLASH_CONFIG };
+    const inShell = document.documentElement.dataset.shell === 'catalog-app';
+    let alreadyOpened = false;
+    try { alreadyOpened = sessionStorage.getItem('catalog:cold-open-done') === '1'; } catch { /* ignore */ }
+    return { active: !inShell && !alreadyOpened, config: DEFAULT_SPLASH_CONFIG };
+  });
+  useEffect(() => {
+    if (!cinematic.active) return;
+    try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
+    // Resolve the admin config; if disabled, drop the splash immediately.
+    let cancelled = false;
+    getSplashConfig().then(cfg => {
+      if (cancelled) return;
+      if (!cfg.enabled) { setCinematic(c => ({ ...c, active: false })); return; }
+      setCinematic(c => ({ ...c, config: cfg }));
+    }).catch(() => { /* keep default config */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
@@ -870,7 +898,18 @@ export default function Home() {
       )}
 
       {showSplash && <SplashScreen />}
-      {firstVisit && <SplashScreen />}
+      {/* Cinematic cold-open takes precedence over the basic first-visit
+          splash. When it's active, the legacy SplashScreen is suppressed
+          so the two don't stack. */}
+      {cinematic.active && cinematic.config.variant !== 'none' ? (
+        <SplashHost
+          variant={cinematic.config.variant}
+          durationMs={cinematic.config.durationMs}
+          onDone={() => setCinematic(c => ({ ...c, active: false }))}
+        />
+      ) : firstVisit ? (
+        <SplashScreen />
+      ) : null}
 
       {view === 'landing' && (
         <Suspense fallback={null}>
