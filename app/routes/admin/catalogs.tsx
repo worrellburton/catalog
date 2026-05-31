@@ -3200,7 +3200,9 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // admin who lives in list mode doesn't have to re-toggle every
   // session.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === 'undefined') return 'grid';
+    // List is the default view (spreadsheet-style) — honour a saved
+    // preference if the admin explicitly switched to grid before.
+    if (typeof window === 'undefined') return 'list';
     try { return (window.localStorage.getItem(VIEW_MODE_LS_KEY) as ViewMode) || 'list'; }
     catch { return 'list'; }
   });
@@ -5403,63 +5405,85 @@ export function AddProductsModal({
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
               No products match “{search}”.
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-              {filtered.map(p => {
-                const isTagged = tagged.has(p.id);
-                const isSelected = selected.has(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => !isTagged && onToggle(p.id)}
-                    disabled={isTagged}
-                    style={{
-                      textAlign: 'left',
-                      padding: 0,
-                      border: `2px solid ${isSelected ? '#2563eb' : isTagged ? '#d1fae5' : '#e5e7eb'}`,
-                      borderRadius: 8,
-                      overflow: 'hidden',
-                      background: '#fff',
-                      cursor: isTagged ? 'default' : 'pointer',
-                      opacity: isTagged ? 0.55 : 1,
-                      position: 'relative',
-                    }}
-                  >
-                    {p.image_url ? (
-                      <img src={p.image_url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', background: '#f5f5f5' }} />
-                    ) : (
-                      <div style={{ width: '100%', aspectRatio: '1', background: '#f5f5f5' }} />
-                    )}
-                    <div style={{ padding: 8 }}>
-                      <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand || ' - '}</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || ' - '}</div>
-                    </div>
-                    {isTagged && (
-                      <span style={{
-                        position: 'absolute', top: 6, right: 6,
-                        padding: '2px 6px', borderRadius: 4,
-                        fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-                        background: '#10b981', color: '#fff',
-                      }}>Added</span>
-                    )}
-                    {isSelected && !isTagged && (
-                      <span style={{
-                        position: 'absolute', top: 6, right: 6,
-                        padding: '2px 6px', borderRadius: 4,
-                        fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-                        background: '#2563eb', color: '#fff',
-                      }}>Selected</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f8fafc' }}>
+                <tr style={{ textAlign: 'left', color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '8px 12px', width: 40 }}>
+                    {/* select-all over the non-tagged, filtered set */}
+                    {(() => {
+                      const selectable = filtered.filter(p => !tagged.has(p.id));
+                      const allSel = selectable.length > 0 && selectable.every(p => selected.has(p.id));
+                      const someSel = !allSel && selectable.some(p => selected.has(p.id));
+                      return (
+                        <input
+                          type="checkbox"
+                          checked={allSel}
+                          ref={el => { if (el) el.indeterminate = someSel; }}
+                          onChange={() => selectable.forEach(p => {
+                            if (allSel) { if (selected.has(p.id)) onToggle(p.id); }
+                            else { if (!selected.has(p.id)) onToggle(p.id); }
+                          })}
+                          title="Select all"
+                        />
+                      );
+                    })()}
+                  </th>
+                  <th style={{ padding: '8px 12px', width: 48 }}></th>
+                  <th style={{ padding: '8px 12px' }}>Product</th>
+                  <th style={{ padding: '8px 12px' }}>Brand</th>
+                  <th style={{ padding: '8px 12px', width: 90 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => {
+                  const isTagged = tagged.has(p.id);
+                  const isSelected = selected.has(p.id);
+                  return (
+                    <tr
+                      key={p.id}
+                      onClick={() => !isTagged && onToggle(p.id)}
+                      style={{
+                        borderTop: '1px solid #f1f5f9',
+                        cursor: isTagged ? 'default' : 'pointer',
+                        background: isSelected ? '#eff6ff' : isTagged ? '#f0fdf4' : '#fff',
+                        opacity: isTagged ? 0.7 : 1,
+                      }}
+                    >
+                      <td style={{ padding: '6px 12px' }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected || isTagged}
+                          disabled={isTagged}
+                          onChange={() => !isTagged && onToggle(p.id)}
+                        />
+                      </td>
+                      <td style={{ padding: '6px 12px' }}>
+                        {(p.primary_image_url || p.image_url) ? (
+                          <img src={p.primary_image_url || p.image_url || ''} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                        ) : (
+                          <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                        )}
+                      </td>
+                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111' }}>{p.name || ' - '}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569' }}>{p.brand || ' - '}</td>
+                      <td style={{ padding: '6px 12px' }}>
+                        {isTagged ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#059669' }}>Added</span>
+                        ) : isSelected ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#2563eb' }}>Selected</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
 
@@ -5547,27 +5571,80 @@ export function AddLooksModal({
           />
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
               {looks.length === 0 ? 'No live looks in the library.' : `No looks match “${search}”.`}
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-              {filtered.map(l => {
-                const isTagged = tagged.has(l.id);
-                const isSelected = selected.has(l.id);
-                return (
-                  <AddLookTile
-                    key={l.id}
-                    look={l}
-                    isTagged={isTagged}
-                    isSelected={isSelected}
-                    onToggle={() => !isTagged && onToggle(l.id)}
-                  />
-                );
-              })}
-            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f8fafc' }}>
+                <tr style={{ textAlign: 'left', color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '8px 12px', width: 40 }}>
+                    {(() => {
+                      const selectable = filtered.filter(l => !tagged.has(l.id));
+                      const allSel = selectable.length > 0 && selectable.every(l => selected.has(l.id));
+                      const someSel = !allSel && selectable.some(l => selected.has(l.id));
+                      return (
+                        <input
+                          type="checkbox"
+                          checked={allSel}
+                          ref={el => { if (el) el.indeterminate = someSel; }}
+                          onChange={() => selectable.forEach(l => {
+                            if (allSel) { if (selected.has(l.id)) onToggle(l.id); }
+                            else { if (!selected.has(l.id)) onToggle(l.id); }
+                          })}
+                          title="Select all"
+                        />
+                      );
+                    })()}
+                  </th>
+                  <th style={{ padding: '8px 12px', width: 48 }}></th>
+                  <th style={{ padding: '8px 12px' }}>Look</th>
+                  <th style={{ padding: '8px 12px' }}>Creator</th>
+                  <th style={{ padding: '8px 12px', width: 90 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(l => {
+                  const isTagged = tagged.has(l.id);
+                  const isSelected = selected.has(l.id);
+                  const src = l.videoPath
+                    ? (l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`)
+                    : null;
+                  return (
+                    <tr
+                      key={l.id}
+                      onClick={() => !isTagged && onToggle(l.id)}
+                      style={{
+                        borderTop: '1px solid #f1f5f9',
+                        cursor: isTagged ? 'default' : 'pointer',
+                        background: isSelected ? '#eff6ff' : isTagged ? '#f0fdf4' : '#fff',
+                        opacity: isTagged ? 0.7 : 1,
+                      }}
+                    >
+                      <td style={{ padding: '6px 12px' }} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={isSelected || isTagged} disabled={isTagged} onChange={() => !isTagged && onToggle(l.id)} />
+                      </td>
+                      <td style={{ padding: '6px 12px' }}>
+                        <div style={{ width: 30, height: 40, borderRadius: 4, overflow: 'hidden', background: '#000' }}>
+                          {src && <video src={src} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                        </div>
+                      </td>
+                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569' }}>{l.creatorHandle ? `@${l.creatorHandle}` : ' - '}</td>
+                      <td style={{ padding: '6px 12px' }}>
+                        {isTagged ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#059669' }}>Added</span>
+                        ) : isSelected ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#2563eb' }}>Selected</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
 
@@ -5596,88 +5673,6 @@ export function AddLooksModal({
         </div>
       </div>
     </div>
-  );
-}
-
-function AddLookTile({
-  look,
-  isTagged,
-  isSelected,
-  onToggle,
-}: {
-  look: LookRow;
-  isTagged: boolean;
-  isSelected: boolean;
-  onToggle: () => void;
-}) {
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const src = look.videoPath
-    ? (look.videoPath.startsWith('http')
-        ? look.videoPath
-        : `${import.meta.env.BASE_URL}${look.videoPath.replace(/^\//, '')}`)
-    : null;
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={isTagged}
-      onMouseEnter={() => { videoRef.current?.play().catch(() => {}); }}
-      onMouseLeave={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
-      style={{
-        textAlign: 'left',
-        padding: 0,
-        border: `2px solid ${isSelected ? '#2563eb' : isTagged ? '#d1fae5' : '#e5e7eb'}`,
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: '#fff',
-        cursor: isTagged ? 'default' : 'pointer',
-        opacity: isTagged ? 0.55 : 1,
-        position: 'relative',
-      }}
-    >
-      <div style={{ width: '100%', aspectRatio: '9/16', background: '#000' }}>
-        {src ? (
-          <video
-            ref={videoRef}
-            src={src}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>
-            No video
-          </div>
-        )}
-      </div>
-      <div style={{ padding: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {look.title || `Look #${look.legacyId ?? ''}`}
-        </div>
-        <div style={{ fontSize: 10, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {look.creatorHandle ? `@${look.creatorHandle}` : ' - '}
-        </div>
-      </div>
-      {isTagged && (
-        <span style={{
-          position: 'absolute', top: 6, right: 6,
-          padding: '2px 6px', borderRadius: 4,
-          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-          background: '#10b981', color: '#fff',
-        }}>Added</span>
-      )}
-      {isSelected && !isTagged && (
-        <span style={{
-          position: 'absolute', top: 6, right: 6,
-          padding: '2px 6px', borderRadius: 4,
-          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
-          background: '#2563eb', color: '#fff',
-        }}>Selected</span>
-      )}
-    </button>
   );
 }
 
