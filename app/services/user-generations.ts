@@ -339,10 +339,12 @@ function computeFraming(
     return 'Mid-shot crop, top of head to just below the waist. Do not render legs or feet.';
   }
 
-  // Has legs but no shoes - knees crop, omit feet so Seedance does
-  // not invent footwear that was not picked.
+  // Has legs but no shoes - show the bottom in full, down to BARE feet.
+  // We deliberately render the whole leg (not an ankle crop) so the
+  // featured bottom reads at full length; the wardrobe clause pins the
+  // feet to bare (no invented footwear) instead of cropping them out.
   if (legs && !feet) {
-    return 'Three-quarter crop from top of head to just above the ankles. Do not render feet or footwear.';
+    return 'Full-length shot, top of head down to the floor, showing bare feet — no footwear of any kind.';
   }
 
   // Has shoes but no legs/torso - feet/ankle crop.
@@ -357,6 +359,54 @@ function computeFraming(
 
   // Anything spanning torso through feet - full body.
   return 'Frame as a centered full-body shot, head to toe.';
+}
+
+/**
+ * Product-only wardrobe instruction. The model wears ONLY the attached
+ * products — no invented garments, layers, or branding. Whatever the
+ * products don't cover is left in plain, neutral, unbranded basics so all
+ * attention stays on the featured items (this is how we "maximise the
+ * product"). Coverage is gender-aware and only described for zones that
+ * are actually in frame, so it never fights the crop:
+ *   - bottom picked, no top  -> torso is shown -> plain neutral bra/tank
+ *   - bottom picked, no shoes -> legs shown to the floor -> bare feet
+ *   - top-only / head-only looks crop below the chest, so no extra
+ *     coverage is mentioned at all.
+ */
+function computeProductOnlyWardrobe(
+  productLines: { role_tag: string | null; name: string | null }[],
+  gender?: 'male' | 'female' | 'unknown' | null,
+): string {
+  const zones = new Set<BodyZone>();
+  for (const p of productLines) {
+    const role = ((p.role_tag || inferRoleFromName(p.name)) || '').toLowerCase().trim();
+    const z = role ? ROLE_ZONES[role] : null;
+    if (z) z.forEach(zone => zones.add(zone));
+  }
+  const hasTop = zones.has('torso');
+  const hasBottom = zones.has('legs') || zones.has('waist');
+  const hasShoes = zones.has('feet');
+
+  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+
+  // Neutral fillers, only for zones that the framing will actually show
+  // (i.e. once there's a bottom, the torso + legs are in frame).
+  const fillers: string[] = [];
+  if (hasBottom && !hasTop) {
+    fillers.push(
+      gender === 'female'
+        ? 'a plain seamless neutral-white bra (unbranded, no logos)'
+        : gender === 'male'
+          ? 'a bare torso or a plain unbranded white tank'
+          : 'a plain unbranded neutral top',
+    );
+  }
+  if (hasBottom && !hasShoes) {
+    fillers.push('bare feet');
+  }
+
+  if (fillers.length === 0) return base;
+  return `${base} Leave everything the products don't cover in plain, neutral, unbranded basics so the products stay the sole focus: ${fillers.join(', ')}.`;
 }
 
 /**
@@ -877,6 +927,10 @@ export function buildGenerationPrompt(opts: {
   occasion?: string;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
   durationSeconds?: number;
+  /** Shopper gender — drives the neutral-coverage wording for any body
+   *  area the picked products don't cover (e.g. a plain bra vs. a bare
+   *  torso) so the model wears ONLY the products + tasteful basics. */
+  gender?: 'male' | 'female' | 'unknown' | null;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
   // Strip brand + product names from the prompt - Bytedance/Seedance's
@@ -900,6 +954,11 @@ export function buildGenerationPrompt(opts: {
   // actually picked an item. Stops Seedance from inventing pants /
   // shoes / accessories that were never selected.
   const framing = computeFraming(opts.productLines);
+  // Product-only wardrobe: the model wears ONLY the attached products.
+  // Any body area a product doesn't cover stays in plain neutral basics
+  // (bare feet, a plain unbranded bra/tank, etc.) so nothing competes
+  // with the featured products. Maximises product visibility.
+  const wardrobe = computeProductOnlyWardrobe(opts.productLines, opts.gender);
   const seconds = opts.durationSeconds ?? 5;
   // Occasion is appended at the END of each prompt variant below so
   // it modifies the scene context without disrupting the existing
@@ -939,6 +998,7 @@ export function buildGenerationPrompt(opts: {
     return [
       `Use this person's face. Make them ${buildClause}.${ageClause}`,
       productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
+      wardrobe,
       castLine,
       cameraLine,
       beatLine,
@@ -950,8 +1010,13 @@ export function buildGenerationPrompt(opts: {
   const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
 
   return [
-    `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
+    // buildClause (height + weight) so the body build — including weight —
+    // reaches Seedance on the default/lifestyle styles too, not just
+    // commercial. Previously this branch hard-coded height only and the
+    // weight clause was silently dropped.
+    `Use this person's face. Make them ${buildClause}.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
+    wardrobe,
     framing,
     `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}`,
   ].join(' ');

@@ -267,6 +267,7 @@ export default function StylePage() {
         </div>
         <div className="style-context-meta">
           {profileBits.heightLabel && <span className="style-context-chip">{profileBits.heightLabel}</span>}
+          {profileBits.weightLabel && <span className="style-context-chip">{profileBits.weightLabel}</span>}
           {profileBits.ageLabel && <span className="style-context-chip">{profileBits.ageLabel}</span>}
           {profileBits.gender !== 'unknown' && (
             <span className="style-context-chip">{profileBits.gender}</span>

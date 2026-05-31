@@ -905,7 +905,12 @@ export default function Home() {
         <SplashHost
           variant={cinematic.config.variant}
           durationMs={cinematic.config.durationMs}
-          onDone={() => setCinematic(c => ({ ...c, active: false }))}
+          onDone={() => {
+            setCinematic(c => ({ ...c, active: false }));
+            // Tell anything that was waiting for the splash to finish
+            // (e.g. ActivityRealtimeToasts) it's safe to surface now.
+            try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
+          }}
         />
       ) : firstVisit ? (
         <SplashScreen />
@@ -1129,6 +1134,8 @@ export default function Home() {
                 graphPairs={graphPairs ?? undefined}
                 popularFallback={popularFallback}
                 lookCreatives={lookCreativesForProduct}
+                allLooks={liveLooks}
+                fromLook={productOpenedFromLook}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
               />
