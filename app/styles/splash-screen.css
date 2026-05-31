@@ -46,3 +46,128 @@
   fill: currentColor;
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   CinematicSplash — 3D cascade-to-grid cold open.
+   GPU-only (CSS transforms on ≤24 tiny images inside a preserve-3d
+   stage). Tiles fly in from scattered 3D space, settle onto a grid
+   that echoes the feed, while CATALOG resolves crisp in front; the
+   whole thing cross-fades out to reveal the live feed underneath.
+   ───────────────────────────────────────────────────────────────────── */
+.cinematic-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  background: radial-gradient(120% 120% at 50% 42%, #14141a 0%, #000 70%);
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1);
+  perspective: 1100px;
+  perspective-origin: 50% 44%;
+}
+.cinematic-splash.cs-exit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cs-stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Each tile starts scattered + pushed back in Z, then eases onto its
+   landing grid cell (centered, flat). The custom props are set inline
+   per tile. */
+.cs-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(56px, 13vw, 128px);
+  aspect-ratio: 3 / 4;
+  margin-left: calc(clamp(56px, 13vw, 128px) / -2);
+  margin-top: calc(clamp(56px, 13vw, 128px) * 4 / 3 / -2);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  will-change: transform, opacity;
+  transform-style: preserve-3d;
+  animation: cs-cascade 1500ms cubic-bezier(0.18, 0.9, 0.22, 1) both;
+}
+.cs-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@keyframes cs-cascade {
+  0% {
+    left: var(--sx);
+    top: var(--sy);
+    transform: translateZ(var(--sz)) rotateX(calc(var(--srot) * 0.4)) rotateY(var(--srot)) scale(0.7);
+    opacity: 0;
+  }
+  18% { opacity: 1; }
+  62% {
+    /* brief swirl pass: overshoot slightly past center before settling */
+    left: calc((var(--gx) + 50%) / 2);
+    top: calc((var(--gy) + 50%) / 2);
+    transform: translateZ(120px) rotateY(calc(var(--srot) * 0.25)) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    left: var(--gx);
+    top: var(--gy);
+    transform: translateZ(0) rotateX(0) rotateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* CATALOG wordmark — sits in front of the swirl, resolves crisp as the
+   tiles settle, lifts slightly on reveal. */
+.cs-logo-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1), transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.cs-logo-wrap.cs-logo-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.cinematic-splash .cs-logo {
+  height: clamp(34px, 7vw, 64px);
+  width: auto;
+  color: #fff;
+  filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.6));
+}
+.cinematic-splash .cs-logo path { fill: currentColor; }
+
+/* Soft vignette to focus the eye on center where the logo lands. */
+.cs-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(75% 75% at 50% 44%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* Reduced-motion / cold-cache fallback: just the logo, gentle fade. */
+.cinematic-splash.cs-simple {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: none;
+}
+.cinematic-splash.cs-simple .cs-logo {
+  opacity: 0;
+  animation: splashIn 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+}
+
