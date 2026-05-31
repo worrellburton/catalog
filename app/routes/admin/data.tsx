@@ -4910,7 +4910,24 @@ export default function AdminData() {
                     })()}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12, color: '#475569' }}>
-                    {p.brand}
+                    {p.brand ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/brand/${encodeURIComponent(p.brand!)}`); }}
+                        title={`Open ${p.brand} brand page`}
+                        style={{
+                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                          color: '#2563eb', fontSize: 12, fontWeight: 500, textAlign: 'left',
+                          textDecoration: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none'; }}
+                      >
+                        {p.brand}
+                      </button>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    )}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12 }}>
                     {p.type ? (
