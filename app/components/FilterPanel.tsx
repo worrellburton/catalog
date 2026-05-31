@@ -19,6 +19,12 @@ interface FilterPanelProps {
   onFiltersChange: (filters: ActiveFilters) => void;
   onApply: () => void;
   onClose: () => void;
+  /** True when the shopper has body data on file (height/weight). When
+   *  false the "My Size" filter is hidden — there's nothing to match
+   *  against. Sourced from useShopperBody by BottomBar. */
+  hasSizeData?: boolean;
+  mySizeOnly?: boolean;
+  onMySizeChange?: (v: boolean) => void;
 }
 
 export function getEmptyFilters(): ActiveFilters {
@@ -73,7 +79,7 @@ const bottomsKeywords = [
   { val: 'chinos', label: 'Chinos', x: -140, y: 10 },
 ];
 
-export default function FilterPanel({ activeFilters, onFiltersChange, onApply, onClose }: FilterPanelProps) {
+export default function FilterPanel({ activeFilters, onFiltersChange, onApply, onClose, hasSizeData = false, mySizeOnly = false, onMySizeChange }: FilterPanelProps) {
   const [openSubPanel, setOpenSubPanel] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('Build Your Catalog');
   const [locationOpen, setLocationOpen] = useState(false);
@@ -123,6 +129,27 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
     <div className="filter-panel-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bottom-bar-filters" onClick={(e) => e.stopPropagation()}>
         <p className="filter-catalog-name">{displayName}</p>
+
+        {/* Personalize — My Size lives here now (was a chip in the mobile
+            search bar; moved into Filters so the bar stays clean). Only
+            renders when the shopper has body data; otherwise the toggle
+            would have nothing to match against. */}
+        {hasSizeData && onMySizeChange && (
+          <div className="filter-section">
+            <div className="filter-section-label">Personalize</div>
+            <button
+              className={`filter-option ${mySizeOnly ? 'active' : ''}`}
+              onClick={() => onMySizeChange(!mySizeOnly)}
+              aria-pressed={mySizeOnly}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: '-2px' }}>
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7" />
+                <path d="M16 3l-4 4-4-4" />
+              </svg>
+              My Size
+            </button>
+          </div>
+        )}
 
         {/* Who's it for? */}
         <div className="filter-section">

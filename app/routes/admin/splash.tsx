@@ -86,10 +86,12 @@ export default function AdminSplash() {
       {/* Concept picker — cards in a list at the top. */}
       <div className="splash-card-row">
         {/* None disables the splash. */}
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           className={`splash-card is-none ${sel === 'none' ? 'is-active' : ''}`}
           onClick={() => selectCard('none')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectCard('none'); } }}
         >
           {live === 'none' && <span className="splash-card-badge">Main</span>}
           {sel === 'none' && <span className="splash-card-tick">✓</span>}
@@ -98,21 +100,43 @@ export default function AdminSplash() {
             <div className="splash-card-name">None</div>
             <div className="splash-card-tagline">Skip the splash — boot straight to the feed.</div>
           </div>
-        </button>
+        </div>
 
         {SPLASH_REGISTRY.map(meta => (
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
             key={meta.id}
             className={`splash-card ${sel === meta.id ? 'is-active' : ''}`}
             onClick={() => selectCard(meta.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectCard(meta.id); } }}
           >
             {live === meta.id && <span className="splash-card-badge">Main</span>}
             {sel === meta.id && <span className="splash-card-tick">✓</span>}
             <div
               className="splash-card-poster"
               style={{ backgroundImage: `linear-gradient(135deg, ${meta.poster[0]}, ${meta.poster[1]})` }}
-            />
+            >
+              {/* Preview action — selects this concept AND fires the
+                  animation in the big preview pane below. Stops the click
+                  so it doesn't double-trigger the card's select handler. */}
+              <button
+                type="button"
+                className="splash-card-preview"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectCard(meta.id);
+                  // Play right away. selectCard re-arms idle + bumps
+                  // replayKey; flipping playing=true on the next tick
+                  // ensures SplashHost re-mounts and runs.
+                  setTimeout(() => playPreview(), 0);
+                }}
+                title="Preview this splash in the panel below"
+                aria-label={`Preview ${meta.name}`}
+              >
+                ▶ Preview
+              </button>
+            </div>
             <div className="splash-card-body">
               <div className="splash-card-name">
                 {meta.name}
@@ -120,7 +144,7 @@ export default function AdminSplash() {
               </div>
               <div className="splash-card-tagline">{meta.tagline}</div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 

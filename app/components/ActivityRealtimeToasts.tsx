@@ -116,7 +116,14 @@ export default function ActivityRealtimeToasts() {
   });
   useEffect(() => {
     if (splashDone) return;
-    const onDone = () => setSplashDone(true);
+    // After the splash finishes, give the shopper an extra beat to
+    // settle into the feed before the first toast pops in.
+    const SETTLE_AFTER_SPLASH_MS = 1500;
+    let openTimer = 0;
+    const onDone = () => {
+      window.clearTimeout(openTimer);
+      openTimer = window.setTimeout(() => setSplashDone(true), SETTLE_AFTER_SPLASH_MS);
+    };
     window.addEventListener('catalog:splash-done', onDone);
     // Safety net: if no splash event fires within a generous window
     // (config disabled mid-load, etc.) open the gate so toasts aren't
@@ -124,6 +131,7 @@ export default function ActivityRealtimeToasts() {
     const guard = window.setTimeout(() => setSplashDone(true), 8000);
     return () => {
       window.removeEventListener('catalog:splash-done', onDone);
+      window.clearTimeout(openTimer);
       window.clearTimeout(guard);
     };
   }, [splashDone]);
