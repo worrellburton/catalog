@@ -1020,6 +1020,20 @@ export default function AdminCatalogs() {
     return counts;
   }, [products]);
 
+  // Looks tagged per catalog — mirrors catalogProductCounts so the list
+  // table can show a Looks count next to Products without expanding each
+  // row. Universe catalogs (home / all) show totals instead (handled at
+  // the call sites) since they surface every live look regardless of tag.
+  const catalogLookCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    looks.forEach(l => {
+      (l.catalog_tags || []).forEach(tag => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [looks]);
+
   // Rank by total search volume so the catalogs shoppers actually care
   // about float to the top. Home is rendered separately above this
   // table so it's already pinned at #1; the synthetic `all` row stays
@@ -1841,6 +1855,7 @@ export default function AdminCatalogs() {
               <th>Featured</th>
               <th>Gender</th>
               <th>Products</th>
+              <th>Looks</th>
               <th>Searches</th>
               <th>Created</th>
             </tr>
@@ -1862,7 +1877,10 @@ export default function AdminCatalogs() {
               const isOpen = expanded.has(homeCatalog.id);
               const creative = creativeByCatalog[homeCatalog.id];
               const isLoadingCreative = creativeLoading.has(homeCatalog.id);
-              const homeProductCount = catalogProductCounts.get(homeCatalog.name) || 0;
+              // Home is universe — show TOTAL products/looks (every live
+              // entry), preferring the expanded payload's counts once loaded.
+              const homeProductCount = creative?.products.length ?? products.length;
+              const homeLookCount = creative?.looks.length ?? looks.length;
               return (
                 <React.Fragment key={homeCatalog.id}>
                   <tr
@@ -1940,12 +1958,19 @@ export default function AdminCatalogs() {
                         <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                       )}
                     </td>
+                    <td>
+                      {homeLookCount > 0 ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: '#f0fdf4', color: '#15803d' }}>{homeLookCount}</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
+                      )}
+                    </td>
                     <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                         <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
@@ -1981,9 +2006,16 @@ export default function AdminCatalogs() {
             {all.map(c => {
               // Use expanded-state count (includes feed-derived products) when
             // the row has already been loaded; fall back to the tag-based count.
+            const isUni = isUniverseCatalog(c.name);
             const productCount =
               creativeByCatalog[c.id]?.products.length ??
-              catalogProductCounts.get(c.name) ??
+              (isUni ? products.length : catalogProductCounts.get(c.name)) ??
+              0;
+            // Looks count: expanded payload first, else total for universe
+            // catalogs, else the tag-based count for named catalogs.
+            const lookCount =
+              creativeByCatalog[c.id]?.looks.length ??
+              (isUni ? looks.length : catalogLookCounts.get(c.name)) ??
               0;
               const isOpen = expanded.has(c.id);
               const creative = creativeByCatalog[c.id];
@@ -2093,6 +2125,22 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
+                <td>
+                  {lookCount > 0 ? (
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: '#f0fdf4',
+                      color: '#15803d',
+                    }}>
+                      {lookCount}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
+                  )}
+                </td>
                 <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
@@ -2100,7 +2148,7 @@ export default function AdminCatalogs() {
               </tr>
               {isOpen && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                  <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
                     <CatalogCreativeDropdown
                       isAll={isAllCatalog(c.name)}
                       isUniverse={isUniverseCatalog(c.name)}
