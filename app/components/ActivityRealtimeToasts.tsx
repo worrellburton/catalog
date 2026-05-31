@@ -98,6 +98,35 @@ function pushSummary(
 export default function ActivityRealtimeToasts() {
   const { user, loading } = useAuth();
   const [toasts, setToasts] = useState<ActivityToast[]>([]);
+  // Suppress all toasts until the cinematic cold-open splash finishes —
+  // engagement notifications popping over the splash animation looked
+  // chaotic. _index dispatches a 'catalog:splash-done' window event once
+  // SplashHost.onDone fires (or never, if the splash is disabled, in
+  // which case we initialise to true via the same flag SplashHost reads).
+  const [splashDone, setSplashDone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    // If the cold-open splash never armed for this tab — disabled in
+    // admin config, returning visit (sessionStorage gate), or running
+    // inside the Flutter shell — the gate is open from the start.
+    try {
+      if (sessionStorage.getItem('catalog:cold-open-done') === '1') return true;
+    } catch { /* ignore */ }
+    if (document.documentElement.dataset.shell === 'catalog-app') return true;
+    return false;
+  });
+  useEffect(() => {
+    if (splashDone) return;
+    const onDone = () => setSplashDone(true);
+    window.addEventListener('catalog:splash-done', onDone);
+    // Safety net: if no splash event fires within a generous window
+    // (config disabled mid-load, etc.) open the gate so toasts aren't
+    // lost forever.
+    const guard = window.setTimeout(() => setSplashDone(true), 8000);
+    return () => {
+      window.removeEventListener('catalog:splash-done', onDone);
+      window.clearTimeout(guard);
+    };
+  }, [splashDone]);
 
   const pushToast = useCallback((kind: ActivityKind, message: string, lifespanMs = TOAST_LIFESPAN_MS) => {
     if (!message) return;
@@ -391,6 +420,11 @@ export default function ActivityRealtimeToasts() {
     navigate('/earnings');
   }, [navigate]);
 
+  // Wait for the cinematic splash to finish before showing any
+  // engagement toasts (we still collect them in the background so the
+  // catch-up queue and realtime listeners stay armed — only the visible
+  // surface is gated).
+  if (!splashDone) return null;
   if (toasts.length === 0) return null;
   return (
     <div className="activity-toasts" role="status" aria-live="polite">

@@ -641,30 +641,32 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                       </svg>
                     </div>
                   ))}
-                  {/* More from this creator — sits at the bottom of the
-                      products list so the shopper can keep scrolling
-                      into more of the same creator's work without
-                      hopping to the About tab. */}
-                  {moreFromCreatorEnabled && aboutCreatorStrip.length > 0 && (
-                    <div className="look-creator-more-section" style={{ marginTop: 24 }}>
-                      <h3 className="look-feed-heading">More from this creator</h3>
-                      <div className="look-creator-more-scroll-wrap">
-                        <div className="look-creator-more-scroll">
-                          {aboutCreatorStrip.map(fl => (
-                            <LookCard
-                              key={`products-more-creator-${fl.id}`}
-                              look={fl}
-                              className="look-card"
-                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
-                              onOpenCreator={onOpenCreator}
-                              onCreateCatalog={onCreateCatalog}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
+              )}
+
+              {/* "More from this creator" is its own dedicated section
+                  (previously buried at the bottom of the Products tab).
+                  Rendered outside the tab switcher so it's visible under
+                  both tabs — keeps the same-creator browse path one
+                  scroll away no matter what the shopper opened. */}
+              {moreFromCreatorEnabled && aboutCreatorStrip.length > 0 && (
+                <section className="look-creator-more-section" aria-label="More from this creator">
+                  <h3 className="look-feed-heading">More from this creator</h3>
+                  <div className="look-creator-more-scroll-wrap">
+                    <div className="look-creator-more-scroll">
+                      {aboutCreatorStrip.map(fl => (
+                        <LookCard
+                          key={`creator-more-${fl.id}`}
+                          look={fl}
+                          className="look-card"
+                          onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
+                          onOpenCreator={onOpenCreator}
+                          onCreateCatalog={onCreateCatalog}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </section>
               )}
 
               {activeTab === 'creator' && (
