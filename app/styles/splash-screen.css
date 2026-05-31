@@ -243,6 +243,22 @@
   height: 96px; position: relative; overflow: hidden;
   background-size: 200% 200%; animation: card-drift 7s ease-in-out infinite;
 }
+/* Per-card Preview action: hidden until hover/focus on the card, sits in
+   the bottom-right of the poster so it doesn't fight the Main/✓ chips. */
+.splash-card-preview {
+  position: absolute; bottom: 8px; right: 8px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; font-size: 11px; font-weight: 700;
+  color: #fff; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 999px; cursor: pointer;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  opacity: 0; transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.splash-card:hover .splash-card-preview,
+.splash-card:focus-within .splash-card-preview,
+.splash-card.is-active .splash-card-preview { opacity: 1; transform: translateY(0); }
+.splash-card-preview:hover { background: rgba(0,0,0,0.78); }
 @keyframes card-drift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 .splash-card-body { padding: 9px 11px 11px; background: #fff; color: #111; }
 .splash-card-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
