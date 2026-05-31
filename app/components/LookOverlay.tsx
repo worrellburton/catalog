@@ -72,6 +72,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
+  /** The whole info column on mobile — needs its scrollTop checked when a
+   *  swipe-down begins, so we only intercept the gesture as a dismiss
+   *  when the column is already at the top. */
+  const infoColRef = useRef<HTMLDivElement>(null);
+  /** True when the touch sequence currently in flight is being treated
+   *  as a dismiss-pull (we'll translate the panel) instead of normal
+   *  vertical scroll (we leave it alone). */
+  const dragActiveRef = useRef(false);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -339,12 +347,30 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   }, [touchStartY]);
 
   const handleTouchEnd = useCallback(() => {
+    dragActiveRef.current = false;
     if (translateY > 100) {
       handleClose();
     } else {
       setTranslateY(0);
     }
   }, [translateY, handleClose]);
+
+  // Column-scoped swipe-down: only arms when the info column is already
+  // scrolled to its top, so a normal vertical scroll inside content
+  // never gets hijacked into a dismiss-pull. Mirrors how ProductPage
+  // handles its own pull-to-close.
+  const handleColumnTouchStart = useCallback((e: React.TouchEvent) => {
+    const atTop = (infoColRef.current?.scrollTop ?? 0) <= 0;
+    dragActiveRef.current = atTop;
+    if (atTop) setTouchStartY(e.touches[0].clientY);
+  }, []);
+  const handleColumnTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragActiveRef.current) return;
+    const dy = e.touches[0].clientY - touchStartY;
+    // Upward swipe → cede control back to native scroll.
+    if (dy <= 0) { dragActiveRef.current = false; setTranslateY(0); return; }
+    setTranslateY(dy);
+  }, [touchStartY]);
 
   const handleToggleLookBookmark = () => {
     const wasBookmarked = lookBookmarked;
@@ -403,12 +429,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </svg>
             </button>
 
-            {/* Mobile-only: back + bookmark overlaid on top of the video (same
-                pattern as ProductPage .pd-back / .pd-bookmark-btn) */}
+            {/* Mobile-only: dismiss + bookmark overlaid on top of the video.
+                The chevron points DOWN (instead of left/back) since the
+                overlay also dismisses with a swipe-down — the icon
+                reinforces the same gesture. */}
             <div className="look-video-overlay-btns">
-              <button className="look-video-back-btn" onClick={handleClose} aria-label="Back">
+              <button className="look-video-back-btn" onClick={handleClose} aria-label="Close">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6"/>
+                  <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </button>
               <button
@@ -490,8 +518,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
 
           {/* ── RIGHT: Info panel (40%) ── */}
-          <div className="look-info-col" style={panelStyle}>
-            {/* Mobile-only: drag handle */}
+          {/* Mobile parity with ProductPage: the whole info column accepts
+              the swipe-down dismiss, but ONLY when the column is already
+              scrolled to the top — otherwise a normal downward scroll
+              would drag the panel instead of scrolling content. */}
+          <div
+            ref={infoColRef}
+            className="look-info-col"
+            style={panelStyle}
+            onTouchStart={handleColumnTouchStart}
+            onTouchMove={handleColumnTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Mobile-only: drag handle (visual affordance for the
+                gesture the whole column accepts at scroll-top). */}
             <div
               className="look-drag-strip"
               onTouchStart={handleTouchStart}
@@ -504,9 +544,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Desktop-only top bar: bookmark button. On mobile these move
                 to look-video-overlay-btns on top of the video. */}
             <div className="look-info-topbar">
-              <button className="look-back-btn-mobile" onClick={handleClose} aria-label="Back">
+              <button className="look-back-btn-mobile" onClick={handleClose} aria-label="Close">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6"/>
+                  <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </button>
               <button
