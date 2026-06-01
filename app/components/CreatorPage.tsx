@@ -85,6 +85,19 @@ export default function CreatorPage({
   const [userLooks, setUserLooks] = useState<Look[]>([]);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(!!userId);
+  // The creator's chosen catalog theme — applied for ALL viewers. null
+  // until resolved; treated as the default dark.
+  const [catalogTheme, setCatalogTheme] = useState<'light' | 'dark' | null>(null);
+
+  // Resolve the creator's catalog theme by handle (public read).
+  useEffect(() => {
+    let cancelled = false;
+    if (!creatorName) return;
+    import('~/services/catalog-theme').then(({ getCreatorTheme }) => {
+      getCreatorTheme(creatorName).then(t => { if (!cancelled) setCatalogTheme(t); });
+    });
+    return () => { cancelled = true; };
+  }, [creatorName]);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -416,7 +429,13 @@ export default function CreatorPage({
   // Initial-letter avatar fallback when profile.avatar_url is missing.
   const initial = (displayName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
+  // The creator's chosen theme applies for everyone. Light catalogs wrap
+  // the page in `.light-mode` so the global descendant rules
+  // (.light-mode .creator-*) recolor it; dark (default) renders as-is.
+  const wrapClass = catalogTheme === 'light' ? 'creator-theme-wrap light-mode' : undefined;
+
   return (
+    <div className={wrapClass}>
     <div className="creator-page">
       <button className="creator-back" onClick={onClose}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -586,6 +605,7 @@ export default function CreatorPage({
           </div>
         )
       )}
+    </div>
     </div>
   );
 }
