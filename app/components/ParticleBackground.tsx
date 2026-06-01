@@ -5,6 +5,13 @@ import { useEffect, useRef } from 'react';
 // so it reads as ambient texture, not a focal effect. Auto-pauses when the
 // tab is hidden and honours prefers-reduced-motion (renders one static frame).
 
+interface ParticleBackgroundProps {
+  /** Multiplier on each particle's drift speed. 1 = the default ambient
+   *  pace used on the home hero / sign-in gate. >1 reads as "searching the
+   *  world" (used by SearchCeremony, ~3-4×). */
+  speed?: number;
+}
+
 const PARTICLE_COUNT = 180;
 
 const VS = /* glsl */ `
@@ -74,8 +81,10 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
-export default function ParticleBackground() {
+export default function ParticleBackground({ speed = 1 }: ParticleBackgroundProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -142,15 +151,22 @@ export default function ParticleBackground() {
     let running = true;
     const start = performance.now();
 
+    // Driver: scale wall-clock by the live speed ref so a parent can speed
+    // the field up mid-animation (SearchCeremony → "searching the world").
+    let accum = 0;
+    let last = performance.now();
     const frame = () => {
       if (!running) return;
-      const t = (performance.now() - start) / 1000;
+      const now = performance.now();
+      accum += ((now - last) / 1000) * speedRef.current;
+      last = now;
       gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.uniform1f(uTime, reduced ? 0 : t);
+      gl.uniform1f(uTime, reduced ? 0 : accum);
       gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
       if (!reduced) raf = requestAnimationFrame(frame);
     };
     frame();
+    void start;
 
     const onVisibility = () => {
       if (document.hidden) {
