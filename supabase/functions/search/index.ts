@@ -83,11 +83,24 @@ Deno.serve(async (req: Request) => {
     k?: number;
     gender?: string | null;
     exclude_ids?: string[];
+    warmup?: boolean;
   };
   try {
     body = await req.json();
   } catch {
     return json({ error: 'invalid JSON body' }, 400);
+  }
+
+  // Keep-warm ping (pg_cron): load the gte-small model into the isolate so the
+  // first real query doesn't pay the cold-start (~1.2s → ~370ms). Must run an
+  // actual embed — getSession() alone lazy-inits but doesn't load weights.
+  if (body.warmup === true) {
+    try {
+      await getSession().run('warm', { mean_pool: true, normalize: true });
+      return json({ ok: true, warm: true, took_ms: Date.now() - startedAt });
+    } catch (err: any) {
+      return json({ ok: false, warm: false, detail: err?.message ?? String(err) }, 500);
+    }
   }
 
   const query = (body.query ?? '').trim();
