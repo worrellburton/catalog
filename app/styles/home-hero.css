@@ -13,7 +13,12 @@
   flex-direction: column;
   background:
     radial-gradient(120% 90% at 50% 14%, #15161c 0%, #0a0a0c 52%, #000 100%);
-  padding: 0 20px calc(40px + env(safe-area-inset-bottom));
+  /* The fixed header (logo / wallet / avatar) owns the top, and the fixed
+     search bar floats at 46vh-from-bottom. Pad past both — top clears the
+     header, bottom reserves the bar's zone — so the spark + headline
+     auto-center in the band BETWEEN them. Result: header → headline → bar
+     fall into one evenly-spaced, vertically-centered column with no overlap. */
+  padding: calc(env(safe-area-inset-top, 0px) + 72px) 20px 54vh;
   text-align: center;
   overflow: hidden;
 }
@@ -23,9 +28,6 @@
   flex-direction: column;
   align-items: center;
   gap: 22px;
-  /* Reserve room below the centered spark+headline for the search bar
-     so spark + headline + bar read as ONE vertically-centered group. */
-  margin-bottom: 16vh;
 }
 
 /* Breathing brand spark. */
@@ -357,6 +359,9 @@
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
     bottom: 50vh;
   }
+  /* Bar sits a touch higher on desktop (50vh), so reserve a bit more below
+     to keep the spark + headline centered in the band above it. */
+  .sfh { padding-bottom: 58vh; }
 }
 
 /* When the catalog-pills cloud comes up (search focused), fade the

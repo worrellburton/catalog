@@ -763,6 +763,26 @@
   background: rgba(220, 220, 225, 0.78);
 }
 
+/* The open search pill is dark glass on every breakpoint (the mobile rule
+   below otherwise paints the input #111 for the white resting pill — which
+   is invisible on the dark sheet). Force white input text + placeholder
+   whenever the sheet is open, regardless of hero/scroll/mobile state. Light
+   mode flips the open pill to light glass, so its text goes dark instead. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #fff;
+}
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #111;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
 /* Circular close button — same frosted glass treatment as the pill. */
 .bottom-search-close {
   flex: 0 0 auto;
