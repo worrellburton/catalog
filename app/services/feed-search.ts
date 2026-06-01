@@ -49,13 +49,15 @@ function semanticToProductAd(c: SemanticCreative): ProductAd {
     completed_at:     null,
     updated_at:       null,
     product: {
-      id:           c.product_id,
-      name:         c.product_name,
-      brand:        c.product_brand,
-      price:        c.product_price,
-      image_url:    c.product_image_url,
-      url:          c.product_url,
-      catalog_tags: null,
+      id:                c.product_id,
+      name:              c.product_name,
+      brand:             c.product_brand,
+      price:             c.product_price,
+      image_url:         c.product_image_url,
+      primary_image_url: c.thumbnail_url,
+      primary_video_url: c.video_url,
+      url:               c.product_url,
+      catalog_tags:      null,
     },
   };
 }

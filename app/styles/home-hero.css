@@ -290,7 +290,9 @@
   /* Reposition the center rail to a horizontal row pinned at the top. */
   .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
     position: fixed !important;
-    top: calc(8px + env(safe-area-inset-top)) !important;
+    /* Its own row BELOW the header (logo/bookmark/profile) so the avatars
+       never collide with that UI on a narrow phone. */
+    top: calc(54px + env(safe-area-inset-top)) !important;
     bottom: auto !important;
     left: 0; right: 0;
     transform: none !important;
@@ -319,4 +321,23 @@
     pointer-events: none !important;
     transform: translateY(-12px) !important;
   }
+}
+
+/* Desktop: dock the centered search bar tighter under the headline so the
+   two read as one centered group (the wide/short desktop viewport made
+   46vh feel disconnected from the top-anchored title). */
+@media (min-width: 769px) {
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: 50vh;
+  }
+}
+
+/* When the catalog-pills cloud comes up (search focused), fade the
+   "Scroll to find amazing things" cue out so the two don't overlap. */
+.sfh-scroll-hint { transition: opacity 0.3s ease, transform 0.3s ease; }
+.app-root.home-hero:has(.bottom-bar.search-open) .sfh-scroll-hint {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
 }

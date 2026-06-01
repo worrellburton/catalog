@@ -221,15 +221,20 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [heroMode]);
 
-  const handleHeroSearch = useCallback((q: string) => {
-    const query = q.trim();
-    if (!query) return;
-    setSearchQuery(query.toLowerCase());
-    setCatalogName(toCatalogName(query));
-    bumpSearchTrigger();
-    setCeremony({ active: true, query });
+  // Any committed search while on the hero (bottom bar Enter, a catalog
+  // pill, the type-anywhere overlay, or a deep-linked ?q=) bumps
+  // searchTrigger — that's our single universal cue to play the ceremony,
+  // then reveal results. Live typing doesn't bump the trigger, so the
+  // hero stays put while the shopper types.
+  const prevTriggerRef = useRef(searchTrigger);
+  useEffect(() => {
+    if (searchTrigger === prevTriggerRef.current) return;
+    prevTriggerRef.current = searchTrigger;
+    if (heroMode && searchQuery.trim() && !ceremony.active) {
+      setCeremony({ active: true, query: searchQuery });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bumpSearchTrigger]);
+  }, [searchTrigger]);
 
   const handleCeremonyDone = useCallback(() => {
     setCeremony({ active: false, query: '' });
@@ -849,15 +854,11 @@ export default function Home() {
     setCatalogName(q.trim() ? toCatalogName(q) : 'all');
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
-    // On the home hero, a submitted search plays the ceremony then reveals
-    // results. Off the hero (already browsing the feed), it's a plain
-    // in-feed search.
-    if (heroMode && q.trim()) { handleHeroSearch(q); return; }
     setSearchQuery(q.toLowerCase());
     setCatalogName(toCatalogName(q));
     bumpSearchTrigger();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heroMode, handleHeroSearch]);
+    // The searchTrigger effect plays the ceremony when on the hero.
+  }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
     setSelectedProduct(null);
@@ -1032,7 +1033,7 @@ export default function Home() {
           {/* New home entry: the ask hero sits above the feed; scrolling
               down reveals the catalog. Hidden once a search resolves into
               results (heroMode flips off). */}
-          {heroMode && (
+          {heroMode && !ceremony.active && (
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
