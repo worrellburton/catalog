@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "catalog-webapp",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5180", "--strictPort"],
+      "runtimeExecutable": "/Users/samirmaikap/.nvm/versions/node/v22.19.0/bin/node",
+      "runtimeArgs": ["node_modules/@remix-run/dev/dist/cli.js", "vite:dev", "--port", "5180", "--strictPort"],
       "port": 5180,
       "autoPort": false
     }
