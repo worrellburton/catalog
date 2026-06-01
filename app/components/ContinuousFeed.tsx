@@ -16,6 +16,7 @@ import { lookFitScore } from '~/services/size-match';
 import { useHiddenLooks, useHiddenProductKeys, hideLookId } from '~/hooks/useHiddenLooks';
 import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
+import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed';
 import { useSearch } from '~/hooks/useSearch';
 import { director } from '~/services/video-playback-director';
 
@@ -239,6 +240,19 @@ function ContinuousFeed({
     return off;
   }, []);
 
+  // Per-user "seen" set — drives hiding already-seen thumbnails on the
+  // default home feed (re-login skips what you've seen; once you've seen
+  // everything it resets). Loaded once per mount; empty for guests, so
+  // they always see the full feed. Search / catalog-filtered views are
+  // never seen-filtered (the shopper asked for those exact results).
+  const [seenKeys, setSeenKeys] = useState<Set<SeenKey>>(() => new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getSeenKeys().then(set => { if (!cancelled) setSeenKeys(set); });
+    return () => { cancelled = true; };
+    // Re-pull when the signed-in user changes (login/logout).
+  }, [user?.id]);
+
   const filteredLooks = useMemo(() => {
     // Gender filter: 'men' includes 'unisex' looks too (and vice-versa)
     // so catalog-wide staples surface for everyone regardless of the
@@ -385,8 +399,9 @@ function ContinuousFeed({
     const q = committedQuery.trim();
     if (q.length >= 3 && searchMatchedLooks.length > 0) return searchMatchedLooks;
     if (q.length >= 3) return [];
-    return fitRankedLooks;
-  }, [fitRankedLooks, searchMatchedLooks, committedQuery]);
+    // Default home feed → hide already-seen looks (reset when all seen).
+    return partitionUnseen(fitRankedLooks, seenKeys, l => l.uuid ? `look:${l.uuid}` : null);
+  }, [fitRankedLooks, searchMatchedLooks, committedQuery, seenKeys]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],
@@ -762,7 +777,10 @@ function ContinuousFeed({
       return out;
     }
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
-    if (tagMatch.length === 0) return semanticallyOrderedCreatives;
+    // Default home feed (no typed/tag match) → hide already-seen products.
+    if (tagMatch.length === 0) {
+      return partitionUnseen(semanticallyOrderedCreatives, seenKeys, c => c.product_id ? `product:${c.product_id}` : null);
+    }
 
     // Tier-1 found typed products - return those exclusively.
     // Appending semanticallyOrderedCreatives would inject off-type semantic
@@ -777,7 +795,7 @@ function ContinuousFeed({
       out.push(c);
     }
     return out;
-  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery]);
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
