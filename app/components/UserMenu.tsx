@@ -78,6 +78,11 @@ function UserMenu({
   onChangeCatalogGender,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  // Mobile-only: opens a full-screen Account page instead of the popout.
+  // The origin (avatar's center, in viewport coords) drives the clip-path
+  // reveal animation so the page appears to grow out of the tapped avatar.
+  const [pageOpen, setPageOpen] = useState(false);
+  const [pageOrigin, setPageOrigin] = useState<{ x: number; y: number } | null>(null);
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -87,7 +92,51 @@ function UserMenu({
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [dotsConnected, setDotsConnected] = useState<boolean | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
+
+  // Decide which surface the trigger should open: full-page on mobile,
+  // the classic popout on desktop. Capture the avatar's center at click
+  // time so the page can reveal outward from that exact point.
+  const handleTriggerClick = useCallback(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOpen(false);
+      setPageOpen(true);
+    } else {
+      setOpen(o => !o);
+    }
+  }, []);
+
+  // Close the page, but let the close animation play first (reverse of
+  // the reveal) before unmounting.
+  const [pageClosing, setPageClosing] = useState(false);
+  const closePage = useCallback(() => {
+    setPageClosing(true);
+    window.setTimeout(() => {
+      setPageOpen(false);
+      setPageClosing(false);
+    }, 380);
+  }, []);
+
+  // When an action runs from the page, close the page first (with its
+  // animation), then dispatch the action — same pattern as runTile, just
+  // routed through the page lifecycle.
+  const runPageItem = useCallback((action: () => void) => () => {
+    closePage();
+    setCooldown(true);
+    window.setTimeout(() => setCooldown(false), 420);
+    window.setTimeout(action, 380);
+  }, [closePage]);
+
+  // Escape closes the page too.
+  useEffect(() => {
+    if (!pageOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closePage(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pageOpen, closePage]);
 
   const runItem = useCallback((action: () => void) => (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -120,7 +169,7 @@ function UserMenu({
 
   // Fetch wallet balance + Dots connection status when menu opens
   useEffect(() => {
-    if (!open || !user?.id) return;
+    if ((!open && !pageOpen) || !user?.id) return;
     let cancelled = false;
     // Check if Dots is connected
     supabase
@@ -140,7 +189,7 @@ function UserMenu({
         }
       }, () => { if (!cancelled) setDotsConnected(false); });
     return () => { cancelled = true; };
-  }, [open, user?.id]);
+  }, [open, pageOpen, user?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -423,9 +472,117 @@ function UserMenu({
           </div>
         </>
       )}
+
+      {/* Mobile full-page Account — replaces the popout on ≤768px. The reveal
+          uses a clip-path circle that grows from the avatar's tapped position
+          to cover the screen, and content staggers in after the wipe. */}
+      {pageOpen && (
+        <div
+          className={`user-menu-page ${pageClosing ? 'is-closing' : 'is-open'}`}
+          style={pageOrigin ? { '--ump-x': `${pageOrigin.x}px`, '--ump-y': `${pageOrigin.y}px` } as React.CSSProperties : undefined}
+          role="dialog"
+          aria-label="Account"
+        >
+          <header className="user-menu-page-top">
+            <button className="user-menu-page-back" onClick={closePage} aria-label="Back">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            </button>
+            <h1 className="user-menu-page-title">Account</h1>
+            <span style={{ width: 22 }} aria-hidden="true" />
+          </header>
+
+          <div className="user-menu-page-body">
+            {user && (
+              <button
+                type="button"
+                className="user-menu-page-hero"
+                onClick={onOpenProfile ? runPageItem(onOpenProfile) : undefined}
+              >
+                <div className="user-menu-page-avatar-wrap">
+                  {renderedAvatarUrl ? (
+                    <img src={renderedAvatarUrl} alt="" className="user-menu-page-avatar" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="user-menu-page-avatar user-menu-page-avatar--initial" aria-hidden="true">
+                      {(user.displayName?.trim() || user.email?.trim() || 'U').charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="user-menu-page-identity">
+                  {user.displayName && <span className="user-menu-page-name">{user.displayName}</span>}
+                  {user.email && <span className="user-menu-page-email">{user.email}</span>}
+                  {user.role && <span className={`user-menu-role user-menu-role-${user.role}`} style={{ marginTop: 4 }}>{USER_ROLE_LABELS[user.role]}</span>}
+                </div>
+                {onOpenProfile && (
+                  <svg className="user-menu-page-hero-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                )}
+              </button>
+            )}
+
+            <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/generate'))}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Try it on</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/style'))}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
+              <span>Style</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+
+            <PageRow icon="bookmark" label="Bookmarks" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
+            {onOpenMyLooks && (
+              <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
+            )}
+            {onOpenWallet && dotsConnected === false && (
+              <PageRow icon="star" label="Setup Earnings" onClick={runPageItem(onOpenWallet)} />
+            )}
+            {onOpenWallet && dotsConnected === true && (
+              <PageRow icon="wallet" label="Wallet" trailing={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : undefined} onClick={runPageItem(onOpenWallet)} />
+            )}
+            {isSuperAdmin && (
+              <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
+            )}
+            {isAdmin && (
+              <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
+            )}
+            {onChangeCatalogGender && (
+              <div className="user-menu-page-row user-menu-page-row--segmented">
+                <span className="user-menu-page-row-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                </span>
+                <span className="user-menu-page-row-label">Shopping for</span>
+                <div className="user-menu-segmented" style={{ marginLeft: 'auto' }}>
+                  <button className={`user-menu-segmented-btn ${activeFilter === 'men' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('men')}>Men</button>
+                  <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
+                </div>
+              </div>
+            )}
+            {isSuperAdmin && (
+              <div className={`user-menu-page-row user-menu-page-row--toggle ${deleteMode ? 'is-on' : ''}`} onClick={() => setDeleteModeState(!deleteMode)} role="switch" aria-checked={deleteMode}>
+                <span className="user-menu-page-row-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                </span>
+                <span className="user-menu-page-row-label">Delete mode</span>
+                <span className={`user-menu-switch ${deleteMode ? 'is-on' : ''}`} aria-hidden="true" style={{ marginLeft: 'auto' }}>
+                  <span className="user-menu-switch-thumb" />
+                </span>
+              </div>
+            )}
+            {onOpenDecks && (
+              <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
+            )}
+
+            {onLogout && (
+              <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
+            )}
+          </div>
+        </div>
+      )}
+
       <button
-        className={`user-menu-trigger ${open ? 'active' : ''}${renderedAvatarUrl ? ' has-avatar' : (user ? ' has-initial' : '')}`}
-        onClick={() => setOpen(o => !o)}
+        ref={triggerRef}
+        className={`user-menu-trigger ${open || pageOpen ? 'active' : ''}${renderedAvatarUrl ? ' has-avatar' : (user ? ' has-initial' : '')}`}
+        onClick={handleTriggerClick}
         aria-label="Account menu"
       >
         {renderedAvatarUrl ? (
@@ -447,6 +604,38 @@ function UserMenu({
         )}
       </button>
     </div>
+  );
+}
+
+// Reusable row for the mobile Account page. The icon is keyed by name so
+// the row component stays compact; the SVGs are inline so we don't drag in
+// an icon library.
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout';
+function PageRow({ icon, label, onClick, badge, trailing, variant }: {
+  icon: PageRowIcon;
+  label: string;
+  onClick: () => void;
+  badge?: number;
+  trailing?: string;
+  variant?: 'danger';
+}) {
+  return (
+    <button type="button" className={`user-menu-page-row ${variant === 'danger' ? 'is-danger' : ''}`} onClick={onClick}>
+      <span className="user-menu-page-row-icon" aria-hidden="true">
+        {icon === 'bookmark' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>}
+        {icon === 'grid' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
+        {icon === 'star' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
+        {icon === 'wallet' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}
+        {icon === 'shield' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>}
+        {icon === 'import' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
+        {icon === 'deck' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>}
+        {icon === 'logout' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+      </span>
+      <span className="user-menu-page-row-label">{label}</span>
+      {badge != null && <span className="user-menu-page-row-badge">{badge}</span>}
+      {trailing && <span className="user-menu-page-row-trailing">{trailing}</span>}
+      <svg className="user-menu-page-row-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
   );
 }
 
