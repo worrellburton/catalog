@@ -622,13 +622,48 @@
    two read as one centered group (the wide/short desktop viewport made
    46vh feel disconnected from the top-anchored title). */
 @media (min-width: 769px) {
+  /* Desktop: bar sits at 42vh-from-bottom (≈ screen center). Anchor the
+     spark + headline to the bottom of the hero box (flex-end) directly
+     above it, so logo + headline + bar read as ONE vertically-centered
+     cluster — same treatment as mobile. */
+  .sfh {
+    /* min-height < 100vh so the top of the catalog feed peeks at the bottom
+       edge, inviting the scroll. flex-end + padding-bottom parks the
+       spark+headline just above the viewport-fixed bar (bottom: 44vh →
+       top ≈ 52.5vh); headline bottom lands ~50vh so the trio is tight and
+       centered around ~45vh. */
+    min-height: 90vh;
+    justify-content: flex-end;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
+    padding-bottom: 40vh;
+  }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    bottom: 50vh;
+    bottom: 44vh;
   }
-  /* Bar sits a touch higher on desktop (50vh), so reserve a bit more below
-     to keep the spark + headline centered in the band above it. */
-  .sfh { padding-bottom: 58vh; }
+
+  /* Creator profile pictures on desktop too: show the glowing stories rail
+     in the header center (where the avatar stacks used to sit), hide the
+     overlapping stacks. Compact — no name captions — so it fits the header
+     row. */
+  .header-center .follow-rail-wrap--center .follow-rail,
+  .header-center .follow-rail-wrap--center .follow-rail-separator {
+    display: none !important;
+  }
+  .header-center .follow-rail-wrap--center .follow-stories-rail {
+    display: flex;
+    width: auto;
+    max-width: min(520px, 40vw);
+    gap: 10px;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .header-center .follow-rail-wrap--center .follow-stories-rail::-webkit-scrollbar { display: none; }
+  /* Header is a fixed-height row — shrink circles + drop the captions. */
+  .header-center .follow-story { width: auto; gap: 0; }
+  .header-center .follow-story-ring { width: 40px; height: 40px; padding: 2px; }
+  .header-center .follow-story-name { display: none; }
 }
 
 /* When the catalog-pills cloud comes up (search focused), fade the
