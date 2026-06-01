@@ -405,15 +405,31 @@ class VideoPlaybackDirector {
 
       // (Re-)configure the element.
       if (slot.el.src !== entry.videoUrl) {
+        // STROBE FIX: a recycled pooled <video> sits at z-index 2, above the
+        // card's poster <img>. Setting a new src + load() repaints the
+        // element black/empty until the first frame of the NEW clip decodes
+        // — flashing over the poster. Hide the element (opacity 0) so the
+        // poster shows through, and fade it back in only once the new src
+        // actually has a frame (loadeddata/playing). Guarded by the target
+        // URL so a listener from a prior assignment can't reveal a
+        // since-recycled element.
+        const targetUrl = entry.videoUrl;
+        slot.el.style.opacity = '0';
         slot.el.src = entry.videoUrl;
         slot.el.preload = 'auto';
         // Explicitly call load() so the browser starts buffering immediately.
-        // Without this, setting src alone may not kick the network request
-        // until play() is called, causing play() to pend until data arrives.
         try { slot.el.load(); } catch { /* ignore */ }
+        const reveal = () => {
+          if (slot.el.currentSrc === targetUrl || slot.el.src === targetUrl) {
+            slot.el.style.opacity = '1';
+          }
+        };
+        slot.el.addEventListener('loadeddata', reveal, { once: true });
+        slot.el.addEventListener('playing', reveal, { once: true });
       } else {
-        // Same src (pool reuse) — make sure preload is still set to auto.
+        // Same src (pool reuse) — already has frames, show immediately.
         slot.el.preload = 'auto';
+        slot.el.style.opacity = '1';
       }
       const poster = entry.posterUrl;
       if (poster && slot.el.getAttribute('poster') !== poster) {
@@ -427,6 +443,7 @@ class VideoPlaybackDirector {
         objectFit: 'cover',
         zIndex: '2',
         display: 'block',
+        transition: 'opacity 0.22s ease',
       });
 
       slot.assignedTo = id;

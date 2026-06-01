@@ -230,6 +230,15 @@ export default function Home() {
     import('~/services/referrals').then(({ redeemStoredRef }) => { void redeemStoredRef(); });
   }, [user]);
 
+  // Pause the site singleton particle field whenever the feed is the focus
+  // (hero dismissed or scrolled past) — it's fully covered there, so drawing
+  // it is wasted GPU that competes with video decode on scroll.
+  useEffect(() => {
+    import('~/services/particles').then(({ particleControls }) => {
+      particleControls.paused = !heroMode || heroScrolled;
+    });
+  }, [heroMode, heroScrolled]);
+
   // Reveal the bottom search bar once the shopper scrolls down off the
   // hero into the catalog (while heroMode is the active screen).
   useEffect(() => {

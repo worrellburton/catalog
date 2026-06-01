@@ -134,11 +134,32 @@ function canBackgroundPreload(): boolean {
  *  would double the bytes a scrolling user spends; we'd rather warm
  *  the cache for "the first frame is ready" and let the rest stream
  *  on demand once the user taps in. */
+// Concurrency cap: never have more than this many prewarm fetches in
+// flight at once, so a fast scroll past 20 cards can't open 20 sockets
+// that starve the clip the user is actually watching. Excess URLs queue
+// and start as earlier ones finish.
+const MAX_PREFETCH_CONCURRENCY = 4;
+let prefetchInFlight = 0;
+const prefetchQueue: string[] = [];
+
+function pumpPrefetchQueue(): void {
+  while (prefetchInFlight < MAX_PREFETCH_CONCURRENCY && prefetchQueue.length > 0) {
+    const next = prefetchQueue.shift()!;
+    startPrefetch(next);
+  }
+}
+
 export function prefetchVideoBytes(url: string | null | undefined): void {
   if (!url) return;
   if (preloadedHighResUrls.has(url)) return;
   if (!canBackgroundPreload()) return;
   preloadedHighResUrls.add(url);
+  prefetchQueue.push(url);
+  pumpPrefetchQueue();
+}
+
+function startPrefetch(url: string): void {
+  prefetchInFlight++;
   const ctrl = new AbortController();
   preloadAbortControllers.set(url, ctrl);
   // Range request grabs just enough to make first-frame decode instant.
@@ -176,7 +197,11 @@ export function prefetchVideoBytes(url: string | null | undefined): void {
       }
     })
     .catch(() => { /* aborted or offline - nothing to do */ })
-    .finally(() => { preloadAbortControllers.delete(url); });
+    .finally(() => {
+      preloadAbortControllers.delete(url);
+      prefetchInFlight--;
+      pumpPrefetchQueue();
+    });
 }
 
 /** Cancels any pending high-res preload. Use on route change so the
