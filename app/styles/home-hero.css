@@ -315,27 +315,28 @@
 /* ── Mobile: following / followers profile icons at the TOP of the hero,
    not on the left/right edges — and gone once you scroll into the feed. */
 @media (max-width: 768px) {
-  /* On mobile the top rail shows ONLY the creators you follow — hide the
-     "followers" row + the separator dot between them. Tapping the
-     following row opens the full Following list page (wired in
-     FollowingRail → onOpenFollowingList). */
-  .follow-rail-wrap--center .follow-rail--followers,
+  /* On mobile the top rail becomes the Instagram-stories scroll of creators
+     you follow — hide the desktop overlapping-avatar stacks (both following
+     AND followers) + the separator, and reveal the stories rail. */
+  .follow-rail-wrap--center .follow-rail,
   .follow-rail-wrap--center .follow-rail-separator {
     display: none !important;
   }
+  .follow-rail-wrap--center .follow-stories-rail {
+    display: flex;
+  }
 
-  /* Reposition the center rail to a horizontal row pinned at the top. */
+  /* Reposition the center rail to a full-width row pinned at the top, BELOW
+     the header (logo/bookmark/profile), so the stories rail can scroll edge
+     to edge without colliding with that UI. */
   .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
     position: fixed !important;
-    /* Its own row BELOW the header (logo/bookmark/profile) so the avatars
-       never collide with that UI on a narrow phone. */
-    top: calc(54px + env(safe-area-inset-top)) !important;
+    top: calc(50px + env(safe-area-inset-top)) !important;
     bottom: auto !important;
     left: 0; right: 0;
     transform: none !important;
-    justify-content: center !important;
-    gap: 18px;
-    padding: 0 12px;
+    display: block !important;
+    padding: 0;
     transition: opacity 0.35s ease, transform 0.35s ease;
   }
   /* Lay each group out horizontally (overlapping avatars in a row). */
@@ -358,6 +359,106 @@
     pointer-events: none !important;
     transform: translateY(-12px) !important;
   }
+
+  /* The stories rail is taller than the old avatar stack (rings + captions),
+     so push the hero's spark + headline down to clear it. */
+  .sfh { padding-top: calc(env(safe-area-inset-top, 0px) + 150px); }
+}
+
+/* ── Instagram-stories rail: glowing creator circles (mobile top) ─────── */
+@property --story-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+/* Hidden on desktop — the header renders the avatar stacks there instead.
+   Shown on mobile via the .follow-rail-wrap--center .follow-stories-rail rule
+   above. */
+.follow-stories-rail { display: none; }
+
+.follow-story {
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 68px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+.follow-story:active { transform: scale(0.94); }
+
+/* Glowing, slowly-rotating gradient ring (silver to stay on-brand vs IG's
+   orange/pink), with a breathing glow. Online creators get a green-tinted
+   ring. */
+.follow-story-ring {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  padding: 2.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(from var(--story-angle),
+    #ffffff, #cbd5e1, #94a3b8, #e2e8f0, #ffffff);
+  animation: follow-story-spin 7s linear infinite,
+             follow-story-glow 3.2s ease-in-out infinite;
+}
+.follow-story-ring.is-online {
+  background: conic-gradient(from var(--story-angle),
+    #4ade80, #ffffff, #86efac, #ffffff, #4ade80);
+}
+@keyframes follow-story-spin { to { --story-angle: 360deg; } }
+@keyframes follow-story-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.22); }
+  50%      { box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); }
+}
+.follow-story-avatar {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1b1f29;
+  border: 2.5px solid #0a0a0c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.follow-story-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.follow-story-initial { color: #cbd5e1; font-size: 20px; font-weight: 700; }
+.follow-story-name {
+  width: 100%;
+  max-width: 100%;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trailing "See all" chip → full Following list page. */
+.follow-story-ring--all {
+  background: rgba(255, 255, 255, 0.12);
+  animation: none;
+}
+.follow-story-avatar--all { color: rgba(255, 255, 255, 0.8); }
+
+@media (max-width: 768px) {
+  .follow-stories-rail {
+    width: 100%;
+    gap: 14px;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 16px;
+    box-sizing: border-box;
+  }
+  .follow-stories-rail::-webkit-scrollbar { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-story-ring { animation: none; }
 }
 
 /* Desktop: dock the centered search bar tighter under the headline so the

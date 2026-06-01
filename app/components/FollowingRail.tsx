@@ -235,6 +235,18 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           gap: 0,
         }}
       >
+        {/* Mobile-only Instagram-stories rail: a horizontal scroll of every
+            followed creator as a glowing circle, latest-posted first (the
+            entries are already ts-sorted). Hidden on desktop via CSS, which
+            shows the overlapping avatar stacks below instead. */}
+        {hasFollowing && (
+          <FollowingStoriesRail
+            entries={followingEntries!}
+            onlineHandles={onlineHandles}
+            onOpenCreator={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+            onSeeAll={onOpenFollowingList}
+          />
+        )}
         {hasFollowing && (
           <AvatarRow
             railKind="following"
@@ -322,6 +334,70 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
 // on every keystroke even though its data only changes on follow events
 // / presence ticks.
 export default memo(FollowingRail);
+
+// ─── internal FollowingStoriesRail (mobile) ─────────────────────────
+
+interface FollowingStoriesRailProps {
+  entries: RailEntry[];
+  onlineHandles: Set<string>;
+  onOpenCreator: (handle: string) => void;
+  /** Optional trailing "See all" chip → opens the full Following page. */
+  onSeeAll?: () => void;
+}
+
+/** Instagram-stories-style horizontal scroll of followed creators. Each is a
+ *  glowing, slowly-rotating gradient ring around the creator's avatar with a
+ *  name caption. Latest-posted creators come first (entries arrive ts-sorted).
+ *  Mobile-only — CSS hides it ≥769px. */
+function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+  return (
+    <div className="follow-stories-rail" role="list" aria-label="Creators you follow">
+      {entries.map(c => {
+        const isOnline = onlineHandles.has(c.handle.toLowerCase());
+        const name = c.displayName || c.handle;
+        return (
+          <button
+            key={c.handle}
+            type="button"
+            role="listitem"
+            className="follow-story"
+            onClick={() => onOpenCreator(c.handle)}
+            title={name}
+            aria-label={`Open ${name}'s catalog`}
+          >
+            <span className={`follow-story-ring${isOnline ? ' is-online' : ''}`}>
+              <span className="follow-story-avatar">
+                {c.avatarUrl
+                  ? <img src={c.avatarUrl} alt="" loading="lazy" />
+                  : <span className="follow-story-initial">{name.charAt(0).toUpperCase()}</span>}
+              </span>
+            </span>
+            <span className="follow-story-name">{name}</span>
+          </button>
+        );
+      })}
+      {onSeeAll && (
+        <button
+          type="button"
+          className="follow-story follow-story--all"
+          onClick={onSeeAll}
+          title="See all"
+          aria-label="See all creators you follow"
+        >
+          <span className="follow-story-ring follow-story-ring--all">
+            <span className="follow-story-avatar follow-story-avatar--all">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                <circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" />
+              </svg>
+            </span>
+          </span>
+          <span className="follow-story-name">See all</span>
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ─── internal AvatarRow ─────────────────────────────────────────────
 
