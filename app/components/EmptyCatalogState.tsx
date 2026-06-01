@@ -1,19 +1,15 @@
 // EmptyCatalogState - shown when a search/filter yields zero creatives.
-// Recycles the same WebGL particle background from the sign-in screen so
-// the moment reads as deliberate ("there's a vibe here") rather than
-// broken. Below the headline sits a single CTA that lets shoppers signal
-// demand for the catalog they searched for; the count of presses is fed
-// from Supabase realtime so the number ticks up live as other shoppers
-// hit the same empty state.
+// Matte-black surface with the AI-diamond particle drift behind it
+// (same field as the home hero). Below the headline sits a single CTA
+// that lets shoppers signal demand for the catalog they searched for;
+// the count is fed from Supabase realtime so it ticks up live.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ParticleBackground from './ParticleBackground';
 import { supabase } from '~/utils/supabase';
 
 interface EmptyCatalogStateProps {
-  /** Display name as shown in the UI (e.g. "Y2K Streetwear"). The slug
-   *  used for counting is the normalized lowercase version, computed
-   *  server-side in request_catalog(). */
+  /** Display name as shown in the UI (e.g. "Y2K Streetwear"). */
   catalogName: string;
   /** When true, shows a "sourcing" message instead of the normal demand-signal
    *  copy - used when the semantic search returned a cold miss and the backfill
@@ -22,8 +18,6 @@ interface EmptyCatalogStateProps {
 }
 
 export default function EmptyCatalogState({ catalogName, isSourcing = false }: EmptyCatalogStateProps) {
-  // Slug used to query the count row. Mirrors the normalization done by
-  // request_catalog() so the realtime filter matches the upserted row.
   const slug = catalogName.toLowerCase().trim().replace(/\s+/g, ' ');
 
   const [count, setCount] = useState<number | null>(null);
@@ -31,16 +25,12 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
   const [pulse, setPulse] = useState(false);
   const pulseTimeout = useRef<number | null>(null);
 
-  // Ticks the visual pulse when count changes - fires whether the change
-  // came from this client (optimistic) or from a realtime broadcast.
   const triggerPulse = useCallback(() => {
     setPulse(true);
     if (pulseTimeout.current) window.clearTimeout(pulseTimeout.current);
     pulseTimeout.current = window.setTimeout(() => setPulse(false), 600);
   }, []);
 
-  // Initial fetch + realtime subscription. We subscribe with a slug filter
-  // so each empty state only listens to its own row.
   useEffect(() => {
     if (!supabase || !slug) return;
     let cancelled = false;
@@ -80,13 +70,11 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
   const handleRequest = useCallback(async () => {
     if (pressed || !supabase) return;
     setPressed(true);
-    // Optimistic - realtime will reconcile if drift happens.
     setCount(c => (c ?? 0) + 1);
     triggerPulse();
     const { data, error } = await supabase.rpc('request_catalog', { slug });
     if (error) {
       console.warn('[EmptyCatalogState] request_catalog failed:', error.message);
-      // Rollback the optimistic bump.
       setCount(c => (c == null ? c : Math.max(0, c - 1)));
       setPressed(false);
       return;
@@ -101,30 +89,29 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
     <div className="empty-catalog">
       <ParticleBackground />
       <div className="empty-catalog-content">
-
-        {/* Animated graphic — shared between both states */}
-        <div className="ec-graphic" aria-hidden="true">
-          <span className="ec-ring ec-ring-1" />
-          <span className="ec-ring ec-ring-2" />
-          <span className="ec-ring ec-ring-3" />
-          <div className="ec-orb">
-            <svg className="ec-orb-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M20 4 L22.4 15.6 L34 20 L22.4 24.4 L20 36 L17.6 24.4 L6 20 L17.6 15.6 Z"
-                fill="rgba(255,215,92,0.95)"
-              />
-            </svg>
-          </div>
-        </div>
+        {/* Catalog AI spark — same 4-point diamond the home hero uses, just
+            smaller and slower so it reads as ambient brand rather than a
+            focal animation. */}
+        <span className="ec-spark" aria-hidden="true">
+          <svg viewBox="0 0 100 100" width="48" height="48">
+            <defs>
+              <linearGradient id="ec-spark-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#fff" />
+                <stop offset="50%" stopColor="#cbd5e1" />
+                <stop offset="100%" stopColor="#94a3b8" />
+              </linearGradient>
+            </defs>
+            <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="url(#ec-spark-grad)" />
+          </svg>
+        </span>
 
         {isSourcing ? (
           <>
-            <p className="empty-catalog-eyebrow">Sourcing now</p>
             <h2 className="empty-catalog-headline">
-              We're finding <em>{catalogName}</em> for you.
+              Finding <em>{catalogName}</em>
             </h2>
             <p className="empty-catalog-subhead">
-              Our agents are pulling looks and products. Check back shortly — this catalog is being built.
+              Our agents are pulling looks and products. Check back shortly.
             </p>
             <div className="ec-sourcing" aria-live="polite">
               <div className="ec-sourcing-track">
@@ -135,12 +122,11 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
           </>
         ) : (
           <>
-            <p className="empty-catalog-eyebrow">No creatives yet</p>
             <h2 className="empty-catalog-headline">
-              Nothing in <em>{catalogName}</em> yet.
+              Nothing in <em>{catalogName}</em> yet
             </h2>
             <p className="empty-catalog-subhead">
-              Tap the button if you'd shop this. We surface what people ask for.
+              Tap below if you'd shop this. We surface what people ask for.
             </p>
 
             <button
@@ -155,7 +141,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
                   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
                     <path d="M2.5 7.5L6 11L12.5 4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  Got it — we hear you
+                  We hear you
                 </>
               ) : (
                 'I want this catalog'
@@ -164,20 +150,13 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
 
             <div className={`ec-demand ${pulse ? 'pulse' : ''}`} aria-live="polite">
               {count == null ? (
-                <span className="empty-catalog-counter-loading">…</span>
+                <span className="ec-demand-text">&nbsp;</span>
               ) : count > 0 ? (
-                <>
-                  <div className="ec-avatars" aria-hidden="true">
-                    {Array.from({ length: Math.min(count, 3) }, (_, i) => (
-                      <span key={i} className={`ec-avatar ec-avatar-${i + 1}`} />
-                    ))}
-                  </div>
-                  <span className="ec-demand-text">
-                    <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
-                  </span>
-                </>
+                <span className="ec-demand-text">
+                  <strong>{display}</strong> {noun} {count === 1 ? 'has' : 'have'} asked for this
+                </span>
               ) : (
-                <span className="ec-demand-text">Be the first to ask for this</span>
+                <span className="ec-demand-text">Be the first to ask</span>
               )}
             </div>
           </>

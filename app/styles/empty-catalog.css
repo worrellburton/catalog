@@ -1,17 +1,14 @@
 /* Empty-catalog state — shown by ContinuousFeed when a search yields zero
-   creatives. Full-bleed dark surface with particle drift behind a glass
-   card, animated sparkle graphic, and demand-signal CTA. */
+   creatives. Matte-black surface matching the new home aesthetic: no yellow,
+   no purple, no glow rings. Just the AI-diamond particle drift behind a
+   centered spark + headline + CTA. */
 
-/* ── Container ─────────────────────────────────────────────────────────── */
 .empty-catalog {
   position: fixed;
   inset: 0;
   z-index: 50;
   background:
-    radial-gradient(ellipse at 22% 18%, rgba(110, 70, 160, 0.22) 0%, transparent 52%),
-    radial-gradient(ellipse at 78% 82%, rgba(40, 80, 145, 0.18) 0%, transparent 52%),
-    radial-gradient(ellipse at 55% 48%, rgba(255, 215, 92, 0.04) 0%, transparent 62%),
-    #080808;
+    radial-gradient(120% 90% at 50% 14%, #15161c 0%, #0a0a0c 56%, #000 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,7 +18,6 @@
   isolation: isolate;
 }
 
-/* ── Content ────────────────────────────────────────────────────────────── */
 .empty-catalog-content {
   position: relative;
   z-index: 1;
@@ -32,338 +28,158 @@
   flex-direction: column;
   align-items: center;
   padding: 0 20px;
-  animation: ecCardIn 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ecCardIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
 @keyframes ecCardIn {
-  from { opacity: 0; transform: translateY(28px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* ── Animated graphic ──────────────────────────────────────────────────── */
-.ec-graphic {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-  animation: ecGraphicIn 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
-}
-
-@keyframes ecGraphicIn {
-  from { opacity: 0; transform: scale(0.5) rotate(-15deg); }
-  to   { opacity: 1; transform: scale(1) rotate(0deg); }
-}
-
-/* Expanding pulse rings */
-.ec-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 215, 92, 0.2);
-  animation: ecRingExpand 3s ease-out infinite;
-}
-.ec-ring-2 { animation-delay: 1s; }
-.ec-ring-3 { animation-delay: 2s; }
-
-@keyframes ecRingExpand {
-  0%   { transform: scale(0.85); opacity: 0.65; }
-  100% { transform: scale(1.95); opacity: 0; }
-}
-
-/* Central glowing orb */
-.ec-orb {
-  position: relative;
-  z-index: 2;
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 36% 30%,
-    rgba(255, 215, 92, 0.17) 0%,
-    rgba(255, 168, 0, 0.07) 55%,
-    rgba(170, 75, 200, 0.05) 100%
-  );
-  border: 1.5px solid rgba(255, 215, 92, 0.22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 0 22px rgba(255, 215, 92, 0.13),
-    0 0 52px rgba(255, 215, 92, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  animation: ecOrbFloat 4.5s ease-in-out infinite 0.4s;
-}
-
-@keyframes ecOrbFloat {
-  0%, 100% {
-    transform: translateY(0px);
-    box-shadow: 0 0 22px rgba(255,215,92,0.13), 0 0 52px rgba(255,215,92,0.07), inset 0 1px 0 rgba(255,255,255,0.12);
-  }
-  50% {
-    transform: translateY(-8px);
-    box-shadow: 0 10px 34px rgba(255,215,92,0.2), 0 0 68px rgba(255,215,92,0.1), inset 0 1px 0 rgba(255,255,255,0.15);
-  }
-}
-
-/* Sparkle star icon */
-.ec-orb-svg {
-  width: 26px;
-  height: 26px;
-  animation: ecSparkle 6s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(255, 215, 92, 0.7));
-}
-
-@keyframes ecSparkle {
-  0%, 100% { transform: rotate(0deg) scale(1);    opacity: 0.95; }
-  25%       { transform: rotate(20deg) scale(0.88); opacity: 0.8; }
-  50%       { transform: rotate(0deg) scale(1.1);   opacity: 1; }
-  75%       { transform: rotate(-18deg) scale(0.9); opacity: 0.85; }
-}
-
-/* ── Eyebrow pill ─────────────────────────────────────────────────────── */
-.empty-catalog-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255, 215, 92, 0.75);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin: 0 0 14px;
-  padding: 5px 13px;
-  border-radius: 999px;
-  background: rgba(255, 215, 92, 0.09);
-  border: 1px solid rgba(255, 215, 92, 0.2);
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
-}
-
-/* ── Headline ─────────────────────────────────────────────────────────── */
-.empty-catalog-headline {
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 1.18;
-  letter-spacing: -0.02em;
-  color: #fff;
-  margin: 0 0 12px;
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both;
-}
-
-.empty-catalog-headline em {
-  font-style: italic;
-  font-weight: 500;
-  background: linear-gradient(135deg, #FFD75C 0%, #FFA828 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Subhead ──────────────────────────────────────────────────────────── */
-.empty-catalog-subhead {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.47);
-  margin: 0 0 28px;
-  max-width: 330px;
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.39s both;
-}
-
-/* ── CTA Button ───────────────────────────────────────────────────────── */
-.empty-catalog-cta {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: linear-gradient(135deg, #FFD75C 0%, #FFA020 100%);
-  color: #0a0a0a;
-  border: none;
-  border-radius: 999px;
-  padding: 14px 30px;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  letter-spacing: 0.005em;
-  transition:
-    transform 0.2s cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 0.25s ease;
-  box-shadow:
-    0 0 0 1px rgba(255,215,92,0.25),
-    0 6px 20px rgba(255,160,32,0.32),
-    0 2px 4px rgba(0,0,0,0.25);
-  overflow: hidden;
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.46s both;
-}
-
-/* Highlight sheen */
-.empty-catalog-cta::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 50%;
-  background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%);
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.empty-catalog-cta:hover:not(:disabled):not(.is-pressed) {
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px rgba(255,215,92,0.35),
-    0 10px 26px rgba(255,160,32,0.42),
-    0 4px 8px rgba(0,0,0,0.22);
-}
-
-.empty-catalog-cta:active:not(:disabled):not(.is-pressed) { transform: scale(0.97); }
-
-.empty-catalog-cta:disabled,
-.empty-catalog-cta.is-pressed {
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.55);
-  cursor: default;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
-  transform: none;
-}
-.empty-catalog-cta.is-pressed::before { display: none; }
-
-/* ── Demand counter + avatar stack ─────────────────────────────────────── */
-.ec-demand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin-top: 18px;
-  min-height: 26px;
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.53s both;
-}
-
-.empty-catalog-counter-loading {
-  font-size: 13px;
-  color: rgba(255,255,255,0.22);
-}
-
-.ec-demand-text {
-  font-size: 13px;
-  color: rgba(255,255,255,0.44);
-}
-.ec-demand-text strong {
-  color: #fff;
-  font-weight: 600;
-}
-
-/* Avatar group */
-.ec-avatars {
-  display: flex;
-  align-items: center;
-}
-.ec-avatar {
-  display: block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1.5px solid #0a0a0a;
-  background: linear-gradient(135deg, #7B6FCF, #5A4FB5);
-  margin-left: -6px;
-  flex-shrink: 0;
-}
-.ec-avatar:first-child { margin-left: 0; }
-.ec-avatar-2 { background: linear-gradient(135deg, #4AACBD, #2F87A0); }
-.ec-avatar-3 { background: linear-gradient(135deg, #C87AB8, #A85A9C); }
-
-/* Pulse on realtime/optimistic count bump */
-.ec-demand.pulse .ec-demand-text {
-  animation: ecDemandPulse 0.65s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-@keyframes ecDemandPulse {
-  0%   { color: rgba(255,255,255,0.44); }
-  25%  { color: rgba(255,215,92,0.95); }
-  100% { color: rgba(255,255,255,0.44); }
-}
-
-/* ── Shared stagger entrance ──────────────────────────────────────────── */
-@keyframes ecItemIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Sourcing state ───────────────────────────────────────────────────── */
-.ec-sourcing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  animation: ecItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.46s both;
+/* Spark mark — same 4-point catalog diamond the home hero uses. Breathes
+   slowly so the moment feels alive without being noisy. */
+.ec-spark {
+  display: inline-flex;
+  margin-bottom: 22px;
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.28));
+  animation: ec-spark-breathe 4.5s ease-in-out infinite,
+             ec-spark-spin   18s linear infinite;
+}
+@keyframes ec-spark-breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.92; }
+  50%      { transform: scale(1.08) rotate(8deg); opacity: 1; }
+}
+@keyframes ec-spark-spin {
+  /* Combined with the breathe above via dual animation; gives the mark a
+     slow continuous drift on top of the pulse. */
+  to { transform: rotate(360deg); }
 }
 
+/* Headline — clean white, with the catalog name italicized but NOT colored
+   (the old yellow accent is gone; the slant alone reads as emphasis). */
+.empty-catalog-headline {
+  margin: 0 0 12px 0;
+  font-size: clamp(26px, 6.5vw, 36px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  color: #f5f5f7;
+}
+.empty-catalog-headline em {
+  font-style: italic;
+  color: #f5f5f7;
+}
+
+.empty-catalog-subhead {
+  margin: 0 0 28px 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 360px;
+}
+
+/* CTA — clean white pill, black text, matches the home Build-My-Catalog
+   pattern. No yellow gradient. */
+.empty-catalog-cta {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: #0a0a0c;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  box-shadow:
+    0 12px 30px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(0, 0, 0, 0.05);
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.empty-catalog-cta:hover:not(.is-pressed) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 36px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+.empty-catalog-cta:active { transform: scale(0.985); }
+
+/* Pressed (after a successful request): muted glass treatment with a check
+   icon, so the CTA reads as "got it" but stays composed (was a yellow flash
+   in the old design). */
+.empty-catalog-cta.is-pressed {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Demand counter — single soft line beneath the CTA. Pulses on every
+   realtime tick. */
+.ec-demand {
+  margin-top: 14px;
+  min-height: 18px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.42);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), color 0.5s ease;
+}
+.ec-demand strong {
+  color: #fff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ec-demand.pulse {
+  transform: scale(1.04);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Sourcing variant — keep the agent-progress affordance but in monochrome. */
+.ec-sourcing {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: min(320px, 100%);
+  margin-top: 4px;
+}
 .ec-sourcing-track {
-  width: 140px;
+  position: relative;
+  width: 100%;
   height: 3px;
-  border-radius: 99px;
-  background: rgba(255,255,255,0.07);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
   overflow: hidden;
 }
-
 .ec-sourcing-fill {
-  display: block;
-  height: 100%;
-  width: 50%;
-  border-radius: 99px;
-  background: linear-gradient(
-    90deg,
-    rgba(255,215,92,0) 0%,
-    rgba(255,215,92,0.85) 50%,
-    rgba(255,215,92,0) 100%
-  );
-  animation: ecSourcingSlide 2s ease-in-out infinite;
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.5), #fff, rgba(255,255,255,0.5));
+  border-radius: inherit;
+  animation: ec-sourcing-slide 1.8s ease-in-out infinite;
 }
-
-@keyframes ecSourcingSlide {
-  0%   { transform: translateX(-200%); }
-  100% { transform: translateX(400%); }
+@keyframes ec-sourcing-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(265%); }
 }
-
 .ec-sourcing-label {
   font-size: 12px;
-  color: rgba(255,255,255,0.36);
-  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  letter-spacing: 0.03em;
 }
 
-/* Legacy sourcing dots (kept for compat) */
-.empty-catalog-sourcing-indicator {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 20px;
-}
-.sourcing-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255,215,92,0.7);
-  animation: sourcingPulse 1.4s ease-in-out infinite both;
-}
-.sourcing-dot:nth-child(2) { animation-delay: 0.2s; }
-.sourcing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes sourcingPulse {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
-  40%            { transform: scale(1);   opacity: 1; }
-}
-
-/* ── Reduced motion ───────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .empty-catalog-content,
-  .ec-graphic,
-  .ec-orb,
-  .ec-orb-svg,
-  .ec-ring,
-  .ec-sourcing-fill,
-  .sourcing-dot { animation: none; }
-  .empty-catalog-cta { transition: none; }
+  .ec-spark,
+  .ec-sourcing-fill {
+    animation: none !important;
+  }
 }
-
