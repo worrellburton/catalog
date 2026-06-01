@@ -3666,6 +3666,17 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     if (!previewOrder) return;
     setFeedOrder(previewOrder);
     saveFeedOrder(previewOrder);
+    // Persist to the DB so the CONSUMER feed honours this order too
+    // (getHomeFeed / getLooks order by feed_rank). Per-type position is
+    // the item's order within its kind in the previewed sequence.
+    const lookIds = previewOrder.filter(k => k.startsWith('look:')).map(k => k.slice(5));
+    const productIds = previewOrder.filter(k => k.startsWith('product:')).map(k => k.slice(8));
+    if (supabase) {
+      supabase.rpc('apply_feed_order', { look_ids: lookIds, product_ids: productIds })
+        .then(({ error }) => {
+          if (error) console.warn('[catalog] apply_feed_order failed:', error.message);
+        });
+    }
     setPreviewOrder(null);
   };
   const discardRecommendedOrder = () => setPreviewOrder(null);
@@ -3784,7 +3795,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               border: '1px solid #c7d2fe', background: '#eef2ff',
             }}>
               <span style={{ fontSize: 12, color: '#3730a3' }}>
-                <strong>Recommended order previewed</strong> — winners + under-tested items up top, ~2 looks : 1 product. Not saved yet.
+                <strong>Recommended order previewed</strong> — winners + under-tested items up top, ~2 looks : 1 product. Keep to publish this order to the live shopper feed.
               </span>
               <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
                 <button type="button" onClick={discardRecommendedOrder} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 12px' }}>Discard</button>
