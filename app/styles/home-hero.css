@@ -1,0 +1,203 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Home "What are you shopping for?" hero + search ceremony.
+   Matte-black, white text, Catalog-branded. The hero is the home entry;
+   the catalog feed sits directly below (scroll reveals it).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.sfh {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(120% 90% at 50% 14%, #15161c 0%, #0a0a0c 52%, #000 100%);
+  padding: 24px 20px calc(40px + env(safe-area-inset-bottom));
+  text-align: center;
+  overflow: hidden;
+}
+.sfh-stage {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+/* Breathing brand spark. */
+.sfh-spark {
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.28));
+  animation: sfh-breathe 4.5s ease-in-out infinite;
+}
+@keyframes sfh-breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.92; }
+  50%      { transform: scale(1.12) rotate(8deg); opacity: 1; }
+}
+
+.sfh-title {
+  margin: 0;
+  font-size: clamp(30px, 7.5vw, 46px);
+  line-height: 1.06;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f5f5f7;
+  animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes sfh-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Search pill — Gemini-ish, Catalog matte. */
+.sfh-pill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+.sfh-pill-lead { color: rgba(255, 255, 255, 0.5); display: inline-flex; flex-shrink: 0; }
+.sfh-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 17px;
+  font-family: inherit;
+  padding: 10px 2px;
+}
+.sfh-input::placeholder { color: rgba(255, 255, 255, 0.42); }
+.sfh-go {
+  flex-shrink: 0;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.sfh-go.is-ready { background: #fff; color: #0a0a0c; transform: scale(1.04); }
+.sfh-go.is-ready:hover { transform: scale(1.1); }
+
+/* Scroll-for-catalog hint pinned near the bottom. */
+.sfh-scroll-hint {
+  position: absolute;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  animation: sfh-bob 2.4s ease-in-out infinite;
+}
+.sfh-scroll-hint:hover { color: rgba(255, 255, 255, 0.8); }
+@keyframes sfh-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(5px); }
+}
+
+/* While the hero owns the screen (top of scroll), hide the fixed bottom
+   search bar — the hero has its own search. It fades back in once the
+   shopper scrolls down into the catalog. */
+.app-root.home-hero:not(.hero-scrolled) .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(24px);
+}
+
+/* ── Search ceremony ─────────────────────────────────────────────────── */
+.search-ceremony {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: radial-gradient(120% 100% at 50% 40%, #14141a 0%, #000 72%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: sc-in 0.32s ease both;
+}
+@keyframes sc-in { from { opacity: 0; } to { opacity: 1; } }
+.sc-stage {
+  width: min(440px, 90%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+}
+.sc-orb { position: relative; width: 72px; height: 72px; }
+.sc-orb-core {
+  position: absolute; inset: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #cbd5e1 60%, #64748b);
+  box-shadow: 0 0 26px rgba(255, 255, 255, 0.45);
+  animation: sc-pulse 1.6s ease-in-out infinite;
+}
+.sc-orb-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  animation: sc-spin 1.1s linear infinite;
+}
+.sc-orb-ring--2 { inset: 12px; border-top-color: rgba(255,255,255,0.4); animation-duration: 1.7s; animation-direction: reverse; }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+@keyframes sc-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.86); opacity: 0.8; } }
+
+.sc-messages { position: relative; height: 26px; width: 100%; }
+.sc-message {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 500; color: #f5f5f7;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.sc-message.is-active { opacity: 1; transform: translateY(0); }
+.sc-query { font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-top: -8px; }
+
+.sc-bar {
+  width: 100%; height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.sc-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #94a3b8, #fff);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+  transition: width 0.1s linear;
+}
+
+/* Results reveal — the catalog animates up as the ceremony bows out. */
+.home-results-reveal { animation: home-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes home-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfh-spark, .sfh-title, .sfh-pill, .sfh-scroll-hint,
+  .sc-orb-core, .sc-orb-ring, .search-ceremony, .home-results-reveal {
+    animation: none !important;
+  }
+  .sc-message { transition: opacity 0.2s ease; }
+}
