@@ -592,3 +592,254 @@
 .light-mode .user-menu-item--toggle.is-on .user-menu-switch {
   background: #dc2626;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   User Menu — Mobile Full-Page
+   Replaces the popout on ≤768px with a full-screen vertical Account page.
+   Reveals via a clip-path circle that grows from the avatar's tap point
+   (--ump-x / --ump-y, set inline by UserMenu from the trigger's bbox), and
+   reverses on close. Inside, the content staggers in after the wipe.
+   ═══════════════════════════════════════════════════════════════════════ */
+.user-menu-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  background:
+    radial-gradient(110% 80% at 50% 14%, #15161c 0%, #0a0a0c 56%, #000 100%);
+  color: #f5f5f7;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+}
+.user-menu-page.is-open {
+  animation: ump-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.user-menu-page.is-closing {
+  animation: ump-conceal 0.36s cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+@keyframes ump-reveal {
+  from {
+    clip-path: circle(0px at var(--ump-x, 50%) var(--ump-y, 50%));
+    opacity: 1;
+  }
+  to {
+    clip-path: circle(160vmax at var(--ump-x, 50%) var(--ump-y, 50%));
+    opacity: 1;
+  }
+}
+@keyframes ump-conceal {
+  from {
+    clip-path: circle(160vmax at var(--ump-x, 50%) var(--ump-y, 50%));
+    opacity: 1;
+  }
+  to {
+    clip-path: circle(0px at var(--ump-x, 50%) var(--ump-y, 50%));
+    opacity: 1;
+  }
+}
+
+/* Header — back chevron + title */
+.user-menu-page-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 14px;
+  background: linear-gradient(180deg, rgba(10, 10, 12, 0.92) 60%, rgba(10, 10, 12, 0));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.user-menu-page-back {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.user-menu-page-back:active { background: rgba(255, 255, 255, 0.12); transform: scale(0.96); }
+.user-menu-page-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+}
+
+/* Body — staggered content reveal */
+.user-menu-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 16px 24px;
+}
+.user-menu-page-body > * {
+  animation: ump-item-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.user-menu-page-body > *:nth-child(1)  { animation-delay: 0.18s; }
+.user-menu-page-body > *:nth-child(2)  { animation-delay: 0.24s; }
+.user-menu-page-body > *:nth-child(3)  { animation-delay: 0.30s; }
+.user-menu-page-body > *:nth-child(4)  { animation-delay: 0.36s; }
+.user-menu-page-body > *:nth-child(5)  { animation-delay: 0.42s; }
+.user-menu-page-body > *:nth-child(6)  { animation-delay: 0.48s; }
+.user-menu-page-body > *:nth-child(7)  { animation-delay: 0.52s; }
+.user-menu-page-body > *:nth-child(8)  { animation-delay: 0.56s; }
+.user-menu-page-body > *:nth-child(9)  { animation-delay: 0.60s; }
+.user-menu-page-body > *:nth-child(n+10) { animation-delay: 0.64s; }
+@keyframes ump-item-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero row — big avatar + name/email/role */
+.user-menu-page-hero {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 16px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.user-menu-page-hero:active { transform: scale(0.99); background: rgba(255, 255, 255, 0.06); }
+.user-menu-page-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px; height: 64px;
+}
+.user-menu-page-avatar {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1e2230;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+.user-menu-page-avatar--initial { color: #cbd5e1; font-size: 26px; font-weight: 700; }
+.user-menu-page-identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.user-menu-page-name { font-size: 17px; font-weight: 600; color: #f5f5f7; }
+.user-menu-page-email { font-size: 13px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-menu-page-hero-chev { color: rgba(255, 255, 255, 0.5); flex-shrink: 0; }
+
+/* Primary CTAs (Try it on / Style) */
+.user-menu-page-cta {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  color: #fde68a;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.user-menu-page-cta:active { transform: scale(0.99); background: rgba(250, 204, 21, 0.14); }
+.user-menu-page-cta-chev { margin-left: auto; opacity: 0.7; }
+
+/* List row */
+.user-menu-page-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  color: #f5f5f7;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.user-menu-page-row:active { transform: scale(0.99); background: rgba(255, 255, 255, 0.07); }
+.user-menu-page-row.is-danger { color: #fca5a5; }
+.user-menu-page-row-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.72);
+}
+.user-menu-page-row.is-danger .user-menu-page-row-icon { color: #fca5a5; }
+.user-menu-page-row-label { flex: 1; min-width: 0; }
+.user-menu-page-row-badge {
+  background: #f5f5f7;
+  color: #0a0a0c;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 22px;
+  text-align: center;
+}
+.user-menu-page-row-trailing {
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.user-menu-page-row-chev {
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+/* Segmented + toggle variants share the row shell */
+.user-menu-page-row--segmented,
+.user-menu-page-row--toggle {
+  cursor: default;
+}
+.user-menu-page-row--segmented .user-menu-page-row-chev,
+.user-menu-page-row--toggle .user-menu-page-row-chev {
+  display: none;
+}
+.user-menu-page-row--toggle { cursor: pointer; }
+.user-menu-page-row--toggle.is-on { color: #fca5a5; }
+.user-menu-page-row--toggle.is-on .user-menu-page-row-icon { color: #fca5a5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .user-menu-page.is-open,
+  .user-menu-page.is-closing,
+  .user-menu-page-body > * {
+    animation: none !important;
+  }
+  .user-menu-page.is-open { clip-path: none; }
+}
+
+/* Desktop: never use the page surface — desktop keeps the classic popout. */
+@media (min-width: 769px) {
+  .user-menu-page { display: none; }
+}
