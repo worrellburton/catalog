@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { startGenerationJob } from '~/services/generation-queue';
 
 // /generate-only styles. Used to be in root.tsx where the consumer paid
 // the bundle cost on every page.
@@ -763,6 +764,34 @@ export default function GeneratePage() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [generationIdForPoll, generationIsTerminal]);
+
+  // Surface the in-flight try-on render in the global Generation Queue
+  // (bottom-right panel) so it shows alongside admin jobs. We mirror the
+  // poll's lifecycle: open a queue job when a generation goes in-flight,
+  // finish/fail it when it reaches a terminal status. Keyed off id+status
+  // so it fires exactly on the transitions.
+  const queueJobRef = useRef<{ genId: string; finish: (ms?: number, msg?: string) => void; fail: (msg?: string) => void } | null>(null);
+  useEffect(() => {
+    if (!generation) return;
+    const st = generation.status;
+    const inFlight = st === 'pending' || st === 'generating';
+    if (inFlight && queueJobRef.current?.genId !== generation.id) {
+      queueJobRef.current?.finish(); // close any stale one
+      const job = startGenerationJob({
+        kind: 'primary-video',
+        label: generation.display_name || 'Your look',
+        context: STYLE_PRESETS.find(s => s.value === style)?.label || 'Try-on',
+        model: model === 'pro' ? 'Seedance 2 Pro' : 'Seedance 2 Fast',
+        thumbnailUrl: existingUploads.find(u => u.id === pickedUploadIds[0])?.public_url ?? null,
+      });
+      queueJobRef.current = { genId: generation.id, finish: job.finish, fail: job.fail };
+    } else if ((st === 'done' || st === 'failed') && queueJobRef.current?.genId === generation.id) {
+      if (st === 'done') queueJobRef.current.finish(undefined, 'Done');
+      else queueJobRef.current.fail(generation.error || 'Failed');
+      queueJobRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generation?.id, generation?.status]);
 
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
