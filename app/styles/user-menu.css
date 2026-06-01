@@ -614,31 +614,26 @@
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
 }
+/* Reveal: scale + fade from the avatar's tap point. transform-origin is
+   the captured avatar center, so the page appears to grow out of the
+   tapped avatar — without the clip-path-with-CSS-variable fragility that
+   left the page transparent in some WebViews. Always ends fully opaque
+   at scale(1). */
 .user-menu-page.is-open {
-  animation: ump-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: ump-reveal 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: var(--ump-x, 50%) var(--ump-y, 50%);
 }
 .user-menu-page.is-closing {
-  animation: ump-conceal 0.36s cubic-bezier(0.7, 0, 0.84, 0) both;
+  animation: ump-conceal 0.3s cubic-bezier(0.7, 0, 0.84, 0) both;
+  transform-origin: var(--ump-x, 50%) var(--ump-y, 50%);
 }
 @keyframes ump-reveal {
-  from {
-    clip-path: circle(0px at var(--ump-x, 50%) var(--ump-y, 50%));
-    opacity: 1;
-  }
-  to {
-    clip-path: circle(160vmax at var(--ump-x, 50%) var(--ump-y, 50%));
-    opacity: 1;
-  }
+  from { opacity: 0; transform: scale(0.78); }
+  to   { opacity: 1; transform: scale(1); }
 }
 @keyframes ump-conceal {
-  from {
-    clip-path: circle(160vmax at var(--ump-x, 50%) var(--ump-y, 50%));
-    opacity: 1;
-  }
-  to {
-    clip-path: circle(0px at var(--ump-x, 50%) var(--ump-y, 50%));
-    opacity: 1;
-  }
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.85); }
 }
 
 /* Header — back chevron + title */
@@ -857,7 +852,7 @@
   .user-menu-page-body > * {
     animation: none !important;
   }
-  .user-menu-page.is-open { clip-path: none; }
+  .user-menu-page.is-open { opacity: 1; transform: none; }
 }
 
 /* Desktop: never use the page surface — desktop keeps the classic popout. */

@@ -30,6 +30,7 @@ import "./styles/splash-screen.css";
 import "./styles/home-hero.css";
 import "./styles/header.css";
 import "./styles/bottom-bar.css";
+import "./styles/build-catalog.css";
 import "./styles/type-anywhere.css";
 import "./styles/bookmarks.css";
 import "./styles/grid-view.css";
