@@ -27,6 +27,7 @@ import "./styles/base.css";
 import "./styles/password-gate.css";
 import "./styles/waitlist.css";
 import "./styles/splash-screen.css";
+import "./styles/home-hero.css";
 import "./styles/header.css";
 import "./styles/bottom-bar.css";
 import "./styles/type-anywhere.css";

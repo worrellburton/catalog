@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from '@remix-run/react';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
+import ShoppingForHero from '~/components/home/ShoppingForHero';
+import SearchCeremony from '~/components/home/SearchCeremony';
 import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
@@ -198,6 +200,49 @@ export default function Home() {
   const [catalogName, setCatalogName] = useState<string>('all');
   const [mySizeOnly, setMySizeOnly] = useState(false);
 
+  // ── New home: "What are you shopping for?" hero ──────────────────────
+  // The hero is the home entry; the catalog feed lives directly below it
+  // (scroll reveals it). A search plays the SearchCeremony then reveals
+  // results. Skipped inside the native Flutter shell (it has its own
+  // launch UX) and once a search/catalog filter is already active.
+  const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
+  const [heroMode, setHeroMode] = useState(() => !inShell);
+  const [heroScrolled, setHeroScrolled] = useState(false);
+  const [ceremony, setCeremony] = useState<{ active: boolean; query: string }>({ active: false, query: '' });
+  const [revealResults, setRevealResults] = useState(false);
+
+  // Reveal the bottom search bar once the shopper scrolls down off the
+  // hero into the catalog (while heroMode is the active screen).
+  useEffect(() => {
+    if (!heroMode) { setHeroScrolled(true); return; }
+    setHeroScrolled(false);
+    const onScroll = () => setHeroScrolled(window.scrollY > window.innerHeight * 0.5);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [heroMode]);
+
+  const handleHeroSearch = useCallback((q: string) => {
+    const query = q.trim();
+    if (!query) return;
+    setSearchQuery(query.toLowerCase());
+    setCatalogName(toCatalogName(query));
+    bumpSearchTrigger();
+    setCeremony({ active: true, query });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bumpSearchTrigger]);
+
+  const handleCeremonyDone = useCallback(() => {
+    setCeremony({ active: false, query: '' });
+    setHeroMode(false);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setRevealResults(true);
+    window.setTimeout(() => setRevealResults(false), 700);
+  }, []);
+
+  const handleRevealFeed = useCallback(() => {
+    window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
+  }, []);
+
   // Native shell bridge: Flutter wrapper dispatches CustomEvents on
   // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
   useShellBridge({
@@ -268,6 +313,8 @@ export default function Home() {
     // so the feed re-rolls to a fresh order, and dispatch a
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
+    // Also return to the "What are you shopping for?" home hero.
+    if (!inShell) { setHeroMode(true); window.scrollTo({ top: 0, behavior: 'auto' }); }
     setSearchQuery('');
     resetGenderFilter();
     setCreatorFilter(null);
@@ -885,7 +932,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}`}>
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}
@@ -977,6 +1024,14 @@ export default function Home() {
               summary toasts (mount-time + tab-return). */}
           <ActivityRealtimeToasts />
 
+          {/* New home entry: the ask hero sits above the feed; scrolling
+              down reveals the catalog. Hidden once a search resolves into
+              results (heroMode flips off). */}
+          {heroMode && (
+            <ShoppingForHero onSubmit={handleHeroSearch} onRevealFeed={handleRevealFeed} />
+          )}
+
+          <div className={revealResults ? 'home-results-reveal' : undefined}>
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
@@ -995,6 +1050,7 @@ export default function Home() {
             followedHandles={followingCatalog}
             mySizeOnly={mySizeOnly}
           />
+          </div>
 
           <BottomBar
             activeFilter={activeFilter}
@@ -1008,6 +1064,11 @@ export default function Home() {
             mySizeOnly={mySizeOnly}
             onMySizeChange={setMySizeOnly}
           />
+
+          {/* Magical loading screen between a hero search and its results. */}
+          {ceremony.active && (
+            <SearchCeremony query={ceremony.query} ready={!searchLoading} onDone={handleCeremonyDone} />
+          )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
