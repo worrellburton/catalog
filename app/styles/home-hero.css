@@ -9,11 +9,11 @@
   min-height: 100svh;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   flex-direction: column;
   background:
     radial-gradient(120% 90% at 50% 14%, #15161c 0%, #0a0a0c 52%, #000 100%);
-  padding: 22vh 20px calc(40px + env(safe-area-inset-bottom));
+  padding: 0 20px calc(40px + env(safe-area-inset-bottom));
   text-align: center;
   overflow: hidden;
 }
@@ -23,6 +23,9 @@
   flex-direction: column;
   align-items: center;
   gap: 22px;
+  /* Reserve room below the centered spark+headline for the search bar
+     so spark + headline + bar read as ONE vertically-centered group. */
+  margin-bottom: 16vh;
 }
 
 /* Breathing brand spark. */
@@ -204,11 +207,31 @@
   transition: width 0.1s linear;
 }
 
-/* Results reveal — the catalog animates up as the ceremony bows out. */
-.home-results-reveal { animation: home-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Results reveal — classic chatbot answer: once the ceremony bows out the
+   catalog rises up into position from below the fold (bottom → top) and
+   settles, the way a chat response scrolls into view. A soft blur-to-sharp
+   + barely-there scale makes the arrival feel like it's "resolving" rather
+   than just sliding. */
+.home-results-reveal {
+  animation: home-reveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
 @keyframes home-reveal {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(72px) scale(0.98);
+    filter: blur(6px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -260,10 +283,13 @@
   }
 }
 
-/* Keyboard-stays-put: on the hero the centered bar must NOT jump up when
-   the keyboard opens (search-open) — it's already in a good spot and the
-   centered position sits above the keyboard. Higher specificity than the
-   mobile keyboard-flush rule so it wins on every breakpoint. */
+/* On the hero, the search bar starts centered (46vh). When the shopper taps
+   it on mobile a soft keyboard appears and BottomBar pins the bar inline to
+   the keyboard's top edge — that inline value overrides this, so the bar
+   glides down from center to ride the keyboard (the 0.55s transition above
+   makes it elegant). This 46vh rule remains the resting/no-keyboard value
+   (desktop has its own 50vh rule below, and stays centered since there's no
+   soft keyboard). */
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
   bottom: 46vh;
 }

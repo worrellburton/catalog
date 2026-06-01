@@ -50,6 +50,13 @@ function BottomBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef<number | null>(null);
+  // Live height of the on-screen keyboard (+ any bottom browser chrome),
+  // measured from window.visualViewport. 0 when no keyboard is up. When the
+  // search sheet is open and this is > 0, the bar pins its bottom edge flush
+  // to the keyboard's top — the elegant fix for the classic iOS "fixed bar
+  // hides behind the keyboard" problem, driven purely by the visual viewport
+  // so it tracks the keyboard 1:1 regardless of hero/feed/shell context.
+  const [kbInset, setKbInset] = useState(0);
   // onSearchChange fires on every keystroke - no debounce here.
   // The feed itself only commits once nl-search resolves, so the spinner
   // appears immediately and the grid stays frozen until results are ready.
@@ -69,12 +76,19 @@ function BottomBar({
     const root = document.documentElement;
     const update = () => {
       const offset = window.innerHeight - vv.height - vv.offsetTop;
-      root.style.setProperty('--ios-bottom-chrome', `${Math.max(offset, 0)}px`);
+      const inset = Math.max(offset, 0);
+      root.style.setProperty('--ios-bottom-chrome', `${inset}px`);
       // Visible viewport height (full screen minus keyboard + browser
       // chrome). On iOS Safari, where interactive-widget isn't honored,
       // the search overlay binds its height to this so the suggestion
       // column ends at the keyboard's top edge instead of running behind it.
       root.style.setProperty('--vv-height', `${Math.round(vv.height)}px`);
+      // The bottom chrome alone (Safari's URL toolbar / form accessory) is
+      // ~44-88px; a real soft keyboard pushes this well past 120px. Treat
+      // anything above that threshold as "keyboard is up" so we only pin the
+      // bar to it when there genuinely is one (and never on desktop, where
+      // the visual viewport doesn't shrink).
+      setKbInset(inset > 120 ? inset : 0);
     };
     update();
     vv.addEventListener('resize', update);
@@ -330,7 +344,15 @@ function BottomBar({
       <div
         className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`}
         id="bottom-bar"
-        style={searchOpen ? { transform: `translateX(-50%) translateY(${dragOffset}px)`, transition: dragging ? 'none' : undefined } : undefined}
+        style={searchOpen ? {
+          transform: `translateX(-50%) translateY(${dragOffset}px)`,
+          transition: dragging ? 'none' : undefined,
+          // Pin flush to the keyboard's top edge (8px breathing gap) the
+          // instant a soft keyboard appears. Inline so it beats every CSS
+          // position rule (hero centering, top-dock, shell) with no
+          // specificity war; falls back to CSS when no keyboard is up.
+          ...(kbInset > 0 ? { bottom: kbInset + 8, top: 'auto' } : null),
+        } : undefined}
       >
         {searchOpen && (
           <div className="search-drag-handle" aria-hidden="true">

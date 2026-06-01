@@ -241,7 +241,7 @@ export default function Home() {
     setHeroMode(false);
     window.scrollTo({ top: 0, behavior: 'auto' });
     setRevealResults(true);
-    window.setTimeout(() => setRevealResults(false), 700);
+    window.setTimeout(() => setRevealResults(false), 950);
   }, []);
 
   const handleRevealFeed = useCallback(() => {

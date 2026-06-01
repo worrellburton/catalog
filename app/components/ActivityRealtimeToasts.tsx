@@ -65,12 +65,6 @@ function KindIcon({ kind }: { kind: ActivityKind }) {
   return (<svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>);
 }
 
-function actionVerb(kind: Exclude<ActivityKind, 'follow'>): string {
-  if (kind === 'impression') return 'viewed';
-  if (kind === 'click')      return 'tapped';
-  return 'checked out from';
-}
-
 function summaryNoun(kind: ActivityKind, n: number): string {
   if (kind === 'impression') return n === 1 ? 'new view'    : 'new views';
   if (kind === 'click')      return n === 1 ? 'new tap'     : 'new taps';
@@ -150,6 +144,9 @@ export default function ActivityRealtimeToasts() {
 
   const pushRef = useRef(pushToast);
   pushRef.current = pushToast;
+  // Dedup realtime deliveries — Supabase can deliver the same INSERT
+  // twice, which previously stacked identical toasts.
+  const seenEventIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (loading || !user || !supabase) return;
@@ -245,9 +242,10 @@ export default function ActivityRealtimeToasts() {
                 .neq('follower_id', userId)
             : Promise.resolve({ data: [] as Array<{ follower_id: string }> }),
         ]);
-        let imps = 0, clicks = 0, clickouts = 0;
+        // Only meaningful intent: look taps + product checkouts. Views
+        // (impressions) are intentionally excluded — they over-counted.
+        let clicks = 0, clickouts = 0;
         for (const e of (events ?? []) as Array<{ event_type: string }>) {
-          if (e.event_type === 'impression') imps      += 1;
           if (e.event_type === 'click')      clicks    += 1;
           if (e.event_type === 'clickout')   clickouts += 1;
         }
@@ -255,7 +253,6 @@ export default function ActivityRealtimeToasts() {
         if (clickouts > 0) pushSummary(setToasts, 'clickout',   clickouts);
         if (clicks    > 0) pushSummary(setToasts, 'click',      clicks);
         if (followers > 0) pushSummary(setToasts, 'follow',     followers);
-        if (imps      > 0) pushSummary(setToasts, 'impression', imps);
       }
 
       // 3. Mount-time catch-up.
@@ -310,25 +307,37 @@ export default function ActivityRealtimeToasts() {
             },
             (payload) => {
               const row = payload.new as {
+                id?: string | null;
                 user_id?: string | null;
                 event_type?: string | null;
                 target_type?: string | null;
                 target_uuid?: string | null;
               };
               if (!row) return;
-              if (row.user_id === userId) return;       // skip my own views
-              if (row.target_type !== 'look' || !row.target_uuid) return;
+              if (row.user_id === userId) return;       // skip my own activity
+              if (!row.target_uuid) return;
               const k = row.event_type;
-              if (k !== 'impression' && k !== 'click' && k !== 'clickout') return;
-              const kind: ActivityKind = k;
+              // Only discrete intent: a LOOK tapped open, or a PRODUCT
+              // checked out. Impressions ('viewed') are excluded — they
+              // fired on every scroll and spammed duplicate toasts.
+              const isLookClick = row.target_type === 'look' && k === 'click';
+              const isProductClickout = row.target_type === 'product' && k === 'clickout';
+              if (!isLookClick && !isProductClickout) return;
+              // Dedup repeated realtime deliveries of the same row.
+              if (row.id) {
+                if (seenEventIdsRef.current.has(row.id)) return;
+                seenEventIdsRef.current.add(row.id);
+              }
+              const kind: ActivityKind = k as ActivityKind;
               const lookId = row.target_uuid;
-              const verb  = actionVerb(kind);
-              const cachedLook = lookInfoById.get(lookId);
+              const verb  = isProductClickout ? 'checked out' : 'tapped';
+              const noun = isProductClickout ? 'your product' : 'your look';
+              const cachedLook = isProductClickout ? undefined : lookInfoById.get(lookId);
               const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               setToasts(prev => {
                 const merged: ActivityToast[] = [...prev, {
                   id, kind,
-                  message: `Someone ${verb} ${cachedLook?.title ?? 'your look'}`,
+                  message: `Someone ${verb} ${cachedLook?.title ?? noun}`,
                   avatarUrl: null,
                   thumbnailUrl: cachedLook?.thumbnailUrl ?? null,
                   fallbackInitial: '?',
@@ -338,19 +347,19 @@ export default function ActivityRealtimeToasts() {
               window.setTimeout(() => {
                 setToasts(prev => prev.filter(t => t.id !== id));
               }, TOAST_LIFESPAN_MS);
-              // Resolve actor (name + avatar) and look (title + thumb) and
-              // upgrade the toast in place once both land.
+              // Resolve actor (+ look details for look taps) and upgrade the
+              // toast in place once they land.
               void Promise.all([
                 row.user_id ? resolveActorInfo(row.user_id) : Promise.resolve<ActorInfo>({ name: 'Someone', avatarUrl: null }),
-                resolveLookInfo(lookId),
+                isProductClickout ? Promise.resolve(null) : resolveLookInfo(lookId),
               ]).then(([actor, look]) => {
                 setToasts(prev => prev.map(t =>
                   t.id === id
                     ? {
                         ...t,
-                        message: `${actor.name} ${verb} ${look.title}`,
+                        message: `${actor.name} ${verb} ${look?.title ?? noun}`,
                         avatarUrl: actor.avatarUrl,
-                        thumbnailUrl: look.thumbnailUrl,
+                        thumbnailUrl: look?.thumbnailUrl ?? t.thumbnailUrl,
                         fallbackInitial: actor.name.charAt(0).toUpperCase() || '?',
                       }
                     : t,
