@@ -11,11 +11,14 @@
 // A hard MAX_DURATION guarantees we never hang if `ready` never arrives.
 
 import { useEffect, useRef, useState } from 'react';
+import ParticleBackground from '~/components/ParticleBackground';
+// Speed is dialed up while the ceremony is on screen so the field reads
+// as "searching the world", then restored on cleanup. The ceremony's own
+// ParticleBackground sits ABOVE its opaque scrim so the field is visible
+// against the scrim (the site singleton sits below the scrim and is
+// hidden during the ceremony — that's intentional: the ceremony covers
+// the feed, but its own particle layer keeps the brand world alive).
 import { particleControls } from '~/services/particles';
-// ParticleBackground lives in the app root (SiteParticleHost). Here we
-// just dial up its speed for the "searching the world" moment, then
-// restore it on cleanup — the canvas itself never re-mounts so the field
-// stays continuous across the search transition.
 
 interface SearchCeremonyProps {
   query: string;
@@ -158,6 +161,8 @@ export default function SearchCeremony({ query, ready, onDone }: SearchCeremonyP
 
   return (
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
+      {/* Ceremony-local particle layer above the opaque scrim. */}
+      <ParticleBackground />
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (

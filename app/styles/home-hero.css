@@ -784,11 +784,20 @@ html:has(.user-menu-page) .bottom-bar {
    through. The matte-black radial gradient on each is preserved as a base
    tint via alpha; without this, the surfaces would block the field. */
 .search-ceremony {
-  /* original: radial-gradient(...) #000 — alpha-step the inner stops so
-     the singleton particles bleed through. */
-  background: radial-gradient(120% 100% at 50% 40%,
-    rgba(20, 20, 26, 0.78) 0%,
-    rgba(0, 0, 0, 0.92) 72%);
+  /* OPAQUE — the ceremony fully covers the feed underneath so 'James
+     Perse' steps don't bleed across the cards below. The particle world
+     stays alive via the ceremony's own ParticleBackground (rendered ABOVE
+     this scrim, BELOW the .sc-stage content). The site singleton sits
+     below; that's fine — the ceremony's local canvas takes over visually
+     while it's on screen. */
+  background: radial-gradient(120% 100% at 50% 40%, #14141a 0%, #000 72%);
+}
+.search-ceremony .pw-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.8;
+  pointer-events: none;
 }
 .empty-catalog {
   background: radial-gradient(120% 90% at 50% 14%,
