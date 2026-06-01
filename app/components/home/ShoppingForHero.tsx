@@ -31,9 +31,15 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
 
       {/* Scroll-to-best-sellers affordance: an animated mouse with a
           dot that travels down, plus a bobbing chevron + label. */}
-      <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Scroll to see best sellers">
+      <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Scroll to find amazing things">
+        {/* Desktop: a scroll-mouse. Mobile: a swiping finger (CSS swaps). */}
         <span className="sfh-mouse" aria-hidden="true"><span className="sfh-mouse-dot" /></span>
-        <span className="sfh-scroll-label">Scroll to see best sellers</span>
+        <span className="sfh-finger" aria-hidden="true">
+          <svg width="26" height="30" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 9V4.5a1.5 1.5 0 0 0-3 0V12L8.2 10.4a1.6 1.6 0 0 0-2.2 2.3l3.4 3.6A5 5 0 0 0 13.1 18H16a4 4 0 0 0 4-4v-3a1.5 1.5 0 0 0-3 0 1.5 1.5 0 0 0-3 0 1.5 1.5 0 0 0-1 .1V9z"/>
+          </svg>
+        </span>
+        <span className="sfh-scroll-label">Scroll to find amazing things</span>
         <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
