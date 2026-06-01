@@ -1273,8 +1273,12 @@ export default function GeneratePage() {
     setGeneration(data);
     // Fire-and-forget Claude name generation. Doesn't block the user
     // from advancing to the result screen - the name lands on the row
-    // asynchronously and shows up in "Your looks" once it does.
-    void nameLookForGeneration(data.id);
+    // asynchronously and shows up in "Your looks" once it does. Surfaced
+    // in the global Generation Queue too (a quick text job).
+    {
+      const nameJob = startGenerationJob({ kind: 'other', label: 'Naming look', model: 'claude' });
+      nameLookForGeneration(data.id).then(() => nameJob.finish(undefined, 'Named')).catch(() => nameJob.fail());
+    }
     // Prepend the new row to the in-memory list so it shows up in
     // "Your looks" the moment the shopper hits Back from the result
     // screen - no page refresh needed. The list-polling effect will
