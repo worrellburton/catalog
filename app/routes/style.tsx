@@ -8,6 +8,7 @@ import { type UserGender } from '~/services/genders';
 import { getLensIngestCounts } from '~/services/lens-search';
 import { supabase } from '~/utils/supabase';
 import StatsEditorModal from '~/components/StatsEditorModal';
+import { startGenerationJob } from '~/services/generation-queue';
 
 // Lens sheet is the only consumer of the SerpAPI Google Lens client +
 // product ingest path, so lazy-load it so the rest of the Style page
@@ -164,6 +165,14 @@ export default function StylePage() {
     setSubmitting(true);
     setSubmittingOccasion(trimmed);
     setError(null);
+    // Surface this style-sheet render in the global Generation Queue.
+    const queueJob = startGenerationJob({
+      kind: 'style',
+      label: 'Style sheet',
+      context: trimmed,
+      model: 'gpt-image-1',
+      thumbnailUrl: referenceUrls[0] ?? null,
+    });
     const { data, error: err } = await createStyleGeneration({
       userId: user.id,
       occasion: trimmed,
@@ -171,7 +180,8 @@ export default function StylePage() {
     });
     setSubmitting(false);
     setSubmittingOccasion('');
-    if (err) { setError(err); return; }
+    if (err) { queueJob.fail(err); setError(err); return; }
+    queueJob.finish(undefined, 'Done');
     if (data) {
       setHistory(prev => [data, ...prev.filter(p => p.generation.id !== data.generation.id)]);
       setOccasion('');
