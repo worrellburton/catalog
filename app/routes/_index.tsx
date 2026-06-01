@@ -219,6 +219,17 @@ export default function Home() {
   // Scrolling up brings them back; stopping preserves the current state.
   const [chromeHidden, setChromeHidden] = useState(false);
 
+  // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
+  // (before OAuth can strip it), then redeem it once the user is signed in
+  // (attribute the signup + skip the waitlist + reward the creator $0.25).
+  useEffect(() => {
+    import('~/services/referrals').then(({ captureRefFromUrl }) => captureRefFromUrl());
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    import('~/services/referrals').then(({ redeemStoredRef }) => { void redeemStoredRef(); });
+  }, [user]);
+
   // Reveal the bottom search bar once the shopper scrolls down off the
   // hero into the catalog (while heroMode is the active screen).
   useEffect(() => {

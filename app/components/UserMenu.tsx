@@ -91,6 +91,9 @@ function UserMenu({
   const [cooldown, setCooldown] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [dotsConnected, setDotsConnected] = useState<boolean | null>(null);
+  // Invite-and-earn: the signed-in creator's referral link + running stats.
+  const [invite, setInvite] = useState<{ handle: string | null; link: string | null; count: number; earnedCents: number } | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
@@ -176,6 +179,38 @@ function UserMenu({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
+
+  // Fetch invite link + referral stats when the menu/page opens.
+  useEffect(() => {
+    if ((!open && !pageOpen) || !user?.id) return;
+    let cancelled = false;
+    import('~/services/referrals').then(({ getMyInviteInfo }) => {
+      getMyInviteInfo().then(info => { if (!cancelled) setInvite(info); });
+    });
+    return () => { cancelled = true; };
+  }, [open, pageOpen, user?.id]);
+
+  // Share / copy the invite link. Native share sheet where available
+  // (mobile), clipboard copy fallback with a brief "Copied" confirmation.
+  const handleInvite = useCallback(() => {
+    const link = invite?.link;
+    if (!link) return;
+    const shareData = {
+      title: 'Catalog',
+      text: 'Join my catalog on Catalog — skip the waitlist:',
+      url: link,
+    };
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share(shareData).catch(() => {});
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => {
+        setInviteCopied(true);
+        window.setTimeout(() => setInviteCopied(false), 1800);
+      }).catch(() => {});
+    }
+  }, [invite]);
 
   // Fetch wallet balance + Dots connection status when menu opens
   useEffect(() => {
@@ -569,6 +604,23 @@ function UserMenu({
                       <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
                     </div>
                   </div>
+                )}
+
+                {/* Invite & earn — share your catalog link; signups skip the
+                    waitlist and you earn $0.25 each. Shows running earnings. */}
+                {invite?.link && (
+                  <button type="button" className="user-menu-page-row user-menu-invite-row" onClick={handleInvite}>
+                    <span className="user-menu-page-row-icon" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                    </span>
+                    <span className="user-menu-page-row-label">
+                      {inviteCopied ? 'Link copied!' : 'Invite a catalog & earn'}
+                    </span>
+                    {invite.earnedCents > 0 && (
+                      <span className="user-menu-page-row-trailing">${(invite.earnedCents / 100).toFixed(2)}</span>
+                    )}
+                    <svg className="user-menu-page-row-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  </button>
                 )}
 
                 {onLogout && (
