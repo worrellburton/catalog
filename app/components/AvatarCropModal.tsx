@@ -43,6 +43,42 @@ const PIXEL_RATIO = typeof window !== 'undefined' ? Math.min(window.devicePixelR
 
 interface ImageDims { w: number; h: number }
 
+/** Decode a blob into an HTMLImageElement, downscale to fit `maxLong` on
+ *  the long edge, and return a JPEG blob at the given quality. Used to
+ *  optimize every uploaded avatar before the crop UI sees it — phone
+ *  photos can easily be 12-30 MB; the crop modal + Supabase storage are
+ *  both happier with something near 2 MB. */
+async function downscaleImage(input: Blob, maxLong: number, quality: number): Promise<Blob> {
+  const url = URL.createObjectURL(input);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('decode'));
+      el.src = url;
+    });
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    if (long <= maxLong && input.size <= 4 * 1024 * 1024) {
+      // Small enough already — skip the canvas round-trip.
+      return input;
+    }
+    const scale = long > maxLong ? maxLong / long : 1;
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return input;
+    ctx.drawImage(img, 0, 0, w, h);
+    return await new Promise<Blob>((resolve) => {
+      canvas.toBlob(b => resolve(b || input), 'image/jpeg', quality);
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -473,11 +509,9 @@ export function AvatarUpload({
       window.setTimeout(() => setError(null), 3000);
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('That image is too large (10 MB max).');
-      window.setTimeout(() => setError(null), 3000);
-      return;
-    }
+    // No size rejection — modern phone photos are routinely 12-30 MB. We
+    // always downscale to ≤ 2048px on the long edge below, so any input
+    // size works and the upload stays small.
 
     let blob: Blob = file;
     if (
@@ -494,6 +528,16 @@ export function AvatarUpload({
         window.setTimeout(() => setError(null), 3000);
         return;
       }
+    }
+
+    // Always optimize: decode → downscale to 2048px max → JPEG at 0.9.
+    // Keeps the crop modal snappy on big phone photos and removes the
+    // "image too large" failure mode entirely.
+    try {
+      blob = await downscaleImage(blob, 2048, 0.9);
+    } catch {
+      /* If decode fails, fall through with the original blob; the crop
+         modal can still handle it most of the time. */
     }
 
     setPickedSrc(URL.createObjectURL(blob));
