@@ -419,15 +419,10 @@ function ContinuousFeed({
   //     re-shuffling mid-session.
   //   - When there is NO cache (first visit), the fetch updates live
   //     state so the feed appears as soon as data arrives.
+  // Seed state from cache for an instant first paint; the refetch below
+  // always overwrites with fresh data (true SWR) so order/content changes
+  // reach the screen.
   const initialCached = useMemo(() => getCachedHomeFeed(), []);
-  const hasLooksCacheRef = useRef(!!initialCachedLooks && initialCachedLooks.length > 0);
-  // CRITICAL: only treat the cache as "present" when it actually has items.
-  // An empty cached array ([]) is still truthy, and the SWR refresh guard
-  // (`if (hasCreativesCacheRef.current && !force)`) then skips setLiveCreatives
-  // forever — so a once-empty cache permanently hid every product even after
-  // the catalog filled back up. Requiring length > 0 lets the fresh fetch
-  // populate when the cache is empty/stale.
-  const hasCreativesCacheRef = useRef(!!initialCached && initialCached.length > 0);
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
   const [creativesLoading, setCreativesLoading] = useState(!(initialCached && initialCached.length > 0));
   useEffect(() => {
@@ -440,30 +435,25 @@ function ContinuousFeed({
         prefetchHomeFeed().catch(() => null as ProductAd[] | null),
       ]).then(([freshLooks, freshCreatives]) => {
         if (cancelled) return;
-        // Looks: skip setState when cache was valid — avoids grid reshuffle.
-        // `force` (a gender change) overrides this: the cached feed is for
-        // the OLD gender, so we MUST swap to the freshly-filtered set.
-        if (hasLooksCacheRef.current && !force) {
-          if (freshLooks) primeLookAssets(freshLooks);
-        } else if (freshLooks && freshLooks.length > 0) {
+        // True stale-while-revalidate: show the cache instantly (state was
+        // seeded from it), THEN always overwrite with the fresh fetch so
+        // order/content changes (e.g. the admin's feed_rank arrangement,
+        // a gender flip) actually reach the screen. The previous version
+        // skipped setState whenever a cache existed, which permanently
+        // pinned the stale order — the home feed never reflected the admin
+        // FEED order. React reconciles by slotId so the swap is seamless.
+        void force;
+        if (freshLooks && freshLooks.length > 0) {
           setDbLooks(freshLooks);
           primeLookAssets(freshLooks);
         } else if (!initialCachedLooks) {
           setDbLooks(staticLooksFallback);
         }
-        // Creatives: same SWR guard, same `force` override. Without the
-        // override, flipping "Shopping for: Women" fetched the women's
-        // feed but never pushed it to state, leaving men's products on
-        // screen (the bug this fixes).
-        if (hasCreativesCacheRef.current && !force) {
-          if (freshCreatives) primeTrailAssets(freshCreatives);
-        } else {
-          if (freshCreatives) {
-            setLiveCreatives(freshCreatives);
-            primeTrailAssets(freshCreatives);
-          }
-          setCreativesLoading(false);
+        if (freshCreatives) {
+          setLiveCreatives(freshCreatives);
+          primeTrailAssets(freshCreatives);
         }
+        setCreativesLoading(false);
       });
     };
 

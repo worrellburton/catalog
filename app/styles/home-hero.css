@@ -660,14 +660,18 @@
   }
 
   /* THE desktop search bar is TypeAnywhere's .ai-bar-wrap (the bottom-bar is
-     display:none on desktop). It's fixed at the bottom by default; on the
-     hero (not scrolled) lift it to the cluster center, then glide it back
-     down to the bottom once the shopper scrolls into the feed. */
+     display:none on desktop). Center it with the headline whenever the hero
+     is showing; glide it back to the bottom only once the shopper actually
+     scrolls into the feed (.hero-scrolled). Using the positive
+     .hero-scrolled selector for the drop (not :not(.hero-scrolled) for the
+     centered state) means the centered position is the default and can't be
+     defeated by a transient hero-scrolled flicker. */
   .app-root.home-hero .ai-bar-wrap {
+    bottom: 44vh;
     transition: bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .app-root.home-hero:not(.hero-scrolled) .ai-bar-wrap {
-    bottom: 44vh;
+  .app-root.home-hero.hero-scrolled .ai-bar-wrap {
+    bottom: max(env(safe-area-inset-bottom), 24px);
   }
 
   /* Creator profile pictures on desktop too: show the glowing stories rail
