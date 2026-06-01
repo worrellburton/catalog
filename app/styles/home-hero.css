@@ -100,7 +100,9 @@
    bar (which is the single search input on the hero). */
 .sfh-scroll-hint {
   position: absolute;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  /* Sit closer to the iOS browser chrome so the cluster above has visual
+     breathing room — was 96px, felt cramped against the centered bar. */
+  bottom: calc(38px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
@@ -368,12 +370,17 @@
     display: inline-flex;
     order: 1;
     color: rgba(255, 255, 255, 0.75);
-    animation: sfh-swipe 1.8s ease-in-out infinite;
+    transform-origin: 50% 50%;
+    animation: sfh-swipe 2s ease-in-out infinite;
   }
 }
+/* The finger rotates around its center axis (a gentle 'flick' motion) plus
+   a small Y bob, so the gesture reads as a swipe instead of a tap. */
 @keyframes sfh-swipe {
-  0%, 100% { transform: translateY(6px); opacity: 0.55; }
-  50%      { transform: translateY(-4px); opacity: 1; }
+  0%   { transform: translateY(-2px) rotate(-22deg); opacity: 0.55; }
+  35%  { transform: translateY(2px)  rotate(0deg);   opacity: 1; }
+  70%  { transform: translateY(10px) rotate(22deg);  opacity: 0.85; }
+  100% { transform: translateY(-2px) rotate(-22deg); opacity: 0.55; }
 }
 
 /* ── Mobile: following / followers profile icons at the TOP of the hero,
@@ -557,4 +564,15 @@
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
   pointer-events: none;
+}
+
+/* Hide the centered hero search bar (and its scroll hint) whenever the
+   profile/user menu is open — the menu sheet sits above the bar and the
+   bar bleeding through behind it reads as a layering bug. The :has()
+   selector keys off the popout that only mounts while the menu is open. */
+.app-root.home-hero:has(.user-menu-popout) .bottom-bar,
+.app-root.home-hero:has(.user-menu-popout) .sfh-scroll-hint {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
