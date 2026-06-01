@@ -642,15 +642,17 @@
      above it, so logo + headline + bar read as ONE vertically-centered
      cluster — same treatment as mobile. */
   .sfh {
-    /* min-height < 100vh so the top of the catalog feed peeks at the bottom
-       edge, inviting the scroll. flex-end + padding-bottom parks the
-       spark+headline just above the viewport-fixed bar (bottom: 44vh →
-       top ≈ 52.5vh); headline bottom lands ~50vh so the trio is tight and
-       centered around ~45vh. */
-    min-height: 90vh;
+    /* Full viewport on desktop (matches the Gemini-style reference: clean
+       centered screen, feed appears only on scroll). 90vh let the page
+       scroll a hair on load, which could flip hero-scrolled → the bar
+       dropped to the bottom while the headline stayed centered. Full
+       height keeps scrollY pinned at 0 so the centered state holds. */
+    min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    padding-bottom: 40vh;
+    /* Headline bottom lands ~48vh from top; bar at 44vh-from-bottom
+       (52-56vh from top) sits just under it — tight centered trio. */
+    padding-bottom: 52vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
