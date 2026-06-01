@@ -2171,9 +2171,27 @@ export default function AdminData() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'products' }, (payload) => {
         const p = payload.new as CrawledProduct;
-        setCrawledProducts(prev => prev.map(x => x.id === p.id
-          ? { ...x, ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct
-          : x));
+        setCrawledProducts(prev => {
+          const idx = prev.findIndex(x => x.id === p.id);
+          if (idx === -1) return prev;
+          const prevRow = prev[idx];
+          const merged = { ...prevRow, ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct;
+          // When a scrape just finished (pending → done) OR a primary
+          // video just landed, surface the product at the TOP of the
+          // list so the admin sees the freshly-resolved row immediately
+          // (it also gets a fresh created_at from the scrape, so the
+          // default Date-Added sort keeps it on top). Plain in-place
+          // update for every other field change.
+          const justScraped = p.scrape_status === 'done' && prevRow.scrape_status !== 'done';
+          const gotPrimaryVideo = !!p.primary_video_url && !prevRow.primary_video_url;
+          if (justScraped || gotPrimaryVideo) {
+            const without = prev.filter(x => x.id !== p.id);
+            return [merged, ...without];
+          }
+          const copy = prev.slice();
+          copy[idx] = merged;
+          return copy;
+        });
       })
       .subscribe();
     return () => { void supabase!.removeChannel(channel); };
