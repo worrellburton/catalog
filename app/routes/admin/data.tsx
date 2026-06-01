@@ -2339,17 +2339,20 @@ export default function AdminData() {
   //   OFF → set products.is_active = false AND pause every live ad for the
   //         product so it falls off the feed immediately.
   const toggleProductActive = useCallback(async (productId: string, active: boolean) => {
+    // Single "Active" switch now controls BOTH flags together (the old
+    // Home + Platform toggles were merged): on → live on the home feed
+    // AND in search/catalog listings; off → fully hidden.
     setCrawledProducts(prev =>
-      prev.map(r => (r.id === productId ? { ...r, is_active: active } : r))
+      prev.map(r => (r.id === productId ? { ...r, is_active: active, is_platform: active } : r))
     );
     if (!supabase) return;
     const { error: updateErr } = await supabase
       .from('products')
-      .update({ is_active: active })
+      .update({ is_active: active, is_platform: active })
       .eq('id', productId);
     if (updateErr) {
       setCrawledProducts(prev =>
-        prev.map(r => (r.id === productId ? { ...r, is_active: !active } : r))
+        prev.map(r => (r.id === productId ? { ...r, is_active: !active, is_platform: !active } : r))
       );
       console.error('toggleProductActive failed:', updateErr.message);
       return;
@@ -2871,28 +2874,7 @@ export default function AdminData() {
     }
   }, [adVideoMap, adMetaByUrl, showToast, loadAdProductIds]);
 
-  // Platform visibility toggle. Sister to toggleProductActive (which
-  // governs the home grid). When false, the product is excluded from
-  // search results + catalog-wide listings but stays in the admin
-  // table so an admin can flip it back on.
-  const toggleProductPlatform = useCallback(async (productId: string, on: boolean) => {
-    setCrawledProducts(prev =>
-      prev.map(r => (r.id === productId ? { ...r, is_platform: on } : r))
-    );
-    if (!supabase) return;
-    const { error } = await supabase
-      .from('products')
-      .update({ is_platform: on })
-      .eq('id', productId);
-    if (error) {
-      setCrawledProducts(prev =>
-        prev.map(r => (r.id === productId ? { ...r, is_platform: !on } : r))
-      );
-      showToast(`Platform toggle failed: ${error.message}`);
-    }
-  }, [showToast]);
-
-  // Bulk-flip the Home toggle (products.is_active) on every selected
+  // Bulk-flip the Active toggle (products.is_active + is_platform) on every selected
   // product. Lives below showToast because it captures it for error
   // toasts; declaring it earlier would TDZ in the bundled output.
   const bulkSetActive = useCallback(async (active: boolean) => {
@@ -2903,8 +2885,9 @@ export default function AdminData() {
     }
     if (ids.length === 0) return;
     // Optimistic UI flip - rolled back below on any chunk failure.
+    // The single Active switch controls is_active + is_platform together.
     setCrawledProducts(prev =>
-      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active } : r))
+      prev.map(r => (ids.includes(r.id) ? { ...r, is_active: active, is_platform: active } : r))
     );
     if (!supabase) return;
 
@@ -2919,7 +2902,7 @@ export default function AdminData() {
       const slice = ids.slice(i, i + CHUNK);
       const { error } = await supabase
         .from('products')
-        .update({ is_active: active })
+        .update({ is_active: active, is_platform: active })
         .in('id', slice);
       if (error && !firstError) firstError = error.message;
     }
@@ -4449,12 +4432,12 @@ export default function AdminData() {
             <span className="bulk-divider" />
 
             <span className="bulk-group">
-              <span className="bulk-label">Home</span>
+              <span className="bulk-label">Active</span>
               <button
                 className="bulk-pill bulk-pill--on"
                 onClick={async () => {
                   await bulkSetActive(true);
-                  showToast(`Home on for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                  showToast(`Active on for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
                 }}
               >
                 On
@@ -4463,7 +4446,7 @@ export default function AdminData() {
                 className="bulk-pill bulk-pill--off"
                 onClick={async () => {
                   await bulkSetActive(false);
-                  showToast(`Home off for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                  showToast(`Active off for ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
                 }}
               >
                 Off
@@ -4539,8 +4522,7 @@ export default function AdminData() {
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ minWidth: 140 }}>Fabric</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <th style={{ textAlign: 'center' }} title="When on, this product is shown on the home feed">Home</th>
-                <th style={{ textAlign: 'center' }} title="When on, this product appears in search results and catalog-wide listings. When off, the product is hidden from the platform but stays in this admin table.">Platform</th>
+                <th style={{ textAlign: 'center' }} title="When on, this product is live — shown on the home feed AND in search / catalog listings. When off, it's fully hidden from the platform (but stays in this admin table).">Active</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 {!statsExpanded && (
@@ -5026,16 +5008,6 @@ export default function AdminData() {
                       <AdminToggle
                         on={(p as any).is_active !== false}
                         onChange={v => toggleProductActive(p.id!, v)}
-                      />
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    {p.id ? (
-                      <AdminToggle
-                        on={(p as any).is_platform !== false}
-                        onChange={v => toggleProductPlatform(p.id!, v)}
                       />
                     ) : (
                       <span style={{ fontSize: 11, color: '#cbd5e1' }}> - </span>

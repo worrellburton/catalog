@@ -414,10 +414,12 @@ export default function Home() {
     // rest of the app uses to gate native-only flows.
     const inNativeShell = typeof document !== 'undefined'
       && document.documentElement.dataset.shell === 'catalog-app';
-    const isDesktop = typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(min-width: 769px)').matches
-      : false;
-    if (isDesktop && !inNativeShell) {
+    // For now, every product link opens the merchant in a real new tab on
+    // web — desktop AND mobile — so the shopper keeps the catalog tab and
+    // lands directly on the product. Only the native Flutter shell keeps
+    // the in-app browser overlay (window.open doesn't pop a real tab
+    // inside the embedded webview, and the shell owns that flow).
+    if (!inNativeShell) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       setBrowserState({ url, title, product });
