@@ -514,12 +514,15 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
+    /* Hero is shorter than the viewport so the top of the catalog feed
+       peeks at the bottom edge, inviting the scroll. */
+    min-height: 88svh;
     justify-content: center;
     /* Just clear the stories rail at the top (rail bottom ≈ 180px from
        top). Generous bottom reservation so the cluster centers in the
        remaining band and the bar always sits well below. */
     padding-top: calc(env(safe-area-inset-top, 0px) + 120px);
-    padding-bottom: 30vh;
+    padding-bottom: 24vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
