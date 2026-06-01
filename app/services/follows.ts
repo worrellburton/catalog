@@ -77,6 +77,108 @@ export async function getMyFollowing(): Promise<string[]> {
   return ((data || []) as { followee_handle: string }[]).map(r => r.followee_handle);
 }
 
+/** A creator the shopper follows, enriched with the stats the Following
+ *  list-view page shows: how many looks they've posted, how many followers
+ *  they have, when they last posted, and when you started following them. */
+export interface FollowingDetail {
+  handle: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  /** ms-since-epoch you started following this creator. */
+  followedAt: number;
+  looksCount: number;
+  followerCount: number;
+  /** ms-since-epoch of their most recent look, 0 if they've never posted. */
+  lastPostTs: number;
+}
+
+/** Every creator the shopper follows, newest-followed first, each with
+ *  display info + engagement stats for the Following page. One round of
+ *  fan-out queries (creators / looks / follower counts), tallied client-side
+ *  with a profiles fallback for seed creators that have no avatar yet. */
+export async function getMyFollowingDetailed(): Promise<FollowingDetail[]> {
+  if (!supabase) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: followRows } = await supabase
+    .from('creator_follows')
+    .select('followee_handle, created_at')
+    .eq('follower_id', user.id)
+    .order('created_at', { ascending: false });
+  const rows = (followRows || []) as { followee_handle: string; created_at: string }[];
+  if (rows.length === 0) return [];
+
+  const handles = rows.map(r => r.followee_handle);
+  const followedAtByHandle = new Map(
+    rows.map(r => [r.followee_handle, Date.parse(r.created_at) || Date.now()] as const),
+  );
+
+  const [creatorsRes, looksRes, followersRes] = await Promise.all([
+    supabase.from('creators').select('id, handle, display_name, avatar_url').in('handle', handles),
+    supabase.from('looks').select('creator_handle, user_id, created_at').in('creator_handle', handles),
+    supabase.from('creator_follows').select('followee_handle').in('followee_handle', handles),
+  ]);
+
+  type CRow = { id: string | null; handle: string; display_name: string | null; avatar_url: string | null };
+  type LRow = { creator_handle: string; user_id: string | null; created_at: string | null };
+  const creatorByHandle = new Map<string, CRow>(
+    ((creatorsRes.data || []) as CRow[]).map(c => [c.handle, c]),
+  );
+
+  // Looks count + last-post ts + a representative user_id per handle.
+  const looksCountByHandle = new Map<string, number>();
+  const lastPostByHandle = new Map<string, number>();
+  const userIdByHandle = new Map<string, string>();
+  for (const l of (looksRes.data || []) as LRow[]) {
+    looksCountByHandle.set(l.creator_handle, (looksCountByHandle.get(l.creator_handle) ?? 0) + 1);
+    if (l.user_id && !userIdByHandle.has(l.creator_handle)) userIdByHandle.set(l.creator_handle, l.user_id);
+    if (l.created_at) {
+      const ts = Date.parse(l.created_at);
+      if (Number.isFinite(ts) && ts > (lastPostByHandle.get(l.creator_handle) ?? 0)) {
+        lastPostByHandle.set(l.creator_handle, ts);
+      }
+    }
+  }
+
+  // Follower count per followed creator (tally the rows we can read).
+  const followerCountByHandle = new Map<string, number>();
+  for (const f of (followersRes.data || []) as { followee_handle: string }[]) {
+    followerCountByHandle.set(f.followee_handle, (followerCountByHandle.get(f.followee_handle) ?? 0) + 1);
+  }
+
+  // Profiles fallback for handles whose creators row lacks an avatar/name.
+  const profileNeeded = Array.from(new Set(
+    handles
+      .filter(h => !creatorByHandle.get(h)?.avatar_url || !creatorByHandle.get(h)?.display_name)
+      .map(h => userIdByHandle.get(h))
+      .filter((u): u is string => !!u),
+  ));
+  const profileByUserId = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+  if (profileNeeded.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles').select('id, full_name, avatar_url').in('id', profileNeeded);
+    for (const p of (profs || []) as { id: string; full_name: string | null; avatar_url: string | null }[]) {
+      profileByUserId.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url });
+    }
+  }
+
+  return handles.map(h => {
+    const cr = creatorByHandle.get(h);
+    const uid = userIdByHandle.get(h);
+    const prof = uid ? profileByUserId.get(uid) : undefined;
+    return {
+      handle: h,
+      displayName: cr?.display_name || prof?.full_name || null,
+      avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
+      followedAt: followedAtByHandle.get(h) ?? Date.now(),
+      looksCount: looksCountByHandle.get(h) ?? 0,
+      followerCount: followerCountByHandle.get(h) ?? 0,
+      lastPostTs: lastPostByHandle.get(h) ?? 0,
+    };
+  });
+}
+
 /** People who follow the signed-in shopper — most recent first.
  *  Returns the follower's display name, avatar, and the ms-timestamp
  *  of when they followed (so the rail can render a "followed Xs ago"

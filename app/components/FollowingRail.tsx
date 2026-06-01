@@ -16,6 +16,10 @@ interface FollowingRailProps {
    *  button at the top of the popover. Receives the full list of
    *  followed handles so the parent can scope the feed to them. */
   onCreateFollowingCatalog?: (handles: string[]) => void;
+  /** When provided, tapping the "Following" row on mobile opens this full
+   *  list-view page instead of the inline popover. Desktop keeps the quick
+   *  popover. */
+  onOpenFollowingList?: () => void;
 }
 
 interface RailEntry {
@@ -65,7 +69,7 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
   const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
@@ -206,6 +210,19 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     ts: f.followedAt,
   }));
 
+  // Tapping the "Following" row: on mobile (where the full list page is
+  // wired up) open that page; everywhere else fall back to the quick
+  // inline popover.
+  const onFollowingTrigger = () => {
+    if (onOpenFollowingList && typeof window !== 'undefined'
+        && window.matchMedia('(max-width: 768px)').matches) {
+      setOpenPopover(null);
+      onOpenFollowingList();
+    } else {
+      setOpenPopover(v => v === 'following' ? null : 'following');
+    }
+  };
+
   if (mode === 'both') {
     return (
       <div
@@ -220,12 +237,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       >
         {hasFollowing && (
           <AvatarRow
+            railKind="following"
             ariaLabel="Following"
             titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
             entries={followingEntries!}
             newSet={null}
             isOpen={openPopover === 'following'}
-            onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+            onToggle={onFollowingTrigger}
             onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
             popoverTitle={`Following · ${followingEntries!.length}`}
             tooltipPrefix={null}
@@ -237,6 +255,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
         )}
         {hasFollowers && (
           <AvatarRow
+            railKind="followers"
             ariaLabel="Followers"
             titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
             entries={followerRailEntries}
@@ -267,6 +286,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     >
       {showFollowers && hasFollowers && (
         <AvatarRow
+          railKind="followers"
           ariaLabel="Followers"
           titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
           entries={followerRailEntries}
@@ -281,12 +301,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       )}
       {showFollowing && hasFollowing && (
         <AvatarRow
+          railKind="following"
           ariaLabel="Following"
           titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
           entries={followingEntries!}
           newSet={null}
           isOpen={openPopover === 'following'}
-          onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+          onToggle={onFollowingTrigger}
           onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
           popoverTitle={`Following · ${followingEntries!.length}`}
           tooltipPrefix={null}
@@ -305,6 +326,9 @@ export default memo(FollowingRail);
 // ─── internal AvatarRow ─────────────────────────────────────────────
 
 interface AvatarRowProps {
+  /** Which rail — drives a `.follow-rail--{kind}` class so CSS can show
+   *  only the "following" rail on mobile. */
+  railKind: 'following' | 'followers';
   ariaLabel: string;
   titleText: string;
   entries: RailEntry[];
@@ -322,12 +346,12 @@ interface AvatarRowProps {
 }
 
 function AvatarRow({
-  ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix, onlineHandles,
+  railKind, ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix, onlineHandles,
 }: AvatarRowProps) {
   const visible = entries.slice(0, MAX_VISIBLE);
   const overflow = Math.max(0, entries.length - MAX_VISIBLE);
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }} className="follow-rail">
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }} className={`follow-rail follow-rail--${railKind}`}>
       <button
         type="button"
         onClick={onToggle}

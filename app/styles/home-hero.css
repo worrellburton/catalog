@@ -315,6 +315,15 @@
 /* ── Mobile: following / followers profile icons at the TOP of the hero,
    not on the left/right edges — and gone once you scroll into the feed. */
 @media (max-width: 768px) {
+  /* On mobile the top rail shows ONLY the creators you follow — hide the
+     "followers" row + the separator dot between them. Tapping the
+     following row opens the full Following list page (wired in
+     FollowingRail → onOpenFollowingList). */
+  .follow-rail-wrap--center .follow-rail--followers,
+  .follow-rail-wrap--center .follow-rail-separator {
+    display: none !important;
+  }
+
   /* Reposition the center rail to a horizontal row pinned at the top. */
   .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
     position: fixed !important;
