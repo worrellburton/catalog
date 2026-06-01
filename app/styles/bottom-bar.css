@@ -1409,7 +1409,9 @@ body:has(.bottom-bar.search-open) {
     background: transparent;
     border: none;
     color: #111;
-    padding: 12px 4px;
+    /* 14px left padding gives the placeholder breathing room after the filter
+       icon — 4px sat right against the icon and read as cramped. */
+    padding: 12px 6px 12px 14px;
     font-size: 16px;
     font-weight: 400;
     animation: none;
