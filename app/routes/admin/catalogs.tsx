@@ -554,6 +554,8 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
+      // Hydrate the session so the admin-gated RPC sees auth.uid().
+      await supabase.auth.getSession();
       const { data, error } = await supabase.rpc('catalog_view_counts_daily', { window_days: 14 });
       if (cancelled || error || !data) return;
       type Row = { catalog_key: string; day: string; impressions: number | string };
@@ -583,6 +585,7 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
+      await supabase.auth.getSession();
       const { data, error } = await supabase.rpc('catalog_view_counts', { window_days: 7 });
       if (cancelled || error || !data) return;
       type Row = { catalog_key: string; impressions_curr: number | string; impressions_prev: number | string };
@@ -796,13 +799,14 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     setMetricsLoading(true);
     try {
-      const { data, error } = await supabase.rpc('catalog_item_metrics', {
-        window_days: METRIC_WINDOW_DAYS,
-      });
-      if (error) {
-        console.warn('[catalog-metrics] rpc failed:', error.message);
-        return;
-      }
+      // catalog_item_metrics is SECURITY DEFINER and gates on the
+      // caller's admin role via auth.uid(). On a cold mount the Supabase
+      // session often isn't attached to the client yet, so the RPC fired
+      // unauthenticated, raised 'Admin privileges required', got
+      // swallowed, and left every metric column blank ("—") with no
+      // retry. Force session hydration first, then retry a few times so
+      // the metrics land once auth is ready.
+      await supabase.auth.getSession();
       type Row = {
         target_type: string;
         target_key: string;
@@ -813,8 +817,20 @@ export default function AdminCatalogs() {
         clicks_prev: number | string;
         clickouts_prev: number | string;
       };
+      let data: Row[] | null = null;
+      let lastErr: string | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await supabase.rpc('catalog_item_metrics', { window_days: METRIC_WINDOW_DAYS });
+        if (!res.error) { data = res.data as Row[] | null; lastErr = null; break; }
+        lastErr = res.error.message;
+        await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+      }
+      if (lastErr) {
+        console.warn('[catalog-metrics] rpc failed after retries:', lastErr);
+        return;
+      }
       const next = new Map<string, ItemMetrics>();
-      for (const r of (data as Row[] | null) || []) {
+      for (const r of (data || [])) {
         const impressions = Number(r.impressions_curr) || 0;
         const clicks = Number(r.clicks_curr) || 0;
         const clickouts = Number(r.clickouts_curr) || 0;
