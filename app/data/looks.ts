@@ -51,6 +51,10 @@ export interface Look {
   id: number;
   /** Supabase UUID - present for DB-sourced looks, absent for static seed data. */
   uuid?: string;
+  /** Admin-assigned unified feed position (shared rank space with products
+   *  via apply_feed_order). Drives the consumer home-feed order so it
+   *  matches the /admin/catalogs FEED editor. null/undefined = unranked. */
+  feed_rank?: number | null;
   title: string;
   video: string;
   // 'unisex' looks (and the rare untyped null in the DB) stay visible

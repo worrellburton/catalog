@@ -168,13 +168,29 @@ function FeedSection({
     let cycleSeed = baseSeed;
     const buildDeck = (): DeckEntry[] => {
       cycleSeed = (cycleSeed * 31 + 7) | 0;
-      return seededShuffle<DeckEntry>(
-        [
-          ...looks.map(look => ({ type: 'look' as const, look })),
-          ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
-        ],
-        cycleSeed,
-      );
+      const entries: DeckEntry[] = [
+        ...looks.map(look => ({ type: 'look' as const, look })),
+        ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+      ];
+      // The initial home feed (not search) honours the admin's UNIFIED
+      // feed_rank order — looks AND products share one rank space
+      // (apply_feed_order), so sorting the combined deck by feed_rank
+      // reproduces the /admin/catalogs FEED arrangement exactly. Search
+      // results and later cycles still shuffle (relevance / variety).
+      if (isInitial && !searchMode) {
+        const rankOf = (e: DeckEntry) => {
+          const r = e.type === 'look' ? e.look.feed_rank : e.creative.feed_rank;
+          return typeof r === 'number' ? r : Number.POSITIVE_INFINITY;
+        };
+        return entries
+          .map((e, i) => ({ e, i }))
+          .sort((a, b) => {
+            const d = rankOf(a.e) - rankOf(b.e);
+            return d !== 0 ? d : a.i - b.i;
+          })
+          .map(x => x.e);
+      }
+      return seededShuffle<DeckEntry>(entries, cycleSeed);
     };
 
     const items: PoolItem[] = [];
