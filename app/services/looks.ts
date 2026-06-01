@@ -87,6 +87,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       description,
       color,
       status,
+      feed_rank,
       looks_creative!inner (
         video_url,
         thumbnail_url,
@@ -106,6 +107,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       )
     `)
     .eq('looks_creative.is_primary', true)
+    // Admin catalog order first (feed_rank), then newest.
+    .order('feed_rank', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
 
   if (error || !data) {

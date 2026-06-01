@@ -198,9 +198,12 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // content lands on top of the grid.
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at')
+    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
     .eq('is_active', true)
     .not('primary_video_url', 'is', null)
+    // Admin-chosen catalog order (Recommend Order / saved order) leads;
+    // unranked items fall back to the elite → freshest tiebreakers.
+    .order('feed_rank',                 { ascending: true,  nullsFirst: false })
     .order('is_elite',                  { ascending: false, nullsFirst: false })
     .order('primary_video_generated_at',{ ascending: false, nullsFirst: false })
     .order('created_at',                { ascending: false });

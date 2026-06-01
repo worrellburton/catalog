@@ -4,15 +4,27 @@
 // kind's rolling average duration. Catalog-brand glass card, bottom-
 // right. Auto-hides when there's nothing to show.
 
-import { useEffect, useState } from 'react';
-import { listGenerationJobs, subscribeGenerationQueue, type GenerationJob } from '~/services/generation-queue';
+import { useEffect, useMemo, useState } from 'react';
+import { listGenerationJobs, subscribeGenerationQueue, subscribeExternalGenerationJobs, type GenerationJob } from '~/services/generation-queue';
 
 export default function GenerationQueueHost() {
-  const [jobs, setJobs] = useState<GenerationJob[]>(listGenerationJobs());
+  const [localJobs, setLocalJobs] = useState<GenerationJob[]>(listGenerationJobs());
+  // Running jobs from other sessions/users (admins see everyone site-wide;
+  // regular users get only their own, which are filtered out as dupes).
+  const [externalJobs, setExternalJobs] = useState<GenerationJob[]>([]);
   const [now, setNow] = useState(Date.now());
 
-  // Subscribe to the bus.
-  useEffect(() => subscribeGenerationQueue(() => setJobs(listGenerationJobs())), []);
+  // Subscribe to the local in-memory bus.
+  useEffect(() => subscribeGenerationQueue(() => setLocalJobs(listGenerationJobs())), []);
+  // Subscribe to the cross-user DB stream.
+  useEffect(() => subscribeExternalGenerationJobs(setExternalJobs), []);
+
+  // Local jobs first (they carry done/failed transitions), then other
+  // sessions' running jobs. Dedup by id defensively.
+  const jobs = useMemo(() => {
+    const seen = new Set(localJobs.map(j => j.id));
+    return [...localJobs, ...externalJobs.filter(j => !seen.has(j.id))];
+  }, [localJobs, externalJobs]);
 
   // Tick once a second while any job is running so the progress bars
   // animate without per-row timers.

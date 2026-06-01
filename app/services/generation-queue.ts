@@ -34,10 +34,58 @@ export interface GenerationJob {
   endedAt?: number;
 }
 
+import { supabase } from '~/utils/supabase';
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
 const jobs = new Map<string, GenerationJob>();
+
+// ── Cross-user mirror ────────────────────────────────────────────────
+// Every started job is also written to public.generation_jobs so admins
+// (and the owner) can see it live via realtime in GenerationQueueHost.
+// We remember the DB ids WE created this session so the host can filter
+// them out of the realtime stream (they're already shown from the local
+// in-memory bus — no double render).
+const ownDbJobIds = new Set<string>();
+export function isOwnDbJob(id: string): boolean { return ownDbJobIds.has(id); }
+
+async function insertDbJob(input: {
+  kind: GenerationKind; label: string; context?: string; model?: string;
+  thumbnailUrl?: string | null; estimatedMs?: number;
+}): Promise<string | null> {
+  if (!supabase) return null;
+  try {
+    const { data: sess } = await supabase.auth.getSession();
+    const uid = sess?.session?.user?.id ?? null;
+    const { data, error } = await supabase
+      .from('generation_jobs')
+      .insert({
+        user_id: uid,
+        kind: input.kind,
+        label: input.label,
+        context: input.context ?? null,
+        model: input.model ?? null,
+        thumbnail_url: input.thumbnailUrl ?? null,
+        estimated_ms: input.estimatedMs ?? getAverageDurationMs(input.kind),
+        status: 'running',
+      })
+      .select('id')
+      .single();
+    if (error || !data) return null;
+    ownDbJobIds.add((data as { id: string }).id);
+    return (data as { id: string }).id;
+  } catch { return null; }
+}
+
+async function closeDbJob(dbId: string | null, status: 'done' | 'failed', message?: string): Promise<void> {
+  if (!supabase || !dbId) return;
+  try {
+    await supabase.from('generation_jobs')
+      .update({ status, ended_at: new Date().toISOString(), result_message: message ?? null })
+      .eq('id', dbId);
+  } catch { /* best-effort */ }
+}
 
 // Rolling averages per kind. EMA (alpha=0.4) — recent runs weigh more
 // without thrashing. Seeded from sensible defaults + localStorage.
@@ -111,6 +159,9 @@ export function startGenerationJob(input: {
   };
   jobs.set(id, job);
   emit();
+  // Mirror to the DB (fire-and-forget). finish/fail resolve the id first
+  // so the row gets closed even if the insert is still in flight.
+  const dbIdPromise = insertDbJob(input);
   return {
     id,
     finish: (observedMs?: number, resultMessage?: string) => {
@@ -119,6 +170,7 @@ export function startGenerationJob(input: {
       j.status = 'done';
       j.endedAt = Date.now();
       j.resultMessage = resultMessage;
+      void dbIdPromise.then(dbId => closeDbJob(dbId, 'done', resultMessage));
       // Roll the actual duration into the kind's average (EMA, a=0.4).
       const actual = typeof observedMs === 'number' && observedMs > 0
         ? observedMs : (j.endedAt - j.startedAt);
@@ -139,6 +191,7 @@ export function startGenerationJob(input: {
       j.status = 'failed';
       j.endedAt = Date.now();
       j.resultMessage = resultMessage;
+      void dbIdPromise.then(dbId => closeDbJob(dbId, 'failed', resultMessage));
       emit();
       window.setTimeout(() => { jobs.delete(id); emit(); }, 5000);
     },
@@ -149,4 +202,68 @@ export function startGenerationJob(input: {
 export function _resetGenerationQueue() {
   jobs.clear();
   emit();
+}
+
+// Running jobs from OTHER sessions/users, streamed from the DB. RLS means
+// an admin receives everyone's rows (the site-wide view) while a normal
+// user receives only their own — which are already shown by the local
+// bus, so they're filtered out via ownDbJobIds. Stale running rows
+// (client crashed mid-job) are dropped after 10 min.
+const EXTERNAL_STALE_MS = 10 * 60 * 1000;
+type DbJobRow = {
+  id: string; kind: GenerationKind; label: string; context: string | null;
+  model: string | null; thumbnail_url: string | null; status: string;
+  estimated_ms: number | null; started_at: string;
+};
+function rowToJob(r: DbJobRow): GenerationJob {
+  return {
+    id: r.id,
+    kind: r.kind,
+    label: r.label,
+    context: r.context ?? undefined,
+    model: r.model ?? undefined,
+    thumbnailUrl: r.thumbnail_url ?? null,
+    startedAt: new Date(r.started_at).getTime(),
+    estimatedMs: r.estimated_ms ?? getAverageDurationMs(r.kind),
+    status: 'running',
+  };
+}
+
+export function subscribeExternalGenerationJobs(cb: (jobs: GenerationJob[]) => void): () => void {
+  if (!supabase) return () => {};
+  const rows = new Map<string, DbJobRow>();
+  const push = () => {
+    const now = Date.now();
+    const out: GenerationJob[] = [];
+    for (const r of rows.values()) {
+      if (r.status !== 'running') continue;
+      if (ownDbJobIds.has(r.id)) continue;
+      if (now - new Date(r.started_at).getTime() > EXTERNAL_STALE_MS) continue;
+      out.push(rowToJob(r));
+    }
+    out.sort((a, b) => b.startedAt - a.startedAt);
+    cb(out);
+  };
+  supabase
+    .from('generation_jobs')
+    .select('id, kind, label, context, model, thumbnail_url, status, estimated_ms, started_at')
+    .eq('status', 'running')
+    .gte('started_at', new Date(Date.now() - EXTERNAL_STALE_MS).toISOString())
+    .order('started_at', { ascending: false })
+    .limit(40)
+    .then(({ data }) => {
+      for (const r of (data as DbJobRow[] | null) ?? []) rows.set(r.id, r);
+      push();
+    });
+  const ch = supabase
+    .channel('generation_jobs_stream')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'generation_jobs' }, (payload) => {
+      const rec = (payload.new ?? payload.old) as Partial<DbJobRow> | undefined;
+      if (!rec?.id) return;
+      if (payload.eventType === 'DELETE') rows.delete(rec.id);
+      else rows.set(rec.id, rec as DbJobRow);
+      push();
+    })
+    .subscribe();
+  return () => { void supabase!.removeChannel(ch); };
 }
