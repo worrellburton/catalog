@@ -3417,6 +3417,9 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   useEffect(() => { try { window.localStorage.setItem('catalog-admin:feed-show-products', showProducts ? '1' : '0'); } catch { /* ignore */ } }, [showProducts]);
   // Interleaved feed drag-order (look:/product: keys).
   const [feedOrder, setFeedOrder] = useState<string[]>(() => loadFeedOrder());
+  // Recommend Order: when set, the feed previews this proposed order
+  // (not yet saved). Keep commits it to feedOrder; Discard clears it.
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
 
   // ── ALL HOOKS MUST RUN BEFORE EARLY RETURNS (React Rule of Hooks) ──
   // Previously: 3 early returns BEFORE the 5 useCallbacks below,
@@ -3628,14 +3631,28 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       for (const p of sortedProducts) base.push({ kind: 'product', id: p.id, key: `product:${p.id}`, metrics: p.metrics, createdAt: (p as { createdAt?: string | null }).createdAt ?? null, product: p });
     }
     const merged = sortAndFilterItems(base, sort, filter);
-    if (feedOrder.length === 0) return merged;
-    const orderIdx = new Map(feedOrder.map((k, i) => [k, i]));
+    // A previewed Recommend Order wins over the saved order until kept.
+    const activeOrder = previewOrder ?? feedOrder;
+    if (activeOrder.length === 0) return merged;
+    const orderIdx = new Map(activeOrder.map((k, i) => [k, i]));
     return [...merged].sort((a, b) => {
       const ai = orderIdx.has(a.key) ? orderIdx.get(a.key)! : Number.MAX_SAFE_INTEGER;
       const bi = orderIdx.has(b.key) ? orderIdx.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return ai - bi;
     });
   })();
+
+  // Recommend Order handlers.
+  const runRecommendOrder = () => {
+    setPreviewOrder(recommendFeedOrder(sortedLooks, sortedProducts));
+  };
+  const keepRecommendedOrder = () => {
+    if (!previewOrder) return;
+    setFeedOrder(previewOrder);
+    saveFeedOrder(previewOrder);
+    setPreviewOrder(null);
+  };
+  const discardRecommendedOrder = () => setPreviewOrder(null);
 
   const handleFeedReorder = (from: number, to: number) => {
     if (from === to) return;
@@ -3736,10 +3753,29 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
               {onOpenAddLooks && <button type="button" onClick={onOpenAddLooks} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Looks</button>}
               {onOpenAddProducts && <button type="button" onClick={onOpenAddProducts} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Products</button>}
-              {onRecommendLooks && <button type="button" onClick={onRecommendLooks} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Looks</button>}
-              {onRecommendProducts && <button type="button" onClick={onRecommendProducts} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Products</button>}
+              <button type="button" onClick={runRecommendOrder} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} title="Re-rank the feed: proven converters + under-tested items up top, ~2 looks : 1 product">✨ Recommend Order</button>
+              {onRecommendLooks && <button type="button" onClick={onRecommendLooks} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Looks</button>}
+              {onRecommendProducts && <button type="button" onClick={onRecommendProducts} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Products</button>}
             </div>
           </div>
+
+          {/* Recommend Order preview bar — appears once a recommendation
+              is computed; the feed below previews it until kept/discarded. */}
+          {previewOrder && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              margin: '8px 0 0', padding: '10px 14px', borderRadius: 10,
+              border: '1px solid #c7d2fe', background: '#eef2ff',
+            }}>
+              <span style={{ fontSize: 12, color: '#3730a3' }}>
+                <strong>Recommended order previewed</strong> — winners + under-tested items up top, ~2 looks : 1 product. Not saved yet.
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
+                <button type="button" onClick={discardRecommendedOrder} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '4px 12px' }}>Discard</button>
+                <button type="button" onClick={keepRecommendedOrder} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}>Keep this order</button>
+              </div>
+            </div>
+          )}
 
           {feedRows.length === 0 ? (
             <div style={{ padding: '12px 14px', color: '#888', fontSize: 12, border: '1px dashed #e5e7eb', borderRadius: 8, marginTop: 6 }}>
@@ -4751,6 +4787,57 @@ function CreativesListTable({ title, creatives }: { title: string; creatives: Ca
 
 // ── Phase 5: sort + filter helpers shared by looks and products ─────
 type MetricBearing = { metrics?: ItemMetrics; createdAt?: string | null };
+
+// Recommend Order — a bandit-style ranking that mixes looks + products
+// into one interleaved feed order (~2 looks : 1 product). The score is a
+// blend of EXPLOIT (proven conversion: clickout-rate + CTR, rank-
+// normalised so the best converter tops) and EXPLORE (a UCB term that
+// surfaces under-tested low-impression items near the top to gather a
+// sample size). Proven winners and unproven items both float up; items
+// with lots of impressions but poor conversion sink.
+function recommendFeedOrder(
+  looks: { id: string; metrics?: ItemMetrics }[],
+  products: { id: string; metrics?: ItemMetrics }[],
+): string[] {
+  const all = [
+    ...looks.map(l => ({ key: `look:${l.id}`, kind: 'look' as const, m: l.metrics })),
+    ...products.map(p => ({ key: `product:${p.id}`, kind: 'product' as const, m: p.metrics })),
+  ];
+  if (all.length === 0) return [];
+  const totalImp = all.reduce((s, x) => s + (x.m?.impressions ?? 0), 0) + 1;
+  const enriched = all.map(x => {
+    const imp = x.m?.impressions ?? 0;
+    const clk = x.m?.clickouts ?? 0;
+    const ctr = x.m?.ctr ?? 0;
+    const exploit = 0.7 * (imp > 0 ? clk / imp : 0) + 0.3 * ctr;       // blended conversion
+    const explore = Math.sqrt(Math.log(totalImp + 1) / (imp + 1));     // UCB: ↑ when under-tested
+    return { ...x, exploit, explore };
+  });
+  const norm = (vals: number[]) => {
+    let mn = Infinity, mx = -Infinity;
+    for (const v of vals) { if (v < mn) mn = v; if (v > mx) mx = v; }
+    const range = mx - mn || 1;
+    return (v: number) => (v - mn) / range;
+  };
+  const exploitN = norm(enriched.map(e => e.exploit));
+  const exploreN = norm(enriched.map(e => e.explore));
+  const EXPLORE_W = 0.6; // proven winners still beat unproven, but unproven beats proven-mediocre
+  const scored = enriched.map(e => ({
+    key: e.key,
+    kind: e.kind,
+    score: exploitN(e.exploit) + EXPLORE_W * exploreN(e.explore),
+  }));
+  const looksSorted = scored.filter(s => s.kind === 'look').sort((a, b) => b.score - a.score);
+  const prodsSorted = scored.filter(s => s.kind === 'product').sort((a, b) => b.score - a.score);
+  // Interleave ~2 looks : 1 product, best-first within each type.
+  const out: string[] = [];
+  let li = 0, pi = 0;
+  while (li < looksSorted.length || pi < prodsSorted.length) {
+    for (let k = 0; k < 2 && li < looksSorted.length; k++) out.push(looksSorted[li++].key);
+    if (pi < prodsSorted.length) out.push(prodsSorted[pi++].key);
+  }
+  return out;
+}
 
 function sortAndFilterItems<T extends MetricBearing>(items: T[], sort: MetricSort, filter: MetricFilter): T[] {
   const FRESH_DAYS = 14;
