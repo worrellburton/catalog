@@ -1475,3 +1475,16 @@ body:has(.bottom-bar.search-open) {
     color: #5f6368;
   }
 }
+
+/* When the keyboard is up (search input focused on mobile), pin the bar
+   flush against the keyboard's top edge — Gemini-style — instead of
+   floating with a 12px+safe-area gap. --ios-bottom-chrome is set by
+   BottomBar's visualViewport listener and equals the keyboard's height
+   (plus any bottom browser chrome). Mobile only; desktop keeps its
+   floating position since there's no soft keyboard. */
+@media (max-width: 640px) {
+  .bottom-bar.search-open {
+    bottom: var(--ios-bottom-chrome, 0px);
+    transition: bottom 0.18s ease;
+  }
+}
