@@ -38,9 +38,9 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  /* Dial it back — the gate is full-screen with the cloud as the focal
-     effect; here it's pure ambient texture behind the headline. */
-  opacity: 0.55;
+  /* Ambient texture behind the headline. Kept fairly present so the field
+     reads on the big desktop viewport (where 180 points spread thin). */
+  opacity: 0.8;
   pointer-events: none;
 }
 .sfh-scroll-hint { z-index: 1; }
@@ -642,10 +642,21 @@
     bottom: 44vh;
   }
 
+  /* THE desktop search bar is TypeAnywhere's .ai-bar-wrap (the bottom-bar is
+     display:none on desktop). It's fixed at the bottom by default; on the
+     hero (not scrolled) lift it to the cluster center, then glide it back
+     down to the bottom once the shopper scrolls into the feed. */
+  .app-root.home-hero .ai-bar-wrap {
+    transition: bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .ai-bar-wrap {
+    bottom: 44vh;
+  }
+
   /* Creator profile pictures on desktop too: show the glowing stories rail
      in the header center (where the avatar stacks used to sit), hide the
-     overlapping stacks. Compact — no name captions — so it fits the header
-     row. */
+     overlapping stacks. Compact — sized to match the user's own profile
+     avatar in the header (34px), no name captions. */
   .header-center .follow-rail-wrap--center .follow-rail,
   .header-center .follow-rail-wrap--center .follow-rail-separator {
     display: none !important;
@@ -653,16 +664,16 @@
   .header-center .follow-rail-wrap--center .follow-stories-rail {
     display: flex;
     width: auto;
-    max-width: min(520px, 40vw);
-    gap: 10px;
+    max-width: min(440px, 36vw);
+    gap: 8px;
     padding: 0;
     overflow-x: auto;
     scrollbar-width: none;
   }
   .header-center .follow-rail-wrap--center .follow-stories-rail::-webkit-scrollbar { display: none; }
-  /* Header is a fixed-height row — shrink circles + drop the captions. */
+  /* Match the 34px profile-avatar trigger; thinner ring, no captions. */
   .header-center .follow-story { width: auto; gap: 0; }
-  .header-center .follow-story-ring { width: 40px; height: 40px; padding: 2px; }
+  .header-center .follow-story-ring { width: 34px; height: 34px; padding: 1.5px; }
   .header-center .follow-story-name { display: none; }
 }
 
