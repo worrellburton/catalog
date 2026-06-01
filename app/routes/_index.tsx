@@ -947,6 +947,39 @@ export default function Home() {
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
 
+  // Lock the underlying feed while a product/look overlay is open so
+  // swipe-down-to-dismiss only moves the overlay, not the page beneath.
+  // iOS Safari needs position:fixed + saved scrollY (not just overflow:
+  // hidden) for this to actually stop the body from scrolling. On close
+  // we restore the prior scroll position so the shopper lands exactly
+  // where they tapped — no jump to the top.
+  useEffect(() => {
+    if (!overlayOpen) return;
+    if (typeof window === 'undefined') return;
+    const scrollY = window.scrollY;
+    const { body, documentElement: html } = document;
+    const prev = {
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+      bodyOverflow: body.style.overflow,
+      htmlOverflow: html.style.overflow,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+    return () => {
+      body.style.position = prev.bodyPosition;
+      body.style.top = prev.bodyTop;
+      body.style.width = prev.bodyWidth;
+      body.style.overflow = prev.bodyOverflow;
+      html.style.overflow = prev.htmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [overlayOpen]);
+
   return (
     <TrailRoot>
     <TrailVideoHost>

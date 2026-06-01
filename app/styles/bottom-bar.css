@@ -46,16 +46,20 @@
   gap: 8px;
 }
 
-.bottom-bar-inner.search-inline .bottom-search-input {
-  /* Knock the standalone glow off - the bar already provides the surface. */
+.bottom-bar-inner.search-inline .bottom-search-input,
+.bottom-bar-inner.search-inline .bottom-search-input:focus,
+.bottom-bar-inner.search-inline .bottom-search-input:hover {
+  /* Knock the standalone glow + nested pill chrome off — the bar IS the
+     pill, so the input must read as a transparent slot. Without the
+     :focus override, iOS Safari would otherwise paint the input's base
+     dark-glass background on focus, producing a visible inner rounded
+     rectangle inside the outer pill (the "two shapes" bug). */
   animation: none;
-  background: transparent;
-  border-color: transparent;
+  background: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
   padding: 12px 6px;
-}
-.bottom-bar-inner.search-inline .bottom-search-input:focus {
-  border-color: transparent;
-  animation: none;
 }
 
 /* Spinner shown while nl-search is resolving */

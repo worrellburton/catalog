@@ -2089,13 +2089,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   justify-content: center;
   padding: 0;
 }
+/* Analytics FAB — was rgba(255,255,255,0.08) which is invisible against the
+   light MyLooks hero. Solid black surface (same as the create FAB) with a
+   subtle outline so the bar-chart icon reads on every viewport. */
 .my-cat-create-fab.my-cat-analytics-fab {
-  background: rgba(255, 255, 255, 0.08);
+  background: #111;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 .my-cat-create-fab.my-cat-analytics-fab:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: #000;
 }
 
 /* Grid: edge-to-edge 2-col on mobile to match the main feed. */
