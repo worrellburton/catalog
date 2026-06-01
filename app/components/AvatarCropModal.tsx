@@ -456,7 +456,10 @@ export function AvatarUpload({
     if (buttonRef.current) {
       setOriginRect(buttonRef.current.getBoundingClientRect());
     }
-    setPickerOpen(true);
+    // Skip the intermediate drag-zone modal entirely: open the native file
+    // picker straight away. iOS Safari requires the .click() to fire from a
+    // user-gesture handler, which this one is, so it's safe inline.
+    fileInputRef.current?.click();
   }, [userId]);
 
   // Shared file-handling pipeline used by both drag-drop and file-input
