@@ -315,6 +315,10 @@
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
     background: rgba(255, 255, 255, 0.07);
     border-color: rgba(255, 255, 255, 0.14);
+    /* Match the docked white-pill silhouette (999px pill, not the chunkier
+       28px rounded rect from the base) so resting + scrolled bar feel like
+       the same control in two skins. */
+    border-radius: 999px;
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
