@@ -3611,7 +3611,15 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // Merge looks + products into one interleaved, metric-sorted list,
   // gated by the show-looks / show-products toggles, then apply any
   // saved drag order on top. feedRows powers the list-view FEED table.
-  const feedRows: FeedRow[] = useMemo(() => {
+  //
+  // NOTE: a previous version wrapped this in useMemo + handleFeedReorder
+  // in useCallback. That placed two hooks BELOW the `if (!creative)`
+  // early returns earlier in the function, which violates the Rules of
+  // Hooks (the hook count differs between the loading and ready renders)
+  // and crashed /admin/catalogs in production with React error #310.
+  // The work here is cheap iteration over a small list; plain expressions
+  // are correct and faster than the broken-hook variant.
+  const feedRows: FeedRow[] = (() => {
     const base: FeedRow[] = [];
     if (showLooks) {
       for (const l of sortedLooks) base.push({ kind: 'look', id: l.id, key: `look:${l.id}`, metrics: l.metrics, createdAt: l.createdAt ?? null, look: l });
@@ -3619,8 +3627,6 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     if (showProducts) {
       for (const p of sortedProducts) base.push({ kind: 'product', id: p.id, key: `product:${p.id}`, metrics: p.metrics, createdAt: (p as { createdAt?: string | null }).createdAt ?? null, product: p });
     }
-    // Re-sort the merged set by the active metric so looks + products
-    // interleave (each was only sorted within its own type above).
     const merged = sortAndFilterItems(base, sort, filter);
     if (feedOrder.length === 0) return merged;
     const orderIdx = new Map(feedOrder.map((k, i) => [k, i]));
@@ -3629,17 +3635,16 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       const bi = orderIdx.has(b.key) ? orderIdx.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return ai - bi;
     });
-  }, [sortedLooks, sortedProducts, showLooks, showProducts, sort, filter, feedOrder]);
+  })();
 
-  // Persist a new interleaved order when a feed row is dragged.
-  const handleFeedReorder = useCallback((from: number, to: number) => {
+  const handleFeedReorder = (from: number, to: number) => {
     if (from === to) return;
     const keys = feedRows.map(r => r.key);
     const [moved] = keys.splice(from, 1);
     keys.splice(to, 0, moved);
     setFeedOrder(keys);
     saveFeedOrder(keys);
-  }, [feedRows]);
+  };
 
   // Phase 7-lite: KPI strip.
   const kpi = buildKpiStrip([...sortedLooks, ...sortedProducts]);
