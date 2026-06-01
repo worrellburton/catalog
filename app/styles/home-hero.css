@@ -515,8 +515,11 @@
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
     justify-content: center;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 170px);
-    padding-bottom: 32vh;
+    /* Just clear the stories rail at the top (rail bottom ≈ 180px from
+       top). Generous bottom reservation so the cluster centers in the
+       remaining band and the bar always sits well below. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 120px);
+    padding-bottom: 30vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
