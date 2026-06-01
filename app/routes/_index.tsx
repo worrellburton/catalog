@@ -213,6 +213,10 @@ export default function Home() {
   const [heroScrolled, setHeroScrolled] = useState(false);
   const [ceremony, setCeremony] = useState<{ active: boolean; query: string }>({ active: false, query: '' });
   const [revealResults, setRevealResults] = useState(false);
+  // Chrome auto-hide on scroll-down once you're past the hero. Header
+  // slides up offscreen, bottom search bar slides down — full-screen feed.
+  // Scrolling up brings them back; stopping preserves the current state.
+  const [chromeHidden, setChromeHidden] = useState(false);
 
   // Reveal the bottom search bar once the shopper scrolls down off the
   // hero into the catalog (while heroMode is the active screen).
@@ -223,6 +227,31 @@ export default function Home() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [heroMode]);
+
+  // Scroll-direction tracker: once past the hero, hide chrome on scroll
+  // down and show it on scroll up. Small dead-zone so micro-jitter doesn't
+  // flicker the chrome. Reset to visible on every overlay open (so the
+  // chrome is there when you close back to the feed).
+  useEffect(() => {
+    if (!heroScrolled) { setChromeHidden(false); return; }
+    let lastY = window.scrollY;
+    const THRESHOLD = 8; // px of continuous direction before reacting
+    let accum = 0;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+      // Always show near the very top.
+      if (y < window.innerHeight * 0.6) { setChromeHidden(false); accum = 0; return; }
+      // Same direction as accum: extend; opposite direction: reset.
+      if ((dy > 0 && accum >= 0) || (dy < 0 && accum <= 0)) accum += dy;
+      else accum = dy;
+      if (accum > THRESHOLD)       setChromeHidden(true);
+      else if (accum < -THRESHOLD) setChromeHidden(false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [heroScrolled]);
 
   // Any committed search while on the hero (bottom bar Enter, a catalog
   // pill, the type-anywhere overlay, or a deep-linked ?q=) bumps
@@ -983,7 +1012,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}
