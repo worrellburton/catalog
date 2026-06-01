@@ -16,6 +16,7 @@ interface SearchCeremonyProps {
 }
 
 const MIN_DURATION_MS = 2400;
+const MAX_DURATION_MS = 6000;
 
 // Playful & magical (the tone picked). Rotated every ~1.1s.
 const MESSAGES = [
@@ -64,6 +65,15 @@ export default function SearchCeremony({ query, ready, onDone }: SearchCeremonyP
     const t = window.setTimeout(onDone, wait + 280); // +280 lets the bar finish
     return () => window.clearTimeout(t);
   }, [ready, onDone]);
+
+  // Hard safety: always reveal results within MAX_DURATION even if the
+  // `ready` signal never arrives (e.g. searchLoading never flips on a
+  // cached/instant query). Without this the ceremony could hang and the
+  // shopper would never see their results.
+  useEffect(() => {
+    const t = window.setTimeout(onDone, MAX_DURATION_MS);
+    return () => window.clearTimeout(t);
+  }, [onDone]);
 
   return (
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
