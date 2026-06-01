@@ -8,6 +8,7 @@ import SearchCeremony from '~/components/home/SearchCeremony';
 import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
+import SiteParticleHost from '~/components/SiteParticleHost';
 import BottomBar from '~/components/BottomBar';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
@@ -1013,6 +1014,12 @@ export default function Home() {
     <TrailRoot>
     <TrailVideoHost>
     <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+      {/* Singleton particle world — one canvas mounted at the app root,
+          always visible. Splash, hero, search-ceremony, empty-catalog all
+          render above this so the field stays continuous across every
+          screen transition (no re-mount = no reseed = the same drift
+          continues). Consumers retune speed via particleControls. */}
+      <SiteParticleHost />
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}

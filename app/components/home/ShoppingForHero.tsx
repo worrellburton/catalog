@@ -4,7 +4,8 @@
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
 import { useEffect, useRef } from 'react';
-import ParticleBackground from '~/components/ParticleBackground';
+// ParticleBackground is mounted once at the app root (SiteParticleHost) so
+// the hero shares the same field as splash + ceremony + empty-catalog.
 
 interface ShoppingForHeroProps {
   /** Scroll the page to the home feed below (the "best sellers" hint). */
@@ -41,10 +42,6 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
 
   return (
     <section className="sfh" aria-label="What are you shopping for?">
-      {/* Ambient AI-diamond particle field — the same WebGL drift the sign-in
-          gate uses, but the shader now renders concave 4-point sparks
-          instead of soft circles. Sits behind the hero content. */}
-      <ParticleBackground />
       <div className="sfh-stage">
         {/*
           Brand mark — a 4-point "AI" diamond at center surrounded by four

@@ -5,7 +5,8 @@
 // the count is fed from Supabase realtime so it ticks up live.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import ParticleBackground from './ParticleBackground';
+// ParticleBackground is mounted once at the app root (SiteParticleHost) so
+// this surface shares the same field as splash + hero + ceremony.
 import { supabase } from '~/utils/supabase';
 
 interface EmptyCatalogStateProps {
@@ -87,7 +88,6 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
 
   return (
     <div className="empty-catalog">
-      <ParticleBackground />
       <div className="empty-catalog-content">
         {/* Catalog AI spark — the orbiting-tiles diamond from the home hero,
             spinning. Core diamond + four catalog tiles counter-rotating. */}
