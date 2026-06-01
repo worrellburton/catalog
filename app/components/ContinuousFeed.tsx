@@ -420,10 +420,16 @@ function ContinuousFeed({
   //   - When there is NO cache (first visit), the fetch updates live
   //     state so the feed appears as soon as data arrives.
   const initialCached = useMemo(() => getCachedHomeFeed(), []);
-  const hasLooksCacheRef = useRef(!!initialCachedLooks);
-  const hasCreativesCacheRef = useRef(!!initialCached);
+  const hasLooksCacheRef = useRef(!!initialCachedLooks && initialCachedLooks.length > 0);
+  // CRITICAL: only treat the cache as "present" when it actually has items.
+  // An empty cached array ([]) is still truthy, and the SWR refresh guard
+  // (`if (hasCreativesCacheRef.current && !force)`) then skips setLiveCreatives
+  // forever — so a once-empty cache permanently hid every product even after
+  // the catalog filled back up. Requiring length > 0 lets the fresh fetch
+  // populate when the cache is empty/stale.
+  const hasCreativesCacheRef = useRef(!!initialCached && initialCached.length > 0);
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
-  const [creativesLoading, setCreativesLoading] = useState(!initialCached);
+  const [creativesLoading, setCreativesLoading] = useState(!(initialCached && initialCached.length > 0));
   useEffect(() => {
     let cancelled = false;
     if (initialCached) primeTrailAssets(initialCached);
