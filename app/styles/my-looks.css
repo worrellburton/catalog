@@ -1064,15 +1064,16 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 20px 20px 18px;
   border-radius: 16px;
   min-width: 0;
-  /* Dark frosted glass over the animated wave mesh. */
-  background: rgba(15, 22, 41, 0.7);
+  /* Neutral dark frosted glass — matches the rest of the wallet (no blue
+     tint that fought with the green ring field underneath). */
+  background: rgba(20, 22, 26, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .wallet-card--main {
-  background: rgba(15, 22, 41, 0.82);
+  background: rgba(20, 22, 26, 0.82);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
@@ -2209,33 +2210,58 @@ html[data-shell="catalog-app"] .my-looks-overlay {
     #0a0a0c;
 }
 
-/* Concentric ring field — always-running ripples expanding from center. */
+/* Circular-lightning ring field — six fixed-radius rings centered on the
+   $ amount (the page's natural center point), each constantly rotating
+   around its own axis. No pulse / no expansion — they hold position and
+   spin like field lines in an electric well, with a brighter arc segment
+   that traces around. Money moving, value circulating. */
 .wb-ring-field {
   position: absolute;
+  /* Anchor on the $ amount, not the screen center. The wallet's
+     .wallet-amount sits ~32vh from top on the wallet overlay; center the
+     field there so the rings orbit the number. */
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 .wb-ring {
   position: absolute;
-  width: 80px;
-  height: 80px;
+  top: 28vh;
+  left: 50%;
   border-radius: 50%;
-  border: 1px solid rgba(34, 197, 94, 0.5);
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  /* Bright arc segment via a conic-gradient masked to the ring's border.
+     The conic-gradient sweeps from transparent → emerald → transparent so
+     about a quarter of the ring is the "lightning arc"; the rest of the
+     border is the faint base. */
+  background:
+    conic-gradient(from 0deg,
+      transparent 0deg,
+      transparent 250deg,
+      rgba(74, 222, 128, 0.85) 320deg,
+      rgba(255, 255, 255, 0.9) 340deg,
+      rgba(74, 222, 128, 0.85) 360deg) border-box;
+  -webkit-mask:
+    radial-gradient(circle, transparent 49%, #000 50%, #000 51%, transparent 52%);
+          mask:
+    radial-gradient(circle, transparent 49%, #000 50%, #000 51%, transparent 52%);
   box-shadow:
-    0 0 12px rgba(34, 197, 94, 0.18),
-    inset 0 0 8px rgba(34, 197, 94, 0.08);
-  opacity: 0;
-  animation: wb-ring-expand 7.2s linear infinite;
-  will-change: transform, opacity;
+    0 0 16px rgba(74, 222, 128, 0.18),
+    inset 0 0 22px rgba(74, 222, 128, 0.08);
+  will-change: transform;
+  animation: wb-ring-spin 14s linear infinite;
 }
-@keyframes wb-ring-expand {
-  0%   { transform: scale(0.05); opacity: 0; border-width: 1.6px; }
-  10%  { opacity: 0.65; }
-  60%  { opacity: 0.18; border-width: 0.8px; }
-  100% { transform: scale(20); opacity: 0; border-width: 0.4px; }
-}
+/* Six radii — fixed sizes, each ring its own orbit speed (alternating
+   direction so adjacent rings counter-rotate, giving the field-line feel). */
+.wb-ring:nth-child(1) { width: 140px; height: 140px; margin-left: -70px;  margin-top: -70px;  animation-duration: 12s; }
+.wb-ring:nth-child(2) { width: 240px; height: 240px; margin-left: -120px; margin-top: -120px; animation-duration: 16s; animation-direction: reverse; }
+.wb-ring:nth-child(3) { width: 360px; height: 360px; margin-left: -180px; margin-top: -180px; animation-duration: 22s; }
+.wb-ring:nth-child(4) { width: 500px; height: 500px; margin-left: -250px; margin-top: -250px; animation-duration: 28s; animation-direction: reverse; }
+.wb-ring:nth-child(5) { width: 680px; height: 680px; margin-left: -340px; margin-top: -340px; animation-duration: 36s; }
+.wb-ring:nth-child(6) { width: 900px; height: 900px; margin-left: -450px; margin-top: -450px; animation-duration: 44s; animation-direction: reverse; }
+
+@keyframes wb-ring-spin { to { transform: rotate(360deg); } }
 
 /* Localized burst (from wallet:burst event). One-shot, faster than the
    ambient rings, slightly thicker. */

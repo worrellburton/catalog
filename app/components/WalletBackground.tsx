@@ -59,11 +59,13 @@ const WalletBackground = memo(function WalletBackground(_: WalletBackgroundProps
 
   return (
     <div className="wb-root" aria-hidden="true">
-      {/* Six concentric rings emanating from the center, staggered so
-          there's always one mid-expansion. */}
+      {/* Six fixed-radius rings centered on the $ amount, each constantly
+          rotating on its own axis (alternating directions, varying speeds
+          via nth-child rules in CSS). The "lightning arc" is a conic
+          gradient masked to the ring border that sweeps as the ring spins. */}
       <div className="wb-ring-field">
         {Array.from({ length: 6 }, (_, i) => (
-          <span key={i} className="wb-ring" style={{ animationDelay: `${i * 1.2}s` }} />
+          <span key={i} className="wb-ring" />
         ))}
       </div>
 
