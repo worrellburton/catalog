@@ -120,6 +120,16 @@ function UserMenu({
     }, 380);
   }, []);
 
+  // Super-admin sub-section visibility within the page. Only super-admins see
+  // a small icon at the bottom; tapping it flips this to true and the body
+  // swaps from the consumer list to the admin-only list (Import / Admin /
+  // Decks / Delete mode). A back chevron in the header returns. Reset on
+  // page close so re-opening always lands on the consumer view.
+  const [superSection, setSuperSection] = useState(false);
+  useEffect(() => {
+    if (!pageOpen) setSuperSection(false);
+  }, [pageOpen]);
+
   // When an action runs from the page, close the page first (with its
   // animation), then dispatch the action — same pattern as runTile, just
   // routed through the page lifecycle.
@@ -484,96 +494,122 @@ function UserMenu({
           aria-label="Account"
         >
           <header className="user-menu-page-top">
-            <button className="user-menu-page-back" onClick={closePage} aria-label="Back">
+            <button
+              className="user-menu-page-back"
+              onClick={superSection ? () => setSuperSection(false) : closePage}
+              aria-label={superSection ? 'Back to account' : 'Close account'}
+            >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
             </button>
-            <h1 className="user-menu-page-title">Account</h1>
+            <h1 className="user-menu-page-title">{superSection ? 'Super Admin' : 'Account'}</h1>
             <span style={{ width: 22 }} aria-hidden="true" />
           </header>
 
           <div className="user-menu-page-body">
-            {user && (
-              <button
-                type="button"
-                className="user-menu-page-hero"
-                onClick={onOpenProfile ? runPageItem(onOpenProfile) : undefined}
-              >
+            {!superSection && user && (
+              <div className="user-menu-page-hero">
                 <div className="user-menu-page-avatar-wrap">
-                  {renderedAvatarUrl ? (
-                    <img src={renderedAvatarUrl} alt="" className="user-menu-page-avatar" referrerPolicy="no-referrer" />
-                  ) : (
-                    <span className="user-menu-page-avatar user-menu-page-avatar--initial" aria-hidden="true">
-                      {(user.displayName?.trim() || user.email?.trim() || 'U').charAt(0).toUpperCase()}
-                    </span>
+                  <AvatarUpload
+                    userId={user.id}
+                    currentUrl={renderedAvatarUrl}
+                    fallbackInitial={user.displayName?.charAt(0) || user.email?.charAt(0)}
+                    onUploaded={setAvatarOverride}
+                    className="user-menu-page-avatar-upload"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="user-menu-page-identity-btn"
+                  onClick={onOpenProfile ? runPageItem(onOpenProfile) : undefined}
+                  aria-label="Edit profile"
+                >
+                  <span className="user-menu-page-identity">
+                    {user.displayName && <span className="user-menu-page-name">{user.displayName}</span>}
+                    {user.email && <span className="user-menu-page-email">{user.email}</span>}
+                    {user.role && <span className={`user-menu-role user-menu-role-${user.role}`} style={{ marginTop: 4 }}>{USER_ROLE_LABELS[user.role]}</span>}
+                  </span>
+                  {onOpenProfile && (
+                    <svg className="user-menu-page-hero-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                   )}
-                </div>
-                <div className="user-menu-page-identity">
-                  {user.displayName && <span className="user-menu-page-name">{user.displayName}</span>}
-                  {user.email && <span className="user-menu-page-email">{user.email}</span>}
-                  {user.role && <span className={`user-menu-role user-menu-role-${user.role}`} style={{ marginTop: 4 }}>{USER_ROLE_LABELS[user.role]}</span>}
-                </div>
-                {onOpenProfile && (
-                  <svg className="user-menu-page-hero-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+            )}
+
+            {!superSection && (
+              <>
+                <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/generate'))}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  <span>Try it on</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/style'))}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
+                  <span>Style</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+
+                <PageRow icon="bookmark" label="Bookmarks" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
+                {onOpenMyLooks && (
+                  <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
-              </button>
+                {onOpenWallet && dotsConnected === false && (
+                  <PageRow icon="star" label="Setup Earnings" onClick={runPageItem(onOpenWallet)} />
+                )}
+                {onOpenWallet && dotsConnected === true && (
+                  <PageRow icon="wallet" label="Wallet" trailing={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : undefined} onClick={runPageItem(onOpenWallet)} />
+                )}
+                {onChangeCatalogGender && (
+                  <div className="user-menu-page-row user-menu-page-row--segmented">
+                    <span className="user-menu-page-row-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                    </span>
+                    <span className="user-menu-page-row-label">Shopping for</span>
+                    <div className="user-menu-segmented" style={{ marginLeft: 'auto' }}>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'men' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('men')}>Men</button>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
+                    </div>
+                  </div>
+                )}
+
+                {onLogout && (
+                  <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
+                )}
+
+                {/* Super-admin entry — only visible to super_admin role, sits
+                    on its own at the bottom of the consumer list. Routes to
+                    the super-admin sub-section instead of cluttering the
+                    main menu with admin-only chrome. */}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="user-menu-page-super-entry"
+                    onClick={() => setSuperSection(true)}
+                    aria-label="Open Super Admin"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 4v6c0 5-3.7 9.4-9 10-5.3-.6-9-5-9-10V6l9-4z"/></svg>
+                    <span>Super Admin</span>
+                  </button>
+                )}
+              </>
             )}
 
-            <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/generate'))}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span>Try it on</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-            <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/style'))}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
-              <span>Style</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-
-            <PageRow icon="bookmark" label="Bookmarks" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
-            {onOpenMyLooks && (
-              <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
-            )}
-            {onOpenWallet && dotsConnected === false && (
-              <PageRow icon="star" label="Setup Earnings" onClick={runPageItem(onOpenWallet)} />
-            )}
-            {onOpenWallet && dotsConnected === true && (
-              <PageRow icon="wallet" label="Wallet" trailing={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : undefined} onClick={runPageItem(onOpenWallet)} />
-            )}
-            {isSuperAdmin && (
-              <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
-            )}
-            {isAdmin && (
-              <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
-            )}
-            {onChangeCatalogGender && (
-              <div className="user-menu-page-row user-menu-page-row--segmented">
-                <span className="user-menu-page-row-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-                </span>
-                <span className="user-menu-page-row-label">Shopping for</span>
-                <div className="user-menu-segmented" style={{ marginLeft: 'auto' }}>
-                  <button className={`user-menu-segmented-btn ${activeFilter === 'men' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('men')}>Men</button>
-                  <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
+            {superSection && isSuperAdmin && (
+              <>
+                <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
+                <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
+                {onOpenDecks && (
+                  <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
+                )}
+                <div className={`user-menu-page-row user-menu-page-row--toggle ${deleteMode ? 'is-on' : ''}`} onClick={() => setDeleteModeState(!deleteMode)} role="switch" aria-checked={deleteMode}>
+                  <span className="user-menu-page-row-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </span>
+                  <span className="user-menu-page-row-label">Delete mode</span>
+                  <span className={`user-menu-switch ${deleteMode ? 'is-on' : ''}`} aria-hidden="true" style={{ marginLeft: 'auto' }}>
+                    <span className="user-menu-switch-thumb" />
+                  </span>
                 </div>
-              </div>
-            )}
-            {isSuperAdmin && (
-              <div className={`user-menu-page-row user-menu-page-row--toggle ${deleteMode ? 'is-on' : ''}`} onClick={() => setDeleteModeState(!deleteMode)} role="switch" aria-checked={deleteMode}>
-                <span className="user-menu-page-row-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
-                </span>
-                <span className="user-menu-page-row-label">Delete mode</span>
-                <span className={`user-menu-switch ${deleteMode ? 'is-on' : ''}`} aria-hidden="true" style={{ marginLeft: 'auto' }}>
-                  <span className="user-menu-switch-thumb" />
-                </span>
-              </div>
-            )}
-            {onOpenDecks && (
-              <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
-            )}
-
-            {onLogout && (
-              <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
+              </>
             )}
           </div>
         </div>
