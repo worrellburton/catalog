@@ -516,17 +516,22 @@
   .sfh {
     min-height: 88svh;
     /* flex-end anchors the spark+headline to the bottom edge of the inner
-       area (just above padding-bottom). Padding-bottom = where the bar
-       zone starts — so the bar sits right under the headline with even
-       breathing on either side and the whole trio reads as one centered
-       group. */
+       area (just above padding-bottom). The .sfh-stage gap is 22px between
+       spark↔headline; setting the bar so its top edge lands ~22px below
+       the headline bottom (padding-bottom 30vh + bar bottom 32vh below
+       the viewport's bottom edge ≈ 22px gap on a typical phone viewport)
+       gives the trio equal-feel spacing as one centered group. */
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
     padding-bottom: 30vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    bottom: 30vh;
+    /* Bar's top edge = .sfh stage bottom (= 100% − padding-bottom = 70vh
+       from top, or 58vh from top on the 88svh hero) + ~22px gap. With a
+       ~50px bar height, bottom: 32vh puts the bar top at ~61vh from top
+       on a typical viewport — one chip-spacing under the headline. */
+    bottom: 32vh;
   }
 }
 
