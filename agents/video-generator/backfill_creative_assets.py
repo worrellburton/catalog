@@ -36,6 +36,7 @@ from typing import Iterable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from asset_encoder import encode_assets_from_url, cleanup  # noqa: E402
+from primary_poster import generate_primary_poster, poster_storage_key  # noqa: E402
 
 try:
     from supabase import create_client  # type: ignore
@@ -132,13 +133,6 @@ def process_row(
         cleanup(assets)
 
 
-def product_poster_key(product_id: str) -> str:
-    """Storage key for a product's primary-video poster. Primary videos
-    live on fal's CDN (external URL), so we can't mirror their path — key
-    by product id instead, which is stable and one-poster-per-product."""
-    return f"products/{product_id}/primary-video{POSTER_SUFFIX}"
-
-
 def process_product_row(
     supabase,
     supabase_url: str,
@@ -147,33 +141,19 @@ def process_product_row(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """Extracts the primary video's first frame (at the clip's native 3:4
-    size) and writes it to products.primary_video_poster_url. Products only
-    need the poster — no mobile variant — so we encode poster_only."""
-    poster_key = product_poster_key(product_id)
+    size) and writes it to products.primary_video_poster_url. Delegates to
+    the shared primary_poster helper so the Modal webhook/cron path and this
+    one-off sweep stay byte-identical."""
     if dry_run:
-        return product_id, True, f"DRY-RUN poster={poster_key}"
+        return product_id, True, f"DRY-RUN poster={poster_storage_key(product_id)}"
 
     try:
-        assets = encode_assets_from_url(primary_video_url, poster_only=True)
-    except Exception as e:
-        return product_id, False, f"encode failed: {e}"
-
-    try:
-        with open(assets.poster_jpeg_path, "rb") as f:
-            supabase.storage.from_(BUCKET).upload(
-                poster_key,
-                f.read(),
-                {"content-type": "image/jpeg", "upsert": "true"},
-            )
-        poster_url = public_url_for(supabase_url, poster_key)
-        supabase.table("products").update(
-            {"primary_video_poster_url": poster_url}
-        ).eq("id", product_id).execute()
+        poster_url = generate_primary_poster(
+            supabase, supabase_url, product_id, video_url=primary_video_url,
+        )
         return product_id, True, f"poster={poster_url}"
     except Exception as e:
-        return product_id, False, f"upload failed: {e}"
-    finally:
-        cleanup(assets)
+        return product_id, False, f"failed: {e}"
 
 
 def fetch_product_rows(supabase, limit: int | None) -> list[dict]:
