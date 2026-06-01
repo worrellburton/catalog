@@ -703,8 +703,9 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Hero row — big avatar + name/email/role. No card chrome, just a hairline
-   under it to read as the header of the list. */
+/* Hero row — big avatar (its own tap target, opens the upload picker) +
+   name/email/role identity button (separate tap target, opens Profile).
+   No card chrome, just a hairline divider under the row. */
 .user-menu-page-hero {
   width: 100%;
   display: flex;
@@ -712,16 +713,30 @@
   gap: 14px;
   padding: 14px 4px 22px;
   margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.user-menu-page-hero .avatar-upload-trigger {
+  width: 64px; height: 64px;
+  border: none;
+  box-shadow: none;
+  font-size: 26px;
+}
+.user-menu-page-identity-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0;
   color: inherit;
-  cursor: pointer;
   text-align: left;
   font-family: inherit;
+  cursor: pointer;
   transition: opacity 0.15s ease;
 }
-.user-menu-page-hero:active { opacity: 0.7; }
+.user-menu-page-identity-btn:active { opacity: 0.7; }
 .user-menu-page-avatar-wrap {
   position: relative;
   flex-shrink: 0;
@@ -848,4 +863,33 @@
 /* Desktop: never use the page surface — desktop keeps the classic popout. */
 @media (min-width: 769px) {
   .user-menu-page { display: none; }
+}
+
+/* Super-admin entry row at the very bottom of the Account list. Small,
+   muted, distinct from the consumer rows — reads as "admin tools live
+   behind this". Tapping it swaps the page body to the super-admin
+   sub-section (Import / Admin / Decks / Delete mode), with the page
+   back-chevron returning here. */
+.user-menu-page-super-entry {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.user-menu-page-super-entry:active {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
 }
