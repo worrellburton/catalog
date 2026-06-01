@@ -418,45 +418,6 @@
   inset: 0;
 }
 
-/* ---- Product "fit, don't zoom" poster treatment ----
-   Product photos are roughly square; forcing object-fit: cover into the
-   3/4 portrait card magnifies the garment ~33% and crops its edges, so it
-   reads as "zoomed in". For product creatives (.creative-contain) we show
-   the WHOLE image with object-fit: contain and fill the leftover portrait
-   gap with a blurred copy of the same image, so the tile still reads
-   edge-to-edge. Looks are untouched — their portrait video fills cover. */
-.creative-contain .card-poster {
-  object-fit: contain;
-}
-
-.creative-contain .card-poster-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1.12);
-  filter: blur(20px) brightness(0.92);
-  z-index: 0;
-}
-
-/* Keep the autoplay video consistent with the contained poster so the
-   poster→video swap doesn't suddenly re-zoom the product. */
-.promo-card.creative-contain video {
-  object-fit: contain;
-}
-
-/* Wide / featured slots add transform: scale(1.15) to imgs — that would
-   re-zoom an otherwise-contained product. Cancel it for product tiles
-   (the blurred backdrop keeps its own scale via the rule above). */
-.look-card-wide.creative-contain .card-poster,
-.look-card-featured.creative-contain .card-poster,
-.promo-card.creative-contain.look-card-wide video,
-.promo-card.creative-contain.look-card-featured video {
-  transform: none;
-  object-position: center;
-}
-
 .promo-chip {
   display: flex;
   align-items: center;

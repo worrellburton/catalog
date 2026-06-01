@@ -1,0 +1,157 @@
+/* ============================================
+   FOLLOWING — full-screen list of creators you follow.
+   Matte-black, reuses the .my-looks-overlay shell; this file styles the
+   list rows + per-creator stats.
+   ============================================ */
+
+.following-page-overlay { background: #0b0b0d; }
+.following-page-container { max-width: 720px; }
+
+.following-empty {
+  margin-top: 40px;
+  padding: 28px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+.following-empty strong { color: #fff; font-weight: 600; }
+
+.following-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.following-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: #fff;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.following-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.following-row:active { transform: scale(0.99); }
+
+/* Avatar */
+.following-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: visible;
+  background: #1f2430;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.following-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.following-avatar-initial {
+  color: #cbd5e1;
+  font-size: 18px;
+  font-weight: 700;
+}
+.following-avatar.is-online {
+  box-shadow: 0 0 0 2px #22c55e, 0 0 12px rgba(34, 197, 94, 0.55);
+}
+.following-online-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #0b0b0d;
+}
+
+/* Name + handle */
+.following-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+.following-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f5f5f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.following-handle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Stats cluster */
+.following-stats {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.following-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 38px;
+}
+.following-stat-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+.following-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.following-chevron {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* On narrow phones the three-stat cluster crowds the name; drop the
+   "last post" column and tighten spacing so name + the two key numbers
+   (looks, followers) still fit comfortably. */
+@media (max-width: 480px) {
+  .following-row { gap: 10px; padding: 11px 12px; }
+  .following-avatar { width: 44px; height: 44px; }
+  .following-stats { gap: 12px; }
+  .following-stat { min-width: 34px; }
+  .following-stat--last { display: none; }
+  .following-chevron { display: none; }
+}

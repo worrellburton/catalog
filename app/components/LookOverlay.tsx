@@ -684,30 +684,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </div>
               )}
 
-              {/* "More from this creator" is its own dedicated section
-                  (previously buried at the bottom of the Products tab).
-                  Rendered outside the tab switcher so it's visible under
-                  both tabs — keeps the same-creator browse path one
-                  scroll away no matter what the shopper opened. */}
-              {moreFromCreatorEnabled && aboutCreatorStrip.length > 0 && (
-                <section className="look-creator-more-section" aria-label="More from this creator">
-                  <h3 className="look-feed-heading">More from this creator</h3>
-                  <div className="look-creator-more-scroll-wrap">
-                    <div className="look-creator-more-scroll">
-                      {aboutCreatorStrip.map(fl => (
-                        <LookCard
-                          key={`creator-more-${fl.id}`}
-                          look={fl}
-                          className="look-card"
-                          onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
-                          onOpenCreator={onOpenCreator}
-                          onCreateCatalog={onCreateCatalog}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              )}
+              {/* "More from this creator" no longer lives up here as a
+                  horizontal strip — it renders below as a 2-column grid
+                  AFTER "More like this" / "Popular" (see the feed sections). */}
 
               {activeTab === 'creator' && (
                 <>
@@ -819,6 +798,31 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onCreateCatalog={onCreateCatalog}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* "More from this creator" — same 2-column grid as the sections
+            above, placed AFTER "More like this" / "Popular" so the look's
+            own products and similar looks come first. Skips the seed look
+            itself. */}
+        {moreFromCreatorEnabled && aboutCreatorStrip.filter(fl => fl.id !== look.id).length > 0 && (
+          <div className="look-feed-section">
+            <h3 className="look-feed-heading">More from this creator</h3>
+            <div className="look-feed-grid">
+              {aboutCreatorStrip
+                .filter(fl => fl.id !== look.id)
+                .slice(0, moreFromCreatorLimit)
+                .map(fl => (
+                  <LookCard
+                    key={`creator-more-${fl.id}`}
+                    look={fl}
+                    className="look-card"
+                    onOpenLook={handleFeedLookClick}
+                    onOpenCreator={onOpenCreator}
+                    onCreateCatalog={onCreateCatalog}
+                  />
+                ))}
             </div>
           </div>
         )}

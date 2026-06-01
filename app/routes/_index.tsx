@@ -54,6 +54,7 @@ const importInAppBrowser = () => import('~/components/InAppBrowser');
 const importMyLooks = () => import('~/components/MyLooks');
 const importCreatorWallet = () => import('~/components/CreatorWallet');
 const importProfilePage = () => import('~/components/ProfilePage');
+const importFollowingPage = () => import('~/components/FollowingPage');
 
 const LandingPage = lazy(importLandingPage);
 const CreatorPage = lazy(importCreatorPage);
@@ -65,6 +66,7 @@ const InAppBrowser = lazy(importInAppBrowser);
 const MyLooks = lazy(importMyLooks);
 const CreatorWallet = lazy(importCreatorWallet);
 const ProfilePage = lazy(importProfilePage);
+const FollowingPage = lazy(importFollowingPage);
 
 // Order chosen by likelihood the user will open the surface in the next
 // minute: looks/products dominate, browser is the most-visited tail action,
@@ -153,6 +155,7 @@ export default function Home() {
   const [showMyLooks, setShowMyLooks] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
@@ -422,6 +425,15 @@ export default function Home() {
   const handleCloseCreator = useCallback(() => {
     setCreatorFilter(null);
   }, []);
+
+  // Following list page (mobile rail tap). Opening a creator from it closes
+  // the list first so the creator catalog comes to the foreground.
+  const openFollowingList = useCallback(() => setShowFollowing(true), []);
+  const closeFollowingList = useCallback(() => setShowFollowing(false), []);
+  const handleFollowingOpenCreator = useCallback((handle: string) => {
+    setShowFollowing(false);
+    handleOpenCreator(handle);
+  }, [handleOpenCreator]);
 
   // Brand catalog overlay. Opening from a product detail (or any
   // higher-stacked modal) closes those overlays so the new brand
@@ -996,6 +1008,7 @@ export default function Home() {
                 mode="both"
                 onOpenCreator={handleOpenCreator}
                 onCreateFollowingCatalog={handleCreateFollowingCatalog}
+                onOpenFollowingList={openFollowingList}
               />
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />
@@ -1141,6 +1154,15 @@ export default function Home() {
           {showMyLooks && (
             <Suspense fallback={null}>
               <MyLooks onClose={closeMyLooks} />
+            </Suspense>
+          )}
+
+          {showFollowing && (
+            <Suspense fallback={null}>
+              <FollowingPage
+                onOpenCreator={handleFollowingOpenCreator}
+                onClose={closeFollowingList}
+              />
             </Suspense>
           )}
 

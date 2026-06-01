@@ -763,6 +763,26 @@
   background: rgba(220, 220, 225, 0.78);
 }
 
+/* The open search pill is dark glass on every breakpoint (the mobile rule
+   below otherwise paints the input #111 for the white resting pill — which
+   is invisible on the dark sheet). Force white input text + placeholder
+   whenever the sheet is open, regardless of hero/scroll/mobile state. Light
+   mode flips the open pill to light glass, so its text goes dark instead. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #fff;
+}
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #111;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
 /* Circular close button — same frosted glass treatment as the pill. */
 .bottom-search-close {
   flex: 0 0 auto;
@@ -1400,10 +1420,9 @@ body:has(.bottom-bar.search-open) {
     font-weight: 400;
   }
 
-  /* The filter button (leftmost) becomes a borderless '+' glyph. We hide
-     its inline SVG and draw the plus with CSS so the existing button —
-     and every event handler attached to it — stays intact. The button
-     itself still opens the filters sheet on tap. */
+  /* The leftmost button is the FILTERS control — show its sliders icon
+     (the inline SVG) rather than the old '+' glyph, so it reads as a
+     filters button. It already opens the filters sheet on tap. */
   .bottom-bar-inner.search-inline > .filter-btn.inline {
     width: 32px;
     height: 32px;
@@ -1413,23 +1432,14 @@ body:has(.bottom-bar.search-open) {
     color: #5f6368;
     box-shadow: none;
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
-  .bottom-bar-inner.search-inline > .filter-btn.inline > svg { display: none; }
-  .bottom-bar-inner.search-inline > .filter-btn.inline::before,
-  .bottom-bar-inner.search-inline > .filter-btn.inline::after {
-    content: '';
-    position: absolute;
-    top: 50%; left: 50%;
-    background: currentColor;
-    border-radius: 1.5px;
-  }
-  .bottom-bar-inner.search-inline > .filter-btn.inline::before {
-    width: 16px; height: 2px;
-    transform: translate(-50%, -50%);
-  }
-  .bottom-bar-inner.search-inline > .filter-btn.inline::after {
-    width: 2px; height: 16px;
-    transform: translate(-50%, -50%);
+  .bottom-bar-inner.search-inline > .filter-btn.inline > svg {
+    display: block;
+    width: 18px;
+    height: 18px;
   }
   .bottom-bar-inner.search-inline > .filter-btn.inline:hover,
   .bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {

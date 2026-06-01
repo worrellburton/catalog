@@ -16,6 +16,10 @@ interface FollowingRailProps {
    *  button at the top of the popover. Receives the full list of
    *  followed handles so the parent can scope the feed to them. */
   onCreateFollowingCatalog?: (handles: string[]) => void;
+  /** When provided, tapping the "Following" row on mobile opens this full
+   *  list-view page instead of the inline popover. Desktop keeps the quick
+   *  popover. */
+  onOpenFollowingList?: () => void;
 }
 
 interface RailEntry {
@@ -65,7 +69,7 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog }: FollowingRailProps) {
+function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
   const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
@@ -206,6 +210,19 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     ts: f.followedAt,
   }));
 
+  // Tapping the "Following" row: on mobile (where the full list page is
+  // wired up) open that page; everywhere else fall back to the quick
+  // inline popover.
+  const onFollowingTrigger = () => {
+    if (onOpenFollowingList && typeof window !== 'undefined'
+        && window.matchMedia('(max-width: 768px)').matches) {
+      setOpenPopover(null);
+      onOpenFollowingList();
+    } else {
+      setOpenPopover(v => v === 'following' ? null : 'following');
+    }
+  };
+
   if (mode === 'both') {
     return (
       <div
@@ -218,14 +235,27 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           gap: 0,
         }}
       >
+        {/* Mobile-only Instagram-stories rail: a horizontal scroll of every
+            followed creator as a glowing circle, latest-posted first (the
+            entries are already ts-sorted). Hidden on desktop via CSS, which
+            shows the overlapping avatar stacks below instead. */}
+        {hasFollowing && (
+          <FollowingStoriesRail
+            entries={followingEntries!}
+            onlineHandles={onlineHandles}
+            onOpenCreator={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+            onSeeAll={onOpenFollowingList}
+          />
+        )}
         {hasFollowing && (
           <AvatarRow
+            railKind="following"
             ariaLabel="Following"
             titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
             entries={followingEntries!}
             newSet={null}
             isOpen={openPopover === 'following'}
-            onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+            onToggle={onFollowingTrigger}
             onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
             popoverTitle={`Following · ${followingEntries!.length}`}
             tooltipPrefix={null}
@@ -237,6 +267,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
         )}
         {hasFollowers && (
           <AvatarRow
+            railKind="followers"
             ariaLabel="Followers"
             titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
             entries={followerRailEntries}
@@ -267,6 +298,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     >
       {showFollowers && hasFollowers && (
         <AvatarRow
+          railKind="followers"
           ariaLabel="Followers"
           titleText={`${followerEntries!.length} follower${followerEntries!.length === 1 ? '' : 's'}`}
           entries={followerRailEntries}
@@ -281,12 +313,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       )}
       {showFollowing && hasFollowing && (
         <AvatarRow
+          railKind="following"
           ariaLabel="Following"
           titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
           entries={followingEntries!}
           newSet={null}
           isOpen={openPopover === 'following'}
-          onToggle={() => setOpenPopover(v => v === 'following' ? null : 'following')}
+          onToggle={onFollowingTrigger}
           onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
           popoverTitle={`Following · ${followingEntries!.length}`}
           tooltipPrefix={null}
@@ -302,9 +335,76 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
 // / presence ticks.
 export default memo(FollowingRail);
 
+// ─── internal FollowingStoriesRail (mobile) ─────────────────────────
+
+interface FollowingStoriesRailProps {
+  entries: RailEntry[];
+  onlineHandles: Set<string>;
+  onOpenCreator: (handle: string) => void;
+  /** Optional trailing "See all" chip → opens the full Following page. */
+  onSeeAll?: () => void;
+}
+
+/** Instagram-stories-style horizontal scroll of followed creators. Each is a
+ *  glowing, slowly-rotating gradient ring around the creator's avatar with a
+ *  name caption. Latest-posted creators come first (entries arrive ts-sorted).
+ *  Mobile-only — CSS hides it ≥769px. */
+function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+  return (
+    <div className="follow-stories-rail" role="list" aria-label="Creators you follow">
+      {entries.map(c => {
+        const isOnline = onlineHandles.has(c.handle.toLowerCase());
+        const name = c.displayName || c.handle;
+        return (
+          <button
+            key={c.handle}
+            type="button"
+            role="listitem"
+            className="follow-story"
+            onClick={() => onOpenCreator(c.handle)}
+            title={name}
+            aria-label={`Open ${name}'s catalog`}
+          >
+            <span className={`follow-story-ring${isOnline ? ' is-online' : ''}`}>
+              <span className="follow-story-avatar">
+                {c.avatarUrl
+                  ? <img src={c.avatarUrl} alt="" loading="lazy" />
+                  : <span className="follow-story-initial">{name.charAt(0).toUpperCase()}</span>}
+              </span>
+            </span>
+            <span className="follow-story-name">{name}</span>
+          </button>
+        );
+      })}
+      {onSeeAll && (
+        <button
+          type="button"
+          className="follow-story follow-story--all"
+          onClick={onSeeAll}
+          title="See all"
+          aria-label="See all creators you follow"
+        >
+          <span className="follow-story-ring follow-story-ring--all">
+            <span className="follow-story-avatar follow-story-avatar--all">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                <circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" />
+              </svg>
+            </span>
+          </span>
+          <span className="follow-story-name">See all</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── internal AvatarRow ─────────────────────────────────────────────
 
 interface AvatarRowProps {
+  /** Which rail — drives a `.follow-rail--{kind}` class so CSS can show
+   *  only the "following" rail on mobile. */
+  railKind: 'following' | 'followers';
   ariaLabel: string;
   titleText: string;
   entries: RailEntry[];
@@ -322,12 +422,12 @@ interface AvatarRowProps {
 }
 
 function AvatarRow({
-  ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix, onlineHandles,
+  railKind, ariaLabel, titleText, entries, newSet, isOpen, onToggle, onSelect, popoverTitle, tooltipPrefix, onlineHandles,
 }: AvatarRowProps) {
   const visible = entries.slice(0, MAX_VISIBLE);
   const overflow = Math.max(0, entries.length - MAX_VISIBLE);
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }} className="follow-rail">
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }} className={`follow-rail follow-rail--${railKind}`}>
       <button
         type="button"
         onClick={onToggle}

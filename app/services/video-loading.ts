@@ -67,14 +67,17 @@ export function pickVideoUrl(creative: {
  *  Used as the <video poster=> attribute so the browser paints a
  *  real image on first paint, before the MP4 has decoded a frame.
  *
- *  primary_image_url is preferred so that, when paired with a product's
- *  primary_video_url (above), the poster→video swap is from the exact
- *  same canonical asset family — same shape, same crop, no jump. */
+ *  primary_video_poster_url leads: it's a still extracted from the
+ *  primary video at the clip's native 3:4 size, so poster and video are
+ *  literally the same frame — same shape, same crop, no jump and no
+ *  crop-zoom in the 3:4 card. primary_image_url (the polished packshot)
+ *  is the fallback for products whose poster hasn't been backfilled. */
 export function pickPosterUrl(creative: {
   thumbnail_url?: string | null;
-  product?: { image_url?: string | null; primary_image_url?: string | null; images?: string[] | null } | null;
+  product?: { image_url?: string | null; primary_image_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null } | null;
 }): string {
-  return creative.product?.primary_image_url
+  return creative.product?.primary_video_poster_url
+    || creative.product?.primary_image_url
     || creative.thumbnail_url
     || creative.product?.image_url
     || (creative.product?.images && creative.product.images[0])
@@ -89,9 +92,12 @@ export function pickPosterUrl(creative: {
  *  only when the picker hasn't run on this product yet. */
 export function pickStillImageUrl(creative: {
   thumbnail_url?: string | null;
-  product?: { image_url?: string | null; primary_image_url?: string | null; images?: string[] | null } | null;
+  product?: { image_url?: string | null; primary_image_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null } | null;
 }): string {
-  return creative.product?.primary_image_url
+  // Prefer the 3:4 video poster when present so a forced-still product
+  // tile fills the card the same way the clip would — no crop-zoom.
+  return creative.product?.primary_video_poster_url
+    || creative.product?.primary_image_url
     || creative.product?.image_url
     || (creative.product?.images && creative.product.images[0])
     || creative.thumbnail_url

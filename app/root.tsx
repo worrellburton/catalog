@@ -47,6 +47,7 @@ import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
 import "./styles/my-looks.css";
+import "./styles/following-page.css";
 import "./styles/creator-toast.css";
 import "./styles/import.css";
 import "./styles/share-page.css";

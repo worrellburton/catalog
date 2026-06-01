@@ -37,16 +37,30 @@ from typing import Optional
 @dataclass
 class EncodedAssets:
     """Output of encode_assets_from_url. Both fields are file paths on disk
-    that the caller is responsible for cleaning up."""
+    that the caller is responsible for cleaning up. `mobile_mp4_path` is an
+    empty string when poster_only=True (no mobile variant was encoded)."""
     poster_jpeg_path: str
     mobile_mp4_path: str
     workdir: str
 
 
-def encode_assets_from_url(video_url: str, workdir: Optional[str] = None) -> EncodedAssets:
-    """Downloads the source MP4 to a temp dir, then runs ffmpeg twice:
-    once to extract the first frame as a JPEG, once to transcode a
-    mobile-optimized variant. Returns the two output paths.
+def encode_assets_from_url(
+    video_url: str,
+    workdir: Optional[str] = None,
+    poster_only: bool = False,
+) -> EncodedAssets:
+    """Downloads the source MP4 to a temp dir, then runs ffmpeg to extract
+    the first frame as a JPEG and (unless poster_only) transcode a
+    mobile-optimized variant. Returns the output paths.
+
+    The poster is the video's first frame scaled to the clip's NATIVE
+    aspect ratio (height derived with `-2`), so it matches the video
+    pixel-for-pixel in shape — this is what lets the feed swap poster→video
+    with no crop-zoom.
+
+    Set poster_only=True for sources that only need a poster (e.g. the
+    products.primary_video_poster_url backfill), skipping the costlier
+    mobile transcode.
 
     Raises CalledProcessError on ffmpeg failure or HTTPError on a 4xx/5xx
     while fetching the source.
@@ -87,6 +101,13 @@ def encode_assets_from_url(video_url: str, workdir: Optional[str] = None) -> Enc
         ],
         check=True,
     )
+
+    if poster_only:
+        return EncodedAssets(
+            poster_jpeg_path=poster_path,
+            mobile_mp4_path="",
+            workdir=workdir,
+        )
 
     # 3. Mobile variant: 480p H.264, 1.5 Mbps target. Earlier this
     # ran at 600 kbps, which is borderline for 480p portrait at 24fps
