@@ -1074,9 +1074,11 @@ body:has(.bottom-bar.search-open) {
     border-radius: 22px;
   }
   .bottom-bar.search-open {
-    /* Tight 8px gap when the search overlay is up — the keyboard sits
-       directly below the bar, so the user reads it as one continuous
-       input strip (was 28px which left a visible un-dimmed band). */
+    /* Resting fallback when there's no soft keyboard (e.g. an external
+       keyboard is paired): float 8px above the bottom chrome. When a soft
+       keyboard IS up, BottomBar pins the bar's bottom inline to the
+       keyboard's top edge — that inline value wins, so the bar rides the
+       keyboard 1:1 as it animates in/out. */
     bottom: max(
       calc(env(safe-area-inset-bottom) + 8px),
       calc(var(--ios-bottom-chrome, 0px) + 8px)
@@ -1087,35 +1089,17 @@ body:has(.bottom-bar.search-open) {
     bottom: 0;
   }
 
-  /* Outside the Flutter shell, the search input docks to the TOP while
-     active so it never collides with the on-screen keyboard — the keyboard
-     only ever eats the bottom of the screen, so a top-anchored bar sidesteps
-     the whole "lift above the keyboard" problem and the gap it left behind.
-     The suggestion column then cascades downward beneath it toward the
-     keyboard. Inside the shell the native header owns the top zone, so the
-     bar stays bottom-anchored (the rule above). */
-  html:not([data-shell="catalog-app"]) .bottom-bar.search-open {
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
-    bottom: auto;
-  }
-
+  /* The suggestion column rises UP from the bar (which is docked to the
+     keyboard top). It fills the layout viewport but reserves the keyboard +
+     bar height at the bottom so the lowest visible suggestion sits just
+     above the bar, then masks-fade as items scroll up toward the headline.
+     --ios-bottom-chrome tracks the keyboard height live (set in BottomBar),
+     so the reserved band shrinks/grows with the keyboard. */
   html:not([data-shell="catalog-app"]) .search-suggestions {
-    /* Bind to the visible viewport so the column ends at the keyboard's top
-       edge instead of running behind it. On interactive-widget=resizes-content
-       browsers inset:0 already collapses to this; --vv-height (set live from
-       window.visualViewport in BottomBar) is the iOS-Safari fallback. */
-    bottom: auto;
-    height: var(--vv-height, 100%);
-    /* Reserve space for the top-docked bar instead of for a bottom bar:
-       safe-area + ~12px offset + ~52px bar height + ~20px grab handle +
-       breathing room. */
-    padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    padding-bottom: 16px;
-    /* Fade in beneath the bar (top) and out at the keyboard (bottom). The
-       150px solid-start clears the bar + handle on notched devices so items
-       dissolve as they scroll up under it. */
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 150px, black 88%, transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0, black 150px, black 88%, transparent 100%);
+    padding-bottom: max(
+      calc(env(safe-area-inset-bottom) + 72px),
+      calc(var(--ios-bottom-chrome, 0px) + 72px)
+    );
   }
 
   /* Auto-scroll (rAF) is now active on mobile too — no touch-scroll
@@ -1476,15 +1460,16 @@ body:has(.bottom-bar.search-open) {
   }
 }
 
-/* When the keyboard is up (search input focused on mobile), pin the bar
-   flush against the keyboard's top edge — Gemini-style — instead of
-   floating with a 12px+safe-area gap. --ios-bottom-chrome is set by
-   BottomBar's visualViewport listener and equals the keyboard's height
-   (plus any bottom browser chrome). Mobile only; desktop keeps its
-   floating position since there's no soft keyboard. */
+/* When the keyboard is up (search input focused on mobile), the bar pins
+   flush to the keyboard's top edge — Gemini-style. BottomBar sets the exact
+   bottom inline from window.visualViewport (so it rides the keyboard 1:1 as
+   it animates); this CSS is the matching fallback + the transition that makes
+   the inline move glide. ~0.28s roughly matches the iOS keyboard slide, so
+   the bar and keyboard rise together. Mobile only; desktop has no soft
+   keyboard so its centered/floating position stays. */
 @media (max-width: 640px) {
   .bottom-bar.search-open {
-    bottom: var(--ios-bottom-chrome, 0px);
-    transition: bottom 0.18s ease;
+    bottom: calc(var(--ios-bottom-chrome, 0px) + 8px);
+    transition: bottom 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
