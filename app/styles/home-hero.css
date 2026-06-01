@@ -508,20 +508,20 @@
     transform: translateY(-12px) !important;
   }
 
-  /* Vertically center the spark + headline + search bar as ONE group in the
-     band BELOW the stories rail. The rail eats the top ~25% of the screen,
-     so the visual midpoint of the remaining space is well below 50vh; we
-     drop the bar to 28vh-from-bottom and anchor spark+headline to flex-end
-     so they sit directly above it. Trio center ≈ 62vh-from-top, which is
-     the midpoint of (rail-bottom → screen-bottom). */
+  /* Headline anchored to flex-end with a LARGE bottom reservation, and the
+     bar dropped to a clearly-lower position. Earlier the gap was tight
+     enough that on some viewports the bar visually overlapped or sat above
+     the headline. Now headline bottom = 38vh-from-bottom (62% from top),
+     bar = 22vh-from-bottom (78% from top): always 16vh of clear air below
+     the headline, bar visibly under it. */
   .sfh {
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 180px);
-    padding-bottom: calc(28vh + 84px);
+    padding-bottom: 38vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    bottom: 28vh;
+    bottom: 22vh;
   }
 }
 
