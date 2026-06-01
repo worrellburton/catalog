@@ -740,6 +740,15 @@ html:has(.user-menu-page) .bottom-bar {
   transition:
     transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
     opacity   0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* will-change only on the bottom bars — NOT the header. will-change:
+   transform makes an element a containing block for fixed-position
+   descendants, and the mobile Account page (position:fixed) is rendered
+   INSIDE the header; with will-change on the header it positioned relative
+   to the 60px header box instead of the viewport — the menu looked broken.
+   The header still animates via the transition above. */
+.app-root .bottom-bar,
+.app-root .ai-bar-wrap {
   will-change: transform;
 }
 .app-root.chrome-hidden header {
