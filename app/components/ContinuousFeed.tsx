@@ -413,14 +413,16 @@ function ContinuousFeed({
     let cancelled = false;
     if (initialCached) primeTrailAssets(initialCached);
 
-    const refetch = () => {
+    const refetch = (force = false) => {
       Promise.all([
         getLooks().catch(() => null as Look[] | null),
         prefetchHomeFeed().catch(() => null as ProductAd[] | null),
       ]).then(([freshLooks, freshCreatives]) => {
         if (cancelled) return;
         // Looks: skip setState when cache was valid — avoids grid reshuffle.
-        if (hasLooksCacheRef.current) {
+        // `force` (a gender change) overrides this: the cached feed is for
+        // the OLD gender, so we MUST swap to the freshly-filtered set.
+        if (hasLooksCacheRef.current && !force) {
           if (freshLooks) primeLookAssets(freshLooks);
         } else if (freshLooks && freshLooks.length > 0) {
           setDbLooks(freshLooks);
@@ -428,8 +430,11 @@ function ContinuousFeed({
         } else if (!initialCachedLooks) {
           setDbLooks(staticLooksFallback);
         }
-        // Creatives: same — only push to live state on first visit.
-        if (hasCreativesCacheRef.current) {
+        // Creatives: same SWR guard, same `force` override. Without the
+        // override, flipping "Shopping for: Women" fetched the women's
+        // feed but never pushed it to state, leaving men's products on
+        // screen (the bug this fixes).
+        if (hasCreativesCacheRef.current && !force) {
           if (freshCreatives) primeTrailAssets(freshCreatives);
         } else {
           if (freshCreatives) {
@@ -442,7 +447,7 @@ function ContinuousFeed({
     };
 
     refetch();
-    const unsubscribe = subscribeToShopperGender(refetch);
+    const unsubscribe = subscribeToShopperGender(() => refetch(true));
     return () => {
       cancelled = true;
       unsubscribe();
