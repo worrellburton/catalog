@@ -706,3 +706,41 @@ html:has(.user-menu-page) .bottom-bar {
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
+
+/* ── Scroll-driven chrome auto-hide ─────────────────────────────────────
+   Once past the hero, header slides up offscreen + bottom search bar
+   slides down on scroll-down. Scrolling up brings them back. Smooth glide
+   so it reads as "the page wants you to focus on the feed". The class is
+   set by the scroll-direction effect in _index.tsx; cleared near the top
+   of the page so the chrome always reappears when you've scrolled back. */
+.app-root header,
+.app-root .bottom-bar,
+.app-root .ai-bar-wrap {
+  transition:
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity   0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+.app-root.chrome-hidden header {
+  transform: translateY(-130%);
+  opacity: 0;
+  pointer-events: none;
+}
+.app-root.chrome-hidden .bottom-bar {
+  /* The bar uses translateX(-50%) for centering — chain a Y translation
+     on top so it slides off the bottom without losing horizontal anchor. */
+  transform: translateX(-50%) translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.app-root.chrome-hidden .ai-bar-wrap {
+  transform: translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* When the search sheet is open we drag the bar around manually — don't
+   stomp on its inline transform with our hide-state translateX. */
+.app-root.chrome-hidden .bottom-bar.search-open {
+  transform: translateX(-50%) translateY(140%);
+}
