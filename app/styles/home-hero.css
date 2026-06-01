@@ -518,15 +518,14 @@
        below the fold. Only a thin sliver of the first row peeks at the
        bottom edge, hinting that scrolling reveals more. */
     min-height: 100svh;
-    /* flex-end anchors the spark+headline to the bottom edge of the inner
-       area (just above padding-bottom). The .sfh-stage gap is 22px between
-       spark↔headline; setting the bar so its top edge lands ~22px below
-       the headline bottom (padding-bottom 30vh + bar bottom 32vh below
-       the viewport's bottom edge ≈ 22px gap on a typical phone viewport)
-       gives the trio equal-feel spacing as one centered group. */
+    /* flex-end anchors spark+headline to the inner-area bottom. We need
+       padding-bottom > (100% − bar_top_position) so the stage cannot
+       overflow into the bar zone. Bar top = 100 − bar.bottom − bar.height
+       ≈ 100 − 32 − 7 = 61% from top → padding-bottom must be ≥ 42vh to
+       keep stage bottom at ≤ 58% (a 22px / ~3vh gap above the bar). */
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
-    padding-bottom: 30vh;
+    padding-bottom: 42vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
