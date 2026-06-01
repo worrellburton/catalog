@@ -20,12 +20,53 @@ interface PopularCatalogPillsProps {
   onFollowingCatalog?: (handles: string[]) => void;
 }
 
-const KIND_META: Record<CatalogPill['kind'], { icon: string; tag: string | null; cls: string }> = {
-  fire:     { icon: '🔥', tag: 'On fire',      cls: 'catalog-pill--fire' },
-  popular:  { icon: '⭐', tag: 'Most popular',  cls: 'catalog-pill--popular' },
-  featured: { icon: '✨', tag: 'Featured',      cls: 'catalog-pill--featured' },
-  catalog:  { icon: '',   tag: null,            cls: '' },
+const KIND_META: Record<CatalogPill['kind'], { tag: string | null }> = {
+  fire:     { tag: 'On fire' },
+  popular:  { tag: 'Most popular' },
+  featured: { tag: 'Featured' },
+  catalog:  { tag: null },
 };
+
+// Monochrome SVG icon set. Every chip gets a distinct glowing glyph; plain
+// catalogs are assigned one deterministically from POOL by name hash so
+// the cloud reads as a varied set of icons rather than repeats.
+const ICON_PATHS: Record<string, string> = {
+  people:  'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+  flame:   'M12 2c1.2 3 4 4.2 4 7.8A4 4 0 0 1 8 10c0-1.6.8-2.6 1.6-3.4M9.5 14.6A2.4 2.4 0 0 0 14 14c0-1.8-1.8-2.4-1.3-4.4',
+  star:    'M12 2.5l2.9 6.1 6.6.7-5 4.5 1.4 6.6L12 17.6 6.1 20.9l1.4-6.6-5-4.5 6.6-.7z',
+  sparkle: 'M12 3l1.9 5.4L19 10l-5.1 1.6L12 17l-1.9-5.4L5 10l5.1-1.6z',
+  tag:     'M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8zM7 7h.01',
+  hanger:  'M12 4a2 2 0 0 0-1 3.7L3 13h18l-8-5.3A2 2 0 0 0 12 4z',
+  bag:     'M6 2 4 7v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7l-2-5zM4 7h16M16 11a4 4 0 0 1-8 0',
+  heart:   'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z',
+  bolt:    'M13 2 3 14h9l-1 8 10-12h-9z',
+  sun:     'M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  compass: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM16.2 7.8l-2.1 6.4-6.4 2.1 2.1-6.4z',
+  crown:   'M2 18h20M3 8l4 4 5-7 5 7 4-4-2 10H5z',
+  flower:  'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2a3 3 0 0 1 0 6M12 16a3 3 0 0 1 0 6M5 12a3 3 0 0 1 6 0M13 12a3 3 0 0 1 6 0',
+};
+const POOL = ['tag', 'hanger', 'bag', 'heart', 'bolt', 'sun', 'compass', 'crown', 'flower'];
+function iconForName(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return POOL[h % POOL.length];
+}
+function iconForPill(kind: CatalogPill['kind'], name: string): string {
+  if (kind === 'fire') return 'flame';
+  if (kind === 'popular') return 'star';
+  if (kind === 'featured') return 'sparkle';
+  return iconForName(name);
+}
+
+function PillIcon({ name }: { name: string }) {
+  return (
+    <span className="catalog-pill-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d={ICON_PATHS[name] ?? ICON_PATHS.tag} />
+      </svg>
+    </span>
+  );
+}
 
 export default function PopularCatalogPills({ onPick, onFollowingCatalog }: PopularCatalogPillsProps) {
   const [pills, setPills] = useState<CatalogPill[] | null>(null);
@@ -65,12 +106,12 @@ export default function PopularCatalogPills({ onPick, onFollowingCatalog }: Popu
           <button
             key="__following"
             type="button"
-            className="catalog-pill catalog-pill--following"
+            className="catalog-pill"
             style={{ animationDelay: `${idx++ * 38}ms` }}
             onClick={() => onFollowingCatalog?.(followHandles)}
             title="Make a catalog of everyone you follow"
           >
-            <span className="catalog-pill-icon" aria-hidden="true">👥</span>
+            <PillIcon name="people" />
             <span className="catalog-pill-tag">Following</span>
           </button>
         )}
@@ -81,12 +122,12 @@ export default function PopularCatalogPills({ onPick, onFollowingCatalog }: Popu
             <button
               key={`${p.kind}-${p.name}`}
               type="button"
-              className={`catalog-pill ${meta.cls}`}
+              className="catalog-pill"
               style={{ animationDelay: delay }}
               onClick={() => onPick(p.name)}
               title={meta.tag ? `${meta.tag}: ${p.name}` : p.name}
             >
-              {meta.icon && <span className="catalog-pill-icon" aria-hidden="true">{meta.icon}</span>}
+              <PillIcon name={iconForPill(p.kind, p.name)} />
               {meta.tag && <span className="catalog-pill-tag">{meta.tag}</span>}
               <span className="catalog-pill-name">{p.name}</span>
             </button>

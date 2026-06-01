@@ -291,44 +291,28 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 .catalog-pill:active { transform: translateY(0) scale(0.97); }
-.catalog-pill-icon { font-size: 14px; line-height: 1; }
-.catalog-pill-tag { font-weight: 700; }
-/* Tag + name share a pill (e.g. "🔥 On fire | Quiet luxury") — divide them. */
+/* Monochrome glowing SVG glyph — white, soft halo. */
+.catalog-pill-icon {
+  display: inline-flex;
+  line-height: 0;
+  color: #fff;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.55));
+  animation: catalog-icon-glow 3.2s ease-in-out infinite;
+}
+@keyframes catalog-icon-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.75)); }
+}
+.catalog-pill-tag { font-weight: 700; color: #fff; }
+/* Tag + name share a pill ("Most popular | white shoes") — divide them. */
 .catalog-pill-tag + .catalog-pill-name {
   padding-left: 8px;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
-  opacity: 0.82;
+  opacity: 0.7;
 }
 
-/* Kind accents */
-.catalog-pill--fire {
-  border-color: rgba(251, 146, 60, 0.5);
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.24), rgba(239, 68, 68, 0.18));
-  box-shadow: 0 4px 18px rgba(249, 115, 22, 0.25);
-}
-.catalog-pill--fire:hover {
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.34), rgba(239, 68, 68, 0.26));
-  border-color: rgba(251, 146, 60, 0.72);
-}
-.catalog-pill--fire .catalog-pill-tag { color: #fdba74; }
-
-.catalog-pill--popular {
-  border-color: rgba(250, 204, 21, 0.45);
-  background: linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(245, 158, 11, 0.16));
-}
-.catalog-pill--popular .catalog-pill-tag { color: #fde68a; }
-
-.catalog-pill--featured {
-  border-color: rgba(167, 139, 250, 0.45);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.24), rgba(99, 102, 241, 0.16));
-}
-.catalog-pill--featured .catalog-pill-tag { color: #c4b5fd; }
-
-.catalog-pill--following {
-  border-color: rgba(56, 189, 248, 0.5);
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(56, 189, 248, 0.18));
-}
-.catalog-pill--following .catalog-pill-tag { color: #7dd3fc; }
+/* Black & white glass — no per-kind hues. Every chip is the same matte
+   glass; the glowing icon is what distinguishes it. */
 
 /* Light mode */
 .light-mode .catalog-pills-label { color: rgba(0, 0, 0, 0.5); }
