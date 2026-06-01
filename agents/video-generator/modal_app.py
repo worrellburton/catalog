@@ -2,10 +2,12 @@
 Modal deployment for the Video Generator Agent.
 
 Exposes entry points:
-  1. POST /generate-ad      — Supabase webhook when product_creative row inserted
-  2. POST /generate-video   — Supabase webhook when products.scrape_status → done
-  3. Cron job               — every 30 min: retry pending/failed creatives & looks
-  4. Manual                 — generate_ad_job / generate_and_update
+  1. POST /generate-ad             — Supabase webhook when product_creative row inserted
+  2. POST /generate-video          — Supabase webhook when products.scrape_status → done
+  3. POST /generate-primary-poster — products DB trigger when primary_video_url is set
+  4. Cron job                      — every 30 min: retry pending creatives & looks,
+                                     backfill missing primary-video posters
+  5. Manual                        — generate_ad_job / generate_and_update
 
 Deploy:
     modal deploy modal_app.py
@@ -25,6 +27,11 @@ Supabase webhooks to configure in Dashboard → Database → Webhooks:
     → POST {modal_webhook_url}/generate-ad
   • Table: products, event: UPDATE (filter: scrape_status = done)
     → POST {modal_webhook_url}/generate-video
+
+The primary-poster endpoint is wired via a DB trigger instead of a
+dashboard webhook — see migration
+20260601000008_trg_generate_primary_poster.sql
+(trg_products_generate_primary_poster → POST /generate-primary-poster).
 """
 
 import modal
@@ -57,6 +64,10 @@ generator_image = (
     .add_local_file("ad_generator.py", "/root/ad_generator.py")
     .add_local_file("agent.py", "/root/agent.py")
     .add_local_file("watermark.py", "/root/watermark.py")
+    # Primary-video poster extraction (asset_encoder does the ffmpeg
+    # frame grab; primary_poster wraps upload + DB write).
+    .add_local_file("asset_encoder.py", "/root/asset_encoder.py")
+    .add_local_file("primary_poster.py", "/root/primary_poster.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -172,6 +183,57 @@ def generate_webhook(body: dict):
     # Dispatch async — webhook returns immediately
     generate_and_update.spawn(product_id)
 
+    return {"status": "queued", "product_id": product_id}
+
+
+# ─── Primary-video poster: extract a 3:4 still that matches the clip ───
+
+@app.function(
+    image=generator_image,
+    secrets=secrets,
+    timeout=300,
+    retries=1,
+    max_containers=5,
+)
+def generate_primary_poster_job(product_id: str):
+    """Extract the product's primary-video first frame (native 3:4) and
+    write products.primary_video_poster_url. Cheap (one ffmpeg frame grab),
+    so it runs with higher concurrency than the video generators."""
+    import os
+    import sys
+    sys.path.insert(0, "/root")
+    from supabase import create_client
+    from primary_poster import generate_primary_poster
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    poster_url = generate_primary_poster(supabase, os.environ["SUPABASE_URL"], product_id)
+    print(f"[poster {product_id}] {poster_url}")
+    return {"product_id": product_id, "poster_url": poster_url}
+
+
+@app.function(image=generator_image, secrets=secrets)
+@modal.fastapi_endpoint(method="POST", label="generate-primary-poster")
+def generate_primary_poster_webhook(body: dict):
+    """
+    POST /generate-primary-poster
+
+    Called by the products DB trigger (trg_products_generate_primary_poster)
+    whenever primary_video_url appears/changes and no poster exists yet.
+    Supabase sends the full new row as body["record"].
+    """
+    record = body.get("record", {})
+    product_id = record.get("id")
+    if not product_id:
+        return {"error": "Missing product id"}, 400
+    if not record.get("primary_video_url"):
+        return {"status": "skipped", "reason": "no primary_video_url"}
+    if record.get("primary_video_poster_url"):
+        return {"status": "skipped", "reason": "poster already set"}
+
+    generate_primary_poster_job.spawn(product_id)
     return {"status": "queued", "product_id": product_id}
 
 
@@ -292,4 +354,25 @@ def generate_pending():
             pass
     else:
         print("No pending looks.")
+
+    # ── 3. Backfill missing primary-video posters ─────────────────────
+    # Safety net behind the DB trigger: catches any product whose
+    # primary_video_url was set without the webhook firing (trigger
+    # disabled, Modal endpoint down, historical autopromote rows) so the
+    # feed never falls back to the square, zoomed primary_image_url.
+    missing_posters = (
+        supabase.table("products")
+        .select("id")
+        .not_.is_("primary_video_url", "null")
+        .is_("primary_video_poster_url", "null")
+        .limit(20)
+        .execute()
+    )
+    poster_rows = missing_posters.data or []
+    if poster_rows:
+        print(f"Backfilling {len(poster_rows)} missing primary-video poster(s)…")
+        for _ in generate_primary_poster_job.starmap([(r["id"],) for r in poster_rows]):
+            pass
+    else:
+        print("No missing primary-video posters.")
 

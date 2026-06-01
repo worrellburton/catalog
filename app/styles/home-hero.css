@@ -158,45 +158,95 @@
 }
 @keyframes sc-in { from { opacity: 0; } to { opacity: 1; } }
 .sc-stage {
-  width: min(440px, 90%);
+  width: min(420px, 86%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 22px;
-  text-align: center;
+  align-items: stretch;
+  gap: 20px;
+  text-align: left;
 }
-.sc-orb { position: relative; width: 72px; height: 72px; }
-.sc-orb-core {
-  position: absolute; inset: 26px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff, #cbd5e1 60%, #64748b);
-  box-shadow: 0 0 26px rgba(255, 255, 255, 0.45);
-  animation: sc-pulse 1.6s ease-in-out infinite;
-}
-.sc-orb-ring {
-  position: absolute; inset: 0;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
-  border-top-color: rgba(255, 255, 255, 0.7);
-  animation: sc-spin 1.1s linear infinite;
-}
-.sc-orb-ring--2 { inset: 12px; border-top-color: rgba(255,255,255,0.4); animation-duration: 1.7s; animation-direction: reverse; }
-@keyframes sc-spin { to { transform: rotate(360deg); } }
-@keyframes sc-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.86); opacity: 0.8; } }
 
-.sc-messages { position: relative; height: 26px; width: 100%; }
-.sc-message {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px; font-weight: 500; color: #f5f5f7;
-  opacity: 0; transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+/* 1 — Query echo: the committed query, pinned at the top of the flow. */
+.sc-echo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
 }
-.sc-message.is-active { opacity: 1; transform: translateY(0); }
-.sc-query { font-size: 13px; color: rgba(255, 255, 255, 0.5); margin-top: -8px; }
+.sc-echo-spark {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: #e2e8f0;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+  animation: sc-spark-breathe 3.6s ease-in-out infinite;
+}
+@keyframes sc-spark-breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50%      { transform: scale(1.12) rotate(10deg); opacity: 1; }
+}
+.sc-echo-q {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 2 — Thinking label: a shimmering "Thinking" that settles to "Ready". */
+.sc-think-label { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.sc-think-shimmer {
+  background: linear-gradient(100deg,
+    rgba(255, 255, 255, 0.35) 30%, #fff 50%, rgba(255, 255, 255, 0.35) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sc-shimmer 1.6s linear infinite;
+}
+@keyframes sc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sc-think-done { color: #4ade80; }
+
+/* Streamed step list — each ticks from spinner to check. */
+.sc-steps { display: flex; flex-direction: column; gap: 12px; }
+.sc-step {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  font-weight: 500;
+  animation: sc-step-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes sc-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sc-step.is-active { color: #f5f5f7; }
+.sc-step.is-done   { color: rgba(255, 255, 255, 0.62); }
+.sc-step-icon {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.sc-step.is-active .sc-step-icon { color: #fff; }
+.sc-step.is-done .sc-step-icon {
+  color: #0a0a0c;
+  background: #4ade80;
+}
+.sc-step-spinner { animation: sc-spin 0.7s linear infinite; }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+.sc-step-label { min-width: 0; }
 
 .sc-bar {
-  width: 100%; height: 4px;
+  margin-top: 4px;
+  width: 100%; height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -238,10 +288,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sfh-spark, .sfh-title, .sfh-pill, .sfh-scroll-hint,
-  .sc-orb-core, .sc-orb-ring, .search-ceremony, .home-results-reveal {
+  .sc-echo-spark, .sc-think-shimmer, .sc-step, .sc-step-spinner,
+  .search-ceremony, .home-results-reveal {
     animation: none !important;
   }
-  .sc-message { transition: opacity 0.2s ease; }
 }
 
 /* ── Single search bar: centered on the hero → glides to the bottom ───
@@ -360,9 +410,21 @@
     transform: translateY(-12px) !important;
   }
 
-  /* The stories rail is taller than the old avatar stack (rings + captions),
-     so push the hero's spark + headline down to clear it. */
-  .sfh { padding-top: calc(env(safe-area-inset-top, 0px) + 150px); }
+  /* Vertically center the spark + headline + search bar as one group. The
+     bar is fixed at 40vh-from-bottom (≈ screen center); anchoring the
+     spark + headline to the BOTTOM of the hero box (flex-end) parks them
+     directly above it with a small gap, so the trio reads as one centered
+     cluster instead of floating high with a gap. padding-top still clears
+     the stories rail; padding-bottom lands the headline just above the bar. */
+  .sfh {
+    justify-content: flex-end;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 132px);
+    padding-bottom: calc(40vh + 66px);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: 40vh;
+  }
 }
 
 /* ── Instagram-stories rail: glowing creator circles (mobile top) ─────── */
