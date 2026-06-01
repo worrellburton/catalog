@@ -319,6 +319,16 @@
     backdrop-filter: blur(18px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   }
+  /* When the search sheet is open, the inner pill carries its own dark
+     glass — drop the outer dark-glass on the .bottom-bar shell so it doesn't
+     read as a second rectangle wrapping the pill + close button. */
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    background: transparent;
+    border-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input:focus {
     color: #fff;
