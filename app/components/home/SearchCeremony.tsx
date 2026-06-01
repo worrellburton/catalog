@@ -11,6 +11,7 @@
 // A hard MAX_DURATION guarantees we never hang if `ready` never arrives.
 
 import { useEffect, useRef, useState } from 'react';
+import ParticleBackground from '~/components/ParticleBackground';
 
 interface SearchCeremonyProps {
   query: string;
@@ -27,17 +28,57 @@ const STEP_INTERVAL_MS = 600;
 /** Beat to hold on the all-checks state before revealing results. */
 const SETTLE_MS = 420;
 
-// Agentic progress narration — concrete steps, streamed one by one with a
-// spinner→check. The first echoes the query; the last ("Composing your
-// edit") is the one that holds while the real search resolves.
+// Agentic progress narration — concrete steps streamed one by one with a
+// spinner→check. The first always echoes the query; the middle three are
+// picked randomly from a pool that's roughly 50/50 jokes/serious so the
+// loading moment feels like a personality, not a checklist. The last
+// always says "Composing your edit" so the closer is consistent.
+const SERIOUS_MIDDLE_STEPS = [
+  'Searching the catalog',
+  'Matching products & styles',
+  'Ranking the best looks',
+  'Cross-referencing your size',
+  "Checking what's in stock",
+  'Reading the room',
+];
+const FUNNY_MIDDLE_STEPS = [
+  'Asking the algorithm nicely',
+  'Bribing the trend forecasters',
+  'Consulting a very stylish raccoon',
+  'Negotiating with the fashion gods',
+  'Pulling looks from the multiverse',
+  'Whispering to the catalog spirits',
+  'Hyping up the AI',
+  'Running this by Anna Wintour',
+  'Untangling the fit predictions',
+  'Doing math in heels',
+  'Asking what your ex would hate',
+  'Filtering out the ick',
+];
+
+function pick<T>(arr: T[], n: number): T[] {
+  const copy = [...arr];
+  const out: T[] = [];
+  for (let i = 0; i < n && copy.length; i++) {
+    out.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+  }
+  return out;
+}
+
 function buildSteps(query: string): string[] {
   const q = query.trim();
   const subject = q.length > 32 ? `${q.slice(0, 31)}…` : q;
+  // Roughly 50/50 split — two from each pool, shuffled, sliced to three.
+  const middle: string[] = [];
+  middle.push(...pick(SERIOUS_MIDDLE_STEPS, 2));
+  middle.push(...pick(FUNNY_MIDDLE_STEPS, 2));
+  for (let i = middle.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [middle[i], middle[j]] = [middle[j], middle[i]];
+  }
   return [
-    subject ? `Understanding “${subject}”` : 'Understanding your request',
-    'Searching the catalog',
-    'Matching products & styles',
-    'Ranking the best looks',
+    subject ? `Understanding "${subject}"` : 'Understanding your request',
+    ...middle.slice(0, 3),
     'Composing your edit',
   ];
 }
@@ -104,6 +145,8 @@ export default function SearchCeremony({ query, ready, onDone }: SearchCeremonyP
 
   return (
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
+      {/* AI-diamond particles drifting fast — reads as 'searching the world'. */}
+      <ParticleBackground speed={3.5} />
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (
