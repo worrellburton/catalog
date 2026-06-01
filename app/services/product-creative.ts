@@ -107,6 +107,11 @@ export interface ProductAd {
   id: string;
   product_id: string;
   look_id: string | null;
+  /** Admin-assigned unified feed position (looks + products share one rank
+   *  space via apply_feed_order). Lower = earlier. null/undefined = unranked
+   *  (falls to the end). Drives the consumer feed order so it matches the
+   *  /admin/catalogs FEED editor exactly. */
+  feed_rank?: number | null;
   title: string | null;
   description: string | null;
   video_url: string | null;
@@ -222,6 +227,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     type: string | null; catalog_tags: string[] | null;
     is_active: boolean; is_elite: boolean | null;
     gender: string | null; created_at: string;
+    feed_rank: number | null;
   };
   const products = (data || []) as ProductRow[];
   // Synthesize ProductAd rows so the renderer doesn't need to know we
@@ -254,6 +260,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     error:             null,
     enabled:           true,
     is_elite:          p.is_elite ?? undefined,
+    feed_rank:         p.feed_rank,
     created_at:        p.primary_video_generated_at ?? p.created_at,
     completed_at:      p.primary_video_generated_at,
     updated_at:        null,
@@ -281,20 +288,23 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // come from product_creative; look_id is set so downstream code can
   // distinguish look-tiles from product-tiles if needed.
   const looksAds = await getHomeLooksAsProductAds();
-  // Interleave: looks lead 1-in-5 so the feed reads as product-first
-  // with editorial breaks. Cheaper than ranking — admins can refine
-  // later via the Phase 7 KPI strip in /admin/catalogs.
-  const merged: ProductAd[] = [];
-  let li = 0;
-  for (let i = 0; i < deduped.length; i++) {
-    merged.push(deduped[i]);
-    if ((i + 1) % 5 === 0 && li < looksAds.length) {
-      merged.push(looksAds[li++]);
-    }
-  }
-  // Any remaining looks tail-append so nothing gets dropped if the
-  // product feed is short.
-  while (li < looksAds.length) merged.push(looksAds[li++]);
+  // Honour the admin's UNIFIED feed order: /admin/catalogs ranks looks AND
+  // products in ONE drag sequence (apply_feed_order writes a shared
+  // feed_rank space across both tables). Combine the two lists and sort by
+  // feed_rank so the consumer feed reproduces the admin order exactly.
+  // Ranked items lead in that order; unranked items (feed_rank null) fall to
+  // the end, products-before-looks then recency — a stable sort on the
+  // combined array index, which preserves each list's own pre-sort.
+  const combined = [...deduped, ...looksAds];
+  const rankOf = (a: ProductAd) =>
+    typeof a.feed_rank === 'number' ? a.feed_rank : Number.POSITIVE_INFINITY;
+  const merged: ProductAd[] = combined
+    .map((ad, i) => ({ ad, i }))
+    .sort((x, y) => {
+      const dr = rankOf(x.ad) - rankOf(y.ad);
+      return dr !== 0 ? dr : x.i - y.i;
+    })
+    .map(e => e.ad);
 
   // Final dedup pass — never show the same look (or same product)
   // twice in a single feed catalog. Same look_id collapses to the
@@ -331,7 +341,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
   const { data, error } = await supabase
     .from('looks')
     .select(`
-      id, title, creator_handle, gender, created_at, catalog_tags,
+      id, title, creator_handle, gender, created_at, catalog_tags, feed_rank,
       looks_creative ( video_url, is_primary ),
       look_products ( product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
     `)
@@ -339,6 +349,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
     .eq('enabled', true)
     .is('archived_at', null)
     .contains('catalog_tags', ['home'])
+    .order('feed_rank', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(60);
   if (error) {
@@ -352,6 +363,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
     gender: string | null;
     created_at: string;
     catalog_tags: string[] | null;
+    feed_rank: number | null;
     looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
     look_products: { product: ProductAd['product'] | null }[] | null;
   };
@@ -367,6 +379,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
       id: `look-${r.id}`,
       product_id: firstProduct?.id ?? '',
       look_id: r.id,
+      feed_rank: r.feed_rank,
       title: r.title,
       description: null,
       video_url: video,

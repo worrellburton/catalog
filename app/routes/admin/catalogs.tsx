@@ -3666,13 +3666,13 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     if (!previewOrder) return;
     setFeedOrder(previewOrder);
     saveFeedOrder(previewOrder);
-    // Persist to the DB so the CONSUMER feed honours this order too
-    // (getHomeFeed / getLooks order by feed_rank). Per-type position is
-    // the item's order within its kind in the previewed sequence.
-    const lookIds = previewOrder.filter(k => k.startsWith('look:')).map(k => k.slice(5));
-    const productIds = previewOrder.filter(k => k.startsWith('product:')).map(k => k.slice(8));
+    // Persist to the DB so the CONSUMER feed honours this order too.
+    // apply_feed_order now takes the FULL unified key sequence and writes
+    // feed_rank = unified position across BOTH looks and products, so the
+    // home feed (getHomeFeed sorts the combined list by feed_rank)
+    // reproduces this exact interleaved order.
     if (supabase) {
-      supabase.rpc('apply_feed_order', { look_ids: lookIds, product_ids: productIds })
+      supabase.rpc('apply_feed_order', { ordered_keys: previewOrder })
         .then(({ error }) => {
           if (error) console.warn('[catalog] apply_feed_order failed:', error.message);
         });
@@ -3688,6 +3688,14 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     keys.splice(to, 0, moved);
     setFeedOrder(keys);
     saveFeedOrder(keys);
+    // Persist the unified order to the DB so the consumer home feed matches
+    // a manual drag-reorder, not just "Recommend Order → Keep".
+    if (supabase) {
+      supabase.rpc('apply_feed_order', { ordered_keys: keys })
+        .then(({ error }) => {
+          if (error) console.warn('[catalog] apply_feed_order (manual) failed:', error.message);
+        });
+    }
   };
 
   // Phase 7-lite: KPI strip.
