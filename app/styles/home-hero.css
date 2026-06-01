@@ -410,20 +410,20 @@
     transform: translateY(-12px) !important;
   }
 
-  /* Vertically center the spark + headline + search bar as one group. The
-     bar is fixed at 40vh-from-bottom (≈ screen center); anchoring the
-     spark + headline to the BOTTOM of the hero box (flex-end) parks them
-     directly above it with a small gap, so the trio reads as one centered
-     cluster instead of floating high with a gap. padding-top still clears
-     the stories rail; padding-bottom lands the headline just above the bar. */
+  /* Vertically center the spark + headline + search bar as ONE group in the
+     band BELOW the stories rail. The rail eats the top ~25% of the screen,
+     so the visual midpoint of the remaining space is well below 50vh; we
+     drop the bar to 28vh-from-bottom and anchor spark+headline to flex-end
+     so they sit directly above it. Trio center ≈ 62vh-from-top, which is
+     the midpoint of (rail-bottom → screen-bottom). */
   .sfh {
     justify-content: flex-end;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 132px);
-    padding-bottom: calc(40vh + 66px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 180px);
+    padding-bottom: calc(28vh + 84px);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    bottom: 40vh;
+    bottom: 28vh;
   }
 }
 
