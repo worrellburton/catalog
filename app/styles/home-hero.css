@@ -514,7 +514,10 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    min-height: 88svh;
+    /* Hero takes essentially the full viewport so the feed begins well
+       below the fold. Only a thin sliver of the first row peeks at the
+       bottom edge, hinting that scrolling reveals more. */
+    min-height: 100svh;
     /* flex-end anchors the spark+headline to the bottom edge of the inner
        area (just above padding-bottom). The .sfh-stage gap is 22px between
        spark↔headline; setting the bar so its top edge lands ~22px below
