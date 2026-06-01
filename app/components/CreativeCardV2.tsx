@@ -336,7 +336,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   return (
     <div
       ref={combinedRef}
-      className={`${className} ${isLook ? '' : 'promo-card creative-contain '}${loaded ? 'loaded' : ''}`}
+      className={`${className} ${isLook ? '' : 'promo-card '}${loaded ? 'loaded' : ''}`}
       data-present-id={isLook && look ? `card:${look.id}` : undefined}
       style={{ position: 'relative', overflow: 'hidden' }}
       onClick={(e) => {
@@ -381,35 +381,19 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             with proper priority, decoding, and lazy-loading — CSS
             backgroundImage gets none of that. */}
         {(renderAsStill ? stillImageUrl : posterUrl) && (
-          <>
-            {/* Products: a blurred copy of the same image fills the
-                portrait gap left by object-fit: contain, so the tile reads
-                edge-to-edge without cropping/zooming the product. Looks
-                skip this — their portrait video already fills the frame. */}
-            {!isLook && (
-              <img
-                className="card-poster-bg"
-                src={renderAsStill && !hoverPlaying ? stillImageUrl : posterUrl ?? undefined}
-                alt=""
-                aria-hidden="true"
-                loading={priority ? 'eager' : 'lazy'}
-                decoding="async"
-              />
-            )}
-            <img
-              className="card-poster"
-              src={renderAsStill && !hoverPlaying ? stillImageUrl : posterUrl ?? undefined}
-              alt=""
-              loading={priority ? 'eager' : 'lazy'}
-              decoding="async"
-              fetchPriority={priority ? 'high' : undefined}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%',
-                objectFit: isLook ? 'cover' : 'contain', zIndex: 1,
-              } as React.CSSProperties}
-            />
-          </>
+          <img
+            className="card-poster"
+            src={renderAsStill && !hoverPlaying ? stillImageUrl : posterUrl ?? undefined}
+            alt=""
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchPriority={priority ? 'high' : undefined}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', zIndex: 1,
+            } as React.CSSProperties}
+          />
         )}
 
         {/* Director appends the pooled <video> element here at zIndex 2.

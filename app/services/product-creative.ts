@@ -138,7 +138,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url?: string | null; primary_video_url?: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url?: string | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -149,7 +149,7 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+  product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender)
 `;
 
 export async function getProductAds(): Promise<ProductAd[]> {
@@ -198,7 +198,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // content lands on top of the grid.
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
+    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
     .eq('is_active', true)
     .not('primary_video_url', 'is', null)
     // Admin-chosen catalog order (Recommend Order / saved order) leads;
@@ -216,6 +216,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     name: string | null; brand: string | null; price: string | null;
     image_url: string | null; primary_image_url: string | null;
     primary_video_url: string | null;
+    primary_video_poster_url: string | null;
     primary_video_generated_at: string | null;
     images: string[] | null; url: string | null;
     type: string | null; catalog_tags: string[] | null;
@@ -237,7 +238,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     video_url:         p.primary_video_url,
     mobile_video_url:  null,
     storage_path:      null,
-    thumbnail_url:     p.primary_image_url,
+    thumbnail_url:     p.primary_video_poster_url ?? p.primary_image_url,
     affiliate_url:     null,
     prompt:            null,
     prompt_extra:      null,
@@ -264,6 +265,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
       image_url:         p.image_url,
       primary_image_url: p.primary_image_url,
       primary_video_url: p.primary_video_url,
+      primary_video_poster_url: p.primary_video_poster_url,
       images:            p.images,
       url:               p.url,
       type:              p.type,
@@ -331,7 +333,7 @@ async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
     .select(`
       id, title, creator_handle, gender, created_at, catalog_tags,
       looks_creative ( video_url, is_primary ),
-      look_products ( product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
+      look_products ( product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
     `)
     .eq('status', 'live')
     .eq('enabled', true)
@@ -726,7 +728,7 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
+      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
     `)
     .eq('status', 'live')
     .not('video_url', 'is', null)
@@ -1092,7 +1094,7 @@ export async function getCreativesByBrand(
     .from('product_creative')
     .select(`
       *,
-      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, images, url, catalog_tags, gender, is_platform)
+      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, catalog_tags, gender, is_platform)
     `)
     .eq('status', 'live')
     .ilike('product.brand', normalizedBrand)
