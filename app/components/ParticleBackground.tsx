@@ -117,8 +117,13 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     gl.useProgram(program);
 
     // Per-particle seed: (phase, drift speed, base size).
-    const seeds = new Float32Array(PARTICLE_COUNT * 3);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // Halve the field + cap DPR harder on phones — additive-blend fill is
+    // the cost, and 180 points at dpr 2 is overkill for ambient texture on
+    // a small screen.
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+    const count = isMobile ? 90 : PARTICLE_COUNT;
+    const seeds = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
       seeds[i * 3 + 0] = Math.random();              // phase 0..1
       seeds[i * 3 + 1] = 0.04 + Math.random() * 0.10; // very slow drift
       seeds[i * 3 + 2] = 1.5 + Math.random() * 4.5;   // size 1.5..6 px
@@ -139,7 +144,7 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive for glow
     gl.clearColor(0, 0, 0, 0);
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
     const resize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -166,13 +171,22 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     let last = performance.now();
     const frame = () => {
       if (!running) return;
+      // Site singleton (no explicit speed prop) skips the GL draw while the
+      // feed covers it — keeps the loop alive to resume instantly, but
+      // spends zero GPU on a hidden canvas. One-off mounts (ceremony, which
+      // pass `speed`) always render.
+      if (localSpeed === undefined && particleControls.paused) {
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+        return;
+      }
       const now = performance.now();
       const s = localSpeed ?? particleControls.speed;
       accum += ((now - last) / 1000) * s;
       last = now;
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(uTime, reduced ? 0 : accum);
-      gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
+      gl.drawArrays(gl.POINTS, 0, count);
       if (!reduced) raf = requestAnimationFrame(frame);
     };
     frame();

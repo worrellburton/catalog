@@ -195,7 +195,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     },
     [containerRef],
   );
-  const inPrewarmBand = useInViewport(prewarmNodeRef, '200% 0%');
+  // 120% (was 200%) — warm roughly one screen ahead instead of two, so the
+  // on-screen clip's bytes always win the bandwidth. prefetchVideoBytes
+  // additionally caps concurrency and bails on fast scroll.
+  const inPrewarmBand = useInViewport(prewarmNodeRef, '120% 0%');
   useEffect(() => {
     if (isLook && inPrewarmBand && playableUrl) {
       prefetchVideoBytes(playableUrl);
