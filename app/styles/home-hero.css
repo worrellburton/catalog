@@ -631,11 +631,21 @@
 }
 
 /* Hide the centered hero search bar (and its scroll hint) whenever the
-   profile/user menu is open — the menu sheet sits above the bar and the
-   bar bleeding through behind it reads as a layering bug. The :has()
-   selector keys off the popout that only mounts while the menu is open. */
+   profile/user menu is open — the menu (popout on desktop, full-page on
+   mobile) sits above the bar and the bar bleeding through reads as a
+   layering bug. */
 .app-root.home-hero:has(.user-menu-popout) .bottom-bar,
-.app-root.home-hero:has(.user-menu-popout) .sfh-scroll-hint {
+.app-root.home-hero:has(.user-menu-popout) .sfh-scroll-hint,
+.app-root.home-hero:has(.user-menu-page) .bottom-bar,
+.app-root.home-hero:has(.user-menu-page) .sfh-scroll-hint {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Mobile Account page is its own full-screen surface — hide the bottom
+   bar everywhere (even off the home hero) when it's mounted. */
+html:has(.user-menu-page) .bottom-bar {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
