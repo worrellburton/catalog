@@ -849,10 +849,15 @@ export default function Home() {
     setCatalogName(q.trim() ? toCatalogName(q) : 'all');
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
+    // On the home hero, a submitted search plays the ceremony then reveals
+    // results. Off the hero (already browsing the feed), it's a plain
+    // in-feed search.
+    if (heroMode && q.trim()) { handleHeroSearch(q); return; }
     setSearchQuery(q.toLowerCase());
     setCatalogName(toCatalogName(q));
     bumpSearchTrigger();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroMode, handleHeroSearch]);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
     setSelectedProduct(null);
@@ -1028,7 +1033,7 @@ export default function Home() {
               down reveals the catalog. Hidden once a search resolves into
               results (heroMode flips off). */}
           {heroMode && (
-            <ShoppingForHero onSubmit={handleHeroSearch} onRevealFeed={handleRevealFeed} />
+            <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
           <div className={revealResults ? 'home-results-reveal' : undefined}>
