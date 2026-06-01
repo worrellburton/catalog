@@ -177,11 +177,14 @@ def process_product_row(
 
 
 def fetch_product_rows(supabase, limit: int | None) -> list[dict]:
-    """Products with a finished primary video but no poster yet."""
+    """Products with a primary video but no poster yet. We match the feed's
+    own selection criteria — getHomeFeed surfaces any product where
+    primary_video_url IS NOT NULL (it doesn't gate on primary_video_status,
+    since the autopromote backfill sets the URL without flipping status to
+    'done') — so every such product needs a matching 3:4 poster."""
     q = (
         supabase.table("products")
         .select("id, primary_video_url")
-        .eq("primary_video_status", "done")
         .not_.is_("primary_video_url", "null")
         .is_("primary_video_poster_url", "null")
     )

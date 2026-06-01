@@ -421,7 +421,11 @@ const HOME_FEED_TTL_MS = 60_000;
 // v8: feed now sourced from products table directly (one product = one
 // tile via primary_video_url), not product_creative. Old v7 cache rows
 // keyed on creative ids, so bump the version to evict them cleanly.
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v8';
+// v9: rows now carry product.primary_video_poster_url (the 3:4 still
+// extracted from the primary video). Stale v8 rows lack it and would
+// fall back to the square primary_image_url (the zoomed-in poster), so
+// evict them.
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v9';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
