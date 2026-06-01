@@ -1,14 +1,20 @@
 import { useEffect, useRef } from 'react';
+import { particleControls } from '~/services/particles';
 
 // Vanilla WebGL particle drift - no dependencies. Renders a soft cloud of
 // glowing points with additive blending and slow noise-driven motion. Sized
 // so it reads as ambient texture, not a focal effect. Auto-pauses when the
 // tab is hidden and honours prefers-reduced-motion (renders one static frame).
+//
+// Speed is read every frame from `particleControls.speed` (singleton config
+// in services/particles.ts). The site mounts one of these at the app root
+// so splash → landing → search ceremony all share ONE continuous canvas —
+// dial the speed up/down to retune the visible field without remounting.
 
 interface ParticleBackgroundProps {
-  /** Multiplier on each particle's drift speed. 1 = the default ambient
-   *  pace used on the home hero / sign-in gate. >1 reads as "searching the
-   *  world" (used by SearchCeremony, ~3-4×). */
+  /** Multiplier on each particle's drift speed at mount time. Useful for
+   *  one-off, non-singleton mounts (e.g. the wallet's tinted variant).
+   *  The site singleton omits this and reads from `particleControls` live. */
   speed?: number;
 }
 
@@ -81,10 +87,12 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
-export default function ParticleBackground({ speed = 1 }: ParticleBackgroundProps = {}) {
+export default function ParticleBackground({ speed }: ParticleBackgroundProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const speedRef = useRef(speed);
-  speedRef.current = speed;
+  // When a one-off mount sets `speed`, use that locally; otherwise read the
+  // shared `particleControls.speed` live on every frame so the singleton
+  // can be retuned by any consumer.
+  const localSpeed = speed;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -151,14 +159,16 @@ export default function ParticleBackground({ speed = 1 }: ParticleBackgroundProp
     let running = true;
     const start = performance.now();
 
-    // Driver: scale wall-clock by the live speed ref so a parent can speed
-    // the field up mid-animation (SearchCeremony → "searching the world").
+    // Driver: scale wall-clock by the live speed (prop override or the
+    // shared singleton's value) so any consumer can speed the field up
+    // mid-animation (e.g. SearchCeremony → "searching the world").
     let accum = 0;
     let last = performance.now();
     const frame = () => {
       if (!running) return;
       const now = performance.now();
-      accum += ((now - last) / 1000) * speedRef.current;
+      const s = localSpeed ?? particleControls.speed;
+      accum += ((now - last) / 1000) * s;
       last = now;
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(uTime, reduced ? 0 : accum);

@@ -11,7 +11,11 @@
 // A hard MAX_DURATION guarantees we never hang if `ready` never arrives.
 
 import { useEffect, useRef, useState } from 'react';
-import ParticleBackground from '~/components/ParticleBackground';
+import { particleControls } from '~/services/particles';
+// ParticleBackground lives in the app root (SiteParticleHost). Here we
+// just dial up its speed for the "searching the world" moment, then
+// restore it on cleanup — the canvas itself never re-mounts so the field
+// stays continuous across the search transition.
 
 interface SearchCeremonyProps {
   query: string;
@@ -141,12 +145,19 @@ export default function SearchCeremony({ query, ready, onDone }: SearchCeremonyP
     return () => window.clearTimeout(t);
   }, [onDone]);
 
+  // Speed the singleton particle field up while the ceremony is on screen
+  // (reads as "searching the world"). The canvas keeps running; only its
+  // per-frame time delta multiplier changes, so the field is continuous
+  // across the hero → ceremony → results transition.
+  useEffect(() => {
+    particleControls.speed = 3.5;
+    return () => { particleControls.speed = 1; };
+  }, []);
+
   const activeIndex = revealed - 1;
 
   return (
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
-      {/* AI-diamond particles drifting fast — reads as 'searching the world'. */}
-      <ParticleBackground speed={3.5} />
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (
