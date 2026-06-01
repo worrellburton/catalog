@@ -508,16 +508,15 @@
     transform: translateY(-12px) !important;
   }
 
-  /* Headline anchored to flex-end with a LARGE bottom reservation, and the
-     bar dropped to a clearly-lower position. Earlier the gap was tight
-     enough that on some viewports the bar visually overlapped or sat above
-     the headline. Now headline bottom = 38vh-from-bottom (62% from top),
-     bar = 22vh-from-bottom (78% from top): always 16vh of clear air below
-     the headline, bar visibly under it. */
+  /* Center the spark + headline in the band BETWEEN the stories rail (top
+     ~25%) and the fixed search bar (22vh-from-bottom, ~28% reserved).
+     justify-content: center (not flex-end) so the stage NEVER overflows
+     into the bar's reserved zone — on tight viewports the flex-end + small
+     reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    justify-content: flex-end;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 180px);
-    padding-bottom: 38vh;
+    justify-content: center;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 170px);
+    padding-bottom: 32vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
