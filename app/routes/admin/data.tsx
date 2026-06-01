@@ -4888,15 +4888,26 @@ export default function AdminData() {
                                 autoPlay muted loop playsInline preload="metadata"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                               />
-                            ) : primaryImageUrl ? (
+                            ) : isPending && primaryImageUrl ? (
+                              // Rendering in background — show the source image
+                              // dimmed as a poster preview (a real video is on
+                              // its way; the shimmer + amber dot signal pending).
                               <img
                                 src={primaryImageUrl}
                                 alt={p.name}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isPending ? 'saturate(0.7) brightness(0.9)' : undefined }}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(0.7) brightness(0.9)' }}
                                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                               />
                             ) : (
-                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#94a3b8', fontWeight: 600 }}>+</div>
+                              // No primary video yet — show a clear "no video"
+                              // film icon, NOT the product image (which read as
+                              // if a video already existed).
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', background: '#f8fafc' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="m22 8-6 4 6 4V8Z" />
+                                  <rect x="2" y="6" width="14" height="12" rx="2" ry="2" />
+                                </svg>
+                              </div>
                             )}
                             {isPending && (
                               // Shimmering overlay while the webhook is pending.
