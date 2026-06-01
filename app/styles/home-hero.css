@@ -23,12 +23,27 @@
   overflow: hidden;
 }
 .sfh-stage {
+  position: relative;
+  z-index: 1;
   width: min(560px, 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 22px;
 }
+/* Hero owns its own ParticleBackground canvas (the same WebGL drift the
+   sign-in gate uses, but rendered as AI-diamond sparks). Push it behind
+   the stage so the spark + headline read above the field. */
+.sfh .pw-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* Dial it back — the gate is full-screen with the cloud as the focal
+     effect; here it's pure ambient texture behind the headline. */
+  opacity: 0.55;
+  pointer-events: none;
+}
+.sfh-scroll-hint { z-index: 1; }
 
 /* Brand spark — AI diamond core + catalog tiles orbiting at the cardinal
    points. On mount the whole mark spins in from -360deg + 0.4 scale; idle

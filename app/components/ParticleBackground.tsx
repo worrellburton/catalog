@@ -43,13 +43,21 @@ const FS = /* glsl */ `
   varying float vAlpha;
 
   void main() {
-    // Soft circular falloff - gl_PointCoord is the [0,1] sprite coord.
-    vec2  d   = gl_PointCoord - 0.5;
-    float r   = dot(d, d) * 4.0;
-    float a   = exp(-r * 3.5) * vAlpha;
+    // 4-point AI spark / diamond. gl_PointCoord is [0,1] sprite coords;
+    // we distance from center, then use a sub-unit superellipse exponent
+    // so the shape becomes a concave diamond (pinched waist along the
+    // cardinal axes — the classic Claude/Gemini "spark" silhouette, but
+    // here it's the catalog AI mark in particle form).
+    vec2  d  = abs(gl_PointCoord - 0.5) * 2.0;       // 0..1 per axis
+    float r  = pow(d.x, 0.55) + pow(d.y, 0.55);       // concave diamond
+    // Soft inner glow that brightens at the very center so each diamond
+    // also reads as a luminous point at small sizes.
+    float c  = exp(-dot(d, d) * 6.0);
+    float a  = (smoothstep(1.05, 0.0, r) * 0.85 + c * 0.4) * vAlpha;
 
-    // Slight warm tint so the cloud reads as light, not pure white.
-    gl_FragColor = vec4(0.95, 0.92, 0.88, a);
+    // Cool silver-white tint so the field reads on matte black without
+    // looking warm/cream.
+    gl_FragColor = vec4(0.95, 0.96, 1.0, a);
   }
 `;
 
