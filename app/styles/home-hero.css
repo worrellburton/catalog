@@ -30,14 +30,63 @@
   gap: 22px;
 }
 
-/* Breathing brand spark. */
+/* Brand spark — AI diamond core + catalog tiles orbiting at the cardinal
+   points. On mount the whole mark spins in from -360deg + 0.4 scale; idle
+   it drifts; on scroll the orbit speeds up. The per-element duration is
+   `var(--base) / (1 + boost)` so a scroll-driven boost shortens it (i.e.
+   speeds it up). */
 .sfh-spark {
+  --sfh-spark-boost: 0;
+  display: inline-flex;
   filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.28));
-  animation: sfh-breathe 4.5s ease-in-out infinite;
+  animation: sfh-spark-in 1s cubic-bezier(0.16, 1, 0.3, 1) both,
+             sfh-spark-drift 7s ease-in-out infinite 1s;
+  transform-origin: center;
 }
-@keyframes sfh-breathe {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.92; }
-  50%      { transform: scale(1.12) rotate(8deg); opacity: 1; }
+@keyframes sfh-spark-in {
+  from { opacity: 0; transform: rotate(-360deg) scale(0.4); }
+  to   { opacity: 1; transform: rotate(0deg)    scale(1);   }
+}
+@keyframes sfh-spark-drift {
+  0%, 100% { transform: translate(0, 0)      rotate(0deg); }
+  25%      { transform: translate(3px, -2px) rotate(2deg); }
+  50%      { transform: translate(0, 3px)    rotate(-3deg); }
+  75%      { transform: translate(-3px, -1px) rotate(2deg); }
+}
+
+/* The core diamond rotates one way, slowly. */
+.sfh-spark-core {
+  transform-origin: 70px 70px;
+  animation: sfh-spark-core-spin calc(14s / (1 + var(--sfh-spark-boost, 0))) linear infinite;
+}
+@keyframes sfh-spark-core-spin { to { transform: rotate(360deg); } }
+
+/* The orbit ring (catalog tiles) rotates the opposite way + a touch faster,
+   so they glide past the core. */
+.sfh-spark-orbit {
+  transform-origin: 70px 70px;
+  animation: sfh-spark-orbit-spin calc(10s / (1 + var(--sfh-spark-boost, 0))) linear infinite reverse;
+}
+@keyframes sfh-spark-orbit-spin { to { transform: rotate(360deg); } }
+
+/* The four catalog tiles breathe — slight scale + opacity pulse — so they
+   feel alive rather than rigidly spinning. */
+.sfh-spark-tile {
+  transform-origin: center;
+  animation: sfh-spark-tile-pulse 2.6s ease-in-out infinite;
+}
+.sfh-spark-tile:nth-child(2) { animation-delay: 0.65s; }
+.sfh-spark-tile:nth-child(3) { animation-delay: 1.3s;  }
+.sfh-spark-tile:nth-child(4) { animation-delay: 1.95s; }
+@keyframes sfh-spark-tile-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfh-spark, .sfh-spark-core, .sfh-spark-orbit, .sfh-spark-tile {
+    animation: none !important;
+  }
 }
 
 .sfh-title {
