@@ -143,6 +143,105 @@ function firstSentence(body: string): string {
   return (m ? m[1] : flat).trim();
 }
 
+type ReportRange = 'week' | 'month' | 'year';
+const RANGE_LABEL: Record<ReportRange, string> = {
+  week: 'Last week',
+  month: 'This month',
+  year: 'This year',
+};
+function rangeCutoff(range: ReportRange): Date {
+  const d = new Date();
+  if (range === 'week') d.setDate(d.getDate() - 7);
+  else if (range === 'month') d.setMonth(d.getMonth() - 1);
+  else d.setFullYear(d.getFullYear() - 1);
+  return d;
+}
+
+// Build a matte-black, white-text PDF (via the browser's print → Save as
+// PDF) summarising every shipped update in the chosen window: a headline
+// summary then a full ledger. Opens in a new window and triggers print.
+function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
+  const cutoff = rangeCutoff(range);
+  const inRange = commits
+    .filter(c => !isMergeNoise(c.commit.message))
+    .filter(c => new Date(c.commit.author.date) >= cutoff)
+    .sort((a, b) => +new Date(b.commit.author.date) - +new Date(a.commit.author.date));
+
+  // Tally by type for the summary.
+  const counts: Record<string, number> = {};
+  for (const c of inRange) {
+    const { prefix } = parseSubject(c.commit.message.split('\n')[0]);
+    const label = (prefix && PREFIX_LABEL[prefix]?.label) || 'Other';
+    counts[label] = (counts[label] || 0) + 1;
+  }
+  const esc = (s: string) => s.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]!));
+  const now = new Date();
+  const rangeStr = `${cutoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  const summaryChips = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, n]) => `<div class="chip"><span class="chip-n">${n}</span><span class="chip-l">${esc(label)}</span></div>`)
+    .join('');
+
+  const rows = inRange.map(c => {
+    const subject = c.commit.message.split('\n')[0];
+    const { prefix, text } = parseSubject(subject);
+    const tag = prefix ? PREFIX_LABEL[prefix] : null;
+    const summary = simplifySummary(firstSentence(text));
+    const date = new Date(c.commit.author.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `<tr>
+      <td class="d">${date}</td>
+      <td>${tag ? `<span class="tag" style="color:${tag.color}">${esc(tag.label)}</span>` : ''}</td>
+      <td class="s">${esc(summary)}</td>
+      <td class="sha">${esc(c.sha.slice(0, 7))}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Catalog — What's New (${esc(RANGE_LABEL[range])})</title>
+  <style>
+    @page { margin: 16mm; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: #0a0a0a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; padding: 32px 36px; }
+    .brand { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: #8a8a8f; margin-bottom: 4px; }
+    h1 { font-size: 30px; margin: 0 0 4px; font-weight: 700; }
+    .range { color: #b8b8bd; font-size: 14px; margin-bottom: 24px; }
+    .summary { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 28px; }
+    .chip { background: #161618; border: 1px solid #262629; border-radius: 12px; padding: 14px 18px; min-width: 96px; }
+    .chip-n { display: block; font-size: 26px; font-weight: 800; }
+    .chip-l { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #9a9aa0; margin-top: 2px; }
+    .total { font-size: 15px; color: #e6e6ea; margin-bottom: 20px; }
+    .total b { font-size: 17px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #8a8a8f; border-top: 1px solid #262629; padding-top: 18px; margin: 8px 0 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td { padding: 8px 8px; border-bottom: 1px solid #1c1c1f; vertical-align: top; }
+    td.d { color: #8a8a8f; white-space: nowrap; width: 64px; }
+    td.s { color: #ededf2; }
+    .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    td.sha { color: #5a5a60; font-family: ui-monospace, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
+    .empty { color: #8a8a8f; padding: 30px 0; }
+    .foot { margin-top: 26px; color: #5a5a60; font-size: 11px; }
+  </style></head>
+  <body>
+    <div class="brand">Catalog</div>
+    <h1>What's New</h1>
+    <div class="range">${esc(RANGE_LABEL[range])} · ${esc(rangeStr)}</div>
+    <div class="total"><b>${inRange.length}</b> update${inRange.length === 1 ? '' : 's'} shipped in this period.</div>
+    <div class="summary">${summaryChips || '<div class="chip"><span class="chip-n">0</span><span class="chip-l">Updates</span></div>'}</div>
+    <h2>Ledger</h2>
+    ${inRange.length ? `<table><tbody>${rows}</tbody></table>` : '<div class="empty">No updates shipped in this window.</div>'}
+    <div class="foot">Generated ${esc(now.toLocaleString())} · catalog.shop</div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to download the report.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // Give the new window a tick to lay out before invoking print.
+  w.onload = () => { w.focus(); w.print(); };
+  setTimeout(() => { try { w.focus(); w.print(); } catch { /* onload handles it */ } }, 400);
+}
+
 export default function AdminWhatsNew() {
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +250,32 @@ export default function AdminWhatsNew() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [reportRange, setReportRange] = useState<ReportRange>('month');
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  // Build the PDF report: fetch enough commit pages to cover the chosen
+  // window (the page only lazy-loads 100 at a time), then hand off to the
+  // matte-black print view.
+  const generateReport = async () => {
+    setGeneratingReport(true);
+    try {
+      const cutoff = rangeCutoff(reportRange);
+      const acc: GitHubCommit[] = [];
+      for (let p = 1; p <= 6; p++) {
+        let batch: GitHubCommit[];
+        try { batch = await fetchPage(p); } catch { break; }
+        acc.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+        const oldest = batch.length ? new Date(batch[batch.length - 1].commit.author.date) : null;
+        if (oldest && oldest < cutoff) break;
+      }
+      const seen = new Set<string>();
+      const merged = [...acc, ...commits].filter(c => (seen.has(c.sha) ? false : (seen.add(c.sha), true)));
+      buildAndPrintReport(merged, reportRange);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
 
   const fetchPage = async (pageNum: number) => {
     const res = await fetch(
@@ -218,9 +343,33 @@ export default function AdminWhatsNew() {
       }}
     >
       <div className="admin-page-header" style={{ marginBottom: 20 }}>
-        <h1>What's New</h1>
-        <div className="admin-page-subtitle">
-          Plain-English updates from the team. Every change shipped to Catalog.
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1>What's New</h1>
+            <div className="admin-page-subtitle">
+              Plain-English updates from the team. Every change shipped to Catalog.
+            </div>
+          </div>
+          {/* Download a matte-black PDF report for a date range. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={reportRange}
+              onChange={e => setReportRange(e.target.value as ReportRange)}
+              style={{ fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#111' }}
+            >
+              <option value="week">Last week</option>
+              <option value="month">This month</option>
+              <option value="year">This year</option>
+            </select>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={generateReport}
+              disabled={generatingReport}
+              style={{ fontSize: 13, padding: '7px 14px', whiteSpace: 'nowrap' }}
+            >
+              {generatingReport ? 'Preparing…' : '↓ Download report'}
+            </button>
+          </div>
         </div>
       </div>
 
