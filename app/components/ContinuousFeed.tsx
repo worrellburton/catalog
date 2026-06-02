@@ -815,13 +815,18 @@ function ContinuousFeed({
       logSearch({
         query: q,
         user_handle: handle,
-        results_count: semanticallyOrderedLooks.length,
+        // Count BOTH lanes the shopper actually sees — product tiles
+        // (renderedCreatives) AND look tiles. Logging looks-only made every
+        // product-returning query ("candles", "quiet luxury") record 0
+        // results, so the admin Search analytics showed "0 results / 0% CTR"
+        // and looked like search was dead when it was returning 6–12 hits.
+        results_count: renderedCreatives.length + semanticallyOrderedLooks.length,
         clicked: false,
         filter: activeFilter,
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [committedQuery, semanticallyOrderedLooks.length, activeFilter, user]);
+  }, [committedQuery, renderedCreatives.length, semanticallyOrderedLooks.length, activeFilter, user]);
 
   // Reset when filters/search/shuffle change - use committedQuery so the
   // feed only resets after nl-search resolves, not on every keystroke.
