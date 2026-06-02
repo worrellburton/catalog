@@ -73,6 +73,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
             the visual-viewport gap/shrink hacks on supporting browsers;
             iOS Safari still falls back to the visualViewport JS in BottomBar. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+        {/* Theme-color drives the iOS Safari toolbar background. Without
+            it, Safari paints a default-white bar at the bottom — visible
+            as a white strip under our matte-black landing. Setting it
+            to the page's own matte black makes the toolbar blend into
+            the page so the bottom edge reads as one continuous surface.
+            We also set apple-mobile-web-app-status-bar-style so the
+            top status zone matches when the page is added to the home
+            screen as a PWA. */}
+        <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <title>catalog</title>
         <meta
           name="description"

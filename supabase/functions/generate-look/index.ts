@@ -41,7 +41,10 @@ function jsonRes(data: unknown, status = 200) {
 const FAL_BASE = 'https://queue.fal.run';
 // Seedance 2 fallback slugs — used when the platform model is Seedance.
 const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-const MODEL_SLUG_PRO  = 'bytedance/seedance-2.0/pro/reference-to-video';
+// Pro is the default tier on fal.ai — no `/pro/` path segment. The fast
+// tier gets its own `/fast/` subpath; everything else routes through
+// the bare endpoint.
+const MODEL_SLUG_PRO  = 'bytedance/seedance-2.0/reference-to-video';
 const SEEDANCE_SLUGS  = new Set([MODEL_SLUG_FAST, MODEL_SLUG_PRO, 'seedance-2', 'seedance-1-pro', 'seedance-1-lite']);
 function seedanceSlugFor(model: string | null | undefined): string {
   return model === 'pro' ? MODEL_SLUG_PRO : MODEL_SLUG_FAST;
