@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, memo } from 'react';
-import { getMyFollowing, getMyFollowers, type FollowerInfo } from '~/services/follows';
+import { getMyFollowing, getMyFollowers, getPopularCreators, type FollowerInfo } from '~/services/follows';
 import { subscribeFollowingChanges } from '~/hooks/useFollowState';
 import { subscribeOnline } from '~/services/presence';
 import { supabase } from '~/utils/supabase';
+import { getShopperGender } from '~/services/product-creative';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -88,12 +89,31 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   useEffect(() => subscribeOnline((s) => setOnlineHandles(s.handles)), []);
 
   // Following list: handle → display name + avatar + last-post ts.
+  // When the user follows NO ONE yet, fall back to popular creators of
+  // their gender so the rail isn't empty space on first sign-in. The
+  // moment they follow someone, the next render swaps to their actual
+  // follows (subscribeFollowingChanges bumps refreshKey + re-runs this
+  // effect).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const handles = await getMyFollowing();
       if (cancelled) return;
-      if (handles.length === 0) { setFollowingEntries([]); return; }
+      if (handles.length === 0) {
+        // Cold-start fallback: pick popular creators matching the
+        // shopper's gender. The rail entries are tagged ts=0 (no
+        // last-post ts) which sorts them after any real followed
+        // creators if the user later follows someone mid-session.
+        const suggested = await getPopularCreators(getShopperGender(), { limit: 12 });
+        if (cancelled) return;
+        setFollowingEntries(suggested.map(s => ({
+          handle: s.handle,
+          displayName: s.displayName,
+          avatarUrl: s.avatarUrl,
+          ts: 0,
+        })));
+        return;
+      }
       if (!supabase) {
         setFollowingEntries(handles.map(h => ({ handle: h, displayName: null, avatarUrl: null, ts: 0 })));
         return;
@@ -352,7 +372,7 @@ interface FollowingStoriesRailProps {
 function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
   return (
     <div className="follow-stories-rail" role="list" aria-label="Creators you follow">
-      {entries.map(c => {
+      {entries.map((c, i) => {
         const isOnline = onlineHandles.has(c.handle.toLowerCase());
         const name = c.displayName || c.handle;
         return (
@@ -361,6 +381,10 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
             type="button"
             role="listitem"
             className="follow-story"
+            // `--i` drives the per-story stagger of follow-story-bloom
+            // (defined in home-hero.css). Each circle waits an extra
+            // 60ms × i before unfurling, so the row blooms left → right.
+            style={{ ['--i' as 'order']: i as unknown as number }}
             onClick={() => onOpenCreator(c.handle)}
             title={name}
             aria-label={`Open ${name}'s catalog`}
