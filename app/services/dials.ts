@@ -196,10 +196,14 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
 
 // ────────────────────────────────────────────────────────────────────
 // Product similarity threshold (0–100).
-// Controls the minimum cosine similarity for "More like this" products.
-// 0 (default) = no filter, all K nearest neighbours from the RPC are
-// shown. 60 = only include items where (1 − cosine_distance) ≥ 0.60.
-// 90 = near-identical items only; the rail will show fewer results.
+// Tightness of the product-page "Similar" rail, applied RELATIVE to each
+// product's nearest match (cosine distance on products.embedding). The
+// cutoff = nearest_distance ÷ (threshold / 100):
+//   0 (default) = no filter — show all K nearest neighbours (never empty).
+//   60          = keep items within ~1.67× the nearest distance (wider band).
+//   100         = keep items within 1× the nearest distance (tightest — only
+//                 the closest matches; sparse → the Popular rail fills).
+// Higher = stricter. See getSimilarProductsByEmbedding in product-creative.ts.
 // ────────────────────────────────────────────────────────────────────
 
 // Shared parser for 0-default dials (similarity thresholds).

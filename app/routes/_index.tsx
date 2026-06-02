@@ -24,8 +24,7 @@ import { useAppView } from '~/hooks/useAppView';
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
-import { inferRoleFromName } from '~/utils/garmentOrder';
+import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -622,21 +621,38 @@ export default function Home() {
     setBrandCreatives(null);
     setGraphPairs(null);
 
-    // Fire a single product impression. Resolve URL → DB id asynchronously
-    // so it doesn't block navigation; fire-and-forget.
-    const productId = (product as Product & { id?: string }).id || null;
+    // Resolve the product's DB id once. Products opened from a Look, search,
+    // or recents arrive WITHOUT an `id` but carry a `url`, so fall back to a
+    // URL → id lookup. This single id drives the impression ping, the graph
+    // "Pairs well with" rail, and the "Similar" rail below — all of which were
+    // silently skipped before whenever the id was absent (i.e. every non-feed
+    // entry point). Resolution is async so it never blocks navigation.
+    const directId = (product as Product & { id?: string }).id || null;
     const context = [product.brand, product.name].filter(Boolean).join(' · ').slice(0, 200);
-    if (productId) {
-      void trackCreativeImpressions(productId, null, context);
-    } else if (product.url) {
-      resolveProductIdByUrl(product.url).then(id => {
-        void trackCreativeImpressions(id || null, null, context);
-      });
-    }
+    const productIdP: Promise<string | null> = directId
+      ? Promise.resolve(directId)
+      : (product.url ? resolveProductIdByUrl(product.url).then(id => id || null) : Promise.resolve(null));
+
+    void productIdP.then(productId => {
+      // Impression ping (matches prior behaviour: fired whenever we had a
+      // direct id or a url to resolve from).
+      if (directId || product.url) void trackCreativeImpressions(productId, null, context);
+      if (!productId) return;
+      getGraphPairs([productId]).then(setGraphPairs).catch(() => {});
+      // "Similar" rail: description-embedding similarity, seeded by product id
+      // (migration 020). Type-gated server-side; empty → Popular fills.
+      prefetchSimilarProducts(productId, 18)
+        .then(rows => {
+          primeTrailAssets(rows);
+          setSimilarCreatives(rows);
+        })
+        .catch(() => { /* leave rail empty rather than throw */ });
+    }).catch(() => {});
+
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
-      // Same data the brand rail uses to fill "More from <Brand>"  - 
+      // Same data the brand rail uses to fill "More from <Brand>"  -
       // without this, products opened from a Look, search, or recents
       // see an empty rail.
       prefetchCreativesByBrand(product.brand, null, 12)
@@ -645,9 +661,6 @@ export default function Home() {
           setBrandCreatives(rows);
         })
         .catch(() => { /* leave rail empty rather than throw */ });
-    }
-    if (productId) {
-      getGraphPairs([productId]).then(setGraphPairs).catch(() => {});
     }
   }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
@@ -700,16 +713,10 @@ export default function Home() {
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
-    // Scope similarity to the same garment category whenever we can.
-    // When product.type is null (admin hasn't tagged it yet), fall
-    // back to inferring the type from the name so the rail doesn't
-    // come back full of beanies, houseplants, and empty rooms when
-    // the seed is a shirt. The RPC drops the type constraint only
-    // when both signals are missing.
-    const inferredType = creative.product?.type
-      || inferRoleFromName(creative.product?.name)
-      || null;
-    const similarP = prefetchSimilarCreatives(creative.id, 18, inferredType);
+    // "Similar" rail: description-embedding similarity seeded by product id
+    // (migration 020 / find_similar_products). Type-gated server-side so it
+    // never mixes garment categories; empty → the Popular fallback fills.
+    const similarP = prefetchSimilarProducts(creative.product.id || '', 18);
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);

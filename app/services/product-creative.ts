@@ -48,7 +48,7 @@ export function setShopperGender(g: ShopperGender) {
   // Drop caches so the next callers re-fetch with the new scope.
   homeFeedPromise = null;
   brandCache.clear();
-  similarCache.clear();
+  similarProductCache.clear();
   // Notify subscribers so they can re-pull. Wrap each call in try/catch
   // so a single bad listener doesn't break the rest.
   for (const cb of genderListeners) {
@@ -1200,108 +1200,135 @@ export function prefetchCreativesByBrand(
   return p;
 }
 
-// Per-seed promise cache - coalesces hover + tap into one network round-trip.
-// Keyed by `${seedId}|${k}` so different rail sizes don't collide.
-const similarCache = new Map<string, Promise<ProductAd[]>>();
+// ── Product "Similar" (description-embedding path) ───────────────────────
+// Seeds from products.embedding — the 384-dim gte-small TEXT embedding of the
+// enriched description — the same signal the feed search uses. Backed by the
+// find_similar_products RPC (migration 020), which is type-gated and reads
+// ONLY public.products, so it never touches the search edge function.
+//
+// This replaces the old getSimilarCreatives path on the product page: that
+// keyed off product_creative.embedding (512-dim Marengo visual vectors) which
+// exist for only a handful of creatives, so it was almost always cold-start
+// filler. products.embedding is ~99% populated, so this returns genuine
+// description-level matches for nearly the whole catalogue.
+type SimilarProductRow = {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  image_url: string | null;
+  primary_image_url: string | null;
+  primary_video_url: string | null;
+  primary_video_poster_url: string | null;
+  images: string[] | null;
+  url: string | null;
+  type: string | null;
+  gender: string | null;
+  is_elite: boolean | null;
+  distance: number;
+};
 
-/** Idempotent prefetch - call from hover, tap, anywhere. Returns the same
- *  cached promise on subsequent calls so consumers can `await` and get an
- *  instant resolve once the first call has finished. */
-export function prefetchSimilarCreatives(seedId: string, k = 12, productType?: string | null): Promise<ProductAd[]> {
-  const key = `${seedId}|${k}|${productType ?? ''}`;
-  const cached = similarCache.get(key);
-  if (cached) return cached;
-  const p = getSimilarCreatives(seedId, k, productType);
-  similarCache.set(key, p);
-  // If it errors, drop the cache so the next call retries.
-  p.catch(() => similarCache.delete(key));
-  return p;
+function similarProductRowToAd(p: SimilarProductRow): ProductAd {
+  // Mirrors the product-direct tile shape getHomeFeed produces so the
+  // renderer (CreativeCard) paints these identically to feed tiles.
+  return {
+    id:               p.id,
+    product_id:       p.id,
+    look_id:          null,
+    title:            p.name,
+    description:      null,
+    video_url:        p.primary_video_url,
+    mobile_video_url: null,
+    storage_path:     null,
+    thumbnail_url:    p.primary_video_poster_url ?? p.primary_image_url,
+    affiliate_url:    null,
+    prompt:           null,
+    prompt_extra:     null,
+    style:            'similar',
+    model:            null,
+    status:           'live',
+    duration_seconds: null,
+    aspect_ratio:     '3:4',
+    resolution:       null,
+    cost_usd:         null,
+    impressions:      0,
+    clicks:           0,
+    error:            null,
+    enabled:          true,
+    is_elite:         p.is_elite ?? undefined,
+    created_at:       '',
+    completed_at:     null,
+    updated_at:       null,
+    product: {
+      id:                       p.id,
+      name:                     p.name,
+      brand:                    p.brand,
+      price:                    p.price,
+      image_url:                p.image_url,
+      primary_image_url:        p.primary_image_url,
+      primary_video_url:        p.primary_video_url,
+      primary_video_poster_url: p.primary_video_poster_url,
+      images:                   p.images,
+      url:                      p.url,
+      type:                     p.type,
+      gender:                   p.gender,
+      is_elite:                 p.is_elite ?? undefined,
+    },
+  } as ProductAd;
 }
 
-// Returns the K visually-nearest creatives to the seed, deduped by product.
-// Backed by find_similar_creatives() - uses Marengo 3.0 cosine distance when
-// the seed has an embedding, otherwise falls back to same-type → newest.
-// productType scopes results to the same product category (e.g. 'Top', 'Shorts').
-export async function getSimilarCreatives(seedId: string, k = 12, productType?: string | null): Promise<ProductAd[]> {
-  if (!supabase) return [];
-  // Pull extra results to absorb both the gender post-filter and the
-  // similarity threshold post-filter without leaving the rail short.
+export async function getSimilarProductsByEmbedding(seedProductId: string, k = 18): Promise<ProductAd[]> {
+  if (!supabase || !seedProductId) return [];
+  // product_similarity_threshold dial (/admin/dials) — see relative-cutoff
+  // logic below.
   const similarityThreshold = await ensureProductSimilarityThreshold();
-  const hasThreshold = similarityThreshold > 0;
-  const fetchK = hasThreshold
-    ? Math.min(k * 4, 96)
-    : (shopperGender === 'unknown' ? k : Math.min(k * 2, 48));
-  const { data, error } = await supabase.rpc('find_similar_creatives', { seed_id: seedId, k: fetchK, seed_type: productType ?? null });
+  // Over-fetch to absorb the relative cutoff, the own-brand drop and gender
+  // scope the consumer layer applies on top, without leaving the rail short.
+  const fetchK = Math.min(k * 5, 100);
+  const { data, error } = await supabase.rpc('find_similar_products', { seed_id: seedProductId, k: fetchK, seed_type: null });
   if (error || !data) {
-    if (error) console.warn('[getSimilarCreatives] rpc error:', error.message);
+    if (error) console.warn('[getSimilarProductsByEmbedding] rpc error:', error.message);
     return [];
   }
-  // The RPC doesn't return product.gender, so when a gender scope is
-  // active we hydrate the missing column with one batched lookup
-  // before post-filtering. Untagged products stay visible.
-  let genderById: Map<string, string | null> | null = null;
-  if (shopperGender !== 'unknown') {
-    const ids = Array.from(new Set((data as Array<{ product_id: string }>).map(r => r.product_id))).filter(Boolean);
-    if (ids.length > 0) {
-      const { data: prods } = await supabase
-        .from('products')
-        .select('id, gender')
-        .in('id', ids);
-      genderById = new Map((prods || []).map((p: { id: string; gender: string | null }) => [p.id, p.gender]));
-    }
-  }
-  const maxDistance = hasThreshold ? 1 - similarityThreshold / 100 : Infinity;
-  // The RPC returns distance=1.0 as a sentinel for cold-start items (no
-  // embedding). Those should bypass the threshold — it only makes sense
-  // to gate items where we have a real vector measurement (distance < 1).
-  const COLDSTART_DISTANCE = 1.0;
-  const mapped = (data as Array<{
-    id: string;
-    product_id: string;
-    video_url: string | null;
-    thumbnail_url: string | null;
-    product_name: string | null;
-    product_brand: string | null;
-    distance: number;
-  }>).filter(row => row.distance <= maxDistance || row.distance >= COLDSTART_DISTANCE).map(row => ({
-    id: row.id,
-    product_id: row.product_id,
-    look_id: null,
-    title: null,
-    description: null,
-    video_url: row.video_url,
-    storage_path: null,
-    thumbnail_url: row.thumbnail_url,
-    affiliate_url: null,
-    prompt: null,
-    prompt_extra: null,
-    style: '',
-    model: null,
-    status: 'live',
-    duration_seconds: null,
-    aspect_ratio: null,
-    resolution: null,
-    cost_usd: null,
-    impressions: 0,
-    clicks: 0,
-    error: null,
-    enabled: true,
-    created_at: '',
-    completed_at: null,
-    updated_at: null,
-    product: {
-      id: row.product_id,
-      name: row.product_name,
-      brand: row.product_brand,
-      price: null,
-      image_url: null,
-      url: null,
-    },
-  } as ProductAd));
-  if (!genderById) return mapped.slice(0, k);
-  return mapped
-    .filter(ad => passesGenderFilter({ gender: genderById!.get(ad.product_id) ?? null }))
+  const rows = data as SimilarProductRow[]; // already ascending distance
+  if (rows.length === 0) return [];
+  // The product_similarity_threshold dial is AUTHORITATIVE, applied RELATIVE
+  // to this product's nearest match rather than as an absolute distance. The
+  // cutoff scales off the closest item (rows[0], smallest cosine distance):
+  //
+  //   cutoff = nearest_distance ÷ (dial / 100)
+  //
+  //   dial 0   → no filter (cutoff = ∞), show all K nearest — never empty
+  //   dial 60  → keep items within 1.67× the nearest distance (a wider band)
+  //   dial 100 → keep items within 1× the nearest distance (tightest — only
+  //              the closest matches / ties)
+  //
+  // Relative anchoring means the band auto-adapts to how tightly a given
+  // category clusters, instead of a one-size absolute threshold. Items past
+  // the bar are dropped (no backfill); the separate "Popular" rail covers the
+  // sparse case.
+  const dialFrac = similarityThreshold / 100; // 0..1
+  const maxDistance = dialFrac > 0 ? rows[0].distance / dialFrac : Infinity;
+  return rows
+    .filter(r => r.distance <= maxDistance)
+    .map(similarProductRowToAd)
+    .filter(ad => passesGenderFilter({ gender: ad.product?.gender ?? null }))
     .slice(0, k);
+}
+
+const similarProductCache = new Map<string, Promise<ProductAd[]>>();
+
+/** Idempotent prefetch for the description-embedding "Similar" rail, keyed by
+ *  PRODUCT id (not creative id). Safe to call from hover, tap, or open. */
+export function prefetchSimilarProducts(seedProductId: string, k = 18): Promise<ProductAd[]> {
+  if (!seedProductId) return Promise.resolve([] as ProductAd[]);
+  const key = `${seedProductId}|${k}`;
+  const cached = similarProductCache.get(key);
+  if (cached) return cached;
+  const p = getSimilarProductsByEmbedding(seedProductId, k);
+  similarProductCache.set(key, p);
+  p.catch(() => similarProductCache.delete(key));
+  return p;
 }
 
 // Impression batching. The consumer feed mounts ~50 CreativeCards at once
