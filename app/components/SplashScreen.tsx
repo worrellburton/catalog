@@ -6,12 +6,12 @@ export default function SplashScreen() {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    // Quick handoff — was 1800ms which made the splash feel like a wait
-    // screen instead of a brand cue. 900ms is enough for the wordmark
-    // to spin in and start a single arc of the gradient sweep before
-    // the fade begins; combined with the shorter CSS transition (0.4s)
-    // the splash → landing handoff feels like a single quick beat.
-    const timer = setTimeout(() => setFadeOut(true), 900);
+    // Fixed 2000ms hold so the splash is consistent every cold open
+    // (and on every entry into the app from the landing) — the user
+    // wanted a deterministic beat, not "however long the network takes".
+    // Matches SPLASH_MIN_MS / SPLASH_MAX_MS in useAppView and the
+    // setTimeout in handleLandingToApp; all three should stay in sync.
+    const timer = setTimeout(() => setFadeOut(true), 2000);
     return () => clearTimeout(timer);
   }, []);
 

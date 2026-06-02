@@ -434,12 +434,16 @@ export default function Home() {
   }, []);
 
   const handleLandingToApp = useCallback(() => {
+    // Fixed 2000ms beat — consistent with SplashScreen's internal
+    // timer and useAppView's first-visit SPLASH_MIN/MAX_MS. The user
+    // wants the splash to always feel the same regardless of where
+    // they entered from.
     setShowSplash(true);
     setView('splash');
     setTimeout(() => {
       setView('app');
       setShowSplash(false);
-    }, 1200);
+    }, 2000);
   }, []);
 
   const handleOpenLook = useCallback((look: Look) => {
