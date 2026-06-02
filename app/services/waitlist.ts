@@ -74,10 +74,14 @@ export async function getWaitlistIds(): Promise<Set<string>> {
 
 export async function getWaitlist(): Promise<WaitlistEntry[]> {
   if (!supabase) return [];
+  // Newest joiners at the TOP per the latest spec — admins want the
+  // most recent activity in their face first, with the older queue
+  // scrolling below. (Previously sorted by `position` ascending, which
+  // buried fresh signups under early-bird entries.)
   const { data, error } = await supabase
     .from('waitlist')
     .select('id, position, email, full_name, avatar_url, provider, approved, created_at, approved_at')
-    .order('position', { ascending: true });
+    .order('created_at', { ascending: false });
   if (error) {
     console.error('Failed to load waitlist', error);
     return [];

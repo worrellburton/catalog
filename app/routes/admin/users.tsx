@@ -1032,7 +1032,7 @@ export default function AdminUsers() {
       return <p className="admin-detail-empty">No {labelCol.toLowerCase()}s yet</p>;
     }
     return (
-      <div className="admin-table-wrap">
+      <div className="admin-table-wrap admin-users-grid">
         <table className="admin-table">
           <thead>
             <tr>
