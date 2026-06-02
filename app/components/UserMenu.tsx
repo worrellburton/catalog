@@ -171,6 +171,54 @@ function UserMenu({
     return () => { document.body.classList.remove('has-account-menu'); };
   }, [pageOpen, pageClosing]);
 
+  // Escape hatches — multiple ways to recover if the slide-over ever
+  // gets stuck (transform left on .app-root, menu trapped open, etc.):
+  //   • Escape key always closes the page.
+  //   • An emergency `catalog:account-menu-reset` window event force-
+  //     clears the open/closing flags AND the body class. Triggerable
+  //     from devtools or via a triple-tap-the-top-edge gesture below.
+  //   • Triple-tapping the very top edge of the viewport (within 600ms)
+  //     fires the reset. Hard to trigger accidentally, easy to remember
+  //     if the menu is stuck and the user can't reach the close button.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hardReset = () => {
+      setPageOpen(false);
+      setPageClosing(false);
+      document.body.classList.remove('has-account-menu');
+      // Defensive: if some other code added inline transforms, clear them.
+      const root = document.querySelector('.app-root') as HTMLElement | null;
+      if (root) root.style.transform = '';
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (pageOpen || pageClosing)) hardReset();
+    };
+    const onReset = () => hardReset();
+
+    // Triple-tap-top-edge escape gesture. A tap counts only when it
+    // lands in the top 60px of the viewport AND inside ~600ms of the
+    // previous tap. Three in a row triggers the reset.
+    let taps: number[] = [];
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0] || e.changedTouches[0];
+      if (!t) return;
+      if (t.clientY > 60) { taps = []; return; }
+      const now = performance.now();
+      taps = taps.filter(x => now - x < 600);
+      taps.push(now);
+      if (taps.length >= 3) { taps = []; hardReset(); }
+    };
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('catalog:account-menu-reset', onReset);
+    window.addEventListener('touchstart', onTouch, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('catalog:account-menu-reset', onReset);
+      window.removeEventListener('touchstart', onTouch);
+    };
+  }, [pageOpen, pageClosing]);
+
   // When an action runs from the page, close the page first (with its
   // animation), then dispatch the action — same pattern as runTile, just
   // routed through the page lifecycle.
