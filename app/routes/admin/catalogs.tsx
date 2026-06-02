@@ -105,6 +105,17 @@ export interface ProductRow {
   brand: string | null;
   image_url: string | null;
   primary_image_url: string | null;
+  /** Set when the per-SKU polished i2v clip is available. We expose it as
+   *  a sortable "Video" column in the Add Products picker — admins want to
+   *  prioritize products that already have video over still-image ones. */
+  primary_video_url?: string | null;
+  /** Discounted_price or regular price string ("$29.99"). Kept as text
+   *  because that's how Shopify hands it to us; sorted numerically by
+   *  stripping non-digits in the comparator. */
+  price?: string | null;
+  /** Taxonomy bucket ("Top", "Shoes", "Dress"…). Used by the picker's
+   *  Type column + intent gates in nl-search. */
+  type?: string | null;
   gender: string | null;
   catalog_tags: string[] | null;
   createdAt?: string | null;
@@ -117,6 +128,11 @@ export interface LookRow {
   title: string | null;
   creatorHandle: string | null;
   videoPath: string | null;
+  /** Picker exposes a 320-tall video preview when present (videoUrl is the
+   *  primary creative's clip). thumbnailUrl is the poster fallback. */
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  createdAt?: string | null;
   catalog_tags: string[];
 }
 
@@ -738,8 +754,15 @@ export default function AdminCatalogs() {
     if (!supabase) return;
     const { data } = await supabase
       .from('products')
-      .select('id, name, brand, image_url, primary_image_url, gender, catalog_tags');
-    if (data) setProducts(data as ProductRow[]);
+      .select('id, name, brand, image_url, primary_image_url, primary_video_url, price, type, gender, catalog_tags, created_at');
+    if (data) {
+      // Surface created_at as createdAt so the picker can sort by Added date
+      // without reaching back into the raw DB column name.
+      setProducts((data as Array<ProductRow & { created_at?: string | null }>).map(p => ({
+        ...p,
+        createdAt: p.created_at ?? null,
+      })));
+    }
   }, []);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
@@ -755,8 +778,8 @@ export default function AdminCatalogs() {
     const { data } = await supabase
       .from('looks')
       .select(`
-        id, legacy_id, title, creator_handle, catalog_tags,
-        looks_creative ( video_url, is_primary )
+        id, legacy_id, title, creator_handle, catalog_tags, created_at,
+        looks_creative ( video_url, thumbnail_url, is_primary )
       `)
       .eq('status', 'live')
       .eq('enabled', true)
@@ -769,18 +792,25 @@ export default function AdminCatalogs() {
       title: string | null;
       creator_handle: string | null;
       catalog_tags: string[] | null;
-      looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
+      created_at: string | null;
+      looks_creative: { video_url: string | null; thumbnail_url: string | null; is_primary: boolean }[] | null;
     };
-    const mapped: LookRow[] = (data as LookPayload[]).map(r => ({
-      id: r.id,
-      legacyId: r.legacy_id,
-      title: r.title,
-      creatorHandle: r.creator_handle,
-      videoPath: r.looks_creative?.find(c => c.is_primary)?.video_url
-        ?? r.looks_creative?.[0]?.video_url
-        ?? null,
-      catalog_tags: Array.isArray(r.catalog_tags) ? r.catalog_tags : [],
-    }));
+    const mapped: LookRow[] = (data as LookPayload[]).map(r => {
+      // Pick the primary creative (or first available) for both the video
+      // preview and the poster fallback — same lookup the consumer feed uses.
+      const primary = r.looks_creative?.find(c => c.is_primary) ?? r.looks_creative?.[0] ?? null;
+      return {
+        id: r.id,
+        legacyId: r.legacy_id,
+        title: r.title,
+        creatorHandle: r.creator_handle,
+        videoPath: primary?.video_url ?? null,
+        videoUrl: primary?.video_url ?? null,
+        thumbnailUrl: primary?.thumbnail_url ?? null,
+        createdAt: r.created_at,
+        catalog_tags: Array.isArray(r.catalog_tags) ? r.catalog_tags : [],
+      };
+    });
     setLooks(mapped);
   }, []);
 
@@ -5661,6 +5691,43 @@ interface AddProductsModalProps {
   onCommit: () => void;
 }
 
+// Sortable columns for the products picker. Names mirror the /admin/data
+// Products tab so an admin who knows that page can sort the same way here.
+type ProductSortKey = 'name' | 'brand' | 'type' | 'gender' | 'price' | 'video' | 'created';
+type SortDir = 'asc' | 'desc';
+
+// Pull a numeric value out of a price string like "$1,299.00" or "€89,50".
+// Returns NaN when the string is empty so unrelated rows fall to the end.
+function priceAsNumber(s: string | null | undefined): number {
+  if (!s) return NaN;
+  const m = s.replace(/,/g, '').match(/[\d.]+/);
+  return m ? parseFloat(m[0]) : NaN;
+}
+
+function compareProducts(a: ProductRow, b: ProductRow, key: ProductSortKey, dir: SortDir): number {
+  const mul = dir === 'asc' ? 1 : -1;
+  switch (key) {
+    case 'name':   return ((a.name   || '').toLowerCase()).localeCompare((b.name   || '').toLowerCase()) * mul;
+    case 'brand':  return ((a.brand  || '').toLowerCase()).localeCompare((b.brand  || '').toLowerCase()) * mul;
+    case 'type':   return ((a.type   || '').toLowerCase()).localeCompare((b.type   || '').toLowerCase()) * mul;
+    case 'gender': return ((a.gender || '').toLowerCase()).localeCompare((b.gender || '').toLowerCase()) * mul;
+    case 'price': {
+      const pa = priceAsNumber(a.price); const pb = priceAsNumber(b.price);
+      // NaNs always sink to the bottom regardless of direction.
+      if (isNaN(pa) && isNaN(pb)) return 0;
+      if (isNaN(pa)) return 1;
+      if (isNaN(pb)) return -1;
+      return (pa - pb) * mul;
+    }
+    case 'video':  return (Number(Boolean(b.primary_video_url)) - Number(Boolean(a.primary_video_url))) * mul;
+    case 'created': {
+      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
+      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
+      return (db - da) * mul;
+    }
+  }
+}
+
 export function AddProductsModal({
   catalog,
   products,
@@ -5675,26 +5742,64 @@ export function AddProductsModal({
   onClose,
   onCommit,
 }: AddProductsModalProps) {
+  const [sortKey, setSortKey] = useState<ProductSortKey>('created');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
   const tagged = useMemo(
     () => new Set(products.filter(p => (p.catalog_tags || []).includes(catalog.name)).map(p => p.id)),
     [products, catalog.name],
   );
-  const filtered = useMemo(() => {
+
+  // Filter + sort. The picker now matches the Data products page in shape:
+  // primary image, name, brand, type, gender, price, video, added — all
+  // sortable. Filtering checks every text-y field so a search like "tee"
+  // matches names AND types, "alo" matches brands AND names.
+  const filteredAndSorted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p =>
-      (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q),
+    const filtered = !q ? products : products.filter(p =>
+      (p.name   || '').toLowerCase().includes(q)
+      || (p.brand  || '').toLowerCase().includes(q)
+      || (p.type   || '').toLowerCase().includes(q)
+      || (p.gender || '').toLowerCase().includes(q),
     );
-  }, [products, search]);
+    return [...filtered].sort((a, b) => compareProducts(a, b, sortKey, sortDir));
+  }, [products, search, sortKey, sortDir]);
+
+  // Click a header to sort by that column. Re-click flips direction; switching
+  // columns resets direction to the natural default (text asc, dates/video desc).
+  const onHeaderClick = (key: ProductSortKey) => {
+    if (sortKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return; }
+    setSortKey(key);
+    setSortDir(key === 'created' || key === 'video' || key === 'price' ? 'desc' : 'asc');
+  };
+
+  const Sortable = ({ k, label, width }: { k: ProductSortKey; label: string; width?: number }) => (
+    <th
+      onClick={() => onHeaderClick(k)}
+      style={{ padding: '8px 12px', width, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+      title={`Sort by ${label}`}
+    >
+      {label}
+      <span style={{ marginLeft: 4, color: sortKey === k ? '#111' : 'transparent' }}>
+        {sortDir === 'asc' ? '↑' : '↓'}
+      </span>
+    </th>
+  );
 
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(1040px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="admin-modal"
+        onClick={e => e.stopPropagation()}
+        // Wider, taller modal — admins are scanning hundreds of rows; we want
+        // the picker to feel like a proper table view, not a sidebar drawer.
+        style={{ width: 'min(1440px, 96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+      >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 16 }}>Add Products to “{catalog.name}”</h2>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
-              {tagged.size} already in this catalog · {products.length} in library
+              {tagged.size} already in this catalog · {products.length} in library · {filteredAndSorted.length} shown
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -5712,17 +5817,17 @@ export function AddProductsModal({
             </button>
             <input
               type="text"
-              placeholder="Search by name or brand"
+              placeholder="Search name, brand, type…"
               value={search}
               onChange={e => onSearch(e.target.value)}
               autoFocus
-              style={{ flex: '0 1 260px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+              style={{ flex: '0 1 280px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
             />
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
-          {filtered.length === 0 ? (
+          {filteredAndSorted.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
               No products match “{search}”.
             </div>
@@ -5731,9 +5836,8 @@ export function AddProductsModal({
               <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f8fafc' }}>
                 <tr style={{ textAlign: 'left', color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '8px 12px', width: 40 }}>
-                    {/* select-all over the non-tagged, filtered set */}
                     {(() => {
-                      const selectable = filtered.filter(p => !tagged.has(p.id));
+                      const selectable = filteredAndSorted.filter(p => !tagged.has(p.id));
                       const allSel = selectable.length > 0 && selectable.every(p => selected.has(p.id));
                       const someSel = !allSel && selectable.some(p => selected.has(p.id));
                       return (
@@ -5750,16 +5854,22 @@ export function AddProductsModal({
                       );
                     })()}
                   </th>
-                  <th style={{ padding: '8px 12px', width: 48 }}></th>
-                  <th style={{ padding: '8px 12px' }}>Product</th>
-                  <th style={{ padding: '8px 12px' }}>Brand</th>
+                  <th style={{ padding: '8px 12px', width: 56 }}></th>
+                  <Sortable k="name"    label="Product"        />
+                  <Sortable k="brand"   label="Brand"   width={170} />
+                  <Sortable k="type"    label="Type"    width={120} />
+                  <Sortable k="gender"  label="Gender"  width={90}  />
+                  <Sortable k="price"   label="Price"   width={90}  />
+                  <Sortable k="video"   label="Video"   width={80}  />
+                  <Sortable k="created" label="Added"   width={120} />
                   <th style={{ padding: '8px 12px', width: 90 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(p => {
+                {filteredAndSorted.map(p => {
                   const isTagged = tagged.has(p.id);
                   const isSelected = selected.has(p.id);
+                  const img = p.primary_image_url || p.image_url || '';
                   return (
                     <tr
                       key={p.id}
@@ -5780,14 +5890,30 @@ export function AddProductsModal({
                         />
                       </td>
                       <td style={{ padding: '6px 12px' }}>
-                        {(p.primary_image_url || p.image_url) ? (
-                          <img src={p.primary_image_url || p.image_url || ''} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
+                        {img ? (
+                          // primary_image_url leads (the polished packshot
+                          // vision picked); image_url is the scrape fallback
+                          // so a freshly-added product without a polish run
+                          // still has a thumbnail.
+                          <img src={img} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4, background: '#f1f5f9' }} />
                         ) : (
-                          <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 4 }} />
+                          <div style={{ width: 44, height: 44, background: '#f1f5f9', borderRadius: 4 }} />
                         )}
                       </td>
-                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111' }}>{p.name || ' - '}</td>
-                      <td style={{ padding: '6px 12px', color: '#475569' }}>{p.brand || ' - '}</td>
+                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111' }}>{p.name || '—'}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569' }}>{p.brand || '—'}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569' }}>{p.type || '—'}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569', textTransform: 'capitalize' }}>{p.gender || '—'}</td>
+                      <td style={{ padding: '6px 12px', color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{p.price || '—'}</td>
+                      <td style={{ padding: '6px 12px' }}>
+                        {p.primary_video_url
+                          ? <span title="Has primary video" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} />
+                          : <span title="No primary video yet" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#e2e8f0' }} />
+                        }
+                      </td>
+                      <td style={{ padding: '6px 12px', color: '#64748b', fontSize: 12 }}>
+                        {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}
+                      </td>
                       <td style={{ padding: '6px 12px' }}>
                         {isTagged ? (
                           <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#059669' }}>Added</span>
@@ -5843,6 +5969,22 @@ interface AddLooksModalProps {
   onCommit: () => void;
 }
 
+type LookSortKey = 'title' | 'creator' | 'video' | 'created';
+
+function compareLooks(a: LookRow, b: LookRow, key: LookSortKey, dir: SortDir): number {
+  const mul = dir === 'asc' ? 1 : -1;
+  switch (key) {
+    case 'title':   return ((a.title || '').toLowerCase()).localeCompare((b.title || '').toLowerCase()) * mul;
+    case 'creator': return ((a.creatorHandle || '').toLowerCase()).localeCompare((b.creatorHandle || '').toLowerCase()) * mul;
+    case 'video':   return (Number(Boolean(b.videoUrl ?? b.videoPath)) - Number(Boolean(a.videoUrl ?? a.videoPath))) * mul;
+    case 'created': {
+      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
+      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
+      return (db - da) * mul;
+    }
+  }
+}
+
 export function AddLooksModal({
   catalog,
   looks,
@@ -5854,41 +5996,68 @@ export function AddLooksModal({
   onClose,
   onCommit,
 }: AddLooksModalProps) {
+  const [sortKey, setSortKey] = useState<LookSortKey>('created');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
   const tagged = useMemo(
     () => new Set(looks.filter(l => l.catalog_tags.includes(catalog.name)).map(l => l.id)),
     [looks, catalog.name],
   );
-  const filtered = useMemo(() => {
+  const filteredAndSorted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return looks;
-    return looks.filter(l =>
+    const filtered = !q ? looks : looks.filter(l =>
       (l.title || '').toLowerCase().includes(q)
       || (l.creatorHandle || '').toLowerCase().includes(q),
     );
-  }, [looks, search]);
+    return [...filtered].sort((a, b) => compareLooks(a, b, sortKey, sortDir));
+  }, [looks, search, sortKey, sortDir]);
+
+  const onHeaderClick = (key: LookSortKey) => {
+    if (sortKey === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return; }
+    setSortKey(key);
+    setSortDir(key === 'created' || key === 'video' ? 'desc' : 'asc');
+  };
+  const Sortable = ({ k, label, width }: { k: LookSortKey; label: string; width?: number }) => (
+    <th
+      onClick={() => onHeaderClick(k)}
+      style={{ padding: '8px 12px', width, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+      title={`Sort by ${label}`}
+    >
+      {label}
+      <span style={{ marginLeft: 4, color: sortKey === k ? '#111' : 'transparent' }}>
+        {sortDir === 'asc' ? '↑' : '↓'}
+      </span>
+    </th>
+  );
 
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ width: 'min(1040px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="admin-modal"
+        onClick={e => e.stopPropagation()}
+        // Same wider/taller treatment as AddProductsModal so admins
+        // scanning a catalog's library see the full row at a glance.
+        style={{ width: 'min(1440px, 96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+      >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 16 }}>Add Looks to “{catalog.name}”</h2>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: '#666' }}>
-              {tagged.size} already in this catalog · {looks.length} live in library
+              {tagged.size} already in this catalog · {looks.length} live in library · {filteredAndSorted.length} shown
             </p>
           </div>
           <input
             type="text"
-            placeholder="Search by title or creator handle"
+            placeholder="Search title or creator handle…"
             value={search}
             onChange={e => onSearch(e.target.value)}
             autoFocus
-            style={{ flex: '0 1 260px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
+            style={{ flex: '0 1 280px', padding: '6px 10px', fontSize: 13, border: '1px solid #ddd', borderRadius: 6 }}
           />
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
-          {filtered.length === 0 ? (
+          {filteredAndSorted.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#888', padding: 48, fontSize: 13 }}>
               {looks.length === 0 ? 'No live looks in the library.' : `No looks match “${search}”.`}
             </div>
@@ -5898,7 +6067,7 @@ export function AddLooksModal({
                 <tr style={{ textAlign: 'left', color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '8px 12px', width: 40 }}>
                     {(() => {
-                      const selectable = filtered.filter(l => !tagged.has(l.id));
+                      const selectable = filteredAndSorted.filter(l => !tagged.has(l.id));
                       const allSel = selectable.length > 0 && selectable.every(l => selected.has(l.id));
                       const someSel = !allSel && selectable.some(l => selected.has(l.id));
                       return (
@@ -5915,18 +6084,22 @@ export function AddLooksModal({
                       );
                     })()}
                   </th>
-                  <th style={{ padding: '8px 12px', width: 48 }}></th>
-                  <th style={{ padding: '8px 12px' }}>Look</th>
-                  <th style={{ padding: '8px 12px' }}>Creator</th>
+                  <th style={{ padding: '8px 12px', width: 56 }}></th>
+                  <Sortable k="title"   label="Look"    />
+                  <Sortable k="creator" label="Creator" width={200} />
+                  <Sortable k="video"   label="Video"   width={80}  />
+                  <Sortable k="created" label="Added"   width={120} />
                   <th style={{ padding: '8px 12px', width: 90 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(l => {
+                {filteredAndSorted.map(l => {
                   const isTagged = tagged.has(l.id);
                   const isSelected = selected.has(l.id);
-                  const src = l.videoPath
-                    ? (l.videoPath.startsWith('http') ? l.videoPath : `${import.meta.env.BASE_URL}${l.videoPath.replace(/^\//, '')}`)
+                  const src = (l.videoUrl || l.videoPath)
+                    ? ((l.videoUrl || l.videoPath)!.startsWith('http')
+                        ? (l.videoUrl || l.videoPath)!
+                        : `${import.meta.env.BASE_URL}${(l.videoUrl || l.videoPath)!.replace(/^\//, '')}`)
                     : null;
                   return (
                     <tr
@@ -5943,12 +6116,28 @@ export function AddLooksModal({
                         <input type="checkbox" checked={isSelected || isTagged} disabled={isTagged} onChange={() => !isTagged && onToggle(l.id)} />
                       </td>
                       <td style={{ padding: '6px 12px' }}>
-                        <div style={{ width: 30, height: 40, borderRadius: 4, overflow: 'hidden', background: '#000' }}>
-                          {src && <video src={src} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                        {/* Larger video tile so admins can recognize a look
+                            at a glance — was 30×40, now 36×48 in a 3:4 frame.
+                            Poster fallback when no video URL resolved. */}
+                        <div style={{ width: 36, height: 48, borderRadius: 4, overflow: 'hidden', background: '#000', position: 'relative' }}>
+                          {src
+                            ? <video src={src} muted playsInline preload="metadata" poster={l.thumbnailUrl ?? undefined} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : l.thumbnailUrl
+                              ? <img src={l.thumbnailUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              : null}
                         </div>
                       </td>
                       <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111' }}>{l.title || `Look #${l.legacyId ?? ''}`}</td>
-                      <td style={{ padding: '6px 12px', color: '#475569' }}>{l.creatorHandle ? `@${l.creatorHandle}` : ' - '}</td>
+                      <td style={{ padding: '6px 12px', color: '#475569' }}>{l.creatorHandle ? `@${l.creatorHandle}` : '—'}</td>
+                      <td style={{ padding: '6px 12px' }}>
+                        {(l.videoUrl || l.videoPath)
+                          ? <span title="Has video" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#22c55e' }} />
+                          : <span title="No video" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#e2e8f0' }} />
+                        }
+                      </td>
+                      <td style={{ padding: '6px 12px', color: '#64748b', fontSize: 12 }}>
+                        {l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '—'}
+                      </td>
                       <td style={{ padding: '6px 12px' }}>
                         {isTagged ? (
                           <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#059669' }}>Added</span>
