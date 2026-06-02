@@ -1,9 +1,10 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { Look, creators, Product } from '~/data/looks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import FollowIconButton from './FollowIconButton';
+import { sortByGarmentRole } from '~/utils/garmentOrder';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -24,9 +25,14 @@ interface InlineLookDetailProps {
 
 export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, onOpenProduct, onOpenBrand, onCreateCatalog, bookmarks }: InlineLookDetailProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Sort products head-to-toe (hat → top → bottom → shoes → accessories)
+  // so the panel reads top-to-bottom the way a stylist would call out
+  // an outfit. Memoised so bookmark indices stay aligned to a stable
+  // array across renders.
+  const sortedProducts = useMemo(() => sortByGarmentRole(look.products), [look.products]);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
   const [productBookmarks, setProductBookmarks] = useState(
-    look.products.map(p => bookmarks.isProductBookmarked(p))
+    sortedProducts.map(p => bookmarks.isProductBookmarked(p))
   );
 
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -48,9 +54,9 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
   }, [bookmarks, look.id]);
 
   const handleToggleProductBookmark = useCallback((idx: number) => {
-    bookmarks.toggleProductBookmark(look.products[idx]);
+    bookmarks.toggleProductBookmark(sortedProducts[idx]);
     setProductBookmarks(prev => prev.map((b, i) => i === idx ? !b : b));
-  }, [bookmarks, look.products]);
+  }, [bookmarks, sortedProducts]);
 
   const handleProductClick = useCallback((p: Product) => {
     if (onOpenProduct) {
@@ -124,7 +130,7 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
         {/* Product list */}
         <div className="inline-look-products">
-          {look.products.map((p, pi) => (
+          {sortedProducts.map((p, pi) => (
             <div
               key={pi}
               className="inline-product-card"

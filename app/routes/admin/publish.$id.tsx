@@ -5,6 +5,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
 import { setGenerationPublished } from '~/services/user-generations';
 import { generateAndStorePoster } from '~/utils/video-poster';
+import { sortByGarmentRole } from '~/utils/garmentOrder';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
  * catalog. Reached via the per-row Publish button on
@@ -102,21 +103,27 @@ export default function AdminPublishScreen() {
         setLoading(false);
         return;
       }
-      const products: PublishProduct[] = ((prodRows || []) as unknown as Array<{
-        product_id: string;
-        role_tag: string | null;
-        sort_order: number;
-        products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
-      }>)
-        .filter(r => !!r.products)
-        .map(r => ({
-          id: r.products!.id,
-          name: r.products!.name || ' - ',
-          brand: r.products!.brand || ' - ',
-          price: r.products!.price,
-          image_url: r.products!.image_url,
-          role_tag: r.role_tag,
-        }));
+      // Sort head-to-toe (hat → top → bottom → shoes → accessories) so
+      // the reviewer always sees the outfit read top-to-bottom the way
+      // a stylist would call it out, regardless of the user_generation
+      // row's sort_order — which mirrors pick order, not body order.
+      const products: PublishProduct[] = sortByGarmentRole(
+        ((prodRows || []) as unknown as Array<{
+          product_id: string;
+          role_tag: string | null;
+          sort_order: number;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null } | null;
+        }>)
+          .filter(r => !!r.products)
+          .map(r => ({
+            id: r.products!.id,
+            name: r.products!.name || ' - ',
+            brand: r.products!.brand || ' - ',
+            price: r.products!.price,
+            image_url: r.products!.image_url,
+            role_tag: r.role_tag,
+          }))
+      );
       setDraft({
         generationId: gen.id,
         videoUrl: gen.video_url,
