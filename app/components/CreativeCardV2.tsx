@@ -137,8 +137,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // renders as the still product image. Looks keep video playback.
   const productsImageOnly = useProductsImageOnly();
   // Product cards backed by a polished primary video AUTOPLAY — they
-  // override the still-vs-video dials. The primary image is the video's
-  // first frame, so the poster→video swap is invisible (no jump). Other
+  // override the still-vs-video dials. The poster is the clip's HERO frame
+  // (~80% in), so the autoplaying video replays a short zoom-in reveal from
+  // frame 0 up to the poster's framing — intended, not a glitch. Other
   // product cards (looks with no primary video, no playableUrl) still
   // honour the dials.
   const hasPrimaryVideo = !isLook && !!creative?.product?.primary_video_url;
