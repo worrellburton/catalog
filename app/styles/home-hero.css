@@ -437,29 +437,40 @@
 }
 
 @media (max-width: 640px) {
-  /* While centered on the matte hero the mobile bar wears the hero's
-     dark-glass look (its white Gemini pill would clash), then reverts to
-     white once docked at the bottom over the feed. */
+  /* Mobile landing bar — match the new one-color glass treatment from
+     bottom-bar.css (top→bottom gradient surface, 999px pill, inner
+     highlight + bottom shadow). The previous override here re-stamped a
+     flat rgba(.07) background that defeated the gradient and brought
+     back the two-toned chip-inside-a-chip silhouette. Slightly darker
+     here than the docked-feed variant because the hero is matte black
+     and we want the bar to feel anchored, not float-y. */
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.14);
-    /* Match the docked white-pill silhouette (999px pill, not the chunkier
-       28px rounded rect from the base) so resting + scrolled bar feel like
-       the same control in two skins. */
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+      rgba(15, 18, 24, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow:
+      0 14px 40px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   }
-  /* When the search sheet is open, the inner pill carries its own dark
-     glass — drop the outer dark-glass on the .bottom-bar shell so it doesn't
-     read as a second rectangle wrapping the pill + close button. */
+  /* Search-open: keep the same glass treatment instead of going fully
+     transparent — the previous transparent state broke the bar's outline
+     mid-typing. */
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    background: transparent;
-    border-color: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+      rgba(15, 18, 24, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow:
+      0 14px 40px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input:focus {
@@ -469,10 +480,14 @@
     color: rgba(255, 255, 255, 0.42);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline {
-    color: rgba(255, 255, 255, 0.7);
+    /* Icon on the bar's glass surface, no chip pill. Hover stays
+       transparent (color shift only) so the one-color treatment holds. */
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: transparent;
     color: #fff;
   }
 }

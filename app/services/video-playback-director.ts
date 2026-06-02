@@ -24,20 +24,32 @@
 // user scrolls — when full, the most-distant assigned card is evicted to
 // make room for a closer one.
 
-/** Multiplier on viewport height for the play zone (each side). */
-const PLAY_MARGIN_VH_DESKTOP = 1.0;
+/** Multiplier on viewport height for the play zone (each side). The band
+ *  is sized to "everything visible + roughly half a screen of lookahead"
+ *  so the row about to scroll into view is already playing — no
+ *  poster→video pop. */
+const PLAY_MARGIN_VH_DESKTOP = 0.6;
 const PLAY_MARGIN_VH_MOBILE = 0.5;
 /** Multiplier on viewport height for the release zone (each side). */
-const RELEASE_MARGIN_VH_DESKTOP = 2.0;
+const RELEASE_MARGIN_VH_DESKTOP = 1.5;
 const RELEASE_MARGIN_VH_MOBILE = 1.25;
 /** Hard ceiling on pooled <video> elements — i.e. the max number of clips
- *  decoding/playing at once. The old 40/12 caps let a fast-poster grid spin
- *  up dozens of simultaneous decoders, melting the CPU/GPU and dropping the
- *  feed to a crawl. Bounded much tighter: a handful of on-screen clips is
- *  all the eye tracks anyway, and the hysteresis band keeps the nearest
- *  cards playing as you scroll. */
-const POOL_MAX_DESKTOP = 14;
-const POOL_MAX_MOBILE = 6;
+ *  decoding/playing at once.
+ *
+ *  This is a SAFETY ceiling, not a target: the steady-state decode count is
+ *  whatever falls inside the (tight) play band above, which prompt release +
+ *  the fast-flick velocity gate keep near "visible + lookahead". The cap only
+ *  bites on pathologically tall/wide viewports.
+ *
+ *  History: 40/12 once melted the CPU, but that was the strobe bug (every
+ *  pooled <video> reloading on every rank pass) compounding — fixed in
+ *  f769da9. The follow-up cut to 14/6 over-corrected: a 6-col desktop shows
+ *  ~25 cards at once and a 2-col phone ~8, so a 14/6 pool left HALF the
+ *  visible grid frozen on its poster (no slot to play in). The cap must sit
+ *  ABOVE the visible-card count or autoplay silently degrades to stills.
+ *  These values cover a full screen + a lookahead row on realistic viewports. */
+const POOL_MAX_DESKTOP = 32;
+const POOL_MAX_MOBILE = 14;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
