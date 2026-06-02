@@ -209,6 +209,137 @@ function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
   return out;
 }
 
+// Sidebar nav: top 7 + collapsible "Other Pages". With a non-empty search
+// query the split collapses into a single flat filtered list so a typed
+// match always surfaces, regardless of which bucket it's in. Section
+// headers (the original "Content / Operations / Settings" groupings) are
+// only shown to brand-new admins who have no MRU history yet, same as
+// before.
+const TOP_NAV_COUNT = 7;
+
+function AdminNav({
+  orderedNavItems,
+  mruOrder,
+  navSearch,
+  otherOpen,
+  onToggleOther,
+  onItemClick,
+}: {
+  orderedNavItems: NavItem[];
+  mruOrder: string[];
+  navSearch: string;
+  otherOpen: boolean;
+  onToggleOther: () => void;
+  onItemClick: () => void;
+}) {
+  const trimmed = navSearch.trim().toLowerCase();
+  const searchActive = trimmed.length > 0;
+
+  // When the admin is searching, run the filter across the FULL nav list
+  // and render a single flat group — splitting top vs "Other Pages" would
+  // hide matches behind the dropdown.
+  const matches = useMemo(() => {
+    if (!searchActive) return orderedNavItems;
+    return orderedNavItems.filter(it =>
+      it.label.toLowerCase().includes(trimmed)
+      || it.to.toLowerCase().includes(trimmed),
+    );
+  }, [orderedNavItems, trimmed, searchActive]);
+
+  const renderItem = (item: NavItem, prev?: NavItem) => {
+    // Section headers are only meaningful in the static (non-MRU, non-search)
+    // ordering. Once the user has MRU history or is actively searching,
+    // grouping breaks down so we suppress them.
+    const showSectionHeader = !searchActive
+      && mruOrder.length === 0
+      && item.section
+      && item.section !== prev?.section;
+    return (
+      <Fragment key={item.to}>
+        {showSectionHeader && (
+          <div
+            style={{
+              padding: '12px 14px 4px',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.6px',
+              color: '#94a3b8',
+            }}
+          >
+            {item.section}
+          </div>
+        )}
+        <NavLink
+          to={item.to}
+          end={item.to === '/admin'}
+          prefetch="intent"
+          className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+          onClick={onItemClick}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d={item.icon} />
+          </svg>
+          <span>{item.label}</span>
+          {item.badge && (
+            <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
+              {item.badge}
+            </span>
+          )}
+        </NavLink>
+      </Fragment>
+    );
+  };
+
+  // Searching: flat list, no top/other split.
+  if (searchActive) {
+    return (
+      <nav className="admin-nav">
+        {matches.length === 0
+          ? <div className="admin-nav-empty">No pages match “{navSearch}”.</div>
+          : matches.map((it, i) => renderItem(it, matches[i - 1]))}
+      </nav>
+    );
+  }
+
+  // Default split.
+  const top = orderedNavItems.slice(0, TOP_NAV_COUNT);
+  const other = orderedNavItems.slice(TOP_NAV_COUNT);
+
+  return (
+    <nav className="admin-nav">
+      {top.map((it, i) => renderItem(it, top[i - 1]))}
+      {other.length > 0 && (
+        <>
+          <button
+            type="button"
+            className={`admin-nav-other-toggle${otherOpen ? ' is-open' : ''}`}
+            onClick={onToggleOther}
+            aria-expanded={otherOpen}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="8"  y1="12" x2="8.01"  y2="12" />
+              <line x1="12" y1="12" x2="12.01" y2="12" />
+              <line x1="16" y1="12" x2="16.01" y2="12" />
+            </svg>
+            <span>Other Pages</span>
+            <span className="admin-nav-other-count">{other.length}</span>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ marginLeft: 'auto', transform: otherOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms ease' }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {otherOpen && other.map((it, i) => renderItem(it, other[i - 1]))}
+        </>
+      )}
+    </nav>
+  );
+}
+
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -275,6 +406,13 @@ export default function AdminLayout() {
   }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Sidebar nav-search query (filters the rendered nav list) and the
+  // collapsed/expanded state of the "Other Pages" group. The first 7
+  // items of orderedNavItems stay always-visible; everything past that
+  // tucks under a single click-to-expand row so the sidebar isn't a
+  // 30+ item dump on load. AdminNav (below) handles the rendering split.
+  const [navSearch, setNavSearch] = useState('');
+  const [otherNavOpen, setOtherNavOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -458,57 +596,33 @@ export default function AdminLayout() {
           <CatalogLogo className="admin-logo" />
           <span className="admin-badge">Admin</span>
         </div>
-        <nav className="admin-nav">
-          {orderedNavItems.map((item, i) => {
-            // Section headers only fire when consecutive items belong
-            // to different sections; with MRU reordering the original
-            // grouping breaks, so we suppress headers entirely once a
-            // user has any history. Static order remains intact for
-            // brand-new admins who haven't visited anything yet.
-            const prev = orderedNavItems[i - 1];
-            const showSectionHeader = mruOrder.length === 0
-              && item.section
-              && item.section !== prev?.section;
-            return (
-              <Fragment key={item.to}>
-                {showSectionHeader && (
-                  <div
-                    style={{
-                      padding: '12px 14px 4px',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.6px',
-                      color: '#94a3b8',
-                    }}
-                  >
-                    {item.section}
-                  </div>
-                )}
-                <NavLink
-                  to={item.to}
-                  end={item.to === '/admin'}
-                  // prefetch on hover/focus so the route chunk lands
-                  // before the user clicks. Cuts perceived nav latency
-                  // to ~0 on the second click.
-                  prefetch="intent"
-                  className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              </Fragment>
-            );
-          })}
-        </nav>
+        {/* Sidebar nav search. Filters the full nav (top 7 + Other) by
+            label so an admin can jump to any page by typing it — same
+            behaviour as the topbar search but always at hand inside the
+            sidebar. Falls through when empty so the default split (top 7
+            visible, rest folded under "Other Pages") still renders. */}
+        <div className="admin-nav-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            className="admin-nav-search-input"
+            placeholder="Search pages…"
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            aria-label="Search admin pages"
+          />
+        </div>
+        <AdminNav
+          orderedNavItems={orderedNavItems}
+          mruOrder={mruOrder}
+          navSearch={navSearch}
+          otherOpen={otherNavOpen}
+          onToggleOther={() => setOtherNavOpen(o => !o)}
+          onItemClick={() => setSidebarOpen(false)}
+        />
         <div className="admin-sidebar-footer" ref={userMenuRef}>
           <NavLink
             to="/admin/whats-new"
