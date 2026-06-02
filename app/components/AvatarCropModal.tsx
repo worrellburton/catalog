@@ -492,9 +492,19 @@ export function AvatarUpload({
     if (buttonRef.current) {
       setOriginRect(buttonRef.current.getBoundingClientRect());
     }
-    // Skip the intermediate drag-zone modal entirely: open the native file
-    // picker straight away. iOS Safari requires the .click() to fire from a
-    // user-gesture handler, which this one is, so it's safe inline.
+    // Open the native file picker straight away — no in-app drag-zone
+    // modal, no preview step we control. iOS Safari requires the
+    // .click() to fire from a user-gesture handler, which this one is.
+    //
+    // IMPORTANT (iOS Limited Photo Library): when the user has granted
+    // Safari "Selected Photos" access instead of "Full Access" (iOS
+    // Settings → Privacy → Photos → Safari), iOS shows its own
+    // confirmation screen with a timestamp + ✓/✗ buttons AFTER the
+    // user picks an image. That screen is OS-level and CANNOT be
+    // suppressed from web JS — there's no input attribute or API that
+    // skips it. To bypass it the user must grant "Full Access" in iOS
+    // Settings. Our flow is already as direct as web allows: tap →
+    // OS picker → (iOS confirmation if Limited) → our circle crop.
     fileInputRef.current?.click();
   }, [userId]);
 
