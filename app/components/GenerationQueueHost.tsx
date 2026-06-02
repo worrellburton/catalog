@@ -23,6 +23,7 @@ import {
   type GenerationJob,
 } from '~/services/generation-queue';
 import { supabase } from '~/utils/supabase';
+import { useAuth } from '~/hooks/useAuth';
 
 type Tab = 'active' | 'history' | 'failed';
 
@@ -64,7 +65,20 @@ function genJobToItem(j: GenerationJob): QueueItem {
   };
 }
 
+// Admin-only surface. Shoppers don't have any reason to see a generation
+// queue floating in their feed — the polling + product_creative + scrape
+// subscriptions also need admin-level read permissions to return anything
+// meaningful, so gating at the wrapper avoids unnecessary subscriptions on
+// the consumer hot path entirely (the inner component never mounts).
 export default function GenerationQueueHost() {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  if (!isAdmin) return null;
+  return <AdminGenerationQueueHost />;
+}
+
+function AdminGenerationQueueHost() {
   const [localJobs, setLocalJobs] = useState<GenerationJob[]>(listGenerationJobs());
   const [externalJobs, setExternalJobs] = useState<GenerationJob[]>([]);
   const [scrapeItems, setScrapeItems] = useState<QueueItem[]>([]);

@@ -342,6 +342,19 @@
   transition: width 0.1s linear;
 }
 
+/* Peek-on-landing: the feed wrapper is pulled up under the hero by ~14vh
+   ONLY while the hero is showing, so a thin band of the first grid row
+   noses above the fold beneath the centered bar. That tease is the scroll
+   signal — strong enough to invite swipe-down, small enough that the
+   hero-scrolled threshold (0.5 × innerHeight) still only fires on a real
+   scroll. Done with margin-top on the feed wrapper (not by shrinking the
+   hero box), so the spark + headline + bar trio keeps its centered
+   geometry intact. Once the user scrolls, the negative margin is gone so
+   the feed re-anchors normally and there's no jump. */
+.app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+  margin-top: -14vh;
+}
+
 /* Results reveal — classic chatbot answer: once the ceremony bows out the
    catalog rises up into position from below the fold (bottom → top) and
    settles, the way a chat response scrolls into view. A soft blur-to-sharp
@@ -518,10 +531,14 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    /* Mobile: 88svh so a thin band of the feed peeks below the bottom
-       search bar (the same "scroll for more" tease the desktop hero now
-       uses). Was 100svh which hid the feed behind the fold completely. */
-    min-height: 88svh;
+    /* Mobile: full svh so the spark/headline/search-bar trio keeps its
+       known-good vertical math (justify-content:flex-end + padding-bottom
+       42vh + fixed bar at bottom:32vh). The "feed peek" is produced by a
+       negative margin-top on .home-results-reveal below — that pulls the
+       feed up by ~14svh independent of the hero's internal layout, so the
+       trio stays centered. (Shrinking .sfh itself moved the headline up
+       while the fixed bar held its viewport position, opening a gap.) */
+    min-height: 100svh;
     /* flex-end anchors spark+headline to the inner-area bottom. We need
        padding-bottom > (100% − bar_top_position) so the stage cannot
        overflow into the bar zone. Bar top = 100 − bar.bottom − bar.height
@@ -646,15 +663,11 @@
      above it, so logo + headline + bar read as ONE vertically-centered
      cluster — same treatment as mobile. */
   .sfh {
-    /* 88vh instead of 100vh so a thin band of the feed peeks below the bar
-       — that tease is the strongest scroll signal we can give without the
-       page snapping to "scrolled" state on first paint. The previous 100vh
-       hid the feed entirely behind the fold; users had no visual cue that
-       scrolling would surface content. 88vh leaves enough room for ~one
-       row of cards to nose into view, and the hero-scrolled flip only
-       fires once the user actually scrolls (handled in _index.tsx by a
-       threshold well above the 12vh peek). */
-    min-height: 88vh;
+    /* Desktop: full viewport. Same reason as mobile — the centered trio's
+       math depends on the hero being a full viewport tall, and the feed
+       "peek" is produced by a negative margin-top on .home-results-reveal
+       below (independent of this box's height). */
+    min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
     /* Headline bottom lands ~48vh from top; bar at 44vh-from-bottom
