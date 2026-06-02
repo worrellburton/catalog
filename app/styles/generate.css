@@ -2714,10 +2714,25 @@ html[data-shell="catalog-app"] .gen-page {
     height: auto;
     min-height: 100%;
     justify-content: flex-start;
+    /* align-items: center on the parent makes every child shrink to
+       its max-content width and then center. For the feedback panel
+       + actions row that meant they sized to the widest button — and
+       on phones the widest button (e.g. "Get a new look going" or the
+       2-up "It's okay…"/"It looks great!!" grid) is wider than the
+       viewport, so they overflowed off the right edge. Switching to
+       align-items: stretch on mobile makes every direct child fill
+       the cross-axis width, so they're bounded by the viewport-minus-
+       page-padding instead. The headline + video still center thanks
+       to text-align: center / margin: auto on their own selectors. */
+    align-items: stretch;
   }
   .gen-step-result .gen-result-stage {
     flex: 0 0 auto;
     justify-content: flex-start;
+    align-items: stretch;
+  }
+  .gen-step-result .gen-result-layout {
+    align-items: stretch;
   }
   .gen-step-result .gen-build,
   .gen-step-result .gen-build-done {
