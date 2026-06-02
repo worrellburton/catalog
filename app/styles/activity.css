@@ -23,17 +23,21 @@
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px 10px 10px;
+  /* Tighter geometry: smaller copy, less padding, smaller pill so the
+     toast reads as a notification chip instead of a banner. The number
+     itself stays prominent (.activity-toast-count below) so the count-up
+     animation still draws the eye. */
+  gap: 9px;
+  padding: 7px 13px 7px 8px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.92);
   color: #f8fafc;
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: -0.005em;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 18px 38px rgba(0, 0, 0, 0.42),
+    0 14px 30px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(12px) saturate(1.25);
   -webkit-backdrop-filter: blur(12px) saturate(1.25);
@@ -58,14 +62,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  /* Same proportional shrink as the rest of the toast. */
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: rgba(34, 197, 94, 0.15);
   color: #4ade80;
   border: 1px solid rgba(34, 197, 94, 0.35);
   flex-shrink: 0;
 }
+.activity-toast-icon-disc svg { width: 12px; height: 12px; }
 
 /* Kind accents — tint the icon disc to match the event. */
 .activity-toast--click    .activity-toast-icon-disc { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.42); }
@@ -119,7 +125,9 @@
   font-variant-numeric: tabular-nums;
 }
 .activity-toast-count {
-  font-size: 18px;
+  /* Was 18px — slightly smaller now that the whole chip is tighter, but
+     still the largest text in the pill so the count-up animation reads. */
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #f8fafc;
@@ -127,7 +135,7 @@
   animation: activity-toast-count-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .activity-toast-summary-label {
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 600;
   color: rgba(248, 250, 252, 0.72);
   text-transform: lowercase;
@@ -148,8 +156,9 @@
 
 @media (max-width: 640px) {
   .activity-toasts { top: 68px; max-width: calc(100vw - 16px); }
-  .activity-toast  { font-size: 12.5px; padding: 9px 13px 9px 9px; }
-  .activity-toast-count { font-size: 16px; }
+  .activity-toast  { font-size: 11px; padding: 6px 12px 6px 7px; }
+  .activity-toast-count { font-size: 13.5px; }
+  .activity-toast-summary-label { font-size: 10.5px; }
 }
 
 /* Flutter shell — the native header overlaps the top zone, so nudge

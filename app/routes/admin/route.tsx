@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@rem
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
-import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { promoteQueuedAds } from '~/services/product-creative';
 import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
 import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
@@ -159,159 +159,6 @@ function formatElapsed(seconds: number) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-function FailedErrorView({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
-  const is400 = n.error?.includes('400') || n.error?.includes('INVALID_ARGUMENT');
-  const is500 = n.error?.includes('500') || n.error?.includes('INTERNAL');
-  const label = isQuota
-    ? 'Quota exceeded'
-    : is400 ? 'Invalid request'
-    : is500 ? 'Veo server error'
-    : (n.error?.split(/[.{]/)[0] || 'Failed').slice(0, 60);
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
-          style={{
-            fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
-            border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-            style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          {label}
-        </button>
-        {onRetry && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onRetry(); }}
-            style={{
-              fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
-              border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        )}
-      </div>
-      {expanded && (
-        <div style={{
-          marginTop: 6, padding: 8, background: '#fef2f2', border: '1px solid #fecaca',
-          borderRadius: 6, fontSize: 10, color: '#7f1d1d', lineHeight: 1.5,
-        }}>
-          {isQuota && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                Model: <code style={{ background: '#fee2e2', padding: '1px 4px', borderRadius: 3 }}>{n.veoModel || 'unknown'}</code>
-              </div>
-              <div style={{ color: '#991b1b' }}>
-                Tier 1 has tight per-minute + daily limits for Veo preview models. Options:
-              </div>
-              <ul style={{ margin: '4px 0 4px 14px', padding: 0 }}>
-                <li>Wait - per-minute limits reset every minute, daily at midnight PDT</li>
-                <li>Upgrade to Tier 2+ at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>aistudio.google.com/apikey</a></li>
-                <li>Switch to a non-preview model (e.g. <code>veo-2.0-generate-001</code>) which has higher limits</li>
-              </ul>
-              <div>
-                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>
-                  Full rate-limit docs →
-                </a>
-              </div>
-            </div>
-          )}
-          <details style={{ marginTop: 4 }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Raw error</summary>
-            <pre style={{
-              margin: '4px 0 0', padding: 6, background: '#fff', border: '1px solid #fecaca',
-              borderRadius: 4, overflow: 'auto', maxHeight: 120, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              fontSize: 9, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            }}>
-              {n.error || 'No error message'}
-            </pre>
-          </details>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (n.status !== 'generating' && n.status !== 'pending') return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [n.status]);
-
-  if (n.status === 'done') {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#22c55e' }}>Complete</span>
-      </div>
-    );
-  }
-  if (n.status === 'failed') {
-    return <FailedErrorView n={n} onRetry={onRetry} />;
-  }
-  if (n.status === 'queued') {
-    return (
-      <div style={{ height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-        <div style={{ width: '0%', height: '100%', background: '#94a3b8' }} />
-      </div>
-    );
-  }
-
-  // Use updatedAt so "elapsed" reflects time in current state, not when row was created.
-  // Rows can sit in 'queued' for hours before being promoted to 'pending'/'generating'.
-  const elapsed = (now - new Date(n.updatedAt).getTime()) / 1000;
-  const isStuck = elapsed > STUCK_THRESHOLD_SECONDS;
-  const pct = n.status === 'pending'
-    ? Math.min(15, (elapsed / 30) * 15)
-    : isStuck ? 95 : Math.min(95, (elapsed / ESTIMATED_GEN_SECONDS) * 100);
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : '#3b82f6', textTransform: 'uppercase' }}>
-          {isStuck ? 'Stuck' : n.status === 'pending' ? 'Pending' : 'Generating'}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: isStuck ? '#ef4444' : '#888' }}>{formatElapsed(elapsed)}</span>
-          {isStuck && onRetry && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRetry(); }}
-              style={{
-                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
-                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
-              }}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      </div>
-      <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0, width: `${pct}%`,
-          background: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-          transition: 'width 1s ease',
-        }} />
-        {n.status === 'generating' && !isStuck && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
-            animation: 'admin-shimmer 1.4s infinite',
-          }} />
-        )}
-      </div>
-    </div>
-  );
-}
 
 // MRU helpers — pure functions so they're easy to unit-test if we
 // ever want to. `pickNavMatch` attributes the current location to
@@ -360,6 +207,137 @@ function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
     }
   }
   return out;
+}
+
+// Sidebar nav: top 7 + collapsible "Other Pages". With a non-empty search
+// query the split collapses into a single flat filtered list so a typed
+// match always surfaces, regardless of which bucket it's in. Section
+// headers (the original "Content / Operations / Settings" groupings) are
+// only shown to brand-new admins who have no MRU history yet, same as
+// before.
+const TOP_NAV_COUNT = 7;
+
+function AdminNav({
+  orderedNavItems,
+  mruOrder,
+  navSearch,
+  otherOpen,
+  onToggleOther,
+  onItemClick,
+}: {
+  orderedNavItems: NavItem[];
+  mruOrder: string[];
+  navSearch: string;
+  otherOpen: boolean;
+  onToggleOther: () => void;
+  onItemClick: () => void;
+}) {
+  const trimmed = navSearch.trim().toLowerCase();
+  const searchActive = trimmed.length > 0;
+
+  // When the admin is searching, run the filter across the FULL nav list
+  // and render a single flat group — splitting top vs "Other Pages" would
+  // hide matches behind the dropdown.
+  const matches = useMemo(() => {
+    if (!searchActive) return orderedNavItems;
+    return orderedNavItems.filter(it =>
+      it.label.toLowerCase().includes(trimmed)
+      || it.to.toLowerCase().includes(trimmed),
+    );
+  }, [orderedNavItems, trimmed, searchActive]);
+
+  const renderItem = (item: NavItem, prev?: NavItem) => {
+    // Section headers are only meaningful in the static (non-MRU, non-search)
+    // ordering. Once the user has MRU history or is actively searching,
+    // grouping breaks down so we suppress them.
+    const showSectionHeader = !searchActive
+      && mruOrder.length === 0
+      && item.section
+      && item.section !== prev?.section;
+    return (
+      <Fragment key={item.to}>
+        {showSectionHeader && (
+          <div
+            style={{
+              padding: '12px 14px 4px',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.6px',
+              color: '#94a3b8',
+            }}
+          >
+            {item.section}
+          </div>
+        )}
+        <NavLink
+          to={item.to}
+          end={item.to === '/admin'}
+          prefetch="intent"
+          className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+          onClick={onItemClick}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d={item.icon} />
+          </svg>
+          <span>{item.label}</span>
+          {item.badge && (
+            <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
+              {item.badge}
+            </span>
+          )}
+        </NavLink>
+      </Fragment>
+    );
+  };
+
+  // Searching: flat list, no top/other split.
+  if (searchActive) {
+    return (
+      <nav className="admin-nav">
+        {matches.length === 0
+          ? <div className="admin-nav-empty">No pages match “{navSearch}”.</div>
+          : matches.map((it, i) => renderItem(it, matches[i - 1]))}
+      </nav>
+    );
+  }
+
+  // Default split.
+  const top = orderedNavItems.slice(0, TOP_NAV_COUNT);
+  const other = orderedNavItems.slice(TOP_NAV_COUNT);
+
+  return (
+    <nav className="admin-nav">
+      {top.map((it, i) => renderItem(it, top[i - 1]))}
+      {other.length > 0 && (
+        <>
+          <button
+            type="button"
+            className={`admin-nav-other-toggle${otherOpen ? ' is-open' : ''}`}
+            onClick={onToggleOther}
+            aria-expanded={otherOpen}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="8"  y1="12" x2="8.01"  y2="12" />
+              <line x1="12" y1="12" x2="12.01" y2="12" />
+              <line x1="16" y1="12" x2="16.01" y2="12" />
+            </svg>
+            <span>Other Pages</span>
+            <span className="admin-nav-other-count">{other.length}</span>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ marginLeft: 'auto', transform: otherOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms ease' }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {otherOpen && other.map((it, i) => renderItem(it, other[i - 1]))}
+        </>
+      )}
+    </nav>
+  );
 }
 
 export default function AdminLayout() {
@@ -428,14 +406,25 @@ export default function AdminLayout() {
   }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Sidebar nav-search query (filters the rendered nav list) and the
+  // collapsed/expanded state of the "Other Pages" group. The first 7
+  // items of orderedNavItems stay always-visible; everything past that
+  // tucks under a single click-to-expand row so the sidebar isn't a
+  // 30+ item dump on load. AdminNav (below) handles the rendering split.
+  const [navSearch, setNavSearch] = useState('');
+  const [otherNavOpen, setOtherNavOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Generation notifications
+  // Background data hygiene for the admin AI ad pipeline.
+  // The UI for this stream now lives in the global GenerationQueueHost
+  // (floating lower-right circle, Active/History/Failed tabs). The polling
+  // call below stays in this layout because it does the SELF-HEAL work the
+  // queue UI doesn't: flipping stuck `generating` rows to `failed` and
+  // promoting `queued` rows when slots free up. Tracking job rows in local
+  // state is no longer needed since nothing in this file renders them.
   const [genNotifications, setGenNotifications] = useState<GenNotification[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   const pollGenerations = useCallback(async () => {
@@ -540,22 +529,6 @@ export default function AdminLayout() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!notifOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [notifOpen]);
-
-  const generatingCount = genNotifications.filter(n => n.status === 'generating' || n.status === 'pending').length;
-  const queuedCount = genNotifications.filter(n => n.status === 'queued').length;
-  const completedCount = genNotifications.filter(n => n.status === 'done').length;
-  const totalActiveCount = genNotifications.length;
-  const totalQueueCost = genNotifications.reduce((sum, n) => sum + (n.costUsd ?? ESTIMATED_COST_USD), 0);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -623,57 +596,33 @@ export default function AdminLayout() {
           <CatalogLogo className="admin-logo" />
           <span className="admin-badge">Admin</span>
         </div>
-        <nav className="admin-nav">
-          {orderedNavItems.map((item, i) => {
-            // Section headers only fire when consecutive items belong
-            // to different sections; with MRU reordering the original
-            // grouping breaks, so we suppress headers entirely once a
-            // user has any history. Static order remains intact for
-            // brand-new admins who haven't visited anything yet.
-            const prev = orderedNavItems[i - 1];
-            const showSectionHeader = mruOrder.length === 0
-              && item.section
-              && item.section !== prev?.section;
-            return (
-              <Fragment key={item.to}>
-                {showSectionHeader && (
-                  <div
-                    style={{
-                      padding: '12px 14px 4px',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.6px',
-                      color: '#94a3b8',
-                    }}
-                  >
-                    {item.section}
-                  </div>
-                )}
-                <NavLink
-                  to={item.to}
-                  end={item.to === '/admin'}
-                  // prefetch on hover/focus so the route chunk lands
-                  // before the user clicks. Cuts perceived nav latency
-                  // to ~0 on the second click.
-                  prefetch="intent"
-                  className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              </Fragment>
-            );
-          })}
-        </nav>
+        {/* Sidebar nav search. Filters the full nav (top 7 + Other) by
+            label so an admin can jump to any page by typing it — same
+            behaviour as the topbar search but always at hand inside the
+            sidebar. Falls through when empty so the default split (top 7
+            visible, rest folded under "Other Pages") still renders. */}
+        <div className="admin-nav-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            className="admin-nav-search-input"
+            placeholder="Search pages…"
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            aria-label="Search admin pages"
+          />
+        </div>
+        <AdminNav
+          orderedNavItems={orderedNavItems}
+          mruOrder={mruOrder}
+          navSearch={navSearch}
+          otherOpen={otherNavOpen}
+          onToggleOther={() => setOtherNavOpen(o => !o)}
+          onItemClick={() => setSidebarOpen(false)}
+        />
         <div className="admin-sidebar-footer" ref={userMenuRef}>
           <NavLink
             to="/admin/whats-new"
@@ -790,156 +739,6 @@ export default function AdminLayout() {
             </div>
           )}
 
-          {/* Notifications bell */}
-          <div ref={notifRef} style={{ position: 'relative', marginLeft: 'auto' }}>
-            <button
-              onClick={() => setNotifOpen(o => !o)}
-              style={{
-                position: 'relative', background: 'none', border: 'none', cursor: 'pointer',
-                padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center',
-              }}
-              aria-label="Notifications"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={totalActiveCount > 0 ? '#111' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
-                <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" />
-                <path d="M5 14l.6 1.4L7 16l-1.4.6L5 18l-.6-1.4L3 16l1.4-.6L5 14z" />
-              </svg>
-              {totalActiveCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 4,
-                  width: 16, height: 16, borderRadius: '50%',
-                  background: completedCount > 0 ? '#22c55e' : '#3b82f6',
-                  color: '#fff', fontSize: 10, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  lineHeight: 1,
-                }}>
-                  {totalActiveCount}
-                </span>
-              )}
-            </button>
-
-            {notifOpen && (
-              <div className="admin-notif-dropdown" style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 8,
-                width: 360, background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-                border: '1px solid #e5e7eb', zIndex: 100, display: 'flex', flexDirection: 'column',
-                maxHeight: 'calc(100vh - 80px)',
-              }}>
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
-                    <div style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'center' }}>
-                      {generatingCount > 0 && (
-                        <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
-                      )}
-                      {queuedCount > 0 && (
-                        <span style={{ color: '#94a3b8', fontWeight: 600 }}>{queuedCount} queued</span>
-                      )}
-                    </div>
-                  </div>
-                  {genNotifications.length > 0 && (
-                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. total</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>${totalQueueCost.toFixed(2)}</span>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          for (const n of genNotifications) {
-                            if (n.status !== 'done') await deleteProductAd(n.id);
-                          }
-                          setGenNotifications([]);
-                          prevIdsRef.current.clear();
-                        }}
-                        style={{
-                          fontSize: 10, fontWeight: 600, color: '#ef4444', background: '#fef2f2',
-                          border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
-                        }}
-                      >
-                        Cancel all
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {genNotifications.length === 0 ? (
-                  <div style={{ padding: '24px 16px', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                    No active generations
-                  </div>
-                ) : (
-                  <div style={{ overflowY: 'auto', padding: '4px 0' }}>
-                    {genNotifications.map(n => (
-                      <div key={n.id} style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid #f5f5f5',
-                        opacity: n.status === 'done' ? 0.7 : 1,
-                        transition: 'opacity 0.3s',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 8 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {n.productName}
-                            </div>
-                            <div style={{ fontSize: 10, color: '#888', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span>{n.productBrand}</span>
-                              <span style={{ color: '#cbd5e1' }}>·</span>
-                              <span style={{ color: '#6366f1', fontWeight: 600 }}>{n.style.replace(/_/g, ' ')}</span>
-                              {n.veoModel && (
-                                <>
-                                  <span style={{ color: '#cbd5e1' }}>·</span>
-                                  <span style={{ color: '#0891b2', fontWeight: 500 }}>{n.veoModel}</span>
-                                </>
-                              )}
-                              <span style={{ color: '#cbd5e1' }}>·</span>
-                              <span style={{ color: n.costUsd != null ? '#0f766e' : '#94a3b8', fontWeight: 600 }}>
-                                {n.costUsd != null ? `$${n.costUsd.toFixed(3)}` : `~$${ESTIMATED_COST_USD.toFixed(2)}`}
-                              </span>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            {n.status === 'queued' && (
-                              <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>Queued</span>
-                            )}
-                            {n.status !== 'done' && (
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const wasActive = n.status === 'generating' || n.status === 'pending';
-                                  await deleteProductAd(n.id);
-                                  setGenNotifications(prev => prev.filter(x => x.id !== n.id));
-                                  prevIdsRef.current.delete(n.id);
-                                  if (wasActive) {
-                                    await promoteQueuedAds();
-                                    pollGenerations();
-                                  }
-                                }}
-                                title="Cancel generation"
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  padding: 4, borderRadius: 4, color: '#999',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <GenProgressBar n={n} onRetry={async () => {
-                          await regenerateAd(n.id);
-                          pollGenerations();
-                        }} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
         <Outlet />
       </main>

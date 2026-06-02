@@ -620,6 +620,10 @@ export default function ProductPage({
   const isDesktop = typeof window !== 'undefined'
     && window.matchMedia('(min-width: 960px)').matches;
   const [showRetailers, setShowRetailers] = useState(isDesktop);
+  // Side-rail back button: hidden at the top (the corner .pd-back is the
+  // expected affordance there), fades in once the user has scrolled past
+  // the hero so the corner button has scrolled off the page. Desktop only.
+  const [showSideBack, setShowSideBack] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Tracked separately so the nested ContinuousFeed re-binds its
   // IntersectionObserver root once the scroller mounts (refs alone
@@ -629,6 +633,31 @@ export default function ProductPage({
     scrollerRef.current = el;
     setScrollerEl(el);
   }, []);
+
+  // Show the side-rail back button once the user has scrolled past the
+  // hero on desktop (the corner .pd-back has scrolled off, so we surface
+  // a vertically-centered affordance on the left edge instead). 220px is
+  // about one card-hero height — small enough to feel responsive, large
+  // enough that opening the page doesn't instantly show both back buttons.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(min-width: 769px)').matches) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setShowSideBack(scroller.scrollTop > 220);
+      });
+    };
+    onScroll();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      scroller.removeEventListener('scroll', onScroll);
+    };
+  }, [scrollerEl]);
 
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
@@ -904,6 +933,19 @@ export default function ProductPage({
           aria-label="Back"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        {/* Side-rail back button — vertically centered on the left edge of
+            the browser, desktop only. Fades + slides in once the user has
+            scrolled past the hero (corner button is off-screen by then). */}
+        <button
+          className={`pd-back-rail${showSideBack ? ' is-visible' : ''}`}
+          onClick={handleClose}
+          aria-label="Back"
+          tabIndex={showSideBack ? 0 : -1}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>

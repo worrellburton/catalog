@@ -50,7 +50,11 @@
   opacity: 0.8;
   pointer-events: none;
 }
-.sfh-scroll-hint { z-index: 1; }
+/* Lift the scroll hint above the negative-margin feed peek (.home-feed-wrap
+   is pulled up under the hero by -3.5svh on mobile / -7vh on desktop). At
+   the default z-index:1 the cards' content stacked over the hint; bumping
+   it to 5 keeps it readable as the cards nose into view. */
+.sfh-scroll-hint { z-index: 5; }
 
 /* Brand spark — AI diamond core + catalog tiles orbiting at the cardinal
    points. On mount the whole mark spins in from -360deg + 0.4 scale; idle
@@ -342,6 +346,27 @@
   transition: width 0.1s linear;
 }
 
+/* Peek-on-landing: the feed wrapper is pulled up under the hero by a
+   small amount ONLY while the hero is showing, so just the very top
+   edge of the first row's cards noses above the fold under the
+   centered bar. Desktop and mobile use different values because mobile
+   shows the same band as a much larger portion of the screen — what
+   reads as "a fingertip" on a 1440 desktop reads as "half a card" on a
+   390 phone. Hero-scrolled threshold (0.5 × innerHeight) still only
+   fires on a real scroll. Done with margin-top on the feed wrapper
+   (not by shrinking the hero box), so the spark + headline + bar trio
+   keeps its centered geometry intact. */
+.app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+  margin-top: -7vh;
+}
+@media (max-width: 768px) {
+  /* Mobile: tighter peek so the cards just nose into view + the scroll
+     hint stays visible above them. */
+  .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+    margin-top: -3.5svh;
+  }
+}
+
 /* Results reveal — classic chatbot answer: once the ceremony bows out the
    catalog rises up into position from below the fold (bottom → top) and
    settles, the way a chat response scrolls into view. A soft blur-to-sharp
@@ -518,9 +543,13 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    /* Hero takes essentially the full viewport so the feed begins well
-       below the fold. Only a thin sliver of the first row peeks at the
-       bottom edge, hinting that scrolling reveals more. */
+    /* Mobile: full svh so the spark/headline/search-bar trio keeps its
+       known-good vertical math (justify-content:flex-end + padding-bottom
+       42vh + fixed bar at bottom:32vh). The "feed peek" is produced by a
+       negative margin-top on .home-results-reveal below — that pulls the
+       feed up by ~14svh independent of the hero's internal layout, so the
+       trio stays centered. (Shrinking .sfh itself moved the headline up
+       while the fixed bar held its viewport position, opening a gap.) */
     min-height: 100svh;
     /* flex-end anchors spark+headline to the inner-area bottom. We need
        padding-bottom > (100% − bar_top_position) so the stage cannot
@@ -646,11 +675,10 @@
      above it, so logo + headline + bar read as ONE vertically-centered
      cluster — same treatment as mobile. */
   .sfh {
-    /* Full viewport on desktop (matches the Gemini-style reference: clean
-       centered screen, feed appears only on scroll). 90vh let the page
-       scroll a hair on load, which could flip hero-scrolled → the bar
-       dropped to the bottom while the headline stayed centered. Full
-       height keeps scrollY pinned at 0 so the centered state holds. */
+    /* Desktop: full viewport. Same reason as mobile — the centered trio's
+       math depends on the hero being a full viewport tall, and the feed
+       "peek" is produced by a negative margin-top on .home-results-reveal
+       below (independent of this box's height). */
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
@@ -805,7 +833,11 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  /* Master opacity for the entire particle layer. 1.0 lets the per-particle
+     pulse and the PARTICLE_INTENSITY knob in services do the brightness work
+     instead of capping them here. Was 0.85 — bumped now that the field is
+     deliberately more intense. */
+  opacity: 1;
 }
 .site-particle-host .pw-particles {
   position: absolute;

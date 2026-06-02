@@ -1160,7 +1160,7 @@ export default function Home() {
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
-          <div className={revealResults ? 'home-results-reveal' : undefined}>
+          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}`}>
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}

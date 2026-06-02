@@ -283,6 +283,16 @@ export default function CreatorWallet({ onProfileChange }: Props) {
                 is exclusively the hero. Pressing it expands the
                 insights panel AND scrolls it into view. */}
             <div className="wallet-hero">
+              {/* Concentric green rings, anchored to the hero box so they're
+                  guaranteed centered on the $ amount (the prior version
+                  hardcoded 28vh from the page top and detached on layout
+                  shifts). Six rings, hairline-thin (0.5px border), each
+                  with a brighter arc that sweeps via a conic-gradient mask. */}
+              <div className="wallet-hero-rings" aria-hidden="true">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <span key={i} className="wallet-hero-ring" />
+                ))}
+              </div>
               <div className="wallet-hero-glow" aria-hidden />
               <div className="wallet-hero-label">Total Earned</div>
               <div className="wallet-hero-amount">${totalEarning.toFixed(2)}</div>
