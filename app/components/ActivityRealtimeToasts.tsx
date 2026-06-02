@@ -79,6 +79,11 @@ function pushSummary(
   count: number,
 ) {
   if (count <= 0) return;
+  // Mirror every push to the shared activity bus so HeaderActivityPill
+  // (mobile-only indicator left of the wallet) bumps its unseen count.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('catalog:activity-bump', { detail: { count } }));
+  }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   setToasts(prev => {
     const merged: ActivityToast[] = [...prev, { id, kind, count }];
@@ -132,6 +137,13 @@ export default function ActivityRealtimeToasts() {
 
   const pushToast = useCallback((kind: ActivityKind, message: string, lifespanMs = TOAST_LIFESPAN_MS) => {
     if (!message) return;
+    // Bump the shared activity bus so HeaderActivityPill (mobile) ticks
+    // even when the desktop toast stack is invisible. Per-event pushes
+    // always count as +1; summary toasts pass their own count via
+    // pushSummary (see top of file).
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('catalog:activity-bump', { detail: { count: 1 } }));
+    }
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setToasts(prev => {
       const merged = [...prev, { id, kind, message }];

@@ -154,11 +154,13 @@
   .activity-toast, .activity-toast-count { animation: none; }
 }
 
-@media (max-width: 640px) {
-  .activity-toasts { top: 68px; max-width: calc(100vw - 16px); }
-  .activity-toast  { font-size: 11px; padding: 6px 12px 6px 7px; }
-  .activity-toast-count { font-size: 13.5px; }
-  .activity-toast-summary-label { font-size: 10.5px; }
+@media (max-width: 768px) {
+  /* Mobile: hide the centered toast stack entirely. The new
+     HeaderActivityPill (mobile-only, lives next to the wallet pill) is
+     the activity surface on phones. The realtime/catch-up pipeline still
+     runs and dispatches `catalog:activity-bump` so the pill's unseen
+     count ticks; the toasts just never render. */
+  .activity-toasts { display: none !important; }
 }
 
 /* Flutter shell — the native header overlaps the top zone, so nudge
