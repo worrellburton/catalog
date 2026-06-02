@@ -342,17 +342,17 @@
   transition: width 0.1s linear;
 }
 
-/* Peek-on-landing: the feed wrapper is pulled up under the hero by ~14vh
-   ONLY while the hero is showing, so a thin band of the first grid row
-   noses above the fold beneath the centered bar. That tease is the scroll
-   signal — strong enough to invite swipe-down, small enough that the
-   hero-scrolled threshold (0.5 × innerHeight) still only fires on a real
-   scroll. Done with margin-top on the feed wrapper (not by shrinking the
-   hero box), so the spark + headline + bar trio keeps its centered
-   geometry intact. Once the user scrolls, the negative margin is gone so
-   the feed re-anchors normally and there's no jump. */
+/* Peek-on-landing: the feed wrapper is pulled up under the hero by ~7vh
+   ONLY while the hero is showing, so just the very top edge of the first
+   row's cards noses above the fold under the centered bar. -14vh exposed
+   most of a card (too loud — it competed with the headline); -7vh shows
+   maybe a fingertip of each tile, which reads as a "there's more below"
+   hint without pulling attention. Hero-scrolled threshold (0.5 ×
+   innerHeight) still only fires on a real scroll. Done with margin-top
+   on the feed wrapper (not by shrinking the hero box), so the spark +
+   headline + bar trio keeps its centered geometry intact. */
 .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-  margin-top: -14vh;
+  margin-top: -7vh;
 }
 
 /* Results reveal — classic chatbot answer: once the ceremony bows out the
