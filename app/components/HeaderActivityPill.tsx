@@ -1,35 +1,32 @@
 // Compact activity indicator that lives in the home header on mobile, to
-// the LEFT of HeaderWalletPill. Replaces the centered top-of-screen toast
-// stack on small screens — the floating toasts read as junk on a phone
-// where vertical space is at a premium and the bar already obscures the
-// "Catalog" wordmark briefly on every event.
+// the RIGHT of HeaderWalletPill. Replaces the centered top-of-screen
+// toast stack on small screens — the floating toasts read as junk on a
+// phone where vertical space is at a premium and the bar briefly
+// obscures the "Catalog" wordmark on every event.
 //
-// On click: opens the wallet (which hosts the activity feed at /earnings,
-// same destination the toasts navigated to). On desktop the toasts still
-// surface in the centered stack via ActivityRealtimeToasts; this pill is
-// hidden via CSS (`@media (min-width: 769px)`).
+// On click: routes to /activity (the dedicated activity screen with
+// creator stats + shopper self-feedback). Was previously navigating to
+// the wallet; activity now has its own dedicated surface.
 //
 // Source of truth for "is there activity" is the same realtime + catch-up
 // pipeline ActivityRealtimeToasts already runs — we just subscribe to a
 // shared bus event ('catalog:activity-bump') so we don't double-poll.
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 
-interface HeaderActivityPillProps {
-  onOpenWallet: () => void;
-}
-
-export default function HeaderActivityPill({ onOpenWallet }: HeaderActivityPillProps) {
+export default function HeaderActivityPill() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [unseen, setUnseen] = useState(0);
   const [hasPulse, setHasPulse] = useState(false);
 
   // The realtime/catch-up pipeline dispatches `catalog:activity-bump` on
   // every detected event. We tally an unseen count locally; tapping the
-  // pill resets it (and opens the wallet so the user sees the activity
-  // tab). Persisted across reloads so a fresh page doesn't lose the
-  // unseen count from a notification that arrived a moment ago.
+  // pill resets it and routes to /activity. Persisted across reloads so
+  // a fresh page doesn't lose the unseen count from a notification that
+  // arrived a moment ago.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -56,7 +53,7 @@ export default function HeaderActivityPill({ onOpenWallet }: HeaderActivityPillP
   const handleClick = () => {
     setUnseen(0);
     try { window.localStorage.setItem('catalog:activity-unseen:v1', '0'); } catch { /* quota */ }
-    onOpenWallet();
+    navigate('/activity');
   };
 
   return (
