@@ -16,6 +16,7 @@
 // entry point. With anything active it pulses + shows a count badge.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from '@remix-run/react';
 import {
   listGenerationJobs,
   subscribeGenerationQueue,
@@ -65,16 +66,20 @@ function genJobToItem(j: GenerationJob): QueueItem {
   };
 }
 
-// Admin-only surface. Shoppers don't have any reason to see a generation
-// queue floating in their feed — the polling + product_creative + scrape
-// subscriptions also need admin-level read permissions to return anything
-// meaningful, so gating at the wrapper avoids unnecessary subscriptions on
-// the consumer hot path entirely (the inner component never mounts).
+// Admin-route only. The queue is the right surface for admin pages
+// (gen jobs, scrapes, creative pipeline) but it visually intrudes on
+// the consumer feed even when the viewer happens to be signed in as an
+// admin — admins shop too. Gate by route, not just role, so the same
+// admin sees the queue on /admin/* and a clean consumer landing on /.
+// Pages outside /admin (including super-admin's view of /) never even
+// mount the inner host, so no subscriptions / polling fire there.
 export default function GenerationQueueHost() {
   const { user } = useAuth();
+  const location = useLocation();
   const role = user?.role;
   const isAdmin = role === 'admin' || role === 'super_admin';
-  if (!isAdmin) return null;
+  const onAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/');
+  if (!isAdmin || !onAdminRoute) return null;
   return <AdminGenerationQueueHost />;
 }
 
