@@ -721,63 +721,21 @@
     scrollbar-width: none;
     padding: 2px 16px;
     box-sizing: border-box;
-    /* Elegant wipe-fade reveal. A subtle left→right "wipe" using a
-       linear-gradient mask reveals the rail over a long, slow envelope,
-       paired with a gentle opacity fade + the smallest hint of upward
-       motion. 10s end-to-end, ease-in-out at both ends.
-       The trick: animate the mask's --wipe variable (registered with
-       @property so it's interpolatable) from -25% → 125%, with a soft
-       transparent-to-opaque gradient that's at the wipe position.
-       Anything past --wipe is fully visible; anything before fades to
-       transparent — so the rail materialises from the left edge in a
-       single slow sweep instead of arcing.
-       At-rest CSS already shows the rail fully visible (no mask, full
-       opacity), and we use `forwards` so a missed animation can't
-       orphan the rail in an invisible state. */
-    transform: translate(0, 0);
+    /* Quick fade-in. The wipe / arc / per-story bloom variants all came
+       and went; the user landed on "just fade in quickly". 450ms
+       opacity-only transition, no transform. At-rest CSS = end state +
+       `forwards` fill, so a missed animation can't leave the rail
+       invisible. */
     opacity: 1;
-    animation: follow-stories-wipe-in 10000ms cubic-bezier(0.42, 0, 0.58, 1) forwards;
-    will-change: transform, opacity, --wipe;
+    animation: follow-stories-fade-in 450ms ease-out forwards;
   }
   .follow-stories-rail::-webkit-scrollbar { display: none; }
 }
-@property --wipe {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 125%;
-}
-@keyframes follow-stories-wipe-in {
-  /* The mask itself: a 30%-wide soft transparent-to-opaque gradient
-     centered on --wipe%. At --wipe: -25%, the whole rail is past the
-     opaque side → invisible. At --wipe: 125%, the whole rail is past
-     the transparent side → fully visible. We animate --wipe across
-     that range slowly so the rail materialises from the LEFT in one
-     gentle sweep. The opacity fade + 6px upward motion run on top. */
-  0% {
-    --wipe: -25%;
-    opacity: 0;
-    transform: translate(0, 6px);
-    -webkit-mask: linear-gradient(to right,
-      transparent calc(var(--wipe) - 8%),
-      #000        calc(var(--wipe) + 22%));
-            mask: linear-gradient(to right,
-      transparent calc(var(--wipe) - 8%),
-      #000        calc(var(--wipe) + 22%));
-  }
-  100% {
-    --wipe: 125%;
-    opacity: 1;
-    transform: translate(0, 0);
-    -webkit-mask: linear-gradient(to right,
-      transparent calc(var(--wipe) - 8%),
-      #000        calc(var(--wipe) + 22%));
-            mask: linear-gradient(to right,
-      transparent calc(var(--wipe) - 8%),
-      #000        calc(var(--wipe) + 22%));
-  }
+@keyframes follow-stories-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  /* Skip the wipe — base CSS is already the end state. */
   .follow-stories-rail { animation: none; }
 }
 @media (prefers-reduced-motion: reduce) {
