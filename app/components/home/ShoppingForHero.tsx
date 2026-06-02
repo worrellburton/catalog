@@ -37,22 +37,9 @@ const BASELINE_HEADLINE: Headline = { line1: 'What are you', line2: 'shopping fo
 //     the source is implicit; we don't credit explicitly anymore
 //     because the caption competed with the headline.
 const FUN_HEADLINES: ReadonlyArray<Headline> = [
-  // Song lyrics — italic, 🎵 prefix on line 1.
+  // The ONE musical headline — Spice Girls. All other lyric variants
+  // were dropped per the latest direction; one lyric is enough flavor.
   { lyric: true, line1: '🎵 Tell me what you want,',     line2: 'what you really really want.' },
-  { lyric: true, line1: '🎵 I want it that way,',        line2: 'tell me, baby.' },
-  { lyric: true, line1: '🎵 Material girl in a',         line2: 'material world.' },
-  { lyric: true, line1: '🎵 Started from the bottom,',   line2: "now we're scrolling." },
-  { lyric: true, line1: "🎵 Don't stop believin'",       line2: 'in a good fit.' },
-  { lyric: true, line1: '🎵 Hit me, baby,',              line2: 'one more time.' },
-  { lyric: true, line1: "🎵 I'm bringing sexy",          line2: 'back.' },
-  { lyric: true, line1: '🎵 Just a small-town girl,',    line2: 'big-time taste.' },
-  { lyric: true, line1: '🎵 Money, money, money,',       line2: 'must be funny.' },
-  { lyric: true, line1: '🎵 Beat it,',                   line2: 'just shop it.' },
-  { lyric: true, line1: '🎵 Sweet dreams are',           line2: 'made of this.' },
-  { lyric: true, line1: '🎵 Single ladies,',             line2: 'all the single fits.' },
-  { lyric: true, line1: '🎵 Like a virgin,',             line2: 'shopping for the first time.' },
-  { lyric: true, line1: '🎵 California knows',           line2: 'how to dress.' },
-  { lyric: true, line1: '🎵 I will always love',         line2: 'a clean white tee.' },
 
   // Plain prompts — playful, no italic.
   { line1: 'What sparks joy',         line2: 'today?' },
@@ -103,6 +90,43 @@ const FUN_HEADLINES: ReadonlyArray<Headline> = [
   { line1: 'Imagine it.',             line2: "We'll catalog it." },
   { line1: 'Be specific.',            line2: 'Be wild.' },
   { line1: 'No bad ideas.',           line2: "What's the idea?" },
+
+  // 30 NEW plain headlines — same shape, same playful tone, no lyrics.
+  // Conversational / cheeky.
+  { line1: "What's the mood,",        line2: "what's the move?" },
+  { line1: 'Surprise us.',            line2: 'What is it?' },
+  { line1: 'Dare us.',                line2: 'What do you want?' },
+  { line1: 'We can read minds.',      line2: 'Just kidding.' },
+  { line1: 'Pretend money',           line2: 'is no object.' },
+  { line1: 'What would Future You',   line2: 'want today?' },
+  { line1: 'Best version of you',     line2: 'wears what?' },
+  { line1: 'No wrong answers.',       line2: 'Type away.' },
+  { line1: 'Tell us nothing,',        line2: 'get nothing.' },
+  { line1: 'Lay it on us.',           line2: "What's the ask?" },
+
+  // Mood / aspirational.
+  { line1: 'Effortless, but',         line2: 'on purpose.' },
+  { line1: 'Investment piece',        line2: 'energy.' },
+  { line1: 'Closet upgrade',          line2: 'incoming.' },
+  { line1: 'The perfect basic',       line2: 'awaits.' },
+  { line1: 'Less, but better.',       line2: 'What is it?' },
+  { line1: 'One great thing,',        line2: 'today.' },
+  { line1: 'Statement piece,',        line2: 'inbound.' },
+  { line1: 'Confidence in',           line2: 'fabric form.' },
+  { line1: 'Wardrobe stage left,',    line2: 'new fit enter.' },
+  { line1: 'Wear it like',            line2: 'you mean it.' },
+
+  // Occasion / context.
+  { line1: 'Heading out?',            line2: 'Heading in?' },
+  { line1: 'First impression',        line2: 'kind of day?' },
+  { line1: 'Comfortable,',            line2: 'but cute?' },
+  { line1: 'Concert fit,',            line2: 'coffee fit?' },
+  { line1: 'Dinner, drinks,',         line2: 'or dance?' },
+  { line1: 'New city,',               line2: 'new fit?' },
+  { line1: 'Going viral,',            line2: 'dressing for it.' },
+  { line1: 'Closet refresh',          line2: "o'clock." },
+  { line1: 'The vibe is yours.',      line2: 'Set it.' },
+  { line1: 'Bookmark-worthy',         line2: 'shopping.' },
 ];
 
 function readVisitCount(): number {
