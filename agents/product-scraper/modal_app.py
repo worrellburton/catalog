@@ -34,14 +34,24 @@ scraper_image = (
     .pip_install(
         "anthropic>=0.39.0",
         "playwright>=1.48.0",
-        "playwright-stealth>=2.0.0",
+        # Patchright: drop-in patched Playwright used on the bot-blocked retry.
+        # Beats Akamai/Cloudflare fingerprinting that playwright-stealth misses.
+        "patchright>=1.0.0",
         "supabase>=2.10.0",
         "python-dotenv>=1.0.0",
         "fastapi[standard]>=0.115.0",
         "requests>=2.31.0",
     )
-    .run_commands("playwright install chromium --with-deps")
+    .run_commands(
+        "playwright install chromium --with-deps",
+        # Patchright ships its own patched Chromium build — install it too.
+        "patchright install chromium",
+    )
     .add_local_file("agent.py", "/root/agent.py")
+    # Rotating residential proxy pool (Webshare). Used by agent.py to retry
+    # behind a fresh residential IP after a SITE_BLOCKED (Akamai/Cloudflare).
+    # gitignored — baked into the image at deploy time from the local file.
+    .add_local_file("residential-proxies.txt", "/root/residential-proxies.txt")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────

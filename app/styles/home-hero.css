@@ -13,9 +13,13 @@
   flex-direction: column;
   /* Translucent matte gradient so the SiteParticleHost canvas (z-index 0,
      mounted behind the hero) bleeds through — this is how the hero shares
-     the ONE continuous particle world. Fully-opaque stops would hide it. */
+     the ONE continuous particle world. The outer stop is kept well under
+     full opacity: on the wide desktop viewport most of the hero IS the
+     outer band, so a near-opaque edge (the old 0.9) hid the whole field
+     there. These lower alphas let the silver drift read across the entire
+     landing while still tinting the matte black enough for white text. */
   background:
-    radial-gradient(120% 90% at 50% 14%, rgba(21, 22, 28, 0.55) 0%, rgba(10, 10, 12, 0.78) 52%, rgba(0, 0, 0, 0.9) 100%);
+    radial-gradient(125% 95% at 50% 26%, rgba(20, 21, 27, 0.36) 0%, rgba(10, 10, 13, 0.62) 52%, rgba(0, 0, 0, 0.8) 100%);
   /* The fixed header (logo / wallet / avatar) owns the top, and the fixed
      search bar floats at 46vh-from-bottom. Pad past both — top clears the
      header, bottom reserves the bar's zone — so the spark + headline
@@ -660,17 +664,22 @@
   }
 
   /* THE desktop search bar is TypeAnywhere's .ai-bar-wrap (the bottom-bar is
-     display:none on desktop). Center it with the headline whenever the hero
-     is showing; glide it back to the bottom only once the shopper actually
-     scrolls into the feed (.hero-scrolled). Using the positive
-     .hero-scrolled selector for the drop (not :not(.hero-scrolled) for the
-     centered state) means the centered position is the default and can't be
-     defeated by a transient hero-scrolled flicker. */
-  .app-root.home-hero .ai-bar-wrap {
+     display:none on desktop). It's mounted in root.tsx OUTSIDE .app-root — a
+     SIBLING of .app-root under <body> — so `.app-root.home-hero .ai-bar-wrap`
+     can NEVER match (the bar isn't a descendant of .app-root). Target it from
+     the shared <body> ancestor with :has() instead.
+
+     Center it with the headline whenever the hero is showing; glide it back
+     to the bottom only once the shopper actually scrolls into the feed
+     (.hero-scrolled). Using the positive .hero-scrolled selector for the drop
+     (not :not(.hero-scrolled) for the centered state) means the centered
+     position is the default and can't be defeated by a transient
+     hero-scrolled flicker. The `bottom` transition is declared globally on
+     .ai-bar-wrap below so the dock glides smoothly. */
+  body:has(.app-root.home-hero) .ai-bar-wrap {
     bottom: 44vh;
-    transition: bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .app-root.home-hero.hero-scrolled .ai-bar-wrap {
+  body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap {
     bottom: max(env(safe-area-inset-bottom), 24px);
   }
 
@@ -735,20 +744,30 @@ html:has(.user-menu-page) .bottom-bar {
    set by the scroll-direction effect in _index.tsx; cleared near the top
    of the page so the chrome always reappears when you've scrolled back. */
 .app-root header,
-.app-root .bottom-bar,
-.app-root .ai-bar-wrap {
+.app-root .bottom-bar {
   transition:
     transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
     opacity   0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
-/* will-change only on the bottom bars — NOT the header. will-change:
+/* will-change only on the bottom bar — NOT the header. will-change:
    transform makes an element a containing block for fixed-position
    descendants, and the mobile Account page (position:fixed) is rendered
    INSIDE the header; with will-change on the header it positioned relative
    to the 60px header box instead of the viewport — the menu looked broken.
    The header still animates via the transition above. */
-.app-root .bottom-bar,
-.app-root .ai-bar-wrap {
+.app-root .bottom-bar {
+  will-change: transform;
+}
+/* .ai-bar-wrap (desktop search bar) lives OUTSIDE .app-root (root.tsx), so
+   its transition / will-change / hide-state can't hang off .app-root — they
+   have to be declared on the global element and driven from <body> via
+   :has(). The `bottom` transition is what makes the hero→feed dock glide; the
+   transform/opacity transitions drive the scroll-direction chrome auto-hide. */
+.ai-bar-wrap {
+  transition:
+    bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
 .app-root.chrome-hidden header {
@@ -763,7 +782,7 @@ html:has(.user-menu-page) .bottom-bar {
   opacity: 0;
   pointer-events: none;
 }
-.app-root.chrome-hidden .ai-bar-wrap {
+body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   transform: translateY(140%);
   opacity: 0;
   pointer-events: none;

@@ -9,6 +9,7 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
+import { director } from '~/services/video-playback-director';
 import FollowIconButton from './FollowIconButton';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 import { type ProductAd } from '~/services/product-creative';
@@ -303,6 +304,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
   // infinite scroll). ymalGenderFilter is already declared above (before feedSections).
+
+  // While this overlay is open, suspend the home feed's video playback in
+  // the director. The feed stays mounted+blurred behind us; without this it
+  // keeps decoding dozens of clips under the blur layer, forcing the
+  // compositor to re-rasterize the blur every frame. Scope matches the
+  // slotPrefix on our nested "You might also like" feed (`look:<id>`), so
+  // that feed still plays while the background is paused.
+  useEffect(() => {
+    const scope = `look:${look.id}`;
+    director.pushScope(scope);
+    return () => director.popScope(scope);
+  }, [look.id]);
 
   // Trigger enter animation after first paint
   useEffect(() => {

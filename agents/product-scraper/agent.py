@@ -18,6 +18,7 @@ import json
 import base64
 import re
 import os
+import random
 import time
 import argparse
 import urllib.request
@@ -506,9 +507,9 @@ class BrowserSession:
     """Manages a headless Chromium browser via Playwright.
 
     Options:
-        use_stealth: when True, applies playwright-stealth evasions on top of
-            the default fingerprint patches. Used as an automatic fallback
-            after a SITE_BLOCKED first attempt.
+        use_stealth: when True, drives a Patchright-patched Chromium that hides
+            the automation fingerprints Akamai/Cloudflare detect. Used as an
+            automatic fallback after a SITE_BLOCKED first attempt.
         proxy: optional dict {"server": "...", "username": "...", "password": "..."}
             forwarded to chromium.launch(proxy=...). Use a US residential proxy
             for sites that block datacenter IPs (Reiss / Akamai, Amazon, etc.).
@@ -521,9 +522,26 @@ class BrowserSession:
         self.page: Page | None = None
         self.use_stealth = use_stealth
         self.proxy = proxy
+        self._using_patchright = False
 
     def start(self):
-        self._pw = sync_playwright().start()
+        # For the bot-blocked retry (use_stealth=True), drive a Patchright
+        # Chromium instead of vanilla Playwright. Patchright removes the
+        # automation tells Akamai/Cloudflare sensors fingerprint — the CDP
+        # Runtime.enable leak, navigator.webdriver, console.debug hooks — far
+        # more thoroughly than playwright-stealth (which Akamai already
+        # detects). Falls back to vanilla Chromium if patchright isn't present.
+        sync_pw = sync_playwright
+        self._using_patchright = False
+        if self.use_stealth:
+            try:
+                from patchright.sync_api import sync_playwright as _patchright_sync  # type: ignore
+                sync_pw = _patchright_sync
+                self._using_patchright = True
+                print("  🛡️  using Patchright stealth browser")
+            except ImportError:
+                print("  ⚠️  use_stealth=True but patchright is not installed; using vanilla Chromium")
+        self._pw = sync_pw().start()
         launch_kwargs = dict(
             headless=True,
             args=[
@@ -575,30 +593,17 @@ class BrowserSession:
             {"name": "i18n_redirected", "value": "en-us", "domain": ".adidas.com", "path": "/"},
         ])
         self.page = self.context.new_page()
-        # Hide webdriver fingerprint to reduce bot-detection false positives
-        self.page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            window.chrome = { runtime: {} };
-        """)
-        # Optional: layer playwright-stealth evasions for the retry attempt.
-        # Imported lazily so the package is only required when actually used.
-        if self.use_stealth:
-            try:
-                # playwright-stealth v2 uses Stealth().apply_stealth_sync(page)
-                # v1 used stealth_sync(page) -- handle both for compatibility.
-                try:
-                    from playwright_stealth import Stealth  # type: ignore
-                    Stealth().apply_stealth_sync(self.page)
-                except (ImportError, AttributeError):
-                    from playwright_stealth import stealth_sync  # type: ignore
-                    stealth_sync(self.page)
-                print("  🥷 playwright-stealth applied")
-            except ImportError:
-                print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
-            except Exception as e:
-                print(f"  ⚠️  stealth apply failed: {e}")
+        # Patchright patches navigator.webdriver / plugins / chrome natively and
+        # consistently; layering our own init-script overrides on top would
+        # create the kind of property inconsistencies Akamai's sensor flags. So
+        # only apply the manual fingerprint shim on the vanilla-Chromium path.
+        if not self._using_patchright:
+            self.page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                window.chrome = { runtime: {} };
+            """)
 
     def stop(self):
         if self.browser:
@@ -1503,6 +1508,64 @@ def _proxy_from_env() -> dict | None:
     return proxy
 
 
+# Path to the rotating residential proxy list (one "host:port:username:password"
+# entry per line). Baked into the Modal image at /root; override via env for
+# local runs. Each line is a distinct residential exit IP, so picking a random
+# line per attempt rotates the IP and defeats IP-based bot walls (Akamai etc.).
+_PROXY_LIST_PATH = os.environ.get(
+    "SCRAPER_PROXY_LIST",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "residential-proxies.txt"),
+)
+
+_proxy_pool_cache: list[dict] | None = None
+
+
+def _load_proxy_pool() -> list[dict]:
+    """Parse the residential proxy list into Playwright proxy dicts.
+
+    Each line ``host:port:username:password`` → ``{"server": "http://host:port",
+    "username": ..., "password": ...}``. Lines that are blank, commented (#),
+    or malformed are skipped. The result is cached for the life of the process.
+    Returns an empty list if the file is missing (callers fall back to
+    ``_proxy_from_env``).
+    """
+    global _proxy_pool_cache
+    if _proxy_pool_cache is not None:
+        return _proxy_pool_cache
+    pool: list[dict] = []
+    try:
+        with open(_PROXY_LIST_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(":")
+                if len(parts) < 2:
+                    continue
+                host, port = parts[0], parts[1]
+                entry = {"server": f"http://{host}:{port}"}
+                if len(parts) >= 4 and parts[2]:
+                    entry["username"] = parts[2]
+                    entry["password"] = parts[3]
+                pool.append(entry)
+    except FileNotFoundError:
+        pool = []
+    _proxy_pool_cache = pool
+    if pool:
+        print(f"🌐 Loaded {len(pool)} residential proxies from {_PROXY_LIST_PATH}")
+    return pool
+
+
+def _random_proxy() -> dict | None:
+    """Pick a random residential proxy from the rotating pool. Falls back to the
+    single ``SCRAPER_PROXY_SERVER`` env var, then None if neither is configured.
+    """
+    pool = _load_proxy_pool()
+    if pool:
+        return random.choice(pool)
+    return _proxy_from_env()
+
+
 def run_agent(
     product_url: str,
     look_id: str | None = None,
@@ -1526,17 +1589,31 @@ def run_agent(
     except RuntimeError as e:
         if "SITE_BLOCKED" not in str(e).upper():
             raise
-        proxy = _proxy_from_env()
-        # Always retry with stealth; proxy only if configured. If neither
-        # gives us anything new (no proxy AND stealth not installed) we'd
-        # just fail the same way -- but stealth alone often clears
-        # Cloudflare/Akamai checks, so it's worth the attempt.
-        print(f"\n🔁 First attempt blocked ({e}); retrying with stealth"
-              f"{' + proxy' if proxy else ''}…\n")
-        return _run_agent_attempt(
-            product_url, look_id=look_id, save=save, on_save=on_save,
-            use_stealth=True, proxy=proxy,
-        )
+        # The direct attempt was blocked (Akamai/Cloudflare/etc). Retry with
+        # stealth + a residential proxy. A single residential exit IP can itself
+        # be flaky or already rate-limited, so when a rotating pool is available
+        # we cycle through up to 3 distinct exit IPs before giving up. Without a
+        # pool we still try stealth once (often clears soft Cloudflare checks).
+        pool = _load_proxy_pool()
+        max_retries = 3 if pool else 1
+        last_err: Exception = e
+        for i in range(max_retries):
+            proxy = _random_proxy()
+            label = (proxy.get("username") or proxy.get("server")) if proxy else "stealth-only"
+            print(f"\n🔁 First attempt blocked ({e}); proxied retry "
+                  f"{i + 1}/{max_retries} via {label}…\n")
+            try:
+                return _run_agent_attempt(
+                    product_url, look_id=look_id, save=save, on_save=on_save,
+                    use_stealth=True, proxy=proxy,
+                )
+            except RuntimeError as retry_err:
+                if "SITE_BLOCKED" not in str(retry_err).upper():
+                    raise
+                last_err = retry_err
+                if not proxy:
+                    break  # nothing left to rotate; further stealth retries won't help
+        raise last_err
 
 
 def _run_agent_attempt(

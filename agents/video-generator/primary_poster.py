@@ -16,9 +16,16 @@ Single source of truth for both callers:
 """
 from __future__ import annotations
 
+import urllib.request
+
 from asset_encoder import encode_assets_from_url, cleanup
 
 BUCKET = "look-media"
+# Feed render params — MUST match app/utils/supabase-image.ts withTransform
+# as called in CreativeCardV2 (width 540, quality 72, resize cover). We warm
+# this exact URL so the first feed view is a CDN HIT, not a 2-6s cold
+# on-demand transform (which left the grid dark on reload).
+POSTER_RENDER_QUERY = "width=540&quality=72&resize=cover"
 # One poster per product, keyed by id. Primary videos live on fal's CDN
 # (external URL) so we can't mirror their storage path — the product id is
 # stable and unambiguous.
@@ -31,6 +38,29 @@ def poster_storage_key(product_id: str) -> str:
 
 def public_url_for(supabase_url: str, key: str, bucket: str = BUCKET) -> str:
     return f"{supabase_url}/storage/v1/object/public/{bucket}/{key}"
+
+
+def render_url_for(object_public_url: str) -> str:
+    """The transform URL the feed actually requests — object/public →
+    render/image/public with the feed's render params appended."""
+    base = object_public_url.replace(
+        "/storage/v1/object/public/", "/storage/v1/render/image/public/", 1
+    )
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}{POSTER_RENDER_QUERY}"
+
+
+def warm_poster_cache(object_public_url: str, timeout: float = 30.0) -> bool:
+    """GET the transformed poster once so the CDN caches it before the first
+    shopper hits the feed. Best-effort: returns True on a 2xx, False on any
+    failure (never raises — a cold poster is a perf hit, not a correctness
+    bug)."""
+    try:
+        req = urllib.request.Request(render_url_for(object_public_url), method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except Exception:
+        return False
 
 
 def generate_primary_poster(
@@ -71,6 +101,9 @@ def generate_primary_poster(
         supabase.table("products").update(
             {"primary_video_poster_url": poster_url}
         ).eq("id", product_id).execute()
+        # Pre-warm the CDN so the first feed render is a HIT, not a cold
+        # 2-6s on-demand transform. Best-effort — never blocks the write.
+        warm_poster_cache(poster_url)
         return poster_url
     finally:
         cleanup(assets)
