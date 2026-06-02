@@ -604,8 +604,16 @@
   position: fixed;
   inset: 0;
   z-index: 9100;
+  /* TRANSLUCENT matte gradient so the singleton SiteParticleHost
+     (mounted at z-index 0 on the app root) bleeds through. Each rgba
+     stop intentionally < 1 so the particles are visible across the
+     entire page even where the gradient is darkest. The previous
+     opaque #0a0a0c base hid them entirely. */
   background:
-    radial-gradient(110% 80% at 50% 14%, #15161c 0%, #0a0a0c 56%, #000 100%);
+    radial-gradient(125% 95% at 50% 18%,
+      rgba(20, 21, 27, 0.55) 0%,
+      rgba(10, 10, 13, 0.78) 56%,
+      rgba(0, 0, 0, 0.88) 100%);
   color: #f5f5f7;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -671,14 +679,19 @@
   color: #f5f5f7;
 }
 
-/* Body — staggered content reveal. Clean iOS-Settings-style list: no
-   per-row card chrome, just hairline dividers between rows. */
+/* Body — staggered content reveal. Each row is now a FLOATING GLASS
+   CAPSULE separated from its siblings by whitespace (no dividers, no
+   borders between sections). Smaller centered type, gap between cards
+   does the grouping work the dividers used to. */
 .user-menu-page-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 4px 20px 28px;
+  gap: 10px;
+  padding: 8px 20px 28px;
+  max-width: 480px;
+  align-self: center;
+  width: 100%;
 }
 .user-menu-page-body > * {
   animation: ump-item-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -698,17 +711,19 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Hero row — big avatar (its own tap target, opens the upload picker) +
-   name/email/role identity button (separate tap target, opens Profile).
-   No card chrome, just a hairline divider under the row. */
+/* Hero — big avatar + identity stacked CENTERED. No divider; the gap to
+   the first capsule below does the visual separation. The whole block
+   reads as a single brand moment at the top of the page. */
 .user-menu-page-hero {
   width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 14px 4px 22px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: center;
+  gap: 12px;
+  padding: 18px 4px 6px;
+  border: none;
+  text-align: center;
 }
 .user-menu-page-hero .avatar-upload-trigger {
   width: 64px; height: 64px;
@@ -717,20 +732,24 @@
   font-size: 26px;
 }
 .user-menu-page-identity-btn {
-  flex: 1;
-  min-width: 0;
+  /* Centered identity stack under the avatar (column-flow on the hero
+     now). The chevron is suppressed since the whole hero IS the tap
+     target and we don't need an inline disclosure. */
+  width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   background: transparent;
   border: none;
   padding: 0;
   color: inherit;
-  text-align: left;
+  text-align: center;
   font-family: inherit;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
+.user-menu-page-identity-btn .user-menu-page-hero-chev { display: none; }
 .user-menu-page-identity-btn:active { opacity: 0.7; }
 .user-menu-page-avatar-wrap {
   position: relative;
@@ -749,58 +768,100 @@
 .user-menu-page-identity {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  flex: 1;
+  align-items: center;
+  gap: 2px;
 }
-.user-menu-page-name { font-size: 17px; font-weight: 600; color: #f5f5f7; }
-.user-menu-page-email { font-size: 13px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Smaller, centered, generous letter-spacing for the brand moment. */
+.user-menu-page-name { font-size: 15px; font-weight: 600; color: #f5f5f7; letter-spacing: -0.005em; }
+.user-menu-page-email { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 .user-menu-page-hero-chev { color: rgba(255, 255, 255, 0.5); flex-shrink: 0; }
 
-/* Primary CTAs (Try it on / Style) — same list-row layout as everything
-   else, just a yellow accent on icon + label so they read as the
-   featured rows without breaking the unified list. */
-.user-menu-page-cta {
+/* Floating glass capsule — shared geometry for every actionable row
+   on the Account page (Try it on / Style / Bookmarks / My Catalog /
+   Shopping for / Invite / Log out / super-admin entry). No dividers
+   between rows; whitespace + the capsule's own border do the work.
+   The label is CENTERED — the icon sits absolute-left and the chevron
+   absolute-right so the label can truly center independently of either
+   one's width. */
+.user-menu-page-cta,
+.user-menu-page-row {
   position: relative;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: #fde68a;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.user-menu-page-cta:active { opacity: 0.7; }
-.user-menu-page-cta-chev { margin-left: auto; opacity: 0.55; color: rgba(255, 255, 255, 0.45); }
-
-/* List row — clean settings-style row, no card, hairline divider. */
-.user-menu-page-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 50px;
+  /* Capsule with a soft glass surface — top→bottom highlight so each
+     row reads as a small object sitting on the matte black, not
+     embedded in a list. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   color: #f5f5f7;
   font-family: inherit;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.user-menu-page-row:last-child { border-bottom: none; }
-.user-menu-page-row:active { opacity: 0.7; }
+.user-menu-page-cta:hover,
+.user-menu-page-row:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.user-menu-page-cta:active,
+.user-menu-page-row:active { transform: scale(0.985); }
+
+/* Icon docks LEFT — absolute so it doesn't push the centered label. */
+.user-menu-page-cta > svg:first-of-type,
+.user-menu-page-row .user-menu-page-row-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
+}
+.user-menu-page-row .user-menu-page-row-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.user-menu-page-row .user-menu-page-row-label {
+  text-align: center;
+}
+
+/* Chevron docks RIGHT — same absolute trick. */
+.user-menu-page-cta-chev,
+.user-menu-page-row-chev {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Featured CTA accent — Try it on / Style stay yellow on icon + label
+   so they read as the headline rows without breaking the unified
+   capsule treatment. */
+.user-menu-page-cta {
+  color: #fde68a;
+}
+.user-menu-page-cta > svg:first-of-type {
+  color: #fde68a;
+}
+
 .user-menu-page-row.is-danger { color: #fca5a5; }
+.user-menu-page-row.is-danger .user-menu-page-row-icon { color: #fca5a5; }
 .user-menu-page-row-icon {
   flex-shrink: 0;
   width: 22px;
@@ -866,22 +927,26 @@
    sub-section (Import / Admin / Decks / Delete mode), with the page
    back-chevron returning here. */
 .user-menu-page-super-entry {
-  margin-top: 24px;
+  /* Centered tiny pill at the bottom, distinct from the consumer
+     capsules so it reads as a separate utility. Subtle, muted, only
+     surfaces for super-admin role. */
+  margin-top: 18px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 8px 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.5);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  align-self: flex-start;
+  align-self: center;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .user-menu-page-super-entry:active {
