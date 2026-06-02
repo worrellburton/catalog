@@ -240,13 +240,48 @@ export default function Home() {
   }, [heroMode, heroScrolled]);
 
   // Reveal the bottom search bar once the shopper scrolls down off the
-  // hero into the catalog (while heroMode is the active screen).
+  // hero into the catalog (while heroMode is the active screen). While
+  // scrolling within the hero band we also write a 0→1 progress value
+  // to --hero-scroll-progress on the app root so CSS can fade the
+  // hero-positioned search bar out as the shopper scrolls into the
+  // feed peek — without that, the bar hovered awkwardly in the
+  // middle of the viewport until the 50% threshold flipped it down
+  // to the docked position in one step.
+  const [heroBarFaded, setHeroBarFaded] = useState(false);
   useEffect(() => {
-    if (!heroMode) { setHeroScrolled(true); return; }
+    if (!heroMode) {
+      setHeroScrolled(true);
+      setHeroBarFaded(false);
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.setProperty('--hero-scroll-progress', '1');
+      }
+      return;
+    }
     setHeroScrolled(false);
-    const onScroll = () => setHeroScrolled(window.scrollY > window.innerHeight * 0.5);
+    setHeroBarFaded(false);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--hero-scroll-progress', '0');
+    }
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const ratio = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.5)));
+        document.documentElement.style.setProperty('--hero-scroll-progress', String(ratio));
+        // Same 0.625 cutoff as the CSS opacity formula (1 - r*1.6 ≤ 0)
+        // so pointer-events flip off the moment the bar is visually
+        // invisible. Without this hook the faded bar still ate taps
+        // meant for the product tiles below it.
+        setHeroBarFaded(ratio >= 0.625);
+        setHeroScrolled(window.scrollY > window.innerHeight * 0.5);
+      });
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [heroMode]);
 
   // Scroll-direction tracker: once past the hero, hide chrome on scroll
@@ -1064,7 +1099,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
