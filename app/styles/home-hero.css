@@ -470,15 +470,17 @@
     color: rgba(255, 255, 255, 0.42);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline {
-    /* Icon on the bar's glass surface, no chip pill. Hover stays
-       transparent (color shift only) so the one-color treatment holds. */
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
+    /* Visible chip — same treatment as the docked-feed variant in
+       bottom-bar.css. The previous transparent rule made the filter
+       icon invisible against the matte hero. */
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.85);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline:hover {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.16);
     color: #fff;
+    border-color: rgba(255, 255, 255, 0.22);
   }
 }
 
