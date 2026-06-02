@@ -18,12 +18,30 @@ interface ParticleBackgroundProps {
   speed?: number;
 }
 
-const PARTICLE_COUNT = 180;
+// ── Particle intensity knob ─────────────────────────────────────────
+// One number you can dial to make the field more / less visible. It
+// scales the particle COUNT, the maximum per-particle ALPHA, and the
+// base SIZE in tandem so the relative look stays consistent (just more
+// or fewer of the same sparks).
+//
+//   0.5 = whisper (90 desktop / 45 mobile, ~50% alpha)
+//   1.0 = subtle (180 / 90, ~80% alpha)            ← old default
+//   1.4 = present (252 / 126, ~100% alpha)         ← current default
+//   1.8 = lively  (324 / 162, alpha clamped to 1)
+//   2.5 = busy    (450 / 225, very prominent)
+//
+// Anything above ~2.5 starts to cost GPU on phones; stay at 1.4–1.8 for
+// production. Mobile still gets the same intensity ratio, just a halved
+// count baseline so additive-blend fill doesn't melt phones.
+export const PARTICLE_INTENSITY = 1.4;
+
+const PARTICLE_COUNT = Math.round(180 * PARTICLE_INTENSITY);
 
 const VS = /* glsl */ `
   attribute vec3 aSeed;        // x = phase, y = drift speed, z = base size
   uniform   float uTime;
   uniform   vec2  uViewport;
+  uniform   float uIntensity;  // mirrors PARTICLE_INTENSITY in JS
   varying   float vAlpha;
 
   // Cheap pseudo-noise from a hash - enough texture for drift.
@@ -46,8 +64,11 @@ const VS = /* glsl */ `
     float pixelRatio = min(uViewport.y / 800.0, 1.5);
     gl_PointSize = aSeed.z * pixelRatio;
 
-    // Pulse opacity per-particle, offset by phase, so the field shimmers.
-    vAlpha = 0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0));
+    // Pulse opacity per-particle, offset by phase. Multiplied by uIntensity
+    // (clamped to 1.0 in the fragment so glow doesn't blow out) so the
+    // single PARTICLE_INTENSITY knob in JS controls visible brightness too,
+    // not just count.
+    vAlpha = (0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0))) * uIntensity;
   }
 `;
 
@@ -121,12 +142,18 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     // the cost, and 180 points at dpr 2 is overkill for ambient texture on
     // a small screen.
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
-    const count = isMobile ? 90 : PARTICLE_COUNT;
+    // Same intensity ratio on mobile, halved baseline (additive-blend fill
+    // is the cost on phones).
+    const count = isMobile ? Math.round(90 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
     const seeds = new Float32Array(count * 3);
+    // Size baseline scales with intensity too so a higher intensity is
+    // also a slightly bigger spark, not just more of them.
+    const sizeMin = 1.5 * PARTICLE_INTENSITY;
+    const sizeMax = 6.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
-      seeds[i * 3 + 0] = Math.random();              // phase 0..1
-      seeds[i * 3 + 1] = 0.04 + Math.random() * 0.10; // very slow drift
-      seeds[i * 3 + 2] = 1.5 + Math.random() * 4.5;   // size 1.5..6 px
+      seeds[i * 3 + 0] = Math.random();                       // phase 0..1
+      seeds[i * 3 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
+      seeds[i * 3 + 2] = sizeMin + Math.random() * (sizeMax - sizeMin);
     }
 
     const buf = gl.createBuffer();
@@ -139,6 +166,8 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
 
     const uTime = gl.getUniformLocation(program, 'uTime');
     const uViewport = gl.getUniformLocation(program, 'uViewport');
+    const uIntensity = gl.getUniformLocation(program, 'uIntensity');
+    gl.uniform1f(uIntensity, PARTICLE_INTENSITY);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive for glow

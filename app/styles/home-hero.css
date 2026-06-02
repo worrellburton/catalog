@@ -833,7 +833,11 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  /* Master opacity for the entire particle layer. 1.0 lets the per-particle
+     pulse and the PARTICLE_INTENSITY knob in services do the brightness work
+     instead of capping them here. Was 0.85 — bumped now that the field is
+     deliberately more intense. */
+  opacity: 1;
 }
 .site-particle-host .pw-particles {
   position: absolute;
