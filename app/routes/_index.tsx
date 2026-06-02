@@ -32,6 +32,7 @@ import { supabase } from '~/utils/supabase';
 import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
 import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
+import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
@@ -1109,6 +1110,10 @@ export default function Home() {
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />
             <div className="header-right">
+              {/* Mobile-only activity indicator. Sits to the LEFT of the
+                  earnings pill; tap opens the wallet (which hosts the
+                  activity feed). Desktop keeps the centered toast stack. */}
+              <HeaderActivityPill onOpenWallet={openWallet} />
               <HeaderWalletPill onOpenWallet={openWallet} />
               {/* Desktop super-admin entry — its own button in the header so
                   the admin surface isn't buried in the profile menu. Mobile
