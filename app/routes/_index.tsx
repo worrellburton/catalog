@@ -1114,11 +1114,14 @@ export default function Home() {
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />
             <div className="header-right">
-              {/* Mobile-only activity indicator. Sits to the LEFT of the
-                  earnings pill; tap opens the wallet (which hosts the
-                  activity feed). Desktop keeps the centered toast stack. */}
-              <HeaderActivityPill onOpenWallet={openWallet} />
+              {/* Earnings stays in its original slot. The activity pill
+                  moved to the RIGHT of it per the latest spec — earnings
+                  is the primary currency indicator, activity is the
+                  secondary indicator so it sits after. Mobile-only;
+                  desktop keeps the centered toast stack. Tap routes to
+                  /activity (a dedicated screen, not the wallet). */}
               <HeaderWalletPill onOpenWallet={openWallet} />
+              <HeaderActivityPill />
               {/* Desktop super-admin entry — its own button in the header so
                   the admin surface isn't buried in the profile menu. Mobile
                   uses the Account page's super-admin sub-section instead;
