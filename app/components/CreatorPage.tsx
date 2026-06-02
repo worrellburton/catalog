@@ -6,6 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from '~/services/follows';
+import { getShopperGender, subscribeToShopperGender } from '~/services/product-creative';
 
 interface CreatorPageProps {
   creatorName: string;
@@ -336,7 +337,23 @@ export default function CreatorPage({
   const avatarUrl = (userId || isHandleBranch)
     ? (profile?.avatar_url || seedCreatorData?.avatar || '')
     : (seedCreatorData?.avatar || '');
-  const creatorLooks = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
+  const rawCreatorLooks = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
+
+  // Hard gender rule (same as the consumer feed): a male shopper sees the
+  // creator's men + unisex looks, a female shopper women + unisex. Untagged
+  // and opposite-gender looks are hidden. 'unknown' (signed-out / no profile
+  // gender) shows everything. Subscribed so flipping the Men/Women chip
+  // re-scopes this catalog live.
+  const [shopperGender, setShopperGenderState] = useState(() => getShopperGender());
+  useEffect(() => subscribeToShopperGender(setShopperGenderState), []);
+  const creatorLooks = useMemo(() => {
+    // Primary-video rule: a look only shows if it has a playable (primary)
+    // video — same contract the consumer feed enforces via getLooks.
+    const withVideo = rawCreatorLooks.filter(l => !!l.video);
+    if (shopperGender === 'unknown') return withVideo;
+    const want = shopperGender === 'male' ? 'men' : 'women';
+    return withVideo.filter(l => l.gender === want || l.gender === 'unisex');
+  }, [rawCreatorLooks, shopperGender]);
 
   // Brand-grouped product list - powers the Shop tab chips.
   const allProducts = useMemo(() => {

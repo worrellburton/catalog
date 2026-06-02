@@ -46,8 +46,13 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     if (!firstVisit) return;
     try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
 
-    const SPLASH_MIN_MS = 800;
-    const SPLASH_MAX_MS = 2500;
+    // Splash is a brand beat, not a wait screen — and it should feel
+    // consistent every cold open. Hold for a FIXED 2000ms regardless of
+    // how fast the feed pre-warms. Min == max == 2000ms; the tryDismiss
+    // path collapses to "dismiss at 2000ms" because the floor and the
+    // ceiling are now the same.
+    const SPLASH_MIN_MS = 2000;
+    const SPLASH_MAX_MS = 2000;
     const startedAt = Date.now();
     let dismissed = false;
     const dismiss = () => {

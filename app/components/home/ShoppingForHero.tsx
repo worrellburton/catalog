@@ -6,39 +6,51 @@
 import { useEffect, useRef, useMemo } from 'react';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
-// canonical "What are you shopping for?". After that, we pick a random
-// joke from FUN_HEADLINES (deterministic per visit so the headline
-// doesn't change mid-session — seeded by visit-count so each new visit
-// rotates). Visit count is stored in localStorage so we don't try to
-// hit the DB for every landing.
+// canonical "What are you shopping for?". After that, we pick from
+// FUN_HEADLINES (deterministic per visit so the headline doesn't change
+// mid-session — seeded by visit-count so each new visit rotates).
+// Visit count is stored in localStorage so we don't try to hit the DB
+// for every landing.
 const HEADLINE_VISIT_KEY = 'catalog:hero-visits:v1';
-const HEADLINE_BASELINE_VISITS = 10;
-const BASELINE_HEADLINE = ['What are you', 'shopping for?'] as const;
+const HEADLINE_BASELINE_VISITS = 3;
 
-// Each entry is [line1, line2]. Two lines because .sfh-title renders
-// `What are you<br/>shopping for?` and we keep the same vertical shape.
-// Keep them ≤ ~22 chars per line so the headline doesn't wrap awkwardly.
-const FUN_HEADLINES: ReadonlyArray<readonly [string, string]> = [
-  // Spice Girls (per user request).
-  ['Tell me what you', 'really really want.'],
+interface Headline {
+  line1: string;
+  line2: string;
+  /** Optional small credit line rendered under the title. Used for lyric
+   *  attributions ("— Spice Girls") so the source is acknowledged
+   *  without crowding the headline itself. */
+  credit?: string;
+  /** When true, the title renders in italic / quoted form to read as a
+   *  lyric rather than a question. */
+  lyric?: boolean;
+}
+
+const BASELINE_HEADLINE: Headline = { line1: 'What are you', line2: 'shopping for?' };
+
+// Each entry is two lines (.sfh-title renders the same vertical shape as
+// the baseline). Keep ≤ ~22 chars per line so it doesn't wrap.
+const FUN_HEADLINES: ReadonlyArray<Headline> = [
+  // Spice Girls lyric — rendered with quotes + italic + credit.
+  { line1: 'Tell me what you want,', line2: 'what you really, really want.', lyric: true, credit: '— Spice Girls' },
   // Genuine but playful.
-  ['What sparks joy', 'today?'],
-  ['What you got', 'on your mind?'],
-  ['Today, you are', 'shopping for…'],
+  { line1: 'What sparks joy', line2: 'today?' },
+  { line1: 'What you got',   line2: 'on your mind?' },
+  { line1: 'Today, you are', line2: 'shopping for…' },
   // Pop-culture nudges.
-  ["What's in your", 'cart energy?'],
-  ['Treat yourself.', 'What is it?'],
-  ['Looking for that', 'one thing?'],
-  ['Speak it into', 'existence.'],
-  ['Manifest your', 'next outfit.'],
+  { line1: "What's in your", line2: 'cart energy?' },
+  { line1: 'Treat yourself.', line2: 'What is it?' },
+  { line1: 'Looking for that', line2: 'one thing?' },
+  { line1: 'Speak it into', line2: 'existence.' },
+  { line1: 'Manifest your',  line2: 'next outfit.' },
   // Mood-board style.
-  ['What is the', 'vibe today?'],
-  ['Catalog mode:', 'engaged.'],
-  ['Type a wish,', 'get a catalog.'],
+  { line1: 'What is the',    line2: 'vibe today?' },
+  { line1: 'Catalog mode:',  line2: 'engaged.' },
+  { line1: 'Type a wish,',   line2: 'get a catalog.' },
   // Cheeky.
-  ['Confess.', 'What do you want?'],
-  ['Be honest with us.', 'What is it?'],
-  ['Talk to me,', 'I am all ears.'],
+  { line1: 'Confess.',       line2: 'What do you want?' },
+  { line1: 'Be honest with us.', line2: 'What is it?' },
+  { line1: 'Talk to me,',    line2: 'I am all ears.' },
 ];
 
 function readVisitCount(): number {
@@ -69,7 +81,7 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
   // beyond that, we rotate through FUN_HEADLINES picked via the visit
   // index (so the same visit always shows the same line — no flicker if
   // the component remounts mid-session — but a new visit rotates).
-  const headline = useMemo<readonly [string, string]>(() => {
+  const headline = useMemo<Headline>(() => {
     const visits = readVisitCount();
     if (visits < HEADLINE_BASELINE_VISITS) return BASELINE_HEADLINE;
     return FUN_HEADLINES[(visits - HEADLINE_BASELINE_VISITS) % FUN_HEADLINES.length];
@@ -150,7 +162,21 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           </svg>
         </div>
 
-        <h1 className="sfh-title">{headline[0]}<br/>{headline[1]}</h1>
+        {/* Lyric headlines render in italic + smart quotes; normal
+            headlines render as-is. Optional `credit` line sits below in
+            a small caption when present. */}
+        <h1 className={`sfh-title${headline.lyric ? ' sfh-title--lyric' : ''}`}>
+          {headline.lyric ? '“' : ''}
+          {headline.line1}
+          <br/>
+          {headline.line2}
+          {headline.lyric ? '”' : ''}
+        </h1>
+        {headline.credit && (
+          <div className="sfh-title-credit" aria-label="Lyric credit">
+            {headline.credit}
+          </div>
+        )}
       </div>
 
       {/* Scroll-to-best-sellers affordance: an animated mouse with a
