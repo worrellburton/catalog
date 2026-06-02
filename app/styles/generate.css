@@ -9,17 +9,19 @@
      the page to 100dvh + overflow:hidden and let the inner .gen-step
      own scroll, but on viewports where the photos row alone fills
      most of the height the step couldn't reliably reveal "Your looks"
-     below — taps on the wheel/trackpad were going to the wrong
-     scroll container. Letting the page scroll instead is the simpler
-     contract: the dock (gen-rail) is position:fixed so it still
-     pins to the bottom, and the bottom padding here keeps content
-     above it. */
-  padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
+     below. Letting the page scroll is the simpler contract.
+     Top padding picks up safe-area-inset-top even outside the Flutter
+     shell (was Flutter-shell-only) so the "Generate" h1 clears Safari's
+     status bar on iOS PWA / standalone Safari fullscreen. Horizontal
+     padding is also capped so wide phones don't push content off the
+     side. */
+  padding: max(env(safe-area-inset-top, 0px), 16px) clamp(16px, 4vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
   min-height: 100vh;
   min-height: 100dvh;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
@@ -1014,6 +1016,13 @@ html[data-shell="catalog-app"] .gen-page {
   width: 100%;
   max-width: 420px;
   aspect-ratio: 9 / 16;
+  /* Cap the visible height on small viewports so the placeholder
+     doesn't swallow the screen when the source URL hasn't resolved.
+     420px wide on a tall phone would otherwise paint a ~745px black
+     box. max-height: 60svh keeps the video readable + leaves room for
+     the actions row + products list below the fold without scroll. */
+  max-height: 60svh;
+  object-fit: contain;
   border-radius: 16px;
   background: #111;
   display: block;
@@ -1031,8 +1040,11 @@ html[data-shell="catalog-app"] .gen-page {
 /* "Products in this look" - surfaces the picked product list under the
    final video so the shopper can see the outfit it was assembled from. */
 .gen-result-products {
+  width: 100%;
   max-width: 480px;
   margin: 18px auto 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .gen-result-products-label {
   font-size: 11px;
@@ -1058,6 +1070,15 @@ html[data-shell="catalog-app"] .gen-page {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  /* Flex children default to min-width:auto, which is the INTRINSIC
+     content width. With white-space:nowrap on the product name, that
+     makes the LI as wide as the longest unbroken text and overflows
+     the viewport on mobile. min-width:0 lets the LI shrink to the UL's
+     box; combined with ellipsis on the name (already in place) the
+     text truncates cleanly instead of breaking the layout. */
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 .gen-result-product-img {
   width: 48px;
