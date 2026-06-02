@@ -22,7 +22,7 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import {
   trackAdImpression,
   trackAdClick,
-  prefetchSimilarCreatives,
+  prefetchSimilarProducts,
   type ProductAd,
 } from '~/services/product-creative';
 import {
@@ -288,7 +288,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // Hover/touch-start prefetch for the "More like this" rail.
   // No-op for look mode — looks don't use the creative-similarity RPC.
   const handlePrefetch = useCallback(() => {
-    if (!isLook && creative?.id) prefetchSimilarCreatives(creative.id, 18);
+    if (!isLook && creative?.product?.id) prefetchSimilarProducts(creative.product.id, 18);
   }, [creative, isLook]);
 
   const beginLongPress = useCallback((e: React.TouchEvent | React.MouseEvent) => {

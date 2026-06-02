@@ -9,7 +9,7 @@ import FollowIconButton from '~/components/FollowIconButton';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { trackAdClick, prefetchSimilarProducts, type ProductAd } from '~/services/product-creative';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
@@ -248,8 +248,8 @@ function BrandStripTile({ creative, onOpen }: { creative: ProductAd; onOpen: (c:
       type="button"
       className={`pd-brand-tile ${loaded ? 'loaded' : ''}`}
       onClick={() => { trackAdClick(creative.id); onOpen(creative); }}
-      onMouseEnter={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
-      onTouchStart={() => prefetchSimilarCreatives(creative.id, 18, creative.product?.type ?? null)}
+      onMouseEnter={() => prefetchSimilarProducts(creative.product?.id || '', 18)}
+      onTouchStart={() => prefetchSimilarProducts(creative.product?.id || '', 18)}
     >
       {posterUrl && (
         <img
@@ -1187,7 +1187,7 @@ export default function ProductPage({
             for open-ended exploration. */}
         {similarEnabled && moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">More like this</h2>
+            <h2 className="pd-feed-title">Similar</h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}

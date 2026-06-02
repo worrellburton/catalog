@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
-import { trackAdImpression, trackAdClick, prefetchSimilarCreatives, type ProductAd } from '~/services/product-creative';
+import { trackAdImpression, trackAdClick, prefetchSimilarProducts, type ProductAd } from '~/services/product-creative';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -183,8 +183,8 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // hover for >100ms), the rail is already loading. Idempotent - multiple
   // hovers coalesce onto one cached promise.
   const handlePrefetch = useCallback(() => {
-    if (creative.id) prefetchSimilarCreatives(creative.id, 18);
-  }, [creative.id]);
+    if (creative.product?.id) prefetchSimilarProducts(creative.product.id, 18);
+  }, [creative.product?.id]);
 
   // Long-press handler - super-admin-only. On touch devices a 500ms hold
   // pops a small confirm-delete menu. Mouse equivalent is right-click
