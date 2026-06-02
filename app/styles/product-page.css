@@ -171,6 +171,59 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Side-rail back button — desktop only. Fixed on the left edge of the
+   viewport, vertically centered. Hidden by default; .is-visible fades it
+   in once the user has scrolled past the hero (the corner .pd-back is
+   off-screen by then). Hardware-accelerated transform + opacity so the
+   animation costs nothing. */
+.pd-back-rail {
+  position: fixed;
+  /* env() safe-area in case the rail ever appears under a notched
+     browser chrome on a desktop-rotated tablet. */
+  left: max(20px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%) translateX(-12px);
+  z-index: 9100;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 180ms ease;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+.pd-back-rail.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
+.pd-back-rail:hover { background: rgba(0, 0, 0, 0.75); }
+.pd-back-rail:active { transform: translateY(-50%) translateX(0) scale(0.94); }
+@media (max-width: 768px) {
+  /* Mobile gets its own dedicated dismiss affordances; the side rail is
+     desktop-only by design. */
+  .pd-back-rail { display: none !important; }
+}
+.light-mode .pd-back-rail {
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+}
+.light-mode .pd-back-rail:hover { background: rgba(255, 255, 255, 0.95); }
+
 /* Mobile: hero + info stack normally inside .pd-split (the desktop
    split rules below override at >= 960px). */
 .pd-split {

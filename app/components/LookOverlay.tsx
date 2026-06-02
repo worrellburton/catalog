@@ -90,6 +90,27 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   }, []);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
+  // Side-rail back button: fades in once the user has scrolled past the
+  // hero (the corner .look-back-btn has scrolled off). Desktop only —
+  // mobile has its own dedicated bottom-sheet dismiss affordance.
+  const [showSideBack, setShowSideBack] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(min-width: 769px)').matches) return;
+    const scroller = scrollEl;
+    if (!scroller) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setShowSideBack(scroller.scrollTop > 220));
+    };
+    onScroll();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      scroller.removeEventListener('scroll', onScroll);
+    };
+  }, [scrollEl]);
   const [touchStartY, setTouchStartY] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
@@ -438,6 +459,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             {/* Back button - top-left of the screen (desktop) */}
             <button className="look-back-btn" onClick={handleClose} aria-label="Back">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+
+            {/* Side-rail back button — vertically centered on the left edge
+                of the browser, desktop only. Fades in once the user has
+                scrolled past the hero (corner button is off-screen). */}
+            <button
+              className={`look-back-rail${showSideBack ? ' is-visible' : ''}`}
+              onClick={handleClose}
+              aria-label="Back"
+              tabIndex={showSideBack ? 0 : -1}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
             </button>
