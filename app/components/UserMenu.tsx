@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
+import ParticleBackground from './ParticleBackground';
 import type { Look, Product } from '~/data/looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { AvatarUpload } from './AvatarCropModal';
@@ -652,6 +653,14 @@ function UserMenu({
           role="dialog"
           aria-label="Account"
         >
+          {/* Dedicated particle layer — sits behind the header + body
+              content. The page background is fully solid (so the feed
+              underneath doesn't ghost through during the slide-over),
+              so we mount a fresh ParticleBackground here instead of
+              relying on the singleton SiteParticleHost bleeding through. */}
+          <div className="ump-particles" aria-hidden="true">
+            <ParticleBackground />
+          </div>
           <header className="user-menu-page-top">
             <button
               className="user-menu-page-back"

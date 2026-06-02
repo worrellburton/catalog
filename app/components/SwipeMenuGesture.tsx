@@ -1,28 +1,28 @@
-// Global mobile gesture: swipe LEFT on any page → open the Account menu.
+// Global mobile gesture: EDGE-swipe LEFT on any page → open the
+// Account menu. The touch must START within EDGE_PX of the right edge
+// of the viewport (iOS-style edge gesture) and then drag left. This
+// is the only way to avoid conflicting with inner horizontal content
+// — carousels, story rails, the Try-It-On product picker, etc. all
+// own their own left/right drags and used to trigger the menu by
+// accident.
 //
-// Mounts once at the app root and listens to touchstart / touchmove /
-// touchend on `window`. When a recognised left-swipe completes, we
-// dispatch `catalog:open-account-menu` on the window — UserMenu listens
-// for it and opens its mobile page surface.
-//
-// Skip rules (so the gesture doesn't fight legit content):
+// Skip rules (still applied on top of the edge gate):
 //   • Desktop: gesture is disabled (matchMedia max-width 768px).
 //   • Flutter shell: native chrome owns horizontal gestures.
 //   • Input focus: never recognise mid-typing.
-//   • Touch starts inside a horizontally-scrollable container (stories
-//     rail, trail rail, anything with overflow-x:auto and >0 scroll
-//     width): native horizontal scroll wins.
-//   • Touch starts inside a known overlay that owns its own swipe
-//     gestures (LookOverlay sheet drag, ProductPage swipe-down dismiss):
-//     skip via [data-no-swipe-menu] hook on those roots.
-//   • Vertical-dominant swipes: the user is scrolling the page, not
-//     swiping horizontally.
+//   • Touch starts inside a horizontally-scrollable container (kept
+//     for the rare case where a scroller starts within EDGE_PX of the
+//     right edge).
+//   • [data-no-swipe-menu] opt-out hook on a parent root.
+//   • Vertical-dominant swipes: the user is scrolling.
 //
-// Threshold tuning: 70px horizontal deltaX, ≤ 0.5 × |deltaX| vertical
-// drift, within 500ms. Tight enough to require an intentional motion.
+// Threshold tuning:
+//   • Touch START within 28px of the viewport right edge.
+//   • ≥70px leftward drag, ≤ 0.5 × |dx| vertical drift, within 500ms.
 
 import { useEffect } from 'react';
 
+const EDGE_PX = 28;
 const MIN_HORIZONTAL_PX = 70;
 const MAX_DURATION_MS = 500;
 const MAX_VERTICAL_RATIO = 0.5;
@@ -68,9 +68,16 @@ export default function SwipeMenuGesture() {
       // Single-finger only; multi-finger is a pinch / different gesture.
       if (e.touches.length !== 1) { active = false; return; }
       if (focusInInput()) return;
-      if (hasHorizontalScrollAncestor(e.target)) return;
       if (typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app') return;
       const t = e.touches[0];
+      // EDGE gate: only arm the gesture when the touch lands in the
+      // rightmost EDGE_PX strip. Inner horizontal carousels start far
+      // from the edge so they're naturally exempt — no per-component
+      // opt-outs needed in the common case.
+      if (t.clientX < window.innerWidth - EDGE_PX) return;
+      // Belt-and-suspenders: a horizontal scroller that happens to sit
+      // right at the edge still wins.
+      if (hasHorizontalScrollAncestor(e.target)) return;
       startX = t.clientX;
       startY = t.clientY;
       startT = performance.now();
