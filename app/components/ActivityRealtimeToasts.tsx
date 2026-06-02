@@ -148,8 +148,28 @@ export default function ActivityRealtimeToasts() {
   // twice, which previously stacked identical toasts.
   const seenEventIdsRef = useRef<Set<string>>(new Set());
 
+  // Hold all toast pushes until AFTER the page has settled. The feed
+  // dispatches `catalog:feed-ready` on its first non-empty paint;
+  // listen for that, otherwise fall back to a 1.2s timer so anonymous
+  // / non-home routes don't sit silent forever. The activity toasts
+  // are reactions to in-product activity, so they read as junk when
+  // they fire DURING the splash → grid handoff.
+  const [postPaint, setPostPaint] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let fired = false;
+    const fire = () => { if (!fired) { fired = true; setPostPaint(true); } };
+    const t = window.setTimeout(fire, 1200);
+    window.addEventListener('catalog:feed-ready', fire, { once: true });
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('catalog:feed-ready', fire);
+    };
+  }, []);
+
   useEffect(() => {
     if (loading || !user || !supabase) return;
+    if (!postPaint) return; // wait for the page to settle
     // Capture into a non-nullable local so the inner closures don't
     // need to re-narrow user — TS can't track the outer narrowing
     // across the async IIFE + per-payload callbacks below.
@@ -427,7 +447,7 @@ export default function ActivityRealtimeToasts() {
       if (followChannel && supabase) supabase.removeChannel(followChannel);
       if (visibilityCleanup) visibilityCleanup();
     };
-  }, [user, loading]);
+  }, [user, loading, postPaint]);
 
   const navigate = useNavigate();
   const openInsights = useCallback(() => {
