@@ -1313,6 +1313,63 @@ html.admin-on-dark-canvas .admin-topbar,
   background: #f7f7f7;
 }
 
+/* Mobile-only: convert admin user / waitlist tables into a 2-column
+   card grid. The list layout is unreadable on a phone — too many narrow
+   columns squeezed together — so on mobile each <tr> becomes a card and
+   each <td> stacks vertically inside it. Triggered by .admin-users-grid
+   applied to .admin-table-wrap by the users page; scoped narrowly so
+   non-user admin tables keep the standard table layout. */
+@media (max-width: 768px) {
+  .admin-users-grid {
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .admin-users-grid .admin-table,
+  .admin-users-grid .admin-table tbody {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    border: none;
+    width: 100%;
+  }
+  .admin-users-grid .admin-table thead { display: none; }
+  .admin-users-grid .admin-table tr {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    background: #fff;
+    min-width: 0;
+  }
+  .admin-dark .admin-users-grid .admin-table tr {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .admin-users-grid .admin-table td {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    border: none;
+    text-align: left;
+    font-size: 12px;
+    min-width: 0;
+  }
+  /* First cell (avatar + name) gets a bigger, top-anchored treatment. */
+  .admin-users-grid .admin-table td:first-child {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  /* Toggles + small controls inside cells stay aligned naturally
+     because of the flex on `td`. */
+  .admin-users-grid .admin-table tr:hover td { background: transparent; }
+}
+
 /* Numeric value cells — right-aligned, tabular number spacing */
 .admin-cell-num {
   text-align: right;

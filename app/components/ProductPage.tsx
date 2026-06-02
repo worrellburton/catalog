@@ -564,10 +564,18 @@ export default function ProductPage({
   const pickFrom = useCallback((rows: ProductAd[] | undefined, limit = 16): ProductAd[] => {
     if (!rows || rows.length === 0) return [];
     const seenProductIds = new Set<string>();
-    const out: ProductAd[] = [];
+    // Cross-brand matches lead — the "Similar" rail is for cross-brand
+    // discovery; same-brand mates have their own "More from <brand>" rail.
+    // But same-brand items are STASHED as backfill rather than discarded:
+    // in a category one brand dominates (e.g. candles are nearly all
+    // WoodWick), the only genuinely-similar items ARE same-brand, and
+    // dropping them outright collapsed the rail to the unrelated "Popular"
+    // fallback. Backfilling keeps the rail on-topic (other candles) and only
+    // ever kicks in when cross-brand results don't fill the limit, so
+    // brand-rich categories (footwear, etc.) are unaffected.
+    const cross: ProductAd[] = [];
+    const sameBrand: ProductAd[] = [];
     for (const c of rows) {
-      const otherBrand = (c.product?.brand || '').trim().toLowerCase();
-      if (ownBrand && otherBrand === ownBrand) continue;
       if (ownProductId && c.product_id === ownProductId) continue;
       if (seenProductIds.has(c.product_id)) continue;
       if (!genderMatches(c.product?.gender)) continue;
@@ -578,8 +586,14 @@ export default function ProductPage({
       const hasVideo = !!c.product?.primary_video_url || !!c.video_url;
       if (!hasVideo) continue;
       seenProductIds.add(c.product_id);
-      out.push(c);
+      const otherBrand = (c.product?.brand || '').trim().toLowerCase();
+      if (ownBrand && otherBrand === ownBrand) sameBrand.push(c);
+      else cross.push(c);
+    }
+    const out = cross.slice(0, limit);
+    for (const c of sameBrand) {
       if (out.length >= limit) break;
+      out.push(c);
     }
     return out;
   }, [ownBrand, ownProductId, genderMatches]);

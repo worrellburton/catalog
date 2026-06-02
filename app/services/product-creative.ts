@@ -1326,11 +1326,20 @@ export async function getSimilarProductsByEmbedding(seedProductId: string, k = 1
   }
   const rows = data as SimilarProductRow[]; // already ascending distance
   if (rows.length === 0) return [];
+
+  // Gender is a hard rule, independent of distance — apply it FIRST so the
+  // relative band below anchors on the nearest match the shopper can actually
+  // see (not a hidden one). Carry each row's distance alongside the mapped ad.
+  const candidates = rows
+    .map(r => ({ ad: similarProductRowToAd(r), distance: r.distance }))
+    .filter(c => passesGenderFilter({ gender: c.ad.product?.gender ?? null }));
+  if (candidates.length === 0) return [];
+
   // The product_similarity_threshold dial is AUTHORITATIVE, applied RELATIVE
   // to this product's nearest match rather than as an absolute distance. The
-  // cutoff scales off the closest item (rows[0], smallest cosine distance):
+  // cutoff scales off the closest item (candidates[0], smallest cosine dist):
   //
-  //   cutoff = nearest_distance ÷ (dial / 100)
+  //   strictMax = nearest_distance ÷ (dial / 100)
   //
   //   dial 0   → no filter (cutoff = ∞), show all K nearest — never empty
   //   dial 60  → keep items within 1.67× the nearest distance (a wider band)
@@ -1338,16 +1347,29 @@ export async function getSimilarProductsByEmbedding(seedProductId: string, k = 1
   //              the closest matches / ties)
   //
   // Relative anchoring means the band auto-adapts to how tightly a given
-  // category clusters, instead of a one-size absolute threshold. Items past
-  // the bar are dropped (no backfill); the separate "Popular" rail covers the
-  // sparse case.
+  // category clusters, instead of a one-size absolute threshold.
   const dialFrac = similarityThreshold / 100; // 0..1
-  const maxDistance = dialFrac > 0 ? rows[0].distance / dialFrac : Infinity;
-  return rows
-    .filter(r => r.distance <= maxDistance)
-    .map(similarProductRowToAd)
-    .filter(ad => passesGenderFilter({ gender: ad.product?.gender ?? null }))
-    .slice(0, k);
+  const strictMax = dialFrac > 0 ? candidates[0].distance / dialFrac : Infinity;
+  const within = candidates.filter(c => c.distance <= strictMax);
+
+  // Minimum fill. A brand's own product line embeds almost identically (a
+  // WoodWick candle's nearest neighbour is another WoodWick candle ~0.05
+  // away), which pins the anchor so low that the strict band trims genuine
+  // cross-brand matches — e.g. a Chesapeake candle at 0.10 falls just outside
+  // the band, so "Similar" cycles two WoodWick tiles and a real candle is
+  // hidden. When the strict band is sparse, widen to a more generous multiple
+  // of the nearest match so the rail fills with real, in-category neighbours,
+  // while still dropping true outliers (a houseplant ranked beneath candles
+  // sits past 3× and stays out). Everything here is already category-gated by
+  // the RPC, so widening never leaks a different category in.
+  const MIN_SIMILAR = Math.min(k, 6);
+  let chosen = within;
+  if (chosen.length < MIN_SIMILAR) {
+    const widenedMax = Math.max(strictMax, candidates[0].distance * 3);
+    chosen = candidates.filter(c => c.distance <= widenedMax);
+  }
+
+  return chosen.slice(0, k).map(c => c.ad);
 }
 
 const similarProductCache = new Map<string, Promise<ProductAd[]>>();
