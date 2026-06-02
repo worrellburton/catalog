@@ -472,7 +472,16 @@ export default function Home() {
   }, []);
 
   const handleOpenCreator = useCallback((creatorName: string) => {
+    // Close every higher-stacked overlay so the creator catalog comes to
+    // the foreground. Without nulling selectedProduct/selectedCreative,
+    // a tap on a creator pill inside ProductPage's "You might also like"
+    // would update the catalog *underneath* the still-visible product
+    // page and the click would look like a no-op. Mirrors the close
+    // pattern in handleOpenBrand.
+    setSelectedProduct(null);
+    setSelectedCreative(null);
     setSelectedLook(null);
+    setBrandFilter(null);
     setCreatorFilter(creatorName);
   }, []);
 

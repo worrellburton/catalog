@@ -37,7 +37,7 @@ export const VIDEO_MODELS: VideoModel[] = [
 
   // Seedance via fal.ai - single face photo sent to avoid ByteDance content filter
   { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)', usable: true },
-  { value: 'bytedance/seedance-2.0/pro/reference-to-video', label: 'Seedance 2 Pro', group: 'Seedance (fal.ai)', usable: true },
+  { value: 'bytedance/seedance-2.0/reference-to-video', label: 'Seedance 2 Pro', group: 'Seedance (fal.ai)', usable: true },
   { value: 'seedance-2', label: 'Seedance 2 (legacy)', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-pro', label: 'Seedance 1 Pro', group: 'Seedance (fal.ai)' },
   { value: 'seedance-1-lite', label: 'Seedance 1 Lite', group: 'Seedance (fal.ai)' },
