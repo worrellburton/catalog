@@ -604,16 +604,15 @@
   position: fixed;
   inset: 0;
   z-index: 9100;
-  /* TRANSLUCENT matte gradient so the singleton SiteParticleHost
-     (mounted at z-index 0 on the app root) bleeds through. Each rgba
-     stop intentionally < 1 so the particles are visible across the
-     entire page even where the gradient is darkest. The previous
-     opaque #0a0a0c base hid them entirely. */
+  /* SOLID matte background so the underlying feed doesn't ghost through
+     while the menu is open. The singleton SiteParticleHost (mounted on
+     .app-root at z-index 0) is HIDDEN behind this surface — we mount a
+     dedicated ParticleBackground INSIDE the page (.ump-particles below)
+     so the field is visible without leaking the feed. Was a translucent
+     rgba gradient (0.55 → 0.88) which left readers seeing "Match my
+     mood" / "Scroll to see most popular" behind the capsules. */
   background:
-    radial-gradient(125% 95% at 50% 18%,
-      rgba(20, 21, 27, 0.55) 0%,
-      rgba(10, 10, 13, 0.78) 56%,
-      rgba(0, 0, 0, 0.88) 100%);
+    radial-gradient(125% 95% at 50% 18%, #15161c 0%, #0a0a0c 56%, #000 100%);
   color: #f5f5f7;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -622,6 +621,23 @@
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
 }
+
+/* Dedicated particle layer inside the page. Sits behind the header +
+   body content (z-index 0) but ABOVE the solid background. Pointer
+   events off so taps fall through to the capsules. */
+.ump-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.ump-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+}
+.user-menu-page-top,
+.user-menu-page-body { position: relative; z-index: 1; }
 /* Horizontal-slide reveal. The Account page acts as if it lives at
    `right: -100%` of the main app — opening pulls it onto the screen
    from the right edge while the underlying viewport (.app-root)
