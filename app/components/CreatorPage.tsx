@@ -489,15 +489,36 @@ export default function CreatorPage({
         )}
         <span className="creator-hero-curated">Curated by</span>
         <h1 className="creator-hero-name">{displayName}</h1>
-        <button
-          className="creator-follow-btn"
-          onClick={onToggleFollow}
-          disabled={followBusy}
-          aria-pressed={following}
-          style={following ? { background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1' } : undefined}
-        >
-          {following ? 'Following' : 'Follow'}
-        </button>
+        {userId && currentUser?.id === userId ? (
+          /* Self-view: this is YOUR creator page. The Follow button
+              doesn't make sense (you can't follow yourself), so we
+              replace it with an Edit button that jumps to the
+              creator's MyCatalog editor. _index listens for
+              `catalog:open-my-catalog` and opens the lazy-loaded
+              MyLooks surface. */
+          <button
+            className="creator-follow-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-my-catalog'))}
+            aria-label="Edit your catalog"
+            style={{ background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit your catalog
+          </button>
+        ) : (
+          <button
+            className="creator-follow-btn"
+            onClick={onToggleFollow}
+            disabled={followBusy}
+            aria-pressed={following}
+            style={following ? { background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1' } : undefined}
+          >
+            {following ? 'Following' : 'Follow'}
+          </button>
+        )}
         <p className="creator-hero-trust">
           {creatorLooks.length > 0
             ? `${creatorLooks.length} look${creatorLooks.length === 1 ? '' : 's'} · ${allProducts.length} product${allProducts.length === 1 ? '' : 's'} · ${formatFollowerCount(followerCount, trustCount)}`
