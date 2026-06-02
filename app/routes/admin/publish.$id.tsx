@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
-import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
-import { setGenerationPublished } from '~/services/user-generations';
-import { generateAndStorePoster } from '~/utils/video-poster';
+import { promoteGenerationToLook } from '~/services/promote-generation';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
@@ -146,73 +144,26 @@ export default function AdminPublishScreen() {
     setPublishing(true);
     setError(null);
     try {
-      const { data: look } = await createLook({
-        title: title.trim() || `${draft.creatorName}’s ${draft.style} look`,
-        description: description.trim() || undefined,
+      // promoteGenerationToLook is the single source of truth for the
+      // generation → looks pipeline. Idempotent — a second submit for
+      // the same generation flips the existing looks row to status=
+      // 'live' instead of creating a duplicate. The Unpublished tab
+      // now de-dupes against source_generation_id so the admin can
+      // only land here for generations that aren't already live, but
+      // the dedupe inside promote keeps us safe under refresh races.
+      const { lookId } = await promoteGenerationToLook({
+        generationId: draft.generationId,
+        creatorUserId: draft.creatorUserId,
+        videoUrl: draft.videoUrl,
+        creatorLabel: draft.creatorName,
+        style: draft.style,
         gender,
+        titleOverride: title.trim() || undefined,
+        descriptionOverride: description.trim() || undefined,
+        products: draft.products.map(p => ({ id: p.id })),
       });
-      // Best-effort attach products. Ignore individual product
-      // failures so a single bad row doesn't fail the whole publish.
-      await Promise.all(draft.products.map(p =>
-        addProductToLook(look.id, { product_id: p.id }).catch(err => {
-          console.warn('[publish] addProductToLook failed:', err);
-        })
-      ));
-      // The Content/Looks list joins `looks_creative!inner` and only
-      // surfaces looks with status='live' - createLook writes draft
-      // and never inserts a creative row, so without these two
-      // follow-ups the published look is silently dropped from the
-      // Published tab.
-      if (supabase && draft.videoUrl) {
-        const { data: creativeData, error: creativeErr } = await supabase
-          .from('looks_creative')
-          .insert({ look_id: look.id, video_url: draft.videoUrl, is_primary: true })
-          .select('id')
-          .single();
-        if (creativeErr) console.warn('[publish] looks_creative insert failed:', creativeErr.message);
-        if (creativeData?.id) {
-          void generateAndStorePoster(look.id, creativeData.id, draft.videoUrl);
-        }
-      }
-      if (supabase) {
-        // Move ownership to the persona who generated the source video
-        // (createLook stamped user_id = auth.uid() = admin). The DB
-        // trigger `looks_sync_creator_handle` will fill creator_handle
-        // from the matching creators row.
-        const updates: Record<string, unknown> = { status: 'live' };
-        if (draft.creatorUserId) {
-          updates.user_id = draft.creatorUserId;
-          updates.creator_handle = null;
-        }
-        const { error: statusErr } = await supabase
-          .from('looks')
-          .update(updates)
-          .eq('id', look.id);
-        if (statusErr) console.warn('[publish] status update failed:', statusErr.message);
-
-        // Preserve the publisher in created_by so the audit trail
-        // survives the user_id move.
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser?.id) {
-          const { error: createdByErr } = await supabase
-            .from('looks')
-            .update({ created_by: authUser.id })
-            .eq('id', look.id);
-          if (createdByErr) console.warn('[publish] created_by update failed:', createdByErr.message);
-        }
-      }
-      // Flip is_published on the source generation so /admin/data's
-      // Unpublished tab stops showing this row — earlier the publish
-      // flow created a new looks row but left the user_generations
-      // row alone, so admins saw the same generation in BOTH the
-      // Unpublished tab and the Published tab.
-      const { error: flipErr } = await setGenerationPublished(draft.generationId, true);
-      if (flipErr) console.warn('[publish] setGenerationPublished failed:', flipErr);
-
-      // Drop the cached promise so the next /admin/data render
-      // refetches and shows the new row in the Published tab.
       invalidateLooksCache();
-      setPublished({ id: look.id });
+      setPublished({ id: lookId });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed.');
     } finally {
