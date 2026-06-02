@@ -1,15 +1,25 @@
-/* Splash Screen */
+/* Splash Screen.
+   The singleton SiteParticleHost is mounted at the app root behind every
+   surface, so the splash uses a TRANSLUCENT matte gradient (same shape as
+   .sfh) instead of a solid #000 — the same particle field that's visible
+   on the landing is therefore visible during the splash too. When the
+   splash fades out, the particles + the matte black behind it continue
+   uninterrupted on the hero. This is what makes the handoff feel like
+   one continuous stage instead of two screens with a cut between them. */
 .splash-screen {
   position: fixed;
   inset: 0;
   z-index: 400;
-  background: #000;
+  background:
+    radial-gradient(125% 95% at 50% 26%, rgba(20, 21, 27, 0.36) 0%, rgba(10, 10, 13, 0.62) 52%, rgba(0, 0, 0, 0.85) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.8s ease;
+  /* Short fade so the user gets to the hero quickly — 0.8s was draggy. */
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .splash-screen.active {
@@ -21,6 +31,44 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* Counterclockwise gradient sweep. A faint silver wedge rotates around the
+   center for 10s with a slow ease at both ends — barely visible at rest,
+   readable while it's moving. The negative animation direction is what
+   makes it counterclockwise; ease-in-out gives the rotation its breathy
+   start and landing. The conic background is masked to a soft ring so it
+   reads as light passing through the splash, not a paint disc spinning. */
+.splash-sweep {
+  position: absolute;
+  inset: -15%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    conic-gradient(from 0deg,
+      rgba(255, 255, 255, 0.0) 0deg,
+      rgba(255, 255, 255, 0.04) 70deg,
+      rgba(255, 255, 255, 0.16) 88deg,
+      rgba(255, 255, 255, 0.32) 96deg,
+      rgba(255, 255, 255, 0.16) 104deg,
+      rgba(255, 255, 255, 0.04) 122deg,
+      rgba(255, 255, 255, 0.0) 200deg,
+      rgba(255, 255, 255, 0.0) 360deg);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 14%, #000 28%, #000 78%, transparent 100%);
+          mask: radial-gradient(circle at 50% 50%, transparent 14%, #000 28%, #000 78%, transparent 100%);
+  /* 10s, with ease-in-out on EACH revolution so the gradient breathes
+     instead of spinning at constant speed. infinite + reverse direction
+     = counterclockwise. */
+  animation: splash-sweep-rotate 10000ms cubic-bezier(0.42, 0, 0.58, 1) infinite reverse;
+  opacity: 0.9;
+}
+@keyframes splash-sweep-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-sweep { animation: none; opacity: 0.3; }
+}
+.splash-content { position: relative; z-index: 2; }
 
 .splash-content {
   display: flex;

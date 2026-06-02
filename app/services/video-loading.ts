@@ -67,11 +67,14 @@ export function pickVideoUrl(creative: {
  *  Used as the <video poster=> attribute so the browser paints a
  *  real image on first paint, before the MP4 has decoded a frame.
  *
- *  primary_video_poster_url leads: it's a still extracted from the
- *  primary video at the clip's native 3:4 size, so poster and video are
- *  literally the same frame — same shape, same crop, no jump and no
- *  crop-zoom in the 3:4 card. primary_image_url (the polished packshot)
- *  is the fallback for products whose poster hasn't been backfilled. */
+ *  primary_video_poster_url leads: it's a HERO still extracted from the
+ *  primary video at the clip's native 3:4 size (~80% in, where the
+ *  editorial zoom-in has settled), so it fills the 3:4 card with no
+ *  crop-zoom AND shows the framing the clip rests on while playing — not
+ *  the zoomed-out frame 0. (Because it's a late frame, the autoplaying
+ *  <video> replays a small zoom-in reveal from its start — intended.)
+ *  primary_image_url (the polished packshot) is the fallback for products
+ *  whose poster hasn't been backfilled. */
 export function pickPosterUrl(creative: {
   thumbnail_url?: string | null;
   product?: { image_url?: string | null; primary_image_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null } | null;

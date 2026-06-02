@@ -124,66 +124,30 @@ def generate_ad_job(ad_id: str):
     return result
 
 
-# ─── Webhook: triggered when product_creative row is inserted ────────
-
-@app.function(image=generator_image, secrets=secrets)
-@modal.fastapi_endpoint(method="POST", label="generate-ad")
-def generate_ad_webhook(body: dict):
-    """
-    POST /generate-ad
-
-    Called by Supabase Database Webhook on INSERT to product_creative.
-    Supabase sends the full new row as body["record"].
-    """
-    record = body.get("record", {})
-    ad_id = record.get("id")
-    status = record.get("status")
-
-    if not ad_id:
-        return {"error": "Missing ad id"}, 400
-
-    if status not in ("pending", None):
-        return {"status": "skipped", "reason": f"ad status is '{status}', expected pending"}
-
-    generate_ad_job.spawn(ad_id)
-    return {"status": "queued", "ad_id": ad_id}
-
-
-
-@app.function(
-    image=generator_image,
-    secrets=secrets,
-)
-@modal.fastapi_endpoint(method="POST", label="generate-video")
-def generate_webhook(body: dict):
-    """
-    POST /generate-video
-
-    Called by Supabase Database Webhook when products.scrape_status is updated to 'done'.
-    Supabase sends the full record as body["record"].
-
-    Expected body:
-        { "record": { "id": "uuid", "scrape_status": "done", ... } }
-    """
-    record = body.get("record", {})
-    product_id = record.get("id")
-    scrape_status = record.get("scrape_status")
-
-    if not product_id:
-        return {"error": "Missing product id"}, 400
-
-    if scrape_status != "done":
-        return {"status": "skipped", "reason": "scrape_status is not done"}
-
-    # Check if product has images (required for image-to-video)
-    images = record.get("images")
-    if not images:
-        return {"status": "skipped", "reason": "no images"}
-
-    # Dispatch async — webhook returns immediately
-    generate_and_update.spawn(product_id)
-
-    return {"status": "queued", "product_id": product_id}
+# ─── Web-function budget (Modal workspace cap = 8) ────────────────────
+# The `catalog` Modal workspace allows at most 8 web endpoints across ALL
+# apps. The other apps (product-scraper, site-crawler, url-resolver) hold
+# 5, leaving 3 for video-generator. We spend them on the two endpoints
+# that have live callers:
+#     • generate-primary-poster — fired by the products DB trigger
+#       (trg_products_generate_primary_poster) on every new primary video.
+#     • watermark-share         — fired by the share-look edge function.
+#
+# The old `generate-ad` and `generate-video` web endpoints were REMOVED:
+# nothing called them (no DB trigger, no Database Webhook, no edge fn —
+# verified against supabase_functions.hooks + pg_trigger). product_creative
+# ads and generated_videos looks are driven entirely by the generate_pending
+# cron below, which calls generate_ad_job / generate_and_update directly via
+# .starmap(). Keeping their unused web endpoints pushed the app to 4 web
+# functions (9 total > 8) so EVERY deploy silently failed — which is why the
+# primary-video poster endpoint 404'd ("modal-http: invalid function call")
+# and posters stopped generating. If instant (non-cron) ad/look generation
+# is ever needed, fold it into ONE dispatcher web endpoint (branch on the
+# record shape) rather than re-adding two, or upgrade the workspace plan.
+#
+# generate_ad_job and generate_and_update remain defined above as plain
+# Modal functions (cron + `modal run` entry points) — only their HTTP
+# wrappers are gone.
 
 
 # ─── Primary-video poster: extract a 3:4 still that matches the clip ───

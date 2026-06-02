@@ -3,7 +3,58 @@
 // app's bottom bar (with filters) — the hero has no pill of its own. The
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
+
+// Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
+// canonical "What are you shopping for?". After that, we pick a random
+// joke from FUN_HEADLINES (deterministic per visit so the headline
+// doesn't change mid-session — seeded by visit-count so each new visit
+// rotates). Visit count is stored in localStorage so we don't try to
+// hit the DB for every landing.
+const HEADLINE_VISIT_KEY = 'catalog:hero-visits:v1';
+const HEADLINE_BASELINE_VISITS = 10;
+const BASELINE_HEADLINE = ['What are you', 'shopping for?'] as const;
+
+// Each entry is [line1, line2]. Two lines because .sfh-title renders
+// `What are you<br/>shopping for?` and we keep the same vertical shape.
+// Keep them ≤ ~22 chars per line so the headline doesn't wrap awkwardly.
+const FUN_HEADLINES: ReadonlyArray<readonly [string, string]> = [
+  // Spice Girls (per user request).
+  ['Tell me what you', 'really really want.'],
+  // Genuine but playful.
+  ['What sparks joy', 'today?'],
+  ['What you got', 'on your mind?'],
+  ['Today, you are', 'shopping for…'],
+  // Pop-culture nudges.
+  ["What's in your", 'cart energy?'],
+  ['Treat yourself.', 'What is it?'],
+  ['Looking for that', 'one thing?'],
+  ['Speak it into', 'existence.'],
+  ['Manifest your', 'next outfit.'],
+  // Mood-board style.
+  ['What is the', 'vibe today?'],
+  ['Catalog mode:', 'engaged.'],
+  ['Type a wish,', 'get a catalog.'],
+  // Cheeky.
+  ['Confess.', 'What do you want?'],
+  ['Be honest with us.', 'What is it?'],
+  ['Talk to me,', 'I am all ears.'],
+];
+
+function readVisitCount(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(HEADLINE_VISIT_KEY);
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  } catch { return 0; }
+}
+function bumpVisitCount(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const n = readVisitCount() + 1;
+    window.localStorage.setItem(HEADLINE_VISIT_KEY, String(n));
+  } catch { /* quota */ }
+}
 // ParticleBackground is mounted once at the app root (SiteParticleHost) so
 // the hero shares the same field as splash + ceremony + empty-catalog.
 
@@ -13,6 +64,19 @@ interface ShoppingForHeroProps {
 }
 
 export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) {
+  // Pick a headline for this visit. The first HEADLINE_BASELINE_VISITS the
+  // user lands here they see the canonical "What are you shopping for?";
+  // beyond that, we rotate through FUN_HEADLINES picked via the visit
+  // index (so the same visit always shows the same line — no flicker if
+  // the component remounts mid-session — but a new visit rotates).
+  const headline = useMemo<readonly [string, string]>(() => {
+    const visits = readVisitCount();
+    if (visits < HEADLINE_BASELINE_VISITS) return BASELINE_HEADLINE;
+    return FUN_HEADLINES[(visits - HEADLINE_BASELINE_VISITS) % FUN_HEADLINES.length];
+  }, []);
+  // Bump the visit count once on mount so the NEXT landing rotates.
+  useEffect(() => { bumpVisitCount(); }, []);
+
   // Scroll-reactive spin: the further down the shopper has scrolled within
   // the first viewport, the more we boost the spark's idle spin. We write
   // the value to a CSS custom property so the CSS animation reads it and
@@ -86,7 +150,7 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           </svg>
         </div>
 
-        <h1 className="sfh-title">What are you<br/>shopping for?</h1>
+        <h1 className="sfh-title">{headline[0]}<br/>{headline[1]}</h1>
       </div>
 
       {/* Scroll-to-best-sellers affordance: an animated mouse with a

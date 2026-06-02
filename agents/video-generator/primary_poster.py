@@ -6,9 +6,11 @@ but never a matching poster. The feed then fell back to the square
 primary_image_url, which object-fit:cover magnified into the 3:4 card (the
 "zoomed in" product look).
 
-This module extracts the clip's own first frame — at the video's native 3:4
-size, via asset_encoder — and writes it to products.primary_video_poster_url
-so the poster and the video fill the card identically.
+This module extracts a HERO frame (~80% through the clip, where the
+editorial zoom-in has settled on the product) at the video's native 3:4
+size, via asset_encoder, and writes it to products.primary_video_poster_url
+so the poster fills the card with the same framing shoppers see while the
+clip plays — not the zoomed-out first frame.
 
 Single source of truth for both callers:
   • modal_app.generate_primary_poster_job  (event-driven webhook + cron)
@@ -29,7 +31,13 @@ POSTER_RENDER_QUERY = "width=540&quality=72&resize=cover"
 # One poster per product, keyed by id. Primary videos live on fal's CDN
 # (external URL) so we can't mirror their storage path — the product id is
 # stable and unambiguous.
-POSTER_SUFFIX = ".poster.jpg"
+#
+# `-v2`: bumped when the poster frame moved from the zoomed-out first frame
+# to the ~80% hero frame (see asset_encoder.POSTER_SEEK_FRACTION). A NEW
+# object key hands every product a fresh render-CDN URL, so the feed can't
+# serve the stale first-frame transform that was already warmed at the old
+# `.poster.jpg` key. Bump again (v3…) if the frame-selection ever changes.
+POSTER_SUFFIX = ".poster-v2.jpg"
 
 
 def poster_storage_key(product_id: str) -> str:
@@ -69,8 +77,8 @@ def generate_primary_poster(
     product_id: str,
     video_url: str | None = None,
 ) -> str:
-    """Extract product_id's primary-video first frame and write it to
-    products.primary_video_poster_url. Returns the public poster URL.
+    """Extract product_id's primary-video hero frame (~80% in) and write it
+    to products.primary_video_poster_url. Returns the public poster URL.
 
     Pass `video_url` to skip the lookup (the webhook already has it from the
     trigger payload). Raises ValueError if the product has no primary video,
