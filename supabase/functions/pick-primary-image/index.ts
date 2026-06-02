@@ -31,6 +31,18 @@ const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_IMAGES = 8;
 
+// Anthropic's URL image source ONLY accepts https://. A single http:// image
+// (some brand CDNs scrape that way) 400s the whole call, which surfaced as
+// "pick primary failed". Upgrade http->https (the asset is identical over
+// TLS) and drop anything still not https so one bad URL can't sink the batch.
+function normalizeImageUrls(urls: string[]): string[] {
+  return urls
+    .filter((u): u is string => typeof u === 'string' && u.length > 0)
+    .map(u => (u.startsWith('http://') ? 'https://' + u.slice(7) : u))
+    .filter(u => u.startsWith('https://'))
+    .slice(0, MAX_IMAGES);
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -154,9 +166,7 @@ Deno.serve(async (req: Request) => {
   catch { return json({ success: false, error: 'JSON body required' }); }
 
   const productId = body.product_id;
-  const imageUrls = (body.image_urls || [])
-    .filter((u): u is string => typeof u === 'string' && u.length > 0)
-    .slice(0, MAX_IMAGES);
+  const imageUrls = normalizeImageUrls(body.image_urls || []);
 
   if (!productId) return json({ success: false, error: 'product_id required' });
   if (imageUrls.length === 0) return json({ success: false, error: 'no images to consider' });
