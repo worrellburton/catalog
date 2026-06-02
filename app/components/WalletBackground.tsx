@@ -59,15 +59,13 @@ const WalletBackground = memo(function WalletBackground(_: WalletBackgroundProps
 
   return (
     <div className="wb-root" aria-hidden="true">
-      {/* Six fixed-radius rings centered on the $ amount, each constantly
-          rotating on its own axis (alternating directions, varying speeds
-          via nth-child rules in CSS). The "lightning arc" is a conic
-          gradient masked to the ring border that sweeps as the ring spins. */}
-      <div className="wb-ring-field">
-        {Array.from({ length: 6 }, (_, i) => (
-          <span key={i} className="wb-ring" />
-        ))}
-      </div>
+      {/* Rings used to live here, anchored to a hardcoded `top: 28vh` of
+          the page background. That detached them from the actual $ amount
+          whenever the wallet content shifted (different viewport, scroll,
+          banner state) — the screenshot bug where they hung off the top of
+          the screen was exactly that. They now live as a ::before on
+          `.wallet-hero` itself (see my-looks.css), so they're guaranteed
+          centered on the amount no matter what. */}
 
       {/* Localized & payout burst rings — mounted on demand by the event
           handlers above. */}
