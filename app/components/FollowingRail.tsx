@@ -397,7 +397,6 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
             key={`skel-${i}`}
             role="listitem"
             className="follow-story follow-story--skeleton"
-            style={{ ['--i' as 'order']: i as unknown as number }}
             aria-hidden="true"
           >
             <span className="follow-story-ring">
@@ -411,7 +410,7 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
   }
   return (
     <div className="follow-stories-rail" role="list" aria-label="Creators you follow">
-      {entries.map((c, i) => {
+      {entries.map((c) => {
         const isOnline = onlineHandles.has(c.handle.toLowerCase());
         const name = c.displayName || c.handle;
         return (
@@ -420,10 +419,9 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
             type="button"
             role="listitem"
             className="follow-story"
-            // `--i` drives the per-story stagger of follow-story-bloom
-            // (defined in home-hero.css). Each circle waits an extra
-            // 60ms × i before unfurling, so the row blooms left → right.
-            style={{ ['--i' as 'order']: i as unknown as number }}
+            // The rail animates as one cohesive unit now
+            // (.follow-stories-rail plays follow-stories-arc-in in
+            // home-hero.css) — no per-story stagger here.
             onClick={() => onOpenCreator(c.handle)}
             title={name}
             aria-label={`Open ${name}'s catalog`}
