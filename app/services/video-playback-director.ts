@@ -25,16 +25,19 @@
 // make room for a closer one.
 
 /** Multiplier on viewport height for the play zone (each side). */
-const PLAY_MARGIN_VH_DESKTOP = 1.5;
-const PLAY_MARGIN_VH_MOBILE = 1.0;
+const PLAY_MARGIN_VH_DESKTOP = 1.0;
+const PLAY_MARGIN_VH_MOBILE = 0.5;
 /** Multiplier on viewport height for the release zone (each side). */
-const RELEASE_MARGIN_VH_DESKTOP = 3.0;
-const RELEASE_MARGIN_VH_MOBILE = 2.0;
-/** Hard ceiling on pooled <video> elements. Tuned to fit ~2.5 viewports of
- *  cards at the densest desktop layout (~6 cols). Scroll-velocity gate
- *  prevents thrashing when this is the binding constraint. */
-const POOL_MAX_DESKTOP = 40;
-const POOL_MAX_MOBILE = 12;
+const RELEASE_MARGIN_VH_DESKTOP = 2.0;
+const RELEASE_MARGIN_VH_MOBILE = 1.25;
+/** Hard ceiling on pooled <video> elements — i.e. the max number of clips
+ *  decoding/playing at once. The old 40/12 caps let a fast-poster grid spin
+ *  up dozens of simultaneous decoders, melting the CPU/GPU and dropping the
+ *  feed to a crawl. Bounded much tighter: a handful of on-screen clips is
+ *  all the eye tracks anyway, and the hysteresis band keeps the nearest
+ *  cards playing as you scroll. */
+const POOL_MAX_DESKTOP = 14;
+const POOL_MAX_MOBILE = 6;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -90,6 +93,13 @@ class VideoPlaybackDirector {
   private scrollRestTimer: ReturnType<typeof setTimeout> | null = null;
   private subscribers = new Map<string, Set<(s: CardStatus) => void>>();
   private initialized = false;
+  // Overlay scope stack. While an overlay (LookOverlay, ProductPage, …) is
+  // open it pushes its slot-prefix here; only cards whose id begins with the
+  // topmost prefix are allowed to play. Everything else — chiefly the home
+  // feed that stays mounted, blurred, behind the overlay — is released so it
+  // stops decoding frames under the blur layer (which would otherwise force
+  // the compositor to re-rasterize the blur every frame and tank the FPS).
+  private scopeStack: string[] = [];
 
   // Lazy init — safe to import on the server; DOM access only when the
   // first card registers (always in the browser).
@@ -239,6 +249,39 @@ class VideoPlaybackDirector {
   }
 
   /**
+   * Push an overlay scope. Pass the slot-prefix the overlay's nested feed
+   * uses (e.g. `look:42`, `product:Nike:Air Force 1`). While it's on top of
+   * the stack, only cards whose director id starts with that prefix play;
+   * the background home feed is released. Call popScope with the SAME prefix
+   * when the overlay closes. Idempotent per (re-)mount — safe to push the
+   * same prefix twice (React Strict Mode) since popScope removes one match.
+   */
+  pushScope(prefix: string): void {
+    if (!prefix) return;
+    this.scopeStack.push(prefix);
+    this.scheduleRank();
+  }
+
+  /** Pop a previously-pushed overlay scope (removes the last matching entry). */
+  popScope(prefix: string): void {
+    if (!prefix) return;
+    const idx = this.scopeStack.lastIndexOf(prefix);
+    if (idx !== -1) this.scopeStack.splice(idx, 1);
+    this.scheduleRank();
+  }
+
+  /** Active scope = the topmost overlay prefix, or null when none is open. */
+  private activeScope(): string | null {
+    return this.scopeStack.length ? this.scopeStack[this.scopeStack.length - 1] : null;
+  }
+
+  /** A card is eligible to play only if it belongs to the active scope. */
+  private inActiveScope(id: string): boolean {
+    const scope = this.activeScope();
+    return scope === null ? true : id.startsWith(scope);
+  }
+
+  /**
    * Notify the director that a detail overlay has opened or closed.
    * Open: pause all non-active cards so the detail view isn't fighting
    * for decode budget. Close: re-rank to restore feed playback.
@@ -341,9 +384,11 @@ class VideoPlaybackDirector {
       ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
     }
 
-    // 1. Release: anything past releaseMargin gives its slot back.
+    // 1. Release: anything past releaseMargin — OR outside the active overlay
+    //    scope (e.g. the home feed sitting blurred behind an open overlay) —
+    //    gives its slot back so it stops decoding.
     for (const { id, entry, distance } of ranked) {
-      if (distance >= releaseMargin && entry.videoEl) {
+      if ((distance >= releaseMargin || !this.inActiveScope(id)) && entry.videoEl) {
         this.releaseVideoEl(id, entry.videoEl);
         entry.videoEl = null;
         entry.status = 'idle';
@@ -351,11 +396,11 @@ class VideoPlaybackDirector {
       }
     }
 
-    // 2. Determine the desired-playing set. Inside playMargin → wants
-    //    playback. Sorted nearest-first so eviction (when pool is full)
-    //    favors the closest cards.
+    // 2. Determine the desired-playing set. Inside playMargin AND in the
+    //    active scope → wants playback. Sorted nearest-first so eviction
+    //    (when pool is full) favors the closest cards.
     const wantsPlay = ranked
-      .filter(r => r.distance <= playMargin)
+      .filter(r => r.distance <= playMargin && this.inActiveScope(r.id))
       .sort((a, b) => a.distance - b.distance);
 
     for (const { id, entry, distance } of wantsPlay) {

@@ -17,6 +17,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
+import { director } from '~/services/video-playback-director';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -491,6 +492,17 @@ export default function ProductPage({
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+
+  // Suspend the home feed's director-driven playback while this page is open.
+  // The feed stays mounted+blurred behind us; left running it decodes dozens
+  // of clips under the blur layer and tanks the FPS. Scope matches the
+  // slotPrefix on our nested "You might also like" feed so that feed keeps
+  // playing while the background is paused.
+  useEffect(() => {
+    const scope = `product:${product.brand}:${product.name}`;
+    director.pushScope(scope);
+    return () => director.popScope(scope);
+  }, [product.brand, product.name]);
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
   // Admin-editable section config from /admin/pages. Each section's
