@@ -1146,6 +1146,62 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #fff;
 }
 
+/* Liquid-glass search bar for /admin/catalogs (replaced the old text-input
+   + filter-chips strip in the minimal-catalog rebuild). Frosted background
+   + subtle inner glow, sits above the table on the light admin surface. */
+.catalogs-table-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.catalogs-table-search:focus-within {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow:
+    0 14px 32px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+.catalogs-table-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+.catalogs-table-search-input::placeholder { color: rgba(15, 23, 42, 0.45); }
+.catalogs-table-search-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+.admin-dark .catalogs-table-search {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.admin-dark .catalogs-table-search-input { color: #f8fafc; }
+.admin-dark .catalogs-table-search-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.admin-dark .catalogs-table-search-count { color: rgba(255, 255, 255, 0.5); }
+
 .admin-table-wrap {
   overflow-x: auto;
   background: #fff;
