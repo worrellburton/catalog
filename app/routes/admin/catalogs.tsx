@@ -4715,6 +4715,29 @@ function FeedTypeChip({ kind }: { kind: 'look' | 'product' }) {
   );
 }
 
+// Gender chip — surfaces the per-item gender (Men / Women / Unisex /
+// Untagged) in the FEED table so admins can scan whether the queue is
+// gender-balanced without expanding rows. Untagged rows render a muted
+// dash so a missing gender stands out as actionable.
+function FeedGenderChip({ gender }: { gender?: string | null }) {
+  const g = (gender || '').toLowerCase();
+  if (g !== 'male' && g !== 'female' && g !== 'unisex') {
+    return <span style={{ fontSize: 11, color: '#cbd5e1', fontWeight: 600 }}>—</span>;
+  }
+  const palette = {
+    male:   { bg: '#eff6ff', fg: '#1d4ed8', label: 'Men' },
+    female: { bg: '#fdf2f8', fg: '#be185d', label: 'Women' },
+    unisex: { bg: '#f1f5f9', fg: '#475569', label: 'Unisex' },
+  }[g as 'male' | 'female' | 'unisex'];
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+      padding: '2px 7px', borderRadius: 999,
+      background: palette.bg, color: palette.fg,
+    }}>{palette.label}</span>
+  );
+}
+
 function FeedListTable({
   rows,
   selectedLookIds,
@@ -4765,6 +4788,7 @@ function FeedListTable({
           <th style={{ ...listHeadCellStyle, width: 56 }}></th>
           <th style={listHeadCellStyle}>Title</th>
           <th style={{ ...listHeadCellStyle, width: 70 }}>Type</th>
+          <th style={{ ...listHeadCellStyle, width: 84 }}>Gender</th>
           <th style={listHeadCellStyle}>Creator / Brand</th>
           <th style={listHeadCellStyle}>Impressions</th>
           <th style={listHeadCellStyle}>CTR</th>
@@ -4846,6 +4870,9 @@ function FeedListTable({
                 {row.kind === 'look' ? (row.look.title || `Look #${row.look.legacyId ?? ''}`) : (row.product.name || '—')}
               </td>
               <td style={listBodyCellStyle}><FeedTypeChip kind={row.kind} /></td>
+              <td style={listBodyCellStyle}>
+                <FeedGenderChip gender={row.kind === 'look' ? row.look.gender : row.product.gender} />
+              </td>
               <td style={listBodyCellStyle}>
                 {row.kind === 'look' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
