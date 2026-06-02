@@ -14,6 +14,7 @@ import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
 import SwipeMenuGesture from "~/components/SwipeMenuGesture";
+import PullDownActivityGesture from "~/components/PullDownActivityGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
@@ -277,6 +278,13 @@ export default function App() {
           Flutter shell, inside horizontally-scrollable regions, and
           while an input is focused — see SwipeMenuGesture for guards. */}
       <SwipeMenuGesture />
+      {/* Global mobile gesture: pull DOWN from the top of the viewport
+          → opens /activity (the followed-creator activity feed). Edge-
+          gated to the top 24 px so it doesn't collide with the normal
+          feed scroll; also requires window.scrollY === 0 so a partial
+          scroll-up doesn't accidentally trigger. See
+          PullDownActivityGesture for the full guard list. */}
+      <PullDownActivityGesture />
       {/* Once-per-session creator engagement toast. Shows "since
           your last visit, your looks earned X impressions / Y
           clicks" when there's something to report; otherwise stays
