@@ -157,6 +157,81 @@ const AD_SELECT = `
   product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender)
 `;
 
+// Columns for a product-direct tile fetch. Mirrors the getHomeFeed select so
+// catalog / brand / similar surfaces all render from the SAME visibility
+// contract: one product = one tile, sourced from products.primary_video_url.
+const PRODUCT_TILE_SELECT =
+  'id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, images, url, type, gender, is_elite, created_at';
+
+interface ProductTileRow {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  image_url: string | null;
+  primary_image_url: string | null;
+  primary_video_url: string | null;
+  primary_video_poster_url: string | null;
+  images: string[] | null;
+  url: string | null;
+  type: string | null;
+  gender: string | null;
+  is_elite: boolean | null;
+  primary_video_generated_at?: string | null;
+  created_at?: string | null;
+}
+
+// Map a product row → a one-tile ProductAd. The renderer (CreativeCardV2 /
+// pickVideoUrl) always prefers product.primary_video_url for playback, so a
+// product with no primary video is simply never fetched into a tile — the
+// hard "no primary video → not on any feed" rule lives at the query layer.
+function productTileToAd(p: ProductTileRow, style: string): ProductAd {
+  return {
+    id:               p.id,
+    product_id:       p.id,
+    look_id:          null,
+    title:            p.name,
+    description:      null,
+    video_url:        p.primary_video_url,
+    mobile_video_url: null,
+    storage_path:     null,
+    thumbnail_url:    p.primary_video_poster_url ?? p.primary_image_url,
+    affiliate_url:    null,
+    prompt:           null,
+    prompt_extra:     null,
+    style,
+    model:            null,
+    status:           'live',
+    duration_seconds: null,
+    aspect_ratio:     '3:4',
+    resolution:       null,
+    cost_usd:         null,
+    impressions:      0,
+    clicks:           0,
+    error:            null,
+    enabled:          true,
+    is_elite:         p.is_elite ?? undefined,
+    created_at:       p.primary_video_generated_at ?? p.created_at ?? '',
+    completed_at:     p.primary_video_generated_at ?? null,
+    updated_at:       null,
+    product: {
+      id:                       p.id,
+      name:                     p.name,
+      brand:                    p.brand,
+      price:                    p.price,
+      image_url:                p.image_url,
+      primary_image_url:        p.primary_image_url,
+      primary_video_url:        p.primary_video_url,
+      primary_video_poster_url: p.primary_video_poster_url,
+      images:                   p.images,
+      url:                      p.url,
+      type:                     p.type,
+      gender:                   p.gender,
+      is_elite:                 p.is_elite ?? undefined,
+    },
+  };
+}
+
 export async function getProductAds(): Promise<ProductAd[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
@@ -626,14 +701,16 @@ export function creativeMatchesCatalogQuery(ad: ProductAd, query: string): boole
   return types.includes(t);
 }
 
-// Returns live creatives whose product.type matches the synonym set for the
-// given query. Used by the consumer feed to render existing catalogs
-// synchronously without waiting on the nl-search semantic pipeline.
+// Returns product tiles whose type matches the synonym set for the given
+// query. Used by the consumer feed to render existing catalogs synchronously
+// without waiting on the nl-search semantic pipeline.
 //
-// Mirrors getHomeFeed() filters (status=live, video present, product is_active,
-// gender filter) so results drop into the same grid render path. is_elite is
-// NOT required here - when a user explicitly asks for "shoes" we want every
-// available creative for that catalog, not just the curated default-grid set.
+// Sourced from the products table directly, same visibility contract as
+// getHomeFeed: is_active = true AND primary_video_url IS NOT NULL, then the
+// shopper-gender post-filter. A product with no primary video is never a
+// tile — "no primary video → not on the feed" holds here too. is_elite is NOT
+// required (when a user asks for "shoes" we want the whole catalog, not just
+// the curated default-grid set); it only influences ordering.
 export async function getCreativesByCatalogTag(query: string): Promise<ProductAd[]> {
   if (!supabase) return [];
   const key = query.trim().toLowerCase();
@@ -641,17 +718,14 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
   if (!types || types.length === 0) return [];
 
   const { data, error } = await supabase
-    .from('product_creative')
-    .select(`
-      *,
-      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, is_platform, gender)
-    `)
-    .eq('status', 'live')
-    .not('video_url', 'is', null)
-    .in('product.type', types)
-    .neq('product.is_platform', false) // hide products an admin has Platform-toggled off
-    .order('boosted_until', { ascending: false, nullsFirst: false })
-    .order('created_at',     { ascending: false })
+    .from('products')
+    .select(PRODUCT_TILE_SELECT)
+    .eq('is_active', true)
+    .not('primary_video_url', 'is', null)
+    .in('type', types)
+    .order('is_elite',                   { ascending: false, nullsFirst: false })
+    .order('primary_video_generated_at', { ascending: false, nullsFirst: false })
+    .order('created_at',                 { ascending: false })
     .limit(60);
 
   if (error) {
@@ -659,20 +733,18 @@ export async function getCreativesByCatalogTag(query: string): Promise<ProductAd
     return [];
   }
   const keywords = CATALOG_KEYWORD_FILTER[key];
-  const rows = (data || []) as ProductAd[];
-  return rows.filter(ad => {
-    const active = (ad.product as { is_active?: boolean } | null | undefined)?.is_active;
-    if (active === false) return false;
-    if (!passesGenderFilter(ad.product as { gender?: string | null } | null)) return false;
+  const rows = (data || []) as ProductTileRow[];
+  return rows
+    .filter(p => passesGenderFilter({ gender: p.gender }))
     // For material queries (denim, leather, wool, …) only keep products whose
     // name actually contains the material keyword - prevents returning all
     // Pants/Jackets when the user searched "denim".
-    if (keywords) {
-      const name = ((ad.product as { name?: string | null } | null)?.name ?? '').toLowerCase();
+    .filter(p => {
+      if (!keywords) return true;
+      const name = (p.name ?? '').toLowerCase();
       return keywords.some(k => name.includes(k));
-    }
-    return true;
-  });
+    })
+    .map(p => productTileToAd(p, 'catalog'));
 }
 
 export async function boostAd(id: string, hours = 24): Promise<{ error: string | null }> {
@@ -1005,28 +1077,33 @@ export async function getCreativesByBrand(
   // or "ALO YOGA". ilike with no wildcards is an exact case-insensitive
   // match - safer than ilike '%brand%' which would over-match (e.g.
   // "Alo Yoga" would match "Alo Yoga Athletic").
+  //
+  // Sourced from the products table directly (same contract as getHomeFeed:
+  // is_active + primary_video_url present) so the brand strip / brand page
+  // only ever surface products that have a primary video — one product, one
+  // tile, no creative-only rows.
   const normalizedBrand = brand.trim();
   let query = supabase
-    .from('product_creative')
-    .select(`
-      *,
-      product:products!inner(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, catalog_tags, gender, is_platform)
-    `)
-    .eq('status', 'live')
-    .ilike('product.brand', normalizedBrand)
-    .neq('product.is_platform', false) // hide products an admin has Platform-toggled off
-    .not('video_url', 'is', null)
-    .order('boosted_until', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
+    .from('products')
+    .select(PRODUCT_TILE_SELECT)
+    .eq('is_active', true)
+    .not('primary_video_url', 'is', null)
+    .ilike('brand', normalizedBrand)
+    .order('is_elite',                   { ascending: false, nullsFirst: false })
+    .order('primary_video_generated_at', { ascending: false, nullsFirst: false })
+    .order('created_at',                 { ascending: false })
     .limit(fetchLimit);
-  if (excludeProductId) query = query.neq('product_id', excludeProductId);
+  if (excludeProductId) query = query.neq('id', excludeProductId);
   const { data, error } = await query;
   if (error) {
     console.warn('[getCreativesByBrand] query error:', error.message);
     return [];
   }
-  const rows = (data || []) as ProductAd[];
-  return rows.filter(r => passesGenderFilter(r.product as { gender?: string | null } | null)).slice(0, limit);
+  const rows = (data || []) as ProductTileRow[];
+  return rows
+    .filter(p => passesGenderFilter({ gender: p.gender }))
+    .map(p => productTileToAd(p, 'brand'))
+    .slice(0, limit);
 }
 
 // Brand fast-path for the search bar. When the user types an exact brand
@@ -1231,50 +1308,7 @@ type SimilarProductRow = {
 function similarProductRowToAd(p: SimilarProductRow): ProductAd {
   // Mirrors the product-direct tile shape getHomeFeed produces so the
   // renderer (CreativeCard) paints these identically to feed tiles.
-  return {
-    id:               p.id,
-    product_id:       p.id,
-    look_id:          null,
-    title:            p.name,
-    description:      null,
-    video_url:        p.primary_video_url,
-    mobile_video_url: null,
-    storage_path:     null,
-    thumbnail_url:    p.primary_video_poster_url ?? p.primary_image_url,
-    affiliate_url:    null,
-    prompt:           null,
-    prompt_extra:     null,
-    style:            'similar',
-    model:            null,
-    status:           'live',
-    duration_seconds: null,
-    aspect_ratio:     '3:4',
-    resolution:       null,
-    cost_usd:         null,
-    impressions:      0,
-    clicks:           0,
-    error:            null,
-    enabled:          true,
-    is_elite:         p.is_elite ?? undefined,
-    created_at:       '',
-    completed_at:     null,
-    updated_at:       null,
-    product: {
-      id:                       p.id,
-      name:                     p.name,
-      brand:                    p.brand,
-      price:                    p.price,
-      image_url:                p.image_url,
-      primary_image_url:        p.primary_image_url,
-      primary_video_url:        p.primary_video_url,
-      primary_video_poster_url: p.primary_video_poster_url,
-      images:                   p.images,
-      url:                      p.url,
-      type:                     p.type,
-      gender:                   p.gender,
-      is_elite:                 p.is_elite ?? undefined,
-    },
-  } as ProductAd;
+  return productTileToAd(p, 'similar');
 }
 
 export async function getSimilarProductsByEmbedding(seedProductId: string, k = 18): Promise<ProductAd[]> {

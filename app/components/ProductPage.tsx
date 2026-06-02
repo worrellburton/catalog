@@ -571,19 +571,12 @@ export default function ProductPage({
       if (ownProductId && c.product_id === ownProductId) continue;
       if (seenProductIds.has(c.product_id)) continue;
       if (!genderMatches(c.product?.gender)) continue;
-      // Skip tiles with NO renderable media — they paint as empty dark
-      // rectangles in the Popular / Similar grids until the lazy loaders
-      // catch up, which reads as "blind-spot loading". Reject anything
-      // without a poster, primary video, or product image so the grid is
-      // always fully populated by tiles that can paint immediately.
-      const hasMedia =
-        !!c.thumbnail_url ||
-        !!c.video_url ||
-        !!c.product?.primary_video_url ||
-        !!c.product?.primary_image_url ||
-        !!c.product?.image_url ||
-        (Array.isArray(c.product?.images) && c.product.images.length > 0);
-      if (!hasMedia) continue;
+      // Hard "primary video only" rule: a product tile must have a playable
+      // primary video. No video → not shown (no image-only fallbacks). This
+      // matches the consumer feed contract; image-only stragglers from any
+      // upstream source are dropped here as a final guard.
+      const hasVideo = !!c.product?.primary_video_url || !!c.video_url;
+      if (!hasVideo) continue;
       seenProductIds.add(c.product_id);
       out.push(c);
       if (out.length >= limit) break;

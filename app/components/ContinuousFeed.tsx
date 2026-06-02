@@ -311,12 +311,17 @@ function ContinuousFeed({
   // profileGender + its subscriber effect are declared higher up
   // (above filteredLooks) so that useMemo can read profileGender
   // without tripping the TDZ in production builds.
-  const genderOpt: 'men' | 'women' | undefined =
-    activeFilter === 'all'
-      ? (profileGender === 'male'   ? 'men'
-        : profileGender === 'female' ? 'women'
-        : undefined)
-      : activeFilter;
+  // Search filter gender MUST use the products vocab ('male'/'female') — the
+  // `search` edge function whitelists only male|female|unisex and silently
+  // drops anything else to null (= no filter). Sending the UI 'men'/'women'
+  // here was the bug that made search ignore gender entirely. The edge
+  // function maps male→men / female→women internally for the looks lane.
+  const genderOpt: 'male' | 'female' | undefined =
+    activeFilter === 'men'       ? 'male'
+    : activeFilter === 'women'   ? 'female'
+    : profileGender === 'male'   ? 'male'
+    : profileGender === 'female' ? 'female'
+    : undefined;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
   // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
   // We still run semantic in the background so Haiku-driven expansion can
@@ -660,9 +665,20 @@ function ContinuousFeed({
     // (is_placeholder=true / video_url=null) are product-image stand-ins for
     // products that have no creative yet — showing them in search gives the
     // impression that the feed is "pooling photos" instead of creatives.
+    // Defense-in-depth gender gate. The edge function already filters by
+    // gender, but never let an off-gender tile render even if a stale/cached
+    // result slips through. Mirrors passesGenderFilter: a gendered shopper
+    // sees their gender + unisex; untagged + opposite are hidden. When no
+    // gender is active ('all'/unknown) everything passes.
+    const genderAllowed = (g: string | null | undefined): boolean => {
+      if (!genderOpt) return true;
+      const gl = (g || '').toLowerCase();
+      return gl === genderOpt || gl === 'unisex';
+    };
     return semantic.creatives
       .filter(c => !c.is_placeholder && c.video_url)
       .filter(c => matchesMaterial(c.product_name))
+      .filter(c => genderAllowed(c.product_gender))
       .map(c => ({
       id:               c.id,
       product_id:       c.product_id,
@@ -701,9 +717,10 @@ function ContinuousFeed({
         primary_video_url: c.video_url,
         url:               c.product_url,
         catalog_tags:      null,
+        gender:            c.product_gender,
       },
     }));
-  }, [semantic.creatives, committedQuery]);
+  }, [semantic.creatives, committedQuery, genderOpt]);
 
   useEffect(() => {
     if (semanticCreatives.length) primeTrailAssets(semanticCreatives);
