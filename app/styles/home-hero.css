@@ -518,10 +518,10 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    /* Hero takes essentially the full viewport so the feed begins well
-       below the fold. Only a thin sliver of the first row peeks at the
-       bottom edge, hinting that scrolling reveals more. */
-    min-height: 100svh;
+    /* Mobile: 88svh so a thin band of the feed peeks below the bottom
+       search bar (the same "scroll for more" tease the desktop hero now
+       uses). Was 100svh which hid the feed behind the fold completely. */
+    min-height: 88svh;
     /* flex-end anchors spark+headline to the inner-area bottom. We need
        padding-bottom > (100% − bar_top_position) so the stage cannot
        overflow into the bar zone. Bar top = 100 − bar.bottom − bar.height
@@ -646,12 +646,15 @@
      above it, so logo + headline + bar read as ONE vertically-centered
      cluster — same treatment as mobile. */
   .sfh {
-    /* Full viewport on desktop (matches the Gemini-style reference: clean
-       centered screen, feed appears only on scroll). 90vh let the page
-       scroll a hair on load, which could flip hero-scrolled → the bar
-       dropped to the bottom while the headline stayed centered. Full
-       height keeps scrollY pinned at 0 so the centered state holds. */
-    min-height: 100vh;
+    /* 88vh instead of 100vh so a thin band of the feed peeks below the bar
+       — that tease is the strongest scroll signal we can give without the
+       page snapping to "scrolled" state on first paint. The previous 100vh
+       hid the feed entirely behind the fold; users had no visual cue that
+       scrolling would surface content. 88vh leaves enough room for ~one
+       row of cards to nose into view, and the hero-scrolled flip only
+       fires once the user actually scrolls (handled in _index.tsx by a
+       threshold well above the 12vh peek). */
+    min-height: 88vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
     /* Headline bottom lands ~48vh from top; bar at 44vh-from-bottom
