@@ -865,6 +865,16 @@ export default function Home() {
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
   const openMyLooks = useCallback(() => setShowMyLooks(true), []);
+  // Cross-component "open MyCatalog" hook. CreatorPage's self-view
+  // Edit button fires `catalog:open-my-catalog` instead of taking a
+  // prop callback through every render path — same pattern as
+  // catalog:open-account-menu and catalog:open-bookmarks.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => openMyLooks();
+    window.addEventListener('catalog:open-my-catalog', onOpen);
+    return () => window.removeEventListener('catalog:open-my-catalog', onOpen);
+  }, [openMyLooks]);
   // Opening the wallet pushes a real history entry at /earnings so it's
   // deep-linkable AND browser-back returns to the catalog screen the
   // user was on (the navigation push, not an external referrer). Skip
