@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
@@ -133,6 +134,30 @@ function UserMenu({
   // Close the page, but let the close animation play first (reverse of
   // the reveal) before unmounting.
   const [pageClosing, setPageClosing] = useState(false);
+
+  // Slide-in trigger. The page mounts at translateX(100%) (off-screen
+  // right) and the .is-open class flips it to translateX(0). CSS
+  // transitions only fire on STATE change, so if both the mount and
+  // .is-open happen in the same paint, the browser collapses them
+  // into a single computed state and skips the slide. Defer .is-open
+  // by one animation frame so there's a real prior state for the
+  // transition to interpolate from.
+  const [pageSlidIn, setPageSlidIn] = useState(false);
+  useEffect(() => {
+    if (!pageOpen) { setPageSlidIn(false); return; }
+    // Two rAFs — the first lets React commit the off-screen mount; the
+    // second adds .is-open. Without this layered defer some browsers
+    // (notably WebKit) still optimise the two states into one and skip
+    // the transition.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setPageSlidIn(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [pageOpen]);
   const closePage = useCallback(() => {
     setPageClosing(true);
     window.setTimeout(() => {
@@ -607,9 +632,22 @@ function UserMenu({
       {/* Mobile full-page Account — replaces the popout on ≤768px. The reveal
           uses a clip-path circle that grows from the avatar's tapped position
           to cover the screen, and content staggers in after the wipe. */}
-      {pageOpen && (
+      {pageOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className={`user-menu-page ${pageClosing ? 'is-closing' : 'is-open'}`}
+          // Portaled to document.body so the page escapes the .app-root
+          // containing block. When .app-root has transform:translateX(-18%)
+          // it becomes the containing block for position:fixed descendants
+          // — the menu's inset:0 + translate would otherwise be relative
+          // to the SHIFTED .app-root, not the viewport, pushing it
+          // off-screen. The portal keeps it anchored to the actual
+          // viewport so the slide-in lands where the user expects.
+          //
+          // .is-open is keyed on pageSlidIn (true one rAF after mount) so
+          // the CSS transition has a real prior state to interpolate from.
+          // Without this defer, browsers can collapse "mount at 100%" and
+          // "apply is-open" into a single computed state and skip the
+          // animation entirely — the symptom the user just hit.
+          className={`user-menu-page ${pageClosing ? 'is-closing' : (pageSlidIn ? 'is-open' : '')}`}
           style={pageOrigin ? { '--ump-x': `${pageOrigin.x}px`, '--ump-y': `${pageOrigin.y}px` } as React.CSSProperties : undefined}
           role="dialog"
           aria-label="Account"
@@ -750,7 +788,8 @@ function UserMenu({
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <button
